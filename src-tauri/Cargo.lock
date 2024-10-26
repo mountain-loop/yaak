@@ -8038,6 +8038,7 @@ name = "yaak_grpc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-recursion",
  "dunce",
  "hyper 0.14.30",
  "hyper-rustls 0.24.2",
