@@ -20,12 +20,12 @@ type Props = Pick<EditorProps, 'heightMode' | 'className' | 'forceUpdateKey'> & 
 export function GraphQLEditor({ body, onChange, baseRequest, ...extraEditorProps }: Props) {
   const editorViewRef = useRef<EditorView>(null);
   const { schema, isLoading, error, refetch } = useIntrospectGraphQL(baseRequest);
-  const [currentBody, setCurrentBody] = useState<{ query: string; variables: string }>(() => {
+  const [currentBody, setCurrentBody] = useState<{ query: string; variables: string | undefined }>(() => {
     // Migrate text bodies to GraphQL format
     // NOTE: This is how GraphQL used to be stored
     if ('text' in body) {
       const b = tryParseJson(body.text, {});
-      const variables = JSON.stringify(b.variables ?? '', null, 2);
+      const variables = JSON.stringify(b.variables || undefined, null, 2);
       return { query: b.query ?? '', variables };
     }
 
@@ -33,13 +33,13 @@ export function GraphQLEditor({ body, onChange, baseRequest, ...extraEditorProps
   });
 
   const handleChangeQuery = (query: string) => {
-    const newBody = { query, variables: currentBody.variables };
+    const newBody = { query, variables: currentBody.variables || undefined };
     setCurrentBody(newBody);
     onChange(newBody);
   };
 
   const handleChangeVariables = (variables: string) => {
-    const newBody = { query: currentBody.query, variables };
+    const newBody = { query: currentBody.query, variables: variables || undefined };
     setCurrentBody(newBody);
     onChange(newBody);
   };

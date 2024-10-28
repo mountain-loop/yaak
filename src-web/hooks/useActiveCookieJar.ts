@@ -18,6 +18,8 @@ export function useActiveCookieJar() {
 export function useEnsureActiveCookieJar() {
   const cookieJars = useCookieJars();
   const [activeCookieJarId, setActiveCookieJarId] = useActiveCookieJarId();
+
+  // Set the active cookie jar to the first one, if none set
   useEffect(() => {
     if (cookieJars == null) return; // Hasn't loaded yet
     if (cookieJars.find((j) => j.id === activeCookieJarId)) {

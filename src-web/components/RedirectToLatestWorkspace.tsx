@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppRoutes } from '../hooks/useAppRoutes';
+import { getRecentCookieJars } from '../hooks/useRecentCookieJars';
 import { getRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { getRecentRequests } from '../hooks/useRecentRequests';
 import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
@@ -20,13 +21,14 @@ export function RedirectToLatestWorkspace() {
 
     (async function () {
       const workspaceId = recentWorkspaces[0] ?? workspaces[0]?.id ?? 'n/a';
-      const environmentId = (await getRecentEnvironments(workspaceId))[0];
-      const requestId = (await getRecentRequests(workspaceId))[0];
+      const environmentId = (await getRecentEnvironments(workspaceId))[0] ?? null;
+      const cookieJarId = (await getRecentCookieJars(workspaceId))[0] ?? null;
+      const requestId = (await getRecentRequests(workspaceId))[0] ?? null;
 
       if (workspaceId != null && requestId != null) {
-        navigate(routes.paths.request({ workspaceId, environmentId, requestId }));
+        navigate(routes.paths.request({ workspaceId, environmentId, requestId, cookieJarId }));
       } else {
-        navigate(routes.paths.workspace({ workspaceId, environmentId }));
+        navigate(routes.paths.workspace({ workspaceId, environmentId, cookieJarId }));
       }
     })();
   }, [navigate, recentWorkspaces, routes.paths, workspaces, workspaces.length]);

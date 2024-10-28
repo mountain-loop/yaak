@@ -1,15 +1,17 @@
 import { useMutation } from '@tanstack/react-query';
+import { useSetAtom } from 'jotai/index';
 import { count } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
 import { useActiveWorkspace } from './useActiveWorkspace';
 import { useAlert } from './useAlert';
 import { useConfirm } from './useConfirm';
 import { useGrpcConnections } from './useGrpcConnections';
-import { useHttpResponses } from './useHttpResponses';
+import { httpResponsesAtom, useHttpResponses } from './useHttpResponses';
 
 export function useDeleteSendHistory() {
   const confirm = useConfirm();
   const alert = useAlert();
+  const setHttpResponses = useSetAtom(httpResponsesAtom);
   const activeWorkspace = useActiveWorkspace();
   const httpResponses = useHttpResponses();
   const grpcConnections = useGrpcConnections();
@@ -36,8 +38,15 @@ export function useDeleteSendHistory() {
         variant: 'delete',
         description: <>Delete {labels.join(' and ')}?</>,
       });
-      if (!confirmed) return;
+      if (!confirmed) return false;
+
       await invokeCmd('cmd_delete_send_history', { workspaceId: activeWorkspace?.id ?? 'n/a' });
+      return true;
+    },
+    onSuccess: async (confirmed) => {
+      if (!confirmed) return;
+
+      setHttpResponses((all) => all.filter((r) => r.workspaceId !== activeWorkspace?.id));
     },
   });
 }

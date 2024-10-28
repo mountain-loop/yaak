@@ -6,6 +6,8 @@ pub enum Error {
     SqlError(#[from] rusqlite::Error),
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
+    #[error("Model not found {0}")]
+    ModelNotFound(String),
     #[error("unknown error")]
     Unknown,
 }

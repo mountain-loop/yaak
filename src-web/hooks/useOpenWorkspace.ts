@@ -17,9 +17,9 @@ export function useOpenWorkspace() {
       workspaceId: string;
       inNewWindow: boolean;
     }) => {
-      const environmentId = (await getRecentEnvironments(workspaceId))[0];
-      const requestId = (await getRecentRequests(workspaceId))[0];
-      const cookieJarId = (await getRecentCookieJars(workspaceId))[0];
+      const environmentId = (await getRecentEnvironments(workspaceId))[0] ?? null;
+      const requestId = (await getRecentRequests(workspaceId))[0] ?? null;
+      const cookieJarId = (await getRecentCookieJars(workspaceId))[0] ?? null;
       const baseArgs = { workspaceId, environmentId, cookieJarId } as const;
       if (inNewWindow) {
         const path =

@@ -12,7 +12,11 @@ export function useOpenSettings() {
       if (workspace == null) return;
 
       await invokeCmd('cmd_new_child_window', {
-        url: routes.paths.workspaceSettings({ workspaceId: workspace.id }),
+        url: routes.paths.workspaceSettings({
+          workspaceId: workspace.id,
+          cookieJarId: null,
+          environmentId: null,
+        }),
         label: 'settings',
         title: 'Yaak Settings',
         innerSize: [600, 550],

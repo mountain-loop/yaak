@@ -1,6 +1,6 @@
 import { lazy } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider, useParams } from 'react-router-dom';
-import { routePaths, useAppRoutes } from '../hooks/useAppRoutes';
+import { paths, useAppRoutes } from '../hooks/useAppRoutes';
 import { DefaultLayout } from './DefaultLayout';
 import { RedirectToLatestWorkspace } from './RedirectToLatestWorkspace';
 import RouteError from './RouteError';
@@ -19,19 +19,23 @@ const router = createBrowserRouter([
         element: <RedirectToLatestWorkspace />,
       },
       {
-        path: routePaths.workspaces(),
+        path: paths.workspaces(),
         element: <RedirectToLatestWorkspace />,
       },
       {
-        path: routePaths.workspace({
+        path: paths.workspace({
           workspaceId: ':workspaceId',
+          environmentId: null,
+          cookieJarId: null,
         }),
         element: <LazyWorkspace />,
       },
       {
-        path: routePaths.request({
+        path: paths.request({
           workspaceId: ':workspaceId',
           requestId: ':requestId',
+          environmentId: null,
+          cookieJarId: null,
         }),
         element: <LazyWorkspace />,
       },
@@ -40,8 +44,10 @@ const router = createBrowserRouter([
         element: <RedirectLegacyEnvironmentURLs />,
       },
       {
-        path: routePaths.workspaceSettings({
+        path: paths.workspaceSettings({
           workspaceId: ':workspaceId',
+          environmentId: null,
+          cookieJarId: null,
         }),
         element: <LazySettings />,
       },
@@ -64,13 +70,13 @@ function RedirectLegacyEnvironmentURLs() {
     workspaceId?: string;
     environmentId?: string;
   }>();
-  const environmentId = rawEnvironmentId === '__default__' ? undefined : rawEnvironmentId;
+  const environmentId = (rawEnvironmentId === '__default__' ? undefined : rawEnvironmentId) ?? null;
 
   let to;
   if (workspaceId != null && requestId != null) {
-    to = routes.paths.request({ workspaceId, environmentId, requestId });
+    to = routes.paths.request({ workspaceId, environmentId, requestId, cookieJarId: null });
   } else if (workspaceId != null) {
-    to = routes.paths.workspace({ workspaceId, environmentId });
+    to = routes.paths.workspace({ workspaceId, environmentId, cookieJarId: null });
   } else {
     to = routes.paths.workspaces();
   }

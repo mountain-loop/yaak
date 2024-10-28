@@ -5,8 +5,8 @@ import { createGlobalState } from 'react-use';
 import { useCopy } from '../../hooks/useCopy';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useFilterResponse } from '../../hooks/useFilterResponse';
+import { useFormatText } from '../../hooks/useFormatText';
 import { useToggle } from '../../hooks/useToggle';
-import { tryFormatJson, tryFormatXml } from '../../lib/formatters';
 import { CopyButton } from '../CopyButton';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
@@ -28,6 +28,7 @@ interface Props {
   text: string;
   language: EditorProps['language'];
   responseId: string;
+  requestId: string;
   onSaveResponse: () => void;
 }
 
@@ -37,20 +38,21 @@ export function TextViewer({
   language,
   text,
   responseId,
+  requestId,
   pretty,
   className,
   onSaveResponse,
 }: Props) {
   const [filterTextMap, setFilterTextMap] = useFilterText();
   const [showLargeResponse, toggleShowLargeResponse] = useToggle();
-  const filterText = filterTextMap[responseId] ?? null;
+  const filterText = filterTextMap[requestId] ?? null;
   const copy = useCopy();
   const debouncedFilterText = useDebouncedValue(filterText, 200);
   const setFilterText = useCallback(
     (v: string | null) => {
-      setFilterTextMap((m) => ({ ...m, [responseId]: v }));
+      setFilterTextMap((m) => ({ ...m, [requestId]: v }));
     },
-    [setFilterTextMap, responseId],
+    [setFilterTextMap, requestId],
   );
 
   const isSearching = filterText != null;
@@ -75,7 +77,7 @@ export function TextViewer({
       nodes.push(
         <div key="input" className="w-full !opacity-100">
           <Input
-            key={responseId}
+            key={requestId}
             validate={!filteredResponse.error}
             hideLabel
             autoFocus
@@ -110,10 +112,12 @@ export function TextViewer({
     filteredResponse.error,
     isSearching,
     language,
-    responseId,
+    requestId,
     setFilterText,
     toggleSearch,
   ]);
+
+  const formattedBody = useFormatText({ text, language, pretty });
 
   if (!showLargeResponse && text.length > LARGE_RESPONSE_BYTES) {
     return (
@@ -138,12 +142,9 @@ export function TextViewer({
     );
   }
 
-  const formattedBody =
-    pretty && language === 'json'
-      ? tryFormatJson(text)
-      : pretty && (language === 'xml' || language === 'html')
-        ? tryFormatXml(text)
-        : text;
+  if (formattedBody.data == null) {
+    return null;
+  }
 
   let body;
   if (isSearching && filterText?.length > 0) {
@@ -153,7 +154,7 @@ export function TextViewer({
       body = filteredResponse.data != null ? filteredResponse.data : '';
     }
   } else {
-    body = formattedBody;
+    body = formattedBody.data;
   }
 
   return (

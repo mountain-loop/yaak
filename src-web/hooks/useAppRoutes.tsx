@@ -1,22 +1,19 @@
-import type { Environment } from '@yaakapp-internal/models';
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QUERY_COOKIE_JAR_ID } from './useActiveCookieJar';
 import { QUERY_ENVIRONMENT_ID } from './useActiveEnvironment';
-import { useActiveRequestId } from './useActiveRequestId';
-import { useActiveWorkspace } from './useActiveWorkspace';
 
 export type RouteParamsWorkspace = {
   workspaceId: string;
-  environmentId?: string;
-  cookieJarId?: string;
+  environmentId: string | null;
+  cookieJarId: string | null;
 };
 
 export type RouteParamsRequest = RouteParamsWorkspace & {
   requestId: string;
 };
 
-export const routePaths = {
+export const paths = {
   workspaces() {
     return '/workspaces';
   },
@@ -52,44 +49,21 @@ export const routePaths = {
 };
 
 export function useAppRoutes() {
-  const activeWorkspace = useActiveWorkspace();
-  const requestId = useActiveRequestId();
   const nav = useNavigate();
 
   const navigate = useCallback(
-    <T extends keyof typeof routePaths>(path: T, ...params: Parameters<(typeof routePaths)[T]>) => {
+    <T extends keyof typeof paths>(path: T, ...params: Parameters<(typeof paths)[T]>) => {
       // Not sure how to make TS work here, but it's good from the
       // outside caller perspective.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resolvedPath = routePaths[path](...(params as any));
+      const resolvedPath = paths[path](...(params as any));
       nav(resolvedPath);
     },
     [nav],
   );
 
-  const setEnvironment = useCallback(
-    (environment: Environment | null) => {
-      if (activeWorkspace == null) {
-        navigate('workspaces');
-      } else if (requestId == null) {
-        navigate('workspace', {
-          workspaceId: activeWorkspace.id,
-          environmentId: environment == null ? undefined : environment.id,
-        });
-      } else {
-        navigate('request', {
-          workspaceId: activeWorkspace.id,
-          environmentId: environment == null ? undefined : environment.id,
-          requestId,
-        });
-      }
-    },
-    [navigate, activeWorkspace, requestId],
-  );
-
   return {
-    paths: routePaths,
+    paths,
     navigate,
-    setEnvironment,
   };
 }

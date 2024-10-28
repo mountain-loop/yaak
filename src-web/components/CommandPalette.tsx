@@ -1,6 +1,7 @@
+import type { KeyboardEvent, ReactNode } from 'react';
+import type { HotkeyAction } from '../hooks/useHotKey';
 import classNames from 'classnames';
 import { fuzzyFilter } from 'fuzzbunny';
-import type { KeyboardEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
@@ -13,7 +14,6 @@ import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDebouncedState } from '../hooks/useDebouncedState';
 import { useDeleteRequest } from '../hooks/useDeleteRequest';
 import { useEnvironments } from '../hooks/useEnvironments';
-import type { HotkeyAction } from '../hooks/useHotKey';
 import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useOpenSettings } from '../hooks/useOpenSettings';
@@ -271,7 +271,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           return routes.navigate('request', {
             workspaceId: r.workspaceId,
             requestId: r.id,
-            environmentId: activeEnvironment?.id,
+            environmentId: activeEnvironment?.id ?? null,
+            cookieJarId: activeCookieJar?.id ?? null,
           });
         },
       });
@@ -313,7 +314,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     workspaceCommands,
     sortedRequests,
     routes,
-    activeEnvironment,
+    activeEnvironment?.id,
+    activeCookieJar?.id,
     sortedEnvironments,
     setActiveEnvironmentId,
     sortedWorkspaces,
@@ -335,7 +337,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           })),
           command,
           { fields: ['filterBy'] },
-        ).map((v) => v.item)
+        )
+          .sort((a, b) => b.score - a.score)
+          .map((v) => v.item)
       : allItems;
 
     const filteredGroups = groups

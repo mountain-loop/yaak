@@ -31,7 +31,7 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
   }
 
   if (language === 'html' && pretty) {
-    return <WebPageViewer response={response} />;
+    return <WebPageViewer response={response}/>;
   } else {
     return (
       <TextViewer
@@ -41,6 +41,7 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
         className={textViewerClassName}
         onSaveResponse={saveResponse.mutate}
         responseId={response.id}
+        requestId={response.requestId}
       />
     );
   }

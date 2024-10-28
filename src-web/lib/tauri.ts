@@ -28,6 +28,7 @@ type TauriCmd =
   | 'cmd_duplicate_http_request'
   | 'cmd_export_data'
   | 'cmd_filter_response'
+  | 'cmd_format_json'
   | 'cmd_get_cookie_jar'
   | 'cmd_get_environment'
   | 'cmd_get_folder'

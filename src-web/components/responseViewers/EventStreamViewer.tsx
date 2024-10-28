@@ -4,10 +4,11 @@ import type { ServerSentEvent } from '@yaakapp-internal/sse';
 import classNames from 'classnames';
 import { motion } from 'framer-motion';
 import React, { Fragment, useMemo, useRef, useState } from 'react';
+import { useFormatText } from '../../hooks/useFormatText';
 import { useResponseBodyEventSource } from '../../hooks/useResponseBodyEventSource';
 import { isJSON } from '../../lib/contentType';
-import { tryFormatJson } from '../../lib/formatters';
 import { Button } from '../core/Button';
+import type { EditorProps } from '../core/Editor';
 import { Editor } from '../core/Editor';
 import { Icon } from '../core/Icon';
 import { InlineCode } from '../core/InlineCode';
@@ -95,11 +96,7 @@ function ActualEventStreamViewer({ response }: Props) {
                       </div>
                     </VStack>
                   ) : (
-                    <Editor
-                      readOnly
-                      defaultValue={tryFormatJson(activeEvent.data)}
-                      language={language}
-                    />
+                    <FormattedEditor language={language} text={activeEvent.data} />
                   )}
                 </div>
               </div>
@@ -108,6 +105,12 @@ function ActualEventStreamViewer({ response }: Props) {
       }
     />
   );
+}
+
+function FormattedEditor({ text, language }: { text: string; language: EditorProps['language'] }) {
+  const formatted = useFormatText({ text, language, pretty: true });
+  if (formatted.data == null) return null;
+  return <Editor readOnly defaultValue={formatted.data} language={language} />;
 }
 
 function EventStreamEventsVirtual({

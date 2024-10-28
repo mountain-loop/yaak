@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import { useMemo, useRef } from 'react';
 import { useKeyPressEvent } from 'react-use';
+import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
@@ -20,6 +21,7 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
   const activeRequest = useActiveRequest();
   const activeWorkspace = useActiveWorkspace();
   const [activeEnvironment] = useActiveEnvironment();
+  const [activeCookieJar] = useActiveCookieJar();
   const routes = useAppRoutes();
   const allRecentRequestIds = useRecentRequests();
   const recentRequestIds = useMemo(() => allRecentRequestIds.slice(1), [allRecentRequestIds]);
@@ -57,8 +59,9 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
         onSelect: () => {
           routes.navigate('request', {
             requestId: request.id,
-            environmentId: activeEnvironment?.id,
             workspaceId: activeWorkspace.id,
+            environmentId: activeEnvironment?.id ?? null,
+            cookieJarId: activeCookieJar?.id ?? null,
           });
         },
       });
@@ -76,7 +79,7 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
     }
 
     return recentRequestItems.slice(0, 20);
-  }, [activeWorkspace, activeEnvironment?.id, recentRequestIds, requests, routes]);
+  }, [activeWorkspace, recentRequestIds, requests, routes, activeEnvironment?.id, activeCookieJar?.id]);
 
   return (
     <Dropdown ref={dropdownRef} items={items}>

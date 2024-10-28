@@ -66,7 +66,8 @@ export function useImportData() {
     if (importedWorkspace != null) {
       routes.navigate('workspace', {
         workspaceId: importedWorkspace.id,
-        environmentId: imported.environments[0]?.id,
+        environmentId: imported.environments[0]?.id ?? null,
+        cookieJarId: null,
       });
     }
 

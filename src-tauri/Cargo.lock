@@ -209,7 +209,7 @@ version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fec134f64e2bc57411226dfc4e52dec859ddfc7e711fc5e07b612584f000e4aa"
 dependencies = [
- "brotli",
+ "brotli 6.0.0",
  "flate2",
  "futures-core",
  "memchr",
@@ -632,6 +632,17 @@ name = "brotli"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74f7971dbd9326d58187408ab83117d8ac1bb9c17b085fdacd1cf2f598719b6b"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
+ "brotli-decompressor",
+]
+
+[[package]]
+name = "brotli"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc97b8f16f944bba54f0433f07e30be199b6dc2bd25937444bbad560bcea29bd"
 dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
@@ -2938,7 +2949,19 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b1fb8864823fad91877e6caea0baca82e49e8db50f8e5c9f9a453e27d3330fc"
 dependencies = [
- "jsonptr",
+ "jsonptr 0.4.7",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "json-patch"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "863726d7afb6bc2590eeff7135d923545e5e964f004c2ccf8716c25e70a86f08"
+dependencies = [
+ "jsonptr 0.6.3",
  "serde",
  "serde_json",
  "thiserror",
@@ -2951,6 +2974,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c6e529149475ca0b2820835d3dce8fcc41c6b943ca608d32f35b449255e4627"
 dependencies = [
  "fluent-uri",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "jsonptr"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5dea2b27dd239b2556ed7a25ba842fe47fd602e7fc7433c2a8d6106d4d9edd70"
+dependencies = [
  "serde",
  "serde_json",
 ]
@@ -4767,9 +4800,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.10.6"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4219d74c6b67a3654a9fbebc4b419e22126d13d2f3c4a07ee0cb61ff79a79619"
+checksum = "38200e5ee88914975b69f657f0801b6f6dccafd44fd9326302a4aaeecfacb1d8"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -4779,9 +4812,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.7"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38caf58cc5ef2fed281f89292ef23f6365465ed9a41b7a7754eb4e26496c92df"
+checksum = "368758f23274712b504848e9d5a6f010445cc8b87a7cdb4d7cbee666c1288da3"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -4790,9 +4823,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
+checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "rend"
@@ -6098,9 +6131,9 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tauri"
-version = "2.0.4"
+version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44438500b50708bfc1e6083844e135d1b516325aae58710dcd8fb67e050ae87c"
+checksum = "d3889b392db6d32a105d3757230ea0220090b8f94c90d3e60b6c5eb91178ab1b"
 dependencies = [
  "anyhow",
  "bytes",
@@ -6149,16 +6182,16 @@ dependencies = [
 
 [[package]]
 name = "tauri-build"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "935f9b3c49b22b3e2e485a57f46d61cd1ae07b1cbb2ba87387a387caf2d8c4e7"
+checksum = "9f96827ccfb1aa40d55d0ded79562d18ba18566657a553f992a982d755148376"
 dependencies = [
  "anyhow",
  "cargo_toml",
  "dirs",
  "glob",
  "heck 0.5.0",
- "json-patch",
+ "json-patch 3.0.1",
  "schemars",
  "semver",
  "serde",
@@ -6171,14 +6204,14 @@ dependencies = [
 
 [[package]]
 name = "tauri-codegen"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95d7443dd4f0b597704b6a14b964ee2ed16e99928d8e6292ae9825f09fbcd30e"
+checksum = "8947f16f47becd9e9cd39b74ee337fd1981574d78819be18e4384d85e5a0b82f"
 dependencies = [
  "base64 0.22.1",
- "brotli",
+ "brotli 7.0.0",
  "ico",
- "json-patch",
+ "json-patch 2.0.0",
  "plist",
  "png",
  "proc-macro2",
@@ -6198,9 +6231,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-macros"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d2c0963ccfc3f5194415f2cce7acc975942a8797fbabfb0aa1ed6f59326ae7f"
+checksum = "8bd1c8d4a66799d3438747c3a79705cd665a95d6f24cb5f315413ff7a981fe2a"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -6245,9 +6278,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-dialog"
-version = "2.0.1"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddb2fe88b602461c118722c574e2775ab26a4e68886680583874b2f6520608b7"
+checksum = "4307310e1d2c09ab110235834722e7c2b85099b683e1eb7342ab351b0be5ada3"
 dependencies = [
  "log",
  "raw-window-handle",
@@ -6263,9 +6296,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-fs"
-version = "2.0.1"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab300488ebec3487ca5f56289692e7e45feb07eea8d5e1dba497f7dc9dd9c407"
+checksum = "96ba7d46e86db8c830d143ef90ab5a453328365b0cc834c24edea4267b16aba0"
 dependencies = [
  "anyhow",
  "dunce",
@@ -6324,9 +6357,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-shell"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "371fb9aca2823990a2d0db7970573be5fdf07881fcaa2b835b29631feb84aec1"
+checksum = "0ad7880c5586b6b2104be451e3d7fc0f3800c84bda69e9ba81c828f87cb34267"
 dependencies = [
  "encoding_rs",
  "log",
@@ -6411,9 +6444,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-runtime"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8f437293d6f5e5dce829250f4dbdce4e0b52905e297a6689cc2963eb53ac728"
+checksum = "a1ef7363e7229ac8d04e8a5d405670dbd43dde8fc4bc3bc56105c35452d03784"
 dependencies = [
  "dpi",
  "gtk",
@@ -6430,9 +6463,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-runtime-wry"
-version = "2.1.1"
+version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1431602bcc71f2f840ad623915c9842ecc32999b867c4a787d975a17a9625cc6"
+checksum = "62fa2068e8498ad007b54d5773d03d57c3ff6dd96f8c8ce58beff44d0d5e0d30"
 dependencies = [
  "gtk",
  "http 1.1.0",
@@ -6456,18 +6489,18 @@ dependencies = [
 
 [[package]]
 name = "tauri-utils"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c38b0230d6880cf6dd07b6d7dd7789a0869f98ac12146e0d18d1c1049215a045"
+checksum = "1fc65d6f5c54e56b66258948a6d9e47a82ea41f4b5a7612bfbdd1634c2913ed0"
 dependencies = [
- "brotli",
+ "brotli 7.0.0",
  "cargo_metadata",
  "ctor",
  "dunce",
  "glob",
  "html5ever",
  "infer",
- "json-patch",
+ "json-patch 2.0.0",
  "kuchikiki",
  "log",
  "memchr",

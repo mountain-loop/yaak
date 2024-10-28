@@ -13,6 +13,7 @@ import React, { Fragment, useCallback, useMemo, useRef, useState } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
 import { useKey, useKeyPressEvent } from 'react-use';
+import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 
 import { useActiveRequest } from '../hooks/useActiveRequest';
@@ -74,6 +75,7 @@ export function Sidebar({ className }: Props) {
   const sidebarRef = useRef<HTMLLIElement>(null);
   const activeRequest = useActiveRequest();
   const [activeEnvironment] = useActiveEnvironment();
+  const [activeCookieJar] = useActiveCookieJar();
   const folders = useFolders();
   const requests = useRequests();
   const activeWorkspace = useActiveWorkspace();
@@ -222,14 +224,22 @@ export function Sidebar({ className }: Props) {
         routes.navigate('request', {
           requestId: id,
           workspaceId: item.workspaceId,
-          environmentId: activeEnvironment?.id,
+          environmentId: activeEnvironment?.id ?? null,
+          cookieJarId: activeCookieJar?.id ?? null,
         });
         setSelectedId(id);
         setSelectedTree(tree);
         if (!opts.noFocus) focusActiveRequest({ forced: { id, tree } });
       }
     },
-    [treeParentMap, collapsed, routes, activeEnvironment, focusActiveRequest],
+    [
+      treeParentMap,
+      collapsed,
+      routes,
+      activeEnvironment?.id,
+      activeCookieJar?.id,
+      focusActiveRequest,
+    ],
   );
 
   const handleClearSelected = useCallback(() => {
@@ -274,8 +284,9 @@ export function Sidebar({ className }: Props) {
     e.preventDefault();
     routes.navigate('request', {
       requestId: selected.id,
-      workspaceId: activeWorkspace?.id,
-      environmentId: activeEnvironment?.id,
+      workspaceId: activeWorkspace?.id ?? null,
+      environmentId: activeEnvironment?.id ?? null,
+      cookieJarId: activeCookieJar?.id ?? null,
     });
   });
 
@@ -706,9 +717,15 @@ function SidebarItem({
   const handleSubmitNameEdit = useCallback(
     async (el: HTMLInputElement) => {
       if (itemModel === 'http_request') {
-        await updateHttpRequest.mutateAsync({ id: itemId, update: (r) => ({ ...r, name: el.value }) });
+        await updateHttpRequest.mutateAsync({
+          id: itemId,
+          update: (r) => ({ ...r, name: el.value }),
+        });
       } else if (itemModel === 'grpc_request') {
-        await updateGrpcRequest.mutateAsync({ id: itemId, update: (r) => ({ ...r, name: el.value }) });
+        await updateGrpcRequest.mutateAsync({
+          id: itemId,
+          update: (r) => ({ ...r, name: el.value }),
+        });
       }
       setEditing(false);
     },
@@ -726,7 +743,7 @@ function SidebarItem({
       switch (e.key) {
         case 'Enter':
           e.preventDefault();
-          handleSubmitNameEdit(e.currentTarget);
+          await handleSubmitNameEdit(e.currentTarget);
           break;
         case 'Escape':
           e.preventDefault();
@@ -743,8 +760,8 @@ function SidebarItem({
   }, [setEditing, itemModel]);
 
   const handleBlur = useCallback(
-    (e: React.FocusEvent<HTMLInputElement>) => {
-      handleSubmitNameEdit(e.currentTarget);
+    async (e: React.FocusEvent<HTMLInputElement>) => {
+      await handleSubmitNameEdit(e.currentTarget);
     },
     [handleSubmitNameEdit],
   );
@@ -905,8 +922,9 @@ function SidebarItem({
           className={classNames(
             'w-full flex gap-1.5 items-center h-xs px-1.5 rounded-md focus-visible:ring focus-visible:ring-border-focus outline-0',
             editing && 'ring-1 focus-within:ring-focus',
-            isActive && 'bg-surface-highlight text',
-            !isActive && 'text-text-subtle group-hover/item:text-text active:bg-surface-highlight',
+            isActive && 'bg-surface-highlight text-text',
+            !isActive && 'text-text-subtle group-hover/item:text-text',
+            showContextMenu && '!text-text', // Show as "active" when context menu is open
             selected && useProminentStyles && '!bg-surface-active',
           )}
         >

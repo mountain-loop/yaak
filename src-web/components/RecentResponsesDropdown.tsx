@@ -41,7 +41,7 @@ export const RecentResponsesDropdown = function ResponsePane({
         },
         {
           key: 'copy',
-          label: 'Copy to Clipboard',
+          label: 'Copy Body',
           onSelect: copyResponse.mutate,
           leftSlot: <Icon icon="copy" />,
           hidden: responses.length === 0,

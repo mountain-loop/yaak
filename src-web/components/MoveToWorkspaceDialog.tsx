@@ -71,7 +71,11 @@ export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Pr
                 className="mr-auto min-w-[5rem]"
                 onClick={() => {
                   toast.hide('workspace-moved');
-                  routes.navigate('workspace', { workspaceId: selectedWorkspaceId });
+                  routes.navigate('workspace', {
+                    workspaceId: selectedWorkspaceId,
+                    cookieJarId: null,
+                    environmentId: null,
+                  });
                 }}
               >
                 Switch to Workspace

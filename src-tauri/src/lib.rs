@@ -74,6 +74,7 @@ use yaak_plugin_runtime::events::{
 };
 use yaak_plugin_runtime::plugin_handle::PluginHandle;
 use yaak_sse::sse::ServerSentEvent;
+use yaak_templates::format::format_json;
 use yaak_templates::{Parser, Tokens};
 
 mod analytics;
@@ -173,7 +174,10 @@ async fn cmd_grpc_reflect<R: Runtime>(
     window: WebviewWindow<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> Result<Vec<ServiceDefinition>, String> {
-    let req = get_grpc_request(&window, request_id).await.map_err(|e| e.to_string())?;
+    let req = get_grpc_request(&window, request_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("Failed to find GRPC request")?;
 
     let uri = safe_uri(&req.url);
 
@@ -200,7 +204,10 @@ async fn cmd_grpc_go<R: Runtime>(
         Some(id) => Some(get_environment(&window, id).await.map_err(|e| e.to_string())?),
         None => None,
     };
-    let req = get_grpc_request(&window, request_id).await.map_err(|e| e.to_string())?;
+    let req = get_grpc_request(&window, request_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("Failed to find GRPC request")?;
     let workspace = get_workspace(&window, &req.workspace_id).await.map_err(|e| e.to_string())?;
     let req = render_grpc_request(
         &req,
@@ -735,6 +742,11 @@ async fn cmd_send_ephemeral_request(
     });
 
     send_http_request(&window, &request, &response, environment, cookie_jar, &mut cancel_rx).await
+}
+
+#[tauri::command]
+async fn cmd_format_json(text: &str) -> Result<String, String> {
+    Ok(format_json(text, "  "))
 }
 
 #[tauri::command]
@@ -1430,12 +1442,12 @@ async fn cmd_get_folder(id: &str, w: WebviewWindow) -> Result<Folder, String> {
 }
 
 #[tauri::command]
-async fn cmd_get_grpc_request(id: &str, w: WebviewWindow) -> Result<GrpcRequest, String> {
+async fn cmd_get_grpc_request(id: &str, w: WebviewWindow) -> Result<Option<GrpcRequest>, String> {
     get_grpc_request(&w, id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_get_http_request(id: &str, w: WebviewWindow) -> Result<HttpRequest, String> {
+async fn cmd_get_http_request(id: &str, w: WebviewWindow) -> Result<Option<HttpRequest>, String> {
     get_http_request(&w, id).await.map_err(|e| e.to_string())
 }
 
@@ -1712,12 +1724,10 @@ pub fn run() {
             cmd_create_folder,
             cmd_create_grpc_request,
             cmd_create_http_request,
-            cmd_install_plugin,
             cmd_create_workspace,
             cmd_curl_to_request,
             cmd_delete_all_grpc_connections,
             cmd_delete_all_http_responses,
-            cmd_delete_send_history,
             cmd_delete_cookie_jar,
             cmd_delete_environment,
             cmd_delete_folder,
@@ -1725,26 +1735,28 @@ pub fn run() {
             cmd_delete_grpc_request,
             cmd_delete_http_request,
             cmd_delete_http_response,
-            cmd_uninstall_plugin,
+            cmd_delete_send_history,
             cmd_delete_workspace,
             cmd_dismiss_notification,
             cmd_duplicate_grpc_request,
             cmd_duplicate_http_request,
             cmd_export_data,
             cmd_filter_response,
+            cmd_format_json,
             cmd_get_cookie_jar,
             cmd_get_environment,
             cmd_get_folder,
             cmd_get_grpc_request,
             cmd_get_http_request,
-            cmd_get_sse_events,
             cmd_get_key_value,
             cmd_get_settings,
+            cmd_get_sse_events,
             cmd_get_workspace,
             cmd_grpc_go,
             cmd_grpc_reflect,
             cmd_http_request_actions,
             cmd_import_data,
+            cmd_install_plugin,
             cmd_list_cookie_jars,
             cmd_list_environments,
             cmd_list_folders,
@@ -1770,6 +1782,7 @@ pub fn run() {
             cmd_template_functions,
             cmd_template_tokens_to_string,
             cmd_track_event,
+            cmd_uninstall_plugin,
             cmd_update_cookie_jar,
             cmd_update_environment,
             cmd_update_folder,
@@ -2074,7 +2087,7 @@ async fn handle_plugin_event<R: Runtime>(
             }))
         }
         InternalEventPayload::GetHttpRequestByIdRequest(req) => {
-            let http_request = get_http_request(app_handle, req.id.as_str()).await.ok();
+            let http_request = get_http_request(app_handle, req.id.as_str()).await.unwrap();
             Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
                 http_request,
             }))

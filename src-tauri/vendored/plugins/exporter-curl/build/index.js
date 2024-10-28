@@ -63,8 +63,12 @@ async function pluginHookExport(_ctx, request) {
       }
       xs.push(NEWLINE);
     }
+  } else if (typeof request.body?.query === "string") {
+    const body = { query: request.body.query || "", variables: maybeParseJSON(request.body.variables, void 0) };
+    xs.push("--data-raw", `${quote(JSON.stringify(body))}`);
+    xs.push(NEWLINE);
   } else if (typeof request.body?.text === "string") {
-    xs.push("--data-raw", `$${quote(request.body.text)}`);
+    xs.push("--data-raw", `${quote(request.body.text)}`);
     xs.push(NEWLINE);
   }
   if (request.authenticationType === "basic" || request.authenticationType === "digest") {
@@ -90,6 +94,13 @@ function quote(arg) {
 }
 function onlyEnabled(v) {
   return v.enabled !== false && !!v.name;
+}
+function maybeParseJSON(v, fallback) {
+  try {
+    return JSON.parse(v);
+  } catch (err) {
+    return fallback;
+  }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

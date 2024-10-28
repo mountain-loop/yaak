@@ -61,7 +61,7 @@ export interface EditorProps {
   onKeyDown?: (e: KeyboardEvent) => void;
   singleLine?: boolean;
   wrapLines?: boolean;
-  format?: (v: string) => string;
+  format?: (v: string) => Promise<string>;
   autocomplete?: GenericCompletionConfig;
   autocompleteVariables?: boolean;
   extraExtensions?: Extension[];
@@ -387,10 +387,10 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
           icon="magic_wand"
           variant="border"
           className={classNames(actionClassName)}
-          onClick={() => {
+          onClick={async () => {
             if (cm.current === null) return;
             const { doc } = cm.current.view.state;
-            const formatted = format(doc.toString());
+            const formatted = await format(doc.toString());
             // Update editor and blur because the cursor will reset anyway
             cm.current.view.dispatch({
               changes: { from: 0, to: doc.length, insert: formatted },
