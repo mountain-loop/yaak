@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
-import { ChangesPayload, CommitPayload, CommitsPayload } from './bindings/commands';
+import { CommitPayload } from './bindings/commands';
 import { SyncCommit } from './bindings/models';
 import { StageTreeNode } from './bindings/sync';
 

@@ -78,7 +78,7 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
       ];
     }
 
-    return recentRequestItems.slice(0, 20);
+    return recentRequestItems;
   }, [activeWorkspace, recentRequestIds, requests, routes, activeEnvironment?.id, activeCookieJar?.id]);
 
   return (
