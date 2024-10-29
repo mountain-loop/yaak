@@ -22,3 +22,4 @@ tauri = { workspace = true }
 tauri-plugin-shell = { workspace = true }
 md5 = "0.7.0"
 dunce = "1.0.4"
+async-recursion = "1.1.1"
