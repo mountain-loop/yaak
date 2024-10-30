@@ -93,7 +93,7 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
           activeRequest === null && 'text-text-subtlest italic',
         )}
       >
-        {resolvedModelName(activeRequest)}
+        {activeRequest == null ? 'No Request' : resolvedModelName(activeRequest)}
       </Button>
     </Dropdown>
   );

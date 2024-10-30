@@ -19,7 +19,7 @@ interface Props {
 }
 
 export function SyncCommitDialog({ workspaceId, hide }: Props) {
-  const tree = useChanges({workspaceId, branch: 'master'});
+  const tree = useChanges({ workspaceId, branch: 'master' });
 
   if (tree.isFetching || tree.data == null) {
     return null;
@@ -69,7 +69,7 @@ function SyncCommitChanges({
     return null;
   }
 
-  if (!isNodeIgnored(tree)) {
+  if (!isNodeRelevant(tree)) {
     return (
       <EmptyStateText>
         No changes to commit.
@@ -132,7 +132,7 @@ function TreeNodeChildren({
   onCheck: (node: StageTreeNode, checked: boolean) => void;
 }) {
   if (node === null) return null;
-  if (!isNodeIgnored(node)) return null;
+  if (!isNodeRelevant(node)) return null;
 
   const checked = nodeCheckedStatus(node, addedIds);
   return (
@@ -145,6 +145,7 @@ function TreeNodeChildren({
         <Checkbox
           className="w-full hover:bg-surface-highlight rounded px-1 group"
           checked={checked}
+          onChange={(checked) => onCheck(node, checked)}
           title={
             <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1 w-full">
               <div className="truncate">{resolvedModelName(node.model)}</div>
@@ -162,7 +163,6 @@ function TreeNodeChildren({
               )}
             </div>
           }
-          onChange={(checked) => onCheck(node, checked)}
         />
       </div>
 
@@ -188,17 +188,13 @@ function nodeCheckedStatus(
 ): CheckboxProps['checked'] {
   let leavesVisited = 0;
   let leavesChecked = 0;
-  if (root.children.length === 0) {
-    return addedIds[root.model.id] ?? false;
-  }
 
   const visitChildren = (n: StageTreeNode) => {
-    if (!isNodeIgnored(n)) return;
-
     if (n.children.length === 0) {
       leavesVisited += 1;
-      const checked = addedIds[n.model.id] ?? false;
-      if (checked) leavesChecked += 1;
+      if (addedIds[n.model.id]) {
+        leavesChecked += 1;
+      }
     }
     for (const child of n.children) {
       visitChildren(child);
@@ -221,20 +217,18 @@ function setCheckedOnChildren(
   addedIds: Record<string, boolean>,
   checked: boolean,
 ) {
-  if (node.children.length === 0) {
-    addedIds[node.model.id] = checked;
-  }
+  addedIds[node.model.id] = checked;
 
   for (const child of node.children) {
     setCheckedOnChildren(child, addedIds, checked);
   }
 }
 
-function isNodeIgnored(node: StageTreeNode): boolean {
+function isNodeRelevant(node: StageTreeNode): boolean {
   if (node.status !== 'unmodified') {
     return true;
   }
 
   // Recursively check children
-  return node.children.some((c) => isNodeIgnored(c));
+  return node.children.some((c) => isNodeRelevant(c));
 }
