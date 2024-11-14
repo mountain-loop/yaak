@@ -5,6 +5,7 @@ import { useActiveWorkspace } from './useActiveWorkspace';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
 import { useRequestUpdateKey } from './useRequestUpdateKey';
 import { useUpdateAnyHttpRequest } from './useUpdateAnyHttpRequest';
+import type { HttpRequest } from '@yaakapp-internal/models';
 
 export function useImportCurl() {
   const workspace = useActiveWorkspace();
@@ -22,11 +23,10 @@ export function useImportCurl() {
       overwriteRequestId?: string;
       command: string;
     }) => {
-      const request: Record<string, unknown> = await invokeCmd('cmd_curl_to_request', {
+      const request: HttpRequest = await invokeCmd('cmd_curl_to_request', {
         command,
         workspaceId: workspace?.id,
       });
-      delete request.id;
 
       let verb;
       if (overwriteRequestId == null) {
@@ -34,7 +34,17 @@ export function useImportCurl() {
         await createRequest.mutateAsync(request);
       } else {
         verb = 'Updated';
-        await updateRequest.mutateAsync({ id: overwriteRequestId, update: request });
+        let update = (r: HttpRequest) => ({
+          ...r,
+          ...request,
+          id: r.id,
+          createdAt: r.createdAt,
+          workspaceId: r.workspaceId,
+          folderId: r.folderId,
+          name: r.name,
+          sortPriority: r.sortPriority,
+        });
+        await updateRequest.mutateAsync({ id: overwriteRequestId, update: update });
         setTimeout(() => wasUpdatedExternally(overwriteRequestId), 100);
       }
 
