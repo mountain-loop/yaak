@@ -19,6 +19,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Npm install
+        run: npm ci
+
       - name: Vendor things
         run: npm run bootstrap
 
