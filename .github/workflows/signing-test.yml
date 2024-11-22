@@ -10,12 +10,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: dotnet restore App
-
-      - name: Build
-        run: dotnet build --configuration Release --no-restore WpfApp
-
       - name: Sign files with Trusted Signing
         uses: azure/trusted-signing-action@v0.5.0
         with:
