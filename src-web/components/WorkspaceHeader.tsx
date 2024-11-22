@@ -1,7 +1,9 @@
 import classNames from 'classnames';
 import React, { memo } from 'react';
+import { appInfo } from '../hooks/useAppInfo';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { CookieDropdown } from './CookieDropdown';
+import { Button } from './core/Button';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
@@ -38,6 +40,11 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         <RecentRequestsDropdown />
       </div>
       <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-0.5">
+        {appInfo.isDev && (
+          <Button size="2xs" color="notice" variant="border" className="!rounded-full opacity-70">
+            Developer
+          </Button>
+        )}
         <ImportCurlButton />
         <IconButton
           icon="search"

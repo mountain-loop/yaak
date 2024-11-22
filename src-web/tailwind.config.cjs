@@ -1,7 +1,7 @@
 const plugin = require('tailwindcss/plugin');
 
 const sizes = {
-  '2xs': '1.25rem',
+  '2xs': '1.4rem',
   xs: '1.8rem',
   sm: '2.0rem',
   md: '2.5rem',
