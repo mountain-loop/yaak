@@ -6,6 +6,12 @@ jobs:
   build-and-sign:
     runs-on: windows-latest
     name: Build app and sign files with Trusted Signing
+    strategy:
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+            yaak_arch: 'x64'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
