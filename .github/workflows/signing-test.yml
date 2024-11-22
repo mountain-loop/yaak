@@ -16,9 +16,9 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: https://eus.codesigning.azure.net/
-          trusted-signing-account-name: vscx-codesigning
-          certificate-profile-name: vscx-certificate-profile
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
           files-folder: ${{ github.workspace }}\proto\plugins
           files-folder-filter: proto
           file-digest: SHA256
