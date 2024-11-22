@@ -16,46 +16,46 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      - uses: actions/cache@v3
-        continue-on-error: false
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-
-      - name: Install trusted signing CLI
-        run: cargo install trusted-signing-cli
-
-      - name: Sign files
-        shell: bash
-        run: trusted-signing-cli -e "${{ secrets.AZURE_ENDPOINT }}" -a "${{ secrets.AZURE_CODE_SIGNING_NAME }}" -c "${{ secrets.AZURE_CERT_PROFILE_NAME }}" Yaak_2024.12.1_x64-setup.exe
-        env:
-          AZURE_CLIENT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_TENANT_ID }}
-
-#      - name: Sign files with Trusted Signing
-#        uses: azure/trusted-signing-action@v0.5.0
+#      - name: install Rust stable
+#        uses: dtolnay/rust-toolchain@stable
 #        with:
-#          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-#          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-#          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-#          endpoint: ${{ secrets.AZURE_ENDPOINT }}
-#          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
-#          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
-#          files-folder: ${{ github.workspace }}
-#          files-folder-filter: exe
-#          file-digest: SHA256
-#          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-#          timestamp-digest: SHA256
+#          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+#          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+#
+#      - uses: actions/cache@v3
+#        continue-on-error: false
+#        with:
+#          path: |
+#            ~/.cargo/bin/
+#            ~/.cargo/registry/index/
+#            ~/.cargo/registry/cache/
+#            ~/.cargo/git/db/
+#            target/
+#          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+#          restore-keys: ${{ runner.os }}-cargo-
+#
+#      - name: Install trusted signing CLI
+#        run: cargo install trusted-signing-cli
+#
+#      - name: Sign files
+#        shell: bash
+#        run: trusted-signing-cli -e "${{ secrets.AZURE_ENDPOINT }}" -a "${{ secrets.AZURE_CODE_SIGNING_NAME }}" -c "${{ secrets.AZURE_CERT_PROFILE_NAME }}" Yaak_2024.12.1_x64-setup.exe
+#        env:
+#          AZURE_CLIENT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_ID }}
+#          AZURE_CLIENT_SECRET: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_SECRET }}
+#          AZURE_TENANT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_TENANT_ID }}
+
+      - name: Sign files with Trusted Signing
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
