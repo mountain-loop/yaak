@@ -4,6 +4,7 @@ import { catppuccin } from './themes/catppuccin';
 import { github } from './themes/github';
 import { hotdogStand } from './themes/hotdog-stand';
 import { monokaiPro } from './themes/monokai-pro';
+import { nord } from './themes/nord';
 import { relaxing } from './themes/relaxing';
 import { rosePine } from './themes/rose-pine';
 import { yaak, yaakDark, yaakLight } from './themes/yaak';
@@ -19,6 +20,7 @@ const allThemes = [
   ...rosePine,
   ...github,
   ...monokaiPro,
+	...nord,
   ...hotdogStand,
 ];
 
