@@ -23,7 +23,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Npm install
-        run: npm install -g decompress@^4.2.1
+        run: npm install decompress@^4.2.1
 
       - name: Vendor things
         run: node scripts/vendor-node.cjs
