@@ -14,6 +14,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - run: dir src-tauri/vendored
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
