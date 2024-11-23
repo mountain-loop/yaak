@@ -28,7 +28,7 @@ jobs:
         run: npm install decompress@^4.2.1
 
       - name: Vendor things
-        run: node scripts/vendor-node.cjs
+        run: node scripts/vendor-protoc.cjs
 
       - run: dir src-tauri/vendored/protoc
 
@@ -41,18 +41,3 @@ jobs:
           AZURE_CLIENT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_TENANT_ID }}
-
-#      - name: Sign files with Trusted Signing
-#        uses: azure/trusted-signing-action@v0.5.0
-#        with:
-#          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-#          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-#          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-#          endpoint: ${{ secrets.AZURE_ENDPOINT }}
-#          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
-#          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
-#          files-folder: ${{ github.workspace }}
-#          files-folder-filter: exe
-#          file-digest: SHA256
-#          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-#          timestamp-digest: SHA256
