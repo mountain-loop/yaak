@@ -26,7 +26,7 @@ jobs:
         run: npm install -g decompress@^4.2.1
 
       - name: Vendor things
-        run: npm run bootstrap
+        run: node scripts/vendor-node.cjs
 
       - name: Install trusted signing CLI
         run: cargo install trusted-signing-cli
