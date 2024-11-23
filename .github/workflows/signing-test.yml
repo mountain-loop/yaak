@@ -14,25 +14,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-#      - name: Setup Node
-#        uses: actions/setup-node@v4
-#        with:
-#          node-version: 22
-
-#      - name: Npm install
-#        run: npm install -g decompress@^4.2.1
-
-#      - name: Vendor things
-#        run: npm run bootstrap
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 23
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Npm install
+        run: npm install -g decompress@^4.2.1
+
+      - name: Vendor things
+        run: npm run bootstrap
 
       - name: Install trusted signing CLI
         run: cargo install trusted-signing-cli
 
       - name: Sign files
-        run: trusted-signing-cli -e https://eus.codesigning.azure.net/ -a Yaak -c yaakapp yaakprotoc-x86_64-pc-windows-msvc.exe
+        run: trusted-signing-cli -e https://eus.codesigning.azure.net/ -a Yaak -c yaakapp vendored/protoc/yaakprotoc-x86_64-pc-windows-msvc.exe
         env:
           AZURE_CLIENT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_SECRET }}
