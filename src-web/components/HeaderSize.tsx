@@ -2,6 +2,7 @@ import classNames from 'classnames';
 import type { HTMLAttributes, ReactNode } from 'react';
 import React from 'react';
 import { useSettings } from '../hooks/useSettings';
+import { useOsInfo } from '../hooks/useOsInfo';
 import { useStoplightsVisible } from '../hooks/useStoplightsVisible';
 import { WINDOW_CONTROLS_WIDTH, WindowControls } from './WindowControls';
 
@@ -23,6 +24,7 @@ export function HeaderSize({
   onlyXWindowControl,
   children,
 }: HeaderSizeProps) {
+  const osInfo = useOsInfo();
   const settings = useSettings();
   const stoplightsVisible = useStoplightsVisible();
   return (
@@ -36,7 +38,7 @@ export function HeaderSize({
         ...(size === 'lg' ? { height: HEADER_SIZE_LG } : {}),
         ...(stoplightsVisible || ignoreControlsSpacing
           ? { paddingRight: '2px' }
-          : { paddingLeft: '2px', paddingRight: WINDOW_CONTROLS_WIDTH }),
+          : { paddingLeft: '2px', paddingRight: osInfo.osType !== 'macos' ? WINDOW_CONTROLS_WIDTH : '2px' }),
       }}
       className={classNames(
         className,
@@ -48,7 +50,7 @@ export function HeaderSize({
       <div className="pointer-events-none h-full w-full overflow-x-auto hide-scrollbars grid">
         {children}
       </div>
-      <WindowControls onlyX={onlyXWindowControl} />
+      <WindowControls onlyX={onlyXWindowControl} macos={osInfo.osType === 'macos'} />
     </div>
   );
 }

@@ -8,18 +8,19 @@ import { HStack } from './core/Stacks';
 interface Props {
   className?: string;
   onlyX?: boolean;
+  macos?: boolean;
 }
 
 export const WINDOW_CONTROLS_WIDTH = '10.5rem';
 
-export function WindowControls({ className, onlyX }: Props) {
+export function WindowControls({ className, onlyX, macos }: Props) {
   const [maximized, setMaximized] = useState<boolean>(false);
   const stoplightsVisible = useStoplightsVisible();
   if (stoplightsVisible) {
     return null;
   }
 
-  return (
+  return !macos && (
     <HStack
       className={classNames(className, 'ml-4 absolute right-0 top-0 bottom-0')}
       justifyContent="end"
