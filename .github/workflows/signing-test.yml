@@ -30,6 +30,8 @@ jobs:
       - name: Vendor things
         run: node scripts/vendor-node.cjs
 
+      - run: dir src-tauri/vendored/protoc
+
       - name: Install trusted signing CLI
         run: cargo install trusted-signing-cli
 
