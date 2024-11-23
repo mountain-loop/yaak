@@ -34,7 +34,7 @@ jobs:
         run: cargo install trusted-signing-cli
 
       - name: Sign files
-        run: trusted-signing-cli -e https://eus.codesigning.azure.net/ -a Yaak -c yaakapp vendored/protoc/yaakprotoc-x86_64-pc-windows-msvc.exe
+        run: trusted-signing-cli -e https://eus.codesigning.azure.net/ -a Yaak -c yaakapp src-tauri/vendored/protoc/yaakprotoc-x86_64-pc-windows-msvc.exe
         env:
           AZURE_CLIENT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_SECRET }}
