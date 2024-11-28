@@ -52,7 +52,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
+            src-tauri/target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
@@ -64,14 +64,7 @@ jobs:
 
       - name: install dependencies (windows only)
         if: matrix.platform == 'windows-latest'
-        shell: bash
-        env:
-          # replace Azure credentials before running
-          WINDOWS_SIGN_COMMAND: trusted-signing-cli -e "${{ secrets.AZURE_ENDPOINT }}" -a "${{ secrets.AZURE_CODE_SIGNING_NAME }}" -c "${{ secrets.AZURE_CERT_PROFILE_NAME }}" %1
-        run: |
-          cd "$GITHUB_WORKSPACE"
-          cat './src-tauri/tauri.conf.json' | jq '.bundle .windows += {"signCommand": env.WINDOWS_SIGN_COMMAND}' > './src-tauri/temp.json' && mv './src-tauri/temp.json' './src-tauri/tauri.conf.json'
-          cargo install trusted-signing-cli
+        run: cargo install trusted-signing-cli
 
       - name: Install NPM Dependencies
         run: |
