@@ -28,9 +28,10 @@ export function ImportCurlButton() {
       transition={{ delay: 0.5 }}
     >
       <Button
-        size="xs"
+        size="2xs"
         variant="border"
-        color="primary"
+        color="success"
+        className="rounded-full"
         leftSlot={<Icon icon="paste" size="sm" />}
         isLoading={isLoading}
         onClick={async () => {

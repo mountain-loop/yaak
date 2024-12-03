@@ -1,10 +1,11 @@
+use crate::errors::Error::{ClientError, ServerError};
 use crate::errors::Result;
 use chrono::{NaiveDateTime, Utc};
-use log::{debug, info};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::ops::Add;
 use std::time::Duration;
-use tauri::{is_dev, AppHandle, Runtime, WebviewWindow};
+use tauri::{is_dev, AppHandle, Emitter, Runtime, WebviewWindow};
 use ts_rs::TS;
 
 const KV_NAMESPACE: &str = "license";
@@ -22,7 +23,7 @@ pub struct CheckActivationRequestPayload {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "license.ts")]
 pub struct CheckActivationResponsePayload {
-    pub status: bool,
+    pub active: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -41,6 +42,14 @@ pub struct ActivateLicenseResponsePayload {
     pub activation_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "license.ts")]
+pub struct APIErrorResponsePayload {
+    pub error: String,
+    pub message: String,
+}
+
 pub async fn activate_license<R: Runtime>(
     window: &WebviewWindow<R>,
     p: ActivateLicenseRequestPayload,
@@ -48,11 +57,19 @@ pub async fn activate_license<R: Runtime>(
     let client = reqwest::Client::new();
     let response = client.post(build_url("/activate")).json(&p).send().await?;
 
-    debug!("Activated license status={}", response.status());
-    let body_text = response.text().await?;
-    debug!("Activated license: {}", body_text);
+    if response.status().is_client_error() {
+        let body: APIErrorResponsePayload = response.json().await?;
+        return Err(ClientError {
+            message: body.message,
+            error: body.error,
+        });
+    }
 
-    let body: ActivateLicenseResponsePayload = serde_json::from_str(&body_text)?;
+    if response.status().is_server_error() {
+        return Err(ServerError);
+    }
+
+    let body: ActivateLicenseResponsePayload = response.json().await?;
     yaak_models::queries::set_key_value_string(
         window,
         KV_ACTIVATION_ID_KEY,
@@ -60,6 +77,11 @@ pub async fn activate_license<R: Runtime>(
         body.activation_id.as_str(),
     )
     .await;
+
+    if let Err(e) = window.emit("license-activated", true) {
+        warn!("Failed to emit check-license event: {}", e);
+    }
+    
     Ok(())
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -68,6 +90,7 @@ pub async fn activate_license<R: Runtime>(
 pub enum LicenseCheckStatus {
     PersonalUse,
     CommercialUse,
+    InvalidLicense,
     Trialing { end: NaiveDateTime },
     TrialEnded { end: NaiveDateTime },
 }
@@ -81,7 +104,6 @@ pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Lice
     )
     .await;
 
-    // No license activations exist
     let settings = yaak_models::queries::get_or_create_settings(app_handle).await;
     let trial_end = settings.created_at.add(Duration::from_secs(TRIAL_SECONDS));
 
@@ -97,15 +119,26 @@ pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Lice
             info!("Checking license activation");
             // A license has been activated, so let's check the license server
             let client = reqwest::Client::new();
-            let payload = CheckActivationRequestPayload { activation_id: activation_id.clone() };
+            let payload = CheckActivationRequestPayload {
+                activation_id: activation_id.clone(),
+            };
             let response = client.post(build_url("/check")).json(&payload).send().await?;
-            debug!("Activated license status={}", response.status());
-            let body_text = response.text().await?;
-            debug!("Activated license: {} {}", body_text, activation_id);
 
-            let result: CheckActivationResponsePayload = serde_json::from_str(body_text.as_str())?;
-            if !result.status {
-                todo!("Implement error conditions on API")
+            if response.status().is_client_error() {
+                let body: APIErrorResponsePayload = response.json().await?;
+                return Err(ClientError {
+                    message: body.message,
+                    error: body.error,
+                });
+            }
+
+            if response.status().is_server_error() {
+                return Err(ServerError);
+            }
+
+            let body: CheckActivationResponsePayload = response.json().await?;
+            if !body.active {
+                return Ok(LicenseCheckStatus::InvalidLicense);
             }
 
             Ok(LicenseCheckStatus::CommercialUse)

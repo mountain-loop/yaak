@@ -31,7 +31,7 @@ export function HeaderSize({
       style={{
         ...style,
         // Add padding for macOS stoplights, but keep it the same width (account for the interface scale)
-        paddingLeft: stoplightsVisible ? 72 / settings.interfaceScale : undefined,
+        paddingLeft: (stoplightsVisible && !ignoreControlsSpacing) ? 72 / settings.interfaceScale : undefined,
         ...(size === 'md' ? { height: HEADER_SIZE_MD } : {}),
         ...(size === 'lg' ? { height: HEADER_SIZE_LG } : {}),
         ...(stoplightsVisible || ignoreControlsSpacing

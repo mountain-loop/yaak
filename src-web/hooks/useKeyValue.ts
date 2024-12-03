@@ -19,7 +19,7 @@ export function useKeyValue<T extends object | boolean | number | string | null>
   key,
   fallback,
 }: {
-  namespace?: 'global' | 'no_sync';
+  namespace?: 'global' | 'no_sync' | 'license';
   key: string | string[];
   fallback: T;
 }) {

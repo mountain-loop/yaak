@@ -7,8 +7,8 @@ import { SettingsTab } from './Settings/Settings';
 const labels: Record<LicenseCheckStatus['type'], string | null> = {
   commercial_use: null,
   personal_use: 'Personal Use',
-  trial_ended: 'Trial Ended',
-  trialing: 'Free Trial',
+  trial_ended: 'Personal Use',
+  trialing: 'Active Trial',
 };
 
 export function LicenseBadge() {
@@ -27,16 +27,14 @@ export function LicenseBadge() {
   return (
     <Button
       size="2xs"
-      color={
-        check.data.type == 'trial_ended'
-          ? 'warning'
-          : check.data.type == 'personal_use'
-            ? 'notice'
-            : 'success'
-      }
       variant="border"
       className="!rounded-full mx-1"
       onClick={() => openSettings.mutate(SettingsTab.License)}
+      color={
+        check.data.type == 'trial_ended' || check.data.type === 'personal_use'
+          ? 'primary'
+          : 'success'
+      }
     >
       {label}
     </Button>

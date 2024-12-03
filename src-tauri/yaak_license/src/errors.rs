@@ -5,9 +5,15 @@ use thiserror::Error;
 pub enum Error {
     #[error("Reqwest error: {0}")]
     APIError(#[from] reqwest::Error),
-    
+
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
+
+    #[error("{message}")]
+    ClientError { message: String, error: String },
+
+    #[error("Internal server error")]
+    ServerError,
 }
 
 impl Serialize for Error {

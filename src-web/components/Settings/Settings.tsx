@@ -10,7 +10,7 @@ import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { HeaderSize } from '../HeaderSize';
 import { SettingsAppearance } from './SettingsAppearance';
 import { SettingsGeneral } from './SettingsGeneral';
-import {SettingsLicense} from "./SettingsLicense";
+import { SettingsLicense } from './SettingsLicense';
 import { SettingsPlugins } from './SettingsPlugins';
 import { SettingsProxy } from './SettingsProxy';
 
