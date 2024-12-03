@@ -18,11 +18,11 @@ export function Link({ href, children, className, ...other }: Props) {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className={classNames(className, 'pr-4')}
+        className={classNames(className, 'pr-4 inline-flex items-center')}
         {...other}
       >
         <span className="underline">{children}</span>
-        <Icon className="inline absolute right-0.5 top-0.5" size="xs" icon="external_link" />
+        <Icon className="inline absolute right-0.5 top-1.5" size="xs" icon="external_link" />
       </a>
     );
   }
