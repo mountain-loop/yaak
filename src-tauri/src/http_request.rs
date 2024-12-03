@@ -243,7 +243,7 @@ pub async fn send_http_request<R: Runtime>(
 
     let request_body = rendered_request.body;
     if let Some(body_type) = &rendered_request.body_type {
-        if request_body.contains_key("query") && request_body.contains_key("variables") {
+        if body_type == "graphql" {
             let query = get_str_h(&request_body, "query");
             let variables = get_str_h(&request_body, "variables");
             let body = if variables.trim().is_empty() {
@@ -254,9 +254,6 @@ pub async fn send_http_request<R: Runtime>(
                     serde_json::to_string(query).unwrap_or_default()
                 )
             };
-            request_builder = request_builder.body(body.to_owned());
-        } else if request_body.contains_key("text") {
-            let body = get_str_h(&request_body, "text");
             request_builder = request_builder.body(body.to_owned());
         } else if body_type == "application/x-www-form-urlencoded"
             && request_body.contains_key("form")
@@ -359,6 +356,9 @@ pub async fn send_http_request<R: Runtime>(
             }
             headers.remove("Content-Type"); // reqwest will add this automatically
             request_builder = request_builder.multipart(multipart_form);
+        } else if request_body.contains_key("text") {
+            let body = get_str_h(&request_body, "text");
+            request_builder = request_builder.body(body.to_owned());
         } else {
             warn!("Unsupported body type: {}", body_type);
         }

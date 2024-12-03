@@ -1,10 +1,10 @@
 const decompress = require('decompress');
 const Downloader = require('nodejs-file-downloader');
 const path = require('node:path');
-const { rmSync, mkdirSync, cpSync, existsSync } = require('node:fs');
+const { rmSync, mkdirSync, cpSync, existsSync, statSync, chmodSync } = require('node:fs');
 const { execSync } = require('node:child_process');
 
-const VERSION = '27.2';
+const VERSION = '28.3';
 
 // `${process.platform}_${process.arch}`
 const MAC_ARM = 'darwin_arm64';
@@ -66,6 +66,11 @@ mkdirSync(dstDir, { recursive: true });
   const includeDst = path.join(dstDir, 'include');
   cpSync(includeSrc, includeDst, { recursive: true });
   rmSync(tmpDir, { recursive: true, force: true });
+
+  // Make binary writable, so we can sign it during release
+  const stat = statSync(binDst);
+  const newMode = stat.mode | 0o200;
+  chmodSync(binDst, newMode);
 
   console.log('Downloaded protoc to', binDst);
 })().catch((err) => console.log('Script failed:', err));
