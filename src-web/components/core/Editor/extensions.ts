@@ -10,6 +10,7 @@ import { json } from '@codemirror/lang-json';
 import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
 import {
+  codeFolding,
   foldGutter,
   foldKeymap,
   HighlightStyle,
@@ -148,6 +149,49 @@ export const multiLineExtensions = [
         el.setAttribute('data-open', '');
       }
       return el;
+    },
+  }),
+  codeFolding({
+    placeholderDOM(view, onclick, prepared) {
+      const el = document.createElement('span');
+      el.onclick = onclick;
+      el.className = 'cm-foldPlaceholder';
+      el.innerText = prepared;
+      el.title = 'unfold';
+      el.ariaLabel = 'folded code';
+      return el;
+    },
+    preparePlaceholder(state, range) {
+      let count: number | undefined;
+      let startToken = '{';
+      let endToken = '}';
+
+      const prevLine = state.doc.lineAt(range.from).text;
+      const isArray = prevLine.lastIndexOf('[') > prevLine.lastIndexOf('{');
+
+      if (isArray) {
+        startToken = '[';
+        endToken = ']';
+      }
+
+      const internal = state.sliceDoc(range.from, range.to);
+      const toParse = startToken + internal + endToken;
+
+      try {
+        const parsed = JSON.parse(toParse);
+        count = Object.keys(parsed).length;
+      } catch {
+        /* empty */
+      }
+
+      if (count !== undefined) {
+        const label = isArray ? 'item' : 'prop';
+        const plural = count === 1 ? '' : 's';
+
+        return `${count} ${label}${plural}`;
+      }
+
+      return '…';
     },
   }),
   EditorState.allowMultipleSelections.of(true),

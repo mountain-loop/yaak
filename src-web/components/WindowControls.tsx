@@ -1,21 +1,24 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import classNames from 'classnames';
 import React, { useState } from 'react';
-import { useStoplightsVisible } from '../hooks/useStoplightsVisible';
+import { useOsInfo } from '../hooks/useOsInfo';
 import { Button } from './core/Button';
 import { HStack } from './core/Stacks';
 
 interface Props {
   className?: string;
   onlyX?: boolean;
+  macos?: boolean;
 }
 
 export const WINDOW_CONTROLS_WIDTH = '10.5rem';
 
 export function WindowControls({ className, onlyX }: Props) {
   const [maximized, setMaximized] = useState<boolean>(false);
-  const stoplightsVisible = useStoplightsVisible();
-  if (stoplightsVisible) {
+  const osInfo = useOsInfo();
+
+  // Never show controls on macOS
+  if (osInfo.osType === 'macos') {
     return null;
   }
 

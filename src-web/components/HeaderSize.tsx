@@ -2,6 +2,7 @@ import classNames from 'classnames';
 import type { HTMLAttributes, ReactNode } from 'react';
 import React from 'react';
 import { useSettings } from '../hooks/useSettings';
+import { useOsInfo } from '../hooks/useOsInfo';
 import { useStoplightsVisible } from '../hooks/useStoplightsVisible';
 import { WINDOW_CONTROLS_WIDTH, WindowControls } from './WindowControls';
 
@@ -23,6 +24,7 @@ export function HeaderSize({
   onlyXWindowControl,
   children,
 }: HeaderSizeProps) {
+  const osInfo = useOsInfo();
   const settings = useSettings();
   const stoplightsVisible = useStoplightsVisible();
   return (
@@ -34,7 +36,7 @@ export function HeaderSize({
         paddingLeft: (stoplightsVisible && !ignoreControlsSpacing) ? 72 / settings.interfaceScale : undefined,
         ...(size === 'md' ? { height: HEADER_SIZE_MD } : {}),
         ...(size === 'lg' ? { height: HEADER_SIZE_LG } : {}),
-        ...(stoplightsVisible || ignoreControlsSpacing
+        ...(osInfo.osType === 'macos' || ignoreControlsSpacing
           ? { paddingRight: '2px' }
           : { paddingLeft: '2px', paddingRight: WINDOW_CONTROLS_WIDTH }),
       }}
