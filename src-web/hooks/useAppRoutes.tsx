@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SettingsTab } from '../components/Settings/Settings';
 import { QUERY_COOKIE_JAR_ID } from './useActiveCookieJar';
 import { QUERY_ENVIRONMENT_ID } from './useActiveEnvironment';
 
@@ -13,12 +14,18 @@ export type RouteParamsRequest = RouteParamsWorkspace & {
   requestId: string;
 };
 
+export type RouteParamsSettings = {
+  workspaceId: string;
+  tab?: SettingsTab;
+};
+
 export const paths = {
-  workspaces() {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  workspaces(_ = {}) {
     return '/workspaces';
   },
-  workspaceSettings({ workspaceId } = { workspaceId: ':workspaceId' } as RouteParamsWorkspace) {
-    return `/workspaces/${workspaceId}/settings`;
+  workspaceSettings({ workspaceId, tab } = { workspaceId: ':workspaceId' } as RouteParamsSettings) {
+    return `/workspaces/${workspaceId}/settings?tab=${tab ?? SettingsTab.General}`;
   },
   workspace(
     { workspaceId, environmentId, cookieJarId } = {

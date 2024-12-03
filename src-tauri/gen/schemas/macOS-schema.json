@@ -5141,6 +5141,31 @@
           "description": "Denies the save_window_state command without any pre-configured scope.",
           "type": "string",
           "const": "window-state:deny-save-window-state"
+        },
+        {
+          "description": "Default permissions for the plugin",
+          "type": "string",
+          "const": "yaak-license:default"
+        },
+        {
+          "description": "Enables the activate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-license:allow-activate"
+        },
+        {
+          "description": "Enables the check command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-license:allow-check"
+        },
+        {
+          "description": "Denies the activate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-license:deny-activate"
+        },
+        {
+          "description": "Denies the check command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-license:deny-check"
         }
       ]
     },

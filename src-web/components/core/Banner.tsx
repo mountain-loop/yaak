@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 interface Props {
   children: ReactNode;
   className?: string;
-  color?: 'primary' | 'secondary' | 'success' | 'notice' | 'warning' | 'danger';
+  color?: 'primary' | 'secondary' | 'success' | 'notice' | 'warning' | 'danger' | 'info';
 }
 
 export function Banner({ children, className, color = 'secondary' }: Props) {

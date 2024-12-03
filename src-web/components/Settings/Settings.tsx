@@ -1,6 +1,7 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import classNames from 'classnames';
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useKeyPressEvent } from 'react-use';
 import { useOsInfo } from '../../hooks/useOsInfo';
 import { capitalize } from '../../lib/capitalize';
@@ -9,25 +10,34 @@ import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { HeaderSize } from '../HeaderSize';
 import { SettingsAppearance } from './SettingsAppearance';
 import { SettingsGeneral } from './SettingsGeneral';
+import {SettingsLicense} from "./SettingsLicense";
 import { SettingsPlugins } from './SettingsPlugins';
-import {SettingsProxy} from "./SettingsProxy";
+import { SettingsProxy } from './SettingsProxy';
 
 interface Props {
   hide?: () => void;
 }
 
-enum Tab {
+export enum SettingsTab {
   General = 'general',
   Proxy = 'proxy',
   Appearance = 'appearance',
   Plugins = 'plugins',
+  License = 'license',
 }
 
-const tabs = [Tab.General, Tab.Appearance, Tab.Proxy, Tab.Plugins];
+const tabs = [
+  SettingsTab.General,
+  SettingsTab.Appearance,
+  SettingsTab.Proxy,
+  SettingsTab.Plugins,
+  SettingsTab.License,
+];
 
 export default function Settings({ hide }: Props) {
   const osInfo = useOsInfo();
-  const [tab, setTab] = useState<string>(Tab.General);
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<string>(params.get('tab') ?? SettingsTab.General);
 
   // Close settings window on escape
   // TODO: Could this be put in a better place? Eg. in Rust key listener when creating the window
@@ -71,17 +81,20 @@ export default function Settings({ hide }: Props) {
         onChangeValue={setTab}
         tabs={tabs.map((value) => ({ value, label: capitalize(value) }))}
       >
-        <TabContent value={Tab.General} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={SettingsTab.General} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsGeneral />
         </TabContent>
-        <TabContent value={Tab.Appearance} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={SettingsTab.Appearance} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsAppearance />
         </TabContent>
-        <TabContent value={Tab.Plugins} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={SettingsTab.Plugins} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsPlugins />
         </TabContent>
-        <TabContent value={Tab.Proxy} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={SettingsTab.Proxy} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsProxy />
+        </TabContent>
+        <TabContent value={SettingsTab.License} className="pt-3 overflow-y-auto h-full px-4">
+          <SettingsLicense />
         </TabContent>
       </Tabs>
     </div>

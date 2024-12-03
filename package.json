@@ -4,16 +4,17 @@
   "version": "0.0.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yaakapp/app.git"
+    "url": "git+https://github.com/mountain-loop/yaak.git"
   },
   "workspaces": [
     "plugin-runtime",
     "plugin-runtime-types",
+    "src-tauri/yaak_license",
     "src-tauri/yaak_models",
     "src-tauri/yaak_plugin_runtime",
+    "src-tauri/yaak_sse",
     "src-tauri/yaak_sync",
     "src-tauri/yaak_templates",
-    "src-tauri/yaak_sse",
     "src-web"
   ],
   "scripts": {

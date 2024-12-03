@@ -1,11 +1,19 @@
 [workspace]
-members = ["yaak_grpc", "yaak_templates", "yaak_plugin_runtime", "yaak_models", "yaak_sse"]
+members = [
+    "yaak_grpc",
+    "yaak_license",
+    "yaak_models",
+    "yaak_plugin_runtime",
+    "yaak_sse",
+    "yaak_templates",
+]
 
 [package]
 name = "yaak-app"
 version = "0.0.0"
 edition = "2021"
 authors = ["Gregory Schier"]
+publish = false
 
 # Produce a library for mobile support
 [lib]
@@ -27,10 +35,11 @@ openssl-sys = { version = "0.9", features = ["vendored"] } # For Ubuntu installa
 
 [dependencies]
 yaak_grpc = { path = "yaak_grpc" }
-yaak_templates = { path = "yaak_templates" }
+tauri-plugin-yaak-license = { path = "yaak_license" }
+yaak_models = { workspace = true }
 yaak_plugin_runtime = { workspace = true }
 yaak_sse = { workspace = true }
-yaak_models = { workspace = true }
+yaak_templates = { path = "yaak_templates" }
 base64 = "0.22.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 datetime = "0.5.2"
@@ -39,7 +48,7 @@ http = "1"
 log = "0.4.21"
 rand = "0.8.5"
 regex = "1.10.2"
-reqwest = { version = "0.12.4", features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "native-tls-alpn"] }
+reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "native-tls-alpn"] }
 reqwest_cookie_store = "0.8.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
@@ -66,6 +75,7 @@ yaak_plugin_runtime = { path = "yaak_plugin_runtime" }
 serde = "1.0.215"
 serde_json = "1.0.132"
 tauri-plugin-shell = "2.0.2"
-tauri = { version = "2.1.1", features = ["devtools", "protocol-asset"] }
+tauri = "2.1.1"
 thiserror = "2.0.3"
 ts-rs = "10.0.0"
+reqwest = "0.12.4"

@@ -44,11 +44,11 @@ const router = createBrowserRouter([
         element: <RedirectLegacyEnvironmentURLs />,
       },
       {
-        path: paths.workspaceSettings({
-          workspaceId: ':workspaceId',
-          environmentId: null,
-          cookieJarId: null,
-        }),
+        path: paths
+          .workspaceSettings({
+            workspaceId: ':workspaceId',
+          })
+          .replace(/\?.*/, ''),
         element: <LazySettings />,
       },
     ],

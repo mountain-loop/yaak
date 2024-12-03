@@ -57,9 +57,7 @@ impl PluginRuntime for PluginRuntimeServerImpl {
         let plugin_to_app_events_tx = self.plugin_to_app_events_tx.clone();
         let client_disconnect_tx = self.client_disconnect_tx.clone();
 
-        self.client_connect_tx
-            .send(true)
-            .expect("Failed to send client ready event");
+        self.client_connect_tx.send(true).expect("Failed to send client ready event");
 
         tokio::spawn(async move {
             while let Some(result) = in_stream.next().await {
@@ -96,8 +94,6 @@ impl PluginRuntime for PluginRuntimeServerImpl {
         // Write the same data that was received
         let out_stream = ReceiverStream::new(to_plugin_rx);
 
-        Ok(Response::new(
-            Box::pin(out_stream) as Self::EventStreamStream
-        ))
+        Ok(Response::new(Box::pin(out_stream) as Self::EventStreamStream))
     }
 }

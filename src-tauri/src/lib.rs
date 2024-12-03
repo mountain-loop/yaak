@@ -1687,6 +1687,7 @@ pub fn run() {
             .plugin(tauri_plugin_os::init())
             .plugin(tauri_plugin_fs::init())
             .plugin(yaak_models::plugin::Builder::default().build())
+            .plugin(tauri_plugin_yaak_license::init())
             .plugin(yaak_plugin_runtime::plugin::init());
 
     #[cfg(target_os = "macos")]

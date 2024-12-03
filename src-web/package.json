@@ -28,6 +28,7 @@
     "@tauri-apps/plugin-log": "^2.0.0",
     "@tauri-apps/plugin-os": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
+    "@yaakapp-internal/license": "^1.0.0",
     "buffer": "^6.0.3",
     "classnames": "^2.5.1",
     "cm6-graphql": "^0.0.9",

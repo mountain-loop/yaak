@@ -9,6 +9,7 @@ import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
 import { EnvironmentActionsDropdown } from './EnvironmentActionsDropdown';
 import { ImportCurlButton } from './ImportCurlButton';
+import { LicenseBadge } from './LicenseBadge';
 import { RecentRequestsDropdown } from './RecentRequestsDropdown';
 import { SettingsDropdown } from './SettingsDropdown';
 import { SidebarActions } from './SidebarActions';
@@ -39,12 +40,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
       <div className="pointer-events-none w-full max-w-[30vw] mx-auto">
         <RecentRequestsDropdown />
       </div>
-      <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-0.5">
-        {appInfo.isDev && (
-          <Button size="2xs" color="notice" variant="border" className="!rounded-full opacity-70">
-            Developer
-          </Button>
-        )}
+      <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-1">
         <ImportCurlButton />
         <IconButton
           icon="search"
@@ -53,6 +49,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
           onClick={togglePalette}
         />
         <SettingsDropdown />
+        <LicenseBadge />
       </div>
     </div>
   );

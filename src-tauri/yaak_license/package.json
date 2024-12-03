@@ -1,5 +1,5 @@
 {
-  "name": "@yaakapp-internal/template",
+  "name": "@yaakapp-internal/license",
   "private": true,
   "version": "1.0.0",
   "main": "index.ts"
