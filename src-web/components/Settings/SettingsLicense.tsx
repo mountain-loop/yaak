@@ -57,7 +57,7 @@ export function SettingsLicense() {
           </p>
           <p>
             For details, see the{' '}
-            <Link href="https://yaak.app/blog/commercial-use-license">Announcement Post</Link>.
+            <Link href="https://yaak.app/blog/commercial-use">Announcement Post</Link>.
           </p>
           <p>
             As a thank-you, enter code <InlineCode>EARLYAAK</InlineCode> at checkout for 50% off
