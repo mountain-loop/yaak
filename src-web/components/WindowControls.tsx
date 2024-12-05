@@ -27,6 +27,7 @@ export function WindowControls({ className, onlyX }: Props) {
       className={classNames(className, 'ml-4 absolute right-0 top-0 bottom-0')}
       justifyContent="end"
       style={{ width: WINDOW_CONTROLS_WIDTH }}
+      data-tauri-drag-region
     >
       {!onlyX && (
         <>
