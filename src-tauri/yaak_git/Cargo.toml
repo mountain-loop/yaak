@@ -1,0 +1,18 @@
+[package]
+name = "tauri-plugin-yaak-git"
+links = "tauri-plugin-yaak-git"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+chrono = { version = "0.4.38", features = ["serde"] }
+git2 = "0.19.0"
+serde = { version = "1.0.215", features = ["derive"] }
+tauri = { workspace = true }
+tempdir = "0.3.7"
+thiserror = { workspace = true }
+ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2.0.3", features = ["build"] }

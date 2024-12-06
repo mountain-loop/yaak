@@ -5145,6 +5145,61 @@
         {
           "description": "Default permissions for the plugin",
           "type": "string",
+          "const": "yaak-git:default"
+        },
+        {
+          "description": "Enables the activate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-activate"
+        },
+        {
+          "description": "Enables the check command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-check"
+        },
+        {
+          "description": "Enables the checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-checkout"
+        },
+        {
+          "description": "Enables the commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-commit"
+        },
+        {
+          "description": "Enables the status command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-status"
+        },
+        {
+          "description": "Denies the activate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-activate"
+        },
+        {
+          "description": "Denies the check command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-check"
+        },
+        {
+          "description": "Denies the checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-checkout"
+        },
+        {
+          "description": "Denies the commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-commit"
+        },
+        {
+          "description": "Denies the status command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-status"
+        },
+        {
+          "description": "Default permissions for the plugin",
+          "type": "string",
           "const": "yaak-license:default"
         },
         {
