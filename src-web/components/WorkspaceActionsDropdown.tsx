@@ -73,6 +73,27 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         },
       },
       {
+        key: 'sync-dir',
+        label: 'Set sync dir',
+        leftSlot: <Icon icon="git_fork" />,
+        onSelect: async () => {
+          const settingSyncDir = await prompt({
+            id: 'workspace-sync-dir',
+            title: 'Select sync dir',
+            description: (
+              <>
+                Select a sync dir for <InlineCode>{activeWorkspace?.name}</InlineCode>
+              </>
+            ),
+            label: 'Directory',
+            placeholder: '/User/foo',
+            defaultValue: activeWorkspace?.settingSyncDir ?? undefined,
+          });
+          if (settingSyncDir == null) return;
+          updateWorkspace.mutate({ settingSyncDir });
+        },
+      },
+      {
         key: 'delete-responses',
         label: 'Clear Send History',
         leftSlot: <Icon icon="history" />,
@@ -97,6 +118,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     return { workspaceItems, extraItems };
   }, [
     activeWorkspace?.name,
+    activeWorkspace?.settingSyncDir,
     activeWorkspaceId,
     createWorkspace.mutate,
     deleteSendHistory.mutate,

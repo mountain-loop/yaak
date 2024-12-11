@@ -1,0 +1,259 @@
+import { useGit } from '@yaakapp-internal/git';
+import type { GitStatusEntry } from '@yaakapp-internal/git/bindings/git';
+import type {
+  Environment,
+  Folder,
+  GrpcRequest,
+  HttpRequest,
+  Workspace,
+} from '@yaakapp-internal/models';
+import classNames from 'classnames';
+
+import { useMemo, useState } from 'react';
+import YAML from 'yaml';
+import { fallbackRequestName } from '../lib/fallbackRequestName';
+import { Banner } from './core/Banner';
+import { Button } from './core/Button';
+import type { CheckboxProps } from './core/Checkbox';
+import { Checkbox } from './core/Checkbox';
+import { Editor } from './core/Editor';
+import { InlineCode } from './core/InlineCode';
+import { SplitLayout } from './core/SplitLayout';
+import { HStack } from './core/Stacks';
+import { EmptyStateText } from './EmptyStateText';
+
+interface Props {
+  syncDir: string;
+  onDone: () => void;
+  workspace: Workspace;
+}
+
+interface TreeNode {
+  model: HttpRequest | GrpcRequest | Folder | Environment | Workspace;
+  status: GitStatusEntry;
+  children: TreeNode[];
+}
+
+export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
+  const [{ status }, { commit, add, unstage }] = useGit(syncDir);
+  const [message, setMessage] = useState<string>('');
+
+  const handleCreateCommit = async () => {
+    await commit.mutateAsync({ message });
+    onDone();
+  };
+
+  const hasAddedAnything = status.data?.find((s) => s.staged) != null;
+
+  const tree: TreeNode | null = useMemo(() => {
+    if (status.data == null) {
+      return null;
+    }
+
+    console.log('------------------------------');
+    const next = (parent: TreeNode['model']): TreeNode | null => {
+      const children = status.data
+        .map((s) => {
+          const data = s.next ?? s.prev;
+          if (data == null) return null; // TODO: Is this right?
+
+          const model: TreeNode['model'] = YAML.parse(data);
+          // TODO: Figure out why not all of these show up
+          if ('folderId' in model && model.folderId != null) {
+            if (model.folderId === parent.id) {
+              console.log('ADDING IN FOLDER', model.id, parent.id, s);
+              return next(model);
+            }
+          } else if ('workspaceId' in model && model.workspaceId === parent.id) {
+            console.log('ADDING IN WORKSPACE', model.id, parent.id, s);
+            return next(model);
+          }
+          return null;
+        })
+        .filter((c) => c != null);
+
+      const statusEntry = status.data?.find((s) => s.relaPath.includes(parent.id));
+      if (statusEntry == null) {
+        return null;
+      }
+
+      return {
+        model: parent,
+        status: statusEntry,
+        children,
+      };
+    };
+    return next(workspace);
+  }, [status.data, workspace]);
+
+  if (tree == null) {
+    return null;
+  }
+
+  if (status.data != null && status.data.length === 0) {
+    return (
+      <EmptyStateText>
+        No changes to commit.
+        <br />
+        Please check back once you have made changes.
+      </EmptyStateText>
+    );
+  }
+
+  const checkNode = (treeNode: TreeNode) => {
+    // If the node doesn't have
+    if (treeNode.status.status === 'current') {
+      // TODO: Handle checking something that's not changed
+    }
+
+    // TODO: Handle staging child nodes too. Can make add/unstage accept multiple paths
+    //  to make this easier.
+    if (treeNode.status.staged) {
+      unstage.mutate({ relaPath: treeNode.status.relaPath });
+    } else {
+      add.mutate({ relaPath: treeNode.status.relaPath });
+    }
+  };
+
+  return (
+    <div className="grid grid-rows-1 h-full">
+      <SplitLayout
+        name="commit"
+        layout="vertical"
+        defaultRatio={0.3}
+        firstSlot={({ style }) => (
+          <div style={style} className="h-full overflow-y-auto -ml-1">
+            <TreeNodeChildren node={tree} depth={0} onCheck={checkNode} />
+          </div>
+        )}
+        secondSlot={({ style }) => (
+          <div style={style} className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2">
+            <div className="bg-surface-highlight border border-border rounded-md overflow-hidden">
+              <Editor
+                className="!text-base font-sans h-full rounded-md"
+                placeholder="Commit message..."
+                onChange={setMessage}
+              />
+            </div>
+            {commit.error && <Banner color="danger">{commit.error}</Banner>}
+            <HStack justifyContent="end" space={2}>
+              <Button
+                color="secondary"
+                size="sm"
+                onClick={handleCreateCommit}
+                disabled={!hasAddedAnything}
+              >
+                Commit
+              </Button>
+              {/*<Button color="secondary" size="sm" disabled={!hasAddedAnything}>*/}
+              {/*  Commit and Push*/}
+              {/*</Button>*/}
+            </HStack>
+          </div>
+        )}
+      />
+    </div>
+  );
+}
+
+function TreeNodeChildren({
+  node,
+  depth,
+  onCheck,
+}: {
+  node: TreeNode | null;
+  depth: number;
+  onCheck: (node: TreeNode, checked: boolean) => void;
+}) {
+  if (node === null) return null;
+  if (!isNodeRelevant(node)) return null;
+
+  const checked = nodeCheckedStatus(node);
+  return (
+    <div
+      className={classNames(
+        depth > 0 && 'pl-1 ml-[10px] border-l border-dashed border-border-subtle',
+      )}
+    >
+      <div className="flex gap-3 w-full h-xs">
+        <Checkbox
+          className="w-full hover:bg-surface-highlight rounded px-1 group"
+          checked={checked}
+          onChange={(checked) => onCheck(node, checked)}
+          title={
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1 w-full">
+              <div className="truncate">
+                {fallbackRequestName(node.model)} ({node.model.model})
+              </div>
+              <InlineCode
+                className={classNames(
+                  'py-0 ml-auto !bg-surface w-[6rem] text-center',
+                  node.status.status === 'modified' && 'text-info',
+                  node.status.status === 'added' && 'text-success',
+                  node.status.status === 'removed' && 'text-danger',
+                )}
+              >
+                {node.status.status}
+              </InlineCode>
+            </div>
+          }
+        />
+      </div>
+
+      {node.children.map((childNode, i) => {
+        return (
+          <TreeNodeChildren
+            key={childNode.status.relaPath + i}
+            node={childNode}
+            depth={depth + 1}
+            onCheck={onCheck}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
+  let leavesVisited = 0;
+  let leavesChecked = 0;
+
+  const visitChildren = (n: TreeNode) => {
+    if (n.children.length === 0) {
+      leavesVisited += 1;
+      if (n.status.staged) {
+        leavesChecked += 1;
+      }
+    }
+    for (const child of n.children) {
+      visitChildren(child);
+    }
+  };
+
+  visitChildren(root);
+
+  if (leavesVisited === leavesChecked) {
+    return true;
+  } else if (leavesChecked === 0) {
+    return false;
+  } else {
+    return 'indeterminate';
+  }
+}
+
+// function setCheckedOnChildren(node: TreeNode, addedIds: Record<string, boolean>, checked: boolean) {
+//   addedIds[node.model.id] = checked;
+//
+//   for (const child of node.children) {
+//     setCheckedOnChildren(child, addedIds, checked);
+//   }
+// }
+
+function isNodeRelevant(node: TreeNode): boolean {
+  if (node.status.status !== 'current') {
+    return true;
+  }
+
+  // Recursively check children
+  return node.children.some((c) => isNodeRelevant(c));
+}

@@ -55,7 +55,8 @@
     "slugify": "^1.6.6",
     "uuid": "^10.0.0",
     "whatwg-mimetype": "^4.0.0",
-    "xml-formatter": "^3.6.3"
+    "xml-formatter": "^3.6.3",
+    "yaml": "^2.6.1"
   },
   "devDependencies": {
     "@lezer/generator": "^1.7.1",

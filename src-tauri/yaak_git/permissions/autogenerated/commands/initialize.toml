@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-initialize"
+description = "Enables the initialize command without any pre-configured scope."
+commands.allow = ["initialize"]
+
+[[permission]]
+identifier = "deny-initialize"
+description = "Denies the initialize command without any pre-configured scope."
+commands.deny = ["initialize"]

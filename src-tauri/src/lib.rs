@@ -36,7 +36,6 @@ use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition}
 use yaak_plugin_runtime::manager::PluginManager;
 
 use crate::analytics::{AnalyticsAction, AnalyticsResource};
-use crate::export_resources::{get_workspace_export_resources, WorkspaceExportResources};
 use crate::grpc::metadata_to_map;
 use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
@@ -58,12 +57,13 @@ use yaak_models::queries::{
     delete_workspace, duplicate_grpc_request, duplicate_http_request, generate_id,
     generate_model_id, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
     get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
-    get_or_create_settings, get_plugin, get_workspace, list_cookie_jars, list_environments,
-    list_folders, list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests,
-    list_http_requests, list_http_responses_for_request, list_http_responses_for_workspace,
-    list_plugins, list_workspaces, set_key_value_raw, update_response_if_id, update_settings,
-    upsert_cookie_jar, upsert_environment, upsert_folder, upsert_grpc_connection,
-    upsert_grpc_event, upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
+    get_or_create_settings, get_plugin, get_workspace, get_workspace_export_resources,
+    list_cookie_jars, list_environments, list_folders, list_grpc_connections_for_workspace,
+    list_grpc_events, list_grpc_requests, list_http_requests, list_http_responses_for_request,
+    list_http_responses_for_workspace, list_plugins, list_workspaces, set_key_value_raw,
+    update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder,
+    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_http_request,
+    upsert_plugin, upsert_workspace, WorkspaceExportResources,
 };
 use yaak_plugin_runtime::events::{
     BootResponse, CallHttpRequestActionRequest, FilterResponse, FindHttpResponsesResponse,
@@ -78,7 +78,6 @@ use yaak_templates::format::format_json;
 use yaak_templates::{Parser, Tokens};
 
 mod analytics;
-mod export_resources;
 mod grpc;
 mod http_request;
 mod notifications;
@@ -978,7 +977,7 @@ async fn cmd_export_data(
     export_path: &str,
     workspace_ids: Vec<&str>,
 ) -> Result<(), String> {
-    let export_data = get_workspace_export_resources(&window, workspace_ids).await;
+    let export_data = get_workspace_export_resources(window.app_handle(), workspace_ids).await;
     let f = File::options()
         .create(true)
         .truncate(true)
@@ -1689,7 +1688,7 @@ pub fn run() {
             .plugin(yaak_models::plugin::Builder::default().build())
             .plugin(tauri_plugin_yaak_license::init())
             .plugin(tauri_plugin_yaak_git::init())
-            .plugin(yaak_plugin_runtime::plugin::init());
+            .plugin(yaak_plugin_runtime::init());
 
     #[cfg(target_os = "macos")]
     {

@@ -118,6 +118,7 @@ pub struct Workspace {
     #[serde(default = "default_true")]
     pub setting_follow_redirects: bool,
     pub setting_request_timeout: i32,
+    pub setting_sync_dir: Option<String>,
 }
 
 #[derive(Iden)]
@@ -133,6 +134,7 @@ pub enum WorkspaceIden {
     Name,
     SettingFollowRedirects,
     SettingRequestTimeout,
+    SettingSyncDir,
     SettingValidateCertificates,
     Variables,
 }
@@ -149,10 +151,11 @@ impl<'s> TryFrom<&Row<'s>> for Workspace {
             updated_at: r.get("updated_at")?,
             name: r.get("name")?,
             description: r.get("description")?,
-            variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
-            setting_validate_certificates: r.get("setting_validate_certificates")?,
             setting_follow_redirects: r.get("setting_follow_redirects")?,
             setting_request_timeout: r.get("setting_request_timeout")?,
+            setting_sync_dir: r.get("setting_sync_dir")?,
+            setting_validate_certificates: r.get("setting_validate_certificates")?,
+            variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
         })
     }
 }
@@ -855,6 +858,67 @@ impl<'s> TryFrom<&Row<'s>> for Plugin {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "models.ts")]
+pub struct SyncStateFlushState {
+    pub time: NaiveDateTime,
+    pub hash: String,
+    pub checksum: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "models.ts")]
+pub struct SyncState {
+    #[ts(type = "\"sync_state\"")]
+    pub model: String,
+    pub id: String,
+    pub workspace_id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+
+    pub dirty: bool,
+    pub model_id: String,
+    pub last_flush: Option<SyncStateFlushState>,
+    pub path: String,
+}
+
+#[derive(Iden)]
+pub enum SyncStateIden {
+    #[iden = "sync_states"]
+    Table,
+    Model,
+    Id,
+    WorkspaceId,
+    CreatedAt,
+    UpdatedAt,
+
+    Dirty,
+    ModelId,
+    LastFlush,
+    Path,
+}
+
+impl<'s> TryFrom<&Row<'s>> for SyncState {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        let last_flush: String = r.get("last_flush")?;
+        Ok(SyncState {
+            id: r.get("id")?,
+            workspace_id: r.get("workspace_id")?,
+            model: r.get("model")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            dirty: r.get("dirty")?,
+            model_id: r.get("model_id")?,
+            last_flush: serde_json::from_str(last_flush.as_str()).unwrap_or_default(),
+            path: r.get("path")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "models.ts")]
 pub struct KeyValue {
     #[ts(type = "\"key_value\"")]
     pub model: String,
@@ -913,6 +977,7 @@ pub enum ModelType {
     TypeHttpResponse,
     TypePlugin,
     TypeWorkspace,
+    TypeSyncState,
 }
 
 impl ModelType {
@@ -928,6 +993,7 @@ impl ModelType {
             ModelType::TypeHttpResponse => "rs",
             ModelType::TypePlugin => "pg",
             ModelType::TypeWorkspace => "wk",
+            ModelType::TypeSyncState => "ss",
         }
         .to_string()
     }
@@ -948,5 +1014,6 @@ pub enum AnyModel {
     Plugin(Plugin),
     Settings(Settings),
     KeyValue(KeyValue),
+    SyncState(SyncState),
     Workspace(Workspace),
 }

@@ -485,7 +485,7 @@ export function Sidebar({ className }: Props) {
           handleDragStart={handleDragStart}
         />
       </div>
-      <SyncDropdown />
+      {activeWorkspace?.settingSyncDir && <SyncDropdown syncDir={activeWorkspace.settingSyncDir} />}
     </aside>
   );
 }

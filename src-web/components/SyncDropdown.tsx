@@ -1,14 +1,12 @@
-import {useGitStatus} from "@yaakapp-internal/git";
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
-import { useToast } from './ToastContext';
+import { useDialog } from './DialogContext';
+import { GitCommitDialog } from './GitCommitDialog';
 
-export function SyncDropdown() {
+export function SyncDropdown({ syncDir }: { syncDir: string }) {
   const workspace = useActiveWorkspace();
-  const toast = useToast();
-  const status = useGitStatus('/Users/gschier/Desktop/test-git');
-  console.log("GIT STATUS", status);
+  const dialog = useDialog();
 
   if (workspace == null) return null;
 
@@ -17,15 +15,16 @@ export function SyncDropdown() {
       fullWidth
       items={[
         {
-          key: 'push',
-          label: 'Manage Branches',
+          key: 'commit',
+          label: 'Commit',
           leftSlot: <Icon icon="git_branch" />,
           onSelect() {
-            toast.show({
-              id: 'manage-branches',
-              icon: 'info',
-              color: 'notice',
-              message: 'TODO: Implement branch manager',
+            dialog.show({
+              id: 'commit',
+              title: 'Commit Changes',
+              size: 'full',
+              className: '!max-h-[min(80vh,40rem)] !max-w-[min(50rem,90vw)]',
+              render: ({hide}) => <GitCommitDialog syncDir={syncDir} onDone={hide} workspace={workspace} />,
             });
           },
         },

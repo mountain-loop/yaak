@@ -305,6 +305,16 @@
           "const": "deny-activate"
         },
         {
+          "description": "Enables the add command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-add"
+        },
+        {
+          "description": "Denies the add command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-add"
+        },
+        {
           "description": "Enables the check command without any pre-configured scope.",
           "type": "string",
           "const": "allow-check"
@@ -325,6 +335,66 @@
           "const": "deny-checkout"
         },
         {
+          "description": "Enables the cmd_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cmd-add"
+        },
+        {
+          "description": "Denies the cmd_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cmd-add"
+        },
+        {
+          "description": "Enables the cmd_checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cmd-checkout"
+        },
+        {
+          "description": "Denies the cmd_checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cmd-checkout"
+        },
+        {
+          "description": "Enables the cmd_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cmd-commit"
+        },
+        {
+          "description": "Denies the cmd_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cmd-commit"
+        },
+        {
+          "description": "Enables the cmd_init command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cmd-init"
+        },
+        {
+          "description": "Denies the cmd_init command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cmd-init"
+        },
+        {
+          "description": "Enables the cmd_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cmd-log"
+        },
+        {
+          "description": "Denies the cmd_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cmd-log"
+        },
+        {
+          "description": "Enables the cmd_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cmd-status"
+        },
+        {
+          "description": "Denies the cmd_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cmd-status"
+        },
+        {
           "description": "Enables the commit command without any pre-configured scope.",
           "type": "string",
           "const": "allow-commit"
@@ -335,6 +405,46 @@
           "const": "deny-commit"
         },
         {
+          "description": "Enables the init command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-init"
+        },
+        {
+          "description": "Denies the init command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-init"
+        },
+        {
+          "description": "Enables the init_repo command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-init-repo"
+        },
+        {
+          "description": "Denies the init_repo command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-init-repo"
+        },
+        {
+          "description": "Enables the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-initialize"
+        },
+        {
+          "description": "Denies the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-initialize"
+        },
+        {
+          "description": "Enables the log command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-log"
+        },
+        {
+          "description": "Denies the log command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-log"
+        },
+        {
           "description": "Enables the status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-status"
@@ -343,6 +453,36 @@
           "description": "Denies the status command without any pre-configured scope.",
           "type": "string",
           "const": "deny-status"
+        },
+        {
+          "description": "Enables the sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-sync"
+        },
+        {
+          "description": "Denies the sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-sync"
+        },
+        {
+          "description": "Enables the sync_fs command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-sync-fs"
+        },
+        {
+          "description": "Denies the sync_fs command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-sync-fs"
+        },
+        {
+          "description": "Enables the unstage command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unstage"
+        },
+        {
+          "description": "Denies the unstage command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unstage"
         },
         {
           "description": "Default permissions for the plugin",

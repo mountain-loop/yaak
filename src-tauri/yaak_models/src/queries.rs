@@ -1,24 +1,25 @@
-use std::fs;
-
 use crate::error::Error::ModelNotFound;
 use crate::error::Result;
 use crate::models::{
-    CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden, GrpcConnection,
-    GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
+    AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
+    GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
     GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader,
     HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden,
-    Settings, SettingsIden, Workspace, WorkspaceIden,
+    Settings, SettingsIden, SyncState, SyncStateFlushState, SyncStateIden, Workspace,
+    WorkspaceIden,
 };
 use crate::plugin::SqliteConnection;
-use log::{debug, error};
+use chrono::NaiveDateTime;
+use log::{debug, error, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rusqlite::OptionalExtension;
 use sea_query::ColumnRef::Asterisk;
 use sea_query::Keyword::CurrentTimestamp;
 use sea_query::{Cond, Expr, OnConflict, Order, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
-use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
 
 const MAX_GRPC_CONNECTIONS_PER_REQUEST: usize = 20;
 const MAX_HTTP_RESPONSES_PER_REQUEST: usize = MAX_GRPC_CONNECTIONS_PER_REQUEST;
@@ -192,8 +193,9 @@ pub async fn upsert_workspace<R: Runtime>(
             WorkspaceIden::Name,
             WorkspaceIden::Description,
             WorkspaceIden::Variables,
-            WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingFollowRedirects,
+            WorkspaceIden::SettingRequestTimeout,
+            WorkspaceIden::SettingSyncDir,
             WorkspaceIden::SettingValidateCertificates,
         ])
         .values_panic([
@@ -203,8 +205,9 @@ pub async fn upsert_workspace<R: Runtime>(
             trimmed_name.into(),
             workspace.description.into(),
             serde_json::to_string(&workspace.variables)?.into(),
-            workspace.setting_request_timeout.into(),
             workspace.setting_follow_redirects.into(),
+            workspace.setting_request_timeout.into(),
+            workspace.setting_sync_dir.into(),
             workspace.setting_validate_certificates.into(),
         ])
         .on_conflict(
@@ -214,8 +217,9 @@ pub async fn upsert_workspace<R: Runtime>(
                     WorkspaceIden::Name,
                     WorkspaceIden::Description,
                     WorkspaceIden::Variables,
-                    WorkspaceIden::SettingRequestTimeout,
                     WorkspaceIden::SettingFollowRedirects,
+                    WorkspaceIden::SettingRequestTimeout,
+                    WorkspaceIden::SettingSyncDir,
                     WorkspaceIden::SettingValidateCertificates,
                 ])
                 .to_owned(),
@@ -788,8 +792,8 @@ async fn get_settings<R: Runtime>(mgr: &impl Manager<R>) -> Result<Option<Settin
 pub async fn get_or_create_settings<R: Runtime>(mgr: &impl Manager<R>) -> Settings {
     match get_settings(mgr).await {
         Ok(Some(settings)) => return settings,
-        Ok(None) => (),
         Err(e) => panic!("Failed to get settings {e:?}"),
+        Ok(None) => {}
     };
 
     let dbm = &*mgr.state::<SqliteConnection>();
@@ -812,13 +816,20 @@ pub async fn update_settings<R: Runtime>(
 ) -> Result<Settings> {
     let dbm = &*window.app_handle().state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
+    
+    // Correct for the bug where created_at was being updated by mistake
+    let created_at = if settings.created_at > settings.updated_at {
+        settings.updated_at
+    } else {
+        settings.created_at
+    };
 
     let (sql, params) = Query::update()
         .table(SettingsIden::Table)
         .cond_where(Expr::col(SettingsIden::Id).eq("default"))
         .values([
-            (SettingsIden::Id, "default".into()),
-            (SettingsIden::CreatedAt, CurrentTimestamp.into()),
+            (SettingsIden::CreatedAt, created_at.into()),
+            (SettingsIden::UpdatedAt, CurrentTimestamp.into()),
             (SettingsIden::Appearance, settings.appearance.as_str().into()),
             (SettingsIden::ThemeDark, settings.theme_dark.as_str().into()),
             (SettingsIden::ThemeLight, settings.theme_light.as_str().into()),
@@ -1536,6 +1547,114 @@ pub async fn list_responses_by_workspace_id<R: Runtime>(
     Ok(items.map(|v| v.unwrap()).collect())
 }
 
+pub async fn get_sync_state_for_model<R: Runtime>(
+    mgr: &impl Manager<R>,
+    model_id: &str,
+) -> Result<Option<SyncState>> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::select()
+        .from(SyncStateIden::Table)
+        .column(Asterisk)
+        .cond_where(Expr::col(SyncStateIden::ModelId).eq(model_id))
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into()).optional()?)
+}
+
+pub async fn get_or_create_sync_state_for_model<R: Runtime>(
+    window: &WebviewWindow<R>,
+    workspace_id: &str,
+    model_id: &str,
+    path: &str,
+) -> Result<SyncState> {
+    match get_sync_state_for_model(window, model_id).await {
+        Ok(Some(ss)) => return Ok(ss),
+        Err(e) => panic!("Failed to get SyncState {e:?}"),
+        Ok(None) => {}
+    };
+
+    upsert_sync_state(
+        window,
+        SyncState {
+            workspace_id: workspace_id.to_string(),
+            model_id: model_id.to_string(),
+            path: path.to_string(),
+            dirty: true,
+            ..Default::default()
+        },
+    )
+    .await
+}
+
+pub async fn list_sync_states_for_workspace<R: Runtime>(
+    mgr: &impl Manager<R>,
+    workspace_id: &str,
+) -> Result<Vec<SyncState>> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::select()
+        .from(SyncStateIden::Table)
+        .column(Asterisk)
+        .cond_where(Expr::col(SyncStateIden::WorkspaceId).eq(workspace_id))
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+    Ok(items.map(|v| v.unwrap()).collect())
+}
+
+pub async fn upsert_sync_state<R: Runtime>(
+    window: &WebviewWindow<R>,
+    sync_state: SyncState,
+) -> Result<SyncState> {
+    let id = match sync_state.id.as_str() {
+        "" => generate_model_id(ModelType::TypeSyncState),
+        _ => sync_state.id.to_string(),
+    };
+
+    let dbm = &*window.app_handle().state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+
+    let (sql, params) = Query::insert()
+        .into_table(SyncStateIden::Table)
+        .columns([
+            SyncStateIden::Id,
+            SyncStateIden::WorkspaceId,
+            SyncStateIden::CreatedAt,
+            SyncStateIden::UpdatedAt,
+            SyncStateIden::Dirty,
+            SyncStateIden::LastFlush,
+            SyncStateIden::ModelId,
+            SyncStateIden::Path,
+        ])
+        .values_panic([
+            id.as_str().into(),
+            sync_state.workspace_id.into(),
+            CurrentTimestamp.into(),
+            CurrentTimestamp.into(),
+            sync_state.dirty.into(),
+            serde_json::to_string(&sync_state.last_flush)?.into(),
+            sync_state.model_id.into(),
+            sync_state.path.into(),
+        ])
+        .on_conflict(
+            OnConflict::column(GrpcRequestIden::Id)
+                .update_columns([
+                    SyncStateIden::UpdatedAt,
+                    SyncStateIden::Dirty,
+                    SyncStateIden::LastFlush,
+                    SyncStateIden::Path,
+                ])
+                .to_owned(),
+        )
+        .returning_all()
+        .build_rusqlite(SqliteQueryBuilder);
+
+    let mut stmt = db.prepare(sql.as_str())?;
+    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    Ok(emit_upserted_model(window, m))
+}
+
 pub async fn debug_pool<R: Runtime>(mgr: &impl Manager<R>) {
     let dbm = &*mgr.state::<SqliteConnection>();
     let db = dbm.0.lock().await;
@@ -1551,9 +1670,9 @@ pub fn generate_id() -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), 10)
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
-struct ModelPayload<M: Serialize + Clone> {
+pub struct ModelPayload<M: Serialize + Clone> {
     pub model: M,
     pub window_label: String,
 }
@@ -1578,4 +1697,178 @@ fn emit_deleted_model<M: Serialize + Clone, R: Runtime>(
     };
     window.emit("deleted_model", payload).unwrap();
     Ok(model)
+}
+
+pub fn listen_to_model_delete<F, R>(app_handle: &AppHandle<R>, handler: F)
+where
+    F: Fn(AnyModel) + Send + 'static,
+    R: Runtime,
+{
+    app_handle.listen_any("deleted_model", move |e| {
+        let model_payload: ModelPayload<serde_json::Value> =
+            serde_json::from_str(e.payload()).unwrap();
+
+        let model = match model_payload.model.get("model") {
+            None => return,
+            Some(model) if model == "http_request" => {
+                AnyModel::HttpRequest(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "grpc_request" => {
+                AnyModel::GrpcRequest(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "workspace" => {
+                AnyModel::Workspace(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "environment" => {
+                AnyModel::Environment(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "folder" => {
+                AnyModel::Folder(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "key_value" => {
+                AnyModel::KeyValue(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "sync_state" => {
+                AnyModel::SyncState(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "grpc_connection" => {
+                AnyModel::GrpcConnection(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "grpc_event" => {
+                AnyModel::GrpcEvent(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "cookie_jar" => {
+                AnyModel::CookieJar(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "plugin" => {
+                AnyModel::Plugin(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) => {
+                warn!("Unknown deleted model {}", model);
+                return;
+            }
+        };
+        handler(model);
+    });
+}
+
+pub fn listen_to_model_upsert<F, R>(app_handle: &AppHandle<R>, handler: F)
+where
+    F: Fn(AnyModel) + Send + 'static,
+    R: Runtime,
+{
+    app_handle.listen_any("upserted_model", move |e| {
+        let model_payload: ModelPayload<serde_json::Value> =
+            serde_json::from_str(e.payload()).unwrap();
+
+        let model = match model_payload.model.get("model") {
+            None => return,
+            Some(model) if model == "http_request" => {
+                AnyModel::HttpRequest(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "grpc_request" => {
+                AnyModel::GrpcRequest(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "workspace" => {
+                AnyModel::Workspace(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "environment" => {
+                AnyModel::Environment(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "folder" => {
+                AnyModel::Folder(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "key_value" => {
+                AnyModel::KeyValue(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "sync_state" => {
+                AnyModel::SyncState(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "grpc_connection" => {
+                AnyModel::GrpcConnection(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "grpc_event" => {
+                AnyModel::GrpcEvent(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "cookie_jar" => {
+                AnyModel::CookieJar(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) if model == "plugin" => {
+                AnyModel::Plugin(serde_json::from_value(model_payload.model).unwrap())
+            }
+            Some(model) => {
+                warn!("Unknown upserted model {}", model);
+                return;
+            }
+        };
+        handler(model);
+    });
+}
+
+#[derive(Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WorkspaceExport {
+    pub yaak_version: String,
+    pub yaak_schema: i64,
+    pub timestamp: NaiveDateTime,
+    pub resources: WorkspaceExportResources,
+}
+
+#[derive(Default, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WorkspaceExportResources {
+    pub workspaces: Vec<Workspace>,
+    pub environments: Vec<Environment>,
+    pub folders: Vec<Folder>,
+    pub http_requests: Vec<HttpRequest>,
+    pub grpc_requests: Vec<GrpcRequest>,
+}
+
+#[derive(Default, Debug, Deserialize, Serialize)]
+pub struct ImportResult {
+    pub resources: WorkspaceExportResources,
+}
+
+pub async fn get_workspace_export_resources<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    workspace_ids: Vec<&str>,
+) -> WorkspaceExport {
+    let mut data = WorkspaceExport {
+        yaak_version: app_handle.package_info().version.clone().to_string(),
+        yaak_schema: 2,
+        timestamp: chrono::Utc::now().naive_utc(),
+        resources: WorkspaceExportResources {
+            workspaces: Vec::new(),
+            environments: Vec::new(),
+            folders: Vec::new(),
+            http_requests: Vec::new(),
+            grpc_requests: Vec::new(),
+        },
+    };
+
+    for workspace_id in workspace_ids {
+        data.resources
+            .workspaces
+            .push(get_workspace(app_handle, workspace_id).await.expect("Failed to get workspace"));
+        data.resources.environments.append(
+            &mut list_environments(app_handle, workspace_id)
+                .await
+                .expect("Failed to get environments"),
+        );
+        data.resources.folders.append(
+            &mut list_folders(app_handle, workspace_id).await.expect("Failed to get folders"),
+        );
+        data.resources.http_requests.append(
+            &mut list_http_requests(app_handle, workspace_id)
+                .await
+                .expect("Failed to get http requests"),
+        );
+        data.resources.grpc_requests.append(
+            &mut list_grpc_requests(app_handle, workspace_id)
+                .await
+                .expect("Failed to get grpc requests"),
+        );
+    }
+
+    data
 }

@@ -4,4 +4,4 @@ export type GitCommit = { author: string, when: string, message: string | null, 
 
 export type GitStatus = "added" | "conflict" | "current" | "modified" | "removed" | "renamed" | "type_change";
 
-export type GitStatusEntry = { relaPath: string, indexStatus: GitStatus, worktreeStatus: GitStatus, };
+export type GitStatusEntry = { relaPath: string, status: GitStatus, staged: boolean, prev: string | null, next: string | null, };
