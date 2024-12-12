@@ -2,7 +2,8 @@ use crate::error::Error::WorkspaceSyncNotConfigured;
 use crate::error::Result;
 use crate::model_hash::model_hash;
 use crate::models::SyncModel;
-use log::{debug, warn};
+use chrono::Utc;
+use log::{debug, error};
 use sha1::{Digest, Sha1};
 use std::fs;
 use std::fs::{DirEntry, File};
@@ -10,9 +11,11 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use yaak_models::models::{SyncState, SyncStateFlushState, Workspace};
 use yaak_models::queries::{
-    get_or_create_settings, get_or_create_sync_state_for_model, get_sync_state_for_model,
-    get_workspace, get_workspace_export_resources, list_sync_states_for_workspace,
-    listen_to_model_delete, listen_to_model_upsert, upsert_sync_state,
+    delete_environment, delete_folder, delete_grpc_request, delete_http_request, delete_sync_state,
+    delete_workspace, get_or_create_sync_state_for_model, get_sync_state_for_model, get_workspace,
+    get_workspace_export_resources, list_sync_states_for_workspace, listen_to_model_delete,
+    listen_to_model_upsert, upsert_environment, upsert_folder, upsert_grpc_request,
+    upsert_http_request, upsert_sync_state, upsert_workspace, UpdateSource,
 };
 
 pub(crate) async fn sync_fs<R: Runtime>(
@@ -126,48 +129,130 @@ async fn flush_db_model<R: Runtime>(window: &WebviewWindow<R>, model: &SyncModel
         model.workspace_id().as_str(),
         model.id().as_str(),
         file_path.to_str().unwrap(),
+        &UpdateSource::Sync,
     )
     .await?;
 
     debug!("Reading model from {:?}", file_path);
-    let fs_checksum = match fs::read(file_path.clone()) {
-        Ok(c) => {
-            let mut hasher = Sha1::new();
-            hasher.update(&c);
-            Some(hex::encode(hasher.finalize()))
-        }
-        Err(_) => None,
-    };
+    let fs_model = SyncModel::from_file(file_path.as_path())?;
 
     let new_content = serde_yaml::to_string(model)?;
     let mut hasher = Sha1::new();
     hasher.update(&new_content);
     let new_checksum = hex::encode(hasher.finalize());
 
-    let should_write = match (sync_state.clone().last_flush, fs_checksum) {
-        // Hasn't ever been synced
-        (None, None) => true,
-        // Has been synced, but doesn't exist on FS (deleted)
-        (Some(_last_flush), None) => false,
-        // Hasn't been synced, and doesn't exist in DB (added)
-        (None, Some(_fs_checksum)) => true,
-        // Has been synced, but the destination changed (conflict
-        (Some(last_flush), Some(fs_checksum)) if last_flush.checksum != fs_checksum => todo!("Handle conflict"),
+    #[derive(Debug)]
+    enum SyncOp {
+        // FsDelete, // Not possible to reach in this function
+        FsWrite,
+        DbDelete,
+        DbWrite { model: SyncModel, checksum: String },
+        Conflict,
+        Nothing,
+    }
+
+    let sync_op = match (sync_state.clone().last_flush, fs_model.clone()) {
+        // Hasn't ever been flushed
+        // NOTE: this should technically never happen because a SyncState should exist
+        (None, None) => SyncOp::FsWrite,
+        // Has been flushed, but doesn't exist on FS (deleted)
+        (Some(_last_flush), None) => SyncOp::DbDelete,
+        // Hasn't been flushed, and doesn't exist in DB (added)
+        (None, Some((model, checksum))) => SyncOp::DbWrite { model, checksum },
+        // Has been flushed, but the destination changed (conflict
+        (Some(last_flush), Some((model, checksum))) if last_flush.checksum != checksum => {
+            if sync_state.dirty {
+                SyncOp::Conflict
+            } else {
+                SyncOp::DbWrite { model, checksum }
+            }
+        }
         // Has been synced and the destination is unchanged
-        (Some(_last_flush), Some(_fs_checksum)) => true,
+        (Some(_last_flush), Some(_fs_model)) => SyncOp::Nothing,
     };
 
-    if should_write {
-        fs::write(&file_path, new_content)?;
-        let mut sync_state = sync_state.clone();
-        sync_state.dirty = false;
-        sync_state.last_flush = Some(SyncStateFlushState {
-            time: Default::default(),
-            hash: "".to_string(),
-            checksum: new_checksum,
-        });
-        upsert_sync_state(window, sync_state).await?;
-    }
+    debug!("Sync op for {:?} {:?}", file_path, sync_op);
+
+    match sync_op {
+        SyncOp::Nothing => {}
+        SyncOp::FsWrite => {
+            fs::write(&file_path, new_content)?;
+            upsert_sync_state(
+                window,
+                SyncState {
+                    dirty: false,
+                    last_flush: Some(SyncStateFlushState {
+                        time: Utc::now().naive_utc(),
+                        checksum: new_checksum,
+                    }),
+                    ..sync_state
+                },
+                &UpdateSource::Sync,
+            )
+            .await?;
+        }
+        SyncOp::DbDelete => {
+            match model {
+                SyncModel::Workspace(m) => {
+                    delete_workspace(window, m.id.as_str(), &UpdateSource::Sync).await?;
+                }
+                SyncModel::Environment(m) => {
+                    delete_environment(window, m.id.as_str(), &UpdateSource::Sync).await?;
+                }
+                SyncModel::Folder(m) => {
+                    delete_folder(window, m.id.as_str(), &UpdateSource::Sync).await?;
+                }
+                SyncModel::HttpRequest(m) => {
+                    delete_http_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
+                }
+                SyncModel::GrpcRequest(m) => {
+                    delete_grpc_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
+                }
+            }
+            delete_sync_state(
+                window,
+                sync_state.workspace_id.as_str(),
+                sync_state.model_id.as_str(),
+                &UpdateSource::Sync,
+            )
+            .await?;
+        }
+        SyncOp::DbWrite { model, checksum } => {
+            match model {
+                SyncModel::Workspace(m) => {
+                    upsert_workspace(window, m, &UpdateSource::Sync).await?;
+                }
+                SyncModel::Environment(m) => {
+                    upsert_environment(window, m, &UpdateSource::Sync).await?;
+                }
+                SyncModel::Folder(m) => {
+                    upsert_folder(window, m, &UpdateSource::Sync).await?;
+                }
+                SyncModel::HttpRequest(m) => {
+                    upsert_http_request(window, m, &UpdateSource::Sync).await?;
+                }
+                SyncModel::GrpcRequest(m) => {
+                    upsert_grpc_request(window, &m, &UpdateSource::Sync).await?;
+                }
+            }
+            upsert_sync_state(
+                window,
+                SyncState {
+                    last_flush: Some(SyncStateFlushState {
+                        time: Utc::now().naive_utc(),
+                        checksum,
+                    }),
+                    ..sync_state
+                },
+                &UpdateSource::Sync,
+            )
+            .await?;
+        }
+        SyncOp::Conflict => {
+            error!("Got conflict for \n{sync_state:?} \n{fs_model:?}");
+            todo!("Implement conflict error type?");
+        }
+    };
 
     Ok(())
 }
@@ -175,27 +260,21 @@ async fn flush_db_model<R: Runtime>(window: &WebviewWindow<R>, model: &SyncModel
 async fn read_fs_state<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace: &Workspace,
-) -> Vec<FileState> {
+) -> Result<Vec<FileState>> {
     let state = Vec::new();
 
     let sync_states = match list_sync_states_for_workspace(app_handle, &workspace.id).await {
         Ok(s) => s,
-        Err(_) => return state,
+        Err(_) => return Ok(state),
     };
 
     let dir = match workspace.setting_sync_dir.clone() {
-        None => return state,
+        None => return Ok(state),
         Some(d) => d,
     };
 
-    let dir_items = fs::read_dir(dir.clone());
-    if let Err(e) = dir_items {
-        warn!("Failed to read dir {dir} {e:?}");
-        return state;
-    }
-
-    for item in fs::read_dir(dir).unwrap() {
-        let fs_model = match model_from_dir_item(item.ok()) {
+    for item in fs::read_dir(dir)? {
+        let (fs_model, _fs_checksum) = match model_from_dir_item(item.ok())? {
             None => continue, // We don't care about this file
             Some(m) => m,
         };
@@ -217,8 +296,8 @@ async fn read_fs_state<R: Runtime>(
                     Some(ss) => {
                         // Exists in DB, and has been flushed to FS before
                         let fs_hash = model_hash(&fs_model);
-                        let last_flush_hash = ss.hash;
-                        let status = if fs_hash == last_flush_hash {
+                        let last_flush_checksum = ss.checksum;
+                        let status = if fs_hash == last_flush_checksum {
                             FileStateStatus::Unchanged
                         } else {
                             FileStateStatus::FsModified
@@ -236,7 +315,7 @@ async fn read_fs_state<R: Runtime>(
         todo!();
     }
 
-    state
+    Ok(state)
 }
 
 // async fn read_db_state<R: Runtime>(
@@ -255,15 +334,18 @@ async fn read_fs_state<R: Runtime>(
 //     state
 // }
 
-fn model_from_dir_item(dir_entry: Option<DirEntry>) -> Option<SyncModel> {
-    let dir_entry = dir_entry?;
+fn model_from_dir_item(dir_entry: Option<DirEntry>) -> Result<Option<(SyncModel, String)>> {
+    let dir_entry = match dir_entry {
+        None => return Ok(None),
+        Some(v) => v,
+    };
 
     match dir_entry.file_type() {
         Ok(t) if t.is_file() => {}
-        _ => return None,
+        _ => return Ok(None),
     }
 
-    SyncModel::from_file(dir_entry.path().as_path()).ok()
+    SyncModel::from_file(dir_entry.path().as_path())
 }
 
 async fn prep_model_file_path<R: Runtime>(

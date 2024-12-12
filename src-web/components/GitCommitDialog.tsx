@@ -217,11 +217,14 @@ function TreeNodeChildren({
 function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
   let leavesVisited = 0;
   let leavesChecked = 0;
+  let leavesCurrent = 0;
 
   const visitChildren = (n: TreeNode) => {
     if (n.children.length === 0) {
       leavesVisited += 1;
-      if (n.status.staged) {
+      if (n.status.status === 'current') {
+        leavesCurrent += 1;
+      } else if (n.status.staged) {
         leavesChecked += 1;
       }
     }
@@ -232,7 +235,7 @@ function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
 
   visitChildren(root);
 
-  if (leavesVisited === leavesChecked) {
+  if (leavesVisited === leavesChecked + leavesCurrent) {
     return true;
   } else if (leavesChecked === 0) {
     return false;

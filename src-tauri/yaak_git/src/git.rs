@@ -109,6 +109,10 @@ pub fn git_commit(dir: &Path, message: &str) -> Result<()> {
 pub fn git_log(dir: &Path) -> Result<Vec<GitCommit>> {
     let repo = open_repo(dir)?;
 
+    if repo.is_empty()? {
+        return Ok(vec![]);
+    }
+
     let mut revwalk = repo.revwalk()?;
     revwalk.push_head()?;
     revwalk.set_sorting(git2::Sort::TIME)?;
@@ -606,6 +610,16 @@ mod test {
                 },
             ],
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_log_empty() -> Result<()> {
+        let dir = &new_dir();
+        git_init(dir)?;
+
+        let log = git_log(dir)?;
+        assert_eq!(log.len(), 0);
         Ok(())
     }
 

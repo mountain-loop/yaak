@@ -5,8 +5,7 @@ use crate::models::{
     GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
     GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader,
     HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden,
-    Settings, SettingsIden, SyncState, SyncStateFlushState, SyncStateIden, Workspace,
-    WorkspaceIden,
+    Settings, SettingsIden, SyncState, SyncStateIden, Workspace, WorkspaceIden,
 };
 use crate::plugin::SqliteConnection;
 use chrono::NaiveDateTime;
@@ -20,6 +19,7 @@ use sea_query_rusqlite::RusqliteBinder;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
+use ts_rs::TS;
 
 const MAX_GRPC_CONNECTIONS_PER_REQUEST: usize = 20;
 const MAX_HTTP_RESPONSES_PER_REQUEST: usize = MAX_GRPC_CONNECTIONS_PER_REQUEST;
@@ -29,9 +29,10 @@ pub async fn set_key_value_string<R: Runtime>(
     namespace: &str,
     key: &str,
     value: &str,
+    update_source: &UpdateSource,
 ) -> (KeyValue, bool) {
     let encoded = serde_json::to_string(value);
-    set_key_value_raw(mgr, namespace, key, &encoded.unwrap()).await
+    set_key_value_raw(mgr, namespace, key, &encoded.unwrap(), update_source).await
 }
 
 pub async fn set_key_value_int<R: Runtime>(
@@ -39,9 +40,10 @@ pub async fn set_key_value_int<R: Runtime>(
     namespace: &str,
     key: &str,
     value: i32,
+    update_source: &UpdateSource,
 ) -> (KeyValue, bool) {
     let encoded = serde_json::to_string(&value);
-    set_key_value_raw(mgr, namespace, key, &encoded.unwrap()).await
+    set_key_value_raw(mgr, namespace, key, &encoded.unwrap(), update_source).await
 }
 
 pub async fn get_key_value_string<R: Runtime>(
@@ -91,6 +93,7 @@ pub async fn set_key_value_raw<R: Runtime>(
     namespace: &str,
     key: &str,
     value: &str,
+    update_source: &UpdateSource,
 ) -> (KeyValue, bool) {
     let existing = get_key_value_raw(w, namespace, key).await;
 
@@ -121,10 +124,11 @@ pub async fn set_key_value_raw<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str()).expect("Failed to prepare KeyValue upsert");
-    let kv = stmt
+    let m: KeyValue = stmt
         .query_row(&*params.as_params(), |row| row.try_into())
         .expect("Failed to upsert KeyValue");
-    (emit_upserted_model(w, kv), existing.is_none())
+    emit_upserted_model(w, &AnyModel::KeyValue(m.to_owned()), update_source);
+    (m, existing.is_none())
 }
 
 pub async fn get_key_value_raw<R: Runtime>(
@@ -174,6 +178,7 @@ pub async fn get_workspace<R: Runtime>(mgr: &impl Manager<R>, id: &str) -> Resul
 pub async fn upsert_workspace<R: Runtime>(
     window: &WebviewWindow<R>,
     workspace: Workspace,
+    update_source: &UpdateSource,
 ) -> Result<Workspace> {
     let id = match workspace.id.as_str() {
         "" => generate_model_id(ModelType::TypeWorkspace),
@@ -228,13 +233,15 @@ pub async fn upsert_workspace<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: Workspace = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::Workspace(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn delete_workspace<R: Runtime>(
     window: &WebviewWindow<R>,
     id: &str,
+    update_source: &UpdateSource,
 ) -> Result<Workspace> {
     let workspace = get_workspace(window, id).await?;
 
@@ -248,10 +255,11 @@ pub async fn delete_workspace<R: Runtime>(
     db.execute(sql.as_str(), &*params.as_params())?;
 
     for r in list_responses_by_workspace_id(window, id).await? {
-        delete_http_response(window, &r.id).await?;
+        delete_http_response(window, &r.id, update_source).await?;
     }
 
-    emit_deleted_model(window, workspace)
+    emit_deleted_model(window, &AnyModel::Workspace(workspace.to_owned()), update_source);
+    Ok(workspace)
 }
 
 pub async fn get_cookie_jar<R: Runtime>(mgr: &impl Manager<R>, id: &str) -> Result<CookieJar> {
@@ -286,6 +294,7 @@ pub async fn list_cookie_jars<R: Runtime>(
 pub async fn delete_cookie_jar<R: Runtime>(
     window: &WebviewWindow<R>,
     id: &str,
+    update_source: &UpdateSource,
 ) -> Result<CookieJar> {
     let cookie_jar = get_cookie_jar(window, id).await?;
     let dbm = &*window.app_handle().state::<SqliteConnection>();
@@ -297,12 +306,14 @@ pub async fn delete_cookie_jar<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
     db.execute(sql.as_str(), &*params.as_params())?;
 
-    emit_deleted_model(window, cookie_jar)
+    emit_deleted_model(window, &AnyModel::CookieJar(cookie_jar.to_owned()), update_source);
+    Ok(cookie_jar)
 }
 
 pub async fn duplicate_grpc_request<R: Runtime>(
     window: &WebviewWindow<R>,
     id: &str,
+    update_source: &UpdateSource,
 ) -> Result<GrpcRequest> {
     let mut request = match get_grpc_request(window, id).await? {
         Some(r) => r,
@@ -311,14 +322,15 @@ pub async fn duplicate_grpc_request<R: Runtime>(
         }
     };
     request.id = "".to_string();
-    upsert_grpc_request(window, &request).await
+    upsert_grpc_request(window, &request, update_source).await
 }
 
 pub async fn delete_grpc_request<R: Runtime>(
     window: &WebviewWindow<R>,
     id: &str,
+    update_source: &UpdateSource,
 ) -> Result<GrpcRequest> {
-    let req = match get_grpc_request(window, id).await? {
+    let grpc_request = match get_grpc_request(window, id).await? {
         Some(r) => r,
         None => {
             return Err(ModelNotFound(id.to_string()));
@@ -333,12 +345,14 @@ pub async fn delete_grpc_request<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
     db.execute(sql.as_str(), &*params.as_params())?;
 
-    emit_deleted_model(window, req)
+    emit_deleted_model(window, &AnyModel::GrpcRequest(grpc_request.to_owned()), update_source);
+    Ok(grpc_request)
 }
 
 pub async fn upsert_grpc_request<R: Runtime>(
     window: &WebviewWindow<R>,
     request: &GrpcRequest,
+    update_source: &UpdateSource,
 ) -> Result<GrpcRequest> {
     let id = match request.id.as_str() {
         "" => generate_model_id(ModelType::TypeGrpcRequest),
@@ -404,8 +418,9 @@ pub async fn upsert_grpc_request<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: GrpcRequest = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::GrpcRequest(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn get_grpc_request<R: Runtime>(
@@ -443,12 +458,13 @@ pub async fn list_grpc_requests<R: Runtime>(
 pub async fn upsert_grpc_connection<R: Runtime>(
     window: &WebviewWindow<R>,
     connection: &GrpcConnection,
+    update_source: &UpdateSource,
 ) -> Result<GrpcConnection> {
     let connections =
         list_http_responses_for_request(window, connection.request_id.as_str(), None).await?;
     for c in connections.iter().skip(MAX_GRPC_CONNECTIONS_PER_REQUEST - 1) {
         debug!("Deleting old grpc connection {}", c.id);
-        delete_grpc_connection(window, c.id.as_str()).await?;
+        delete_grpc_connection(window, c.id.as_str(), update_source).await?;
     }
 
     let id = match connection.id.as_str() {
@@ -508,8 +524,9 @@ pub async fn upsert_grpc_connection<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: GrpcConnection = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::GrpcConnection(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn get_grpc_connection<R: Runtime>(
@@ -566,8 +583,9 @@ pub async fn list_grpc_connections_for_request<R: Runtime>(
 pub async fn delete_grpc_connection<R: Runtime>(
     window: &WebviewWindow<R>,
     id: &str,
+    update_source: &UpdateSource,
 ) -> Result<GrpcConnection> {
-    let resp = get_grpc_connection(window, id).await?;
+    let m = get_grpc_connection(window, id).await?;
 
     let dbm = &*window.app_handle().state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -578,15 +596,17 @@ pub async fn delete_grpc_connection<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     db.execute(sql.as_str(), &*params.as_params())?;
-    emit_deleted_model(window, resp)
+    emit_deleted_model(window, &AnyModel::GrpcConnection(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn delete_all_grpc_connections<R: Runtime>(
     window: &WebviewWindow<R>,
     request_id: &str,
+    update_source: &UpdateSource,
 ) -> Result<()> {
     for r in list_grpc_connections_for_request(window, request_id).await? {
-        delete_grpc_connection(window, &r.id).await?;
+        delete_grpc_connection(window, &r.id, update_source).await?;
     }
     Ok(())
 }
@@ -594,9 +614,10 @@ pub async fn delete_all_grpc_connections<R: Runtime>(
 pub async fn delete_all_grpc_connections_for_workspace<R: Runtime>(
     window: &WebviewWindow<R>,
     workspace_id: &str,
+    update_source: &UpdateSource,
 ) -> Result<()> {
     for r in list_grpc_connections_for_workspace(window, workspace_id).await? {
-        delete_grpc_connection(window, &r.id).await?;
+        delete_grpc_connection(window, &r.id, update_source).await?;
     }
     Ok(())
 }
@@ -604,6 +625,7 @@ pub async fn delete_all_grpc_connections_for_workspace<R: Runtime>(
 pub async fn upsert_grpc_event<R: Runtime>(
     window: &WebviewWindow<R>,
     event: &GrpcEvent,
+    update_source: &UpdateSource,
 ) -> Result<GrpcEvent> {
     let id = match event.id.as_str() {
         "" => generate_model_id(ModelType::TypeGrpcEvent),
@@ -656,8 +678,9 @@ pub async fn upsert_grpc_event<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: GrpcEvent = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::GrpcEvent(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn get_grpc_event<R: Runtime>(mgr: &impl Manager<R>, id: &str) -> Result<GrpcEvent> {
@@ -693,6 +716,7 @@ pub async fn list_grpc_events<R: Runtime>(
 pub async fn upsert_cookie_jar<R: Runtime>(
     window: &WebviewWindow<R>,
     cookie_jar: &CookieJar,
+    update_source: &UpdateSource,
 ) -> Result<CookieJar> {
     let id = match cookie_jar.id.as_str() {
         "" => generate_model_id(ModelType::TypeCookieJar),
@@ -734,8 +758,9 @@ pub async fn upsert_cookie_jar<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: CookieJar = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::CookieJar(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn list_environments<R: Runtime>(
@@ -759,6 +784,7 @@ pub async fn list_environments<R: Runtime>(
 pub async fn delete_environment<R: Runtime>(
     window: &WebviewWindow<R>,
     id: &str,
+    update_source: &UpdateSource,
 ) -> Result<Environment> {
     let env = get_environment(window, id).await?;
 
@@ -771,7 +797,9 @@ pub async fn delete_environment<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     db.execute(sql.as_str(), &*params.as_params())?;
-    emit_deleted_model(window, env)
+
+    emit_deleted_model(window, &AnyModel::Environment(env.to_owned()), update_source);
+    Ok(env)
 }
 
 const SETTINGS_ID: &str = "default";
@@ -813,10 +841,11 @@ pub async fn get_or_create_settings<R: Runtime>(mgr: &impl Manager<R>) -> Settin
 pub async fn update_settings<R: Runtime>(
     window: &WebviewWindow<R>,
     settings: Settings,
+    update_source: &UpdateSource,
 ) -> Result<Settings> {
     let dbm = &*window.app_handle().state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
-    
+
     // Correct for the bug where created_at was being updated by mistake
     let created_at = if settings.created_at > settings.updated_at {
         settings.updated_at
@@ -853,13 +882,15 @@ pub async fn update_settings<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: Settings = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::Settings(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn upsert_environment<R: Runtime>(
     window: &WebviewWindow<R>,
     environment: Environment,
+    update_source: &UpdateSource,
 ) -> Result<Environment> {
     let id = match environment.id.as_str() {
         "" => generate_model_id(ModelType::TypeEnvironment),
@@ -901,8 +932,9 @@ pub async fn upsert_environment<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: Environment = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::Environment(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn get_environment<R: Runtime>(mgr: &impl Manager<R>, id: &str) -> Result<Environment> {
@@ -948,6 +980,7 @@ pub async fn list_plugins<R: Runtime>(mgr: &impl Manager<R>) -> Result<Vec<Plugi
 pub async fn upsert_plugin<R: Runtime>(
     window: &WebviewWindow<R>,
     plugin: Plugin,
+    update_source: &UpdateSource,
 ) -> Result<Plugin> {
     let id = match plugin.id.as_str() {
         "" => generate_model_id(ModelType::TypePlugin),
@@ -991,11 +1024,17 @@ pub async fn upsert_plugin<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: Plugin = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::Plugin(m.to_owned()), update_source);
+    Ok(m)
 }
 
-pub async fn delete_plugin<R: Runtime>(window: &WebviewWindow<R>, id: &str) -> Result<Plugin> {
+pub async fn delete_plugin<R: Runtime>(
+    window: &WebviewWindow<R>,
+    id: &str,
+
+    update_source: &UpdateSource,
+) -> Result<Plugin> {
     let plugin = get_plugin(window, id).await?;
 
     let dbm = &*window.app_handle().state::<SqliteConnection>();
@@ -1007,7 +1046,8 @@ pub async fn delete_plugin<R: Runtime>(window: &WebviewWindow<R>, id: &str) -> R
         .build_rusqlite(SqliteQueryBuilder);
     db.execute(sql.as_str(), &*params.as_params())?;
 
-    emit_deleted_model(window, plugin)
+    emit_deleted_model(window, &AnyModel::Plugin(plugin.to_owned()), update_source);
+    Ok(plugin)
 }
 
 pub async fn get_folder<R: Runtime>(mgr: &impl Manager<R>, id: &str) -> Result<Folder> {
@@ -1041,7 +1081,12 @@ pub async fn list_folders<R: Runtime>(
     Ok(items.map(|v| v.unwrap()).collect())
 }
 
-pub async fn delete_folder<R: Runtime>(window: &WebviewWindow<R>, id: &str) -> Result<Folder> {
+pub async fn delete_folder<R: Runtime>(
+    window: &WebviewWindow<R>,
+    id: &str,
+
+    update_source: &UpdateSource,
+) -> Result<Folder> {
     let folder = get_folder(window, id).await?;
 
     let dbm = &*window.app_handle().state::<SqliteConnection>();
@@ -1053,10 +1098,16 @@ pub async fn delete_folder<R: Runtime>(window: &WebviewWindow<R>, id: &str) -> R
         .build_rusqlite(SqliteQueryBuilder);
     db.execute(sql.as_str(), &*params.as_params())?;
 
-    emit_deleted_model(window, folder)
+    emit_deleted_model(window, &AnyModel::Folder(folder.to_owned()), update_source);
+    Ok(folder)
 }
 
-pub async fn upsert_folder<R: Runtime>(window: &WebviewWindow<R>, r: Folder) -> Result<Folder> {
+pub async fn upsert_folder<R: Runtime>(
+    window: &WebviewWindow<R>,
+    r: Folder,
+
+    update_source: &UpdateSource,
+) -> Result<Folder> {
     let id = match r.id.as_str() {
         "" => generate_model_id(ModelType::TypeFolder),
         _ => r.id.to_string(),
@@ -1100,25 +1151,28 @@ pub async fn upsert_folder<R: Runtime>(window: &WebviewWindow<R>, r: Folder) -> 
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: Folder = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::Folder(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn duplicate_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
     id: &str,
+    update_source: &UpdateSource,
 ) -> Result<HttpRequest> {
     let mut request = match get_http_request(window, id).await? {
         None => return Err(ModelNotFound(id.to_string())),
         Some(r) => r,
     };
     request.id = "".to_string();
-    upsert_http_request(window, request).await
+    upsert_http_request(window, request, update_source).await
 }
 
 pub async fn upsert_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
     r: HttpRequest,
+    update_source: &UpdateSource,
 ) -> Result<HttpRequest> {
     let id = match r.id.as_str() {
         "" => generate_model_id(ModelType::TypeHttpRequest),
@@ -1188,8 +1242,9 @@ pub async fn upsert_http_request<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: HttpRequest = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::HttpRequest(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn list_http_requests<R: Runtime>(
@@ -1228,6 +1283,7 @@ pub async fn get_http_request<R: Runtime>(
 pub async fn delete_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
     id: &str,
+    update_source: &UpdateSource,
 ) -> Result<HttpRequest> {
     let req = match get_http_request(window, id).await? {
         None => return Err(ModelNotFound(id.to_string())),
@@ -1235,7 +1291,7 @@ pub async fn delete_http_request<R: Runtime>(
     };
 
     // DB deletes will cascade but this will delete the files
-    delete_all_http_responses_for_request(window, id).await?;
+    delete_all_http_responses_for_request(window, id, update_source).await?;
 
     let dbm = &*window.app_handle().state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -1245,12 +1301,14 @@ pub async fn delete_http_request<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
     db.execute(sql.as_str(), &*params.as_params())?;
 
-    emit_deleted_model(window, req)
+    emit_deleted_model(window, &AnyModel::HttpRequest(req.to_owned()), update_source);
+    Ok(req)
 }
 
 pub async fn create_default_http_response<R: Runtime>(
     window: &WebviewWindow<R>,
     request_id: &str,
+    update_source: &UpdateSource,
 ) -> Result<HttpResponse> {
     create_http_response(
         &window,
@@ -1266,6 +1324,7 @@ pub async fn create_default_http_response<R: Runtime>(
         vec![],
         None,
         None,
+        update_source,
     )
     .await
 }
@@ -1285,11 +1344,12 @@ pub async fn create_http_response<R: Runtime>(
     headers: Vec<HttpResponseHeader>,
     version: Option<&str>,
     remote_addr: Option<&str>,
+    update_source: &UpdateSource,
 ) -> Result<HttpResponse> {
     let responses = list_http_responses_for_request(window, request_id, None).await?;
     for response in responses.iter().skip(MAX_HTTP_RESPONSES_PER_REQUEST - 1) {
         debug!("Deleting old response {}", response.id);
-        delete_http_response(window, response.id.as_str()).await?;
+        delete_http_response(window, response.id.as_str(), update_source).await?;
     }
 
     let req = match get_http_request(window, request_id).await? {
@@ -1342,8 +1402,9 @@ pub async fn create_http_response<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: HttpResponse = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::HttpResponse(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn cancel_pending_grpc_connections(app: &AppHandle) -> Result<()> {
@@ -1382,17 +1443,19 @@ pub async fn cancel_pending_responses(app: &AppHandle) -> Result<()> {
 pub async fn update_response_if_id<R: Runtime>(
     window: &WebviewWindow<R>,
     response: &HttpResponse,
+    update_source: &UpdateSource,
 ) -> Result<HttpResponse> {
     if response.id.is_empty() {
         Ok(response.clone())
     } else {
-        update_http_response(window, response).await
+        update_http_response(window, response, update_source).await
     }
 }
 
 pub async fn update_http_response<R: Runtime>(
     window: &WebviewWindow<R>,
     response: &HttpResponse,
+    update_source: &UpdateSource,
 ) -> Result<HttpResponse> {
     let dbm = &*window.app_handle().state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -1427,8 +1490,9 @@ pub async fn update_http_response<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: HttpResponse = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::HttpResponse(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn get_http_response<R: Runtime>(
@@ -1449,6 +1513,7 @@ pub async fn get_http_response<R: Runtime>(
 pub async fn delete_http_response<R: Runtime>(
     window: &WebviewWindow<R>,
     id: &str,
+    update_source: &UpdateSource,
 ) -> Result<HttpResponse> {
     let resp = get_http_response(window, id).await?;
 
@@ -1467,15 +1532,17 @@ pub async fn delete_http_response<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
     db.execute(sql.as_str(), &*params.as_params())?;
 
-    emit_deleted_model(window, resp)
+    emit_deleted_model(window, &AnyModel::HttpResponse(resp.to_owned()), update_source);
+    Ok(resp)
 }
 
 pub async fn delete_all_http_responses_for_request<R: Runtime>(
     window: &WebviewWindow<R>,
     request_id: &str,
+    update_source: &UpdateSource,
 ) -> Result<()> {
     for r in list_http_responses_for_request(window, request_id, None).await? {
-        delete_http_response(window, &r.id).await?;
+        delete_http_response(window, &r.id, update_source).await?;
     }
     Ok(())
 }
@@ -1483,9 +1550,10 @@ pub async fn delete_all_http_responses_for_request<R: Runtime>(
 pub async fn delete_all_http_responses_for_workspace<R: Runtime>(
     window: &WebviewWindow<R>,
     workspace_id: &str,
+    update_source: &UpdateSource,
 ) -> Result<()> {
     for r in list_http_responses_for_workspace(window, workspace_id, None).await? {
-        delete_http_response(window, &r.id).await?;
+        delete_http_response(window, &r.id, update_source).await?;
     }
     Ok(())
 }
@@ -1549,6 +1617,7 @@ pub async fn list_responses_by_workspace_id<R: Runtime>(
 
 pub async fn get_sync_state_for_model<R: Runtime>(
     mgr: &impl Manager<R>,
+    workspace_id: &str,
     model_id: &str,
 ) -> Result<Option<SyncState>> {
     let dbm = &*mgr.state::<SqliteConnection>();
@@ -1556,7 +1625,11 @@ pub async fn get_sync_state_for_model<R: Runtime>(
     let (sql, params) = Query::select()
         .from(SyncStateIden::Table)
         .column(Asterisk)
-        .cond_where(Expr::col(SyncStateIden::ModelId).eq(model_id))
+        .cond_where(
+            Cond::all()
+                .add(Expr::col(SyncStateIden::ModelId).eq(model_id))
+                .add(Expr::col(SyncStateIden::WorkspaceId).eq(workspace_id)),
+        )
         .build_rusqlite(SqliteQueryBuilder);
     let mut stmt = db.prepare(sql.as_str())?;
     Ok(stmt.query_row(&*params.as_params(), |row| row.try_into()).optional()?)
@@ -1567,8 +1640,9 @@ pub async fn get_or_create_sync_state_for_model<R: Runtime>(
     workspace_id: &str,
     model_id: &str,
     path: &str,
+    update_source: &UpdateSource,
 ) -> Result<SyncState> {
-    match get_sync_state_for_model(window, model_id).await {
+    match get_sync_state_for_model(window, workspace_id, model_id).await {
         Ok(Some(ss)) => return Ok(ss),
         Err(e) => panic!("Failed to get SyncState {e:?}"),
         Ok(None) => {}
@@ -1583,6 +1657,7 @@ pub async fn get_or_create_sync_state_for_model<R: Runtime>(
             dirty: true,
             ..Default::default()
         },
+        update_source,
     )
     .await
 }
@@ -1603,9 +1678,37 @@ pub async fn list_sync_states_for_workspace<R: Runtime>(
     Ok(items.map(|v| v.unwrap()).collect())
 }
 
+pub async fn delete_sync_state<R: Runtime>(
+    window: &WebviewWindow<R>,
+    workspace_id: &str,
+    model_id: &str,
+    update_source: &UpdateSource,
+) -> Result<SyncState> {
+    let sync_state = match get_sync_state_for_model(window, workspace_id, model_id).await? {
+        None => return Err(ModelNotFound(format!("{workspace_id} {model_id}"))),
+        Some(r) => r,
+    };
+
+    let dbm = &*window.app_handle().state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::delete()
+        .from_table(SyncStateIden::Table)
+        .cond_where(
+            Cond::all()
+                .add(Expr::col(SyncStateIden::WorkspaceId).eq(workspace_id))
+                .add(Expr::col(SyncStateIden::ModelId).eq(model_id)),
+        )
+        .build_rusqlite(SqliteQueryBuilder);
+    db.execute(sql.as_str(), &*params.as_params())?;
+
+    emit_deleted_model(window, &AnyModel::SyncState(sync_state.to_owned()), update_source);
+    Ok(sync_state)
+}
+
 pub async fn upsert_sync_state<R: Runtime>(
     window: &WebviewWindow<R>,
     sync_state: SyncState,
+    update_source: &UpdateSource,
 ) -> Result<SyncState> {
     let id = match sync_state.id.as_str() {
         "" => generate_model_id(ModelType::TypeSyncState),
@@ -1651,8 +1754,9 @@ pub async fn upsert_sync_state<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     let mut stmt = db.prepare(sql.as_str())?;
-    let m = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    Ok(emit_upserted_model(window, m))
+    let m: SyncState = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::SyncState(m.to_owned()), update_source);
+    Ok(m)
 }
 
 pub async fn debug_pool<R: Runtime>(mgr: &impl Manager<R>) {
@@ -1670,33 +1774,50 @@ pub fn generate_id() -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), 10)
 }
 
-#[derive(Clone, Serialize, Deserialize, Default)]
-#[serde(default, rename_all = "camelCase")]
-pub struct ModelPayload<M: Serialize + Clone> {
-    pub model: M,
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "models.ts")]
+pub struct ModelPayload {
+    pub model: AnyModel,
     pub window_label: String,
+    pub update_source: UpdateSource,
 }
 
-fn emit_upserted_model<M: Serialize + Clone, R: Runtime>(window: &WebviewWindow<R>, model: M) -> M {
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "models.ts")]
+pub enum UpdateSource {
+    Sync,
+    Window,
+    Plugin,
+    Background,
+}
+
+fn emit_upserted_model<R: Runtime>(
+    window: &WebviewWindow<R>,
+    model: &AnyModel,
+    update_source: &UpdateSource,
+) {
     let payload = ModelPayload {
-        model: model.clone(),
+        model: model.to_owned(),
         window_label: window.label().to_string(),
+        update_source: update_source.to_owned(),
     };
 
     window.emit("upserted_model", payload).unwrap();
-    model
 }
 
-fn emit_deleted_model<M: Serialize + Clone, R: Runtime>(
+fn emit_deleted_model<R: Runtime>(
     window: &WebviewWindow<R>,
-    model: M,
-) -> Result<M> {
+    model: &AnyModel,
+    update_source: &UpdateSource,
+) {
     let payload = ModelPayload {
-        model: model.clone(),
+        model: model.to_owned(),
         window_label: window.label().to_string(),
+        update_source: update_source.to_owned(),
     };
     window.emit("deleted_model", payload).unwrap();
-    Ok(model)
 }
 
 pub fn listen_to_model_delete<F, R>(app_handle: &AppHandle<R>, handler: F)
@@ -1705,43 +1826,43 @@ where
     R: Runtime,
 {
     app_handle.listen_any("deleted_model", move |e| {
-        let model_payload: ModelPayload<serde_json::Value> =
-            serde_json::from_str(e.payload()).unwrap();
+        let p: serde_json::Value = serde_json::from_str(e.payload()).unwrap();
+        let model = p.as_object().unwrap().get("model").unwrap().as_object().unwrap();
 
-        let model = match model_payload.model.get("model") {
+        let model = match model.get("model").map(|m| m.to_owned()) {
             None => return,
             Some(model) if model == "http_request" => {
-                AnyModel::HttpRequest(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::HttpRequest(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "grpc_request" => {
-                AnyModel::GrpcRequest(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::GrpcRequest(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "workspace" => {
-                AnyModel::Workspace(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::Workspace(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "environment" => {
-                AnyModel::Environment(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::Environment(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "folder" => {
-                AnyModel::Folder(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::Folder(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "key_value" => {
-                AnyModel::KeyValue(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::KeyValue(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "sync_state" => {
-                AnyModel::SyncState(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::SyncState(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "grpc_connection" => {
-                AnyModel::GrpcConnection(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::GrpcConnection(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "grpc_event" => {
-                AnyModel::GrpcEvent(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::GrpcEvent(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "cookie_jar" => {
-                AnyModel::CookieJar(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::CookieJar(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "plugin" => {
-                AnyModel::Plugin(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::Plugin(serde_json::from_value(model).unwrap())
             }
             Some(model) => {
                 warn!("Unknown deleted model {}", model);
@@ -1758,43 +1879,43 @@ where
     R: Runtime,
 {
     app_handle.listen_any("upserted_model", move |e| {
-        let model_payload: ModelPayload<serde_json::Value> =
-            serde_json::from_str(e.payload()).unwrap();
+        let p: serde_json::Value = serde_json::from_str(e.payload()).unwrap();
+        let model = p.as_object().unwrap().get("model").unwrap().as_object().unwrap();
 
-        let model = match model_payload.model.get("model") {
+        let model = match model.get("model").map(|m| m.to_owned()) {
             None => return,
             Some(model) if model == "http_request" => {
-                AnyModel::HttpRequest(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::HttpRequest(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "grpc_request" => {
-                AnyModel::GrpcRequest(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::GrpcRequest(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "workspace" => {
-                AnyModel::Workspace(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::Workspace(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "environment" => {
-                AnyModel::Environment(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::Environment(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "folder" => {
-                AnyModel::Folder(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::Folder(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "key_value" => {
-                AnyModel::KeyValue(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::KeyValue(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "sync_state" => {
-                AnyModel::SyncState(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::SyncState(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "grpc_connection" => {
-                AnyModel::GrpcConnection(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::GrpcConnection(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "grpc_event" => {
-                AnyModel::GrpcEvent(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::GrpcEvent(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "cookie_jar" => {
-                AnyModel::CookieJar(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::CookieJar(serde_json::from_value(model).unwrap())
             }
             Some(model) if model == "plugin" => {
-                AnyModel::Plugin(serde_json::from_value(model_payload.model).unwrap())
+                AnyModel::Plugin(serde_json::from_value(model).unwrap())
             }
             Some(model) => {
                 warn!("Unknown upserted model {}", model);

@@ -860,7 +860,6 @@ impl<'s> TryFrom<&Row<'s>> for Plugin {
 #[ts(export, export_to = "models.ts")]
 pub struct SyncStateFlushState {
     pub time: NaiveDateTime,
-    pub hash: String,
     pub checksum: String,
 }
 

@@ -7,6 +7,7 @@ use std::ops::Add;
 use std::time::Duration;
 use tauri::{is_dev, AppHandle, Emitter, Runtime, WebviewWindow};
 use ts_rs::TS;
+use yaak_models::queries::UpdateSource;
 
 const KV_NAMESPACE: &str = "license";
 const KV_ACTIVATION_ID_KEY: &str = "activation_id";
@@ -75,6 +76,7 @@ pub async fn activate_license<R: Runtime>(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         body.activation_id.as_str(),
+        &UpdateSource::Window,
     )
     .await;
 
