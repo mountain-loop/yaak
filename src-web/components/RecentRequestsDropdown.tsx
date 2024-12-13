@@ -24,8 +24,9 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
   const [activeCookieJar] = useActiveCookieJar();
   const routes = useAppRoutes();
   const allRecentRequestIds = useRecentRequests();
-  const recentRequestIds = useMemo(() => allRecentRequestIds.slice(1), [allRecentRequestIds]);
   const requests = useRequests();
+
+  type ExtendedDropdownItem = DropdownItem & { key: string };
 
   // Handle key-up
   useKeyPressEvent('Control', undefined, () => {
@@ -43,11 +44,11 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
     dropdownRef.current?.prev?.();
   });
 
-  const items = useMemo<DropdownItem[]>(() => {
+  const items = useMemo<ExtendedDropdownItem[]>(() => {
     if (activeWorkspace === null) return [];
 
-    const recentRequestItems: DropdownItem[] = [];
-    for (const id of recentRequestIds) {
+    const recentRequestItems: ExtendedDropdownItem[] = [];
+    for (const id of allRecentRequestIds) {
       const request = requests.find((r) => r.id === id);
       if (request === undefined) continue;
 
@@ -79,9 +80,12 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
     }
 
     return recentRequestItems.slice(0, 20);
-  }, [activeWorkspace, recentRequestIds, requests, routes, activeEnvironment?.id, activeCookieJar?.id]);
+  }, [activeWorkspace, allRecentRequestIds, requests, routes, activeEnvironment?.id, activeCookieJar?.id]);
 
-  return (
+  // Only show dropdown if there are valid recent requests
+  const hasRecentRequests = items.length > 0 && items[0]?.key !== 'no-recent-requests';
+
+  return hasRecentRequests ? (
     <Dropdown ref={dropdownRef} items={items}>
       <Button
         data-tauri-drag-region
@@ -96,5 +100,5 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
         {fallbackRequestName(activeRequest)}
       </Button>
     </Dropdown>
-  );
+  ) : null;
 }
