@@ -1,7 +1,7 @@
 import type { YaakTheme } from '../window';
 import { YaakColor } from '../yaakColor';
 
-const gruvboxDefault: YaakTheme = {
+export const gruvboxDefault: YaakTheme = {
   id: 'gruvbox',
   name: 'gruvbox',
   surface: new YaakColor('#282828', 'dark'),             // Gruvbox bg
