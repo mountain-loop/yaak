@@ -1,5 +1,6 @@
 import { catppuccinMacchiato } from '../lib/theme/themes/catppuccin';
 import { githubLight } from '../lib/theme/themes/github';
+import { gruvboxDefault } from '../lib/theme/themes/gruvbox';
 import { hotdogStandDefault } from '../lib/theme/themes/hotdog-stand';
 import { monokaiProDefault } from '../lib/theme/themes/monokai-pro';
 import { rosePineDefault } from '../lib/theme/themes/rose-pine';
@@ -17,6 +18,7 @@ export function useGenerateThemeCss() {
       rosePineDefault,
       catppuccinMacchiato,
       githubLight,
+      gruvboxDefault,
       hotdogStandDefault,
     ]
       .map(getThemeCSS)
