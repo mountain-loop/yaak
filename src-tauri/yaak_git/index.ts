@@ -9,10 +9,12 @@ export function useGit(dir: string) {
   const workspaceId = useActiveWorkspace()?.id;
 
   useQuery({
+    refetchOnMount: true,
     queryKey: ['sync', 'sync', dir],
     queryFn: async () => {
       if (workspaceId == null) return;
       await invoke('plugin:yaak-git|sync', { workspaceId, dir });
+      return 'dummy';
     },
   });
 

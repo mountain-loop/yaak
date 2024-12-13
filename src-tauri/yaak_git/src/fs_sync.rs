@@ -35,11 +35,28 @@ pub(crate) async fn sync_fs<R: Runtime>(
 
 pub(crate) fn watch_upserted_models<R: Runtime>(app_handle: &AppHandle<R>) {
     let app_handle = app_handle.clone();
-    listen_to_model_upsert(&app_handle.clone(), move |m| {
+    listen_to_model_upsert(&app_handle.clone(), move |payload| {
         let app_handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            if let Ok(m) = m.try_into() {
-                write_model_to_fs(&app_handle, &m).await.unwrap();
+            let m: Result<SyncModel> = payload.model.try_into();
+            if let Ok(m) = m {
+                let sync_state = get_sync_state_for_model(
+                    &app_handle,
+                    m.workspace_id().as_str(),
+                    m.id().as_str(),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                upsert_sync_state(
+                    &app_handle,
+                    SyncState {
+                        dirty: true,
+                        ..sync_state
+                    },
+                )
+                .await
+                .unwrap();
             }
         });
     });
@@ -47,11 +64,28 @@ pub(crate) fn watch_upserted_models<R: Runtime>(app_handle: &AppHandle<R>) {
 
 pub(crate) fn watch_deleted_models<R: Runtime>(app_handle: &AppHandle<R>) {
     let app_handle = app_handle.clone();
-    listen_to_model_delete(&app_handle.clone(), move |m| {
+    listen_to_model_delete(&app_handle.clone(), move |payload| {
         let app_handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            if let Ok(m) = m.try_into() {
-                delete_model_from_fs(&app_handle, &m).await.unwrap();
+            let m: Result<SyncModel> = payload.model.try_into();
+            if let Ok(m) = m {
+                let sync_state = get_sync_state_for_model(
+                    &app_handle,
+                    m.workspace_id().as_str(),
+                    m.id().as_str(),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                upsert_sync_state(
+                    &app_handle,
+                    SyncState {
+                        dirty: true,
+                        ..sync_state
+                    },
+                )
+                .await
+                .unwrap();
             }
         });
     });
@@ -129,7 +163,6 @@ async fn flush_db_model<R: Runtime>(window: &WebviewWindow<R>, model: &SyncModel
         model.workspace_id().as_str(),
         model.id().as_str(),
         file_path.to_str().unwrap(),
-        &UpdateSource::Sync,
     )
     .await?;
 
@@ -159,16 +192,22 @@ async fn flush_db_model<R: Runtime>(window: &WebviewWindow<R>, model: &SyncModel
         (Some(_last_flush), None) => SyncOp::DbDelete,
         // Hasn't been flushed, and doesn't exist in DB (added)
         (None, Some((model, checksum))) => SyncOp::DbWrite { model, checksum },
-        // Has been flushed, but the destination changed (conflict
-        (Some(last_flush), Some((model, checksum))) if last_flush.checksum != checksum => {
-            if sync_state.dirty {
-                SyncOp::Conflict
+        // Has been flushed, and exists on FS
+        (Some(last_flush), Some((model, checksum))) => {
+            if last_flush.checksum != checksum {
+                if sync_state.dirty {
+                    SyncOp::Conflict
+                } else {
+                    SyncOp::DbWrite { model, checksum }
+                }
             } else {
-                SyncOp::DbWrite { model, checksum }
+                if sync_state.dirty {
+                    SyncOp::FsWrite
+                } else {
+                    SyncOp::Nothing
+                }
             }
         }
-        // Has been synced and the destination is unchanged
-        (Some(_last_flush), Some(_fs_model)) => SyncOp::Nothing,
     };
 
     debug!("Sync op for {:?} {:?}", file_path, sync_op);
@@ -187,7 +226,6 @@ async fn flush_db_model<R: Runtime>(window: &WebviewWindow<R>, model: &SyncModel
                     }),
                     ..sync_state
                 },
-                &UpdateSource::Sync,
             )
             .await?;
         }
@@ -244,7 +282,6 @@ async fn flush_db_model<R: Runtime>(window: &WebviewWindow<R>, model: &SyncModel
                     }),
                     ..sync_state
                 },
-                &UpdateSource::Sync,
             )
             .await?;
         }

@@ -1,11 +1,9 @@
-use std::ffi::OsStr;
 use crate::error::Error::{InvalidSyncFile, UnknownModel};
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use std::fs;
 use std::path::Path;
-use log::debug;
 use ts_rs::TS;
 use yaak_models::models::{AnyModel, Environment, Folder, GrpcRequest, HttpRequest, Workspace};
 
@@ -31,7 +29,7 @@ impl SyncModel {
         hasher.update(&contents);
         let checksum = hex::encode(hasher.finalize());
 
-        debug!("Loading SyncModel from {file_path:?}");
+        // debug!("Loading SyncModel from {file_path:?}");
         let ext = file_path.extension().unwrap_or_default();
         if ext == "yml" || ext == "yaml" {
             Ok(Some((serde_yaml::from_slice(contents.as_slice())?, checksum)))

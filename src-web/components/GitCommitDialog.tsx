@@ -37,6 +37,7 @@ interface TreeNode {
 export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   const [{ status }, { commit, add, unstage }] = useGit(syncDir);
   const [message, setMessage] = useState<string>('');
+  console.log("STATUS", status);
 
   const handleCreateCommit = async () => {
     await commit.mutateAsync({ message });
@@ -50,7 +51,6 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
       return null;
     }
 
-    console.log('------------------------------');
     const next = (parent: TreeNode['model']): TreeNode | null => {
       const children = status.data
         .map((s) => {
@@ -61,11 +61,9 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
           // TODO: Figure out why not all of these show up
           if ('folderId' in model && model.folderId != null) {
             if (model.folderId === parent.id) {
-              console.log('ADDING IN FOLDER', model.id, parent.id, s);
               return next(model);
             }
           } else if ('workspaceId' in model && model.workspaceId === parent.id) {
-            console.log('ADDING IN WORKSPACE', model.id, parent.id, s);
             return next(model);
           }
           return null;
@@ -101,18 +99,21 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   }
 
   const checkNode = (treeNode: TreeNode) => {
-    // If the node doesn't have
-    if (treeNode.status.status === 'current') {
-      // TODO: Handle checking something that's not changed
-    }
-
-    // TODO: Handle staging child nodes too. Can make add/unstage accept multiple paths
-    //  to make this easier.
-    if (treeNode.status.staged) {
-      unstage.mutate({ relaPath: treeNode.status.relaPath });
-    } else {
-      add.mutate({ relaPath: treeNode.status.relaPath });
-    }
+    const checked = nodeCheckedStatus(treeNode);
+    const newChecked = checked === 'indeterminate' ? true : !checked;
+    setChecked(treeNode, newChecked, unstage.mutate, add.mutate);
+    // // If the node doesn't have
+    // if (treeNode.status.status === 'current') {
+    //   // TODO: Handle checking something that's not changed
+    // }
+    //
+    // // TODO: Handle staging child nodes too. Can make add/unstage accept multiple paths
+    // //  to make this easier.
+    // if (treeNode.status.staged) {
+    //   unstage.mutate({ relaPath: treeNode.status.relaPath });
+    // } else {
+    //   add.mutate({ relaPath: treeNode.status.relaPath });
+    // }
   };
 
   return (
@@ -185,16 +186,18 @@ function TreeNodeChildren({
               <div className="truncate">
                 {fallbackRequestName(node.model)} ({node.model.model})
               </div>
-              <InlineCode
-                className={classNames(
-                  'py-0 ml-auto !bg-surface w-[6rem] text-center',
-                  node.status.status === 'modified' && 'text-info',
-                  node.status.status === 'added' && 'text-success',
-                  node.status.status === 'removed' && 'text-danger',
-                )}
-              >
-                {node.status.status}
-              </InlineCode>
+              {node.status.status !== 'current' && (
+                <InlineCode
+                  className={classNames(
+                    'py-0 ml-auto !bg-surface w-[6rem] text-center',
+                    node.status.status === 'modified' && 'text-info',
+                    node.status.status === 'added' && 'text-success',
+                    node.status.status === 'removed' && 'text-danger',
+                  )}
+                >
+                  {node.status.status}
+                </InlineCode>
+              )}
             </div>
           }
         />
@@ -244,13 +247,24 @@ function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
   }
 }
 
-// function setCheckedOnChildren(node: TreeNode, addedIds: Record<string, boolean>, checked: boolean) {
-//   addedIds[node.model.id] = checked;
-//
-//   for (const child of node.children) {
-//     setCheckedOnChildren(child, addedIds, checked);
-//   }
-// }
+function setChecked(
+  node: TreeNode,
+  checked: boolean,
+  unstage: (args: { relaPath: string }) => void,
+  add: (args: { relaPath: string }) => void,
+) {
+  for (const child of node.children) {
+    setChecked(child, checked, unstage, add);
+  }
+
+  if (node.status.status === 'current') {
+    return; // Do nothing
+  } else if (checked) {
+    add({ relaPath: node.status.relaPath });
+  } else {
+    unstage({ relaPath: node.status.relaPath });
+  }
+}
 
 function isNodeRelevant(node: TreeNode): boolean {
   if (node.status.status !== 'current') {

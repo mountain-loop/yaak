@@ -875,8 +875,9 @@ async fn cmd_import_data<R: Runtime>(
         v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeEnvironment, &mut id_map);
         v.workspace_id =
             maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-        let x =
-            upsert_environment(&window, v, &UpdateSource::Window).await.map_err(|e| e.to_string())?;
+        let x = upsert_environment(&window, v, &UpdateSource::Window)
+            .await
+            .map_err(|e| e.to_string())?;
         imported_resources.environments.push(x.clone());
     }
     info!("Imported {} environments", imported_resources.environments.len());
@@ -902,8 +903,9 @@ async fn cmd_import_data<R: Runtime>(
             if let Some(_) = imported_resources.folders.iter().find(|f| f.id == v.id) {
                 continue;
             }
-            let x =
-                upsert_folder(&window, v, &UpdateSource::Window).await.map_err(|e| e.to_string())?;
+            let x = upsert_folder(&window, v, &UpdateSource::Window)
+                .await
+                .map_err(|e| e.to_string())?;
             imported_resources.folders.push(x.clone());
         }
     }
@@ -1186,8 +1188,9 @@ async fn cmd_uninstall_plugin<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
     window: WebviewWindow<R>,
 ) -> Result<Plugin, String> {
-    let plugin =
-        delete_plugin(&window, plugin_id, &UpdateSource::Window).await.map_err(|e| e.to_string())?;
+    let plugin = delete_plugin(&window, plugin_id, &UpdateSource::Window)
+        .await
+        .map_err(|e| e.to_string())?;
 
     plugin_manager
         .uninstall(WindowContext::from_window(&window), plugin.directory.as_str())
@@ -1905,7 +1908,16 @@ fn is_dev() -> bool {
 }
 
 fn create_main_window(handle: &AppHandle, url: &str) -> WebviewWindow {
-    let label = format!("{MAIN_WINDOW_PREFIX}{}", handle.webview_windows().len());
+    let mut counter = 0;
+    let label = loop {
+        let label = format!("{MAIN_WINDOW_PREFIX}{counter}");
+        match handle.webview_windows().get(label.as_str()) {
+            None => break Some(label),
+            Some(_) => counter += 1,
+        }
+    }
+    .expect("Failed to generate label for new window");
+
     let config = CreateWindowConfig {
         url,
         label: label.as_str(),

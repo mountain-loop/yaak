@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
+use nanoid::nanoid;
 
 const MAX_GRPC_CONNECTIONS_PER_REQUEST: usize = 20;
 const MAX_HTTP_RESPONSES_PER_REQUEST: usize = MAX_GRPC_CONNECTIONS_PER_REQUEST;
@@ -1636,20 +1637,19 @@ pub async fn get_sync_state_for_model<R: Runtime>(
 }
 
 pub async fn get_or_create_sync_state_for_model<R: Runtime>(
-    window: &WebviewWindow<R>,
+    mgr: &impl Manager<R>,
     workspace_id: &str,
     model_id: &str,
     path: &str,
-    update_source: &UpdateSource,
 ) -> Result<SyncState> {
-    match get_sync_state_for_model(window, workspace_id, model_id).await {
+    match get_sync_state_for_model(mgr, workspace_id, model_id).await {
         Ok(Some(ss)) => return Ok(ss),
         Err(e) => panic!("Failed to get SyncState {e:?}"),
         Ok(None) => {}
     };
 
     upsert_sync_state(
-        window,
+        mgr,
         SyncState {
             workspace_id: workspace_id.to_string(),
             model_id: model_id.to_string(),
@@ -1657,7 +1657,6 @@ pub async fn get_or_create_sync_state_for_model<R: Runtime>(
             dirty: true,
             ..Default::default()
         },
-        update_source,
     )
     .await
 }
@@ -1706,16 +1705,15 @@ pub async fn delete_sync_state<R: Runtime>(
 }
 
 pub async fn upsert_sync_state<R: Runtime>(
-    window: &WebviewWindow<R>,
+    mgr: &impl Manager<R>,
     sync_state: SyncState,
-    update_source: &UpdateSource,
 ) -> Result<SyncState> {
     let id = match sync_state.id.as_str() {
         "" => generate_model_id(ModelType::TypeSyncState),
         _ => sync_state.id.to_string(),
     };
 
-    let dbm = &*window.app_handle().state::<SqliteConnection>();
+    let dbm = &*mgr.state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
 
     let (sql, params) = Query::insert()
@@ -1755,7 +1753,6 @@ pub async fn upsert_sync_state<R: Runtime>(
 
     let mut stmt = db.prepare(sql.as_str())?;
     let m: SyncState = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    emit_upserted_model(window, &AnyModel::SyncState(m.to_owned()), update_source);
     Ok(m)
 }
 
@@ -1771,7 +1768,14 @@ pub fn generate_model_id(model: ModelType) -> String {
 }
 
 pub fn generate_id() -> String {
-    Alphanumeric.sample_string(&mut rand::thread_rng(), 10)
+    let alphabet: [char; 57] = [
+        '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+        'k', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C',
+        'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+        'X', 'Y', 'Z',
+    ];
+
+    nanoid!(10, &alphabet)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1822,107 +1826,33 @@ fn emit_deleted_model<R: Runtime>(
 
 pub fn listen_to_model_delete<F, R>(app_handle: &AppHandle<R>, handler: F)
 where
-    F: Fn(AnyModel) + Send + 'static,
+    F: Fn(ModelPayload) + Send + 'static,
     R: Runtime,
 {
     app_handle.listen_any("deleted_model", move |e| {
-        let p: serde_json::Value = serde_json::from_str(e.payload()).unwrap();
-        let model = p.as_object().unwrap().get("model").unwrap().as_object().unwrap();
-
-        let model = match model.get("model").map(|m| m.to_owned()) {
-            None => return,
-            Some(model) if model == "http_request" => {
-                AnyModel::HttpRequest(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "grpc_request" => {
-                AnyModel::GrpcRequest(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "workspace" => {
-                AnyModel::Workspace(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "environment" => {
-                AnyModel::Environment(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "folder" => {
-                AnyModel::Folder(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "key_value" => {
-                AnyModel::KeyValue(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "sync_state" => {
-                AnyModel::SyncState(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "grpc_connection" => {
-                AnyModel::GrpcConnection(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "grpc_event" => {
-                AnyModel::GrpcEvent(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "cookie_jar" => {
-                AnyModel::CookieJar(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "plugin" => {
-                AnyModel::Plugin(serde_json::from_value(model).unwrap())
-            }
-            Some(model) => {
-                warn!("Unknown deleted model {}", model);
+        match serde_json::from_str(e.payload()) {
+            Ok(payload) => handler(payload),
+            Err(e) => {
+                warn!("Failed to deserialize deleted model {}", e);
                 return;
             }
         };
-        handler(model);
     });
 }
 
 pub fn listen_to_model_upsert<F, R>(app_handle: &AppHandle<R>, handler: F)
 where
-    F: Fn(AnyModel) + Send + 'static,
+    F: Fn(ModelPayload) + Send + 'static,
     R: Runtime,
 {
     app_handle.listen_any("upserted_model", move |e| {
-        let p: serde_json::Value = serde_json::from_str(e.payload()).unwrap();
-        let model = p.as_object().unwrap().get("model").unwrap().as_object().unwrap();
-
-        let model = match model.get("model").map(|m| m.to_owned()) {
-            None => return,
-            Some(model) if model == "http_request" => {
-                AnyModel::HttpRequest(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "grpc_request" => {
-                AnyModel::GrpcRequest(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "workspace" => {
-                AnyModel::Workspace(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "environment" => {
-                AnyModel::Environment(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "folder" => {
-                AnyModel::Folder(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "key_value" => {
-                AnyModel::KeyValue(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "sync_state" => {
-                AnyModel::SyncState(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "grpc_connection" => {
-                AnyModel::GrpcConnection(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "grpc_event" => {
-                AnyModel::GrpcEvent(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "cookie_jar" => {
-                AnyModel::CookieJar(serde_json::from_value(model).unwrap())
-            }
-            Some(model) if model == "plugin" => {
-                AnyModel::Plugin(serde_json::from_value(model).unwrap())
-            }
-            Some(model) => {
-                warn!("Unknown upserted model {}", model);
+        match serde_json::from_str(e.payload()) {
+            Ok(payload) => handler(payload),
+            Err(e) => {
+                warn!("Failed to deserialize upserted model {}", e);
                 return;
             }
         };
-        handler(model);
     });
 }
 

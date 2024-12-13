@@ -62,18 +62,22 @@ pub fn git_add(dir: &Path, rela_path: &Path) -> Result<()> {
 pub fn git_unstage(dir: &Path, rela_path: &Path) -> Result<()> {
     let repo = open_repo(dir)?;
 
-    info!("Unstaging file {rela_path:?} to {dir:?}");
-
-    if repo.is_empty()? {
-        // Repo has no commits, so "unstage" means remove from index
-        let mut index = repo.index()?;
-        index.remove_path(rela_path)?;
-        index.write()?;
-        return Ok(());
-    }
+    let head = match repo.head() {
+        Ok(h) => h,
+        Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
+            info!("Unstaging file in empty branch {rela_path:?} to {dir:?}");
+            // Repo has no commits, so "unstage" means remove from index
+            let mut index = repo.index()?;
+            index.remove_path(rela_path)?;
+            index.write()?;
+            return Ok(());
+        }
+        Err(e) => return Err(e.into()),
+    };
 
     // If repo has commits, update the index entry back to HEAD
-    let commit = repo.head()?.peel_to_commit()?;
+    info!("Unstaging file {rela_path:?} to {dir:?}");
+    let commit = head.peel_to_commit()?;
     repo.reset_default(Some(commit.as_object()), &[rela_path])?;
 
     Ok(())
@@ -453,28 +457,48 @@ mod test {
         git_init(dir)?;
 
         new_file(&dir.join("foo.txt"), "foo");
+        new_file(&dir.join("bar.txt"), "bar");
+
         git_add(dir, Path::new("foo.txt"))?;
         assert_eq!(
             git_status(dir)?,
-            vec![GitStatusEntry {
-                rela_path: "foo.txt".to_string(),
-                status: GitStatus::Added,
-                staged: true,
-                prev: None,
-                next: Some("foo".to_string()),
-            }]
+            vec![
+                GitStatusEntry {
+                    rela_path: "bar.txt".to_string(),
+                    status: GitStatus::Added,
+                    staged: false,
+                    prev: None,
+                    next: Some("bar".to_string()),
+                },
+                GitStatusEntry {
+                    rela_path: "foo.txt".to_string(),
+                    status: GitStatus::Added,
+                    staged: true,
+                    prev: None,
+                    next: Some("foo".to_string()),
+                },
+            ]
         );
 
         git_unstage(dir, Path::new("foo.txt"))?;
         assert_eq!(
             git_status(dir)?,
-            vec![GitStatusEntry {
-                rela_path: "foo.txt".to_string(),
-                status: GitStatus::Added,
-                staged: false,
-                prev: None,
-                next: Some("foo".to_string()),
-            }]
+            vec![
+                GitStatusEntry {
+                    rela_path: "bar.txt".to_string(),
+                    status: GitStatus::Added,
+                    staged: false,
+                    prev: None,
+                    next: Some("bar".to_string()),
+                },
+                GitStatusEntry {
+                    rela_path: "foo.txt".to_string(),
+                    status: GitStatus::Added,
+                    staged: false,
+                    prev: None,
+                    next: Some("foo".to_string()),
+                }
+            ]
         );
 
         Ok(())

@@ -1,7 +1,7 @@
 use chrono::NaiveDateTime;
 use rusqlite::Row;
 use sea_query::Iden;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -998,7 +998,7 @@ impl ModelType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase", untagged)]
 #[ts(export, export_to = "models.ts")]
 pub enum AnyModel {
@@ -1015,4 +1015,58 @@ pub enum AnyModel {
     KeyValue(KeyValue),
     SyncState(SyncState),
     Workspace(Workspace),
+}
+
+impl<'de> Deserialize<'de> for AnyModel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        let model = value.as_object().unwrap();
+
+        let model = match model.get("model") {
+            Some(m) if m == "http_request" => {
+                AnyModel::HttpRequest(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "grpc_request" => {
+                AnyModel::GrpcRequest(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "workspace" => {
+                AnyModel::Workspace(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "environment" => {
+                AnyModel::Environment(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "folder" => {
+                AnyModel::Folder(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "key_value" => {
+                AnyModel::KeyValue(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "sync_state" => {
+                AnyModel::SyncState(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "grpc_connection" => {
+                AnyModel::GrpcConnection(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "grpc_event" => {
+                AnyModel::GrpcEvent(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "cookie_jar" => {
+                AnyModel::CookieJar(serde_json::from_value(value).unwrap())
+            }
+            Some(m) if m == "plugin" => {
+                AnyModel::Plugin(serde_json::from_value(value).unwrap())
+            }
+            Some(m) => {
+                return Err(serde::de::Error::custom(format!("Unknown model {}", m)));
+            }
+            None => {
+                return Err(serde::de::Error::custom("Missing or invalid model"));
+            }
+        };
+
+        Ok(model)
+    }
 }
