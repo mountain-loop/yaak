@@ -3,6 +3,7 @@ import { resolveAppearance } from './appearance';
 import { catppuccin } from './themes/catppuccin';
 import { dracula } from './themes/dracula';
 import { github } from './themes/github';
+import { gruvbox } from './themes/gruvbox';
 import { hotdogStand } from './themes/hotdog-stand';
 import { monokaiPro } from './themes/monokai-pro';
 import { nord } from './themes/nord';
@@ -22,8 +23,9 @@ const allThemes = [
   ...relaxing,
   ...rosePine,
   ...github,
+  ...gruvbox,
   ...monokaiPro,
-	...nord,
+  ...nord,
   ...moonlight,
   ...hotdogStand,
 ];
