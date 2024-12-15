@@ -1,3 +1,4 @@
+import {useGit} from "@yaakapp-internal/git";
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
@@ -7,6 +8,7 @@ import { GitCommitDialog } from './GitCommitDialog';
 export function SyncDropdown({ syncDir }: { syncDir: string }) {
   const workspace = useActiveWorkspace();
   const dialog = useDialog();
+  useGit(syncDir);
 
   if (workspace == null) return null;
 

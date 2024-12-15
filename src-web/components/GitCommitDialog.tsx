@@ -37,7 +37,6 @@ interface TreeNode {
 export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   const [{ status }, { commit, add, unstage }] = useGit(syncDir);
   const [message, setMessage] = useState<string>('');
-  console.log("STATUS", status);
 
   const handleCreateCommit = async () => {
     await commit.mutateAsync({ message });

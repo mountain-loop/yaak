@@ -11,8 +11,10 @@ CREATE TABLE sync_states
             ON DELETE CASCADE,
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    flushed_at   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    checksum     TEXT                               NOT NULL,
     model_id     TEXT                               NOT NULL,
-    last_flush   TEXT                               NULL,
     path         TEXT                               NOT NULL,
-    dirty        BOOLEAN                            NOT NULL
+
+    UNIQUE (workspace_id, model_id)
 );

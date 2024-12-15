@@ -4,7 +4,6 @@ use tauri::{
     plugin::{Builder, TauriPlugin},
     Runtime,
 };
-use crate::fs_sync::{watch_deleted_models, watch_upserted_models};
 
 mod commands;
 mod error;
@@ -19,8 +18,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             add, checkout, commit, initialize, log, status, sync, unstage,
         ])
         .setup(|app_handle, _| {
-            watch_upserted_models(app_handle);
-            watch_deleted_models(app_handle);
+            // watch_upserted_models(app_handle);
+            // watch_deleted_models(app_handle);
             Ok(())
         })
         .build()

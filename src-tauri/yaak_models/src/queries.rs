@@ -10,7 +10,7 @@ use crate::models::{
 use crate::plugin::SqliteConnection;
 use chrono::NaiveDateTime;
 use log::{debug, error, warn};
-use rand::distributions::{Alphanumeric, DistString};
+use nanoid::nanoid;
 use rusqlite::OptionalExtension;
 use sea_query::ColumnRef::Asterisk;
 use sea_query::Keyword::CurrentTimestamp;
@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
-use nanoid::nanoid;
 
 const MAX_GRPC_CONNECTIONS_PER_REQUEST: usize = 20;
 const MAX_HTTP_RESPONSES_PER_REQUEST: usize = MAX_GRPC_CONNECTIONS_PER_REQUEST;
@@ -1636,31 +1635,6 @@ pub async fn get_sync_state_for_model<R: Runtime>(
     Ok(stmt.query_row(&*params.as_params(), |row| row.try_into()).optional()?)
 }
 
-pub async fn get_or_create_sync_state_for_model<R: Runtime>(
-    mgr: &impl Manager<R>,
-    workspace_id: &str,
-    model_id: &str,
-    path: &str,
-) -> Result<SyncState> {
-    match get_sync_state_for_model(mgr, workspace_id, model_id).await {
-        Ok(Some(ss)) => return Ok(ss),
-        Err(e) => panic!("Failed to get SyncState {e:?}"),
-        Ok(None) => {}
-    };
-
-    upsert_sync_state(
-        mgr,
-        SyncState {
-            workspace_id: workspace_id.to_string(),
-            model_id: model_id.to_string(),
-            path: path.to_string(),
-            dirty: true,
-            ..Default::default()
-        },
-    )
-    .await
-}
-
 pub async fn list_sync_states_for_workspace<R: Runtime>(
     mgr: &impl Manager<R>,
     workspace_id: &str,
@@ -1675,33 +1649,6 @@ pub async fn list_sync_states_for_workspace<R: Runtime>(
     let mut stmt = db.prepare(sql.as_str())?;
     let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
     Ok(items.map(|v| v.unwrap()).collect())
-}
-
-pub async fn delete_sync_state<R: Runtime>(
-    window: &WebviewWindow<R>,
-    workspace_id: &str,
-    model_id: &str,
-    update_source: &UpdateSource,
-) -> Result<SyncState> {
-    let sync_state = match get_sync_state_for_model(window, workspace_id, model_id).await? {
-        None => return Err(ModelNotFound(format!("{workspace_id} {model_id}"))),
-        Some(r) => r,
-    };
-
-    let dbm = &*window.app_handle().state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::delete()
-        .from_table(SyncStateIden::Table)
-        .cond_where(
-            Cond::all()
-                .add(Expr::col(SyncStateIden::WorkspaceId).eq(workspace_id))
-                .add(Expr::col(SyncStateIden::ModelId).eq(model_id)),
-        )
-        .build_rusqlite(SqliteQueryBuilder);
-    db.execute(sql.as_str(), &*params.as_params())?;
-
-    emit_deleted_model(window, &AnyModel::SyncState(sync_state.to_owned()), update_source);
-    Ok(sync_state)
 }
 
 pub async fn upsert_sync_state<R: Runtime>(
@@ -1723,8 +1670,8 @@ pub async fn upsert_sync_state<R: Runtime>(
             SyncStateIden::WorkspaceId,
             SyncStateIden::CreatedAt,
             SyncStateIden::UpdatedAt,
-            SyncStateIden::Dirty,
-            SyncStateIden::LastFlush,
+            SyncStateIden::FlushedAt,
+            SyncStateIden::Checksum,
             SyncStateIden::ModelId,
             SyncStateIden::Path,
         ])
@@ -1733,17 +1680,17 @@ pub async fn upsert_sync_state<R: Runtime>(
             sync_state.workspace_id.into(),
             CurrentTimestamp.into(),
             CurrentTimestamp.into(),
-            sync_state.dirty.into(),
-            serde_json::to_string(&sync_state.last_flush)?.into(),
+            sync_state.flushed_at.into(),
+            sync_state.checksum.into(),
             sync_state.model_id.into(),
             sync_state.path.into(),
         ])
         .on_conflict(
-            OnConflict::column(GrpcRequestIden::Id)
+            OnConflict::columns(vec![SyncStateIden::WorkspaceId, SyncStateIden::ModelId])
                 .update_columns([
                     SyncStateIden::UpdatedAt,
-                    SyncStateIden::Dirty,
-                    SyncStateIden::LastFlush,
+                    SyncStateIden::FlushedAt,
+                    SyncStateIden::Checksum,
                     SyncStateIden::Path,
                 ])
                 .to_owned(),
@@ -1754,6 +1701,18 @@ pub async fn upsert_sync_state<R: Runtime>(
     let mut stmt = db.prepare(sql.as_str())?;
     let m: SyncState = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
     Ok(m)
+}
+
+pub async fn delete_sync_state<R: Runtime>(mgr: &impl Manager<R>, id: &str) -> Result<()> {
+    let dbm = &*mgr.app_handle().state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+
+    let (sql, params) = Query::delete()
+        .from_table(SyncStateIden::Table)
+        .cond_where(Expr::col(SyncStateIden::Id).eq(id))
+        .build_rusqlite(SqliteQueryBuilder);
+    db.execute(sql.as_str(), &*params.as_params())?;
+    Ok(())
 }
 
 pub async fn debug_pool<R: Runtime>(mgr: &impl Manager<R>) {
@@ -1881,11 +1840,11 @@ pub struct ImportResult {
 }
 
 pub async fn get_workspace_export_resources<R: Runtime>(
-    app_handle: &AppHandle<R>,
+    mgr: &impl Manager<R>,
     workspace_ids: Vec<&str>,
 ) -> WorkspaceExport {
     let mut data = WorkspaceExport {
-        yaak_version: app_handle.package_info().version.clone().to_string(),
+        yaak_version: mgr.package_info().version.clone().to_string(),
         yaak_schema: 2,
         timestamp: chrono::Utc::now().naive_utc(),
         resources: WorkspaceExportResources {
@@ -1900,24 +1859,18 @@ pub async fn get_workspace_export_resources<R: Runtime>(
     for workspace_id in workspace_ids {
         data.resources
             .workspaces
-            .push(get_workspace(app_handle, workspace_id).await.expect("Failed to get workspace"));
+            .push(get_workspace(mgr, workspace_id).await.expect("Failed to get workspace"));
         data.resources.environments.append(
-            &mut list_environments(app_handle, workspace_id)
-                .await
-                .expect("Failed to get environments"),
+            &mut list_environments(mgr, workspace_id).await.expect("Failed to get environments"),
         );
-        data.resources.folders.append(
-            &mut list_folders(app_handle, workspace_id).await.expect("Failed to get folders"),
-        );
+        data.resources
+            .folders
+            .append(&mut list_folders(mgr, workspace_id).await.expect("Failed to get folders"));
         data.resources.http_requests.append(
-            &mut list_http_requests(app_handle, workspace_id)
-                .await
-                .expect("Failed to get http requests"),
+            &mut list_http_requests(mgr, workspace_id).await.expect("Failed to get http requests"),
         );
         data.resources.grpc_requests.append(
-            &mut list_grpc_requests(app_handle, workspace_id)
-                .await
-                .expect("Failed to get grpc requests"),
+            &mut list_grpc_requests(mgr, workspace_id).await.expect("Failed to get grpc requests"),
         );
     }
 

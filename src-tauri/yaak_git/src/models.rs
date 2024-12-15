@@ -1,5 +1,6 @@
 use crate::error::Error::{InvalidSyncFile, UnknownModel};
 use crate::error::Result;
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use std::fs;
@@ -19,25 +20,39 @@ pub enum SyncModel {
 }
 
 impl SyncModel {
-    pub fn from_file(file_path: &Path) -> Result<Option<(SyncModel, String)>> {
-        let contents = match fs::read(file_path) {
+    pub fn from_file(file_path: &Path) -> Result<Option<(SyncModel, Vec<u8>, String)>> {
+        let content = match fs::read(file_path) {
             Ok(c) => c,
-            Err(_) => return Ok(None)
+            Err(_) => return Ok(None),
         };
 
         let mut hasher = Sha1::new();
-        hasher.update(&contents);
+        hasher.update(&content);
         let checksum = hex::encode(hasher.finalize());
 
-        // debug!("Loading SyncModel from {file_path:?}");
         let ext = file_path.extension().unwrap_or_default();
         if ext == "yml" || ext == "yaml" {
-            Ok(Some((serde_yaml::from_slice(contents.as_slice())?, checksum)))
+            Ok(Some((serde_yaml::from_slice(content.as_slice())?, content, checksum)))
         } else if ext == "json" {
-            Ok(Some((serde_json::from_reader(contents.as_slice())?, checksum)))
+            Ok(Some((serde_json::from_reader(content.as_slice())?, content, checksum)))
         } else {
             Err(InvalidSyncFile(file_path.to_str().unwrap().to_string()))
         }
+    }
+
+    pub fn to_file_contents(&self, file_path: &Path) -> Result<(Vec<u8>, String)> {
+        let ext = file_path.extension().unwrap_or_default();
+        let content = if ext == "yaml" || ext == "yml" {
+            serde_yaml::to_string(self)?
+        } else {
+            serde_json::to_string(self)?
+        };
+
+        let mut hasher = Sha1::new();
+        hasher.update(&content);
+        let checksum = hex::encode(hasher.finalize());
+
+        Ok((content.into_bytes(), checksum))
     }
 
     pub fn id(&self) -> String {
@@ -59,6 +74,16 @@ impl SyncModel {
             SyncModel::GrpcRequest(m) => m.workspace_id,
         }
     }
+
+    pub fn updated_at(&self) -> NaiveDateTime {
+        match self.clone() {
+            SyncModel::Workspace(m) => m.updated_at,
+            SyncModel::Environment(m) => m.updated_at,
+            SyncModel::Folder(m) => m.updated_at,
+            SyncModel::HttpRequest(m) => m.updated_at,
+            SyncModel::GrpcRequest(m) => m.updated_at,
+        }
+    }
 }
 
 impl TryFrom<AnyModel> for SyncModel {
@@ -78,7 +103,6 @@ impl TryFrom<AnyModel> for SyncModel {
             AnyModel::Plugin(m) => return Err(UnknownModel(m.model)),
             AnyModel::Settings(m) => return Err(UnknownModel(m.model)),
             AnyModel::KeyValue(m) => return Err(UnknownModel(m.model)),
-            AnyModel::SyncState(m) => return Err(UnknownModel(m.model)),
         };
         Ok(m)
     }

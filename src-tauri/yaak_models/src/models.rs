@@ -858,14 +858,6 @@ impl<'s> TryFrom<&Row<'s>> for Plugin {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "models.ts")]
-pub struct SyncStateFlushState {
-    pub time: NaiveDateTime,
-    pub checksum: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
 pub struct SyncState {
     #[ts(type = "\"sync_state\"")]
     pub model: String,
@@ -873,10 +865,10 @@ pub struct SyncState {
     pub workspace_id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub flushed_at: NaiveDateTime,
 
-    pub dirty: bool,
     pub model_id: String,
-    pub last_flush: Option<SyncStateFlushState>,
+    pub checksum: String,
     pub path: String,
 }
 
@@ -890,9 +882,9 @@ pub enum SyncStateIden {
     CreatedAt,
     UpdatedAt,
 
-    Dirty,
+    Checksum,
+    FlushedAt,
     ModelId,
-    LastFlush,
     Path,
 }
 
@@ -900,16 +892,15 @@ impl<'s> TryFrom<&Row<'s>> for SyncState {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let last_flush: String = r.get("last_flush")?;
         Ok(SyncState {
             id: r.get("id")?,
             workspace_id: r.get("workspace_id")?,
             model: r.get("model")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
-            dirty: r.get("dirty")?,
+            flushed_at: r.get("flushed_at")?,
+            checksum: r.get("checksum")?,
             model_id: r.get("model_id")?,
-            last_flush: serde_json::from_str(last_flush.as_str()).unwrap_or_default(),
             path: r.get("path")?,
         })
     }
@@ -1013,7 +1004,6 @@ pub enum AnyModel {
     Plugin(Plugin),
     Settings(Settings),
     KeyValue(KeyValue),
-    SyncState(SyncState),
     Workspace(Workspace),
 }
 
@@ -1043,9 +1033,6 @@ impl<'de> Deserialize<'de> for AnyModel {
             }
             Some(m) if m == "key_value" => {
                 AnyModel::KeyValue(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "sync_state" => {
-                AnyModel::SyncState(serde_json::from_value(value).unwrap())
             }
             Some(m) if m == "grpc_connection" => {
                 AnyModel::GrpcConnection(serde_json::from_value(value).unwrap())

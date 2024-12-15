@@ -24,7 +24,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const ENABLE_REACT_QUERY_DEVTOOLS = true;
+const ENABLE_REACT_QUERY_DEVTOOLS = false;
 
 export function App() {
   return (
