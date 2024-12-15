@@ -24,7 +24,8 @@ pub(crate) async fn sync_fs<R: Runtime>(
     let db_candidates = get_db_candidates(window, &workspace).await?;
     let fs_candidates = get_fs_candidates(&workspace)?;
     let sync_ops = compute_sync_ops(db_candidates, fs_candidates);
-    apply_sync_ops(window, sync_ops).await?;
+    let sync_state_ops = apply_sync_ops(window, sync_ops).await?;
+    apply_sync_state_ops(window, sync_state_ops).await?;
 
     Ok(())
 }
@@ -250,38 +251,41 @@ async fn workspace_models<R: Runtime>(
 async fn apply_sync_ops<R: Runtime>(
     window: &WebviewWindow<R>,
     sync_ops: Vec<SyncOp>,
-) -> Result<()> {
+) -> Result<Vec<SyncStateOp>> {
     if sync_ops.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     debug!(
         "Sync ops {}",
         sync_ops.iter().map(|op| op.to_string()).collect::<Vec<String>>().join(", ")
     );
+    let mut sync_state_ops = Vec::new();
     for op in sync_ops {
-        apply_sync_op(window, &op).await?
+        let op = apply_sync_op(window, &op).await?;
+        sync_state_ops.push(op);
     }
-    Ok(())
+    Ok(sync_state_ops)
+}
+
+#[derive(Debug)]
+enum SyncStateOp {
+    Create {
+        model_id: String,
+        workspace_id: String,
+        checksum: String,
+        path: PathBuf,
+    },
+    Update {
+        sync_state: SyncState,
+        checksum: String,
+        path: PathBuf,
+    },
+    Delete(SyncState),
 }
 
 /// Flush a DB model to the filesystem
-async fn apply_sync_op<R: Runtime>(window: &WebviewWindow<R>, op: &SyncOp) -> Result<()> {
-    #[derive(Debug)]
-    enum SyncStateOp {
-        Create {
-            model_id: String,
-            workspace_id: String,
-            checksum: String,
-            path: PathBuf,
-        },
-        Update {
-            sync_state: SyncState,
-            checksum: String,
-            path: PathBuf,
-        },
-        Delete(SyncState),
-    }
+async fn apply_sync_op<R: Runtime>(window: &WebviewWindow<R>, op: &SyncOp) -> Result<SyncStateOp> {
     let sync_state_op = match op {
         SyncOp::FsWrite(model, sync_state) => {
             let path = prep_model_file_path(window, &model).await?;
@@ -344,8 +348,23 @@ async fn apply_sync_op<R: Runtime>(window: &WebviewWindow<R>, op: &SyncOp) -> Re
         }
     };
 
-    println!("SYNC STATE OP {:?}", sync_state_op);
-    match sync_state_op {
+    Ok(sync_state_op)
+}
+async fn apply_sync_state_ops<R: Runtime>(
+    window: &WebviewWindow<R>,
+    ops: Vec<SyncStateOp>,
+) -> Result<()> {
+    for op in ops {
+        apply_sync_state_op(window, op).await?
+    }
+    Ok(())
+}
+
+async fn apply_sync_state_op<R: Runtime>(
+    window: &WebviewWindow<R>,
+    op: SyncStateOp,
+) -> Result<()> {
+    match op {
         SyncStateOp::Create {
             checksum,
             path,

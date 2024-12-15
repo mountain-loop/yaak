@@ -35,7 +35,6 @@ use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
 use yaak_plugin_runtime::manager::PluginManager;
 
-use crate::analytics::AnalyticsAction::Update;
 use crate::analytics::{AnalyticsAction, AnalyticsResource};
 use crate::grpc::metadata_to_map;
 use crate::http_request::send_http_request;

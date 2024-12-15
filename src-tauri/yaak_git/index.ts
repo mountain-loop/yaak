@@ -4,7 +4,7 @@ import type { ModelPayload } from '@yaakapp-internal/models';
 import { useActiveWorkspace } from '@yaakapp/app/hooks/useActiveWorkspace';
 import { useListenToTauriEvent } from '@yaakapp/app/hooks/useListenToTauriEvent';
 import { debounce } from '@yaakapp/app/lib/debounce';
-import {useEffect} from "react";
+import { useEffect } from 'react';
 import { GitCommit, GitStatusEntry } from './bindings/git';
 
 export function useGit(dir: string) {
@@ -21,7 +21,7 @@ export function useGit(dir: string) {
   useEffect(() => {
     const t = setInterval(debouncedSync, 2000);
     return () => clearInterval(t);
-  }, [dir])
+  }, [dir]);
 
   useListenToTauriEvent<ModelPayload>('upserted_model', debouncedSync);
   useListenToTauriEvent<ModelPayload>('deleted_model', debouncedSync);
