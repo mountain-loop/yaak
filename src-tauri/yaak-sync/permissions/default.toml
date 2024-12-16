@@ -1,0 +1,5 @@
+[default]
+description = "Default permissions for the plugin"
+permissions = [
+    "allow-sync",
+]

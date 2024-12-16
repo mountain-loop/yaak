@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{Manager, Runtime, WebviewWindow};
 
-use yaak_models::queries::{generate_id, get_key_value_int, get_key_value_string, get_or_create_settings, set_key_value_int, set_key_value_string};
+use yaak_models::queries::{
+    generate_id, get_key_value_int, get_key_value_string, get_or_create_settings,
+    set_key_value_int, set_key_value_string, UpdateSource,
+};
 
 use crate::is_dev;
 
@@ -43,11 +46,7 @@ impl AnalyticsResource {
 
 impl Display for AnalyticsResource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            serde_json::to_string(self).unwrap().replace("\"", "")
-        )
+        write!(f, "{}", serde_json::to_string(self).unwrap().replace("\"", ""))
     }
 }
 
@@ -81,11 +80,7 @@ impl AnalyticsAction {
 
 impl Display for AnalyticsAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            serde_json::to_string(self).unwrap().replace("\"", "")
-        )
+        write!(f, "{}", serde_json::to_string(self).unwrap().replace("\"", ""))
     }
 }
 
@@ -107,13 +102,7 @@ pub async fn track_launch_event<R: Runtime>(w: &WebviewWindow<R>) -> LaunchEvent
     info.current_version = w.package_info().version.to_string();
 
     if info.previous_version.is_empty() {
-        track_event(
-            w,
-            AnalyticsResource::App,
-            AnalyticsAction::LaunchFirst,
-            None,
-        )
-        .await;
+        track_event(w, AnalyticsResource::App, AnalyticsAction::LaunchFirst, None).await;
     } else {
         info.launched_after_update = info.current_version != info.previous_version;
         if info.launched_after_update {
@@ -143,9 +132,11 @@ pub async fn track_launch_event<R: Runtime>(w: &WebviewWindow<R>) -> LaunchEvent
         NAMESPACE,
         last_tracked_version_key,
         info.current_version.as_str(),
+        &UpdateSource::Background,
     )
     .await;
-    set_key_value_int(w, NAMESPACE, NUM_LAUNCHES_KEY, info.num_launches).await;
+    set_key_value_int(w, NAMESPACE, NUM_LAUNCHES_KEY, info.num_launches, &UpdateSource::Background)
+        .await;
 
     info
 }
@@ -156,7 +147,6 @@ pub async fn track_event<R: Runtime>(
     action: AnalyticsAction,
     attributes: Option<Value>,
 ) {
-    
     let id = get_id(w).await;
     let event = format!("{}.{}", resource, action);
     let attributes_json = attributes.unwrap_or("{}".to_string().into()).to_string();
@@ -180,16 +170,13 @@ pub async fn track_event<R: Runtime>(
         ("tz", tz),
         ("xy", get_window_size(w)),
     ];
-    let req = reqwest::Client::builder()
-        .build()
-        .unwrap()
-        .get(format!("{base_url}/t/e"))
-        .query(&params);
+    let req =
+        reqwest::Client::builder().build().unwrap().get(format!("{base_url}/t/e")).query(&params);
 
     let settings = get_or_create_settings(w).await;
     if !settings.telemetry {
         info!("Track event (disabled): {}", event);
-        return
+        return;
     }
 
     // Disable analytics actual sending in dev
@@ -226,18 +213,15 @@ fn get_window_size<R: Runtime>(w: &WebviewWindow<R>) -> String {
     let width: f64 = size.width as f64 / scale_factor;
     let height: f64 = size.height as f64 / scale_factor;
 
-    format!(
-        "{}x{}",
-        (width / 100.0).round() * 100.0,
-        (height / 100.0).round() * 100.0
-    )
+    format!("{}x{}", (width / 100.0).round() * 100.0, (height / 100.0).round() * 100.0)
 }
 
 async fn get_id<R: Runtime>(w: &WebviewWindow<R>) -> String {
     let id = get_key_value_string(w, "analytics", "id", "").await;
     if id.is_empty() {
         let new_id = generate_id();
-        set_key_value_string(w, "analytics", "id", new_id.as_str()).await;
+        set_key_value_string(w, "analytics", "id", new_id.as_str(), &UpdateSource::Background)
+            .await;
         new_id
     } else {
         id

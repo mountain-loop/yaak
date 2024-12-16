@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager, Runtime};
-use yaak_plugin_runtime::events::{RenderPurpose, TemplateFunctionArg, WindowContext};
-use yaak_plugin_runtime::manager::PluginManager;
+use yaak_plugins::events::{RenderPurpose, TemplateFunctionArg, WindowContext};
+use yaak_plugins::manager::PluginManager;
 use yaak_templates::TemplateCallback;
 
 #[derive(Clone)]

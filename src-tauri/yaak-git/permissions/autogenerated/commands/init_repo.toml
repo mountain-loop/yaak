@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-init-repo"
+description = "Enables the init_repo command without any pre-configured scope."
+commands.allow = ["init_repo"]
+
+[[permission]]
+identifier = "deny-init-repo"
+description = "Denies the init_repo command without any pre-configured scope."
+commands.deny = ["init_repo"]

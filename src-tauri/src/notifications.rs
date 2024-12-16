@@ -6,7 +6,7 @@ use log::debug;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, Runtime, WebviewWindow};
-use yaak_models::queries::{get_key_value_raw, set_key_value_raw};
+use yaak_models::queries::{get_key_value_raw, set_key_value_raw, UpdateSource};
 
 // Check for updates every hour
 const MAX_UPDATE_CHECK_SECONDS: u64 = 60 * 60;
@@ -47,7 +47,7 @@ impl YaakNotifier {
         seen.push(id.to_string());
         debug!("Marked notification as seen {}", id);
         let seen_json = serde_json::to_string(&seen).map_err(|e| e.to_string())?;
-        set_key_value_raw(w, KV_NAMESPACE, KV_KEY, seen_json.as_str()).await;
+        set_key_value_raw(w, KV_NAMESPACE, KV_KEY, seen_json.as_str(), &UpdateSource::Window).await;
         Ok(())
     }
 
