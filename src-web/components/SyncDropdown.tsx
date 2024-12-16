@@ -1,4 +1,5 @@
 import { useGit } from '@yaakapp-internal/git';
+import { useDirectorySync } from '@yaakapp-internal/sync';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
@@ -9,6 +10,7 @@ export function SyncDropdown({ syncDir }: { syncDir: string }) {
   const workspace = useActiveWorkspace();
   const dialog = useDialog();
   const [{ status }, { init }] = useGit(syncDir);
+  useDirectorySync(workspace);
 
   if (workspace == null) return null;
 

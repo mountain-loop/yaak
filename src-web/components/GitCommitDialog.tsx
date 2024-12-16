@@ -176,8 +176,9 @@ function TreeNodeChildren({
           title={
             <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1 w-full">
               <div className="truncate">
-                {fallbackRequestName(node.model)} ({node.model.model}) (
-                {node.status.staged ? 'Y' : 'N'})
+                {fallbackRequestName(node.model)}
+                {/*({node.model.model})*/}
+                {/*({node.status.staged ? 'Y' : 'N'})*/}
               </div>
               {node.status.status !== 'current' && (
                 <InlineCode
@@ -253,10 +254,10 @@ function setCheckedAndChildren(
 }
 
 function setChecked(
-    node: TreeNode,
-    checked: boolean,
-    unstage: (args: { relaPath: string }) => void,
-    add: (args: { relaPath: string }) => void,
+  node: TreeNode,
+  checked: boolean,
+  unstage: (args: { relaPath: string }) => void,
+  add: (args: { relaPath: string }) => void,
 ) {
   if (node.status.status === 'current') {
     // Nothing required

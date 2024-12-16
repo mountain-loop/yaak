@@ -8128,12 +8128,10 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "git2",
- "hex",
  "log",
  "serde",
  "serde_json",
  "serde_yaml",
- "sha1",
  "tauri",
  "tauri-plugin",
  "tempdir",
