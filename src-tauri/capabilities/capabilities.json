@@ -46,7 +46,6 @@
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "yaak-license:default",
-    "yaak-sync:default",
-    "yaak-git:default"
+    "yaak-sync:default"
   ]
 }

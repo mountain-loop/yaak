@@ -9,7 +9,6 @@
   "workspaces": [
     "plugin-runtime",
     "plugin-runtime-types",
-    "src-tauri/yaak-git",
     "src-tauri/yaak-license",
     "src-tauri/yaak-models",
     "src-tauri/yaak-plugins",

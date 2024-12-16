@@ -1735,7 +1735,6 @@ pub fn run() {
             .plugin(tauri_plugin_dialog::init())
             .plugin(tauri_plugin_os::init())
             .plugin(tauri_plugin_fs::init())
-            .plugin(yaak_git::init())
             .plugin(yaak_license::init())
             .plugin(yaak_models::plugin::Builder::default().build())
             .plugin(yaak_plugins::init())
