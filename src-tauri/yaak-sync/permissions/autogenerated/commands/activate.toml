@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-activate"
+description = "Enables the activate command without any pre-configured scope."
+commands.allow = ["activate"]
+
+[[permission]]
+identifier = "deny-activate"
+description = "Denies the activate command without any pre-configured scope."
+commands.deny = ["activate"]

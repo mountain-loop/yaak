@@ -1,4 +1,4 @@
-import type { ShowToastRequest } from '@yaakapp-internal/plugin';
+import type { ShowToastRequest } from '@yaakapp-internal/plugins';
 import { AnimatePresence } from 'framer-motion';
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useMemo, useRef, useState } from 'react';

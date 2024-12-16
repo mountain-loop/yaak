@@ -1,12 +1,13 @@
 [workspace]
 members = [
-    "yaak_git",
-    "yaak_grpc",
-    "yaak_license",
-    "yaak_models",
-    "yaak_plugin_runtime",
-    "yaak_sse",
-    "yaak_templates",
+    "yaak-git",
+    "yaak-grpc",
+    "yaak-license",
+    "yaak-models",
+    "yaak-plugins",
+    "yaak-sse",
+    "yaak-sync",
+    "yaak-templates",
 ]
 
 [package]
@@ -58,22 +59,23 @@ tauri-plugin-os = "2.0.1"
 tauri-plugin-shell = { workspace = true }
 tauri-plugin-updater = "2.0.2"
 tauri-plugin-window-state = "2.0.1"
-tauri-plugin-yaak-git = { path = "yaak_git" }
-tauri-plugin-yaak-license = { path = "yaak_license" }
 tokio = { version = "1.36.0", features = ["sync"] }
 tokio-stream = "0.1.15"
 urlencoding = "2.1.3"
 uuid = "1.7.0"
-yaak_grpc = { path = "yaak_grpc" }
-yaak_models = { workspace = true }
-yaak_plugin_runtime = { workspace = true }
-yaak_sse = { workspace = true }
-yaak_templates = { path = "yaak_templates" }
+yaak-git = { path = "yaak-git" }
+yaak-grpc = { path = "yaak-grpc" }
+yaak-license = { path = "yaak-license" }
+yaak-models = { workspace = true }
+yaak-plugins = { workspace = true }
+yaak-sse = { workspace = true }
+yaak-sync = { path = "yaak-sync" }
+yaak-templates = { path = "yaak-templates" }
 
 [workspace.dependencies]
-yaak_models = { path = "yaak_models" }
-yaak_sse = { path = "yaak_sse" }
-yaak_plugin_runtime = { path = "yaak_plugin_runtime" }
+yaak-models = { path = "yaak-models" }
+yaak-sse = { path = "yaak-sse" }
+yaak-plugins = { path = "yaak-plugins" }
 serde = "1.0.215"
 serde_json = "1.0.132"
 tauri-plugin-shell = "2.0.2"

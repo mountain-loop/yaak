@@ -9,13 +9,13 @@
   "workspaces": [
     "plugin-runtime",
     "plugin-runtime-types",
-    "src-tauri/yaak_git",
-    "src-tauri/yaak_license",
-    "src-tauri/yaak_models",
-    "src-tauri/yaak_plugin_runtime",
-    "src-tauri/yaak_sse",
-    "src-tauri/yaak_sync",
-    "src-tauri/yaak_templates",
+    "src-tauri/yaak-git",
+    "src-tauri/yaak-license",
+    "src-tauri/yaak-models",
+    "src-tauri/yaak-plugins",
+    "src-tauri/yaak-sse",
+    "src-tauri/yaak-sync",
+    "src-tauri/yaak-templates",
     "src-web"
   ],
   "scripts": {
@@ -46,5 +46,8 @@
     "npm-run-all": "^4.1.5",
     "prettier": "^3.3.3",
     "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "@yaakapp-internal/models": "^1.0.0"
   }
 }

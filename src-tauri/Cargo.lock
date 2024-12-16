@@ -6208,7 +6208,7 @@ dependencies = [
  "tauri-runtime",
  "tauri-runtime-wry",
  "tauri-utils",
- "thiserror 2.0.3",
+ "thiserror 2.0.7",
  "tokio",
  "tray-icon",
  "url",
@@ -6261,7 +6261,7 @@ dependencies = [
  "sha2",
  "syn 2.0.87",
  "tauri-utils",
- "thiserror 2.0.3",
+ "thiserror 2.0.7",
  "time",
  "url",
  "uuid",
@@ -6461,42 +6461,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-plugin-yaak-git"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "git2",
- "hex",
- "log",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha1",
- "tauri",
- "tauri-plugin",
- "tempdir",
- "thiserror 2.0.3",
- "ts-rs",
- "yaak_models",
-]
-
-[[package]]
-name = "tauri-plugin-yaak-license"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "log",
- "reqwest",
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.3",
- "ts-rs",
- "yaak_models",
-]
-
-[[package]]
 name = "tauri-runtime"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6510,7 +6474,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tauri-utils",
- "thiserror 2.0.3",
+ "thiserror 2.0.7",
  "url",
  "windows",
 ]
@@ -6570,7 +6534,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "swift-rs",
- "thiserror 2.0.3",
+ "thiserror 2.0.7",
  "toml 0.8.19",
  "url",
  "urlpattern",
@@ -6648,11 +6612,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.3"
+version = "2.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c006c85c7651b3cf2ada4584faa36773bd07bac24acfb39f3c431b36d7e667aa"
+checksum = "93605438cbd668185516ab499d589afb7ee1859ea3d5fc8f6b0755e1c7443767"
 dependencies = [
- "thiserror-impl 2.0.3",
+ "thiserror-impl 2.0.7",
 ]
 
 [[package]]
@@ -6668,9 +6632,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.3"
+version = "2.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f077553d607adc1caf65430528a576c757a71ed73944b66ebb58ef2bbd243568"
+checksum = "e1d8749b4531af2117677a5fcd12b1348a3fe2b81e36e61ffeac5c4aa3273e36"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8144,21 +8108,42 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
- "tauri-plugin-yaak-git",
- "tauri-plugin-yaak-license",
  "tokio",
  "tokio-stream",
  "urlencoding",
  "uuid",
- "yaak_grpc",
- "yaak_models",
- "yaak_plugin_runtime",
- "yaak_sse",
- "yaak_templates",
+ "yaak-git",
+ "yaak-grpc",
+ "yaak-license",
+ "yaak-models",
+ "yaak-plugins",
+ "yaak-sse",
+ "yaak-sync",
+ "yaak-templates",
 ]
 
 [[package]]
-name = "yaak_grpc"
+name = "yaak-git"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "git2",
+ "hex",
+ "log",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha1",
+ "tauri",
+ "tauri-plugin",
+ "tempdir",
+ "thiserror 2.0.7",
+ "ts-rs",
+ "yaak-models",
+]
+
+[[package]]
+name = "yaak-grpc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -8183,7 +8168,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak_models"
+name = "yaak-license"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.7",
+ "ts-rs",
+ "yaak-models",
+]
+
+[[package]]
+name = "yaak-models"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -8191,7 +8192,6 @@ dependencies = [
  "nanoid",
  "r2d2",
  "r2d2_sqlite",
- "rand 0.8.5",
  "rusqlite",
  "sea-query",
  "sea-query-rusqlite",
@@ -8204,7 +8204,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak_plugin_runtime"
+name = "yaak-plugins"
 version = "0.1.0"
 dependencies = [
  "dunce",
@@ -8217,16 +8217,16 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-plugin-shell",
- "thiserror 1.0.63",
+ "thiserror 2.0.7",
  "tokio",
  "tonic 0.12.1",
  "tonic-build",
  "ts-rs",
- "yaak_models",
+ "yaak-models",
 ]
 
 [[package]]
-name = "yaak_sse"
+name = "yaak-sse"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -8234,7 +8234,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak_templates"
+name = "yaak-sync"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "log",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha1",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.7",
+ "ts-rs",
+ "yaak-models",
+]
+
+[[package]]
+name = "yaak-templates"
 version = "0.1.0"
 dependencies = [
  "log",

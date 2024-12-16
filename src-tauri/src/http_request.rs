@@ -28,7 +28,7 @@ use yaak_models::models::{
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::queries::{get_http_response, get_or_create_settings, get_workspace, update_response_if_id, upsert_cookie_jar, UpdateSource};
-use yaak_plugin_runtime::events::{RenderPurpose, WindowContext};
+use yaak_plugins::events::{RenderPurpose, WindowContext};
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,

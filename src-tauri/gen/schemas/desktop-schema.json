@@ -5361,6 +5361,201 @@
           "description": "Denies the check command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-license:deny-check"
+        },
+        {
+          "description": "Default permissions for the plugin",
+          "type": "string",
+          "const": "yaak-sync:default"
+        },
+        {
+          "description": "Enables the activate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-activate"
+        },
+        {
+          "description": "Enables the add command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-add"
+        },
+        {
+          "description": "Enables the check command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-check"
+        },
+        {
+          "description": "Enables the checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-checkout"
+        },
+        {
+          "description": "Enables the cmd_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-cmd-add"
+        },
+        {
+          "description": "Enables the cmd_checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-cmd-checkout"
+        },
+        {
+          "description": "Enables the cmd_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-cmd-commit"
+        },
+        {
+          "description": "Enables the cmd_init command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-cmd-init"
+        },
+        {
+          "description": "Enables the cmd_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-cmd-log"
+        },
+        {
+          "description": "Enables the cmd_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-cmd-status"
+        },
+        {
+          "description": "Enables the commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-commit"
+        },
+        {
+          "description": "Enables the init command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-init"
+        },
+        {
+          "description": "Enables the init_repo command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-init-repo"
+        },
+        {
+          "description": "Enables the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-initialize"
+        },
+        {
+          "description": "Enables the log command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-log"
+        },
+        {
+          "description": "Enables the status command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-status"
+        },
+        {
+          "description": "Enables the sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-sync"
+        },
+        {
+          "description": "Enables the sync_fs command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-sync-fs"
+        },
+        {
+          "description": "Enables the unstage command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-unstage"
+        },
+        {
+          "description": "Denies the activate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-activate"
+        },
+        {
+          "description": "Denies the add command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-add"
+        },
+        {
+          "description": "Denies the check command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-check"
+        },
+        {
+          "description": "Denies the checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-checkout"
+        },
+        {
+          "description": "Denies the cmd_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-cmd-add"
+        },
+        {
+          "description": "Denies the cmd_checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-cmd-checkout"
+        },
+        {
+          "description": "Denies the cmd_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-cmd-commit"
+        },
+        {
+          "description": "Denies the cmd_init command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-cmd-init"
+        },
+        {
+          "description": "Denies the cmd_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-cmd-log"
+        },
+        {
+          "description": "Denies the cmd_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-cmd-status"
+        },
+        {
+          "description": "Denies the commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-commit"
+        },
+        {
+          "description": "Denies the init command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-init"
+        },
+        {
+          "description": "Denies the init_repo command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-init-repo"
+        },
+        {
+          "description": "Denies the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-initialize"
+        },
+        {
+          "description": "Denies the log command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-log"
+        },
+        {
+          "description": "Denies the status command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-status"
+        },
+        {
+          "description": "Denies the sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-sync"
+        },
+        {
+          "description": "Denies the sync_fs command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-sync-fs"
+        },
+        {
+          "description": "Denies the unstage command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-unstage"
         }
       ]
     },

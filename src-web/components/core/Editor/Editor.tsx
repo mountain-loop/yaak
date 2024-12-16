@@ -3,7 +3,7 @@ import { forceParsing } from '@codemirror/language';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { keymap, placeholder as placeholderExt, tooltips } from '@codemirror/view';
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
-import type { TemplateFunction } from '@yaakapp-internal/plugin';
+import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { EditorView } from 'codemirror';
 import type { MutableRefObject, ReactNode } from 'react';

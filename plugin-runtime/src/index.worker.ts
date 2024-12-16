@@ -12,7 +12,7 @@ import {
   TemplateFunction,
   TemplateRenderResponse,
   WindowContext,
-} from '@yaakapp-internal/plugin';
+} from '@yaakapp-internal/plugins';
 import { Context } from '@yaakapp/api';
 import { HttpRequestActionPlugin } from '@yaakapp/api/lib/plugins/HttpRequestActionPlugin';
 import { TemplateFunctionPlugin } from '@yaakapp/api/lib/plugins/TemplateFunctionPlugin';

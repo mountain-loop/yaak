@@ -74,8 +74,8 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       },
       {
         key: 'sync-dir',
-        label: 'Set sync dir',
-        leftSlot: <Icon icon="git_fork" />,
+        label: 'Directory Sync',
+        leftSlot: <Icon icon="folder_sync" />,
         onSelect: async () => {
           const settingSyncDir = await prompt({
             id: 'workspace-sync-dir',

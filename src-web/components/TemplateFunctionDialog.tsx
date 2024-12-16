@@ -7,7 +7,7 @@ import type {
   TemplateFunctionHttpRequestArg,
   TemplateFunctionSelectArg,
   TemplateFunctionTextArg,
-} from '@yaakapp-internal/plugin';
+} from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useCallback, useMemo, useState } from 'react';

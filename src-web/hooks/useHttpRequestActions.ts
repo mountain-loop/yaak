@@ -4,7 +4,7 @@ import type {
   CallHttpRequestActionRequest,
   GetHttpRequestActionsResponse,
   HttpRequestAction,
-} from '@yaakapp-internal/plugin';
+} from '@yaakapp-internal/plugins';
 import { invokeCmd } from '../lib/tauri';
 import { usePluginsKey } from './usePlugins';
 

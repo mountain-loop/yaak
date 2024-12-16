@@ -32,6 +32,7 @@ interface TreeNode {
   model: HttpRequest | GrpcRequest | Folder | Environment | Workspace;
   status: GitStatusEntry;
   children: TreeNode[];
+  ancestors: TreeNode[];
 }
 
 export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
@@ -50,37 +51,40 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
       return null;
     }
 
-    const next = (parent: TreeNode['model']): TreeNode | null => {
-      const children = status.data
-        .map((s) => {
-          const data = s.next ?? s.prev;
-          if (data == null) return null; // TODO: Is this right?
-
-          const model: TreeNode['model'] = YAML.parse(data);
-          // TODO: Figure out why not all of these show up
-          if ('folderId' in model && model.folderId != null) {
-            if (model.folderId === parent.id) {
-              return next(model);
-            }
-          } else if ('workspaceId' in model && model.workspaceId === parent.id) {
-            return next(model);
-          }
-          return null;
-        })
-        .filter((c) => c != null);
-
-      const statusEntry = status.data?.find((s) => s.relaPath.includes(parent.id));
+    const next = (model: TreeNode['model'], ancestors: TreeNode[]): TreeNode | null => {
+      const statusEntry = status.data?.find((s) => s.relaPath.includes(model.id));
       if (statusEntry == null) {
         return null;
       }
 
-      return {
-        model: parent,
+      const node: TreeNode = {
+        model,
         status: statusEntry,
-        children,
+        children: [],
+        ancestors,
       };
+
+      node.children = status.data
+        .map((s) => {
+          const data = s.next ?? s.prev;
+          if (data == null) return null; // TODO: Is this right?
+
+          const childModel: TreeNode['model'] = YAML.parse(data);
+          // TODO: Figure out why not all of these show up
+          if ('folderId' in childModel && childModel.folderId != null) {
+            if (childModel.folderId === model.id) {
+              return next(childModel, [...ancestors, node]);
+            }
+          } else if ('workspaceId' in childModel && childModel.workspaceId === model.id) {
+            return next(childModel, [...ancestors, node]);
+          } else {
+            return null;
+          }
+        })
+        .filter((c) => c != null);
+      return node;
     };
-    return next(workspace);
+    return next(workspace, []);
   }, [status.data, workspace]);
 
   if (tree == null) {
@@ -100,19 +104,8 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   const checkNode = (treeNode: TreeNode) => {
     const checked = nodeCheckedStatus(treeNode);
     const newChecked = checked === 'indeterminate' ? true : !checked;
-    setChecked(treeNode, newChecked, unstage.mutate, add.mutate);
-    // // If the node doesn't have
-    // if (treeNode.status.status === 'current') {
-    //   // TODO: Handle checking something that's not changed
-    // }
-    //
-    // // TODO: Handle staging child nodes too. Can make add/unstage accept multiple paths
-    // //  to make this easier.
-    // if (treeNode.status.staged) {
-    //   unstage.mutate({ relaPath: treeNode.status.relaPath });
-    // } else {
-    //   add.mutate({ relaPath: treeNode.status.relaPath });
-    // }
+    setCheckedAndChildren(treeNode, newChecked, unstage.mutate, add.mutate);
+    // TODO: Also ensure parents are added properly
   };
 
   return (
@@ -183,7 +176,8 @@ function TreeNodeChildren({
           title={
             <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1 w-full">
               <div className="truncate">
-                {fallbackRequestName(node.model)} ({node.model.model})
+                {fallbackRequestName(node.model)} ({node.model.model}) (
+                {node.status.staged ? 'Y' : 'N'})
               </div>
               {node.status.status !== 'current' && (
                 <InlineCode
@@ -246,18 +240,26 @@ function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
   }
 }
 
-function setChecked(
+function setCheckedAndChildren(
   node: TreeNode,
   checked: boolean,
   unstage: (args: { relaPath: string }) => void,
   add: (args: { relaPath: string }) => void,
 ) {
   for (const child of node.children) {
-    setChecked(child, checked, unstage, add);
+    setCheckedAndChildren(child, checked, unstage, add);
   }
+  setChecked(node, checked, unstage, add);
+}
 
+function setChecked(
+    node: TreeNode,
+    checked: boolean,
+    unstage: (args: { relaPath: string }) => void,
+    add: (args: { relaPath: string }) => void,
+) {
   if (node.status.status === 'current') {
-    return; // Do nothing
+    // Nothing required
   } else if (checked) {
     add({ relaPath: node.status.relaPath });
   } else {

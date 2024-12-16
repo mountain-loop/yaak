@@ -1,0 +1,22 @@
+[package]
+name = "yaak-sync"
+links = "yaak-sync"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+yaak-models = { workspace = true }
+chrono = { version = "0.4.38", features = ["serde"] }
+serde = { version = "1.0.215", features = ["derive"] }
+tauri = { workspace = true }
+thiserror = { workspace = true }
+ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
+serde_yaml = "0.9.34"
+log = "0.4.22"
+serde_json = "1.0.132"
+hex = "0.4.3"
+sha1 = "0.10.6"
+
+[build-dependencies]
+tauri-plugin = { version = "2.0.3", features = ["build"] }

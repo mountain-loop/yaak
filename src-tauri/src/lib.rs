@@ -33,7 +33,6 @@ use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
-use yaak_plugin_runtime::manager::PluginManager;
 
 use crate::analytics::{AnalyticsAction, AnalyticsResource};
 use crate::grpc::metadata_to_map;
@@ -65,14 +64,15 @@ use yaak_models::queries::{
     upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_http_request,
     upsert_plugin, upsert_workspace, UpdateSource, WorkspaceExportResources,
 };
-use yaak_plugin_runtime::events::{
+use yaak_plugins::events::{
     BootResponse, CallHttpRequestActionRequest, FilterResponse, FindHttpResponsesResponse,
     GetHttpRequestActionsResponse, GetHttpRequestByIdResponse, GetTemplateFunctionsResponse, Icon,
     InternalEvent, InternalEventPayload, PromptTextResponse, RenderHttpRequestResponse,
     RenderPurpose, SendHttpRequestResponse, ShowToastRequest, TemplateRenderResponse,
     WindowContext,
 };
-use yaak_plugin_runtime::plugin_handle::PluginHandle;
+use yaak_plugins::manager::PluginManager;
+use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
 use yaak_templates::{Parser, Tokens};
@@ -1735,10 +1735,11 @@ pub fn run() {
             .plugin(tauri_plugin_dialog::init())
             .plugin(tauri_plugin_os::init())
             .plugin(tauri_plugin_fs::init())
+            .plugin(yaak_git::init())
+            .plugin(yaak_license::init())
             .plugin(yaak_models::plugin::Builder::default().build())
-            .plugin(tauri_plugin_yaak_license::init())
-            .plugin(tauri_plugin_yaak_git::init())
-            .plugin(yaak_plugin_runtime::init());
+            .plugin(yaak_plugins::init())
+            .plugin(yaak_sync::init());
 
     #[cfg(target_os = "macos")]
     {
