@@ -4,6 +4,7 @@ use crate::git::{
     git_add, git_commit, git_init, git_log, git_status, git_unstage, GitCommit, GitStatusEntry,
 };
 use std::path::Path;
+use log::error;
 use tauri::{command, Runtime, WebviewWindow};
 
 #[command]
@@ -43,5 +44,11 @@ pub fn unstage(dir: &Path, rela_path: &Path) -> Result<()> {
 
 #[command]
 pub async fn sync<R: Runtime>(window: WebviewWindow<R>, workspace_id: &str) -> Result<()> {
-    sync_fs(&window, workspace_id).await
+    match sync_fs(&window, workspace_id).await {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            error!("Failed to sync {e:?}");
+            Err(e)
+        }
+    }
 }
