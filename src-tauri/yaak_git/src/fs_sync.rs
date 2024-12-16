@@ -2,7 +2,7 @@ use crate::error::Error::{InvalidSyncFile, WorkspaceSyncNotConfigured};
 use crate::error::Result;
 use crate::models::SyncModel;
 use chrono::Utc;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
@@ -32,7 +32,7 @@ pub(crate) async fn sync_fs<R: Runtime>(
 
 #[derive(Debug, Clone)]
 enum SyncOp {
-    FsWrite(SyncModel, Option<SyncState>),
+    FsUpdate(SyncModel, Option<SyncState>),
     FsDelete(SyncState, Option<FsCandidate>),
     DbUpdate(Option<SyncState>, FsCandidate),
     DbDelete(SyncModel, SyncState),
@@ -42,10 +42,10 @@ impl Display for SyncOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             match self {
-                SyncOp::FsWrite(m, _) => format!("FsWrite({})", m.id()),
-                SyncOp::FsDelete(s, _) => format!("FsDelete({})", s.model_id),
-                SyncOp::DbUpdate(_, c) => format!("DbWrite({})", c.model.id()),
-                SyncOp::DbDelete(m, _) => format!("DbDelete({})", m.id()),
+                SyncOp::FsUpdate(m, _) => format!("DstUpdate({})", m.id()),
+                SyncOp::FsDelete(s, _) => format!("DstDelete({})", s.model_id),
+                SyncOp::DbUpdate(_, c) => format!("SrcUpdate({})", c.model.id()),
+                SyncOp::DbDelete(m, _) => format!("SrcDelete({})", m.id()),
             }
             .as_str(),
         )
@@ -54,19 +54,19 @@ impl Display for SyncOp {
 
 #[derive(Debug, Clone)]
 enum DbCandidate {
-    DbAdded(SyncModel),
-    DbModified(SyncModel, SyncState),
-    DbDeleted(SyncState),
-    DbUnmodified(SyncModel, SyncState),
+    Added(SyncModel),
+    Modified(SyncModel, SyncState),
+    Deleted(SyncState),
+    Unmodified(SyncModel, SyncState),
 }
 
 impl DbCandidate {
     fn model_id(&self) -> String {
         match &self {
-            DbCandidate::DbAdded(m) => m.id(),
-            DbCandidate::DbModified(m, _) => m.id(),
-            DbCandidate::DbDeleted(s) => s.model_id.clone(),
-            DbCandidate::DbUnmodified(m, _) => m.id(),
+            DbCandidate::Added(m) => m.id(),
+            DbCandidate::Modified(m, _) => m.id(),
+            DbCandidate::Deleted(s) => s.model_id.clone(),
+            DbCandidate::Unmodified(m, _) => m.id(),
         }
     }
 }
@@ -91,16 +91,16 @@ async fn get_db_candidates<R: Runtime>(
             get_sync_state_for_model(mgr, workspace.id.as_str(), model.id().as_str()).await?;
         let sync_state = match sync_state {
             None => {
-                candidates.push(DbCandidate::DbAdded(model));
+                candidates.push(DbCandidate::Added(model));
                 continue;
             }
             Some(s) => s,
         };
 
         if model.updated_at() > sync_state.flushed_at {
-            candidates.push(DbCandidate::DbModified(model, sync_state));
+            candidates.push(DbCandidate::Modified(model, sync_state));
         } else {
-            candidates.push(DbCandidate::DbUnmodified(model, sync_state));
+            candidates.push(DbCandidate::Unmodified(model, sync_state));
         }
     }
 
@@ -111,7 +111,7 @@ async fn get_db_candidates<R: Runtime>(
         if already_added {
             continue;
         }
-        candidates.push(DbCandidate::DbDeleted(sync_state));
+        candidates.push(DbCandidate::Deleted(sync_state));
     }
 
     Ok(candidates)
@@ -177,44 +177,40 @@ fn compute_sync_ops(
             let op = match (db_map.get(k), fs_map.get(k)) {
                 (None, None) => return None, // Can never happen
                 (None, Some(fs)) => SyncOp::DbUpdate(None, fs.to_owned()),
-                (Some(DbCandidate::DbUnmodified(model, sync_state)), None) => {
+                (Some(DbCandidate::Unmodified(model, sync_state)), None) => {
                     SyncOp::DbDelete(model.to_owned(), sync_state.to_owned())
                 }
-                (Some(DbCandidate::DbModified(model, sync_state)), None) => {
-                    SyncOp::FsWrite(model.to_owned(), Some(sync_state.to_owned()))
+                (Some(DbCandidate::Modified(model, sync_state)), None) => {
+                    SyncOp::FsUpdate(model.to_owned(), Some(sync_state.to_owned()))
                 }
-                (Some(DbCandidate::DbAdded(model)), None) => {
-                    SyncOp::FsWrite(model.to_owned(), None)
-                }
-                (Some(DbCandidate::DbDeleted(sync_state)), None) => {
+                (Some(DbCandidate::Added(model)), None) => SyncOp::FsUpdate(model.to_owned(), None),
+                (Some(DbCandidate::Deleted(sync_state)), None) => {
                     // Already deleted on FS, but sending it so the SyncState gets dealt with
                     SyncOp::FsDelete(sync_state.to_owned(), None)
                 }
-                (Some(DbCandidate::DbUnmodified(_, sync_state)), Some(fs_candidate)) => {
+                (Some(DbCandidate::Unmodified(_, sync_state)), Some(fs_candidate)) => {
                     if sync_state.checksum == fs_candidate.checksum {
                         return None;
                     } else {
-                        error!("UPDATE FROM FS");
                         SyncOp::DbUpdate(Some(sync_state.to_owned()), fs_candidate.to_owned())
                     }
                 }
-                (Some(DbCandidate::DbModified(model, sync_state)), Some(fs_candidate)) => {
+                (Some(DbCandidate::Modified(model, sync_state)), Some(fs_candidate)) => {
                     if sync_state.checksum == fs_candidate.checksum {
-                        SyncOp::FsWrite(model.to_owned(), Some(sync_state.to_owned()))
+                        SyncOp::FsUpdate(model.to_owned(), Some(sync_state.to_owned()))
                     } else if model.updated_at() < fs_candidate.model.updated_at() {
                         // CONFLICT! Write to DB if fs model is newer
-                        error!("UPDATE FROM CONFLICT");
                         SyncOp::DbUpdate(Some(sync_state.to_owned()), fs_candidate.to_owned())
                     } else {
                         // CONFLICT! Write to FS if db model is newer
-                        SyncOp::FsWrite(model.to_owned(), Some(sync_state.to_owned()))
+                        SyncOp::FsUpdate(model.to_owned(), Some(sync_state.to_owned()))
                     }
                 }
-                (Some(DbCandidate::DbAdded(model)), Some(_)) => {
+                (Some(DbCandidate::Added(model)), Some(_)) => {
                     // This would be super rare, so let's follow the user's intention
-                    SyncOp::FsWrite(model.to_owned(), None)
+                    SyncOp::FsUpdate(model.to_owned(), None)
                 }
-                (Some(DbCandidate::DbDeleted(sync_state)), Some(fs_candidate)) => {
+                (Some(DbCandidate::Deleted(sync_state)), Some(fs_candidate)) => {
                     SyncOp::FsDelete(sync_state.to_owned(), Some(fs_candidate.to_owned()))
                 }
             };
@@ -227,25 +223,24 @@ async fn workspace_models<R: Runtime>(
     mgr: &impl Manager<R>,
     workspace: &Workspace,
 ) -> Vec<SyncModel> {
-    let mut model = vec![SyncModel::Workspace(workspace.to_owned())];
+    let workspace_id = workspace.id.as_str();
+    let resources = get_workspace_export_resources(mgr, vec![workspace_id]).await.resources;
 
-    let resources =
-        get_workspace_export_resources(mgr, vec![workspace.id.as_str()]).await.resources;
-
+    let mut sync_models = vec![SyncModel::Workspace(workspace.to_owned())];
     for m in resources.environments {
-        model.push(SyncModel::Environment(m));
+        sync_models.push(SyncModel::Environment(m));
     }
     for m in resources.folders {
-        model.push(SyncModel::Folder(m));
+        sync_models.push(SyncModel::Folder(m));
     }
     for m in resources.http_requests {
-        model.push(SyncModel::HttpRequest(m));
+        sync_models.push(SyncModel::HttpRequest(m));
     }
     for m in resources.grpc_requests {
-        model.push(SyncModel::GrpcRequest(m));
+        sync_models.push(SyncModel::GrpcRequest(m));
     }
 
-    model
+    sync_models
 }
 
 async fn apply_sync_ops<R: Runtime>(
@@ -287,7 +282,7 @@ enum SyncStateOp {
 /// Flush a DB model to the filesystem
 async fn apply_sync_op<R: Runtime>(window: &WebviewWindow<R>, op: &SyncOp) -> Result<SyncStateOp> {
     let sync_state_op = match op {
-        SyncOp::FsWrite(model, sync_state) => {
+        SyncOp::FsUpdate(model, sync_state) => {
             let path = prep_model_file_path(window, &model).await?;
             let (content, checksum) = model.to_file_contents(&path)?;
             fs::write(&path, content)?;
@@ -326,24 +321,8 @@ async fn apply_sync_op<R: Runtime>(window: &WebviewWindow<R>, op: &SyncOp) -> Re
                 },
             }
         }
-        SyncOp::DbDelete(db_model, sync_state) => {
-            match db_model.to_owned() {
-                SyncModel::Workspace(m) => {
-                    delete_workspace(window, m.id.as_str(), &UpdateSource::Sync).await?;
-                }
-                SyncModel::Environment(m) => {
-                    delete_environment(window, m.id.as_str(), &UpdateSource::Sync).await?;
-                }
-                SyncModel::Folder(m) => {
-                    delete_folder(window, m.id.as_str(), &UpdateSource::Sync).await?;
-                }
-                SyncModel::HttpRequest(m) => {
-                    delete_http_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
-                }
-                SyncModel::GrpcRequest(m) => {
-                    delete_grpc_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
-                }
-            };
+        SyncOp::DbDelete(model, sync_state) => {
+            delete_model(window, model).await?;
             SyncStateOp::Delete(sync_state.to_owned())
         }
     };
@@ -360,10 +339,7 @@ async fn apply_sync_state_ops<R: Runtime>(
     Ok(())
 }
 
-async fn apply_sync_state_op<R: Runtime>(
-    window: &WebviewWindow<R>,
-    op: SyncStateOp,
-) -> Result<()> {
+async fn apply_sync_state_op<R: Runtime>(window: &WebviewWindow<R>, op: SyncStateOp) -> Result<()> {
     match op {
         SyncStateOp::Create {
             checksum,
@@ -449,6 +425,27 @@ async fn upsert_model<R: Runtime>(window: &WebviewWindow<R>, m: &SyncModel) -> R
         }
         SyncModel::GrpcRequest(m) => {
             upsert_grpc_request(window, &m, &UpdateSource::Sync).await?;
+        }
+    };
+    Ok(())
+}
+
+async fn delete_model<R: Runtime>(window: &WebviewWindow<R>, model: &SyncModel) -> Result<()> {
+    match model {
+        SyncModel::Workspace(m) => {
+            delete_workspace(window, m.id.as_str(), &UpdateSource::Sync).await?;
+        }
+        SyncModel::Environment(m) => {
+            delete_environment(window, m.id.as_str(), &UpdateSource::Sync).await?;
+        }
+        SyncModel::Folder(m) => {
+            delete_folder(window, m.id.as_str(), &UpdateSource::Sync).await?;
+        }
+        SyncModel::HttpRequest(m) => {
+            delete_http_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
+        }
+        SyncModel::GrpcRequest(m) => {
+            delete_grpc_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
         }
     };
     Ok(())

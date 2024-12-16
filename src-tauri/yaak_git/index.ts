@@ -2,9 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
 import type { ModelPayload } from '@yaakapp-internal/models';
 import { useActiveWorkspace } from '@yaakapp/app/hooks/useActiveWorkspace';
+import { useDebouncedValue } from '@yaakapp/app/hooks/useDebouncedValue';
 import { useListenToTauriEvent } from '@yaakapp/app/hooks/useListenToTauriEvent';
-import { debounce } from '@yaakapp/app/lib/debounce';
-import { useEffect } from 'react';
 import { GitCommit, GitStatusEntry } from './bindings/git';
 
 export function useGit(dir: string) {
@@ -17,11 +16,7 @@ export function useGit(dir: string) {
     console.log('Syncing');
     await invoke('plugin:yaak-git|sync', { workspaceId, dir });
   };
-  const debouncedSync = debounce(sync, 500);
-  useEffect(() => {
-    const t = setInterval(debouncedSync, 2000);
-    return () => clearInterval(t);
-  }, [dir]);
+  const debouncedSync = useDebouncedValue(sync, 2000);
 
   useListenToTauriEvent<ModelPayload>('upserted_model', debouncedSync);
   useListenToTauriEvent<ModelPayload>('deleted_model', debouncedSync);
