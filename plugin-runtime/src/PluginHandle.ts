@@ -1,4 +1,4 @@
-import { BootRequest, InternalEvent } from '@yaakapp-internal/plugin';
+import { BootRequest, InternalEvent } from '@yaakapp-internal/plugins';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { EventChannel } from './EventChannel';

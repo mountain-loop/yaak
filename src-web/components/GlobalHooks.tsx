@@ -1,5 +1,5 @@
 import { emit } from '@tauri-apps/api/event';
-import type { PromptTextRequest, PromptTextResponse } from '@yaakapp-internal/plugin';
+import type { PromptTextRequest, PromptTextResponse } from '@yaakapp-internal/plugins';
 import { useEnsureActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveWorkspaceChangedToast } from '../hooks/useActiveWorkspaceChangedToast';
 import {useGenerateThemeCss} from "../hooks/useGenerateThemeCss";

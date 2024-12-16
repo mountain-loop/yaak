@@ -7,7 +7,6 @@
     "*"
   ],
   "permissions": [
-    "yaak-license:default",
     "core:event:allow-emit",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
@@ -45,6 +44,8 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-unmaximize",
     "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "yaak-license:default",
+    "yaak-sync:default"
   ]
 }

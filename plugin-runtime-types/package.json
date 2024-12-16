@@ -11,8 +11,8 @@
     "build": "run-s build:copy-types build:tsc",
     "build:tsc": "tsc",
     "build:copy-types": "run-p build:copy-types:*",
-    "build:copy-types:root": "cpy --flat ../src-tauri/yaak_plugin_runtime/bindings/*.ts ./src/bindings",
-    "build:copy-types:next": "cpy --flat ../src-tauri/yaak_plugin_runtime/bindings/serde_json/*.ts ./src/bindings/serde_json",
+    "build:copy-types:root": "cpy --flat ../src-tauri/yaak-plugin-runtime/bindings/*.ts ./src/bindings",
+    "build:copy-types:next": "cpy --flat ../src-tauri/yaak-plugin-runtime/bindings/serde_json/*.ts ./src/bindings/serde_json",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

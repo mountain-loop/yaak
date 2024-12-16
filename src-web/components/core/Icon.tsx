@@ -40,6 +40,8 @@ const icons = {
   file_code: lucide.FileCodeIcon,
   filter: lucide.FilterIcon,
   flask: lucide.FlaskConicalIcon,
+  folder: lucide.FolderIcon,
+  folder_sync: lucide.FolderSyncIcon,
   folder_input: lucide.FolderInputIcon,
   folder_output: lucide.FolderOutputIcon,
   git_branch: lucide.GitBranchIcon,

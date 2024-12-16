@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-cmd-status"
+description = "Enables the cmd_status command without any pre-configured scope."
+commands.allow = ["cmd_status"]
+
+[[permission]]
+identifier = "deny-cmd-status"
+description = "Denies the cmd_status command without any pre-configured scope."
+commands.deny = ["cmd_status"]

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { FilterResponse } from '@yaakapp-internal/plugin';
+import type { FilterResponse } from '@yaakapp-internal/plugins';
 import { invokeCmd } from '../lib/tauri';
 
 export function useFilterResponse({

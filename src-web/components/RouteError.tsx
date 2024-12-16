@@ -3,7 +3,9 @@ import { useAppRoutes } from '../hooks/useAppRoutes';
 import { Button } from './core/Button';
 import { FormattedError } from './core/FormattedError';
 import { Heading } from './core/Heading';
-import { VStack } from './core/Stacks';
+import { HStack, VStack } from './core/Stacks';
+import { open } from '@tauri-apps/plugin-shell';
+import { Icon } from './core/Icon';
 
 export default function RouteError() {
   const error = useRouteError();
@@ -14,22 +16,34 @@ export default function RouteError() {
   const routes = useAppRoutes();
   return (
     <div className="flex items-center justify-center h-full">
-      <VStack space={5} className="max-w-[50rem] !h-auto">
-        <Heading>Route Error 🔥</Heading>
+      <VStack space={5} className="max-w-[40rem] !h-auto">
+        <div className="mb-3">
+          <Heading>App Error</Heading>
+          <p className="text-lg">Uh oh, Yaak encountered an unexpected error.</p>
+        </div>
         <FormattedError>{message}</FormattedError>
-        <VStack space={2}>
+        <HStack space={2}>
+          <Button size="sm" color="secondary" onClick={() => window.location.reload()}>
+            Refresh App
+          </Button>
           <Button
-            color="primary"
+            size="sm"
+            color="secondary"
             onClick={() => {
               routes.navigate('workspaces');
             }}
           >
             Go Home
           </Button>
-          <Button color="info" onClick={() => window.location.reload()}>
-            Refresh
+          <Button
+            size="sm"
+            color="primary"
+            rightSlot={<Icon icon="external_link" />}
+            onClick={() => open('https://feedback.yaak.app')}
+          >
+            Contact Support
           </Button>
-        </VStack>
+        </HStack>
       </VStack>
     </div>
   );

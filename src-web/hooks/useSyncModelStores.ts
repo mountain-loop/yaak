@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import type { AnyModel } from '@yaakapp-internal/models';
+import type { AnyModel, ModelPayload } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai/index';
 import { extractKeyValue } from '../lib/keyValueStore';
 import { modelsEq } from '../lib/model_util';
@@ -20,11 +20,6 @@ import { useRequestUpdateKey } from './useRequestUpdateKey';
 import { settingsAtom } from './useSettings';
 import { workspacesAtom } from './useWorkspaces';
 
-export interface ModelPayload {
-  model: AnyModel;
-  windowLabel: string;
-}
-
 export function useSyncModelStores() {
   const activeWorkspace = useActiveWorkspace();
   const queryClient = useQueryClient();
@@ -42,7 +37,7 @@ export function useSyncModelStores() {
   const setEnvironments = useSetAtom(environmentsAtom);
 
   useListenToTauriEvent<ModelPayload>('upserted_model', ({ payload }) => {
-    const { model, windowLabel } = payload;
+    const model = payload.model;
     const queryKey =
       model.model === 'grpc_event'
         ? grpcEventsQueryKey(model)
@@ -51,7 +46,10 @@ export function useSyncModelStores() {
           : null;
 
     // TODO: Move this logic to useRequestEditor() hook
-    if (model.model === 'http_request' && windowLabel !== getCurrentWebviewWindow().label) {
+    if (
+      model.model === 'http_request' &&
+      (payload.windowLabel !== getCurrentWebviewWindow().label || payload.updateSource !== 'window')
+    ) {
       wasUpdatedExternally(model.id);
     }
 
@@ -60,7 +58,7 @@ export function useSyncModelStores() {
       return;
     }
 
-    if (shouldIgnoreModel(model, windowLabel)) return;
+    if (shouldIgnoreModel(payload)) return;
 
     if (model.model === 'workspace') {
       setWorkspaces(updateModelList(model));
@@ -98,33 +96,32 @@ export function useSyncModelStores() {
   });
 
   useListenToTauriEvent<ModelPayload>('deleted_model', ({ payload }) => {
-    const { model, windowLabel } = payload;
-    if (shouldIgnoreModel(model, windowLabel)) return;
+    if (shouldIgnoreModel(payload)) return;
 
     console.log('Delete model', payload);
 
-    if (model.model === 'workspace') {
-      setWorkspaces(removeModelById(model));
-    } else if (model.model === 'plugin') {
-      setPlugins(removeModelById(model));
-    } else if (model.model === 'http_request') {
-      setHttpRequests(removeModelById(model));
-    } else if (model.model === 'http_response') {
-      setHttpResponses(removeModelById(model));
-    } else if (model.model === 'folder') {
-      setFolders(removeModelById(model));
-    } else if (model.model === 'environment') {
-      setEnvironments(removeModelById(model));
-    } else if (model.model === 'grpc_request') {
-      setGrpcRequests(removeModelById(model));
-    } else if (model.model === 'grpc_connection') {
-      setGrpcConnections(removeModelById(model));
-    } else if (model.model === 'grpc_event') {
-      queryClient.setQueryData(grpcEventsQueryKey(model), removeModelById(model));
-    } else if (model.model === 'key_value') {
-      queryClient.setQueryData(keyValueQueryKey(model), undefined);
-    } else if (model.model === 'cookie_jar') {
-      setCookieJars(removeModelById(model));
+    if (payload.model.model === 'workspace') {
+      setWorkspaces(removeModelById(payload.model));
+    } else if (payload.model.model === 'plugin') {
+      setPlugins(removeModelById(payload.model));
+    } else if (payload.model.model === 'http_request') {
+      setHttpRequests(removeModelById(payload.model));
+    } else if (payload.model.model === 'http_response') {
+      setHttpResponses(removeModelById(payload.model));
+    } else if (payload.model.model === 'folder') {
+      setFolders(removeModelById(payload.model));
+    } else if (payload.model.model === 'environment') {
+      setEnvironments(removeModelById(payload.model));
+    } else if (payload.model.model === 'grpc_request') {
+      setGrpcRequests(removeModelById(payload.model));
+    } else if (payload.model.model === 'grpc_connection') {
+      setGrpcConnections(removeModelById(payload.model));
+    } else if (payload.model.model === 'grpc_event') {
+      queryClient.setQueryData(grpcEventsQueryKey(payload.model), removeModelById(payload.model));
+    } else if (payload.model.model === 'key_value') {
+      queryClient.setQueryData(keyValueQueryKey(payload.model), undefined);
+    } else if (payload.model.model === 'cookie_jar') {
+      setCookieJars(removeModelById(payload.model));
     }
   });
 }
@@ -147,13 +144,17 @@ export function removeModelById<T extends { id: string }>(model: T) {
   return (entries: T[] | undefined) => entries?.filter((e) => e.id !== model.id) ?? [];
 }
 
-const shouldIgnoreModel = (payload: AnyModel, windowLabel: string) => {
+const shouldIgnoreModel = ({ model, windowLabel, updateSource }: ModelPayload) => {
   if (windowLabel === getCurrentWebviewWindow().label) {
     // Never ignore same-window updates
     return false;
   }
-  if (payload.model === 'key_value') {
-    return payload.namespace === 'no_sync';
+  if (updateSource !== 'window') {
+    // Never ignore updates from non-user sources
+    return false;
+  }
+  if (model.model === 'key_value') {
+    return model.namespace === 'no_sync';
   }
   return false;
 };
