@@ -306,6 +306,7 @@ pub async fn duplicate_grpc_request<R: Runtime>(
             return Err(ModelNotFound(id.to_string()));
         }
     };
+    request.sort_priority = request.sort_priority + 0.001;
     request.id = "".to_string();
     upsert_grpc_request(window, &request).await
 }
@@ -1102,7 +1103,77 @@ pub async fn duplicate_http_request<R: Runtime>(
         Some(r) => r,
     };
     request.id = "".to_string();
+    request.sort_priority = request.sort_priority + 0.001;
     upsert_http_request(window, request).await
+}
+
+pub async fn duplicate_folder<R: Runtime>(
+    window: &WebviewWindow<R>,
+    src_folder: &Folder,
+) -> Result<()> {
+    let workspace_id = src_folder.workspace_id.as_str();
+
+    let http_requests = list_http_requests(window, workspace_id)
+        .await?
+        .into_iter()
+        .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+
+    let grpc_requests = list_grpc_requests(window, workspace_id)
+        .await?
+        .into_iter()
+        .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+
+    let folders = list_folders(window, workspace_id)
+        .await?
+        .into_iter()
+        .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+
+    let new_folder = upsert_folder(
+        window,
+        Folder {
+            id: "".into(),
+            sort_priority: src_folder.sort_priority + 0.001,
+            ..src_folder.clone()
+        },
+    )
+    .await?;
+
+    for m in http_requests {
+        upsert_http_request(
+            window,
+            HttpRequest {
+                id: "".into(),
+                folder_id: Some(new_folder.id.clone()),
+                sort_priority: m.sort_priority + 0.001,
+                ..m
+            },
+        )
+        .await?;
+    }
+    for m in grpc_requests {
+        upsert_grpc_request(
+            window,
+            &GrpcRequest {
+                id: "".into(),
+                folder_id: Some(new_folder.id.clone()),
+                sort_priority: m.sort_priority + 0.001,
+                ..m
+            },
+        )
+        .await?;
+    }
+    for m in folders {
+        // Recurse down
+        Box::pin(duplicate_folder(
+            window,
+            &Folder {
+                folder_id: Some(new_folder.id.clone()),
+                ..m
+            },
+        ))
+        .await?;
+    }
+    Ok(())
 }
 
 pub async fn upsert_http_request<R: Runtime>(

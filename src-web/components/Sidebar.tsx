@@ -22,6 +22,7 @@ import { useAppRoutes } from '../hooks/useAppRoutes';
 import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { useDeleteFolder } from '../hooks/useDeleteFolder';
 import { useDeleteRequest } from '../hooks/useDeleteRequest';
+import { useDuplicateFolder } from '../hooks/useDuplicateFolder';
 import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
 import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
 import { useFolders } from '../hooks/useFolders';
@@ -696,6 +697,7 @@ function SidebarItem({
   const deleteFolder = useDeleteFolder(itemId);
   const deleteRequest = useDeleteRequest(itemId);
   const renameRequest = useRenameRequest(itemId);
+  const duplicateFolder = useDuplicateFolder(itemId);
   const duplicateHttpRequest = useDuplicateHttpRequest({ id: itemId, navigateAfter: true });
   const duplicateGrpcRequest = useDuplicateGrpcRequest({ id: itemId, navigateAfter: true });
   const sendRequest = useSendAnyHttpRequest();
@@ -812,6 +814,12 @@ function SidebarItem({
           },
         },
         {
+          key: 'duplicateFolder',
+          label: 'Duplicate',
+          leftSlot: <Icon icon="copy" />,
+          onSelect: () => duplicateFolder.mutate(),
+        },
+        {
           key: 'deleteFolder',
           label: 'Delete',
           variant: 'danger',
@@ -886,6 +894,7 @@ function SidebarItem({
     createDropdownItems,
     deleteFolder,
     deleteRequest,
+    duplicateFolder,
     duplicateGrpcRequest,
     duplicateHttpRequest,
     httpRequestActions,
