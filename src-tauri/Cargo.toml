@@ -63,6 +63,7 @@ tauri-plugin-updater = "2.0.2"
 tauri-plugin-window-state = "2.0.1"
 tokio = { version = "1.36.0", features = ["sync"] }
 tokio-stream = "0.1.15"
+ts-rs = { workspace = true }
 uuid = "1.7.0"
 mime_guess = "2.0.5"
 urlencoding = "2.1.3"

@@ -4,7 +4,6 @@ import { useResolvedAppearance } from '../../hooks/useResolvedAppearance';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import { useSettings } from '../../hooks/useSettings';
 import { useUpdateSettings } from '../../hooks/useUpdateSettings';
-import { trackEvent } from '../../lib/analytics';
 import { clamp } from '../../lib/clamp';
 import { getThemes } from '../../lib/theme/themes';
 import { isThemeDark } from '../../lib/theme/window';
@@ -89,6 +88,7 @@ export function SettingsAppearance() {
         value={`${settings.interfaceFontSize}`}
         options={fontSizes}
         onChange={(v) => updateSettings.mutate({ interfaceFontSize: parseInt(v) })}
+        event="font-size.interface"
       />
       <Select
         size="sm"
@@ -98,11 +98,13 @@ export function SettingsAppearance() {
         value={`${settings.editorFontSize}`}
         options={fontSizes}
         onChange={(v) => updateSettings.mutate({ editorFontSize: clamp(parseInt(v) || 14, 8, 30) })}
+        event="font-size.editor"
       />
       <Checkbox
         checked={settings.editorSoftWrap}
         title="Wrap Editor Lines"
         onChange={(editorSoftWrap) => updateSettings.mutate({ editorSoftWrap })}
+        event="wrap-lines"
       />
 
       <Separator className="my-4" />
@@ -113,10 +115,8 @@ export function SettingsAppearance() {
         labelPosition="top"
         size="sm"
         value={settings.appearance}
-        onChange={(appearance) => {
-          trackEvent('appearance', 'update', { appearance });
-          updateSettings.mutateAsync({ appearance });
-        }}
+        onChange={(appearance) => updateSettings.mutate({ appearance })}
+        event="appearance"
         options={[
           { label: 'Automatic', value: 'system' },
           { label: 'Light', value: 'light' },
@@ -134,10 +134,8 @@ export function SettingsAppearance() {
             className="flex-1"
             value={activeTheme.light.id}
             options={lightThemes}
-            onChange={(themeLight) => {
-              trackEvent('theme', 'update', { theme: themeLight, appearance: 'light' });
-              updateSettings.mutateAsync({ ...settings, themeLight });
-            }}
+            event="theme.light"
+            onChange={(themeLight) => updateSettings.mutate({ ...settings, themeLight })}
           />
         )}
         {(settings.appearance === 'system' || settings.appearance === 'dark') && (
@@ -150,10 +148,8 @@ export function SettingsAppearance() {
             size="sm"
             value={activeTheme.dark.id}
             options={darkThemes}
-            onChange={(themeDark) => {
-              trackEvent('theme', 'update', { theme: themeDark, appearance: 'dark' });
-              updateSettings.mutateAsync({ ...settings, themeDark });
-            }}
+            event="theme.dark"
+            onChange={(themeDark) => updateSettings.mutate({ ...settings, themeDark })}
           />
         )}
       </HStack>

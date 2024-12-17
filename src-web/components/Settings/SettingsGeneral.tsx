@@ -37,6 +37,7 @@ export function SettingsGeneral() {
           size="sm"
           value={settings.updateChannel}
           onChange={(updateChannel) => updateSettings.mutate({ updateChannel })}
+          event="update-channel"
           options={[
             { label: 'Stable (less frequent)', value: 'stable' },
             { label: 'Beta (more frequent)', value: 'beta' },
@@ -57,6 +58,7 @@ export function SettingsGeneral() {
         labelPosition="left"
         labelClassName="w-[12rem]"
         size="sm"
+        event="workspace-open"
         value={
           settings.openWorkspaceNewWindow === true
             ? 'new'
@@ -80,6 +82,7 @@ export function SettingsGeneral() {
         className="mt-3"
         checked={settings.telemetry}
         title="Send Usage Statistics"
+        event="usage-statistics"
         onChange={(telemetry) => updateSettings.mutate({ telemetry })}
       />
 
@@ -107,6 +110,7 @@ export function SettingsGeneral() {
         <Checkbox
           checked={workspace.settingValidateCertificates}
           title="Validate TLS Certificates"
+          event="validate-certs"
           onChange={(settingValidateCertificates) =>
             updateWorkspace.mutate({ settingValidateCertificates })
           }
@@ -115,6 +119,7 @@ export function SettingsGeneral() {
         <Checkbox
           checked={workspace.settingFollowRedirects}
           title="Follow Redirects"
+          event="follow-redirects"
           onChange={(settingFollowRedirects) => updateWorkspace.mutate({ settingFollowRedirects })}
         />
       </VStack>

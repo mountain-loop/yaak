@@ -81,18 +81,17 @@ pub async fn activate_license<R: Runtime>(
     if let Err(e) = window.emit("license-activated", true) {
         warn!("Failed to emit check-license event: {}", e);
     }
-    
+
     Ok(())
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "license.ts")]
 pub enum LicenseCheckStatus {
-    PersonalUse,
+    PersonalUse { trial_ended: NaiveDateTime },
     CommercialUse,
     InvalidLicense,
     Trialing { end: NaiveDateTime },
-    TrialEnded { end: NaiveDateTime },
 }
 
 pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>) -> Result<LicenseCheckStatus> {
@@ -114,7 +113,7 @@ pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Lice
 
     match (has_activation_id, trial_period_active) {
         (false, true) => Ok(LicenseCheckStatus::Trialing { end: trial_end }),
-        (false, false) => Ok(LicenseCheckStatus::TrialEnded { end: trial_end }),
+        (false, false) => Ok(LicenseCheckStatus::PersonalUse { trial_ended: trial_end }),
         (true, _) => {
             info!("Checking license activation");
             // A license has been activated, so let's check the license server

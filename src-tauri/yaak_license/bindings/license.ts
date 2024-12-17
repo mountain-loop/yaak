@@ -8,4 +8,4 @@ export type ActivateLicenseResponsePayload = { activationId: string, };
 
 export type CheckActivationResponsePayload = { active: boolean, };
 
-export type LicenseCheckStatus = { "type": "personal_use" } | { "type": "commercial_use" } | { "type": "trialing", end: string, } | { "type": "trial_ended", end: string, };
+export type LicenseCheckStatus = { "type": "personal_use", trial_ended: string, } | { "type": "commercial_use" } | { "type": "invalid_license" } | { "type": "trialing", end: string, };

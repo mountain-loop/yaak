@@ -115,7 +115,11 @@ jobs:
         with:
           tagName: 'v__VERSION__'
           releaseName: 'Release __VERSION__'
-          releaseBody: 'https://yaak.app/blog/__VERSION__'
+          releaseBody: |
+            > [!IMPORTANT]
+            > The Yaak project is open source. However, to fund development, these pre-built binaries require a license for commercial use. Please see the [Pricing Page](https://yaak.app/pricing) for more details.
+            
+            You can view the full release notes here → https://yaak.app/blog/2024.13.0
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

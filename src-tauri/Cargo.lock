@@ -8000,6 +8000,7 @@ dependencies = [
  "tauri-plugin-yaak-license",
  "tokio",
  "tokio-stream",
+ "ts-rs",
  "urlencoding",
  "uuid",
  "yaak_grpc",

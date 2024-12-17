@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
+import { trackEvent } from '../../../lib/analytics';
 import { Icon } from '../Icon';
 import type { RadioDropdownProps } from '../RadioDropdown';
 import { RadioDropdown } from '../RadioDropdown';
@@ -95,7 +96,14 @@ export function Tabs({
                   onChange={t.options.onChange}
                 >
                   <button
-                    onClick={isActive ? undefined : () => onChangeValue(t.value)}
+                    onClick={
+                      isActive
+                        ? undefined
+                        : () => {
+                            trackEvent('tab', 'click', { label, tab: t.value });
+                            onChangeValue(t.value);
+                          }
+                    }
                     className={btnClassName}
                   >
                     {option && 'shortLabel' in option
@@ -113,7 +121,14 @@ export function Tabs({
               return (
                 <button
                   key={t.value}
-                  onClick={() => onChangeValue(t.value)}
+                  onClick={
+                    isActive
+                      ? undefined
+                      : () => {
+                          trackEvent('tab', 'click', { label, tab: t.value });
+                          onChangeValue(t.value);
+                        }
+                  }
                   className={btnClassName}
                 >
                   {t.label}
