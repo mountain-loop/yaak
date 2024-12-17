@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
 import { v4 as uuid } from 'uuid';
@@ -121,6 +122,46 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
     },
     [onChange],
   );
+
+  // Clipboard parsing function
+  const parseClipboardData = (data: string): { name: string; value: string }[] => {
+    const lines = data.split("\n").filter(Boolean);
+    return lines.map((line) => {
+      const [name, value] = line.split(/[=:]/); // Handle = or : separator
+      return {
+        name: (name ?? '').trim(),
+        value: (value ?? '').trim(),
+      };
+    });
+  };
+
+  // Function to handle paste action
+  const handlePasteFromClipboard = useCallback(async () => {
+    try {
+      const clipboardText = await readText(); // Read clipboard using Tauri plugin
+      const parsedPairs = parseClipboardData(clipboardText);
+      setPairsAndSave((oldPairs) => [
+        ...oldPairs.slice(0, -1), // Remove the empty last row
+        ...parsedPairs.map((pair) => newPairContainer(pair)),
+        newPairContainer(), // Append a new empty row
+      ]);
+    } catch (error) {
+      console.error('Failed to paste clipboard data:', error);
+    }
+  }, [setPairsAndSave]);
+
+  useEffect(() => {
+    const handleKeyDown = async (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+        event.preventDefault(); // Prevent default browser paste
+        await handlePasteFromClipboard();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+
+  }, [handlePasteFromClipboard]);
 
   const handleMove = useCallback<PairEditorRowProps['onMove']>(
     (id, side) => {
