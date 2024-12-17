@@ -26,8 +26,6 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
   const allRecentRequestIds = useRecentRequests();
   const requests = useRequests();
 
-  type ExtendedDropdownItem = DropdownItem & { key: string };
-
   // Handle key-up
   useKeyPressEvent('Control', undefined, () => {
     if (!dropdownRef.current?.isOpen) return;
@@ -44,13 +42,14 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
     dropdownRef.current?.prev?.();
   });
 
-  const items = useMemo<ExtendedDropdownItem[]>(() => {
-    if (activeWorkspace === null) return [];
+  const { items, hasRecentRequests } = useMemo(() => {
+    if (activeWorkspace === null) return { items: [], hasRecentRequests: false };
 
-    const recentRequestItems: ExtendedDropdownItem[] = [];
+    const recentRequestItems: DropdownItem[] = [];
+
     for (const id of allRecentRequestIds) {
       const request = requests.find((r) => r.id === id);
-      if (request === undefined) continue;
+      if (!request) continue;
 
       recentRequestItems.push({
         key: request.id,
@@ -70,20 +69,20 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
 
     // No recent requests to show
     if (recentRequestItems.length === 0) {
-      return [
-        {
-          key: 'no-recent-requests',
-          label: 'No recent requests',
-          disabled: true,
-        },
-      ];
+      return {
+        items: [
+          {
+            key: 'no-recent-requests',
+            label: 'No recent requests',
+            disabled: true,
+          },
+        ],
+        hasRecentRequests: false,
+      };
     }
 
-    return recentRequestItems.slice(0, 20);
+    return { items: recentRequestItems.slice(0, 20), hasRecentRequests: true };
   }, [activeWorkspace, allRecentRequestIds, requests, routes, activeEnvironment?.id, activeCookieJar?.id]);
-
-  // Only show dropdown if there are valid recent requests
-  const hasRecentRequests = items.length > 0 && items[0]?.key !== 'no-recent-requests';
 
   return hasRecentRequests ? (
     <Dropdown ref={dropdownRef} items={items}>
