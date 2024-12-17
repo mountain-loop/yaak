@@ -55,9 +55,9 @@ use yaak_models::queries::{
     delete_all_http_responses_for_request, delete_all_http_responses_for_workspace,
     delete_cookie_jar, delete_environment, delete_folder, delete_grpc_connection,
     delete_grpc_request, delete_http_request, delete_http_response, delete_plugin,
-    delete_workspace, duplicate_grpc_request, duplicate_http_request, generate_id,
-    generate_model_id, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
-    get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
+    delete_workspace, duplicate_folder, duplicate_grpc_request, duplicate_http_request,
+    generate_id, generate_model_id, get_cookie_jar, get_environment, get_folder,
+    get_grpc_connection, get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
     get_or_create_settings, get_plugin, get_workspace, list_cookie_jars, list_environments,
     list_folders, list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests,
     list_http_requests, list_http_responses_for_request, list_http_responses_for_workspace,
@@ -1243,6 +1243,15 @@ async fn cmd_duplicate_grpc_request(id: &str, w: WebviewWindow) -> Result<GrpcRe
 }
 
 #[tauri::command]
+async fn cmd_duplicate_folder<R: Runtime>(
+    window: WebviewWindow<R>,
+    id: &str,
+) -> Result<(), String> {
+    let folder = get_folder(&window, id).await.map_err(|e| e.to_string())?;
+    duplicate_folder(&window, &folder).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn cmd_create_http_request(
     request: HttpRequest,
     w: WebviewWindow,
@@ -1738,6 +1747,7 @@ pub fn run() {
             cmd_delete_send_history,
             cmd_delete_workspace,
             cmd_dismiss_notification,
+            cmd_duplicate_folder,
             cmd_duplicate_grpc_request,
             cmd_duplicate_http_request,
             cmd_export_data,

@@ -24,6 +24,7 @@ type TauriCmd =
   | 'cmd_delete_http_response'
   | 'cmd_delete_workspace'
   | 'cmd_dismiss_notification'
+  | 'cmd_duplicate_folder'
   | 'cmd_duplicate_grpc_request'
   | 'cmd_duplicate_http_request'
   | 'cmd_export_data'
