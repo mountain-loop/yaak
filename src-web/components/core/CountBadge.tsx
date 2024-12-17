@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 
 interface Props {
-  count: number;
+  count: number | true;
   className?: string;
 }
 
@@ -15,7 +15,7 @@ export function CountBadge({ count, className }: Props) {
         'opacity-70 border border-border-subtle text-4xs rounded mb-0.5 px-1 ml-1 h-4 font-mono',
       )}
     >
-      {count}
+      {count === true ? '⊙' : count}
     </div>
   );
 }

@@ -2,7 +2,6 @@ import classNames from 'classnames';
 import { motion } from 'framer-motion';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useWindowSize } from 'react-use';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
@@ -34,13 +33,13 @@ const drag = { gridArea: 'drag' };
 
 export default function Workspace() {
   useSyncWorkspaceRequestTitle();
+
   const workspaces = useWorkspaces();
   const activeWorkspace = useActiveWorkspace();
   const { setWidth, width, resetWidth } = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
   const activeRequest = useActiveRequest();
-  const windowSize = useWindowSize();
   const importData = useImportData();
   const floating = useShouldFloatSidebar();
   const [isResizing, setIsResizing] = useState<boolean>(false);
@@ -102,14 +101,6 @@ export default function Workspace() {
     }),
     [sideWidth, floating],
   );
-
-  if (windowSize.width <= 100) {
-    return (
-      <div>
-        <Button>Send</Button>
-      </div>
-    );
-  }
 
   // We're loading still
   if (workspaces.length === 0) {

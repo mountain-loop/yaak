@@ -47,6 +47,7 @@ import { HeadersEditor } from './HeadersEditor';
 import { useToast } from './ToastContext';
 import { UrlBar } from './UrlBar';
 import { UrlParametersEditor } from './UrlParameterEditor';
+import { MarkdownEditor } from './MarkdownEditor';
 
 interface Props {
   style: CSSProperties;
@@ -59,6 +60,7 @@ const TAB_BODY = 'body';
 const TAB_PARAMS = 'params';
 const TAB_HEADERS = 'headers';
 const TAB_AUTH = 'auth';
+const TAB_DESCRIPTION = 'description';
 
 const DEFAULT_TAB = TAB_BODY;
 
@@ -234,19 +236,35 @@ export const RequestPane = memo(function RequestPane({
           },
         },
       },
+      {
+        value: TAB_DESCRIPTION,
+        label: (
+          <div className="flex items-center">
+            Docs
+            {activeRequest.description && <CountBadge count={true} />}
+          </div>
+        ),
+      },
     ],
     [
       activeRequest.authentication,
       activeRequest.authenticationType,
       activeRequest.bodyType,
+      activeRequest.description,
       activeRequest.headers,
       activeRequest.method,
       activeRequestId,
       handleContentTypeChange,
       toast,
       updateRequest,
-      urlParameterPairs,
+      urlParameterPairs.length,
     ],
+  );
+
+  const handleDescriptionChange = useCallback(
+    (description: HttpRequest['description']) =>
+      updateRequest.mutate({ id: activeRequestId, update: { description } }),
+    [activeRequestId, updateRequest],
   );
 
   const handleBodyChange = useCallback(
@@ -457,6 +475,12 @@ export const RequestPane = memo(function RequestPane({
               ) : (
                 <EmptyStateText>Empty Body</EmptyStateText>
               )}
+            </TabContent>
+            <TabContent value={TAB_DESCRIPTION}>
+              <MarkdownEditor
+                defaultValue={activeRequest.description}
+                onChange={handleDescriptionChange}
+              />
             </TabContent>
           </Tabs>
         </>

@@ -1,0 +1,201 @@
+.prose {
+  @apply text-text;
+
+  & > :first-child {
+    @apply mt-0;
+  }
+
+  img,
+  video,
+  p,
+  ul,
+  ol,
+  table,
+  blockquote,
+  hr,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply my-5;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply mt-10 leading-tight text-balance;
+  }
+
+  p {
+    @apply text-pretty;
+  }
+
+  h1 {
+    @apply text-4xl font-bold;
+  }
+
+  h2 {
+    @apply text-2xl font-bold;
+  }
+
+  h3 {
+    @apply text-xl font-bold;
+  }
+
+  em {
+    @apply italic;
+  }
+
+  strong {
+    @apply font-bold;
+  }
+
+  ul {
+    @apply list-disc;
+
+    ul, ol {
+      @apply my-0;
+    }
+  }
+
+  ol {
+    @apply list-decimal;
+
+    ol, ul {
+      @apply my-0;
+    }
+  }
+
+  ol, ul {
+    @apply pl-6;
+
+    li p {
+      @apply inline-block my-0;
+    }
+
+    li {
+      @apply pl-2;
+    }
+
+    li::marker {
+      @apply text-success;
+    }
+  }
+
+  a {
+    @apply text-notice hover:underline;
+
+    * {
+      @apply text-notice !important;
+    }
+  }
+
+  img,
+  video {
+    @apply max-h-[65vh];
+    @apply w-auto mx-auto rounded-md;
+  }
+
+  table code,
+  p code,
+  ol code,
+  ul code {
+    @apply text-xs bg-surface-active text-info font-normal whitespace-nowrap;
+    @apply px-1.5 py-0.5 rounded not-italic;
+  }
+
+  pre {
+    @apply bg-surface-highlight text-text !important;
+    @apply px-4 py-3 rounded-md;
+    @apply overflow-auto whitespace-pre;
+
+    code {
+      @apply text-xs font-normal;
+    }
+  }
+
+  .banner {
+    @apply border border-dashed;
+    @apply border-border bg-surface-highlight text-text px-4 py-3 rounded text-base;
+
+    &::before {
+      @apply block font-bold mb-1;
+      @apply text-text-subtlest;
+
+      content: 'Note';
+    }
+
+    &.x-theme-banner--secondary::before {
+      content: 'Info';
+    }
+
+    &.x-theme-banner--success::before {
+      content: 'Tip';
+    }
+
+    &.x-theme-banner--notice::before {
+      content: 'Important';
+    }
+
+    &.x-theme-banner--warning::before {
+      content: 'Warning';
+    }
+
+    &.x-theme-banner--danger::before {
+      content: 'Caution';
+    }
+  }
+
+  blockquote {
+    @apply italic py-3 pl-5 pr-3 border-l-8 border-surface-active text-lg text-text bg-surface-highlight rounded shadow-lg;
+
+    p {
+      @apply m-0;
+    }
+  }
+
+  h2[id] > a .icon.icon-link {
+    @apply hidden w-4 h-4 bg-success ml-2;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' stroke='currentColor' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round' class='css-i6dzq1'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'%3E%3C/path%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'%3E%3C/path%3E%3C/svg%3E");
+    mask-size: contain;
+    mask-repeat: no-repeat;
+
+    &:hover {
+      @apply bg-notice;
+    }
+  }
+
+  h2[id]:hover {
+    .icon.icon-link {
+      @apply inline-block;
+    }
+  }
+
+  hr {
+    @apply border-secondary border-dashed md:mx-[25%] my-10;
+  }
+
+  figure {
+    img {
+      @apply mb-0;
+    }
+
+    figcaption {
+      @apply relative pl-9 text-success text-sm pt-1;
+
+      p {
+        @apply m-0;
+      }
+    }
+
+    figcaption::before {
+      @apply border-info absolute left-2 top-0 h-3.5 w-6 rounded-bl border-l border-b border-dotted;
+      content: '';
+    }
+  }
+}

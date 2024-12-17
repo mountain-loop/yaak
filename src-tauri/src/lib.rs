@@ -903,7 +903,7 @@ async fn cmd_import_data<R: Runtime>(
         v.workspace_id =
             maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
         v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
-        let x = upsert_grpc_request(&window, &v).await.map_err(|e| e.to_string())?;
+        let x = upsert_grpc_request(&window, v).await.map_err(|e| e.to_string())?;
         imported_resources.grpc_requests.push(x.clone());
     }
     info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
@@ -1225,7 +1225,7 @@ async fn cmd_create_grpc_request(
 ) -> Result<GrpcRequest, String> {
     upsert_grpc_request(
         &w,
-        &GrpcRequest {
+        GrpcRequest {
             workspace_id: workspace_id.to_string(),
             name: name.to_string(),
             folder_id: folder_id.map(|s| s.to_string()),
@@ -1273,7 +1273,7 @@ async fn cmd_update_grpc_request(
     request: GrpcRequest,
     w: WebviewWindow,
 ) -> Result<GrpcRequest, String> {
-    upsert_grpc_request(&w, &request).await.map_err(|e| e.to_string())
+    upsert_grpc_request(&w, request).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

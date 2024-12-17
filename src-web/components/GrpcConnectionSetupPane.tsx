@@ -1,8 +1,8 @@
-import useResizeObserver from '@react-hook/resize-observer';
+import useSize from '@react-hook/size';
 import type { GrpcMetadataEntry, GrpcRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { createGlobalState } from 'react-use';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
@@ -64,11 +64,8 @@ export function GrpcConnectionSetupPane({
   const [activeTab, setActiveTab] = useActiveTab();
   const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
 
-  const [paneSize, setPaneSize] = useState(99999);
   const urlContainerEl = useRef<HTMLDivElement>(null);
-  useResizeObserver<HTMLDivElement>(urlContainerEl.current, (entry) => {
-    setPaneSize(entry.contentRect.width);
-  });
+  const [paneWidth] = useSize(urlContainerEl.current);
 
   const handleChangeUrl = useCallback(
     (url: string) => updateRequest.mutateAsync({ id: activeRequest.id, update: { url } }),
@@ -182,7 +179,7 @@ export function GrpcConnectionSetupPane({
         ref={urlContainerEl}
         className={classNames(
           'grid grid-cols-[minmax(0,1fr)_auto] gap-1.5',
-          paneSize < 400 && '!grid-cols-1',
+          paneWidth < 400 && '!grid-cols-1',
         )}
       >
         <UrlBar
@@ -222,7 +219,7 @@ export function GrpcConnectionSetupPane({
               disabled={isStreaming || services == null}
               className={classNames(
                 'font-mono text-editor min-w-[5rem] !ring-0',
-                paneSize < 400 && 'flex-1',
+                paneWidth < 400 && 'flex-1',
               )}
             >
               {select.options.find((o) => o.value === select.value)?.label ?? 'No Schema'}

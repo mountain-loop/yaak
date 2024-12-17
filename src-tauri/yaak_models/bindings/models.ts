@@ -14,7 +14,7 @@ export type Environment = { model: "environment", id: string, workspaceId: strin
 
 export type EnvironmentVariable = { enabled?: boolean, name: string, value: string, };
 
-export type Folder = { model: "folder", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, name: string, sortPriority: number, };
+export type Folder = { model: "folder", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, name: string, description: string, sortPriority: number, };
 
 export type GrpcConnection = { model: "grpc_connection", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, elapsed: number, error: string | null, method: string, service: string, status: number, state: GrpcConnectionState, trailers: { [key in string]?: string }, url: string, };
 
@@ -26,9 +26,9 @@ export type GrpcEventType = "info" | "error" | "client_message" | "server_messag
 
 export type GrpcMetadataEntry = { enabled?: boolean, name: string, value: string, };
 
-export type GrpcRequest = { model: "grpc_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authenticationType: string | null, authentication: Record<string, any>, message: string, metadata: Array<GrpcMetadataEntry>, method: string | null, name: string, service: string | null, sortPriority: number, url: string, };
+export type GrpcRequest = { model: "grpc_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authenticationType: string | null, authentication: Record<string, any>, description: string, message: string, metadata: Array<GrpcMetadataEntry>, method: string | null, name: string, service: string | null, sortPriority: number, url: string, };
 
-export type HttpRequest = { model: "http_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, body: Record<string, any>, bodyType: string | null, headers: Array<HttpRequestHeader>, method: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
+export type HttpRequest = { model: "http_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, body: Record<string, any>, bodyType: string | null, description: string, headers: Array<HttpRequestHeader>, method: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
 export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, };
 
