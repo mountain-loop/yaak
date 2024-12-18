@@ -62,8 +62,6 @@ const TAB_HEADERS = 'headers';
 const TAB_AUTH = 'auth';
 const TAB_DESCRIPTION = 'description';
 
-const DEFAULT_TAB = TAB_BODY;
-
 export const RequestPane = memo(function RequestPane({
   style,
   fullHeight,
@@ -122,6 +120,15 @@ export const RequestPane = memo(function RequestPane({
 
   const tabs: TabItem[] = useMemo(
     () => [
+      {
+        value: TAB_DESCRIPTION,
+        label: (
+            <div className="flex items-center">
+              Docs
+              {activeRequest.description && <CountBadge count={true} />}
+            </div>
+        ),
+      },
       {
         value: TAB_BODY,
         options: {
@@ -236,15 +243,6 @@ export const RequestPane = memo(function RequestPane({
           },
         },
       },
-      {
-        value: TAB_DESCRIPTION,
-        label: (
-          <div className="flex items-center">
-            Docs
-            {activeRequest.description && <CountBadge count={true} />}
-          </div>
-        ),
-      },
     ],
     [
       activeRequest.authentication,
@@ -318,7 +316,7 @@ export const RequestPane = memo(function RequestPane({
   const importCurl = useImportCurl();
   const importQuerystring = useImportQuerystring(activeRequestId);
 
-  const activeTab = activeTabs?.[activeRequestId] ?? DEFAULT_TAB;
+  const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(
     (tab: string) => {
       setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));

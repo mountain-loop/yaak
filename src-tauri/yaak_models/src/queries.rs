@@ -386,6 +386,7 @@ pub async fn upsert_grpc_request<R: Runtime>(
                     GrpcRequestIden::UpdatedAt,
                     GrpcRequestIden::WorkspaceId,
                     GrpcRequestIden::Name,
+                    GrpcRequestIden::Description,
                     GrpcRequestIden::FolderId,
                     GrpcRequestIden::SortPriority,
                     GrpcRequestIden::Url,

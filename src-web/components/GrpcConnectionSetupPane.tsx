@@ -3,7 +3,7 @@ import type { GrpcMetadataEntry, GrpcRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useRef } from 'react';
-import { createGlobalState } from 'react-use';
+import { useLocalStorage } from 'react-use';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
@@ -11,6 +11,7 @@ import { AUTH_TYPE_BASIC, AUTH_TYPE_BEARER, AUTH_TYPE_NONE } from '../lib/model_
 import { BasicAuth } from './BasicAuth';
 import { BearerAuth } from './BearerAuth';
 import { Button } from './core/Button';
+import { CountBadge } from './core/CountBadge';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
@@ -20,6 +21,7 @@ import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { GrpcEditor } from './GrpcEditor';
+import { MarkdownEditor } from './MarkdownEditor';
 import { UrlBar } from './UrlBar';
 
 interface Props {
@@ -44,7 +46,10 @@ interface Props {
   services: ReflectResponseService[] | null;
 }
 
-const useActiveTab = createGlobalState<string>('message');
+const TAB_MESSAGE = 'message';
+const TAB_METADATA = 'metadata';
+const TAB_AUTH = 'auth';
+const TAB_DESCRIPTION = 'description';
 
 export function GrpcConnectionSetupPane({
   style,
@@ -61,7 +66,10 @@ export function GrpcConnectionSetupPane({
   onSend,
 }: Props) {
   const updateRequest = useUpdateAnyGrpcRequest();
-  const [activeTab, setActiveTab] = useActiveTab();
+  const [activeTabs, setActiveTabs] = useLocalStorage<Record<string, string>>(
+    'grpcRequestPaneActiveTabs',
+    {},
+  );
   const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
 
   const urlContainerEl = useRef<HTMLDivElement>(null);
@@ -126,9 +134,18 @@ export function GrpcConnectionSetupPane({
 
   const tabs: TabItem[] = useMemo(
     () => [
-      { value: 'message', label: 'Message' },
       {
-        value: 'auth',
+        value: TAB_DESCRIPTION,
+        label: (
+            <div className="flex items-center">
+              Docs
+              {activeRequest.description && <CountBadge count={true} />}
+            </div>
+        ),
+      },
+      { value: TAB_MESSAGE, label: 'Message' },
+      {
+        value: TAB_AUTH,
         label: 'Auth',
         options: {
           value: activeRequest.authenticationType,
@@ -157,19 +174,34 @@ export function GrpcConnectionSetupPane({
           },
         },
       },
-      { value: 'metadata', label: 'Metadata' },
+      { value: TAB_METADATA, label: 'Metadata' },
     ],
     [
       activeRequest.authentication,
       activeRequest.authenticationType,
+      activeRequest.description,
       activeRequest.id,
       updateRequest,
     ],
   );
 
+  const activeTab = activeTabs?.[activeRequest.id];
+  const setActiveTab = useCallback(
+      (tab: string) => {
+        setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
+      },
+      [activeRequest.id, setActiveTabs],
+  );
+
   const handleMetadataChange = useCallback(
     (metadata: GrpcMetadataEntry[]) =>
       updateRequest.mutate({ id: activeRequest.id, update: { metadata } }),
+    [activeRequest.id, updateRequest],
+  );
+
+  const handleDescriptionChange = useCallback(
+    (description: string) =>
+      updateRequest.mutate({ id: activeRequest.id, update: { description } }),
     [activeRequest.id, updateRequest],
   );
 
@@ -307,6 +339,14 @@ export function GrpcConnectionSetupPane({
             pairs={activeRequest.metadata}
             onChange={handleMetadataChange}
             forceUpdateKey={forceUpdateKey}
+          />
+        </TabContent>
+        <TabContent value={TAB_DESCRIPTION}>
+          <MarkdownEditor
+            name="request-description"
+            placeholder="A Markdown description of this request."
+            defaultValue={activeRequest.description}
+            onChange={handleDescriptionChange}
           />
         </TabContent>
       </Tabs>
