@@ -1084,6 +1084,7 @@ pub async fn upsert_folder<R: Runtime>(window: &WebviewWindow<R>, r: Folder) -> 
                 .update_columns([
                     FolderIden::UpdatedAt,
                     FolderIden::Name,
+                    FolderIden::Description,
                     FolderIden::FolderId,
                     FolderIden::SortPriority,
                 ])

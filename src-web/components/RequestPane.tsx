@@ -478,6 +478,8 @@ export const RequestPane = memo(function RequestPane({
             </TabContent>
             <TabContent value={TAB_DESCRIPTION}>
               <MarkdownEditor
+                name="request-description"
+                placeholder="A Markdown description of this request."
                 defaultValue={activeRequest.description}
                 onChange={handleDescriptionChange}
               />

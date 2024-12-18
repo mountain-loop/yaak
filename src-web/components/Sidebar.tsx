@@ -32,7 +32,6 @@ import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useHttpResponses } from '../hooks/useHttpResponses';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { useMoveToWorkspace } from '../hooks/useMoveToWorkspace';
-import { usePrompt } from '../hooks/usePrompt';
 import { useRenameRequest } from '../hooks/useRenameRequest';
 import { useRequests } from '../hooks/useRequests';
 import { useScrollIntoView } from '../hooks/useScrollIntoView';
@@ -50,10 +49,11 @@ import type { DropdownItem } from './core/Dropdown';
 import { ContextMenu } from './core/Dropdown';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { Icon } from './core/Icon';
-import { InlineCode } from './core/InlineCode';
 import { VStack } from './core/Stacks';
 import { StatusTag } from './core/StatusTag';
+import { useDialog } from './DialogContext';
 import { DropMarker } from './DropMarker';
+import { FolderSettingsDialog } from './FolderSettingsDialog';
 
 interface Props {
   className?: string;
@@ -694,6 +694,7 @@ function SidebarItem({
 
   connectDrag(connectDrop(ref));
 
+  const dialog = useDialog();
   const activeRequest = useActiveRequest();
   const deleteFolder = useDeleteFolder(itemId);
   const deleteRequest = useDeleteRequest(itemId);
@@ -706,8 +707,6 @@ function SidebarItem({
   const updateHttpRequest = useUpdateAnyHttpRequest();
   const workspaces = useWorkspaces();
   const updateGrpcRequest = useUpdateAnyGrpcRequest();
-  const updateAnyFolder = useUpdateAnyFolder();
-  const prompt = usePrompt();
   const [editing, setEditing] = useState<boolean>(false);
   const isActive = activeRequest?.id === itemId;
   const createDropdownItems = useCreateDropdownItems({ folderId: itemId });
@@ -786,35 +785,25 @@ function SidebarItem({
     if (itemModel === 'folder') {
       return [
         {
-          key: 'sendAll',
+          key: 'send-all',
           label: 'Send All',
           leftSlot: <Icon icon="send_horizontal" />,
           onSelect: () => sendManyRequests.mutate(child.children.map((c) => c.item.id)),
         },
         {
-          key: 'rename',
-          label: 'Rename',
-          leftSlot: <Icon icon="pencil" />,
-          onSelect: async () => {
-            const name = await prompt({
-              id: 'rename-folder',
-              title: 'Rename Folder',
-              description: (
-                <>
-                  Enter a new name for <InlineCode>{itemName}</InlineCode>
-                </>
-              ),
-              confirmText: 'Save',
-              label: 'Name',
-              placeholder: 'New Name',
-              defaultValue: itemName,
-            });
-            if (name == null) return;
-            updateAnyFolder.mutate({ id: itemId, update: (f) => ({ ...f, name }) });
-          },
+          key: 'folder-settings',
+          label: 'Settings',
+          leftSlot: <Icon icon="settings" />,
+          onSelect: () =>
+            dialog.show({
+              id: 'folder-settings',
+              title: 'Folder Settings',
+              size: 'md',
+              render: () => <FolderSettingsDialog folderId={itemId} />,
+            }),
         },
         {
-          key: 'deleteFolder',
+          key: 'delete-folder',
           label: 'Delete',
           variant: 'danger',
           leftSlot: <Icon icon="trash" />,
@@ -828,7 +817,7 @@ function SidebarItem({
         itemModel === 'http_request'
           ? [
               {
-                key: 'sendRequest',
+                key: 'send-request',
                 label: 'Send',
                 hotKeyAction: 'http_request.send',
                 hotKeyLabelOnly: true, // Already bound in URL bar
@@ -851,13 +840,13 @@ function SidebarItem({
       return [
         ...requestItems,
         {
-          key: 'renameRequest',
+          key: 'rename-request',
           label: 'Rename',
           leftSlot: <Icon icon="pencil" />,
           onSelect: renameRequest.mutate,
         },
         {
-          key: 'duplicateRequest',
+          key: 'duplicate-request',
           label: 'Duplicate',
           hotKeyAction: 'http_request.duplicate',
           hotKeyLabelOnly: true, // Would trigger for every request (bad)
@@ -868,14 +857,14 @@ function SidebarItem({
               : duplicateGrpcRequest.mutate(),
         },
         {
-          key: 'moveWorkspace',
+          key: 'move-workspace',
           label: 'Move',
           leftSlot: <Icon icon="arrow_right_circle" />,
           hidden: workspaces.length <= 1,
           onSelect: moveToWorkspace.mutate,
         },
         {
-          key: 'deleteRequest',
+          key: 'delete-request',
           variant: 'danger',
           label: 'Delete',
           leftSlot: <Icon icon="trash" />,
@@ -888,18 +877,16 @@ function SidebarItem({
     createDropdownItems,
     deleteFolder,
     deleteRequest,
+    dialog,
     duplicateGrpcRequest,
     duplicateHttpRequest,
     httpRequestActions,
     itemId,
     itemModel,
-    itemName,
     moveToWorkspace.mutate,
-    prompt,
     renameRequest.mutate,
     sendManyRequests,
     sendRequest,
-    updateAnyFolder,
     workspaces.length,
   ]);
 

@@ -2,6 +2,7 @@ import useSize from '@react-hook/size';
 import classNames from 'classnames';
 import { useRef } from 'react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { Editor } from './core/Editor';
 import { IconButton } from './core/IconButton';
@@ -10,15 +11,18 @@ import { VStack } from './core/Stacks';
 import { Prose } from './Prose';
 
 interface Props {
+  placeholder: string;
+  className?: string;
   defaultValue: string;
   onChange: (value: string) => void;
+  name: string;
 }
 
-export function MarkdownEditor({ defaultValue, onChange }: Props) {
+export function MarkdownEditor({ className, defaultValue, onChange, name, placeholder }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [width] = useSize(containerRef.current);
-  const wideEnoughForSplit = width > 550;
+  const wideEnoughForSplit = width > 600;
 
   const {
     set: setViewMode,
@@ -26,11 +30,16 @@ export function MarkdownEditor({ defaultValue, onChange }: Props) {
     isLoading,
   } = useKeyValue<'edit' | 'preview' | 'both'>({
     namespace: 'global',
-    key: 'md_view',
+    key: ['md_view', name],
     fallback: 'edit',
   });
 
-  const viewMode = rawViewMode === 'both' && !wideEnoughForSplit ? 'edit' : rawViewMode;
+  let viewMode = rawViewMode;
+  if (rawViewMode === 'both' && !wideEnoughForSplit) {
+    viewMode = 'edit';
+  } else if (rawViewMode === 'preview' && defaultValue === '') {
+    viewMode = 'edit';
+  }
 
   if (isLoading) return null;
 
@@ -40,6 +49,7 @@ export function MarkdownEditor({ defaultValue, onChange }: Props) {
       language="markdown"
       defaultValue={defaultValue}
       onChange={onChange}
+      placeholder={placeholder}
       hideGutter
       wrapLines
     />
@@ -48,6 +58,7 @@ export function MarkdownEditor({ defaultValue, onChange }: Props) {
   const preview = (
     <Prose className="max-w-xl">
       <Markdown
+        remarkPlugins={[remarkGfm]}
         components={{
           a: ({ href, children, ...rest }) => {
             if (href && !href.match(/https?:\/\//)) {
@@ -85,11 +96,15 @@ export function MarkdownEditor({ defaultValue, onChange }: Props) {
     );
 
   return (
-    <div ref={containerRef} className="relative w-full h-full pt-1.5 group">
-      <VStack
-        space={1}
-        className="absolute top-0 right-0 z-10 bg-surface opacity-30 group-hover:opacity-100 transition"
-      >
+    <div
+      ref={containerRef}
+      className={classNames(
+        'w-full h-full pt-1.5 group rounded-md grid grid-cols-[minmax(0,1fr)_auto]',
+        className,
+      )}
+    >
+      <div className="pr-8 h-full w-full">{contents}</div>
+      <VStack space={1} className="bg-surface opacity-20 group-hover:opacity-100 transition-opacity transform-gpu">
         <IconButton
           size="xs"
           icon="text"
@@ -114,7 +129,6 @@ export function MarkdownEditor({ defaultValue, onChange }: Props) {
           onClick={() => setViewMode('preview')}
         />
       </VStack>
-      <div className="pr-8 h-full w-full">{contents}</div>
     </div>
   );
 }

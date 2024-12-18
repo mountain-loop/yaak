@@ -54,6 +54,7 @@
     "react-pdf": "^9.1.0",
     "react-router-dom": "^6.26.2",
     "react-use": "^17.5.1",
+    "remark-gfm": "^4.0.0",
     "slugify": "^1.6.6",
     "uuid": "^10.0.0",
     "whatwg-mimetype": "^4.0.0",
