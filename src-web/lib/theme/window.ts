@@ -69,7 +69,7 @@ function themeVariables(theme?: Partial<YaakColors>, base?: CSSVariables): CSSVa
       theme?.shadow ??
       YaakColor.black().translucify(isThemeDark(theme ?? ({} as Partial<YaakColors>)) ? 0.7 : 0.93),
     primary: theme?.primary,
-    secondary: theme?.primary,
+    secondary: theme?.secondary,
     info: theme?.info,
     success: theme?.success,
     notice: theme?.notice,

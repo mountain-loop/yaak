@@ -38,7 +38,6 @@ interface Props {
 const TAB_BODY = 'body';
 const TAB_HEADERS = 'headers';
 const TAB_INFO = 'info';
-const DEFAULT_TAB = TAB_BODY;
 
 export const ResponsePane = memo(function ResponsePane({ style, className, activeRequest }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequest);
@@ -48,13 +47,6 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
     {},
   );
   const contentType = useContentTypeFromHeaders(activeResponse?.headers ?? null);
-  const activeTab = activeTabs?.[activeRequest.id] ?? DEFAULT_TAB;
-  const setActiveTab = useCallback(
-    (tab: string) => {
-      setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
-    },
-    [activeRequest.id, setActiveTabs],
-  );
 
   const tabs = useMemo<TabItem[]>(
     () => [
@@ -87,6 +79,13 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
       },
     ],
     [activeResponse?.headers, contentType, setViewMode, viewMode],
+  );
+  const activeTab = activeTabs?.[activeRequest.id];
+  const setActiveTab = useCallback(
+      (tab: string) => {
+        setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
+      },
+      [activeRequest.id, setActiveTabs],
   );
 
   const isLoading = isResponseLoading(activeResponse);

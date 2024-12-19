@@ -66,7 +66,7 @@ export const UrlBar = memo(function UrlBar({
       <Input
         autocompleteVariables
         ref={inputRef}
-        size="sm"
+        size="md"
         wrapLines={isFocused}
         hideLabel
         useTemplating
@@ -86,26 +86,30 @@ export const UrlBar = memo(function UrlBar({
         leftSlot={
           method != null &&
           onMethodChange != null && (
-            <RequestMethodDropdown
-              method={method}
-              onChange={onMethodChange}
-              className="my-0.5 ml-0.5"
-            />
+            <div className="py-0.5">
+              <RequestMethodDropdown
+                method={method}
+                onChange={onMethodChange}
+                className="ml-0.5 !h-full"
+              />
+            </div>
           )
         }
         rightSlot={
           <>
             {rightSlot}
             {submitIcon !== null && (
-              <IconButton
-                size="xs"
-                iconSize="md"
-                title="Send Request"
-                type="submit"
-                className="w-8 my-0.5 mr-0.5"
-                icon={isLoading ? 'x' : submitIcon}
-                hotkeyAction="http_request.send"
-              />
+              <div className="py-0.5">
+                <IconButton
+                  size="xs"
+                  iconSize="md"
+                  title="Send Request"
+                  type="submit"
+                  className="w-8 mr-0.5 !h-full"
+                  icon={isLoading ? 'x' : submitIcon}
+                  hotkeyAction="http_request.send"
+                />
+              </div>
             )}
           </>
         }

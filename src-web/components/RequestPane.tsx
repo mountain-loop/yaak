@@ -1,4 +1,4 @@
-import type { HttpRequest, HttpRequestHeader, HttpUrlParameter } from '@yaakapp-internal/models';
+import type { HttpRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
@@ -15,6 +15,7 @@ import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { languageFromContentType } from '../lib/contentType';
+import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { tryFormatJson } from '../lib/formatters';
 import {
   AUTH_TYPE_BASIC,
@@ -34,9 +35,13 @@ import { BearerAuth } from './BearerAuth';
 import { BinaryFileEditor } from './BinaryFileEditor';
 import { CountBadge } from './core/CountBadge';
 import { Editor } from './core/Editor';
-import type { GenericCompletionOption } from './core/Editor/genericCompletion';
+import type {
+  GenericCompletionConfig,
+  GenericCompletionOption,
+} from './core/Editor/genericCompletion';
 import { InlineCode } from './core/InlineCode';
 import type { Pair } from './core/PairEditor';
+import { PlainInput } from './core/PlainInput';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
@@ -44,6 +49,7 @@ import { FormMultipartEditor } from './FormMultipartEditor';
 import { FormUrlencodedEditor } from './FormUrlencodedEditor';
 import { GraphQLEditor } from './GraphQLEditor';
 import { HeadersEditor } from './HeadersEditor';
+import { MarkdownEditor } from './MarkdownEditor';
 import { useToast } from './ToastContext';
 import { UrlBar } from './UrlBar';
 import { UrlParametersEditor } from './UrlParameterEditor';
@@ -59,8 +65,7 @@ const TAB_BODY = 'body';
 const TAB_PARAMS = 'params';
 const TAB_HEADERS = 'headers';
 const TAB_AUTH = 'auth';
-
-const DEFAULT_TAB = TAB_BODY;
+const TAB_DESCRIPTION = 'description';
 
 export const RequestPane = memo(function RequestPane({
   style,
@@ -120,6 +125,15 @@ export const RequestPane = memo(function RequestPane({
 
   const tabs: TabItem[] = useMemo(
     () => [
+      {
+        value: TAB_DESCRIPTION,
+        label: (
+          <div className="flex items-center">
+            Docs
+            {activeRequest.description && <CountBadge count={true} />}
+          </div>
+        ),
+      },
       {
         value: TAB_BODY,
         options: {
@@ -239,68 +253,36 @@ export const RequestPane = memo(function RequestPane({
       activeRequest.authentication,
       activeRequest.authenticationType,
       activeRequest.bodyType,
+      activeRequest.description,
       activeRequest.headers,
       activeRequest.method,
       activeRequestId,
       handleContentTypeChange,
       toast,
       updateRequest,
-      urlParameterPairs,
+      urlParameterPairs.length,
     ],
   );
+
+  const sendRequest = useSendAnyHttpRequest();
+  const { activeResponse } = usePinnedHttpResponse(activeRequest);
+  const cancelResponse = useCancelHttpResponse(activeResponse?.id ?? null);
+  const isLoading = useIsResponseLoading(activeRequestId);
+  const { updateKey } = useRequestUpdateKey(activeRequestId);
+  const importCurl = useImportCurl();
+  const importQuerystring = useImportQuerystring(activeRequestId);
 
   const handleBodyChange = useCallback(
     (body: HttpRequest['body']) => updateRequest.mutate({ id: activeRequestId, update: { body } }),
     [activeRequestId, updateRequest],
   );
 
-  const handleBinaryFileChange = useCallback(
-    (body: HttpRequest['body']) => {
-      updateRequest.mutate({ id: activeRequestId, update: { body } });
-    },
-    [activeRequestId, updateRequest],
-  );
   const handleBodyTextChange = useCallback(
     (text: string) => updateRequest.mutate({ id: activeRequestId, update: { body: { text } } }),
     [activeRequestId, updateRequest],
   );
-  const handleHeadersChange = useCallback(
-    (headers: HttpRequestHeader[]) =>
-      updateRequest.mutate({ id: activeRequestId, update: { headers } }),
-    [activeRequestId, updateRequest],
-  );
-  const handleUrlParametersChange = useCallback(
-    (urlParameters: HttpUrlParameter[]) =>
-      updateRequest.mutate({ id: activeRequestId, update: { urlParameters } }),
-    [activeRequestId, updateRequest],
-  );
 
-  const sendRequest = useSendAnyHttpRequest();
-  const { activeResponse } = usePinnedHttpResponse(activeRequest);
-  const cancelResponse = useCancelHttpResponse(activeResponse?.id ?? null);
-  const handleSend = useCallback(async () => {
-    await sendRequest.mutateAsync(activeRequest.id ?? null);
-  }, [activeRequest.id, sendRequest]);
-
-  const handleCancel = useCallback(async () => {
-    await cancelResponse.mutateAsync();
-  }, [cancelResponse]);
-
-  const handleMethodChange = useCallback(
-    (method: string) => updateRequest.mutate({ id: activeRequestId, update: { method } }),
-    [activeRequestId, updateRequest],
-  );
-  const handleUrlChange = useCallback(
-    (url: string) => updateRequest.mutate({ id: activeRequestId, update: { url } }),
-    [activeRequestId, updateRequest],
-  );
-
-  const isLoading = useIsResponseLoading(activeRequestId);
-  const { updateKey } = useRequestUpdateKey(activeRequestId);
-  const importCurl = useImportCurl();
-  const importQuerystring = useImportQuerystring(activeRequestId);
-
-  const activeTab = activeTabs?.[activeRequestId] ?? DEFAULT_TAB;
+  const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(
     (tab: string) => {
       setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
@@ -311,6 +293,21 @@ export const RequestPane = memo(function RequestPane({
   useRequestEditorEvent('request_pane.focus_tab', () => {
     setActiveTab(TAB_PARAMS);
   });
+
+  const autocomplete: GenericCompletionConfig = {
+    minMatch: 3,
+    options:
+      requests.length > 0
+        ? [
+            ...requests
+              .filter((r) => r.id !== activeRequestId)
+              .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url })),
+          ]
+        : [
+            { label: 'http://', type: 'constant' },
+            { label: 'https://', type: 'constant' },
+          ],
+  };
 
   return (
     <div
@@ -332,30 +329,15 @@ export const RequestPane = memo(function RequestPane({
                 importQuerystring.mutate(text);
               }
             }}
-            autocomplete={{
-              minMatch: 3,
-              options:
-                requests.length > 0
-                  ? [
-                      ...requests
-                        .filter((r) => r.id !== activeRequestId)
-                        .map(
-                          (r) =>
-                            ({
-                              type: 'constant',
-                              label: r.url,
-                            }) as GenericCompletionOption,
-                        ),
-                    ]
-                  : [
-                      { label: 'http://', type: 'constant' },
-                      { label: 'https://', type: 'constant' },
-                    ],
-            }}
-            onSend={handleSend}
-            onCancel={handleCancel}
-            onMethodChange={handleMethodChange}
-            onUrlChange={handleUrlChange}
+            autocomplete={autocomplete}
+            onSend={() => sendRequest.mutateAsync(activeRequest.id ?? null)}
+            onCancel={cancelResponse.mutate}
+            onMethodChange={(method) =>
+              updateRequest.mutate({ id: activeRequestId, update: { method } })
+            }
+            onUrlChange={(url: string) =>
+              updateRequest.mutate({ id: activeRequestId, update: { url } })
+            }
             forceUpdateKey={updateKey}
             isLoading={isLoading}
           />
@@ -382,14 +364,18 @@ export const RequestPane = memo(function RequestPane({
               <HeadersEditor
                 forceUpdateKey={`${forceUpdateHeaderEditorKey}::${forceUpdateKey}`}
                 headers={activeRequest.headers}
-                onChange={handleHeadersChange}
+                onChange={(headers) =>
+                  updateRequest.mutate({ id: activeRequestId, update: { headers } })
+                }
               />
             </TabContent>
             <TabContent value={TAB_PARAMS}>
               <UrlParametersEditor
                 forceUpdateKey={forceUpdateKey + urlParametersKey}
                 pairs={urlParameterPairs}
-                onChange={handleUrlParametersChange}
+                onChange={(urlParameters) =>
+                  updateRequest.mutate({ id: activeRequestId, update: { urlParameters } })
+                }
               />
             </TabContent>
             <TabContent value={TAB_BODY}>
@@ -440,7 +426,9 @@ export const RequestPane = memo(function RequestPane({
                   requestId={activeRequest.id}
                   contentType={contentType}
                   body={activeRequest.body}
-                  onChange={handleBinaryFileChange}
+                  onChange={(body) =>
+                    updateRequest.mutate({ id: activeRequestId, update: { body } })
+                  }
                   onChangeContentType={handleContentTypeChange}
                 />
               ) : typeof activeRequest.bodyType === 'string' ? (
@@ -457,6 +445,26 @@ export const RequestPane = memo(function RequestPane({
               ) : (
                 <EmptyStateText>Empty Body</EmptyStateText>
               )}
+            </TabContent>
+            <TabContent value={TAB_DESCRIPTION}><div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">
+              <PlainInput
+                label="Request Name"
+                hideLabel
+                defaultValue={activeRequest.name}
+                className="font-sans !text-xl !px-0"
+                containerClassName="border-0"
+                placeholder={fallbackRequestName(activeRequest)}
+                onChange={(name) => updateRequest.mutate({ id: activeRequestId, update: { name } })}
+              />
+              <MarkdownEditor
+                name="request-description"
+                placeholder="A Markdown description of this request."
+                defaultValue={activeRequest.description}
+                onChange={(description) =>
+                  updateRequest.mutate({ id: activeRequestId, update: { description } })
+                }
+              />
+            </div>
             </TabContent>
           </Tabs>
         </>

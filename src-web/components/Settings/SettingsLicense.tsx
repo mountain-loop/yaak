@@ -26,7 +26,7 @@ export function SettingsLicense() {
           <strong>License active!</strong> Enjoy using Yaak for commercial use.
         </Banner>
       ) : (
-        <Banner color="primary" className="flex flex-col gap-2">
+        <Banner color="primary" className="flex flex-col gap-3 max-w-lg">
           {check.data?.type === 'trialing' && (
             <p>
               <strong>Your trial ends in {formatDistanceToNow(check.data.end)}.</strong>
@@ -34,14 +34,17 @@ export function SettingsLicense() {
           )}
           <p>
             A commercial license is required if using Yaak within a for-profit organization of two
-            or more people. This helps support the ongoing development of Yaak and ensures continued
-            growth and improvement.
+            or more people.{' '}
+            <Link href="https://yaak.app/pricing" className="text-notice">
+              Learn More
+            </Link>
+          </p>
+          <p>
+            This helps support the ongoing development of Yaak and ensures continued growth and
+            improvement.{' '}
           </p>
           <p>If you&#39;re using Yaak for personal use, no action is needed.</p>
-          <p>~ Gregory</p>
-          <Link href="https://yaak.app/pricing" className="text-sm text-text-subtle">
-            Learn More
-          </Link>
+          <p className="my-3">~ Gregory</p>
         </Banner>
       )}
 

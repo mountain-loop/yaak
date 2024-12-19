@@ -40,6 +40,8 @@ export function Tabs({
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
 
+  value = value ?? tabs[0]?.value;
+
   // Update tabs when value changes
   useEffect(() => {
     const tabs = ref.current?.querySelectorAll<HTMLDivElement>(`[data-tab]`);
@@ -61,7 +63,7 @@ export function Tabs({
   return (
     <div
       ref={ref}
-      className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1')}
+      className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 overflow-x-hidden')}
     >
       <div
         aria-label={label}

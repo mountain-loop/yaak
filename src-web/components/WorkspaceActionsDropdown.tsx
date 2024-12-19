@@ -5,20 +5,18 @@ import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
 import { useDeleteWorkspace } from '../hooks/useDeleteWorkspace';
 import { useOpenWorkspace } from '../hooks/useOpenWorkspace';
-import { usePrompt } from '../hooks/usePrompt';
 import { useSettings } from '../hooks/useSettings';
-import { useUpdateWorkspace } from '../hooks/useUpdateWorkspace';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { getWorkspace } from '../lib/store';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
-import { InlineCode } from './core/InlineCode';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
 import { useDialog } from './DialogContext';
 import { OpenWorkspaceDialog } from './OpenWorkspaceDialog';
+import { WorkspaceSettingsDialog } from './WorkpaceSettingsDialog';
 
 type Props = Pick<ButtonProps, 'className' | 'justify' | 'forDropdown' | 'leftSlot'>;
 
@@ -29,11 +27,9 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   const workspaces = useWorkspaces();
   const activeWorkspace = useActiveWorkspace();
   const activeWorkspaceId = activeWorkspace?.id ?? null;
-  const updateWorkspace = useUpdateWorkspace(activeWorkspaceId);
   const deleteWorkspace = useDeleteWorkspace(activeWorkspace);
   const createWorkspace = useCreateWorkspace();
   const dialog = useDialog();
-  const prompt = usePrompt();
   const settings = useSettings();
   const openWorkspace = useOpenWorkspace();
   const openWorkspaceNewWindow = settings?.openWorkspaceNewWindow ?? null;
@@ -52,24 +48,16 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
 
     const extraItems: DropdownItem[] = [
       {
-        key: 'rename',
-        label: 'Rename',
-        leftSlot: <Icon icon="pencil" />,
+        key: 'workspace-settings',
+        label: 'Settings',
+        leftSlot: <Icon icon="settings" />,
         onSelect: async () => {
-          const name = await prompt({
-            id: 'rename-workspace',
-            title: 'Rename Workspace',
-            description: (
-              <>
-                Enter a new name for <InlineCode>{activeWorkspace?.name}</InlineCode>
-              </>
-            ),
-            label: 'Name',
-            placeholder: 'New Name',
-            defaultValue: activeWorkspace?.name,
+          dialog.show({
+            id: 'workspace-settings',
+            title: 'Workspace Settings',
+            size: 'md',
+            render: () => <WorkspaceSettingsDialog workspaceId={activeWorkspace?.id ?? null} />,
           });
-          if (name == null) return;
-          updateWorkspace.mutate({ name });
         },
       },
       {
@@ -96,13 +84,12 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
 
     return { workspaceItems, extraItems };
   }, [
-    activeWorkspace?.name,
+    activeWorkspace,
     activeWorkspaceId,
     createWorkspace.mutate,
     deleteSendHistory.mutate,
     deleteWorkspace.mutate,
-    prompt,
-    updateWorkspace,
+    dialog,
     workspaces,
   ]);
 

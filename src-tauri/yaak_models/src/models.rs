@@ -310,6 +310,7 @@ pub struct Folder {
     pub folder_id: Option<String>,
 
     pub name: String,
+    pub description: String,
     pub sort_priority: f32,
 }
 
@@ -325,6 +326,7 @@ pub enum FolderIden {
     UpdatedAt,
 
     Name,
+    Description,
     SortPriority,
 }
 
@@ -341,6 +343,7 @@ impl<'s> TryFrom<&Row<'s>> for Folder {
             updated_at: r.get("updated_at")?,
             folder_id: r.get("folder_id")?,
             name: r.get("name")?,
+            description: r.get("description")?,
         })
     }
 }
@@ -385,6 +388,7 @@ pub struct HttpRequest {
     #[ts(type = "Record<string, any>")]
     pub body: BTreeMap<String, Value>,
     pub body_type: Option<String>,
+    pub description: String,
     pub headers: Vec<HttpRequestHeader>,
     #[serde(default = "default_http_request_method")]
     pub method: String,
@@ -409,6 +413,7 @@ pub enum HttpRequestIden {
     AuthenticationType,
     Body,
     BodyType,
+    Description,
     Headers,
     Method,
     Name,
@@ -437,6 +442,7 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
             method: r.get("method")?,
             body: serde_json::from_str(body.as_str()).unwrap_or_default(),
             body_type: r.get("body_type")?,
+            description: r.get("description")?,
             authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
             authentication_type: r.get("authentication_type")?,
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
@@ -584,6 +590,7 @@ pub struct GrpcRequest {
     pub authentication_type: Option<String>,
     #[ts(type = "Record<string, any>")]
     pub authentication: BTreeMap<String, Value>,
+    pub description: String,
     pub message: String,
     pub metadata: Vec<GrpcMetadataEntry>,
     pub method: Option<String>,
@@ -606,6 +613,7 @@ pub enum GrpcRequestIden {
 
     Authentication,
     AuthenticationType,
+    Description,
     Message,
     Metadata,
     Method,
@@ -629,6 +637,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcRequest {
             updated_at: r.get("updated_at")?,
             folder_id: r.get("folder_id")?,
             name: r.get("name")?,
+            description: r.get("description")?,
             service: r.get("service")?,
             method: r.get("method")?,
             message: r.get("message")?,

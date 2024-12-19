@@ -30,7 +30,7 @@ export function Link({ href, children, className, event, ...other }: Props) {
         {...other}
       >
         <span className="underline">{children}</span>
-        <Icon className="inline absolute right-0.5 top-1.5" size="xs" icon="external_link" />
+        <Icon className="inline absolute right-0.5 top-[0.3em]" size="xs" icon="external_link" />
       </a>
     );
   }

@@ -21,7 +21,7 @@
     .cm-line {
       @apply w-full;
       /* Important! Ensure it spans the entire width */
-      @apply w-full text-text pl-1 pr-1.5;
+      @apply w-full text-text px-0;
     }
 
     .cm-placeholder {
@@ -51,7 +51,7 @@
     /* Style gutters */
 
     .cm-gutters {
-      @apply border-0 text-text-subtlest bg-surface;
+      @apply border-0 text-text-subtlest bg-surface pr-1.5;
       /* Not sure why, but there's a tiny gap left of the gutter that you can see text
          through. Move left slightly to fix that. */
       @apply -left-[1px];
@@ -114,12 +114,6 @@
 
     .cm-scroller {
       @apply font-mono text-editor;
-      /*
-                               * Round corners or they'll stick out of the editor bounds of editor is rounded.
-                               * Could potentially be pushed up from the editor like we do with bg color but this
-                               * is probably fine.
-                               */
-      @apply rounded-lg;
     }
   }
 }

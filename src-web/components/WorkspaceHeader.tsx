@@ -45,6 +45,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
           icon="search"
           title="Search or execute a command"
           size="sm"
+          event="search"
           onClick={togglePalette}
         />
         <SettingsDropdown />
