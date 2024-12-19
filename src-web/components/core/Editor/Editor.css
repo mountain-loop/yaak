@@ -114,12 +114,6 @@
 
     .cm-scroller {
       @apply font-mono text-editor;
-      /*
-                               * Round corners or they'll stick out of the editor bounds of editor is rounded.
-                               * Could potentially be pushed up from the editor like we do with bg color but this
-                               * is probably fine.
-                               */
-      @apply rounded-lg;
     }
   }
 }
