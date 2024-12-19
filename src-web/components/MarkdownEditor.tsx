@@ -27,21 +27,22 @@ export function MarkdownEditor({ className, defaultValue, onChange, name, placeh
   const {
     set: setViewMode,
     value: rawViewMode,
-    isLoading,
   } = useKeyValue<'edit' | 'preview' | 'both'>({
     namespace: 'global',
     key: ['md_view', name],
     fallback: 'edit',
   });
 
-  let viewMode = rawViewMode;
+  if (rawViewMode == null) return null;
+
+  let viewMode;
   if (rawViewMode === 'both' && !wideEnoughForSplit) {
     viewMode = 'edit';
   } else if (rawViewMode === 'preview' && defaultValue === '') {
     viewMode = 'edit';
+  } else {
+    viewMode = rawViewMode ?? 'edit';
   }
-
-  if (isLoading) return null;
 
   const editor = (
     <Editor
@@ -104,12 +105,16 @@ export function MarkdownEditor({ className, defaultValue, onChange, name, placeh
       )}
     >
       <div className="pr-8 h-full w-full">{contents}</div>
-      <VStack space={1} className="bg-surface opacity-20 group-hover:opacity-100 transition-opacity transform-gpu">
+      <VStack
+        space={1}
+        className="bg-surface opacity-20 group-hover:opacity-100 transition-opacity transform-gpu"
+      >
         <IconButton
           size="xs"
           icon="text"
           title="Switch to edit mode"
           className={classNames(viewMode === 'edit' && 'bg-surface-highlight !text-text')}
+          event={{ id: 'md_mode', mode: viewMode }}
           onClick={() => setViewMode('edit')}
         />
         {wideEnoughForSplit && (
@@ -118,6 +123,7 @@ export function MarkdownEditor({ className, defaultValue, onChange, name, placeh
             icon="columns_2"
             title="Switch to edit mode"
             className={classNames(viewMode === 'both' && 'bg-surface-highlight !text-text')}
+            event={{ id: 'md_mode', mode: viewMode }}
             onClick={() => setViewMode('both')}
           />
         )}
@@ -126,6 +132,7 @@ export function MarkdownEditor({ className, defaultValue, onChange, name, placeh
           icon="eye"
           title="Switch to preview mode"
           className={classNames(viewMode === 'preview' && 'bg-surface-highlight !text-text')}
+          event={{ id: 'md_mode', mode: viewMode }}
           onClick={() => setViewMode('preview')}
         />
       </VStack>
