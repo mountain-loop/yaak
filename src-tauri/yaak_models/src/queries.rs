@@ -1159,7 +1159,7 @@ pub async fn duplicate_folder<R: Runtime>(
     for m in grpc_requests {
         upsert_grpc_request(
             window,
-            &GrpcRequest {
+            GrpcRequest {
                 id: "".into(),
                 folder_id: Some(new_folder.id.clone()),
                 sort_priority: m.sort_priority + 0.001,
