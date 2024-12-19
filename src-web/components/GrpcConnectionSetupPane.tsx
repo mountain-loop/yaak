@@ -138,7 +138,7 @@ export function GrpcConnectionSetupPane({
         value: TAB_DESCRIPTION,
         label: (
             <div className="flex items-center">
-              Docs
+              Info
               {activeRequest.description && <CountBadge count={true} />}
             </div>
         ),

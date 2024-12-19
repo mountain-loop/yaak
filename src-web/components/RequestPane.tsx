@@ -129,7 +129,7 @@ export const RequestPane = memo(function RequestPane({
         value: TAB_DESCRIPTION,
         label: (
           <div className="flex items-center">
-            Docs
+            Info
             {activeRequest.description && <CountBadge count={true} />}
           </div>
         ),
