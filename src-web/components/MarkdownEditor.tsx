@@ -24,10 +24,7 @@ export function MarkdownEditor({ className, defaultValue, onChange, name, placeh
   const [width] = useSize(containerRef.current);
   const wideEnoughForSplit = width > 600;
 
-  const {
-    set: setViewMode,
-    value: rawViewMode,
-  } = useKeyValue<'edit' | 'preview' | 'both'>({
+  const { set: setViewMode, value: rawViewMode } = useKeyValue<'edit' | 'preview' | 'both'>({
     namespace: 'global',
     key: ['md_view', name],
     fallback: 'edit',
@@ -35,13 +32,9 @@ export function MarkdownEditor({ className, defaultValue, onChange, name, placeh
 
   if (rawViewMode == null) return null;
 
-  let viewMode;
+  let viewMode = rawViewMode;
   if (rawViewMode === 'both' && !wideEnoughForSplit) {
     viewMode = 'edit';
-  } else if (rawViewMode === 'preview' && defaultValue === '') {
-    viewMode = 'edit';
-  } else {
-    viewMode = rawViewMode ?? 'edit';
   }
 
   const editor = (
@@ -56,27 +49,30 @@ export function MarkdownEditor({ className, defaultValue, onChange, name, placeh
     />
   );
 
-  const preview = (
-    <Prose className="max-w-xl">
-      <Markdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ href, children, ...rest }) => {
-            if (href && !href.match(/https?:\/\//)) {
-              href = `http://${href}`;
-            }
-            return (
-              <a target="_blank" rel="noreferrer noopener" href={href} {...rest}>
-                {children}
-              </a>
-            );
-          },
-        }}
-      >
-        {defaultValue}
-      </Markdown>
-    </Prose>
-  );
+  const preview =
+    defaultValue.length === 0 ? (
+      <p className="text-text-subtle">No description</p>
+    ) : (
+      <Prose className="max-w-xl">
+        <Markdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ href, children, ...rest }) => {
+              if (href && !href.match(/https?:\/\//)) {
+                href = `http://${href}`;
+              }
+              return (
+                <a target="_blank" rel="noreferrer noopener" href={href} {...rest}>
+                  {children}
+                </a>
+              );
+            },
+          }}
+        >
+          {defaultValue}
+        </Markdown>
+      </Prose>
+    );
 
   const contents =
     viewMode === 'both' ? (
