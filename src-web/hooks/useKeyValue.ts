@@ -49,7 +49,7 @@ export function useKeyValue<T extends object | boolean | number | string | null>
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fallback, key, namespace],
+    [typeof key === 'string' ? key : key.join('::'), namespace],
   );
 
   const reset = useCallback(async () => mutate.mutateAsync(fallback), [mutate, fallback]);

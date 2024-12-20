@@ -1,18 +1,7 @@
-import type {
-  AnyModel,
-  Folder,
-  GrpcConnection,
-  GrpcRequest,
-  HttpRequest,
-  HttpResponse,
-  Workspace,
-} from '@yaakapp-internal/models';
+import type { Folder, GrpcRequest, HttpRequest, Workspace } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import type { ReactNode } from 'react';
-import React, { Fragment, useCallback, useMemo, useRef, useState } from 'react';
-import type { XYCoord } from 'react-dnd';
-import { useDrag, useDrop } from 'react-dnd';
-import { useKey, useKeyPressEvent } from 'react-use';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { createGlobalState, useKey, useKeyPressEvent } from 'react-use';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 
@@ -20,55 +9,34 @@ import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useAppRoutes } from '../hooks/useAppRoutes';
 import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
-import { useDeleteFolder } from '../hooks/useDeleteFolder';
-import { useDeleteRequest } from '../hooks/useDeleteRequest';
-import { useDuplicateFolder } from '../hooks/useDuplicateFolder';
 import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
 import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
 import { useFolders } from '../hooks/useFolders';
 import { useGrpcConnections } from '../hooks/useGrpcConnections';
 import { useHotKey } from '../hooks/useHotKey';
-import type { CallableHttpRequestAction } from '../hooks/useHttpRequestActions';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useHttpResponses } from '../hooks/useHttpResponses';
 import { useKeyValue } from '../hooks/useKeyValue';
-import { useMoveToWorkspace } from '../hooks/useMoveToWorkspace';
-import { useRenameRequest } from '../hooks/useRenameRequest';
 import { useRequests } from '../hooks/useRequests';
-import { useScrollIntoView } from '../hooks/useScrollIntoView';
-import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
-import { useSendManyRequests } from '../hooks/useSendManyRequests';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useUpdateAnyFolder } from '../hooks/useUpdateAnyFolder';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
-import { useWorkspaces } from '../hooks/useWorkspaces';
-import { fallbackRequestName } from '../lib/fallbackRequestName';
-import { isResponseLoading } from '../lib/model_util';
-import { getHttpRequest } from '../lib/store';
-import type { DropdownItem } from './core/Dropdown';
 import { ContextMenu } from './core/Dropdown';
-import { HttpMethodTag } from './core/HttpMethodTag';
-import { Icon } from './core/Icon';
-import { VStack } from './core/Stacks';
-import { StatusTag } from './core/StatusTag';
-import { useDialog } from './DialogContext';
-import { DropMarker } from './DropMarker';
-import { FolderSettingsDialog } from './FolderSettingsDialog';
+import type { SidebarItemProps } from './SidebarItem';
+import { SidebarItems } from './SidebarItems';
 
 interface Props {
   className?: string;
 }
 
-enum ItemTypes {
-  REQUEST = 'request',
-}
-
-interface TreeNode {
+export interface SidebarTreeNode {
   item: Workspace | Folder | HttpRequest | GrpcRequest;
-  children: TreeNode[];
+  children: SidebarTreeNode[];
   depth: number;
 }
+
+export const useSidebarSelectedId = createGlobalState<string | null>(null);
 
 export function Sidebar({ className }: Props) {
   const [hidden, setHidden] = useSidebarHidden();
@@ -90,17 +58,17 @@ export function Sidebar({ className }: Props) {
     id: activeRequest?.id ?? null,
     navigateAfter: true,
   });
-  const routes = useAppRoutes();
+  const { navigate } = useAppRoutes();
   const [hasFocus, setHasFocus] = useState<boolean>(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedTree, setSelectedTree] = useState<TreeNode | null>(null);
-  const updateAnyHttpRequest = useUpdateAnyHttpRequest();
-  const updateAnyGrpcRequest = useUpdateAnyGrpcRequest();
-  const updateAnyFolder = useUpdateAnyFolder();
+  const [selectedId, setSelectedId] = useSidebarSelectedId();
+  const [selectedTree, setSelectedTree] = useState<SidebarTreeNode | null>(null);
+  const { mutateAsync: updateAnyHttpRequest } = useUpdateAnyHttpRequest();
+  const { mutateAsync: updateAnyGrpcRequest } = useUpdateAnyGrpcRequest();
+  const { mutateAsync: updateAnyFolder } = useUpdateAnyFolder();
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [hoveredTree, setHoveredTree] = useState<TreeNode | null>(null);
+  const [hoveredTree, setHoveredTree] = useState<SidebarTreeNode | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const collapsed = useKeyValue<Record<string, boolean>>({
+  const { value: collapsed, set: setCollapsed } = useKeyValue<Record<string, boolean>>({
     key: ['sidebar_collapsed', activeWorkspace?.id ?? 'n/a'],
     fallback: {},
     namespace: 'no_sync',
@@ -114,49 +82,48 @@ export function Sidebar({ className }: Props) {
     }
   });
 
-  const isCollapsed = useCallback(
-    (id: string) => collapsed.value?.[id] ?? false,
-    [collapsed.value],
-  );
+  const isCollapsed = useCallback((id: string) => collapsed?.[id] ?? false, [collapsed]);
 
   const { tree, treeParentMap, selectableRequests } = useMemo<{
-    tree: TreeNode | null;
-    treeParentMap: Record<string, TreeNode>;
-    selectedRequest: HttpRequest | GrpcRequest | null;
+    tree: SidebarTreeNode | null;
+    treeParentMap: Record<string, SidebarTreeNode>;
     selectableRequests: {
       id: string;
       index: number;
-      tree: TreeNode;
+      tree: SidebarTreeNode;
     }[];
   }>(() => {
-    const treeParentMap: Record<string, TreeNode> = {};
+    const childrenMap: Record<string, (HttpRequest | GrpcRequest | Folder)[]> = {};
+    for (const item of [...requests, ...folders]) {
+      if (item.folderId == null) {
+        childrenMap[item.workspaceId] = childrenMap[item.workspaceId] ?? [];
+        childrenMap[item.workspaceId]!.push(item);
+      } else {
+        childrenMap[item.folderId] = childrenMap[item.folderId] ?? [];
+        childrenMap[item.folderId]!.push(item);
+      }
+    }
+
+    const treeParentMap: Record<string, SidebarTreeNode> = {};
     const selectableRequests: {
       id: string;
       index: number;
-      tree: TreeNode;
+      tree: SidebarTreeNode;
     }[] = [];
 
     if (activeWorkspace == null) {
-      return { tree: null, treeParentMap, selectableRequests, selectedRequest: null };
+      return { tree: null, treeParentMap, selectableRequests };
     }
 
-    let selectedRequest: HttpRequest | GrpcRequest | null = null;
+    const selectedRequest: HttpRequest | GrpcRequest | null = null;
     let selectableRequestIndex = 0;
 
     // Put requests and folders into a tree structure
-    const next = (node: TreeNode): TreeNode => {
-      if (
-        node.item.id === selectedId &&
-        (node.item.model === 'http_request' || node.item.model === 'grpc_request')
-      ) {
-        selectedRequest = node.item;
-      }
-      const childItems = [...requests, ...folders].filter((f) =>
-        node.item.model === 'workspace' ? f.folderId == null : f.folderId === node.item.id,
-      );
+    const next = (node: SidebarTreeNode): SidebarTreeNode => {
+      const childItems = childrenMap[node.item.id] ?? [];
 
       // Recurse to children
-      const isCollapsed = collapsed.value?.[node.item.id];
+      const isCollapsed = collapsed?.[node.item.id];
       const depth = node.depth + 1;
       childItems.sort((a, b) => a.sortPriority - b.sortPriority);
       for (const item of childItems) {
@@ -175,14 +142,14 @@ export function Sidebar({ className }: Props) {
     const tree = next({ item: activeWorkspace, children: [], depth: 0 });
 
     return { tree, treeParentMap, selectableRequests, selectedRequest };
-  }, [activeWorkspace, selectedId, requests, folders, collapsed.value]);
+  }, [activeWorkspace, requests, folders, collapsed]);
 
   const focusActiveRequest = useCallback(
     (
       args: {
         forced?: {
           id: string;
-          tree: TreeNode;
+          tree: SidebarTreeNode;
         };
         noFocusSidebar?: boolean;
       } = {},
@@ -204,11 +171,11 @@ export function Sidebar({ className }: Props) {
         sidebarRef.current?.focus();
       }
     },
-    [activeRequest, treeParentMap],
+    [activeRequest?.id, setSelectedId, treeParentMap],
   );
 
   const handleSelect = useCallback(
-    async (id: string, opts: { noFocus?: boolean } = {}) => {
+    async (id: string) => {
       const tree = treeParentMap[id ?? 'n/a'] ?? null;
       const children = tree?.children ?? [];
       const node = children.find((m) => m.item.id === id) ?? null;
@@ -219,9 +186,9 @@ export function Sidebar({ className }: Props) {
       const { item } = node;
 
       if (item.model === 'folder') {
-        await collapsed.set((c) => ({ ...c, [item.id]: !c[item.id] }));
+        await setCollapsed((c) => ({ ...c, [item.id]: !c[item.id] }));
       } else {
-        routes.navigate('request', {
+        navigate('request', {
           requestId: id,
           workspaceId: item.workspaceId,
           environmentId: activeEnvironment?.id ?? null,
@@ -229,23 +196,15 @@ export function Sidebar({ className }: Props) {
         });
         setSelectedId(id);
         setSelectedTree(tree);
-        if (!opts.noFocus) focusActiveRequest({ forced: { id, tree } });
       }
     },
-    [
-      treeParentMap,
-      collapsed,
-      routes,
-      activeEnvironment?.id,
-      activeCookieJar?.id,
-      focusActiveRequest,
-    ],
+    [treeParentMap, setCollapsed, navigate, activeEnvironment?.id, activeCookieJar?.id, setSelectedId],
   );
 
   const handleClearSelected = useCallback(() => {
     setSelectedId(null);
     setSelectedTree(null);
-  }, []);
+  }, [setSelectedId]);
 
   const handleFocus = useCallback(() => {
     if (hasFocus) return;
@@ -282,7 +241,7 @@ export function Sidebar({ className }: Props) {
     }
 
     e.preventDefault();
-    routes.navigate('request', {
+    navigate('request', {
       requestId: selected.id,
       workspaceId: activeWorkspace?.id ?? null,
       environmentId: activeEnvironment?.id ?? null,
@@ -395,13 +354,13 @@ export function Sidebar({ className }: Props) {
             const sortPriority = i * 1000;
             if (child.item.model === 'folder') {
               const updateFolder = (f: Folder) => ({ ...f, sortPriority, folderId });
-              return updateAnyFolder.mutateAsync({ id: child.item.id, update: updateFolder });
+              return updateAnyFolder({ id: child.item.id, update: updateFolder });
             } else if (child.item.model === 'grpc_request') {
               const updateRequest = (r: GrpcRequest) => ({ ...r, sortPriority, folderId });
-              return updateAnyGrpcRequest.mutateAsync({ id: child.item.id, update: updateRequest });
+              return updateAnyGrpcRequest({ id: child.item.id, update: updateRequest });
             } else if (child.item.model === 'http_request') {
               const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
-              return updateAnyHttpRequest.mutateAsync({ id: child.item.id, update: updateRequest });
+              return updateAnyHttpRequest({ id: child.item.id, update: updateRequest });
             }
           }),
         );
@@ -409,13 +368,13 @@ export function Sidebar({ className }: Props) {
         const sortPriority = afterPriority - (afterPriority - beforePriority) / 2;
         if (child.item.model === 'folder') {
           const updateFolder = (f: Folder) => ({ ...f, sortPriority, folderId });
-          await updateAnyFolder.mutateAsync({ id: child.item.id, update: updateFolder });
+          await updateAnyFolder({ id: child.item.id, update: updateFolder });
         } else if (child.item.model === 'grpc_request') {
           const updateRequest = (r: GrpcRequest) => ({ ...r, sortPriority, folderId });
-          await updateAnyGrpcRequest.mutateAsync({ id: child.item.id, update: updateRequest });
+          await updateAnyGrpcRequest({ id: child.item.id, update: updateRequest });
         } else if (child.item.model === 'http_request') {
           const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
-          await updateAnyHttpRequest.mutateAsync({ id: child.item.id, update: updateRequest });
+          await updateAnyHttpRequest({ id: child.item.id, update: updateRequest });
         }
       }
       setDraggingId(null);
@@ -445,7 +404,7 @@ export function Sidebar({ className }: Props) {
   const mainContextMenuItems = useCreateDropdownItems();
 
   // Not ready to render yet
-  if (tree == null || collapsed.value == null) {
+  if (tree == null || collapsed == null) {
     return null;
   }
 
@@ -467,14 +426,13 @@ export function Sidebar({ className }: Props) {
         />
         <SidebarItems
           treeParentMap={treeParentMap}
-          activeId={activeRequest?.id ?? null}
-          selectedId={selectedId}
           selectedTree={selectedTree}
           isCollapsed={isCollapsed}
           httpRequestActions={httpRequestActions}
           httpResponses={httpResponses}
           grpcConnections={grpcConnections}
           tree={tree}
+          activeId={activeRequest?.id ?? null}
           focused={hasFocus}
           draggingId={draggingId}
           onSelect={handleSelect}
@@ -486,486 +444,5 @@ export function Sidebar({ className }: Props) {
         />
       </div>
     </aside>
-  );
-}
-
-interface SidebarItemsProps {
-  tree: TreeNode;
-  focused: boolean;
-  draggingId: string | null;
-  activeId: string | null;
-  selectedId: string | null;
-  selectedTree: TreeNode | null;
-  treeParentMap: Record<string, TreeNode>;
-  hoveredTree: TreeNode | null;
-  hoveredIndex: number | null;
-  handleMove: (id: string, side: 'above' | 'below') => void;
-  handleEnd: (id: string) => void;
-  handleDragStart: (id: string) => void;
-  onSelect: (requestId: string) => void;
-  isCollapsed: (id: string) => boolean;
-  httpRequestActions: CallableHttpRequestAction[];
-  httpResponses: HttpResponse[];
-  grpcConnections: GrpcConnection[];
-}
-
-function SidebarItems({
-  tree,
-  focused,
-  activeId,
-  selectedId,
-  selectedTree,
-  draggingId,
-  onSelect,
-  treeParentMap,
-  isCollapsed,
-  hoveredTree,
-  hoveredIndex,
-  handleEnd,
-  handleMove,
-  handleDragStart,
-  httpRequestActions,
-  httpResponses,
-  grpcConnections,
-}: SidebarItemsProps) {
-  return (
-    <VStack
-      as="ul"
-      role="menu"
-      aria-orientation="vertical"
-      dir="ltr"
-      className={classNames(
-        tree.depth > 0 && 'border-l border-border-subtle',
-        tree.depth === 0 && 'ml-0',
-        tree.depth >= 1 && 'ml-[1.2rem]',
-      )}
-    >
-      {tree.children.map((child, i) => {
-        const selected = selectedId === child.item.id;
-        const active = activeId === child.item.id;
-        return (
-          <Fragment key={child.item.id}>
-            {hoveredIndex === i && hoveredTree?.item.id === tree.item.id && <DropMarker />}
-            <SidebarItem
-              selected={selected}
-              itemId={child.item.id}
-              itemName={child.item.name}
-              itemFallbackName={
-                child.item.model === 'http_request' || child.item.model === 'grpc_request'
-                  ? fallbackRequestName(child.item)
-                  : 'New Folder'
-              }
-              itemModel={child.item.model}
-              itemPrefix={
-                (child.item.model === 'http_request' || child.item.model === 'grpc_request') && (
-                  <HttpMethodTag
-                    request={child.item}
-                    className={classNames(!(active || selected) && 'text-text-subtlest')}
-                  />
-                )
-              }
-              httpRequestActions={httpRequestActions}
-              latestHttpResponse={httpResponses.find((r) => r.requestId === child.item.id) ?? null}
-              latestGrpcConnection={
-                grpcConnections.find((c) => c.requestId === child.item.id) ?? null
-              }
-              onMove={handleMove}
-              onEnd={handleEnd}
-              onSelect={onSelect}
-              onDragStart={handleDragStart}
-              useProminentStyles={focused}
-              isCollapsed={isCollapsed}
-              child={child}
-            >
-              {child.item.model === 'folder' &&
-                !isCollapsed(child.item.id) &&
-                draggingId !== child.item.id && (
-                  <SidebarItems
-                    activeId={activeId}
-                    draggingId={draggingId}
-                    focused={focused}
-                    handleDragStart={handleDragStart}
-                    handleEnd={handleEnd}
-                    handleMove={handleMove}
-                    hoveredIndex={hoveredIndex}
-                    hoveredTree={hoveredTree}
-                    httpRequestActions={httpRequestActions}
-                    httpResponses={httpResponses}
-                    grpcConnections={grpcConnections}
-                    isCollapsed={isCollapsed}
-                    onSelect={onSelect}
-                    selectedId={selectedId}
-                    selectedTree={selectedTree}
-                    tree={child}
-                    treeParentMap={treeParentMap}
-                  />
-                )}
-            </SidebarItem>
-          </Fragment>
-        );
-      })}
-      {hoveredIndex === tree.children.length && hoveredTree?.item.id === tree.item.id && (
-        <DropMarker />
-      )}
-    </VStack>
-  );
-}
-
-type SidebarItemProps = {
-  className?: string;
-  itemId: string;
-  itemName: string;
-  itemFallbackName: string;
-  itemModel: AnyModel['model'];
-  itemPrefix: ReactNode;
-  useProminentStyles?: boolean;
-  selected: boolean;
-  onMove: (id: string, side: 'above' | 'below') => void;
-  onEnd: (id: string) => void;
-  onDragStart: (id: string) => void;
-  children?: ReactNode;
-  child: TreeNode;
-  latestHttpResponse: HttpResponse | null;
-  latestGrpcConnection: GrpcConnection | null;
-} & Pick<SidebarItemsProps, 'isCollapsed' | 'onSelect' | 'httpRequestActions'>;
-
-type DragItem = {
-  id: string;
-  itemName: string;
-};
-
-function SidebarItem({
-  itemName,
-  itemId,
-  itemModel,
-  child,
-  onMove,
-  onEnd,
-  onDragStart,
-  onSelect,
-  isCollapsed,
-  itemPrefix,
-  className,
-  selected,
-  itemFallbackName,
-  useProminentStyles,
-  latestHttpResponse,
-  latestGrpcConnection,
-  httpRequestActions,
-  children,
-}: SidebarItemProps) {
-  const ref = useRef<HTMLLIElement>(null);
-
-  const [, connectDrop] = useDrop<DragItem, void>(
-    {
-      accept: ItemTypes.REQUEST,
-      hover: (_, monitor) => {
-        if (!ref.current) return;
-        const hoverBoundingRect = ref.current?.getBoundingClientRect();
-        const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
-        const clientOffset = monitor.getClientOffset();
-        const hoverClientY = (clientOffset as XYCoord).y - hoverBoundingRect.top;
-        onMove(itemId, hoverClientY < hoverMiddleY ? 'above' : 'below');
-      },
-    },
-    [onMove],
-  );
-
-  const [, connectDrag] = useDrag<
-    DragItem,
-    unknown,
-    {
-      isDragging: boolean;
-    }
-  >(
-    () => ({
-      type: ItemTypes.REQUEST,
-      item: () => {
-        // Cancel drag when editing
-        if (editing) return null;
-        onDragStart(itemId);
-        return { id: itemId, itemName };
-      },
-      collect: (m) => ({ isDragging: m.isDragging() }),
-      options: { dropEffect: 'move' },
-      end: () => onEnd(itemId),
-    }),
-    [onEnd],
-  );
-
-  connectDrag(connectDrop(ref));
-
-  const dialog = useDialog();
-  const activeRequest = useActiveRequest();
-  const deleteFolder = useDeleteFolder(itemId);
-  const deleteRequest = useDeleteRequest(itemId);
-  const renameRequest = useRenameRequest(itemId);
-  const duplicateFolder = useDuplicateFolder(itemId);
-  const duplicateHttpRequest = useDuplicateHttpRequest({ id: itemId, navigateAfter: true });
-  const duplicateGrpcRequest = useDuplicateGrpcRequest({ id: itemId, navigateAfter: true });
-  const sendRequest = useSendAnyHttpRequest();
-  const moveToWorkspace = useMoveToWorkspace(itemId);
-  const sendManyRequests = useSendManyRequests();
-  const updateHttpRequest = useUpdateAnyHttpRequest();
-  const workspaces = useWorkspaces();
-  const updateGrpcRequest = useUpdateAnyGrpcRequest();
-  const [editing, setEditing] = useState<boolean>(false);
-  const isActive = activeRequest?.id === itemId;
-  const createDropdownItems = useCreateDropdownItems({ folderId: itemId });
-
-  useScrollIntoView(ref.current, isActive);
-
-  const handleSubmitNameEdit = useCallback(
-    async (el: HTMLInputElement) => {
-      if (itemModel === 'http_request') {
-        await updateHttpRequest.mutateAsync({
-          id: itemId,
-          update: (r) => ({ ...r, name: el.value }),
-        });
-      } else if (itemModel === 'grpc_request') {
-        await updateGrpcRequest.mutateAsync({
-          id: itemId,
-          update: (r) => ({ ...r, name: el.value }),
-        });
-      }
-      setEditing(false);
-    },
-    [itemId, itemModel, updateGrpcRequest, updateHttpRequest],
-  );
-
-  const handleFocus = useCallback((el: HTMLInputElement | null) => {
-    el?.focus();
-    el?.select();
-  }, []);
-
-  const handleInputKeyDown = useCallback(
-    async (e: React.KeyboardEvent<HTMLInputElement>) => {
-      e.stopPropagation();
-      switch (e.key) {
-        case 'Enter':
-          e.preventDefault();
-          await handleSubmitNameEdit(e.currentTarget);
-          break;
-        case 'Escape':
-          e.preventDefault();
-          setEditing(false);
-          break;
-      }
-    },
-    [handleSubmitNameEdit],
-  );
-
-  const handleStartEditing = useCallback(() => {
-    if (itemModel !== 'http_request' && itemModel !== 'grpc_request') return;
-    setEditing(true);
-  }, [setEditing, itemModel]);
-
-  const handleBlur = useCallback(
-    async (e: React.FocusEvent<HTMLInputElement>) => {
-      await handleSubmitNameEdit(e.currentTarget);
-    },
-    [handleSubmitNameEdit],
-  );
-
-  const handleSelect = useCallback(() => onSelect(itemId), [onSelect, itemId]);
-  const [showContextMenu, setShowContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const handleCloseContextMenu = useCallback(() => {
-    setShowContextMenu(null);
-  }, []);
-
-  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setShowContextMenu({ x: e.clientX, y: e.clientY });
-  }, []);
-
-  const items = useMemo<DropdownItem[]>(() => {
-    if (itemModel === 'folder') {
-      return [
-        {
-          key: 'send-all',
-          label: 'Send All',
-          leftSlot: <Icon icon="send_horizontal" />,
-          onSelect: () => sendManyRequests.mutate(child.children.map((c) => c.item.id)),
-        },
-        {
-          key: 'folder-settings',
-          label: 'Settings',
-          leftSlot: <Icon icon="settings" />,
-          onSelect: () =>
-            dialog.show({
-              id: 'folder-settings',
-              title: 'Folder Settings',
-              size: 'md',
-              render: () => <FolderSettingsDialog folderId={itemId} />,
-            }),
-        },
-        {
-          key: 'duplicateFolder',
-          label: 'Duplicate',
-          leftSlot: <Icon icon="copy" />,
-          onSelect: () => duplicateFolder.mutate(),
-        },
-        {
-          key: 'delete-folder',
-          label: 'Delete',
-          variant: 'danger',
-          leftSlot: <Icon icon="trash" />,
-          onSelect: () => deleteFolder.mutate(),
-        },
-        { type: 'separator' },
-        ...createDropdownItems,
-      ];
-    } else {
-      const requestItems: DropdownItem[] =
-        itemModel === 'http_request'
-          ? [
-              {
-                key: 'send-request',
-                label: 'Send',
-                hotKeyAction: 'http_request.send',
-                hotKeyLabelOnly: true, // Already bound in URL bar
-                leftSlot: <Icon icon="send_horizontal" />,
-                onSelect: () => sendRequest.mutate(itemId),
-              },
-              ...httpRequestActions.map((a) => ({
-                key: a.key,
-                label: a.label,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
-                onSelect: async () => {
-                  const request = await getHttpRequest(itemId);
-                  if (request != null) await a.call(request);
-                },
-              })),
-              { type: 'separator' },
-            ]
-          : [];
-      return [
-        ...requestItems,
-        {
-          key: 'rename-request',
-          label: 'Rename',
-          leftSlot: <Icon icon="pencil" />,
-          onSelect: renameRequest.mutate,
-        },
-        {
-          key: 'duplicate-request',
-          label: 'Duplicate',
-          hotKeyAction: 'http_request.duplicate',
-          hotKeyLabelOnly: true, // Would trigger for every request (bad)
-          leftSlot: <Icon icon="copy" />,
-          onSelect: () =>
-            itemModel === 'http_request'
-              ? duplicateHttpRequest.mutate()
-              : duplicateGrpcRequest.mutate(),
-        },
-        {
-          key: 'move-workspace',
-          label: 'Move',
-          leftSlot: <Icon icon="arrow_right_circle" />,
-          hidden: workspaces.length <= 1,
-          onSelect: moveToWorkspace.mutate,
-        },
-        {
-          key: 'delete-request',
-          variant: 'danger',
-          label: 'Delete',
-          leftSlot: <Icon icon="trash" />,
-          onSelect: () => deleteRequest.mutate(),
-        },
-      ];
-    }
-  }, [
-    child.children,
-    createDropdownItems,
-    deleteFolder,
-    deleteRequest,
-    duplicateFolder,
-    duplicateGrpcRequest,
-    duplicateHttpRequest,
-    httpRequestActions,
-    itemId,
-    itemModel,
-    moveToWorkspace.mutate,
-    renameRequest.mutate,
-    sendManyRequests,
-    sendRequest,
-    workspaces.length,
-  ]);
-
-  return (
-    <li ref={ref} draggable>
-      <div className={classNames(className, 'block relative group/item px-1.5 pb-0.5')}>
-        <ContextMenu
-          triggerPosition={showContextMenu}
-          items={items}
-          onClose={handleCloseContextMenu}
-        />
-        <button
-          // tabIndex={-1} // Will prevent drag-n-drop
-          disabled={editing}
-          onClick={handleSelect}
-          onDoubleClick={handleStartEditing}
-          onContextMenu={handleContextMenu}
-          data-active={isActive}
-          data-selected={selected}
-          className={classNames(
-            'w-full flex gap-1.5 items-center h-xs px-1.5 rounded-md focus-visible:ring focus-visible:ring-border-focus outline-0',
-            editing && 'ring-1 focus-within:ring-focus',
-            isActive && 'bg-surface-highlight text-text',
-            !isActive && 'text-text-subtle group-hover/item:text-text',
-            showContextMenu && '!text-text', // Show as "active" when context menu is open
-            selected && useProminentStyles && '!bg-surface-active',
-          )}
-        >
-          {itemModel === 'folder' && (
-            <Icon
-              size="sm"
-              icon="chevron_right"
-              className={classNames(
-                'text-text-subtlest',
-                'transition-transform',
-                !isCollapsed(itemId) && 'transform rotate-90',
-              )}
-            />
-          )}
-          <div className="flex items-center gap-2 min-w-0">
-            {itemPrefix}
-            {editing ? (
-              <input
-                ref={handleFocus}
-                defaultValue={itemName}
-                className="bg-transparent outline-none w-full cursor-text"
-                onBlur={handleBlur}
-                onKeyDown={handleInputKeyDown}
-              />
-            ) : (
-              <span className="truncate">{itemName || itemFallbackName}</span>
-            )}
-          </div>
-          {latestGrpcConnection ? (
-            <div className="ml-auto">
-              {isResponseLoading(latestGrpcConnection) && (
-                <Icon spin size="sm" icon="update" className="text-text-subtlest" />
-              )}
-            </div>
-          ) : latestHttpResponse ? (
-            <div className="ml-auto">
-              {isResponseLoading(latestHttpResponse) ? (
-                <Icon spin size="sm" icon="refresh" className="text-text-subtlest" />
-              ) : (
-                <StatusTag className="text-xs" response={latestHttpResponse} />
-              )}
-            </div>
-          ) : null}
-        </button>
-      </div>
-      {children}
-    </li>
   );
 }
