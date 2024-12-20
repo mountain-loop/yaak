@@ -24,7 +24,6 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
   const [activeCookieJar] = useActiveCookieJar();
   const routes = useAppRoutes();
   const allRecentRequestIds = useRecentRequests();
-  const recentRequestIds = useMemo(() => allRecentRequestIds.slice(1), [allRecentRequestIds]);
   const requests = useRequests();
 
   // Handle key-up
@@ -43,13 +42,14 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
     dropdownRef.current?.prev?.();
   });
 
-  const items = useMemo<DropdownItem[]>(() => {
-    if (activeWorkspace === null) return [];
+  const { items, hasRecentRequests } = useMemo(() => {
+    if (activeWorkspace === null) return { items: [], hasRecentRequests: false };
 
     const recentRequestItems: DropdownItem[] = [];
-    for (const id of recentRequestIds) {
+
+    for (const id of allRecentRequestIds) {
       const request = requests.find((r) => r.id === id);
-      if (request === undefined) continue;
+      if (!request) continue;
 
       recentRequestItems.push({
         key: request.id,
@@ -69,19 +69,22 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
 
     // No recent requests to show
     if (recentRequestItems.length === 0) {
-      return [
-        {
-          key: 'no-recent-requests',
-          label: 'No recent requests',
-          disabled: true,
-        },
-      ];
+      return {
+        items: [
+          {
+            key: 'no-recent-requests',
+            label: 'No recent requests',
+            disabled: true,
+          },
+        ],
+        hasRecentRequests: false,
+      };
     }
 
-    return recentRequestItems.slice(0, 20);
-  }, [activeWorkspace, recentRequestIds, requests, routes, activeEnvironment?.id, activeCookieJar?.id]);
+    return { items: recentRequestItems.slice(0, 20), hasRecentRequests: true };
+  }, [activeWorkspace, allRecentRequestIds, requests, routes, activeEnvironment?.id, activeCookieJar?.id]);
 
-  return (
+  return hasRecentRequests ? (
     <Dropdown ref={dropdownRef} items={items}>
       <Button
         data-tauri-drag-region
@@ -96,5 +99,5 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
         {fallbackRequestName(activeRequest)}
       </Button>
     </Dropdown>
-  );
+  ) : null;
 }
