@@ -1,5 +1,6 @@
+import { useSearch } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Route } from '../routes/workspaces/$workspaceId';
 import { useCookieJars } from './useCookieJars';
 
 export const QUERY_COOKIE_JAR_ID = 'cookie_jar_id';
@@ -34,23 +35,18 @@ export function useEnsureActiveCookieJar() {
 
     // There's no active jar, so set it to the first one
     console.log('Setting active cookie jar to', firstJar.id);
-    setActiveCookieJarId(firstJar.id);
+    setActiveCookieJarId(firstJar.id).catch(console.error);
   }, [activeCookieJarId, cookieJars, setActiveCookieJarId]);
 }
 
 function useActiveCookieJarId() {
   // NOTE: This query param is accessed from Rust side, so do not change
-  const [params, setParams] = useSearchParams();
-  const id = params.get(QUERY_COOKIE_JAR_ID);
+  const navigate = Route.useNavigate();
+  const { cookieJarId: id } = useSearch({ strict: false });
 
   const setId = useCallback(
-    (id: string) => {
-      setParams((p) => {
-        const existing = Object.fromEntries(p);
-        return { ...existing, [QUERY_COOKIE_JAR_ID]: id };
-      });
-    },
-    [setParams],
+    (id: string) => navigate({ search: (prev) => ({ ...prev, cookieJarId: id }) }),
+    [navigate],
   );
 
   return [id, setId] as const;

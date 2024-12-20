@@ -1,18 +1,18 @@
 import { useMutation } from '@tanstack/react-query';
 import type { Workspace } from '@yaakapp-internal/models';
-import {useSetAtom} from "jotai";
+import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
 import { invokeCmd } from '../lib/tauri';
+import { router } from '../main';
+import { Route } from '../routes/workspaces';
 import { useActiveWorkspace } from './useActiveWorkspace';
-import { useAppRoutes } from './useAppRoutes';
 import { useConfirm } from './useConfirm';
-import {removeModelById} from "./useSyncModelStores";
-import {workspacesAtom} from "./useWorkspaces";
+import { removeModelById } from './useSyncModelStores';
+import { workspacesAtom } from './useWorkspaces';
 
 export function useDeleteWorkspace(workspace: Workspace | null) {
   const activeWorkspace = useActiveWorkspace();
-  const routes = useAppRoutes();
   const confirm = useConfirm();
   const setWorkspaces = useSetAtom(workspacesAtom);
 
@@ -41,7 +41,7 @@ export function useDeleteWorkspace(workspace: Workspace | null) {
 
       const { id: workspaceId } = workspace;
       if (workspaceId === activeWorkspace?.id) {
-        routes.navigate('workspaces');
+        router.navigate({ to: Route.fullPath });
       }
     },
   });

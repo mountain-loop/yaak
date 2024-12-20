@@ -1,6 +1,6 @@
+import { useParams } from '@tanstack/react-router';
 import type { Workspace } from '@yaakapp-internal/models';
 import { useMemo } from 'react';
-import { useParams } from 'react-router-dom';
 import { useWorkspaces } from './useWorkspaces';
 
 export function useActiveWorkspace(): Workspace | null {
@@ -14,6 +14,6 @@ export function useActiveWorkspace(): Workspace | null {
 }
 
 function useActiveWorkspaceId(): string | null {
-  const { workspaceId } = useParams();
+  const { workspaceId } = useParams({ strict: false });
   return workspaceId ?? null;
 }

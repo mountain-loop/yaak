@@ -1,10 +1,11 @@
 import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 import React, { useState } from 'react';
-import { useAppRoutes } from '../hooks/useAppRoutes';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
+import { router } from '../main';
+import { Route } from '../routes/workspaces/$workspaceId/index';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
 import { Select } from './core/Select';
@@ -22,7 +23,6 @@ export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Pr
   const updateHttpRequest = useUpdateAnyHttpRequest();
   const updateGrpcRequest = useUpdateAnyGrpcRequest();
   const toast = useToast();
-  const routes = useAppRoutes();
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(activeWorkspaceId);
 
   return (
@@ -71,10 +71,9 @@ export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Pr
                 className="mr-auto min-w-[5rem]"
                 onClick={() => {
                   toast.hide('workspace-moved');
-                  routes.navigate('workspace', {
-                    workspaceId: selectedWorkspaceId,
-                    cookieJarId: null,
-                    environmentId: null,
+                  router.navigate({
+                    to: Route.fullPath,
+                    params: { workspaceId: selectedWorkspaceId },
                   });
                 }}
               >

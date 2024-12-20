@@ -1,12 +1,10 @@
-import type { KeyboardEvent, ReactNode } from 'react';
-import type { HotkeyAction } from '../hooks/useHotKey';
 import classNames from 'classnames';
 import { fuzzyFilter } from 'fuzzbunny';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
-import { useAppRoutes } from '../hooks/useAppRoutes';
 import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
 import { useCreateGrpcRequest } from '../hooks/useCreateGrpcRequest';
 import { useCreateHttpRequest } from '../hooks/useCreateHttpRequest';
@@ -14,6 +12,7 @@ import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDebouncedState } from '../hooks/useDebouncedState';
 import { useDeleteRequest } from '../hooks/useDeleteRequest';
 import { useEnvironments } from '../hooks/useEnvironments';
+import type { HotkeyAction } from '../hooks/useHotKey';
 import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useOpenSettings } from '../hooks/useOpenSettings';
@@ -28,6 +27,8 @@ import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
+import { router } from '../main';
+import { Route } from '../routes/workspaces/$workspaceId/requests/$requestId';
 import { CookieDialog } from './CookieDialog';
 import { Button } from './core/Button';
 import { Heading } from './core/Heading';
@@ -58,7 +59,6 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const [activeEnvironment, setActiveEnvironmentId] = useActiveEnvironment();
   const httpRequestActions = useHttpRequestActions();
-  const routes = useAppRoutes();
   const workspaces = useWorkspaces();
   const environments = useEnvironments();
   const recentEnvironments = useRecentEnvironments();
@@ -268,11 +268,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           </HStack>
         ),
         onSelect: () => {
-          return routes.navigate('request', {
-            workspaceId: r.workspaceId,
-            requestId: r.id,
-            environmentId: activeEnvironment?.id ?? null,
-            cookieJarId: activeCookieJar?.id ?? null,
+          router.navigate({
+            to: Route.fullPath,
+            params: {
+              workspaceId: r.workspaceId,
+              requestId: r.id,
+            },
+            search: (prev) => ({ ...prev }),
           });
         },
       });
@@ -313,9 +315,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   }, [
     workspaceCommands,
     sortedRequests,
-    routes,
     activeEnvironment?.id,
-    activeCookieJar?.id,
     sortedEnvironments,
     setActiveEnvironmentId,
     sortedWorkspaces,

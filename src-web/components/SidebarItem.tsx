@@ -1,7 +1,7 @@
 import type { AnyModel, GrpcConnection, HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
 
@@ -402,16 +402,14 @@ function SidebarItem_({
   );
 }
 
-export const SidebarItem = memo<SidebarItemProps>(SidebarItem_, (a, b) => {
+export const SidebarItem = memo<SidebarItemProps>(SidebarItem_); /*(a, b) => {
   let different = false;
   for (const key of Object.keys(a) as (keyof SidebarItemProps)[]) {
     if (a[key] !== b[key]) {
-      // console.log('DIFFERENT', key, a[key], b[key]);
       different = true;
     }
   }
   if (different) {
-    // console.log('DIFFERENT -------------------');
   }
   return !different;
-});
+});*/

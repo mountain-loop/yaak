@@ -13,12 +13,12 @@ import { useDialog } from '../components/DialogContext';
 import { ImportDataDialog } from '../components/ImportDataDialog';
 import { count } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
+import { Route } from '../routes/workspaces/$workspaceId';
 import { useActiveWorkspace } from './useActiveWorkspace';
 import { useAlert } from './useAlert';
-import { useAppRoutes } from './useAppRoutes';
+import { router } from '../main';
 
 export function useImportData() {
-  const routes = useAppRoutes();
   const dialog = useDialog();
   const alert = useAlert();
   const activeWorkspace = useActiveWorkspace();
@@ -64,10 +64,11 @@ export function useImportData() {
     });
 
     if (importedWorkspace != null) {
-      routes.navigate('workspace', {
-        workspaceId: importedWorkspace.id,
-        environmentId: imported.environments[0]?.id ?? null,
-        cookieJarId: null,
+      const environmentId = imported.environments[0]?.id ?? null;
+      router.navigate({
+        to: Route.fullPath,
+        params: { workspaceId: importedWorkspace.id },
+        search: { environmentId },
       });
     }
 

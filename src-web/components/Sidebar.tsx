@@ -2,12 +2,9 @@ import type { Folder, GrpcRequest, HttpRequest, Workspace } from '@yaakapp-inter
 import classNames from 'classnames';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { createGlobalState, useKey, useKeyPressEvent } from 'react-use';
-import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
-import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
-import { useAppRoutes } from '../hooks/useAppRoutes';
 import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
 import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
@@ -22,6 +19,8 @@ import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useUpdateAnyFolder } from '../hooks/useUpdateAnyFolder';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
+import { router } from '../main';
+import { Route } from '../routes/workspaces/$workspaceId/requests/$requestId';
 import { ContextMenu } from './core/Dropdown';
 import type { SidebarItemProps } from './SidebarItem';
 import { SidebarItems } from './SidebarItems';
@@ -42,8 +41,6 @@ export function Sidebar({ className }: Props) {
   const [hidden, setHidden] = useSidebarHidden();
   const sidebarRef = useRef<HTMLLIElement>(null);
   const activeRequest = useActiveRequest();
-  const [activeEnvironment] = useActiveEnvironment();
-  const [activeCookieJar] = useActiveCookieJar();
   const folders = useFolders();
   const requests = useRequests();
   const activeWorkspace = useActiveWorkspace();
@@ -58,7 +55,6 @@ export function Sidebar({ className }: Props) {
     id: activeRequest?.id ?? null,
     navigateAfter: true,
   });
-  const { navigate } = useAppRoutes();
   const [hasFocus, setHasFocus] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useSidebarSelectedId();
   const [selectedTree, setSelectedTree] = useState<SidebarTreeNode | null>(null);
@@ -188,17 +184,19 @@ export function Sidebar({ className }: Props) {
       if (item.model === 'folder') {
         await setCollapsed((c) => ({ ...c, [item.id]: !c[item.id] }));
       } else {
-        navigate('request', {
-          requestId: id,
-          workspaceId: item.workspaceId,
-          environmentId: activeEnvironment?.id ?? null,
-          cookieJarId: activeCookieJar?.id ?? null,
+        router.navigate({
+          to: Route.fullPath,
+          params: {
+            requestId: id,
+            workspaceId: item.workspaceId,
+          },
+          search: (prev) => ({ ...prev }),
         });
         setSelectedId(id);
         setSelectedTree(tree);
       }
     },
-    [treeParentMap, setCollapsed, navigate, activeEnvironment?.id, activeCookieJar?.id, setSelectedId],
+    [treeParentMap, setCollapsed, setSelectedId],
   );
 
   const handleClearSelected = useCallback(() => {
@@ -241,11 +239,13 @@ export function Sidebar({ className }: Props) {
     }
 
     e.preventDefault();
-    navigate('request', {
-      requestId: selected.id,
-      workspaceId: activeWorkspace?.id ?? null,
-      environmentId: activeEnvironment?.id ?? null,
-      cookieJarId: activeCookieJar?.id ?? null,
+    router.navigate({
+      to: Route.fullPath,
+      params: {
+        requestId: selected.id,
+        workspaceId: activeWorkspace?.id ?? null,
+      },
+      search: (prev) => ({ ...prev }),
     });
   });
 

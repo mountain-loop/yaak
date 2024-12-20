@@ -1,7 +1,6 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import classNames from 'classnames';
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { useKeyPressEvent } from 'react-use';
 import { useOsInfo } from '../../hooks/useOsInfo';
 import { capitalize } from '../../lib/capitalize';
@@ -16,6 +15,7 @@ import { SettingsProxy } from './SettingsProxy';
 
 interface Props {
   hide?: () => void;
+  defaultTab?: SettingsTab;
 }
 
 export enum SettingsTab {
@@ -34,10 +34,9 @@ const tabs = [
   SettingsTab.License,
 ];
 
-export default function Settings({ hide }: Props) {
+export default function Settings({ hide, defaultTab }: Props) {
   const osInfo = useOsInfo();
-  const [params] = useSearchParams();
-  const [tab, setTab] = useState<string>(params.get('tab') ?? SettingsTab.General);
+  const [tab, setTab] = useState<string>(defaultTab ?? SettingsTab.General);
 
   // Close settings window on escape
   // TODO: Could this be put in a better place? Eg. in Rust key listener when creating the window

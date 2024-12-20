@@ -1,22 +1,18 @@
 import { useMutation } from '@tanstack/react-query';
 import type { GrpcRequest } from '@yaakapp-internal/models';
-import {useSetAtom} from "jotai";
+import { useSetAtom } from 'jotai';
 import { trackEvent } from '../lib/analytics';
 import { invokeCmd } from '../lib/tauri';
-import {useActiveCookieJar} from "./useActiveCookieJar";
-import { useActiveEnvironment } from './useActiveEnvironment';
+import { router } from '../main';
+import { Route } from '../routes/workspaces/$workspaceId/requests/$requestId';
 import { useActiveRequest } from './useActiveRequest';
 import { useActiveWorkspace } from './useActiveWorkspace';
-import { useAppRoutes } from './useAppRoutes';
-import {grpcRequestsAtom} from "./useGrpcRequests";
-import {updateModelList} from "./useSyncModelStores";
+import { grpcRequestsAtom } from './useGrpcRequests';
+import { updateModelList } from './useSyncModelStores';
 
 export function useCreateGrpcRequest() {
   const workspace = useActiveWorkspace();
-  const [activeEnvironment] = useActiveEnvironment();
-  const [activeCookieJar] = useActiveCookieJar();
   const activeRequest = useActiveRequest();
-  const routes = useAppRoutes();
   const setGrpcRequests = useSetAtom(grpcRequestsAtom);
 
   return useMutation<
@@ -50,11 +46,13 @@ export function useCreateGrpcRequest() {
       // Optimistic update
       setGrpcRequests(updateModelList(request));
 
-      routes.navigate('request', {
-        workspaceId: request.workspaceId,
-        requestId: request.id,
-        environmentId: activeEnvironment?.id ?? null,
-        cookieJarId: activeCookieJar?.id ?? null,
+      router.navigate({
+        to: Route.fullPath,
+        params: {
+          workspaceId: request.workspaceId,
+          requestId: request.id,
+        },
+        search: (prev) => ({ ...prev }),
       });
     },
   });

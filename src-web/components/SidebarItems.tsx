@@ -60,13 +60,11 @@ function SidebarItems_({
       )}
     >
       {tree.children.map((child, i) => {
-        const active = activeId === child.item.id;
         return (
           <Fragment key={child.item.id}>
             {hoveredIndex === i && hoveredTree?.item.id === tree.item.id && <DropMarker />}
             <SidebarItem
               selected={selectedId === child.item.id}
-              active={active}
               itemId={child.item.id}
               itemName={child.item.name}
               itemFallbackName={
@@ -121,9 +119,9 @@ function SidebarItems_({
   );
 }
 
-export const SidebarItems = memo(SidebarItems_, (a, b) => {
+export const SidebarItems = memo<SidebarItemsProps>(SidebarItems_, (a, b) => {
   let different = false;
-  for (const key of Object.keys(a)) {
+  for (const key of Object.keys(a) as (keyof SidebarItemsProps)[]) {
     if (a[key] !== b[key]) {
       console.log('DIFFERENT', key, a[key], b[key]);
       different = true;
