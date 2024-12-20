@@ -29,7 +29,7 @@ export function WorkspaceSettingsDialog({ workspaceId }: Props) {
 
       <MarkdownEditor
         name="workspace-description"
-        placeholder="A Markdown description of this workspace."
+        placeholder="Workspace description"
         className="min-h-[10rem] border border-border px-2"
         defaultValue={workspace.description}
         onChange={(description) => updateWorkspace.mutate({ description })}

@@ -10,7 +10,7 @@ const namespace = 'global';
 const fallback: string[] = [];
 
 export function useRecentEnvironments() {
-  const environments = useEnvironments();
+  const { subEnvironments } = useEnvironments();
   const activeWorkspace = useActiveWorkspace();
   const [activeEnvironment] = useActiveEnvironment();
   const kv = useKeyValue<string[]>({
@@ -30,8 +30,8 @@ export function useRecentEnvironments() {
   }, [activeEnvironment?.id]);
 
   const onlyValidIds = useMemo(
-    () => kv.value?.filter((id) => environments.some((e) => e.id === id)) ?? [],
-    [kv.value, environments],
+    () => kv.value?.filter((id) => subEnvironments.some((e) => e.id === id)) ?? [],
+    [kv.value, subEnvironments],
   );
 
   return onlyValidIds;

@@ -1,14 +1,11 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useEnvironments } from './useEnvironments';
 
 export function useActiveEnvironment() {
   const [id, setId] = useActiveEnvironmentId();
-  const environments = useEnvironments();
-  const environment = useMemo(
-    () => environments.find((w) => w.id === id) ?? null,
-    [environments, id],
-  );
+  const { subEnvironments } = useEnvironments();
+  const environment = subEnvironments.find((w) => w.id === id) ?? null;
   return [environment, setId] as const;
 }
 

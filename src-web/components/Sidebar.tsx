@@ -885,6 +885,7 @@ function SidebarItem({
     createDropdownItems,
     deleteFolder,
     deleteRequest,
+    dialog,
     duplicateFolder,
     duplicateGrpcRequest,
     duplicateHttpRequest,

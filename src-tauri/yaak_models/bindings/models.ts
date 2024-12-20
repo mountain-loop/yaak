@@ -10,7 +10,7 @@ export type CookieExpires = { "AtUtc": string } | "SessionEnd";
 
 export type CookieJar = { model: "cookie_jar", id: string, createdAt: string, updatedAt: string, workspaceId: string, cookies: Array<Cookie>, name: string, };
 
-export type Environment = { model: "environment", id: string, workspaceId: string, createdAt: string, updatedAt: string, name: string, variables: Array<EnvironmentVariable>, };
+export type Environment = { model: "environment", id: string, workspaceId: string, environmentId: string | null, createdAt: string, updatedAt: string, name: string, variables: Array<EnvironmentVariable>, };
 
 export type EnvironmentVariable = { enabled?: boolean, name: string, value: string, };
 
@@ -50,4 +50,4 @@ export type ProxySettingAuth = { user: string, password: string, };
 
 export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, editorFontSize: number, editorSoftWrap: boolean, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, telemetry: boolean, theme: string, themeDark: string, themeLight: string, updateChannel: string, proxy: ProxySetting | null, };
 
-export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, variables: Array<EnvironmentVariable>, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
+export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };

@@ -458,7 +458,7 @@ export const RequestPane = memo(function RequestPane({
               />
               <MarkdownEditor
                 name="request-description"
-                placeholder="A Markdown description of this request."
+                placeholder="Request description"
                 defaultValue={activeRequest.description}
                 onChange={(description) =>
                   updateRequest.mutate({ id: activeRequestId, update: { description } })

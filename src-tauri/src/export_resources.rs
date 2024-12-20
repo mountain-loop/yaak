@@ -34,7 +34,7 @@ pub async fn get_workspace_export_resources(
     let app_handle = window.app_handle();
     let mut data = WorkspaceExport {
         yaak_version: app_handle.package_info().version.clone().to_string(),
-        yaak_schema: 2,
+        yaak_schema: 3,
         timestamp: chrono::Utc::now().naive_utc(),
         resources: WorkspaceExportResources {
             workspaces: Vec::new(),

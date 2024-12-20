@@ -3,37 +3,37 @@ use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashMap};
 use yaak_models::models::{
     Environment, EnvironmentVariable, GrpcMetadataEntry, GrpcRequest, HttpRequest,
-    HttpRequestHeader, HttpUrlParameter, Workspace,
+    HttpRequestHeader, HttpUrlParameter,
 };
 use yaak_templates::{parse_and_render, TemplateCallback};
 
 pub async fn render_template<T: TemplateCallback>(
     template: &str,
-    w: &Workspace,
-    e: Option<&Environment>,
+    base_environment: &Environment,
+    environment: Option<&Environment>,
     cb: &T,
 ) -> String {
-    let vars = &make_vars_hashmap(w, e);
+    let vars = &make_vars_hashmap(base_environment, environment);
     render(template, vars, cb).await
 }
 
 pub async fn render_json_value<T: TemplateCallback>(
     value: Value,
-    w: &Workspace,
-    e: Option<&Environment>,
+    base_environment: &Environment,
+    environment: Option<&Environment>,
     cb: &T,
 ) -> Value {
-    let vars = &make_vars_hashmap(w, e);
+    let vars = &make_vars_hashmap(base_environment, environment);
     render_json_value_raw(value, vars, cb).await
 }
 
 pub async fn render_grpc_request<T: TemplateCallback>(
     r: &GrpcRequest,
-    w: &Workspace,
-    e: Option<&Environment>,
+    base_environment: &Environment,
+    environment: Option<&Environment>,
     cb: &T,
 ) -> GrpcRequest {
-    let vars = &make_vars_hashmap(w, e);
+    let vars = &make_vars_hashmap(base_environment, environment);
 
     let mut metadata = Vec::new();
     for p in r.metadata.clone() {
@@ -61,11 +61,11 @@ pub async fn render_grpc_request<T: TemplateCallback>(
 
 pub async fn render_http_request(
     r: &HttpRequest,
-    w: &Workspace,
-    e: Option<&Environment>,
+    base_environment: &Environment,
+    environment: Option<&Environment>,
     cb: &PluginTemplateCallback,
 ) -> HttpRequest {
-    let vars = &make_vars_hashmap(w, e);
+    let vars = &make_vars_hashmap(base_environment, environment);
 
     let mut url_parameters = Vec::new();
     for p in r.url_parameters.clone() {
@@ -110,11 +110,11 @@ pub async fn render_http_request(
 }
 
 pub fn make_vars_hashmap(
-    workspace: &Workspace,
+    base_environment: &Environment,
     environment: Option<&Environment>,
 ) -> HashMap<String, String> {
     let mut variables = HashMap::new();
-    variables = add_variable_to_map(variables, &workspace.variables);
+    variables = add_variable_to_map(variables, &base_environment.variables);
 
     if let Some(e) = environment {
         variables = add_variable_to_map(variables, &e.variables);

@@ -10,7 +10,7 @@ use crate::models::{
     Settings, SettingsIden, Workspace, WorkspaceIden,
 };
 use crate::plugin::SqliteConnection;
-use log::{debug, error};
+use log::{debug, error, info};
 use rand::distributions::{Alphanumeric, DistString};
 use rusqlite::OptionalExtension;
 use sea_query::ColumnRef::Asterisk;
@@ -191,7 +191,6 @@ pub async fn upsert_workspace<R: Runtime>(
             WorkspaceIden::UpdatedAt,
             WorkspaceIden::Name,
             WorkspaceIden::Description,
-            WorkspaceIden::Variables,
             WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingFollowRedirects,
             WorkspaceIden::SettingValidateCertificates,
@@ -202,7 +201,6 @@ pub async fn upsert_workspace<R: Runtime>(
             CurrentTimestamp.into(),
             trimmed_name.into(),
             workspace.description.into(),
-            serde_json::to_string(&workspace.variables)?.into(),
             workspace.setting_request_timeout.into(),
             workspace.setting_follow_redirects.into(),
             workspace.setting_validate_certificates.into(),
@@ -213,7 +211,6 @@ pub async fn upsert_workspace<R: Runtime>(
                     WorkspaceIden::UpdatedAt,
                     WorkspaceIden::Name,
                     WorkspaceIden::Description,
-                    WorkspaceIden::Variables,
                     WorkspaceIden::SettingRequestTimeout,
                     WorkspaceIden::SettingFollowRedirects,
                     WorkspaceIden::SettingValidateCertificates,
@@ -739,21 +736,41 @@ pub async fn upsert_cookie_jar<R: Runtime>(
 }
 
 pub async fn list_environments<R: Runtime>(
-    mgr: &impl Manager<R>,
+    window: &WebviewWindow<R>,
     workspace_id: &str,
 ) -> Result<Vec<Environment>> {
-    let dbm = &*mgr.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
+    let mut environments: Vec<Environment> = {
+        let dbm = &*window.state::<SqliteConnection>();
+        let db = dbm.0.lock().await.get().unwrap();
+        let (sql, params) = Query::select()
+            .from(EnvironmentIden::Table)
+            .cond_where(Expr::col(EnvironmentIden::WorkspaceId).eq(workspace_id))
+            .column(Asterisk)
+            .order_by(EnvironmentIden::CreatedAt, Order::Desc)
+            .build_rusqlite(SqliteQueryBuilder);
+        let mut stmt = db.prepare(sql.as_str())?;
+        let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+        items.map(|v| v.unwrap()).collect()
+    };
 
-    let (sql, params) = Query::select()
-        .from(EnvironmentIden::Table)
-        .cond_where(Expr::col(EnvironmentIden::WorkspaceId).eq(workspace_id))
-        .column(Asterisk)
-        .order_by(EnvironmentIden::CreatedAt, Order::Desc)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
+    let base_environment =
+        environments.iter().find(|e| e.environment_id == None && e.workspace_id == workspace_id);
+
+    if let None = base_environment {
+        let base_environment = upsert_environment(
+            window,
+            Environment {
+                workspace_id: workspace_id.to_string(),
+                name: "Global Variables".to_string(),
+                ..Default::default()
+            },
+        )
+            .await?;
+        info!("Created base environment for {workspace_id}");
+        environments.push(base_environment);
+    }
+
+    Ok(environments)
 }
 
 pub async fn delete_environment<R: Runtime>(
@@ -839,7 +856,7 @@ pub async fn update_settings<R: Runtime>(
                     None => None,
                     Some(p) => Some(serde_json::to_string(&p)?),
                 })
-                .into(),
+                    .into(),
             ),
         ])
         .returning_all()
@@ -869,6 +886,7 @@ pub async fn upsert_environment<R: Runtime>(
             EnvironmentIden::Id,
             EnvironmentIden::CreatedAt,
             EnvironmentIden::UpdatedAt,
+            EnvironmentIden::EnvironmentId,
             EnvironmentIden::WorkspaceId,
             EnvironmentIden::Name,
             EnvironmentIden::Variables,
@@ -877,7 +895,8 @@ pub async fn upsert_environment<R: Runtime>(
             id.as_str().into(),
             CurrentTimestamp.into(),
             CurrentTimestamp.into(),
-            environment.workspace_id.as_str().into(),
+            environment.environment_id.into(),
+            environment.workspace_id.into(),
             trimmed_name.into(),
             serde_json::to_string(&environment.variables)?.into(),
         ])
@@ -906,6 +925,26 @@ pub async fn get_environment<R: Runtime>(mgr: &impl Manager<R>, id: &str) -> Res
         .from(EnvironmentIden::Table)
         .column(Asterisk)
         .cond_where(Expr::col(EnvironmentIden::Id).eq(id))
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
+}
+
+pub async fn get_base_environment<R: Runtime>(
+    mgr: &impl Manager<R>,
+    workspace_id: &str,
+) -> Result<Environment> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+
+    let (sql, params) = Query::select()
+        .from(EnvironmentIden::Table)
+        .column(Asterisk)
+        .cond_where(
+            Cond::all()
+                .add(Expr::col(EnvironmentIden::WorkspaceId).eq(workspace_id))
+                .add(Expr::col(EnvironmentIden::EnvironmentId).is_null()),
+        )
         .build_rusqlite(SqliteQueryBuilder);
     let mut stmt = db.prepare(sql.as_str())?;
     Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
@@ -1142,7 +1181,7 @@ pub async fn duplicate_folder<R: Runtime>(
             ..src_folder.clone()
         },
     )
-    .await?;
+        .await?;
 
     for m in http_requests {
         upsert_http_request(
@@ -1154,7 +1193,7 @@ pub async fn duplicate_folder<R: Runtime>(
                 ..m
             },
         )
-        .await?;
+            .await?;
     }
     for m in grpc_requests {
         upsert_grpc_request(
@@ -1166,7 +1205,7 @@ pub async fn duplicate_folder<R: Runtime>(
                 ..m
             },
         )
-        .await?;
+            .await?;
     }
     for m in folders {
         // Recurse down
@@ -1177,7 +1216,7 @@ pub async fn duplicate_folder<R: Runtime>(
                 ..m
             },
         ))
-        .await?;
+            .await?;
     }
     Ok(())
 }
@@ -1336,7 +1375,7 @@ pub async fn create_default_http_response<R: Runtime>(
         None,
         None,
     )
-    .await
+        .await
 }
 
 #[allow(clippy::too_many_arguments)]

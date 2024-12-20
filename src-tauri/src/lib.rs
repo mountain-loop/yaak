@@ -56,14 +56,15 @@ use yaak_models::queries::{
     delete_cookie_jar, delete_environment, delete_folder, delete_grpc_connection,
     delete_grpc_request, delete_http_request, delete_http_response, delete_plugin,
     delete_workspace, duplicate_folder, duplicate_grpc_request, duplicate_http_request,
-    generate_id, generate_model_id, get_cookie_jar, get_environment, get_folder,
-    get_grpc_connection, get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
-    get_or_create_settings, get_plugin, get_workspace, list_cookie_jars, list_environments,
-    list_folders, list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests,
-    list_http_requests, list_http_responses_for_request, list_http_responses_for_workspace,
-    list_plugins, list_workspaces, set_key_value_raw, update_response_if_id, update_settings,
-    upsert_cookie_jar, upsert_environment, upsert_folder, upsert_grpc_connection,
-    upsert_grpc_event, upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
+    generate_id, generate_model_id, get_base_environment, get_cookie_jar, get_environment,
+    get_folder, get_grpc_connection, get_grpc_request, get_http_request, get_http_response,
+    get_key_value_raw, get_or_create_settings, get_plugin, get_workspace, list_cookie_jars,
+    list_environments, list_folders, list_grpc_connections_for_workspace, list_grpc_events,
+    list_grpc_requests, list_http_requests, list_http_responses_for_request,
+    list_http_responses_for_workspace, list_plugins, list_workspaces, set_key_value_raw,
+    update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder,
+    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_http_request,
+    upsert_plugin, upsert_workspace,
 };
 use yaak_plugin_runtime::events::{
     BootResponse, CallHttpRequestActionRequest, FilterResponse, FindHttpResponsesResponse,
@@ -143,10 +144,11 @@ async fn cmd_render_template<R: Runtime>(
         Some(id) => Some(get_environment(&window, id).await.map_err(|e| e.to_string())?),
         None => None,
     };
-    let workspace = get_workspace(&window, &workspace_id).await.map_err(|e| e.to_string())?;
+    let base_environment =
+        get_base_environment(&window, &workspace_id).await.map_err(|e| e.to_string())?;
     let rendered = render_template(
         template,
-        &workspace,
+        &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
             &app_handle,
@@ -208,10 +210,11 @@ async fn cmd_grpc_go<R: Runtime>(
         .await
         .map_err(|e| e.to_string())?
         .ok_or("Failed to find GRPC request")?;
-    let workspace = get_workspace(&window, &req.workspace_id).await.map_err(|e| e.to_string())?;
+    let base_environment =
+        get_base_environment(&window, &req.workspace_id).await.map_err(|e| e.to_string())?;
     let req = render_grpc_request(
         &req,
-        &workspace,
+        &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
             window.app_handle(),
@@ -337,7 +340,7 @@ async fn cmd_grpc_go<R: Runtime>(
     let cb = {
         let cancelled_rx = cancelled_rx.clone();
         let window = window.clone();
-        let workspace = workspace.clone();
+        let workspace = base_environment.clone();
         let environment = environment.clone();
         let base_msg = base_msg.clone();
         let method_desc = method_desc.clone();
@@ -433,7 +436,7 @@ async fn cmd_grpc_go<R: Runtime>(
         let msg = if req.message.is_empty() { "{}".to_string() } else { req.message };
         let msg = render_template(
             msg.as_str(),
-            &workspace.clone(),
+            &base_environment.clone(),
             environment.as_ref(),
             &PluginTemplateCallback::new(
                 window.app_handle(),
@@ -852,12 +855,31 @@ async fn cmd_import_data<R: Runtime>(
     }
     info!("Imported {} workspaces", imported_resources.workspaces.len());
 
-    for mut v in resources.environments {
-        v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeEnvironment, &mut id_map);
-        v.workspace_id =
-            maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-        let x = upsert_environment(&window, v).await.map_err(|e| e.to_string())?;
-        imported_resources.environments.push(x.clone());
+    // Environments can foreign-key to themselves, so we need to import from
+    // the top of the tree to the bottom to avoid foreign key conflicts.
+    // We do this by looping until we've imported them all, only importing if:
+    //  - The parent has been imported
+    //  - The environment hasn't already been imported
+    // The loop exits when imported.len == to_import.len
+    while imported_resources.environments.len() < resources.environments.len() {
+        for mut v in resources.environments.clone() {
+            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeEnvironment, &mut id_map);
+            v.workspace_id =
+                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v.environment_id =
+                maybe_gen_id_opt(v.environment_id, ModelType::TypeEnvironment, &mut id_map);
+            if let Some(fid) = v.environment_id.clone() {
+                let imported_parent = imported_resources.environments.iter().find(|f| f.id == fid);
+                if imported_parent.is_none() {
+                    continue;
+                }
+            }
+            if let Some(_) = imported_resources.environments.iter().find(|f| f.id == v.id) {
+                continue;
+            }
+            let x = upsert_environment(&window, v).await.map_err(|e| e.to_string())?;
+            imported_resources.environments.push(x.clone());
+        }
     }
     info!("Imported {} environments", imported_resources.environments.len());
 
@@ -2109,9 +2131,17 @@ async fn handle_plugin_event<R: Runtime>(
                 .await
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
+            let base_environment = get_base_environment(&window, workspace.id.as_str())
+                .await
+                .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let http_request =
-                render_http_request(&req.http_request, &workspace, environment.as_ref(), &cb).await;
+            let http_request = render_http_request(
+                &req.http_request,
+                &base_environment,
+                environment.as_ref(),
+                &cb,
+            )
+            .await;
             Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
                 http_request,
             }))
@@ -2124,8 +2154,12 @@ async fn handle_plugin_event<R: Runtime>(
                 .await
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
+            let base_environment = get_base_environment(&window, workspace.id.as_str())
+                .await
+                .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let data = render_json_value(req.data, &workspace, environment.as_ref(), &cb).await;
+            let data =
+                render_json_value(req.data, &base_environment, environment.as_ref(), &cb).await;
             Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))
         }
         InternalEventPayload::ReloadResponse => {

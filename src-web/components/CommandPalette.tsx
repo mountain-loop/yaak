@@ -60,7 +60,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const httpRequestActions = useHttpRequestActions();
   const routes = useAppRoutes();
   const workspaces = useWorkspaces();
-  const environments = useEnvironments();
+  const { subEnvironments } = useEnvironments();
   const recentEnvironments = useRecentEnvironments();
   const recentWorkspaces = useRecentWorkspaces();
   const requests = useRequests();
@@ -211,7 +211,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   }, [recentRequests, requests]);
 
   const sortedEnvironments = useMemo(() => {
-    return [...environments].sort((a, b) => {
+    return [...subEnvironments].sort((a, b) => {
       const aRecentIndex = recentEnvironments.indexOf(a.id);
       const bRecentIndex = recentEnvironments.indexOf(b.id);
 
@@ -225,7 +225,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         return a.createdAt.localeCompare(b.createdAt);
       }
     });
-  }, [environments, recentEnvironments]);
+  }, [subEnvironments, recentEnvironments]);
 
   const sortedWorkspaces = useMemo(() => {
     return [...workspaces].sort((a, b) => {

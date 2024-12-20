@@ -1,16 +1,16 @@
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import { useMemo } from 'react';
 import { useActiveEnvironment } from './useActiveEnvironment';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { useEnvironments } from './useEnvironments';
 
 export function useActiveEnvironmentVariables() {
-  const workspace = useActiveWorkspace();
+  const { baseEnvironment } = useEnvironments();
   const [environment] = useActiveEnvironment();
 
   const variables = useMemo(() => {
     const varMap: Record<string, EnvironmentVariable> = {};
 
-    const allVariables = [...(workspace?.variables ?? []), ...(environment?.variables ?? [])];
+    const allVariables = [...(baseEnvironment?.variables ?? []), ...(environment?.variables ?? [])];
 
     for (const v of allVariables) {
       if (!v.enabled || !v.name) continue;
@@ -18,7 +18,7 @@ export function useActiveEnvironmentVariables() {
     }
 
     return Object.values(varMap);
-  }, [workspace, environment]);
+  }, [baseEnvironment?.variables, environment?.variables]);
 
   return variables;
 }

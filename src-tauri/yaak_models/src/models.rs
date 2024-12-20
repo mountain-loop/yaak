@@ -110,7 +110,6 @@ pub struct Workspace {
     pub updated_at: NaiveDateTime,
     pub name: String,
     pub description: String,
-    pub variables: Vec<EnvironmentVariable>,
 
     // Settings
     #[serde(default = "default_true")]
@@ -134,14 +133,12 @@ pub enum WorkspaceIden {
     SettingFollowRedirects,
     SettingRequestTimeout,
     SettingValidateCertificates,
-    Variables,
 }
 
 impl<'s> TryFrom<&Row<'s>> for Workspace {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let variables: String = r.get("variables")?;
         Ok(Workspace {
             id: r.get("id")?,
             model: r.get("model")?,
@@ -149,7 +146,6 @@ impl<'s> TryFrom<&Row<'s>> for Workspace {
             updated_at: r.get("updated_at")?,
             name: r.get("name")?,
             description: r.get("description")?,
-            variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
             setting_validate_certificates: r.get("setting_validate_certificates")?,
             setting_follow_redirects: r.get("setting_follow_redirects")?,
             setting_request_timeout: r.get("setting_request_timeout")?,
@@ -248,6 +244,7 @@ pub struct Environment {
     pub model: String,
     pub id: String,
     pub workspace_id: String,
+    pub environment_id: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 
@@ -263,6 +260,7 @@ pub enum EnvironmentIden {
     Id,
     CreatedAt,
     UpdatedAt,
+    EnvironmentId,
     WorkspaceId,
 
     Name,
@@ -278,6 +276,7 @@ impl<'s> TryFrom<&Row<'s>> for Environment {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
+            environment_id: r.get("environment_id")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
             name: r.get("name")?,

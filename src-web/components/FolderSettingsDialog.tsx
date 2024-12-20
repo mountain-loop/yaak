@@ -30,7 +30,7 @@ export function FolderSettingsDialog({ folderId }: Props) {
 
       <MarkdownEditor
         name="folder-description"
-        placeholder="A Markdown description of this folder."
+        placeholder="Folder description"
         className="min-h-[10rem] border border-border px-2"
         defaultValue={folder.description}
         onChange={(description) => {

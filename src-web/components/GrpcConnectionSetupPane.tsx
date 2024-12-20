@@ -344,7 +344,7 @@ export function GrpcConnectionSetupPane({
         <TabContent value={TAB_DESCRIPTION}>
           <MarkdownEditor
             name="request-description"
-            placeholder="A Markdown description of this request."
+            placeholder="Request description"
             defaultValue={activeRequest.description}
             onChange={handleDescriptionChange}
           />
