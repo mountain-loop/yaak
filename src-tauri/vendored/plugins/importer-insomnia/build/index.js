@@ -7233,19 +7233,15 @@ function pluginHookImport(ctx, contents) {
   };
   const workspacesToImport = parsed.resources.filter(isWorkspace);
   for (const workspaceToImport of workspacesToImport) {
-    const baseEnvironment = parsed.resources.find(
-      (r) => isEnvironment(r) && r.parentId === workspaceToImport._id
-    );
     resources.workspaces.push({
       id: convertId(workspaceToImport._id),
       createdAt: new Date(workspacesToImport.created ?? Date.now()).toISOString().replace("Z", ""),
       updatedAt: new Date(workspacesToImport.updated ?? Date.now()).toISOString().replace("Z", ""),
       model: "workspace",
-      name: workspaceToImport.name,
-      variables: baseEnvironment ? parseVariables(baseEnvironment.data) : []
+      name: workspaceToImport.name
     });
     const environmentsToImport = parsed.resources.filter(
-      (r) => isEnvironment(r) && r.parentId === baseEnvironment?._id
+      (r) => isEnvironment(r)
     );
     resources.environments.push(
       ...environmentsToImport.map((r) => importEnvironment(r, workspaceToImport._id))
@@ -7393,13 +7389,6 @@ function importHttpRequest(r, workspaceId, sortPriority = 0) {
       value: h.value ?? ""
     })).filter(({ name, value }) => name !== "" || value !== "")
   };
-}
-function parseVariables(data) {
-  return Object.entries(data).map(([name, value]) => ({
-    enabled: true,
-    name,
-    value: `${value}`
-  }));
 }
 function convertSyntax(variable) {
   if (!isJSString(variable)) return variable;
