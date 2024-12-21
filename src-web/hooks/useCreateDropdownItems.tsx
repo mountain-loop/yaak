@@ -15,9 +15,9 @@ export function useCreateDropdownItems({
   hideIcons?: boolean;
   folderId?: string | null;
 } = {}): DropdownItem[] {
-  const createHttpRequest = useCreateHttpRequest();
-  const createGrpcRequest = useCreateGrpcRequest();
-  const createFolder = useCreateFolder();
+  const { mutate: createHttpRequest } = useCreateHttpRequest();
+  const { mutate: createGrpcRequest } = useCreateGrpcRequest();
+  const { mutate: createFolder } = useCreateFolder();
 
   return useMemo<DropdownItem[]>(
     () => [
@@ -25,14 +25,14 @@ export function useCreateDropdownItems({
         key: 'create-http-request',
         label: 'HTTP Request',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-        onSelect: () => createHttpRequest.mutate({ folderId }),
+        onSelect: () => createHttpRequest({ folderId }),
       },
       {
         key: 'create-graphql-request',
         label: 'GraphQL Query',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
         onSelect: () =>
-          createHttpRequest.mutate({
+          createHttpRequest({
             folderId,
             bodyType: BODY_TYPE_GRAPHQL,
             method: 'POST',
@@ -43,7 +43,7 @@ export function useCreateDropdownItems({
         key: 'create-grpc-request',
         label: 'gRPC Call',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-        onSelect: () => createGrpcRequest.mutate({ folderId }),
+        onSelect: () => createGrpcRequest({ folderId }),
       },
       ...((hideFolder
         ? []
@@ -55,7 +55,7 @@ export function useCreateDropdownItems({
               key: 'create-folder',
               label: 'Folder',
               leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-              onSelect: () => createFolder.mutate({ folderId }),
+              onSelect: () => createFolder({ folderId }),
             },
           ]) as DropdownItem[]),
     ],

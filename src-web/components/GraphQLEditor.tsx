@@ -1,18 +1,20 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { updateSchema } from 'cm6-graphql';
 import type { EditorView } from 'codemirror';
+
+import { formatSdl } from 'format-graphql';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from 'react-use';
 import { useIntrospectGraphQL } from '../hooks/useIntrospectGraphQL';
 import { tryFormatJson } from '../lib/formatters';
 import { Button } from './core/Button';
 import { Dropdown } from './core/Dropdown';
-import type { EditorProps } from './core/Editor';
-import { Editor, formatGraphQL } from './core/Editor';
+import type { EditorProps } from './core/Editor/Editor';
+import { Editor } from './core/Editor/Editor';
 import { FormattedError } from './core/FormattedError';
 import { Icon } from './core/Icon';
 import { Separator } from './core/Separator';
-import { useDialog } from './DialogContext';
+import { useDialog } from '../hooks/useDialog';
 
 type Props = Pick<EditorProps, 'heightMode' | 'className' | 'forceUpdateKey'> & {
   baseRequest: HttpRequest;
@@ -168,7 +170,7 @@ export function GraphQLEditor({ body, onChange, baseRequest, ...extraEditorProps
       <Editor
         language="graphql"
         heightMode="auto"
-        format={formatGraphQL}
+        format={formatSdl}
         defaultValue={currentBody.query}
         onChange={handleChangeQuery}
         placeholder="..."

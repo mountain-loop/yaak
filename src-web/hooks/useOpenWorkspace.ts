@@ -1,14 +1,15 @@
-import { useMutation } from '@tanstack/react-query';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import { invokeCmd } from '../lib/tauri';
-import { useAppRoutes } from './useAppRoutes';
+import { useFastMutation } from './useFastMutation';
 import { getRecentCookieJars } from './useRecentCookieJars';
 import { getRecentEnvironments } from './useRecentEnvironments';
 import { getRecentRequests } from './useRecentRequests';
 
 export function useOpenWorkspace() {
-  const routes = useAppRoutes();
+  const router = useRouter();
+  const navigate = useNavigate();
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['open_workspace'],
     mutationFn: async ({
       workspaceId,
@@ -17,22 +18,29 @@ export function useOpenWorkspace() {
       workspaceId: string;
       inNewWindow: boolean;
     }) => {
-      const environmentId = (await getRecentEnvironments(workspaceId))[0] ?? null;
-      const requestId = (await getRecentRequests(workspaceId))[0] ?? null;
-      const cookieJarId = (await getRecentCookieJars(workspaceId))[0] ?? null;
-      const baseArgs = { workspaceId, environmentId, cookieJarId } as const;
+      const environmentId = (await getRecentEnvironments(workspaceId))[0] ?? undefined;
+      const requestId = (await getRecentRequests(workspaceId))[0] ?? undefined;
+      const cookieJarId = (await getRecentCookieJars(workspaceId))[0] ?? undefined;
+      const search = { environmentId, cookieJarId };
+
       if (inNewWindow) {
-        const path =
-          requestId != null
-            ? routes.paths.request({ ...baseArgs, requestId })
-            : routes.paths.workspace({ ...baseArgs });
-        await invokeCmd('cmd_new_main_window', { url: path });
+        const location = router.buildLocation({
+          to: '/workspaces/$workspaceId',
+          params: { workspaceId },
+          search,
+        });
+        await invokeCmd('cmd_new_main_window', { url: location.href });
+        return;
+      }
+
+      if (requestId != null) {
+        await navigate({
+          to: '/workspaces/$workspaceId/requests/$requestId',
+          params: { workspaceId, requestId },
+          search,
+        });
       } else {
-        if (requestId != null) {
-          routes.navigate('request', { ...baseArgs, requestId });
-        } else {
-          routes.navigate('workspace', { ...baseArgs });
-        }
+        await navigate({ to: '/workspaces/$workspaceId', params: { workspaceId }, search });
       }
     },
   });

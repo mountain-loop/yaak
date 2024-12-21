@@ -55,9 +55,9 @@ use yaak_models::queries::{
     delete_all_http_responses_for_request, delete_all_http_responses_for_workspace,
     delete_cookie_jar, delete_environment, delete_folder, delete_grpc_connection,
     delete_grpc_request, delete_http_request, delete_http_response, delete_plugin,
-    delete_workspace, duplicate_grpc_request, duplicate_http_request, generate_id,
-    generate_model_id, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
-    get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
+    delete_workspace, duplicate_folder, duplicate_grpc_request, duplicate_http_request,
+    generate_id, generate_model_id, get_cookie_jar, get_environment, get_folder,
+    get_grpc_connection, get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
     get_or_create_settings, get_plugin, get_workspace, list_cookie_jars, list_environments,
     list_folders, list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests,
     list_http_requests, list_http_responses_for_request, list_http_responses_for_workspace,
@@ -903,7 +903,7 @@ async fn cmd_import_data<R: Runtime>(
         v.workspace_id =
             maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
         v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
-        let x = upsert_grpc_request(&window, &v).await.map_err(|e| e.to_string())?;
+        let x = upsert_grpc_request(&window, v).await.map_err(|e| e.to_string())?;
         imported_resources.grpc_requests.push(x.clone());
     }
     info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
@@ -1225,7 +1225,7 @@ async fn cmd_create_grpc_request(
 ) -> Result<GrpcRequest, String> {
     upsert_grpc_request(
         &w,
-        &GrpcRequest {
+        GrpcRequest {
             workspace_id: workspace_id.to_string(),
             name: name.to_string(),
             folder_id: folder_id.map(|s| s.to_string()),
@@ -1240,6 +1240,15 @@ async fn cmd_create_grpc_request(
 #[tauri::command]
 async fn cmd_duplicate_grpc_request(id: &str, w: WebviewWindow) -> Result<GrpcRequest, String> {
     duplicate_grpc_request(&w, id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_duplicate_folder<R: Runtime>(
+    window: WebviewWindow<R>,
+    id: &str,
+) -> Result<(), String> {
+    let folder = get_folder(&window, id).await.map_err(|e| e.to_string())?;
+    duplicate_folder(&window, &folder).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1273,7 +1282,7 @@ async fn cmd_update_grpc_request(
     request: GrpcRequest,
     w: WebviewWindow,
 ) -> Result<GrpcRequest, String> {
-    upsert_grpc_request(&w, &request).await.map_err(|e| e.to_string())
+    upsert_grpc_request(&w, request).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1738,6 +1747,7 @@ pub fn run() {
             cmd_delete_send_history,
             cmd_delete_workspace,
             cmd_dismiss_notification,
+            cmd_duplicate_folder,
             cmd_duplicate_grpc_request,
             cmd_duplicate_http_request,
             cmd_export_data,

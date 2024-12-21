@@ -8,7 +8,7 @@ import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
-import { useDialog } from './DialogContext';
+import { useDialog } from '../hooks/useDialog';
 import { EnvironmentEditDialog } from './EnvironmentEditDialog';
 
 type Props = {

@@ -8,22 +8,22 @@ import classNames from 'classnames';
 import { EditorView } from 'codemirror';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
-  useEffect,
   Children,
   cloneElement,
   forwardRef,
   isValidElement,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
 } from 'react';
 import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
+import {useDialog} from "../../../hooks/useDialog";
 import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useSettings } from '../../../hooks/useSettings';
 import { useTemplateFunctions } from '../../../hooks/useTemplateFunctions';
-import { useDialog } from '../../DialogContext';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
@@ -33,11 +33,6 @@ import { baseExtensions, getLanguageExtension, multiLineExtensions } from './ext
 import type { GenericCompletionConfig } from './genericCompletion';
 import { singleLineExt } from './singleLine';
 
-// Export some things so all the code-split parts are in this file
-export { buildClientSchema, getIntrospectionQuery } from 'graphql/utilities';
-export { graphql } from 'cm6-graphql';
-export { formatSdl } from 'format-graphql';
-
 export interface EditorProps {
   id?: string;
   readOnly?: boolean;
@@ -45,7 +40,16 @@ export interface EditorProps {
   type?: 'text' | 'password';
   className?: string;
   heightMode?: 'auto' | 'full';
-  language?: 'javascript' | 'json' | 'html' | 'xml' | 'graphql' | 'url' | 'pairs' | 'text';
+  language?:
+    | 'javascript'
+    | 'json'
+    | 'html'
+    | 'xml'
+    | 'graphql'
+    | 'url'
+    | 'pairs'
+    | 'text'
+    | 'markdown';
   forceUpdateKey?: string | number;
   autoFocus?: boolean;
   autoSelect?: boolean;
@@ -66,6 +70,7 @@ export interface EditorProps {
   autocompleteVariables?: boolean;
   extraExtensions?: Extension[];
   actions?: ReactNode;
+  hideGutter?: boolean;
 }
 
 const emptyVariables: EnvironmentVariable[] = [];
@@ -96,6 +101,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     autocompleteVariables,
     actions,
     wrapLines,
+    hideGutter,
   }: EditorProps,
   ref,
 ) {
@@ -310,6 +316,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
               container,
               readOnly,
               singleLine,
+              hideGutter,
               onChange: handleChange,
               onPaste: handlePaste,
               onPasteOverwrite: handlePasteOverwrite,
@@ -374,7 +381,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   const decoratedActions = useMemo(() => {
     const results = [];
     const actionClassName = classNames(
-      'bg-surface transition-opacity opacity-0 group-hover:opacity-100 hover:!opacity-100 shadow',
+      'bg-surface transition-opacity transform-gpu opacity-0 group-hover:opacity-100 hover:!opacity-100 shadow',
     );
 
     if (format) {
@@ -455,13 +462,14 @@ function getExtensions({
   container,
   readOnly,
   singleLine,
+  hideGutter,
   onChange,
   onPaste,
   onPasteOverwrite,
   onFocus,
   onBlur,
   onKeyDown,
-}: Pick<EditorProps, 'singleLine' | 'readOnly'> & {
+}: Pick<EditorProps, 'singleLine' | 'readOnly' | 'hideGutter'> & {
   container: HTMLDivElement | null;
   onChange: MutableRefObject<EditorProps['onChange']>;
   onPaste: MutableRefObject<EditorProps['onPaste']>;
@@ -499,7 +507,7 @@ function getExtensions({
     tooltips({ parent }),
     keymap.of(singleLine ? defaultKeymap.filter((k) => k.key !== 'Enter') : defaultKeymap),
     ...(singleLine ? [singleLineExt()] : []),
-    ...(!singleLine ? [multiLineExtensions] : []),
+    ...(!singleLine ? [multiLineExtensions({ hideGutter })] : []),
     ...(readOnly
       ? [EditorState.readOnly.of(true), EditorView.contentAttributes.of({ tabindex: '-1' })]
       : []),

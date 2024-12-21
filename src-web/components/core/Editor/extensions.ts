@@ -6,6 +6,7 @@ import {
 } from '@codemirror/autocomplete';
 import { history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
+import { markdown } from '@codemirror/lang-markdown';
 import { json } from '@codemirror/lang-json';
 import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
@@ -36,7 +37,7 @@ import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import type { TemplateFunction } from '@yaakapp-internal/plugin';
 import { graphql } from 'cm6-graphql';
 import { EditorView } from 'codemirror';
-import type { EditorProps } from './index';
+import type {EditorProps} from "./Editor";
 import { pairs } from './pairs/extension';
 import { text } from './text/extension';
 import { twig } from './twig/extension';
@@ -79,6 +80,7 @@ const syntaxExtensions: Record<NonNullable<EditorProps['language']>, LanguageSup
   url: url(),
   pairs: pairs(),
   text: text(),
+  markdown: markdown(),
 };
 
 export function getLanguageExtension({
@@ -138,21 +140,25 @@ export const baseExtensions = [
   keymap.of([...historyKeymap, ...completionKeymap]),
 ];
 
-export const multiLineExtensions = [
-  lineNumbers(),
-  foldGutter({
-    markerDOM: (open) => {
-      const el = document.createElement('div');
-      el.classList.add('fold-gutter-icon');
-      el.tabIndex = -1;
-      if (open) {
-        el.setAttribute('data-open', '');
-      }
-      return el;
-    },
-  }),
+export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) => [
+  hideGutter
+    ? []
+    : [
+        lineNumbers(),
+        foldGutter({
+          markerDOM: (open) => {
+            const el = document.createElement('div');
+            el.classList.add('fold-gutter-icon');
+            el.tabIndex = -1;
+            if (open) {
+              el.setAttribute('data-open', '');
+            }
+            return el;
+          },
+        }),
+      ],
   codeFolding({
-    placeholderDOM(view, onclick, prepared) {
+    placeholderDOM(_view, onclick, prepared) {
       const el = document.createElement('span');
       el.onclick = onclick;
       el.className = 'cm-foldPlaceholder';

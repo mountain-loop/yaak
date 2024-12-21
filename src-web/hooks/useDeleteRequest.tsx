@@ -1,12 +1,12 @@
-import { useMutation } from '@tanstack/react-query';
 import { useDeleteAnyGrpcRequest } from './useDeleteAnyGrpcRequest';
 import { useDeleteAnyHttpRequest } from './useDeleteAnyHttpRequest';
+import { useFastMutation } from './useFastMutation';
 
 export function useDeleteRequest(id: string | null) {
   const deleteAnyHttpRequest = useDeleteAnyHttpRequest();
   const deleteAnyGrpcRequest = useDeleteAnyGrpcRequest();
 
-  return useMutation<void, string>({
+  return useFastMutation<void, string>({
     mutationKey: ['delete_request', id],
     mutationFn: async () => {
       if (id == null) return;

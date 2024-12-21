@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import type { AnyModel } from '@yaakapp-internal/models';
-import { useSetAtom } from 'jotai/index';
+import { jotaiStore } from '../lib/jotai';
 import { extractKeyValue } from '../lib/keyValueStore';
 import { modelsEq } from '../lib/model_util';
 import { useActiveWorkspace } from './useActiveWorkspace';
@@ -30,17 +30,6 @@ export function useSyncModelStores() {
   const queryClient = useQueryClient();
   const { wasUpdatedExternally } = useRequestUpdateKey(null);
 
-  const setSettings = useSetAtom(settingsAtom);
-  const setWorkspaces = useSetAtom(workspacesAtom);
-  const setCookieJars = useSetAtom(cookieJarsAtom);
-  const setFolders = useSetAtom(foldersAtom);
-  const setPlugins = useSetAtom(pluginsAtom);
-  const setHttpRequests = useSetAtom(httpRequestsAtom);
-  const setHttpResponses = useSetAtom(httpResponsesAtom);
-  const setGrpcConnections = useSetAtom(grpcConnectionsAtom);
-  const setGrpcRequests = useSetAtom(grpcRequestsAtom);
-  const setEnvironments = useSetAtom(environmentsAtom);
-
   useListenToTauriEvent<ModelPayload>('upserted_model', ({ payload }) => {
     const { model, windowLabel } = payload;
     const queryKey =
@@ -63,25 +52,25 @@ export function useSyncModelStores() {
     if (shouldIgnoreModel(model, windowLabel)) return;
 
     if (model.model === 'workspace') {
-      setWorkspaces(updateModelList(model));
+      jotaiStore.set(workspacesAtom, updateModelList(model));
     } else if (model.model === 'plugin') {
-      setPlugins(updateModelList(model));
+      jotaiStore.set(pluginsAtom, updateModelList(model));
     } else if (model.model === 'http_request') {
-      setHttpRequests(updateModelList(model));
+      jotaiStore.set(httpRequestsAtom, updateModelList(model));
     } else if (model.model === 'folder') {
-      setFolders(updateModelList(model));
+      jotaiStore.set(foldersAtom, updateModelList(model));
     } else if (model.model === 'http_response') {
-      setHttpResponses(updateModelList(model));
+      jotaiStore.set(httpResponsesAtom, updateModelList(model));
     } else if (model.model === 'grpc_request') {
-      setGrpcRequests(updateModelList(model));
+      jotaiStore.set(grpcRequestsAtom, updateModelList(model));
     } else if (model.model === 'grpc_connection') {
-      setGrpcConnections(updateModelList(model));
+      jotaiStore.set(grpcConnectionsAtom, updateModelList(model));
     } else if (model.model === 'environment') {
-      setEnvironments(updateModelList(model));
+      jotaiStore.set(environmentsAtom, updateModelList(model));
     } else if (model.model === 'cookie_jar') {
-      setCookieJars(updateModelList(model));
+      jotaiStore.set(cookieJarsAtom, updateModelList(model));
     } else if (model.model === 'settings') {
-      setSettings(model);
+      jotaiStore.set(settingsAtom, model);
     } else if (queryKey != null) {
       // TODO: Convert all models to use Jotai
       queryClient.setQueryData(queryKey, (current: unknown) => {
@@ -104,27 +93,27 @@ export function useSyncModelStores() {
     console.log('Delete model', payload);
 
     if (model.model === 'workspace') {
-      setWorkspaces(removeModelById(model));
+      jotaiStore.set(workspacesAtom, removeModelById(model));
     } else if (model.model === 'plugin') {
-      setPlugins(removeModelById(model));
+      jotaiStore.set(pluginsAtom, removeModelById(model));
     } else if (model.model === 'http_request') {
-      setHttpRequests(removeModelById(model));
+      jotaiStore.set(httpRequestsAtom, removeModelById(model));
     } else if (model.model === 'http_response') {
-      setHttpResponses(removeModelById(model));
+      jotaiStore.set(httpResponsesAtom, removeModelById(model));
     } else if (model.model === 'folder') {
-      setFolders(removeModelById(model));
+      jotaiStore.set(foldersAtom, removeModelById(model));
     } else if (model.model === 'environment') {
-      setEnvironments(removeModelById(model));
+      jotaiStore.set(environmentsAtom, removeModelById(model));
     } else if (model.model === 'grpc_request') {
-      setGrpcRequests(removeModelById(model));
+      jotaiStore.set(grpcRequestsAtom, removeModelById(model));
     } else if (model.model === 'grpc_connection') {
-      setGrpcConnections(removeModelById(model));
+      jotaiStore.set(grpcConnectionsAtom, removeModelById(model));
     } else if (model.model === 'grpc_event') {
       queryClient.setQueryData(grpcEventsQueryKey(model), removeModelById(model));
     } else if (model.model === 'key_value') {
       queryClient.setQueryData(keyValueQueryKey(model), undefined);
     } else if (model.model === 'cookie_jar') {
-      setCookieJars(removeModelById(model));
+      jotaiStore.set(cookieJarsAtom, removeModelById(model));
     }
   });
 }

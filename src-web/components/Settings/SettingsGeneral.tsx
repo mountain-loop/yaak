@@ -20,7 +20,7 @@ export function SettingsGeneral() {
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const appInfo = useAppInfo();
-  const checkForUpdates = useCheckForUpdates();
+  const checkForUpdates = useCheckForUpdates(); 
 
   if (settings == null || workspace == null) {
     return null;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { InlineCode } from '../components/core/InlineCode';
-import { useToast } from '../components/ToastContext';
 import { useActiveWorkspace } from './useActiveWorkspace';
+import { useToast } from './useToast';
 
 export function useActiveWorkspaceChangedToast() {
   const toast = useToast();

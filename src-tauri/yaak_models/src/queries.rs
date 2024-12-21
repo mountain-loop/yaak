@@ -306,8 +306,9 @@ pub async fn duplicate_grpc_request<R: Runtime>(
             return Err(ModelNotFound(id.to_string()));
         }
     };
+    request.sort_priority = request.sort_priority + 0.001;
     request.id = "".to_string();
-    upsert_grpc_request(window, &request).await
+    upsert_grpc_request(window, request).await
 }
 
 pub async fn delete_grpc_request<R: Runtime>(
@@ -334,7 +335,7 @@ pub async fn delete_grpc_request<R: Runtime>(
 
 pub async fn upsert_grpc_request<R: Runtime>(
     window: &WebviewWindow<R>,
-    request: &GrpcRequest,
+    request: GrpcRequest,
 ) -> Result<GrpcRequest> {
     let id = match request.id.as_str() {
         "" => generate_model_id(ModelType::TypeGrpcRequest),
@@ -351,6 +352,7 @@ pub async fn upsert_grpc_request<R: Runtime>(
             GrpcRequestIden::CreatedAt,
             GrpcRequestIden::UpdatedAt,
             GrpcRequestIden::Name,
+            GrpcRequestIden::Description,
             GrpcRequestIden::WorkspaceId,
             GrpcRequestIden::FolderId,
             GrpcRequestIden::SortPriority,
@@ -363,17 +365,18 @@ pub async fn upsert_grpc_request<R: Runtime>(
             GrpcRequestIden::Metadata,
         ])
         .values_panic([
-            id.as_str().into(),
+            id.into(),
             CurrentTimestamp.into(),
             CurrentTimestamp.into(),
             trimmed_name.into(),
-            request.workspace_id.as_str().into(),
+            request.description.into(),
+            request.workspace_id.into(),
             request.folder_id.as_ref().map(|s| s.as_str()).into(),
             request.sort_priority.into(),
-            request.url.as_str().into(),
+            request.url.into(),
             request.service.as_ref().map(|s| s.as_str()).into(),
             request.method.as_ref().map(|s| s.as_str()).into(),
-            request.message.as_str().into(),
+            request.message.into(),
             request.authentication_type.as_ref().map(|s| s.as_str()).into(),
             serde_json::to_string(&request.authentication)?.into(),
             serde_json::to_string(&request.metadata)?.into(),
@@ -384,6 +387,7 @@ pub async fn upsert_grpc_request<R: Runtime>(
                     GrpcRequestIden::UpdatedAt,
                     GrpcRequestIden::WorkspaceId,
                     GrpcRequestIden::Name,
+                    GrpcRequestIden::Description,
                     GrpcRequestIden::FolderId,
                     GrpcRequestIden::SortPriority,
                     GrpcRequestIden::Url,
@@ -1064,6 +1068,7 @@ pub async fn upsert_folder<R: Runtime>(window: &WebviewWindow<R>, r: Folder) -> 
             FolderIden::WorkspaceId,
             FolderIden::FolderId,
             FolderIden::Name,
+            FolderIden::Description,
             FolderIden::SortPriority,
         ])
         .values_panic([
@@ -1073,6 +1078,7 @@ pub async fn upsert_folder<R: Runtime>(window: &WebviewWindow<R>, r: Folder) -> 
             r.workspace_id.as_str().into(),
             r.folder_id.as_ref().map(|s| s.as_str()).into(),
             trimmed_name.into(),
+            r.description.into(),
             r.sort_priority.into(),
         ])
         .on_conflict(
@@ -1080,6 +1086,7 @@ pub async fn upsert_folder<R: Runtime>(window: &WebviewWindow<R>, r: Folder) -> 
                 .update_columns([
                     FolderIden::UpdatedAt,
                     FolderIden::Name,
+                    FolderIden::Description,
                     FolderIden::FolderId,
                     FolderIden::SortPriority,
                 ])
@@ -1102,7 +1109,77 @@ pub async fn duplicate_http_request<R: Runtime>(
         Some(r) => r,
     };
     request.id = "".to_string();
+    request.sort_priority = request.sort_priority + 0.001;
     upsert_http_request(window, request).await
+}
+
+pub async fn duplicate_folder<R: Runtime>(
+    window: &WebviewWindow<R>,
+    src_folder: &Folder,
+) -> Result<()> {
+    let workspace_id = src_folder.workspace_id.as_str();
+
+    let http_requests = list_http_requests(window, workspace_id)
+        .await?
+        .into_iter()
+        .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+
+    let grpc_requests = list_grpc_requests(window, workspace_id)
+        .await?
+        .into_iter()
+        .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+
+    let folders = list_folders(window, workspace_id)
+        .await?
+        .into_iter()
+        .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+
+    let new_folder = upsert_folder(
+        window,
+        Folder {
+            id: "".into(),
+            sort_priority: src_folder.sort_priority + 0.001,
+            ..src_folder.clone()
+        },
+    )
+    .await?;
+
+    for m in http_requests {
+        upsert_http_request(
+            window,
+            HttpRequest {
+                id: "".into(),
+                folder_id: Some(new_folder.id.clone()),
+                sort_priority: m.sort_priority + 0.001,
+                ..m
+            },
+        )
+        .await?;
+    }
+    for m in grpc_requests {
+        upsert_grpc_request(
+            window,
+            GrpcRequest {
+                id: "".into(),
+                folder_id: Some(new_folder.id.clone()),
+                sort_priority: m.sort_priority + 0.001,
+                ..m
+            },
+        )
+        .await?;
+    }
+    for m in folders {
+        // Recurse down
+        Box::pin(duplicate_folder(
+            window,
+            &Folder {
+                folder_id: Some(new_folder.id.clone()),
+                ..m
+            },
+        ))
+        .await?;
+    }
+    Ok(())
 }
 
 pub async fn upsert_http_request<R: Runtime>(
@@ -1127,6 +1204,7 @@ pub async fn upsert_http_request<R: Runtime>(
             HttpRequestIden::WorkspaceId,
             HttpRequestIden::FolderId,
             HttpRequestIden::Name,
+            HttpRequestIden::Description,
             HttpRequestIden::Url,
             HttpRequestIden::UrlParameters,
             HttpRequestIden::Method,
@@ -1141,12 +1219,13 @@ pub async fn upsert_http_request<R: Runtime>(
             id.as_str().into(),
             CurrentTimestamp.into(),
             CurrentTimestamp.into(),
-            r.workspace_id.as_str().into(),
+            r.workspace_id.into(),
             r.folder_id.as_ref().map(|s| s.as_str()).into(),
             trimmed_name.into(),
-            r.url.as_str().into(),
+            r.description.into(),
+            r.url.into(),
             serde_json::to_string(&r.url_parameters)?.into(),
-            r.method.as_str().into(),
+            r.method.into(),
             serde_json::to_string(&r.body)?.into(),
             r.body_type.as_ref().map(|s| s.as_str()).into(),
             serde_json::to_string(&r.authentication)?.into(),
@@ -1160,6 +1239,7 @@ pub async fn upsert_http_request<R: Runtime>(
                     HttpRequestIden::UpdatedAt,
                     HttpRequestIden::WorkspaceId,
                     HttpRequestIden::Name,
+                    HttpRequestIden::Description,
                     HttpRequestIden::FolderId,
                     HttpRequestIden::Method,
                     HttpRequestIden::Headers,

@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai/index";
 import { getHttpRequest } from '../lib/store';
@@ -8,7 +8,7 @@ import {updateModelList} from "./useSyncModelStores";
 
 export function useUpdateAnyHttpRequest() {
   const setHttpRequests = useSetAtom(httpRequestsAtom);
-  return useMutation<
+  return useFastMutation<
     HttpRequest,
     unknown,
     { id: string; update: Partial<HttpRequest> | ((r: HttpRequest) => HttpRequest) }

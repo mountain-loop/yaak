@@ -1,7 +1,7 @@
+import { useSearch } from '@tanstack/react-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import classNames from 'classnames';
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { useKeyPressEvent } from 'react-use';
 import { useOsInfo } from '../../hooks/useOsInfo';
 import { capitalize } from '../../lib/capitalize';
@@ -13,17 +13,10 @@ import { SettingsGeneral } from './SettingsGeneral';
 import { SettingsLicense } from './SettingsLicense';
 import { SettingsPlugins } from './SettingsPlugins';
 import { SettingsProxy } from './SettingsProxy';
+import { SettingsTab } from './SettingsTab';
 
 interface Props {
   hide?: () => void;
-}
-
-export enum SettingsTab {
-  General = 'general',
-  Proxy = 'proxy',
-  Appearance = 'appearance',
-  Plugins = 'plugins',
-  License = 'license',
 }
 
 const tabs = [
@@ -36,8 +29,8 @@ const tabs = [
 
 export default function Settings({ hide }: Props) {
   const osInfo = useOsInfo();
-  const [params] = useSearchParams();
-  const [tab, setTab] = useState<string>(params.get('tab') ?? SettingsTab.General);
+  const { tab: tabFromQuery } = useSearch({ from: '/workspaces/$workspaceId/settings' });
+  const [tab, setTab] = useState<string>(tabFromQuery ?? SettingsTab.General);
 
   // Close settings window on escape
   // TODO: Could this be put in a better place? Eg. in Rust key listener when creating the window

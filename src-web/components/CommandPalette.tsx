@@ -1,19 +1,20 @@
-import type { KeyboardEvent, ReactNode } from 'react';
-import type { HotkeyAction } from '../hooks/useHotKey';
+import { useNavigate } from '@tanstack/react-router';
 import classNames from 'classnames';
 import { fuzzyFilter } from 'fuzzbunny';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
-import { useAppRoutes } from '../hooks/useAppRoutes';
 import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
 import { useCreateGrpcRequest } from '../hooks/useCreateGrpcRequest';
 import { useCreateHttpRequest } from '../hooks/useCreateHttpRequest';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDebouncedState } from '../hooks/useDebouncedState';
 import { useDeleteRequest } from '../hooks/useDeleteRequest';
+import { useDialog } from '../hooks/useDialog';
 import { useEnvironments } from '../hooks/useEnvironments';
+import type { HotkeyAction } from '../hooks/useHotKey';
 import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useOpenSettings } from '../hooks/useOpenSettings';
@@ -36,7 +37,6 @@ import { HttpMethodTag } from './core/HttpMethodTag';
 import { Icon } from './core/Icon';
 import { PlainInput } from './core/PlainInput';
 import { HStack } from './core/Stacks';
-import { useDialog } from './DialogContext';
 import { EnvironmentEditDialog } from './EnvironmentEditDialog';
 
 interface CommandPaletteGroup {
@@ -58,7 +58,6 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const [activeEnvironment, setActiveEnvironmentId] = useActiveEnvironment();
   const httpRequestActions = useHttpRequestActions();
-  const routes = useAppRoutes();
   const workspaces = useWorkspaces();
   const environments = useEnvironments();
   const recentEnvironments = useRecentEnvironments();
@@ -78,6 +77,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const deleteRequest = useDeleteRequest(activeRequest?.id ?? null);
   const [, setSidebarHidden] = useSidebarHidden();
   const openSettings = useOpenSettings();
+  const navigate = useNavigate();
 
   const workspaceCommands = useMemo<CommandPaletteItem[]>(() => {
     const commands: CommandPaletteItem[] = [
@@ -267,12 +267,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             <div className="truncate">{fallbackRequestName(r)}</div>
           </HStack>
         ),
-        onSelect: () => {
-          return routes.navigate('request', {
-            workspaceId: r.workspaceId,
-            requestId: r.id,
-            environmentId: activeEnvironment?.id ?? null,
-            cookieJarId: activeCookieJar?.id ?? null,
+        onSelect: async () => {
+          await navigate({
+            to: '/workspaces/$workspaceId/requests/$requestId',
+            params: {
+              workspaceId: r.workspaceId,
+              requestId: r.id,
+            },
+            search: (prev) => ({ ...prev }),
           });
         },
       });
@@ -313,10 +315,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   }, [
     workspaceCommands,
     sortedRequests,
-    routes,
-    activeEnvironment?.id,
-    activeCookieJar?.id,
+    navigate,
     sortedEnvironments,
+    activeEnvironment?.id,
     setActiveEnvironmentId,
     sortedWorkspaces,
     openWorkspace,

@@ -1,6 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { HttpRequest } from '@yaakapp-internal/models';
-import { useToast } from '../components/ToastContext';
+import { useToast } from './useToast';
 import { invokeCmd } from '../lib/tauri';
 import { useActiveWorkspace } from './useActiveWorkspace';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
@@ -14,7 +14,7 @@ export function useImportCurl() {
   const { wasUpdatedExternally } = useRequestUpdateKey(null);
   const toast = useToast();
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['import_curl'],
     mutationFn: async ({
       overwriteRequestId,

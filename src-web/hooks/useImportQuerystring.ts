@@ -1,6 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { HttpUrlParameter } from '@yaakapp-internal/models';
-import { useToast } from '../components/ToastContext';
+import { useToast } from './useToast';
 import { pluralize } from '../lib/pluralize';
 import { getHttpRequest } from '../lib/store';
 import { useRequestEditor } from './useRequestEditor';
@@ -11,7 +11,7 @@ export function useImportQuerystring(requestId: string) {
   const toast = useToast();
   const [, { focusParamsTab, forceParamsRefresh, forceUrlRefresh }] = useRequestEditor();
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['import_querystring'],
     mutationFn: async (url: string) => {
       const split = url.split(/\?(.*)/s);

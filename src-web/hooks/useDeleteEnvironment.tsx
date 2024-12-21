@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { Environment } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai";
 import { InlineCode } from '../components/core/InlineCode';
@@ -12,7 +12,7 @@ export function useDeleteEnvironment(environment: Environment | null) {
   const confirm = useConfirm();
   const setEnvironments = useSetAtom(environmentsAtom);
 
-  return useMutation<Environment | null, string>({
+  return useFastMutation<Environment | null, string>({
     mutationKey: ['delete_environment', environment?.id],
     mutationFn: async () => {
       const confirmed = await confirm({

@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import type { HTMLAttributes } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from '@tanstack/react-router';
 import { trackEvent } from '../../lib/analytics';
 import { Icon } from './Icon';
 
@@ -30,7 +30,7 @@ export function Link({ href, children, className, event, ...other }: Props) {
         {...other}
       >
         <span className="underline">{children}</span>
-        <Icon className="inline absolute right-0.5 top-1.5" size="xs" icon="external_link" />
+        <Icon className="inline absolute right-0.5 top-[0.3em]" size="xs" icon="external_link" />
       </a>
     );
   }

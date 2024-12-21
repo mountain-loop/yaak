@@ -1,11 +1,9 @@
+import { useNavigate } from '@tanstack/react-router';
 import classNames from 'classnames';
 import { useMemo, useRef } from 'react';
 import { useKeyPressEvent } from 'react-use';
-import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
-import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
-import { useAppRoutes } from '../hooks/useAppRoutes';
 import { useHotKey } from '../hooks/useHotKey';
 import { useRecentRequests } from '../hooks/useRecentRequests';
 import { useRequests } from '../hooks/useRequests';
@@ -20,11 +18,9 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
   const dropdownRef = useRef<DropdownRef>(null);
   const activeRequest = useActiveRequest();
   const activeWorkspace = useActiveWorkspace();
-  const [activeEnvironment] = useActiveEnvironment();
-  const [activeCookieJar] = useActiveCookieJar();
-  const routes = useAppRoutes();
   const allRecentRequestIds = useRecentRequests();
   const requests = useRequests();
+  const navigate = useNavigate();
 
   // Handle key-up
   useKeyPressEvent('Control', undefined, () => {
@@ -56,12 +52,14 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
         label: fallbackRequestName(request),
         // leftSlot: <CountBadge className="!ml-0 px-0 w-5" count={recentRequestItems.length} />,
         leftSlot: <HttpMethodTag className="text-right" shortNames request={request} />,
-        onSelect: () => {
-          routes.navigate('request', {
-            requestId: request.id,
-            workspaceId: activeWorkspace.id,
-            environmentId: activeEnvironment?.id ?? null,
-            cookieJarId: activeCookieJar?.id ?? null,
+        onSelect: async () => {
+          await navigate({
+            to: '/workspaces/$workspaceId/requests/$requestId',
+            params: {
+              requestId: request.id,
+              workspaceId: activeWorkspace.id,
+            },
+            search: (prev) => ({ ...prev }),
           });
         },
       });
@@ -82,7 +80,7 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
     }
 
     return { items: recentRequestItems.slice(0, 20), hasRecentRequests: true };
-  }, [activeWorkspace, allRecentRequestIds, requests, routes, activeEnvironment?.id, activeCookieJar?.id]);
+  }, [activeWorkspace, navigate, recentRequestIds, requests]);
 
   return hasRecentRequests ? (
     <Dropdown ref={dropdownRef} items={items}>

@@ -1,7 +1,7 @@
 import type { DialogProps } from '../components/core/Dialog';
-import { useDialog } from '../components/DialogContext';
 import type { PromptProps } from './Prompt';
 import { Prompt } from './Prompt';
+import {useDialog} from "./useDialog";
 
 type Props = Pick<DialogProps, 'title' | 'description'> &
   Omit<PromptProps, 'onClose' | 'onCancel' | 'onResult'> & { id: string };

@@ -1,10 +1,10 @@
-import { useMutation } from '@tanstack/react-query';
-import { useDialog } from '../components/DialogContext';
+import {useDialog} from "./useDialog";
+import { useFastMutation } from './useFastMutation';
 import { ExportDataDialog } from '../components/ExportDataDialog';
 import { useActiveWorkspace } from './useActiveWorkspace';
 import { useAlert } from './useAlert';
 import { useWorkspaces } from './useWorkspaces';
-import { useToast } from '../components/ToastContext';
+import { useToast } from './useToast';
 
 export function useExportData() {
   const workspaces = useWorkspaces();
@@ -13,7 +13,7 @@ export function useExportData() {
   const dialog = useDialog();
   const toast = useToast();
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['export_data'],
     onError: (err: string) => {
       alert({ id: 'export-failed', title: 'Export Failed', body: err });

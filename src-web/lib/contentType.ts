@@ -1,4 +1,4 @@
-import type { EditorProps } from '../components/core/Editor';
+import type { EditorProps } from '../components/core/Editor/Editor';
 
 export function languageFromContentType(
   contentType: string | null,

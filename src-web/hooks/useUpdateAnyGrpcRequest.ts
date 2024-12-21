@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { GrpcRequest } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai/index';
 import { getGrpcRequest } from '../lib/store';
@@ -8,7 +8,7 @@ import { updateModelList } from './useSyncModelStores';
 
 export function useUpdateAnyGrpcRequest() {
   const setGrpcRequests = useSetAtom(grpcRequestsAtom);
-  return useMutation<
+  return useFastMutation<
     GrpcRequest,
     unknown,
     { id: string; update: Partial<GrpcRequest> | ((r: GrpcRequest) => GrpcRequest) }

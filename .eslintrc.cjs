@@ -8,6 +8,7 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'eslint-config-prettier',
   ],
+  plugins: ['react-refresh'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     project: ['./tsconfig.json'],
@@ -32,6 +33,7 @@ module.exports = {
     },
   },
   rules: {
+    'react-refresh/only-export-components': 'error',
     'jsx-a11y/no-autofocus': 'off',
     'react/react-in-jsx-scope': 'off',
     'import/no-unresolved': 'off',

@@ -3,8 +3,8 @@ import type { EditorView } from 'codemirror';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
-import type { EditorProps } from './Editor';
-import { Editor } from './Editor';
+import type { EditorProps } from './Editor/Editor';
+import { Editor } from './Editor/Editor';
 import { IconButton } from './IconButton';
 import { HStack } from './Stacks';
 

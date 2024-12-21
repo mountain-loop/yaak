@@ -1,5 +1,5 @@
+import { getRouteApi, useSearch } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { useEnvironments } from './useEnvironments';
 
 export function useActiveEnvironment() {
@@ -14,24 +14,19 @@ export function useActiveEnvironment() {
 
 export const QUERY_ENVIRONMENT_ID = 'environment_id';
 
+const routeApi = getRouteApi('/workspaces/$workspaceId/');
+
 function useActiveEnvironmentId() {
   // NOTE: This query param is accessed from Rust side, so do not change
-  const [params, setParams] = useSearchParams();
-  const id = params.get(QUERY_ENVIRONMENT_ID);
+  const { environmentId: id } = useSearch({ strict: false });
+  const navigate = routeApi.useNavigate();
 
   const setId = useCallback(
-    (id: string | null) => {
-      setParams((p) => {
-        const existing = Object.fromEntries(p);
-        if (id == null) {
-          delete existing[QUERY_ENVIRONMENT_ID];
-        } else {
-          existing[QUERY_ENVIRONMENT_ID] = id;
-        }
-        return existing;
-      });
-    },
-    [setParams],
+    (environment_id: string | null) =>
+      navigate({
+        search: (prev) => ({ ...prev, environment_id: environment_id ?? undefined }),
+      }),
+    [navigate],
   );
 
   return [id, setId] as const;

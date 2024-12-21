@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { Editor } from './Editor';
+import {Editor} from "./Editor/Editor";
 import type { PairEditorProps } from './PairEditor';
 
 type Props = PairEditorProps;

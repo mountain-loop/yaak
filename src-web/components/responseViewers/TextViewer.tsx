@@ -10,14 +10,14 @@ import { useToggle } from '../../hooks/useToggle';
 import { CopyButton } from '../CopyButton';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
-import type { EditorProps } from '../core/Editor';
-import { Editor } from '../core/Editor';
 import { hyperlink } from '../core/Editor/hyperlink/extension';
 import { IconButton } from '../core/IconButton';
 import { InlineCode } from '../core/InlineCode';
 import { Input } from '../core/Input';
 import { SizeTag } from '../core/SizeTag';
 import { HStack } from '../core/Stacks';
+import type { EditorProps } from '../core/Editor/Editor';
+import { Editor } from '../core/Editor/Editor';
 
 const extraExtensions = [hyperlink];
 const LARGE_RESPONSE_BYTES = 2 * 1000 * 1000;
