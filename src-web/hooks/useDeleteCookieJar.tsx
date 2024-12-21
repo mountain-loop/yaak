@@ -1,12 +1,12 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import type { CookieJar } from '@yaakapp-internal/models';
-import {useSetAtom} from "jotai";
+import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
 import { invokeCmd } from '../lib/tauri';
 import { useConfirm } from './useConfirm';
-import {cookieJarsAtom} from "./useCookieJars";
-import {removeModelById} from "./useSyncModelStores";
+import { cookieJarsAtom } from './useCookieJars';
+import { removeModelById } from './useSyncModelStores';
 
 export function useDeleteCookieJar(cookieJar: CookieJar | null) {
   const confirm = useConfirm();
@@ -33,6 +33,6 @@ export function useDeleteCookieJar(cookieJar: CookieJar | null) {
       if (cookieJar == null) return;
 
       setCookieJars(removeModelById(cookieJar));
-    }
+    },
   });
 }

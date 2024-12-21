@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import type { GrpcConnection } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai";
 import { trackEvent } from '../lib/analytics';

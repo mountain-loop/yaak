@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import { useSendAnyHttpRequest } from './useSendAnyHttpRequest';
 
 export function useSendManyRequests() {

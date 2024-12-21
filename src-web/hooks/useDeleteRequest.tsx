@@ -1,6 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
 import { useDeleteAnyGrpcRequest } from './useDeleteAnyGrpcRequest';
 import { useDeleteAnyHttpRequest } from './useDeleteAnyHttpRequest';
+import { useMutation } from './useMutation';
 
 export function useDeleteRequest(id: string | null) {
   const deleteAnyHttpRequest = useDeleteAnyHttpRequest();

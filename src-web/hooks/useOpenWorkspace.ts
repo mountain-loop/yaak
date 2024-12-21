@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import { invokeCmd } from '../lib/tauri';
 import { router } from '../main';
 import { Route as WorkspaceRoute } from '../routes/workspaces/$workspaceId';

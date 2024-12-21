@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import type { HttpResponse } from '@yaakapp-internal/models';
 import { useCopy } from './useCopy';
 import { getResponseBodyText } from '../lib/responseBody';

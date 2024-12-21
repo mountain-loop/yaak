@@ -5,14 +5,11 @@ import type { CallableHttpRequestAction } from '../hooks/useHttpRequestActions';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { VStack } from './core/Stacks';
 import { DropMarker } from './DropMarker';
-import type { SidebarTreeNode} from './Sidebar';
-import { useSidebarSelectedId } from './Sidebar';
+import type { SidebarTreeNode } from './Sidebar';
 import { SidebarItem } from './SidebarItem';
 
 export interface SidebarItemsProps {
   tree: SidebarTreeNode;
-  focused: boolean;
-  activeId: string | null;
   draggingId: string | null;
   selectedTree: SidebarTreeNode | null;
   treeParentMap: Record<string, SidebarTreeNode>;
@@ -30,8 +27,6 @@ export interface SidebarItemsProps {
 
 function SidebarItems_({
   tree,
-  activeId,
-  focused,
   selectedTree,
   draggingId,
   onSelect,
@@ -46,7 +41,6 @@ function SidebarItems_({
   httpResponses,
   grpcConnections,
 }: SidebarItemsProps) {
-  const [selectedId] = useSidebarSelectedId();
   return (
     <VStack
       as="ul"
@@ -64,7 +58,6 @@ function SidebarItems_({
           <Fragment key={child.item.id}>
             {hoveredIndex === i && hoveredTree?.item.id === tree.item.id && <DropMarker />}
             <SidebarItem
-              selected={selectedId === child.item.id}
               itemId={child.item.id}
               itemName={child.item.name}
               itemFallbackName={
@@ -82,7 +75,6 @@ function SidebarItems_({
               onEnd={handleEnd}
               onSelect={onSelect}
               onDragStart={handleDragStart}
-              useProminentStyles={focused}
               isCollapsed={isCollapsed}
               child={child}
             >
@@ -90,9 +82,7 @@ function SidebarItems_({
                 !isCollapsed(child.item.id) &&
                 draggingId !== child.item.id && (
                   <SidebarItems
-                    activeId={activeId}
                     draggingId={draggingId}
-                    focused={focused}
                     handleDragStart={handleDragStart}
                     handleEnd={handleEnd}
                     handleMove={handleMove}
@@ -120,15 +110,14 @@ function SidebarItems_({
 }
 
 export const SidebarItems = memo<SidebarItemsProps>(SidebarItems_, (a, b) => {
-  let different = false;
+  const different = [];
   for (const key of Object.keys(a) as (keyof SidebarItemsProps)[]) {
     if (a[key] !== b[key]) {
-      console.log('DIFFERENT', key, a[key], b[key]);
-      different = true;
+      different.push(key);
     }
   }
-  if (different) {
-    console.log('DIFFERENT -------------------');
+  if (different.length > 0) {
+    console.log('ITEMS DIFFERENT -------------------', different.join(', '));
   }
-  return !different;
+  return different.length === 0;
 });

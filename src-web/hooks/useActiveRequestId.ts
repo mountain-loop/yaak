@@ -1,6 +1,17 @@
 import { useParams } from '@tanstack/react-router';
+import { atom, useAtomValue } from 'jotai';
+import { useEffect } from 'react';
+import { jotaiStore } from '../routes/__root';
+
+export const activeRequestIdAtom = atom<string>();
 
 export function useActiveRequestId(): string | null {
+  return useAtomValue(activeRequestIdAtom) ?? null;
+}
+
+export function useSubscribeActiveRequestId() {
   const { requestId } = useParams({ strict: false });
-  return requestId ?? null;
+  useEffect(() => {
+    jotaiStore.set(activeRequestIdAtom, requestId);
+  }, [requestId]);
 }

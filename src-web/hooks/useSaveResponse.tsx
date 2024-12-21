@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import { save } from '@tauri-apps/plugin-dialog';
 import mime from 'mime';
 import slugify from 'slugify';

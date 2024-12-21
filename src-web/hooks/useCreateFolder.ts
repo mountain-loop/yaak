@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import type { Folder } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
 import { trackEvent } from '../lib/analytics';
@@ -20,6 +20,7 @@ export function useCreateFolder() {
   >({
     mutationKey: ['create_folder'],
     mutationFn: async (patch) => {
+      console.log("FOLDER", workspace);
       if (workspace === null) {
         throw new Error("Cannot create folder when there's no active workspace");
       }

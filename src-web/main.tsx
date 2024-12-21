@@ -1,9 +1,9 @@
+import './main.css';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { type } from '@tauri-apps/plugin-os';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import './main.css';
 import { routeTree } from './routeTree.gen';
 
 import('react-pdf').then(({ pdfjs }) => {

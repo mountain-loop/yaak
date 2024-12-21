@@ -1,4 +1,3 @@
-import { useMutation } from '@tanstack/react-query';
 import type { Folder } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
@@ -8,6 +7,7 @@ import { invokeCmd } from '../lib/tauri';
 import { useConfirm } from './useConfirm';
 import { foldersAtom } from './useFolders';
 import { removeModelById } from './useSyncModelStores';
+import { useMutation } from './useMutation';
 
 export function useDeleteFolder(id: string | null) {
   const confirm = useConfirm();

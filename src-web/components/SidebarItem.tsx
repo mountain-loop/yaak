@@ -1,11 +1,10 @@
 import type { AnyModel, GrpcConnection, HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
-import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
-
-import { useActiveRequest } from '../hooks/useActiveRequest';
+import { activeRequestAtom } from '../hooks/useActiveRequest';
 import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { useDeleteFolder } from '../hooks/useDeleteFolder';
 import { useDeleteRequest } from '../hooks/useDeleteRequest';
@@ -22,6 +21,7 @@ import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { isResponseLoading } from '../lib/model_util';
 import { getHttpRequest } from '../lib/store';
+import { jotaiStore } from '../routes/__root';
 import type { DropdownItem } from './core/Dropdown';
 import { ContextMenu } from './core/Dropdown';
 import { HttpMethodTag } from './core/HttpMethodTag';
@@ -30,6 +30,7 @@ import { StatusTag } from './core/StatusTag';
 import { useDialog } from './DialogContext';
 import { FolderSettingsDialog } from './FolderSettingsDialog';
 import type { SidebarTreeNode } from './Sidebar';
+import { sidebarFocusedAtom, sidebarSelectedIdAtom } from './Sidebar';
 import type { SidebarItemsProps } from './SidebarItems';
 
 enum ItemTypes {
@@ -42,8 +43,6 @@ export type SidebarItemProps = {
   itemName: string;
   itemFallbackName: string;
   itemModel: AnyModel['model'];
-  useProminentStyles?: boolean;
-  selected: boolean;
   onMove: (id: string, side: 'above' | 'below') => void;
   onEnd: (id: string) => void;
   onDragStart: (id: string) => void;
@@ -69,9 +68,7 @@ function SidebarItem_({
   onSelect,
   isCollapsed,
   className,
-  selected,
   itemFallbackName,
-  useProminentStyles,
   latestHttpResponse,
   latestGrpcConnection,
   httpRequestActions,
@@ -119,7 +116,6 @@ function SidebarItem_({
   connectDrag(connectDrop(ref));
 
   const dialog = useDialog();
-  const activeRequest = useActiveRequest();
   const deleteFolder = useDeleteFolder(itemId);
   const deleteRequest = useDeleteRequest(itemId);
   const renameRequest = useRenameRequest(itemId);
@@ -133,10 +129,37 @@ function SidebarItem_({
   const workspaces = useWorkspaces();
   const updateGrpcRequest = useUpdateAnyGrpcRequest();
   const [editing, setEditing] = useState<boolean>(false);
-  const isActive = activeRequest?.id === itemId;
   const createDropdownItems = useCreateDropdownItems({ folderId: itemId });
 
-  useScrollIntoView(ref.current, isActive);
+  const [selected, setSelected] = useState<boolean>(
+    jotaiStore.get(sidebarSelectedIdAtom) == itemId,
+  );
+  useEffect(() => {
+    jotaiStore.sub(sidebarSelectedIdAtom, () => {
+      const value = jotaiStore.get(sidebarSelectedIdAtom);
+      setSelected(value === itemId);
+    });
+  }, [itemId]);
+
+  const [active, setActive] = useState<boolean>(jotaiStore.get(activeRequestAtom)?.id === itemId);
+  useEffect(() => {
+    jotaiStore.sub(activeRequestAtom, () => {
+      const value = jotaiStore.get(activeRequestAtom);
+      setActive(value?.id === itemId);
+    });
+  }, [itemId]);
+
+  const [sidebarFocused, setSidebarFocused] = useState<boolean>(
+    () => jotaiStore.get(sidebarSelectedIdAtom) == itemId && jotaiStore.get(sidebarFocusedAtom),
+  );
+  useEffect(() => {
+    jotaiStore.sub(sidebarFocusedAtom, () => {
+      const focused = jotaiStore.get(sidebarFocusedAtom);
+      setSidebarFocused(focused);
+    });
+  }, [itemId]);
+
+  useScrollIntoView(ref.current, active);
 
   const handleSubmitNameEdit = useCallback(
     async (el: HTMLInputElement) => {
@@ -326,7 +349,7 @@ function SidebarItem_({
     child.item.model === 'grpc_request') && (
     <HttpMethodTag
       request={child.item}
-      className={classNames(!(isActive || selected) && 'text-text-subtlest')}
+      className={classNames(!(active || selected) && 'text-text-subtlest')}
     />
   );
 
@@ -344,15 +367,15 @@ function SidebarItem_({
           onClick={handleSelect}
           onDoubleClick={handleStartEditing}
           onContextMenu={handleContextMenu}
-          data-active={isActive}
+          data-active={active}
           data-selected={selected}
           className={classNames(
             'w-full flex gap-1.5 items-center h-xs px-1.5 rounded-md focus-visible:ring focus-visible:ring-border-focus outline-0',
             editing && 'ring-1 focus-within:ring-focus',
-            isActive && 'bg-surface-highlight text-text',
-            !isActive && 'text-text-subtle group-hover/item:text-text',
+            active && 'bg-surface-highlight text-text',
+            !active && 'text-text-subtle group-hover/item:text-text',
             showContextMenu && '!text-text', // Show as "active" when context menu is open
-            selected && useProminentStyles && '!bg-surface-active',
+            selected && sidebarFocused && '!bg-surface-active',
           )}
         >
           {itemModel === 'folder' && (
@@ -377,7 +400,9 @@ function SidebarItem_({
                 onKeyDown={handleInputKeyDown}
               />
             ) : (
-              <span className="truncate">{itemName || itemFallbackName}</span>
+              <span className="truncate">
+                {itemName || itemFallbackName}
+              </span>
             )}
           </div>
           {latestGrpcConnection ? (
@@ -402,14 +427,15 @@ function SidebarItem_({
   );
 }
 
-export const SidebarItem = memo<SidebarItemProps>(SidebarItem_); /*(a, b) => {
-  let different = false;
+export const SidebarItem = memo<SidebarItemProps>(SidebarItem_, (a, b) => {
+  const different = [];
   for (const key of Object.keys(a) as (keyof SidebarItemProps)[]) {
     if (a[key] !== b[key]) {
-      different = true;
+      different.push(key);
     }
   }
-  if (different) {
+  if (different.length > 0) {
+    console.log('ITEM DIFFERENT -------------------', different.join(', '));
   }
-  return !different;
-});*/
+  return different.length === 0;
+});

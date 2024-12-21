@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import type { Workspace } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai/index";
 import { getWorkspace } from '../lib/store';

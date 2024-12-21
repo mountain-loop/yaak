@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai/index";
 import { getHttpRequest } from '../lib/store';

@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import React from 'react';
 import { useDialog } from '../components/DialogContext';
 import { MoveToWorkspaceDialog } from '../components/MoveToWorkspaceDialog';

@@ -1,8 +1,8 @@
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 import classNames from 'classnames';
 import { MotionConfig } from 'framer-motion';
+import { createStore, Provider as JotaiProvider } from 'jotai';
 import React, { Suspense } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -11,8 +11,6 @@ import { DialogProvider, Dialogs } from '../components/DialogContext';
 import { GlobalHooks } from '../components/GlobalHooks';
 import { ToastProvider, Toasts } from '../components/ToastContext';
 import { useOsInfo } from '../hooks/useOsInfo';
-
-const ENABLE_REACT_QUERY_DEVTOOLS = true;
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -31,6 +29,7 @@ const queryClient = new QueryClient({
   },
 });
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TanStackRouterDevtools =
   process.env.NODE_ENV === 'production'
     ? () => null // Render nothing in production
@@ -40,42 +39,53 @@ const TanStackRouterDevtools =
         })),
       );
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const ReactQueryDevtools =
+  process.env.NODE_ENV === 'production'
+    ? () => null // Render nothing in production
+    : React.lazy(() =>
+        import('@tanstack/react-query-devtools').then((res) => ({
+          default: res.ReactQueryDevtools,
+        })),
+      );
+
 export const Route = createRootRoute({
   component: RouteComponent,
 });
 
+export const jotaiStore = createStore();
+
 function RouteComponent() {
   const osInfo = useOsInfo();
   return (
-    <QueryClientProvider client={queryClient}>
-      {ENABLE_REACT_QUERY_DEVTOOLS && <ReactQueryDevtools buttonPosition="bottom-left" />}
-      <MotionConfig transition={{ duration: 0.1 }}>
-        <HelmetProvider>
-          <DndProvider backend={HTML5Backend}>
-            <Suspense>
-              <DialogProvider>
-                <ToastProvider>
-                  <>
-                    {/* Must be inside all the providers, so they have access to them */}
+    <JotaiProvider store={jotaiStore}>
+      <QueryClientProvider client={queryClient}>
+        <MotionConfig transition={{ duration: 0.1 }}>
+          <HelmetProvider>
+            <DndProvider backend={HTML5Backend}>
+              <Suspense>
+                <DialogProvider>
+                  <ToastProvider>
+                    <GlobalHooks />
                     <Toasts />
                     <Dialogs />
-                  </>
-                  <div
-                    className={classNames(
-                      'w-full h-full',
-                      osInfo?.osType === 'linux' && 'border border-border-subtle',
-                    )}
-                  >
-                    <Outlet />
-                  </div>
-                  <GlobalHooks />
-                </ToastProvider>
-              </DialogProvider>
-            </Suspense>
-          </DndProvider>
-        </HelmetProvider>
-      </MotionConfig>
-      <TanStackRouterDevtools initialIsOpen />
-    </QueryClientProvider>
+                    <div
+                      className={classNames(
+                        'w-full h-full',
+                        osInfo?.osType === 'linux' && 'border border-border-subtle',
+                      )}
+                    >
+                      <Outlet />
+                    </div>
+                  </ToastProvider>
+                </DialogProvider>
+              </Suspense>
+            </DndProvider>
+          </HelmetProvider>
+        </MotionConfig>
+        {/*<ReactQueryDevtools initialIsOpen />*/}
+        {/*<TanStackRouterDevtools initialIsOpen />*/}
+      </QueryClientProvider>
+    </JotaiProvider>
   );
 }

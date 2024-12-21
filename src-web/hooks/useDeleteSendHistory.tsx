@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import { useSetAtom } from 'jotai/index';
 import { count } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';

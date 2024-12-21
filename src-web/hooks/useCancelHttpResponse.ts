@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import { event } from '@tauri-apps/api';
 import { trackEvent } from '../lib/analytics';
 

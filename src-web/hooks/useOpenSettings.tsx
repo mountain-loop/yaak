@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation } from './useMutation';
 import { SettingsTab } from '../components/Settings/Settings';
 import { trackEvent } from '../lib/analytics';
 import { invokeCmd } from '../lib/tauri';

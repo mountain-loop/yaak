@@ -1,9 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router'
-import Workspace from '../../../components/Workspace'
+import { createFileRoute } from '@tanstack/react-router';
+import { Workspace } from '../../../components/Workspace';
 
 interface WorkspaceSearchSchema {
-  cookieJarId?: string | null
-  environmentId?: string | null
+  cookieJarId?: string | null;
+  environmentId?: string | null;
 }
 
 export const Route = createFileRoute('/workspaces/$workspaceId/')({
@@ -12,8 +12,8 @@ export const Route = createFileRoute('/workspaces/$workspaceId/')({
     environmentId: search.environment_id as string,
     cookieJarId: search.cookie_jar_id as string,
   }),
-})
+});
 
 function RouteComponent() {
-  return <Workspace />
+  return <Workspace />;
 }

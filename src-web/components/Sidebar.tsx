@@ -1,13 +1,11 @@
 import type { Folder, GrpcRequest, HttpRequest, Workspace } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { createGlobalState, useKey, useKeyPressEvent } from 'react-use';
-
-import { useActiveRequest } from '../hooks/useActiveRequest';
+import { atom, useAtom } from 'jotai';
+import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { useKey, useKeyPressEvent } from 'react-use';
+import { getActiveRequest } from '../hooks/useActiveRequest';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
-import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
-import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
 import { useFolders } from '../hooks/useFolders';
 import { useGrpcConnections } from '../hooks/useGrpcConnections';
 import { useHotKey } from '../hooks/useHotKey';
@@ -35,28 +33,20 @@ export interface SidebarTreeNode {
   depth: number;
 }
 
-export const useSidebarSelectedId = createGlobalState<string | null>(null);
+export const sidebarSelectedIdAtom = atom<string | null>(null);
+export const sidebarFocusedAtom = atom<boolean>(false);
 
-export function Sidebar({ className }: Props) {
+export const Sidebar = memo(function Sidebar({ className }: Props) {
   const [hidden, setHidden] = useSidebarHidden();
   const sidebarRef = useRef<HTMLLIElement>(null);
-  const activeRequest = useActiveRequest();
   const folders = useFolders();
   const requests = useRequests();
   const activeWorkspace = useActiveWorkspace();
   const httpRequestActions = useHttpRequestActions();
   const httpResponses = useHttpResponses();
   const grpcConnections = useGrpcConnections();
-  const duplicateHttpRequest = useDuplicateHttpRequest({
-    id: activeRequest?.id ?? null,
-    navigateAfter: true,
-  });
-  const duplicateGrpcRequest = useDuplicateGrpcRequest({
-    id: activeRequest?.id ?? null,
-    navigateAfter: true,
-  });
-  const [hasFocus, setHasFocus] = useState<boolean>(false);
-  const [selectedId, setSelectedId] = useSidebarSelectedId();
+  const [hasFocus, setHasFocus] = useAtom(sidebarFocusedAtom);
+  const [selectedId, setSelectedId] = useAtom(sidebarSelectedIdAtom);
   const [selectedTree, setSelectedTree] = useState<SidebarTreeNode | null>(null);
   const { mutateAsync: updateAnyHttpRequest } = useUpdateAnyHttpRequest();
   const { mutateAsync: updateAnyGrpcRequest } = useUpdateAnyGrpcRequest();
@@ -68,14 +58,6 @@ export function Sidebar({ className }: Props) {
     key: ['sidebar_collapsed', activeWorkspace?.id ?? 'n/a'],
     fallback: {},
     namespace: 'no_sync',
-  });
-
-  useHotKey('http_request.duplicate', async () => {
-    if (activeRequest?.model === 'http_request') {
-      await duplicateHttpRequest.mutateAsync();
-    } else {
-      await duplicateGrpcRequest.mutateAsync();
-    }
   });
 
   const isCollapsed = useCallback((id: string) => collapsed?.[id] ?? false, [collapsed]);
@@ -150,6 +132,7 @@ export function Sidebar({ className }: Props) {
         noFocusSidebar?: boolean;
       } = {},
     ) => {
+      const activeRequest = getActiveRequest();
       const { forced, noFocusSidebar } = args;
       const tree = forced?.tree ?? treeParentMap[activeRequest?.id ?? 'n/a'] ?? null;
       const children = tree?.children ?? [];
@@ -167,7 +150,7 @@ export function Sidebar({ className }: Props) {
         sidebarRef.current?.focus();
       }
     },
-    [activeRequest?.id, setSelectedId, treeParentMap],
+    [setHasFocus, setSelectedId, treeParentMap],
   );
 
   const handleSelect = useCallback(
@@ -192,11 +175,13 @@ export function Sidebar({ className }: Props) {
           },
           search: (prev) => ({ ...prev }),
         });
+
+        setHasFocus(true);
         setSelectedId(id);
         setSelectedTree(tree);
       }
     },
-    [treeParentMap, setCollapsed, setSelectedId],
+    [treeParentMap, setCollapsed, setHasFocus, setSelectedId],
   );
 
   const handleClearSelected = useCallback(() => {
@@ -209,7 +194,7 @@ export function Sidebar({ className }: Props) {
     focusActiveRequest({ noFocusSidebar: true });
   }, [focusActiveRequest, hasFocus]);
 
-  const handleBlur = useCallback(() => setHasFocus(false), []);
+  const handleBlur = useCallback(() => setHasFocus(false), [setHasFocus]);
 
   useHotKey('sidebar.focus', async () => {
     // Hide the sidebar if it's already focused
@@ -234,7 +219,7 @@ export function Sidebar({ className }: Props) {
   useKeyPressEvent('Enter', (e) => {
     if (!hasFocus) return;
     const selected = selectableRequests.find((r) => r.id === selectedId);
-    if (!selected || selected.id === activeRequest?.id || activeWorkspace == null) {
+    if (!selected || activeWorkspace == null) {
       return;
     }
 
@@ -384,8 +369,8 @@ export function Sidebar({ className }: Props) {
       hoveredTree,
       hoveredIndex,
       treeParentMap,
-      updateAnyFolder,
-      updateAnyGrpcRequest,
+      // updateAnyFolder,
+      // updateAnyGrpcRequest,
       updateAnyHttpRequest,
     ],
   );
@@ -432,8 +417,6 @@ export function Sidebar({ className }: Props) {
           httpResponses={httpResponses}
           grpcConnections={grpcConnections}
           tree={tree}
-          activeId={activeRequest?.id ?? null}
-          focused={hasFocus}
           draggingId={draggingId}
           onSelect={handleSelect}
           hoveredIndex={hoveredIndex}
@@ -445,4 +428,4 @@ export function Sidebar({ className }: Props) {
       </div>
     </aside>
   );
-}
+});
