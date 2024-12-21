@@ -9,7 +9,6 @@ import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { useFolders } from '../hooks/useFolders';
 import { useGrpcConnections } from '../hooks/useGrpcConnections';
 import { useHotKey } from '../hooks/useHotKey';
-import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useHttpResponses } from '../hooks/useHttpResponses';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { useRequests } from '../hooks/useRequests';
@@ -33,8 +32,8 @@ export interface SidebarTreeNode {
   depth: number;
 }
 
+// This is an atom so we can use it in the child items to avoid re-rendering the entire list
 export const sidebarSelectedIdAtom = atom<string | null>(null);
-export const sidebarFocusedAtom = atom<boolean>(false);
 
 export const Sidebar = memo(function Sidebar({ className }: Props) {
   const [hidden, setHidden] = useSidebarHidden();
@@ -42,10 +41,9 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
   const folders = useFolders();
   const requests = useRequests();
   const activeWorkspace = useActiveWorkspace();
-  const httpRequestActions = useHttpRequestActions();
   const httpResponses = useHttpResponses();
   const grpcConnections = useGrpcConnections();
-  const [hasFocus, setHasFocus] = useAtom(sidebarFocusedAtom);
+  const [hasFocus, setHasFocus] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useAtom(sidebarSelectedIdAtom);
   const [selectedTree, setSelectedTree] = useState<SidebarTreeNode | null>(null);
   const { mutateAsync: updateAnyHttpRequest } = useUpdateAnyHttpRequest();
@@ -369,8 +367,8 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
       hoveredTree,
       hoveredIndex,
       treeParentMap,
-      // updateAnyFolder,
-      // updateAnyGrpcRequest,
+      updateAnyFolder,
+      updateAnyGrpcRequest,
       updateAnyHttpRequest,
     ],
   );
@@ -401,7 +399,14 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
       onBlur={handleBlur}
       tabIndex={hidden ? -1 : 0}
       onContextMenu={handleMainContextMenu}
-      className={classNames(className, 'h-full grid grid-rows-[minmax(0,1fr)_auto]')}
+      data-focused={hasFocus}
+      className={classNames(
+        className,
+        // Style item selection color here, because it's very hard to do in an efficient
+        // way in the item itself (selection ID makes it hard)
+        hasFocus && '[&_[data-selected=true]]:bg-surface-active',
+        'h-full grid grid-rows-[minmax(0,1fr)_auto]',
+      )}
     >
       <div className="pb-3 overflow-x-visible overflow-y-scroll pt-2">
         <ContextMenu
@@ -413,7 +418,6 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
           treeParentMap={treeParentMap}
           selectedTree={selectedTree}
           isCollapsed={isCollapsed}
-          httpRequestActions={httpRequestActions}
           httpResponses={httpResponses}
           grpcConnections={grpcConnections}
           tree={tree}

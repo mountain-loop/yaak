@@ -1,7 +1,6 @@
 import type { GrpcConnection, HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import React, { Fragment, memo } from 'react';
-import type { CallableHttpRequestAction } from '../hooks/useHttpRequestActions';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { VStack } from './core/Stacks';
 import { DropMarker } from './DropMarker';
@@ -20,7 +19,6 @@ export interface SidebarItemsProps {
   handleDragStart: (id: string) => void;
   onSelect: (requestId: string) => void;
   isCollapsed: (id: string) => boolean;
-  httpRequestActions: CallableHttpRequestAction[];
   httpResponses: HttpResponse[];
   grpcConnections: GrpcConnection[];
 }
@@ -37,7 +35,6 @@ function SidebarItems_({
   handleEnd,
   handleMove,
   handleDragStart,
-  httpRequestActions,
   httpResponses,
   grpcConnections,
 }: SidebarItemsProps) {
@@ -66,7 +63,6 @@ function SidebarItems_({
                   : 'New Folder'
               }
               itemModel={child.item.model}
-              httpRequestActions={httpRequestActions}
               latestHttpResponse={httpResponses.find((r) => r.requestId === child.item.id) ?? null}
               latestGrpcConnection={
                 grpcConnections.find((c) => c.requestId === child.item.id) ?? null
@@ -88,7 +84,6 @@ function SidebarItems_({
                     handleMove={handleMove}
                     hoveredIndex={hoveredIndex}
                     hoveredTree={hoveredTree}
-                    httpRequestActions={httpRequestActions}
                     httpResponses={httpResponses}
                     grpcConnections={grpcConnections}
                     isCollapsed={isCollapsed}

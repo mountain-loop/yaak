@@ -159,7 +159,7 @@ export function Workspace() {
       >
         <WorkspaceHeader className="pointer-events-none" />
       </HeaderSize>
-      {/*<WorkspaceBody />*/}
+      <WorkspaceBody />
     </div>
   );
 }
