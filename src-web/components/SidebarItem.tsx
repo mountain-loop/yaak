@@ -215,7 +215,6 @@ function SidebarItem_({
             active && 'bg-surface-highlight text-text',
             !active && 'text-text-subtle group-hover/item:text-text',
             showContextMenu && '!text-text', // Show as "active" when context menu is open
-            selected && '!bg-surface-active',
           )}
         >
           {itemModel === 'folder' && (
