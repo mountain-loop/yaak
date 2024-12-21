@@ -45,13 +45,20 @@ function pluginHookImport(_ctx, contents) {
     model: "workspace",
     id: generateId("workspace"),
     name: info.name || "Postman Import",
-    description: info.description?.content ?? info.description ?? "",
+    description: info.description?.content ?? info.description ?? ""
+  };
+  exportResources.workspaces.push(workspace);
+  const environment = {
+    model: "environment",
+    id: generateId("environment"),
+    name: "Global Variables",
+    workspaceId: workspace.id,
     variables: root.variable?.map((v) => ({
       name: v.key,
       value: v.value
     })) ?? []
   };
-  exportResources.workspaces.push(workspace);
+  exportResources.environments.push(environment);
   const importItem = (v, folderId = null) => {
     if (typeof v.name === "string" && Array.isArray(v.item)) {
       const folder = {
