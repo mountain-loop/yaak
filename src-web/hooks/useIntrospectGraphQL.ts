@@ -1,7 +1,6 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
-import type { IntrospectionQuery } from 'graphql';
+import { buildClientSchema, getIntrospectionQuery, type IntrospectionQuery } from 'graphql';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { buildClientSchema, getIntrospectionQuery } from '../components/core/Editor';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { getResponseBodyText } from '../lib/responseBody';
 import { sendEphemeralRequest } from '../lib/sendEphemeralRequest';

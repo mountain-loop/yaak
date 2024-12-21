@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { Folder } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
 import { trackEvent } from '../lib/analytics';
@@ -13,13 +13,14 @@ export function useCreateFolder() {
   const prompt = usePrompt();
   const setFolders = useSetAtom(foldersAtom);
 
-  return useMutation<
+  return useFastMutation<
     Folder | null,
     unknown,
     Partial<Pick<Folder, 'name' | 'sortPriority' | 'folderId'>>
   >({
     mutationKey: ['create_folder'],
     mutationFn: async (patch) => {
+      console.log("FOLDER", workspace);
       if (workspace === null) {
         throw new Error("Cannot create folder when there's no active workspace");
       }

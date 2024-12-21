@@ -3,7 +3,7 @@ import { useLicense } from '@yaakapp-internal/license';
 import { useOpenSettings } from '../hooks/useOpenSettings';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
-import { SettingsTab } from './Settings/Settings';
+import {SettingsTab} from "./Settings/SettingsTab";
 
 const details: Record<
   LicenseCheckStatus['type'],

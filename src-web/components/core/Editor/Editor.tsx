@@ -19,11 +19,11 @@ import {
   useRef,
 } from 'react';
 import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
+import {useDialog} from "../../../hooks/useDialog";
 import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useSettings } from '../../../hooks/useSettings';
 import { useTemplateFunctions } from '../../../hooks/useTemplateFunctions';
-import { useDialog } from '../../DialogContext';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
@@ -32,11 +32,6 @@ import './Editor.css';
 import { baseExtensions, getLanguageExtension, multiLineExtensions } from './extensions';
 import type { GenericCompletionConfig } from './genericCompletion';
 import { singleLineExt } from './singleLine';
-
-// Export some things so all the code-split parts are in this file
-export { buildClientSchema, getIntrospectionQuery } from 'graphql/utilities';
-export { graphql } from 'cm6-graphql';
-export { formatSdl } from 'format-graphql';
 
 export interface EditorProps {
   id?: string;

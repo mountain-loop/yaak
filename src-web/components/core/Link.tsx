@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import type { HTMLAttributes } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from '@tanstack/react-router';
 import { trackEvent } from '../../lib/analytics';
 import { Icon } from './Icon';
 

@@ -1,6 +1,6 @@
 import { open } from '@tauri-apps/plugin-shell';
 import { Button } from '../components/core/Button';
-import { useToast } from '../components/ToastContext';
+import { useToast } from './useToast';
 import { invokeCmd } from '../lib/tauri';
 import { useListenToTauriEvent } from './useListenToTauriEvent';
 

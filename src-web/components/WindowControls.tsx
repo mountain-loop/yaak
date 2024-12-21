@@ -2,6 +2,7 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import classNames from 'classnames';
 import React, { useState } from 'react';
 import { useOsInfo } from '../hooks/useOsInfo';
+import {WINDOW_CONTROLS_WIDTH} from "../lib/constants";
 import { Button } from './core/Button';
 import { HStack } from './core/Stacks';
 
@@ -10,8 +11,6 @@ interface Props {
   onlyX?: boolean;
   macos?: boolean;
 }
-
-export const WINDOW_CONTROLS_WIDTH = '10.5rem';
 
 export function WindowControls({ className, onlyX }: Props) {
   const [maximized, setMaximized] = useState<boolean>(false);

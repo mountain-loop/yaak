@@ -10,7 +10,7 @@ import type { DropdownRef } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
-import { useDialog } from './DialogContext';
+import { useDialog } from '../hooks/useDialog';
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 
 export function SettingsDropdown() {

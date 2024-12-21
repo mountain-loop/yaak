@@ -1,6 +1,5 @@
 import { useUpdateWorkspace } from '../hooks/useUpdateWorkspace';
 import { useWorkspaces } from '../hooks/useWorkspaces';
-import { Banner } from './core/Banner';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -18,9 +17,6 @@ export function WorkspaceSettingsDialog({ workspaceId }: Props) {
 
   return (
     <VStack space={3} className="pb-3">
-      {updateWorkspace.error != null && (
-        <Banner color="danger">{String(updateWorkspace.error)}</Banner>
-      )}
       <PlainInput
         label="Workspace Name"
         defaultValue={workspace.name}

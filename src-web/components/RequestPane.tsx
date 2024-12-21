@@ -13,6 +13,7 @@ import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEdit
 import { useRequests } from '../hooks/useRequests';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
+import { useToast } from '../hooks/useToast';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { languageFromContentType } from '../lib/contentType';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
@@ -34,7 +35,7 @@ import { BasicAuth } from './BasicAuth';
 import { BearerAuth } from './BearerAuth';
 import { BinaryFileEditor } from './BinaryFileEditor';
 import { CountBadge } from './core/CountBadge';
-import { Editor } from './core/Editor';
+import { Editor } from './core/Editor/Editor';
 import type {
   GenericCompletionConfig,
   GenericCompletionOption,
@@ -50,7 +51,6 @@ import { FormUrlencodedEditor } from './FormUrlencodedEditor';
 import { GraphQLEditor } from './GraphQLEditor';
 import { HeadersEditor } from './HeadersEditor';
 import { MarkdownEditor } from './MarkdownEditor';
-import { useToast } from './ToastContext';
 import { UrlBar } from './UrlBar';
 import { UrlParametersEditor } from './UrlParameterEditor';
 
@@ -446,25 +446,28 @@ export const RequestPane = memo(function RequestPane({
                 <EmptyStateText>Empty Body</EmptyStateText>
               )}
             </TabContent>
-            <TabContent value={TAB_DESCRIPTION}><div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">
-              <PlainInput
-                label="Request Name"
-                hideLabel
-                defaultValue={activeRequest.name}
-                className="font-sans !text-xl !px-0"
-                containerClassName="border-0"
-                placeholder={fallbackRequestName(activeRequest)}
-                onChange={(name) => updateRequest.mutate({ id: activeRequestId, update: { name } })}
-              />
-              <MarkdownEditor
-                name="request-description"
-                placeholder="Request description"
-                defaultValue={activeRequest.description}
-                onChange={(description) =>
-                  updateRequest.mutate({ id: activeRequestId, update: { description } })
-                }
-              />
-            </div>
+            <TabContent value={TAB_DESCRIPTION}>
+              <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">
+                <PlainInput
+                  label="Request Name"
+                  hideLabel
+                  defaultValue={activeRequest.name}
+                  className="font-sans !text-xl !px-0"
+                  containerClassName="border-0"
+                  placeholder={fallbackRequestName(activeRequest)}
+                  onChange={(name) =>
+                    updateRequest.mutate({ id: activeRequestId, update: { name } })
+                  }
+                />
+                <MarkdownEditor
+                  name="request-description"
+                  placeholder="Request description"
+                  defaultValue={activeRequest.description}
+                  onChange={(description) =>
+                    updateRequest.mutate({ id: activeRequestId, update: { description } })
+                  }
+                />
+              </div>
             </TabContent>
           </Tabs>
         </>

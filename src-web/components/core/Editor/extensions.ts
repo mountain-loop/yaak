@@ -37,7 +37,7 @@ import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import type { TemplateFunction } from '@yaakapp-internal/plugin';
 import { graphql } from 'cm6-graphql';
 import { EditorView } from 'codemirror';
-import type { EditorProps } from './index';
+import type {EditorProps} from "./Editor";
 import { pairs } from './pairs/extension';
 import { text } from './text/extension';
 import { twig } from './twig/extension';

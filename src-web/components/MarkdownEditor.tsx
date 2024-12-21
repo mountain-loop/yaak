@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useKeyValue } from '../hooks/useKeyValue';
-import { Editor } from './core/Editor';
+import {Editor} from "./core/Editor/Editor";
 import { IconButton } from './core/IconButton';
 import { SplitLayout } from './core/SplitLayout';
 import { VStack } from './core/Stacks';

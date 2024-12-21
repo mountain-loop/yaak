@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
@@ -14,7 +14,7 @@ export function useDeleteAnyHttpRequest() {
   const confirm = useConfirm();
   const setHttpRequests = useSetAtom(httpRequestsAtom);
 
-  return useMutation<HttpRequest | null, string, string>({
+  return useFastMutation<HttpRequest | null, string, string>({
     mutationKey: ['delete_any_http_request'],
     mutationFn: async (id) => {
       const request = await getHttpRequest(id);

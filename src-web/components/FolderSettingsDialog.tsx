@@ -1,6 +1,5 @@
 import { useFolders } from '../hooks/useFolders';
 import { useUpdateAnyFolder } from '../hooks/useUpdateAnyFolder';
-import { Banner } from './core/Banner';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -10,7 +9,7 @@ interface Props {
 }
 
 export function FolderSettingsDialog({ folderId }: Props) {
-  const updateFolder = useUpdateAnyFolder();
+  const { mutate: updateFolder } = useUpdateAnyFolder();
   const folders = useFolders();
   const folder = folders.find((f) => f.id === folderId);
 
@@ -18,13 +17,12 @@ export function FolderSettingsDialog({ folderId }: Props) {
 
   return (
     <VStack space={3} className="pb-3">
-      {updateFolder.error != null && <Banner color="danger">{String(updateFolder.error)}</Banner>}
       <PlainInput
         label="Folder Name"
         defaultValue={folder.name}
         onChange={(name) => {
           if (folderId == null) return;
-          updateFolder.mutate({ id: folderId, update: (folder) => ({ ...folder, name }) });
+          updateFolder({ id: folderId, update: (folder) => ({ ...folder, name }) });
         }}
       />
 
@@ -35,7 +33,7 @@ export function FolderSettingsDialog({ folderId }: Props) {
         defaultValue={folder.description}
         onChange={(description) => {
           if (folderId == null) return;
-          updateFolder.mutate({
+          updateFolder({
             id: folderId,
             update: (folder) => ({ ...folder, description }),
           });

@@ -1,28 +1,24 @@
-import { useMutation } from '@tanstack/react-query';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai/index';
 import { trackEvent } from '../lib/analytics';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveCookieJar } from './useActiveCookieJar';
-import { useActiveEnvironment } from './useActiveEnvironment';
-import { useActiveRequest } from './useActiveRequest';
+import { getActiveRequest } from './useActiveRequest';
 import { useActiveWorkspace } from './useActiveWorkspace';
-import { useAppRoutes } from './useAppRoutes';
+import { useFastMutation } from './useFastMutation';
 import { httpRequestsAtom } from './useHttpRequests';
 import { updateModelList } from './useSyncModelStores';
+import { useNavigate } from '@tanstack/react-router';
 
 export function useCreateHttpRequest() {
-  const workspace = useActiveWorkspace();
-  const [activeEnvironment] = useActiveEnvironment();
-  const [activeCookieJar] = useActiveCookieJar();
-  const activeRequest = useActiveRequest();
-  const routes = useAppRoutes();
+  const activeWorkspace = useActiveWorkspace();
   const setHttpRequests = useSetAtom(httpRequestsAtom);
+  const navigate = useNavigate();
 
-  return useMutation<HttpRequest, unknown, Partial<HttpRequest>>({
+  return useFastMutation<HttpRequest, unknown, Partial<HttpRequest>>({
     mutationKey: ['create_http_request'],
     mutationFn: async (patch = {}) => {
-      if (workspace === null) {
+      const activeRequest = getActiveRequest();
+      if (activeWorkspace === null) {
         throw new Error("Cannot create request when there's no active workspace");
       }
       if (patch.sortPriority === undefined) {
@@ -36,7 +32,7 @@ export function useCreateHttpRequest() {
       }
       patch.folderId = patch.folderId || activeRequest?.folderId;
       return invokeCmd<HttpRequest>('cmd_create_http_request', {
-        request: { workspaceId: workspace.id, ...patch },
+        request: { workspaceId: activeWorkspace.id, ...patch },
       });
     },
     onSettled: () => trackEvent('http_request', 'create'),
@@ -44,11 +40,10 @@ export function useCreateHttpRequest() {
       // Optimistic update
       setHttpRequests(updateModelList(request));
 
-      routes.navigate('request', {
-        workspaceId: request.workspaceId,
-        requestId: request.id,
-        environmentId: activeEnvironment?.id ?? null,
-        cookieJarId: activeCookieJar?.id ?? null,
+      await navigate({
+        to: '/workspaces/$workspaceId/requests/$requestId',
+        params: { workspaceId: request.workspaceId, requestId: request.id },
+        search: (prev) => ({ ...prev }),
       });
     },
   });

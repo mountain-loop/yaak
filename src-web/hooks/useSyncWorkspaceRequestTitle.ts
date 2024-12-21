@@ -1,15 +1,14 @@
+import { emit } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useEffect } from 'react';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { useActiveEnvironment } from './useActiveEnvironment';
-import { useActiveRequest } from './useActiveRequest';
+import { getActiveRequest } from './useActiveRequest';
 import { useActiveWorkspace } from './useActiveWorkspace';
 import { useAppInfo } from './useAppInfo';
 import { useOsInfo } from './useOsInfo';
-import { emit } from '@tauri-apps/api/event';
 
 export function useSyncWorkspaceRequestTitle() {
-  const activeRequest = useActiveRequest();
   const activeWorkspace = useActiveWorkspace();
   const [activeEnvironment] = useActiveEnvironment();
   const osInfo = useOsInfo();
@@ -24,6 +23,7 @@ export function useSyncWorkspaceRequestTitle() {
     if (activeEnvironment) {
       newTitle += ` [${activeEnvironment.name}]`;
     }
+    const activeRequest = getActiveRequest();
     if (activeRequest) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       newTitle += ` › ${fallbackRequestName(activeRequest)}`;
@@ -40,5 +40,5 @@ export function useSyncWorkspaceRequestTitle() {
     } else {
       emit('yaak_title_changed', newTitle).catch(console.error);
     }
-  }, [activeEnvironment, activeRequest, activeWorkspace, appInfo.isDev, osInfo.osType]);
+  }, [activeEnvironment, activeWorkspace, appInfo.isDev, osInfo.osType]);
 }

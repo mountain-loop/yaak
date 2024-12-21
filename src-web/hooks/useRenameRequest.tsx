@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 import { InlineCode } from '../components/core/InlineCode';
 import { usePrompt } from './usePrompt';
@@ -12,7 +12,8 @@ export function useRenameRequest(requestId: string | null) {
   const updateGrpcRequest = useUpdateAnyGrpcRequest();
   const requests = useRequests();
 
-  return useMutation({
+  return useFastMutation({
+    mutationKey: ['rename_request'],
     mutationFn: async () => {
       const request = requests.find((r) => r.id === requestId);
       if (request == null) return;

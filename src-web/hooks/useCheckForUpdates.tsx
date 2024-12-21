@@ -8,6 +8,7 @@ import { useAppInfo } from './useAppInfo';
 export function useCheckForUpdates() {
   const alert = useAlert();
   const appInfo = useAppInfo();
+
   return useMutation({
     mutationKey: ['check_for_updates'],
     mutationFn: async () => {

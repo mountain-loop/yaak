@@ -9,7 +9,7 @@ import { Dropdown, type DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
-import { useDialog } from './DialogContext';
+import { useDialog } from '../hooks/useDialog';
 
 export function CookieDropdown() {
   const cookieJars = useCookieJars() ?? [];

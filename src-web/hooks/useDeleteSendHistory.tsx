@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import { useSetAtom } from 'jotai/index';
 import { count } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
@@ -20,7 +20,7 @@ export function useDeleteSendHistory() {
     grpcConnections.length > 0 ? count('Grpc Connection', grpcConnections.length) : null,
   ].filter((l) => l != null);
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['delete_send_history'],
     mutationFn: async () => {
       if (labels.length === 0) {

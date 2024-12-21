@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { CookieJar } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai";
 import { trackEvent } from '../lib/analytics';
@@ -13,7 +13,7 @@ export function useCreateCookieJar() {
   const prompt = usePrompt();
   const setCookieJars = useSetAtom(cookieJarsAtom);
 
-  return useMutation<CookieJar | null>({
+  return useFastMutation<CookieJar | null>({
     mutationKey: ['create_cookie_jar'],
     mutationFn: async () => {
       if (workspace === null) {

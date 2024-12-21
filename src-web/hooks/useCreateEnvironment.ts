@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { Environment } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai";
 import { trackEvent } from '../lib/analytics';
@@ -15,7 +15,7 @@ export function useCreateEnvironment() {
   const workspace = useActiveWorkspace();
   const setEnvironments = useSetAtom(environmentsAtom);
 
-  return useMutation<Environment | null, unknown, void>({
+  return useFastMutation<Environment | null, unknown, void>({
     mutationKey: ['create_environment'],
     mutationFn: async () => {
       const name = await prompt({
@@ -42,7 +42,7 @@ export function useCreateEnvironment() {
       // Optimistic update
       setEnvironments(updateModelList(environment));
 
-      setActiveEnvironmentId(environment.id);
+      await setActiveEnvironmentId(environment.id);
     },
   });
 }

@@ -14,7 +14,7 @@ import type { DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
-import { useDialog } from './DialogContext';
+import { useDialog } from '../hooks/useDialog';
 import { OpenWorkspaceDialog } from './OpenWorkspaceDialog';
 import { WorkspaceSettingsDialog } from './WorkpaceSettingsDialog';
 

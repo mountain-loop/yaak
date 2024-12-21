@@ -9,7 +9,6 @@ import { useImportData } from '../hooks/useImportData';
 import { useShouldFloatSidebar } from '../hooks/useShouldFloatSidebar';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
-import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -31,16 +30,11 @@ const head = { gridArea: 'head' };
 const body = { gridArea: 'body' };
 const drag = { gridArea: 'drag' };
 
-export default function Workspace() {
-  useSyncWorkspaceRequestTitle();
-
+export function Workspace() {
   const workspaces = useWorkspaces();
-  const activeWorkspace = useActiveWorkspace();
   const { setWidth, width, resetWidth } = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
-  const activeRequest = useActiveRequest();
-  const importData = useImportData();
   const floating = useShouldFloatSidebar();
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const moveState = useRef<{ move: (e: MouseEvent) => void; up: (e: MouseEvent) => void } | null>(
@@ -161,34 +155,50 @@ export default function Workspace() {
       >
         <WorkspaceHeader className="pointer-events-none" />
       </HeaderSize>
-      {activeWorkspace == null ? (
-        <div className="m-auto">
-          <Banner color="warning" className="max-w-[30rem]">
-            The active workspace was not found. Select a workspace from the header menu or report
-            this bug to <FeedbackLink />
-          </Banner>
-        </div>
-      ) : activeRequest == null ? (
-        <HotKeyList
-          hotkeys={['http_request.create', 'sidebar.focus', 'settings.show']}
-          bottomSlot={
-            <HStack space={1} justifyContent="center" className="mt-3">
-              <Button variant="border" size="sm" onClick={() => importData.mutate()}>
-                Import
-              </Button>
-              <CreateDropdown hideFolder>
-                <Button variant="border" forDropdown size="sm">
-                  New Request
-                </Button>
-              </CreateDropdown>
-            </HStack>
-          }
-        />
-      ) : activeRequest.model === 'grpc_request' ? (
-        <GrpcConnectionLayout style={body} />
-      ) : (
-        <HttpRequestLayout activeRequest={activeRequest} style={body} />
-      )}
+      <WorkspaceBody />
     </div>
   );
+}
+
+function WorkspaceBody() {
+  const activeRequest = useActiveRequest();
+  const activeWorkspace = useActiveWorkspace();
+  const importData = useImportData();
+
+  if (activeWorkspace == null) {
+    return (
+      <div className="m-auto">
+        <Banner color="warning" className="max-w-[30rem]">
+          The active workspace was not found. Select a workspace from the header menu or report this
+          bug to <FeedbackLink />
+        </Banner>
+      </div>
+    );
+  }
+
+  if (activeRequest == null) {
+    return (
+      <HotKeyList
+        hotkeys={['http_request.create', 'sidebar.focus', 'settings.show']}
+        bottomSlot={
+          <HStack space={1} justifyContent="center" className="mt-3">
+            <Button variant="border" size="sm" onClick={() => importData.mutate()}>
+              Import
+            </Button>
+            <CreateDropdown hideFolder>
+              <Button variant="border" forDropdown size="sm">
+                New Request
+              </Button>
+            </CreateDropdown>
+          </HStack>
+        }
+      />
+    );
+  }
+
+  if (activeRequest.model === 'grpc_request') {
+    return <GrpcConnectionLayout style={body} />;
+  }
+
+  return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
 }

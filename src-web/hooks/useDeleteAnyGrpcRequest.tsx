@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { GrpcRequest } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai";
 import { InlineCode } from '../components/core/InlineCode';
@@ -14,7 +14,7 @@ export function useDeleteAnyGrpcRequest() {
   const confirm = useConfirm();
   const setGrpcRequests = useSetAtom(grpcRequestsAtom);
 
-  return useMutation<GrpcRequest | null, string, string>({
+  return useFastMutation<GrpcRequest | null, string, string>({
     mutationKey: ['delete_any_grpc_request'],
     mutationFn: async (id) => {
       const request = await getGrpcRequest(id);

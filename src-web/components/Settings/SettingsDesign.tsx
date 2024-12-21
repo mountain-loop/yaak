@@ -8,7 +8,7 @@ import { yaakDark } from '../../lib/theme/themes/yaak';
 import { getThemeCSS } from '../../lib/theme/window';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
-import { Editor } from '../core/Editor';
+import {Editor} from "../core/Editor/Editor";
 import type { IconProps } from '../core/Icon';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';

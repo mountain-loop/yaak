@@ -16,13 +16,13 @@ import { tryFormatJson } from '../lib/formatters';
 import type { GrpcRequest } from '@yaakapp-internal/models';
 import { count } from '../lib/pluralize';
 import { Button } from './core/Button';
-import type { EditorProps } from './core/Editor';
-import { Editor } from './core/Editor';
 import { FormattedError } from './core/FormattedError';
 import { InlineCode } from './core/InlineCode';
 import { VStack } from './core/Stacks';
-import { useDialog } from './DialogContext';
+import { useDialog } from '../hooks/useDialog';
 import { GrpcProtoSelection } from './GrpcProtoSelection';
+import type { EditorProps} from './core/Editor/Editor';
+import {Editor} from './core/Editor/Editor';
 
 type Props = Pick<EditorProps, 'heightMode' | 'onChange' | 'className'> & {
   services: ReflectResponseService[] | null;

@@ -9,7 +9,7 @@ import { getThemes } from '../../lib/theme/themes';
 import { isThemeDark } from '../../lib/theme/window';
 import type { ButtonProps } from '../core/Button';
 import { Checkbox } from '../core/Checkbox';
-import { Editor } from '../core/Editor';
+import {Editor} from "../core/Editor/Editor";
 import type { IconProps } from '../core/Icon';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';

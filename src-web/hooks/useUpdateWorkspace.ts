@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { Workspace } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai/index";
 import { getWorkspace } from '../lib/store';
@@ -8,7 +8,7 @@ import {workspacesAtom} from "./useWorkspaces";
 
 export function useUpdateWorkspace(id: string | null) {
   const setWorkspaces = useSetAtom(workspacesAtom);
-  return useMutation<Workspace, unknown, Partial<Workspace> | ((w: Workspace) => Workspace)>({
+  return useFastMutation<Workspace, unknown, Partial<Workspace> | ((w: Workspace) => Workspace)>({
     mutationKey: ['update_workspace', id],
     mutationFn: async (v) => {
       const workspace = await getWorkspace(id);

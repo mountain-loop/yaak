@@ -1,9 +1,10 @@
+import './main.css';
+import { RouterProvider } from '@tanstack/react-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { type } from '@tauri-apps/plugin-os';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './components/App';
-import './main.css';
+import { router } from './lib/router';
 
 import('react-pdf').then(({ pdfjs }) => {
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -24,8 +25,9 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Backspace' && e.target === document.body) e.preventDefault();
 });
 
+console.log('Creating React root');
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
-    <App />
+    <RouterProvider router={router} />
   </StrictMode>,
 );

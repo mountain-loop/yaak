@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import { useSetAtom } from 'jotai';
 import { trackEvent } from '../lib/analytics';
 import { invokeCmd } from '../lib/tauri';
@@ -6,7 +6,7 @@ import { httpResponsesAtom } from './useHttpResponses';
 
 export function useDeleteHttpResponses(requestId?: string) {
   const setHttpResponses = useSetAtom(httpResponsesAtom);
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['delete_http_responses', requestId],
     mutationFn: async () => {
       if (requestId === undefined) return;

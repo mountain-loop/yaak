@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { HttpResponse } from '@yaakapp-internal/models';
 import { trackEvent } from '../lib/analytics';
 import { getHttpRequest } from '../lib/store';
@@ -11,7 +11,7 @@ export function useSendAnyHttpRequest() {
   const alert = useAlert();
   const [environment] = useActiveEnvironment();
   const [activeCookieJar] = useActiveCookieJar();
-  return useMutation<HttpResponse | null, string, string | null>({
+  return useFastMutation<HttpResponse | null, string, string | null>({
     mutationKey: ['send_any_request'],
     mutationFn: async (id) => {
       const request = await getHttpRequest(id);

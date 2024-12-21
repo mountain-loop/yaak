@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import type {
   Environment,
   Folder,
@@ -9,19 +9,19 @@ import type {
 import { Button } from '../components/core/Button';
 import { FormattedError } from '../components/core/FormattedError';
 import { VStack } from '../components/core/Stacks';
-import { useDialog } from '../components/DialogContext';
 import { ImportDataDialog } from '../components/ImportDataDialog';
 import { count } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
 import { useActiveWorkspace } from './useActiveWorkspace';
 import { useAlert } from './useAlert';
-import { useAppRoutes } from './useAppRoutes';
+import { useDialog } from './useDialog';
+import { useFastMutation } from './useFastMutation';
 
 export function useImportData() {
-  const routes = useAppRoutes();
   const dialog = useDialog();
   const alert = useAlert();
   const activeWorkspace = useActiveWorkspace();
+  const navigate = useNavigate();
 
   const importData = async (filePath: string): Promise<boolean> => {
     const imported: {
@@ -64,17 +64,18 @@ export function useImportData() {
     });
 
     if (importedWorkspace != null) {
-      routes.navigate('workspace', {
-        workspaceId: importedWorkspace.id,
-        environmentId: imported.environments[0]?.id ?? null,
-        cookieJarId: null,
+      const environmentId = imported.environments[0]?.id ?? null;
+      await navigate({
+        to: '/workspaces/$workspaceId',
+        params: { workspaceId: importedWorkspace.id },
+        search: { environmentId },
       });
     }
 
     return true;
   };
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['import_data'],
     onError: (err: string) => {
       alert({

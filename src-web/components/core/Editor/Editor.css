@@ -86,7 +86,7 @@
 
   &.cm-singleline {
     .cm-editor {
-      @apply w-full h-auto;
+      @apply w-full h-full;
     }
 
     .cm-scroller {

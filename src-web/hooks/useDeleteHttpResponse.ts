@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { HttpResponse } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai";
 import { trackEvent } from '../lib/analytics';
@@ -8,7 +8,7 @@ import {removeModelById} from "./useSyncModelStores";
 
 export function useDeleteHttpResponse(id: string | null) {
   const setHttpResponses = useSetAtom(httpResponsesAtom);
-  return useMutation<HttpResponse>({
+  return useFastMutation<HttpResponse>({
     mutationKey: ['delete_http_response', id],
     mutationFn: async () => {
       return await invokeCmd('cmd_delete_http_response', { id: id });
