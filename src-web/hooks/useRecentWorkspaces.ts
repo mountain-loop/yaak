@@ -11,7 +11,7 @@ const fallback: string[] = [];
 export function useRecentWorkspaces() {
   const workspaces = useWorkspaces();
   const activeWorkspace = useActiveWorkspace();
-  const kv = useKeyValue<string[]>({
+  const {value, set} = useKeyValue<string[]>({
     key: kvKey(),
     namespace,
     fallback,
@@ -19,7 +19,7 @@ export function useRecentWorkspaces() {
 
   // Set history when active request changes
   useEffect(() => {
-    kv.set((currentHistory: string[]) => {
+    set((currentHistory: string[]) => {
       if (activeWorkspace === null) return currentHistory;
       const withoutCurrent = currentHistory.filter((id) => id !== activeWorkspace.id);
       return [activeWorkspace.id, ...withoutCurrent];
@@ -28,8 +28,8 @@ export function useRecentWorkspaces() {
   }, [activeWorkspace]);
 
   const onlyValidIds = useMemo(
-    () => kv.value?.filter((id) => workspaces.some((w) => w.id === id)) ?? [],
-    [kv.value, workspaces],
+    () => value?.filter((id) => workspaces.some((w) => w.id === id)) ?? [],
+    [value, workspaces],
   );
 
   return onlyValidIds;

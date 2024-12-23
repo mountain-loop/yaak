@@ -1,5 +1,5 @@
-import { defaultKeymap } from '@codemirror/commands';
-import { forceParsing } from '@codemirror/language';
+import { defaultKeymap, historyField } from '@codemirror/commands';
+import { foldState, forceParsing } from '@codemirror/language';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { keymap, placeholder as placeholderExt, tooltips } from '@codemirror/view';
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
@@ -71,6 +71,7 @@ export interface EditorProps {
   extraExtensions?: Extension[];
   actions?: ReactNode;
   hideGutter?: boolean;
+  stateKey: string | null;
 }
 
 const emptyVariables: EnvironmentVariable[] = [];
@@ -102,6 +103,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     actions,
     wrapLines,
     hideGutter,
+    stateKey,
   }: EditorProps,
   ref,
 ) {
@@ -284,12 +286,12 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   const initEditorRef = useCallback(
     (container: HTMLDivElement | null) => {
       if (container === null) {
+        saveCachedEditorState(stateKey, cm.current?.view.state ?? null);
         cm.current?.view.destroy();
         cm.current = null;
         return;
       }
 
-      let view: EditorView;
       try {
         const languageCompartment = new Compartment();
         const langExt = getLanguageExtension({
@@ -303,32 +305,37 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
           onClickMissingVariable,
           onClickPathParameter,
         });
+        const extensions = [
+          languageCompartment.of(langExt),
+          placeholderCompartment.current.of(
+            placeholderExt(placeholderElFromText(placeholder ?? '')),
+          ),
+          wrapLinesCompartment.current.of(wrapLines ? [EditorView.lineWrapping] : []),
+          ...getExtensions({
+            container,
+            readOnly,
+            singleLine,
+            hideGutter,
+            onChange: handleChange,
+            onPaste: handlePaste,
+            onPasteOverwrite: handlePasteOverwrite,
+            onFocus: handleFocus,
+            onBlur: handleBlur,
+            onKeyDown: handleKeyDown,
+          }),
+          ...(extraExtensions ?? []),
+        ];
 
-        const state = EditorState.create({
-          doc: `${defaultValue ?? ''}`,
-          extensions: [
-            languageCompartment.of(langExt),
-            placeholderCompartment.current.of(
-              placeholderExt(placeholderElFromText(placeholder ?? '')),
-            ),
-            wrapLinesCompartment.current.of(wrapLines ? [EditorView.lineWrapping] : []),
-            ...getExtensions({
-              container,
-              readOnly,
-              singleLine,
-              hideGutter,
-              onChange: handleChange,
-              onPaste: handlePaste,
-              onPasteOverwrite: handlePasteOverwrite,
-              onFocus: handleFocus,
-              onBlur: handleBlur,
-              onKeyDown: handleKeyDown,
-            }),
-            ...(extraExtensions ?? []),
-          ],
-        });
+        const cachedJsonState = getCachedEditorState(stateKey);
+        const state = cachedJsonState
+          ? EditorState.fromJSON(
+              cachedJsonState,
+              { extensions },
+              { fold: foldState, history: historyField },
+            )
+          : EditorState.create({ doc: `${defaultValue ?? ''}`, extensions });
 
-        view = new EditorView({ state, parent: container });
+        const view = new EditorView({ state, parent: container });
 
         // For large documents, the parser may parse the max number of lines and fail to add
         // things like fold markers because of it.
@@ -529,3 +536,22 @@ const placeholderElFromText = (text: string) => {
   el.innerHTML = text.replaceAll('\n', '<br/>');
   return el;
 };
+
+function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
+  if (!stateKey || state == null) return;
+  sessionStorage.setItem(
+    stateKey,
+    JSON.stringify(state.toJSON({ history: historyField, folds: foldState })),
+  );
+}
+
+function getCachedEditorState(stateKey: string | null) {
+  const serializedState = stateKey ? sessionStorage.getItem(stateKey) : null;
+  if (serializedState == null) return;
+  try {
+    return JSON.parse(serializedState);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (e) {
+    return null;
+  }
+}

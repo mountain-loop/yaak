@@ -1,8 +1,10 @@
+import { deepEqual } from '@tanstack/react-router';
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
+import type { FocusEvent } from 'react';
 import {
-  Fragment,
   forwardRef,
+  Fragment,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -31,21 +33,22 @@ export interface PairEditorRef {
 }
 
 export type PairEditorProps = {
-  pairs: Pair[];
-  onChange: (pairs: Pair[]) => void;
-  forceUpdateKey?: string;
+  allowFileValues?: boolean;
   className?: string;
+  forceUpdateKey?: string;
+  nameAutocomplete?: GenericCompletionConfig;
+  nameAutocompleteVariables?: boolean;
   namePlaceholder?: string;
+  nameValidate?: InputProps['validate'];
+  noScroll?: boolean;
+  onChange: (pairs: Pair[]) => void;
+  pairs: Pair[];
+  stateKey: InputProps['stateKey'];
+  valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
+  valueAutocompleteVariables?: boolean;
   valuePlaceholder?: string;
   valueType?: 'text' | 'password';
-  nameAutocomplete?: GenericCompletionConfig;
-  valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
-  nameAutocompleteVariables?: boolean;
-  valueAutocompleteVariables?: boolean;
-  allowFileValues?: boolean;
-  nameValidate?: InputProps['validate'];
   valueValidate?: InputProps['validate'];
-  noScroll?: boolean;
 };
 
 export type Pair = {
@@ -65,21 +68,22 @@ type PairContainer = {
 
 export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function PairEditor(
   {
+    stateKey,
+    allowFileValues,
     className,
     forceUpdateKey,
     nameAutocomplete,
     nameAutocompleteVariables,
     namePlaceholder,
     nameValidate,
-    valueType,
-    onChange,
     noScroll,
+    onChange,
     pairs: originalPairs,
     valueAutocomplete,
     valueAutocompleteVariables,
     valuePlaceholder,
+    valueType,
     valueValidate,
-    allowFileValues,
   }: PairEditorProps,
   ref,
 ) {
@@ -104,9 +108,13 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
     // Remove empty headers on initial render
     // TODO: Make this not refresh the entire editor when forceUpdateKey changes, using some
     //  sort of diff method or deterministic IDs based on array index and update key
-    const nonEmpty = originalPairs.filter((h) => !(h.name === '' && h.value === ''));
-    const pairs = nonEmpty.map((pair) => newPairContainer(pair));
-    setPairs([...pairs, newPairContainer()]);
+    const nonEmpty = originalPairs.filter(
+      (h, i) => i !== originalPairs.length - 1 && !(h.name === '' && h.value === ''),
+    );
+    const newPairs = nonEmpty.map((pair) => newPairContainer(pair));
+    if (!deepEqual(pairs, newPairs)) {
+      setPairs(pairs);
+    }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceUpdateKey]);
@@ -211,28 +219,29 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
           <Fragment key={p.id}>
             {hoveredIndex === i && <DropMarker />}
             <PairEditorRow
-              pairContainer={p}
-              className="py-1"
-              isLast={isLast}
               allowFileValues={allowFileValues}
-              nameAutocompleteVariables={nameAutocompleteVariables}
-              valueAutocompleteVariables={valueAutocompleteVariables}
-              valueType={valueType}
+              className="py-1"
               forceFocusNamePairId={forceFocusNamePairId}
               forceFocusValuePairId={forceFocusValuePairId}
               forceUpdateKey={forceUpdateKey}
+              index={i}
+              isLast={isLast}
               nameAutocomplete={nameAutocomplete}
-              valueAutocomplete={valueAutocomplete}
+              nameAutocompleteVariables={nameAutocompleteVariables}
               namePlaceholder={namePlaceholder}
-              valuePlaceholder={valuePlaceholder}
               nameValidate={nameValidate}
-              valueValidate={valueValidate}
               onChange={handleChange}
-              onFocus={handleFocus}
               onDelete={handleDelete}
               onEnd={handleEnd}
+              onFocus={handleFocus}
               onMove={handleMove}
-              index={i}
+              pairContainer={p}
+              stateKey={stateKey}
+              valueAutocomplete={valueAutocomplete}
+              valueAutocompleteVariables={valueAutocompleteVariables}
+              valuePlaceholder={valuePlaceholder}
+              valueType={valueType}
+              valueValidate={valueValidate}
             />
           </Fragment>
         );
@@ -260,17 +269,18 @@ type PairEditorRowProps = {
   index: number;
 } & Pick<
   PairEditorProps,
-  | 'nameAutocomplete'
-  | 'valueAutocomplete'
-  | 'nameAutocompleteVariables'
-  | 'valueAutocompleteVariables'
-  | 'valueType'
-  | 'namePlaceholder'
-  | 'valuePlaceholder'
-  | 'nameValidate'
-  | 'valueValidate'
-  | 'forceUpdateKey'
   | 'allowFileValues'
+  | 'forceUpdateKey'
+  | 'nameAutocomplete'
+  | 'nameAutocompleteVariables'
+  | 'namePlaceholder'
+  | 'nameValidate'
+  | 'stateKey'
+  | 'valueAutocomplete'
+  | 'valueAutocompleteVariables'
+  | 'valuePlaceholder'
+  | 'valueType'
+  | 'valueValidate'
 >;
 
 function PairEditorRow({
@@ -279,8 +289,8 @@ function PairEditorRow({
   forceFocusNamePairId,
   forceFocusValuePairId,
   forceUpdateKey,
-  isLast,
   index,
+  isLast,
   nameAutocomplete,
   nameAutocompleteVariables,
   namePlaceholder,
@@ -291,6 +301,7 @@ function PairEditorRow({
   onFocus,
   onMove,
   pairContainer,
+  stateKey,
   valueAutocomplete,
   valueAutocompleteVariables,
   valuePlaceholder,
@@ -417,40 +428,27 @@ function PairEditorRow({
           'gap-0.5 grid-cols-1 grid-rows-2',
         )}
       >
-        {isLast ? (
-          // Use PlainInput for last ones because there's a unique bug where clicking below
-          // the Codemirror input focuses it.
-          <PlainInput
-            hideLabel
-            size="sm"
-            containerClassName={classNames(isLast && 'border-dashed')}
-            label="Name"
-            name={`name[${index}]`}
-            onFocus={handleFocus}
-            placeholder={namePlaceholder ?? 'name'}
-          />
-        ) : (
-          <Input
-            ref={nameInputRef}
-            hideLabel
-            useTemplating
-            wrapLines={false}
-            readOnly={pairContainer.pair.readOnlyName}
-            size="sm"
-            require={!isLast && !!pairContainer.pair.enabled && !!pairContainer.pair.value}
-            validate={nameValidate}
-            forceUpdateKey={forceUpdateKey}
-            containerClassName={classNames(isLast && 'border-dashed')}
-            defaultValue={pairContainer.pair.name}
-            label="Name"
-            name={`name[${index}]`}
-            onChange={handleChangeName}
-            onFocus={handleFocus}
-            placeholder={namePlaceholder ?? 'name'}
-            autocomplete={nameAutocomplete}
-            autocompleteVariables={nameAutocompleteVariables}
-          />
-        )}
+        <Input
+          ref={nameInputRef}
+          hideLabel
+          useTemplating
+          stateKey={`name.${pairContainer.id}.${stateKey}`}
+          wrapLines={false}
+          readOnly={pairContainer.pair.readOnlyName}
+          size="sm"
+          require={!isLast && !!pairContainer.pair.enabled && !!pairContainer.pair.value}
+          validate={nameValidate}
+          forceUpdateKey={forceUpdateKey}
+          containerClassName={classNames(isLast && 'border-dashed')}
+          defaultValue={pairContainer.pair.name}
+          label="Name"
+          name={`name[${index}]`}
+          onChange={handleChangeName}
+          onFocus={handleFocus}
+          placeholder={namePlaceholder ?? 'name'}
+          autocomplete={nameAutocomplete}
+          autocompleteVariables={nameAutocompleteVariables}
+        />
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
           {pairContainer.pair.isFile ? (
             <SelectFile
@@ -459,23 +457,12 @@ function PairEditorRow({
               filePath={pairContainer.pair.value}
               onChange={handleChangeValueFile}
             />
-          ) : isLast ? (
-            // Use PlainInput for last ones because there's a unique bug where clicking below
-            // the Codemirror input focuses it.
-            <PlainInput
-              hideLabel
-              size="sm"
-              containerClassName={classNames(isLast && 'border-dashed')}
-              label="Value"
-              name={`value[${index}]`}
-              onFocus={handleFocus}
-              placeholder={valuePlaceholder ?? 'value'}
-            />
           ) : (
-            <Input
+            <SmartInput
               ref={valueInputRef}
               hideLabel
               useTemplating
+              stateKey={`value.${pairContainer.id}.${stateKey}`}
               wrapLines={false}
               size="sm"
               containerClassName={classNames(isLast && 'border-dashed')}
@@ -579,3 +566,52 @@ const newPairContainer = (initialPair?: Pair): PairContainer => {
   const pair = initialPair ?? { name: '', value: '', enabled: true, isFile: false };
   return { id, pair };
 };
+
+const SmartInput = forwardRef<EditorView, InputProps>(function SmartInput(
+  { onFocus, onBlur, autocomplete, autocompleteVariables, ...props }: InputProps,
+  ref,
+) {
+  const [inputRef, setInputRef] = useState<EditorView | null>(null);
+  useImperativeHandle<EditorView | null, EditorView | null>(ref, () => inputRef);
+
+  const cursorPos = useRef<number | null>(null);
+
+  const initInput = (n: EditorView | null) => {
+    setInputRef(n);
+    console.log('INIT', cursorPos.current);
+    if (n == null || cursorPos.current == null) return;
+
+    inputRef?.dispatch({ selection: { anchor: cursorPos.current } });
+    inputRef?.focus();
+  };
+
+  const [plain, setPlain] = useState<boolean>(true);
+
+  const handleFocus = (e: FocusEvent<HTMLInputElement>) => {
+    setTimeout(() => {
+      onFocus?.();
+
+      console.log('SET CURSOR POS', e.target.selectionEnd);
+      cursorPos.current = e.target.selectionEnd ?? null;
+      setPlain(false);
+    });
+  };
+
+  const handleBlur = () => {
+    // onBlur?.();
+    // setPlain(true);
+  };
+
+  return plain ? (
+    <PlainInput {...props} onFocusRaw={handleFocus} />
+  ) : (
+    <Input
+      ref={initInput}
+      {...props}
+      containerClassName="!border-danger"
+      onBlur={handleBlur}
+      autocomplete={autocomplete}
+      autocompleteVariables={autocompleteVariables}
+    />
+  );
+});

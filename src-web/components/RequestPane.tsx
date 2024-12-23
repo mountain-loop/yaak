@@ -16,7 +16,6 @@ import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useToast } from '../hooks/useToast';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { languageFromContentType } from '../lib/contentType';
-import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { tryFormatJson } from '../lib/formatters';
 import {
   AUTH_TYPE_BASIC,
@@ -338,6 +337,7 @@ export const RequestPane = memo(function RequestPane({
       {activeRequest && (
         <>
           <UrlBar
+            stateKey={`url.${activeRequest.id}`}
             key={forceUpdateKey + urlKey}
             url={activeRequest.url}
             method={activeRequest.method}
@@ -392,6 +392,7 @@ export const RequestPane = memo(function RequestPane({
             </TabContent>
             <TabContent value={TAB_PARAMS}>
               <UrlParametersEditor
+                stateKey={`params.${activeRequest.id}`}
                 forceUpdateKey={forceUpdateKey + urlParametersKey}
                 pairs={urlParameterPairs}
                 onChange={(urlParameters) =>
@@ -475,7 +476,7 @@ export const RequestPane = memo(function RequestPane({
                   defaultValue={activeRequest.name}
                   className="font-sans !text-xl !px-0"
                   containerClassName="border-0"
-                  placeholder={fallbackRequestName(activeRequest)}
+                  placeholder={activeRequest.id}
                   onChange={(name) =>
                     updateRequest.mutate({ id: activeRequestId, update: { name } })
                   }

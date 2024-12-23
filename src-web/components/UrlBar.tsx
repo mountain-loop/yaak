@@ -1,9 +1,9 @@
+import type { HttpRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import type { FormEvent, ReactNode } from 'react';
 import { memo, useRef, useState } from 'react';
 import { useHotKey } from '../hooks/useHotKey';
-import type { HttpRequest } from '@yaakapp-internal/models';
 import type { IconProps } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import type { InputProps } from './core/Input';
@@ -25,6 +25,7 @@ type Props = Pick<HttpRequest, 'url'> & {
   forceUpdateKey: string;
   rightSlot?: ReactNode;
   autocomplete?: InputProps['autocomplete'];
+  stateKey: InputProps['stateKey'];
 };
 
 export const UrlBar = memo(function UrlBar({
@@ -43,6 +44,7 @@ export const UrlBar = memo(function UrlBar({
   autocomplete,
   rightSlot,
   isLoading,
+  stateKey,
 }: Props) {
   const inputRef = useRef<EditorView>(null);
   const [isFocused, setIsFocused] = useState<boolean>(false);
@@ -66,6 +68,7 @@ export const UrlBar = memo(function UrlBar({
       <Input
         autocompleteVariables
         ref={inputRef}
+        stateKey={stateKey}
         size="md"
         wrapLines={isFocused}
         hideLabel

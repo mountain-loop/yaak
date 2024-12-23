@@ -1,17 +1,18 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import { useRef } from 'react';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import type { PairEditorRef } from './core/PairEditor';
+import type { PairEditorProps, PairEditorRef } from './core/PairEditor';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { VStack } from './core/Stacks';
-import { useRef } from 'react';
 
 type Props = {
   forceUpdateKey: string;
   pairs: HttpRequest['headers'];
+  stateKey: PairEditorProps['stateKey'];
   onChange: (headers: HttpRequest['urlParameters']) => void;
 };
 
-export function UrlParametersEditor({ pairs, forceUpdateKey, onChange }: Props) {
+export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey }: Props) {
   const pairEditor = useRef<PairEditorRef>(null);
   const [{ urlParametersKey }] = useRequestEditor();
 
@@ -32,14 +33,15 @@ export function UrlParametersEditor({ pairs, forceUpdateKey, onChange }: Props) 
     <VStack className="h-full">
       <PairOrBulkEditor
         ref={pairEditor}
-        preferenceName="url_parameters"
-        valueAutocompleteVariables
+        forceUpdateKey={forceUpdateKey + urlParametersKey}
         nameAutocompleteVariables
         namePlaceholder="param_name"
-        valuePlaceholder="Value"
-        pairs={pairs}
         onChange={onChange}
-        forceUpdateKey={forceUpdateKey + urlParametersKey}
+        pairs={pairs}
+        preferenceName="url_parameters"
+        stateKey={stateKey}
+        valueAutocompleteVariables
+        valuePlaceholder="Value"
       />
     </VStack>
   );
