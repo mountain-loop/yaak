@@ -20,7 +20,7 @@ const kanagawaDragon: YaakTheme = {
   components: {
     button: {
       primary: new YaakColor('#C8C093', 'dark'),
-      secondary: new YaakColor('#7b6c9e', 'dark'),
+      secondary: new YaakColor('#7B6C9E', 'dark'),
       info: new YaakColor('#7FB4CA', 'dark'),
       success: new YaakColor('#87A987', 'dark'),
       notice: new YaakColor('#E6C384', 'dark'),
@@ -29,9 +29,9 @@ const kanagawaDragon: YaakTheme = {
     },
     editor: {
       primary: new YaakColor('#A292A3', 'dark'),
-      secondary: new YaakColor('#aa0000', 'dark'),
+      secondary: new YaakColor('#AA0000', 'dark'),
       info: new YaakColor('#A292A3', 'dark'),
-      success: new YaakColor('#c5c9c5', 'dark'),
+      success: new YaakColor('#C5C9C5', 'dark'),
       notice: new YaakColor('#8A9A7B', 'dark'),
       danger: new YaakColor('#B6927B', 'dark'),
     },
