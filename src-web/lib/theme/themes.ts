@@ -10,6 +10,7 @@ import { nord } from './themes/nord';
 import { moonlight } from './themes/moonlight';
 import { relaxing } from './themes/relaxing';
 import { rosePine } from './themes/rose-pine';
+import { kanagawa } from './themes/kanagawa';
 import { yaak, yaakDark, yaakLight } from './themes/yaak';
 import { isThemeDark } from './window';
 
@@ -28,6 +29,7 @@ const allThemes = [
   ...nord,
   ...moonlight,
   ...hotdogStand,
+  ...kanagawa,
 ];
 
 export function getThemes() {
