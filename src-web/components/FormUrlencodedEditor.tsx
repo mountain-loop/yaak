@@ -5,19 +5,19 @@ import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 
 type Props = {
   forceUpdateKey: string;
-  body: HttpRequest['body'];
+  request: HttpRequest;
   onChange: (headers: HttpRequest['body']) => void;
 };
 
-export function FormUrlencodedEditor({ body, forceUpdateKey, onChange }: Props) {
+export function FormUrlencodedEditor({ request, forceUpdateKey, onChange }: Props) {
   const pairs = useMemo<Pair[]>(
     () =>
-      (Array.isArray(body.form) ? body.form : []).map((p) => ({
+      (Array.isArray(request.body.form) ? request.body.form : []).map((p) => ({
         enabled: !!p.enabled,
         name: p.name || '',
         value: p.value || '',
       })),
-    [body.form],
+    [request.body.form],
   );
 
   const handleChange = useCallback<PairEditorProps['onChange']>(
@@ -36,6 +36,7 @@ export function FormUrlencodedEditor({ body, forceUpdateKey, onChange }: Props) 
       pairs={pairs}
       onChange={handleChange}
       forceUpdateKey={forceUpdateKey}
+      stateKey={`urlencoded.${request.id}`}
     />
   );
 }

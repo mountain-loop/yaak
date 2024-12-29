@@ -107,6 +107,7 @@ export function SettingsDesign() {
         placeholder="Placeholder"
         size="sm"
         rightSlot={<IconButton title="search" size="xs" className="w-8 m-0.5" icon="search" />}
+        stateKey={null}
       />
       <Editor
         defaultValue={[
@@ -118,6 +119,7 @@ export function SettingsDesign() {
         ].join('\n')}
         heightMode="auto"
         language="javascript"
+        stateKey={null}
       />
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap gap-1">

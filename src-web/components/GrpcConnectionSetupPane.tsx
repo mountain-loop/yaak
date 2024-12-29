@@ -224,6 +224,7 @@ export function GrpcConnectionSetupPane({
           onUrlChange={handleChangeUrl}
           onCancel={onCancel}
           isLoading={isStreaming}
+          stateKey={'grpc_url.'+activeRequest.id}
         />
         <HStack space={1.5}>
           <RadioDropdown
@@ -339,6 +340,7 @@ export function GrpcConnectionSetupPane({
             pairs={activeRequest.metadata}
             onChange={handleMetadataChange}
             forceUpdateKey={forceUpdateKey}
+            stateKey={`grpc_metadata.${activeRequest.id}`}
           />
         </TabContent>
         <TabContent value={TAB_DESCRIPTION}>
@@ -346,6 +348,7 @@ export function GrpcConnectionSetupPane({
             name="request-description"
             placeholder="Request description"
             defaultValue={activeRequest.description}
+            stateKey={`description.${activeRequest.id}`}
             onChange={handleDescriptionChange}
           />
         </TabContent>

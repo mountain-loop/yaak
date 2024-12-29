@@ -5,6 +5,7 @@ import type { EditorView } from 'codemirror';
 import { formatSdl } from 'format-graphql';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from 'react-use';
+import { useDialog } from '../hooks/useDialog';
 import { useIntrospectGraphQL } from '../hooks/useIntrospectGraphQL';
 import { tryFormatJson } from '../lib/formatters';
 import { Button } from './core/Button';
@@ -14,15 +15,14 @@ import { Editor } from './core/Editor/Editor';
 import { FormattedError } from './core/FormattedError';
 import { Icon } from './core/Icon';
 import { Separator } from './core/Separator';
-import { useDialog } from '../hooks/useDialog';
 
 type Props = Pick<EditorProps, 'heightMode' | 'className' | 'forceUpdateKey'> & {
   baseRequest: HttpRequest;
   onChange: (body: HttpRequest['body']) => void;
-  body: HttpRequest['body'];
+  request: HttpRequest;
 };
 
-export function GraphQLEditor({ body, onChange, baseRequest, ...extraEditorProps }: Props) {
+export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorProps }: Props) {
   const editorViewRef = useRef<EditorView>(null);
   const [autoIntrospectDisabled, setAutoIntrospectDisabled] = useLocalStorage<
     Record<string, boolean>
@@ -34,13 +34,13 @@ export function GraphQLEditor({ body, onChange, baseRequest, ...extraEditorProps
     () => {
       // Migrate text bodies to GraphQL format
       // NOTE: This is how GraphQL used to be stored
-      if ('text' in body) {
-        const b = tryParseJson(body.text, {});
+      if ('text' in request.body) {
+        const b = tryParseJson(request.body.text, {});
         const variables = JSON.stringify(b.variables || undefined, null, 2);
         return { query: b.query ?? '', variables };
       }
 
-      return { query: body.query ?? '', variables: body.variables ?? '' };
+      return { query: request.body.query ?? '', variables: request.body.variables ?? '' };
     },
   );
 
@@ -176,6 +176,7 @@ export function GraphQLEditor({ body, onChange, baseRequest, ...extraEditorProps
         placeholder="..."
         ref={editorViewRef}
         actions={actions}
+        stateKey={'graphql_body.' + request.id}
         {...extraEditorProps}
       />
       <div className="grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 min-h-[5rem]">
@@ -189,6 +190,7 @@ export function GraphQLEditor({ body, onChange, baseRequest, ...extraEditorProps
           defaultValue={currentBody.variables}
           onChange={handleChangeVariables}
           placeholder="{}"
+          stateKey={'graphql_vars.' + request.id}
           useTemplating
           autocompleteVariables
           {...extraEditorProps}

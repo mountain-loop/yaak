@@ -89,6 +89,7 @@ export function TextViewer({
             defaultValue={filterText}
             onKeyDown={(e) => e.key === 'Escape' && toggleSearch()}
             onChange={setFilterText}
+            stateKey={`filter.${responseId}`}
           />
         </div>,
       );
@@ -113,6 +114,7 @@ export function TextViewer({
     isSearching,
     language,
     requestId,
+    responseId,
     setFilterText,
     toggleSearch,
   ]);
@@ -165,6 +167,7 @@ export function TextViewer({
       language={language}
       actions={actions}
       extraExtensions={extraExtensions}
+      stateKey={null}
     />
   );
 }

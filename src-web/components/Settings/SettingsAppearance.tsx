@@ -197,6 +197,7 @@ export function SettingsAppearance() {
           ].join('\n')}
           heightMode="auto"
           language="javascript"
+          stateKey={null}
         />
       </VStack>
     </VStack>

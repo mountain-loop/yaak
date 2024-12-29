@@ -45,6 +45,7 @@
     "jotai": "^2.9.3",
     "lucide-react": "^0.439.0",
     "mime": "^4.0.4",
+    "nanoid": "^5.0.9",
     "papaparse": "^5.4.1",
     "parse-color": "^1.0.0",
     "react": "^18.3.1",

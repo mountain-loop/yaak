@@ -44,7 +44,11 @@ use crate::render::{render_grpc_request, render_http_request, render_json_value,
 use crate::template_callback::PluginTemplateCallback;
 use crate::updates::{UpdateMode, YaakUpdater};
 use crate::window_menu::app_menu;
-use yaak_models::models::{CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState, GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, Settings, Workspace};
+use yaak_models::models::{
+    CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState,
+    GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
+    ModelType, Plugin, Settings, Workspace,
+};
 use yaak_models::queries::{
     cancel_pending_grpc_connections, cancel_pending_responses, create_default_http_response,
     delete_all_grpc_connections, delete_all_grpc_connections_for_workspace,

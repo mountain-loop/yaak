@@ -112,7 +112,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
     close() {
       handleClose();
     },
-  }));
+  }), [handleClose, isOpen, setIsOpen]);
 
   useHotKey(hotKeyAction ?? null, () => {
     setDefaultSelectedIndex(0);

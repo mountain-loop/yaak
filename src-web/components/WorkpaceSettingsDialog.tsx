@@ -29,6 +29,7 @@ export function WorkspaceSettingsDialog({ workspaceId }: Props) {
         placeholder="Workspace description"
         className="min-h-[10rem] border border-border px-2"
         defaultValue={workspace.description}
+        stateKey={`description.${workspace.id}`}
         onChange={(description) => updateWorkspace.mutate({ description })}
         heightMode='auto'
       />

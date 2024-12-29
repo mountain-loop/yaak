@@ -31,6 +31,7 @@ export function FolderSettingsDialog({ folderId }: Props) {
         placeholder="Folder description"
         className="min-h-[10rem] border border-border px-2"
         defaultValue={folder.description}
+        stateKey={`description.${folder.id}`}
         onChange={(description) => {
           if (folderId == null) return;
           updateFolder({

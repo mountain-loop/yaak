@@ -41,6 +41,7 @@ pub async fn render_grpc_request<T: TemplateCallback>(
             enabled: p.enabled,
             name: render(p.name.as_str(), vars, cb).await,
             value: render(p.value.as_str(), vars, cb).await,
+            id: p.id,
         })
     }
 
@@ -73,6 +74,7 @@ pub async fn render_http_request(
             enabled: p.enabled,
             name: render(p.name.as_str(), vars, cb).await,
             value: render(p.value.as_str(), vars, cb).await,
+            id: p.id,
         })
     }
 
@@ -82,6 +84,7 @@ pub async fn render_http_request(
             enabled: p.enabled,
             name: render(p.name.as_str(), vars, cb).await,
             value: render(p.value.as_str(), vars, cb).await,
+            id: p.id,
         })
     }
 
@@ -309,6 +312,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "xxx".into(),
             enabled: true,
+            id: "p1".into(),
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo/bar"),
@@ -322,6 +326,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "xxx".into(),
             enabled: true,
+            id: "p1".into(),
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo"),
@@ -335,6 +340,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "xxx".into(),
             enabled: true,
+            id: "p1".into(),
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo?:foo"),
@@ -348,6 +354,7 @@ mod placeholder_tests {
             enabled: true,
             name: "".to_string(),
             value: "".to_string(),
+            id: "p1".into(),
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:missing"),
@@ -361,6 +368,7 @@ mod placeholder_tests {
             enabled: false,
             name: ":foo".to_string(),
             value: "xxx".to_string(),
+            id: "p1".into(),
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo"),
@@ -374,6 +382,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "xxx".into(),
             enabled: true,
+            id: "p1".into(),
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foooo"),
@@ -387,6 +396,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "Hello World".into(),
             enabled: true,
+            id: "p1".into(),
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo"),
@@ -403,11 +413,13 @@ mod placeholder_tests {
                     name: "b".to_string(),
                     value: "bbb".to_string(),
                     enabled: true,
+                    id: "p1".into(),
                 },
                 HttpUrlParameter {
                     name: ":a".to_string(),
                     value: "aaa".to_string(),
                     enabled: true,
+                    id: "p2".into(),
                 },
             ],
             ..Default::default()

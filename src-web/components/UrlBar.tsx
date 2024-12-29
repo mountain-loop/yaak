@@ -67,7 +67,6 @@ export const UrlBar = memo(function UrlBar({
     <form onSubmit={handleSubmit} className={classNames('x-theme-urlBar', className)}>
       <Input
         autocompleteVariables
-        ref={inputRef}
         stateKey={stateKey}
         size="md"
         wrapLines={isFocused}

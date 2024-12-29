@@ -1,7 +1,6 @@
 import { deepEqual } from '@tanstack/react-router';
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
-import type { FocusEvent } from 'react';
 import {
   forwardRef,
   Fragment,
@@ -14,8 +13,8 @@ import {
 } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
-import { v4 as uuid } from 'uuid';
 import { usePrompt } from '../../hooks/usePrompt';
+import { generateId } from '../../lib/generateId';
 import { DropMarker } from '../DropMarker';
 import { SelectFile } from '../SelectFile';
 import { Checkbox } from './Checkbox';
@@ -97,12 +96,16 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
     return [...pairs, newPairContainer()];
   });
 
-  useImperativeHandle(ref, () => ({
-    focusValue(index: number) {
-      const id = pairs[index]?.id ?? 'n/a';
-      setForceFocusValuePairId(id);
-    },
-  }));
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusValue(index: number) {
+        const id = pairs[index]?.id ?? 'n/a';
+        setForceFocusValuePairId(id);
+      },
+    }),
+    [pairs],
+  );
 
   useEffect(() => {
     // Remove empty headers on initial render
@@ -428,27 +431,41 @@ function PairEditorRow({
           'gap-0.5 grid-cols-1 grid-rows-2',
         )}
       >
-        <Input
-          ref={nameInputRef}
-          hideLabel
-          useTemplating
-          stateKey={`name.${pairContainer.id}.${stateKey}`}
-          wrapLines={false}
-          readOnly={pairContainer.pair.readOnlyName}
-          size="sm"
-          require={!isLast && !!pairContainer.pair.enabled && !!pairContainer.pair.value}
-          validate={nameValidate}
-          forceUpdateKey={forceUpdateKey}
-          containerClassName={classNames(isLast && 'border-dashed')}
-          defaultValue={pairContainer.pair.name}
-          label="Name"
-          name={`name[${index}]`}
-          onChange={handleChangeName}
-          onFocus={handleFocus}
-          placeholder={namePlaceholder ?? 'name'}
-          autocomplete={nameAutocomplete}
-          autocompleteVariables={nameAutocompleteVariables}
-        />
+        {isLast ? (
+          // Use PlainInput for last ones because there's a unique bug where clicking below
+          // the Codemirror input focuses it.
+          <PlainInput
+            hideLabel
+            size="sm"
+            containerClassName={classNames(isLast && 'border-dashed')}
+            label="Name"
+            name={`name[${index}]`}
+            onFocus={handleFocus}
+            placeholder={namePlaceholder ?? 'name'}
+          />
+        ) : (
+          <Input
+            ref={nameInputRef}
+            hideLabel
+            useTemplating
+            stateKey={`name.${pairContainer.id}.${stateKey}`}
+            wrapLines={false}
+            readOnly={pairContainer.pair.readOnlyName}
+            size="sm"
+            require={!isLast && !!pairContainer.pair.enabled && !!pairContainer.pair.value}
+            validate={nameValidate}
+            forceUpdateKey={forceUpdateKey}
+            containerClassName={classNames(isLast && 'border-dashed')}
+            defaultValue={pairContainer.pair.name}
+            label="Name"
+            name={`name[${index}]`}
+            onChange={handleChangeName}
+            onFocus={handleFocus}
+            placeholder={namePlaceholder ?? 'name'}
+            autocomplete={nameAutocomplete}
+            autocompleteVariables={nameAutocompleteVariables}
+          />
+        )}
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
           {pairContainer.pair.isFile ? (
             <SelectFile
@@ -457,8 +474,20 @@ function PairEditorRow({
               filePath={pairContainer.pair.value}
               onChange={handleChangeValueFile}
             />
+          ) : isLast ? (
+            // Use PlainInput for last ones because there's a unique bug where clicking below
+            // the Codemirror input focuses it.
+            <PlainInput
+              hideLabel
+              size="sm"
+              containerClassName={classNames(isLast && 'border-dashed')}
+              label="Value"
+              name={`value[${index}]`}
+              onFocus={handleFocus}
+              placeholder={valuePlaceholder ?? 'value'}
+            />
           ) : (
-            <SmartInput
+            <Input
               ref={valueInputRef}
               hideLabel
               useTemplating
@@ -562,56 +591,7 @@ function PairEditorRow({
 }
 
 const newPairContainer = (initialPair?: Pair): PairContainer => {
-  const id = initialPair?.id ?? uuid();
+  const id = initialPair?.id ?? generateId();
   const pair = initialPair ?? { name: '', value: '', enabled: true, isFile: false };
   return { id, pair };
 };
-
-const SmartInput = forwardRef<EditorView, InputProps>(function SmartInput(
-  { onFocus, onBlur, autocomplete, autocompleteVariables, ...props }: InputProps,
-  ref,
-) {
-  const [inputRef, setInputRef] = useState<EditorView | null>(null);
-  useImperativeHandle<EditorView | null, EditorView | null>(ref, () => inputRef);
-
-  const cursorPos = useRef<number | null>(null);
-
-  const initInput = (n: EditorView | null) => {
-    setInputRef(n);
-    console.log('INIT', cursorPos.current);
-    if (n == null || cursorPos.current == null) return;
-
-    inputRef?.dispatch({ selection: { anchor: cursorPos.current } });
-    inputRef?.focus();
-  };
-
-  const [plain, setPlain] = useState<boolean>(true);
-
-  const handleFocus = (e: FocusEvent<HTMLInputElement>) => {
-    setTimeout(() => {
-      onFocus?.();
-
-      console.log('SET CURSOR POS', e.target.selectionEnd);
-      cursorPos.current = e.target.selectionEnd ?? null;
-      setPlain(false);
-    });
-  };
-
-  const handleBlur = () => {
-    // onBlur?.();
-    // setPlain(true);
-  };
-
-  return plain ? (
-    <PlainInput {...props} onFocusRaw={handleFocus} />
-  ) : (
-    <Input
-      ref={initInput}
-      {...props}
-      containerClassName="!border-danger"
-      onBlur={handleBlur}
-      autocomplete={autocomplete}
-      autocompleteVariables={autocompleteVariables}
-    />
-  );
-});

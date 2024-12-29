@@ -1,26 +1,27 @@
+import type { HttpRequest } from '@yaakapp-internal/models';
 import { charsets } from '../lib/data/charsets';
 import { connections } from '../lib/data/connections';
 import { encodings } from '../lib/data/encodings';
 import { headerNames } from '../lib/data/headerNames';
 import { mimeTypes } from '../lib/data/mimetypes';
-import type { HttpRequest } from '@yaakapp-internal/models';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import type { PairEditorProps } from './core/PairEditor';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 
 type Props = {
   forceUpdateKey: string;
-  headers: HttpRequest['headers'];
+  request: HttpRequest;
   onChange: (headers: HttpRequest['headers']) => void;
 };
 
-export function HeadersEditor({ headers, onChange, forceUpdateKey }: Props) {
+export function HeadersEditor({ request, onChange, forceUpdateKey }: Props) {
   return (
     <PairOrBulkEditor
       preferenceName="headers"
+      stateKey={`headers.${request.id}`}
       valueAutocompleteVariables
       nameAutocompleteVariables
-      pairs={headers}
+      pairs={request.headers}
       onChange={onChange}
       forceUpdateKey={forceUpdateKey}
       nameValidate={validateHttpHeader}

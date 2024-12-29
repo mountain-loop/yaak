@@ -196,6 +196,7 @@ export function GrpcEditor({
         ref={editorViewRef}
         extraExtensions={extraExtensions}
         actions={actions}
+        stateKey={`grpc_message.${request.id}`}
         {...extraEditorProps}
       />
     </div>

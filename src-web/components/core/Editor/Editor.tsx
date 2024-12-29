@@ -8,12 +8,12 @@ import classNames from 'classnames';
 import { EditorView } from 'codemirror';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
+  useEffect,
   Children,
   cloneElement,
   forwardRef,
   isValidElement,
   useCallback,
-  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -117,7 +117,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   }
 
   const cm = useRef<{ view: EditorView; languageCompartment: Compartment } | null>(null);
-  useImperativeHandle(ref, () => cm.current?.view);
+  useImperativeHandle(ref, () => cm.current?.view, []);
 
   // Use ref so we can update the handler without re-initializing the editor
   const handleChange = useRef<EditorProps['onChange']>(onChange);
@@ -286,7 +286,6 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   const initEditorRef = useCallback(
     (container: HTMLDivElement | null) => {
       if (container === null) {
-        saveCachedEditorState(stateKey, cm.current?.view.state ?? null);
         cm.current?.view.destroy();
         cm.current = null;
         return;
@@ -316,6 +315,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
             readOnly,
             singleLine,
             hideGutter,
+            stateKey,
             onChange: handleChange,
             onPaste: handlePaste,
             onPasteOverwrite: handlePasteOverwrite,
@@ -466,6 +466,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 });
 
 function getExtensions({
+  stateKey,
   container,
   readOnly,
   singleLine,
@@ -477,6 +478,7 @@ function getExtensions({
   onBlur,
   onKeyDown,
 }: Pick<EditorProps, 'singleLine' | 'readOnly' | 'hideGutter'> & {
+  stateKey: EditorProps['stateKey'];
   container: HTMLDivElement | null;
   onChange: MutableRefObject<EditorProps['onChange']>;
   onPaste: MutableRefObject<EditorProps['onPaste']>;
@@ -526,6 +528,7 @@ function getExtensions({
     EditorView.updateListener.of((update) => {
       if (onChange && update.docChanged) {
         onChange.current?.(update.state.doc.toString());
+        saveCachedEditorState(stateKey, update.state);
       }
     }),
   ];
@@ -539,13 +542,12 @@ const placeholderElFromText = (text: string) => {
 
 function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
   if (!stateKey || state == null) return;
-  sessionStorage.setItem(
-    stateKey,
-    JSON.stringify(state.toJSON({ history: historyField, folds: foldState })),
-  );
+  const stateJson = state.toJSON({ history: historyField, folds: foldState });
+  sessionStorage.setItem(stateKey, JSON.stringify(stateJson));
 }
 
 function getCachedEditorState(stateKey: string | null) {
+  if (stateKey == null) return;
   const serializedState = stateKey ? sessionStorage.getItem(stateKey) : null;
   if (serializedState == null) return;
   try {

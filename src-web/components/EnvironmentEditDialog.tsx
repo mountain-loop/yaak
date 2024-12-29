@@ -190,6 +190,7 @@ const EnvironmentEditor = function ({
           forceUpdateKey={environment.id}
           pairs={environment.variables}
           onChange={handleChange}
+          stateKey={`environment.${environment.id}`}
         />
       </div>
     </VStack>

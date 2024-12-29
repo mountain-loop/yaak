@@ -384,7 +384,7 @@ export const RequestPane = memo(function RequestPane({
             <TabContent value={TAB_HEADERS}>
               <HeadersEditor
                 forceUpdateKey={`${forceUpdateHeaderEditorKey}::${forceUpdateKey}`}
-                headers={activeRequest.headers}
+                request={activeRequest}
                 onChange={(headers) =>
                   updateRequest.mutate({ id: activeRequestId, update: { headers } })
                 }
@@ -412,6 +412,7 @@ export const RequestPane = memo(function RequestPane({
                   language="json"
                   onChange={handleBodyTextChange}
                   format={tryFormatJson}
+                  stateKey={`json.${activeRequest.id}`}
                 />
               ) : activeRequest.bodyType === BODY_TYPE_XML ? (
                 <Editor
@@ -423,24 +424,25 @@ export const RequestPane = memo(function RequestPane({
                   defaultValue={`${activeRequest.body?.text ?? ''}`}
                   language="xml"
                   onChange={handleBodyTextChange}
+                  stateKey={`xml.${activeRequest.id}`}
                 />
               ) : activeRequest.bodyType === BODY_TYPE_GRAPHQL ? (
                 <GraphQLEditor
                   forceUpdateKey={forceUpdateKey}
                   baseRequest={activeRequest}
-                  body={activeRequest.body}
+                  request={activeRequest}
                   onChange={handleBodyChange}
                 />
               ) : activeRequest.bodyType === BODY_TYPE_FORM_URLENCODED ? (
                 <FormUrlencodedEditor
                   forceUpdateKey={forceUpdateKey}
-                  body={activeRequest.body}
+                  request={activeRequest}
                   onChange={handleBodyChange}
                 />
               ) : activeRequest.bodyType === BODY_TYPE_FORM_MULTIPART ? (
                 <FormMultipartEditor
                   forceUpdateKey={forceUpdateKey}
-                  body={activeRequest.body}
+                  request={activeRequest}
                   onChange={handleBodyChange}
                 />
               ) : activeRequest.bodyType === BODY_TYPE_BINARY ? (
@@ -463,6 +465,7 @@ export const RequestPane = memo(function RequestPane({
                   heightMode={fullHeight ? 'full' : 'auto'}
                   defaultValue={`${activeRequest.body?.text ?? ''}`}
                   onChange={handleBodyTextChange}
+                  stateKey={`other.${activeRequest.id}`}
                 />
               ) : (
                 <EmptyStateText>Empty Body</EmptyStateText>
@@ -485,6 +488,7 @@ export const RequestPane = memo(function RequestPane({
                   name="request-description"
                   placeholder="Request description"
                   defaultValue={activeRequest.description}
+                  stateKey={`description.${activeRequest.id}`}
                   onChange={(description) =>
                     updateRequest.mutate({ id: activeRequestId, update: { description } })
                   }
