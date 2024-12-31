@@ -17,6 +17,7 @@ import { useToast } from '../hooks/useToast';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { languageFromContentType } from '../lib/contentType';
 import { tryFormatJson } from '../lib/formatters';
+import { generateId } from '../lib/generateId';
 import {
   AUTH_TYPE_BASIC,
   AUTH_TYPE_BEARER,
@@ -86,6 +87,11 @@ export const RequestPane = memo(function RequestPane({
 
   const handleContentTypeChange = useCallback(
     async (contentType: string | null) => {
+      if (activeRequest == null || activeRequest.model !== 'http_request') {
+        console.error('Failed to get active request to update', activeRequest);
+        return;
+      }
+
       const headers = activeRequest.headers.filter((h) => h.name.toLowerCase() !== 'content-type');
 
       if (contentType != null) {
@@ -93,14 +99,15 @@ export const RequestPane = memo(function RequestPane({
           name: 'Content-Type',
           value: contentType,
           enabled: true,
+          id: generateId(),
         });
       }
-      await updateRequest.mutateAsync({ id: activeRequestId, update: { headers } });
+      await updateRequest.mutateAsync({ id: activeRequest.id, update: { headers } });
 
       // Force update header editor so any changed headers are reflected
       setTimeout(() => setForceUpdateHeaderEditorKey((u) => u + 1), 100);
     },
-    [activeRequest.headers, activeRequestId, updateRequest],
+    [activeRequest, updateRequest],
   );
 
   const toast = useToast();
@@ -116,51 +123,39 @@ export const RequestPane = memo(function RequestPane({
       if (index >= 0) {
         items[index]!.readOnlyName = true;
       } else {
-        items.push({ name, value: '', enabled: true, readOnlyName: true });
+        items.push({ name, value: '', enabled: true, readOnlyName: true, id: generateId() });
       }
     }
     return { urlParameterPairs: items, urlParametersKey: placeholderNames.join(',') };
   }, [activeRequest.url, activeRequest.urlParameters]);
 
-  const tabs: TabItem[] = useMemo(
+  let numParams = 0;
+  if (
+    activeRequest.bodyType === BODY_TYPE_FORM_URLENCODED ||
+    activeRequest.bodyType === BODY_TYPE_FORM_MULTIPART
+  ) {
+    const n = Array.isArray(activeRequest.body?.form)
+      ? activeRequest.body.form.filter((p) => p.name).length
+      : 0;
+    numParams = n;
+  }
+
+  const tabs = useMemo<TabItem[]>(
     () => [
       {
         value: TAB_DESCRIPTION,
-        label: (
-          <div className="flex items-center">
-            Info
-            {activeRequest.description && <CountBadge count={true} />}
-          </div>
-        ),
+        label: 'Info',
+        rightSlot: activeRequest.description ? <CountBadge count={true} /> : null,
       },
       {
         value: TAB_BODY,
+        rightSlot: numParams > 0 ? <CountBadge count={numParams} /> : null,
         options: {
           value: activeRequest.bodyType,
           items: [
             { type: 'separator', label: 'Form Data' },
-            {
-              label: (
-                <>
-                  Url Encoded
-                  <CountBadge
-                    count={'form' in activeRequest.body && activeRequest.body.form.length}
-                  />
-                </>
-              ),
-              value: BODY_TYPE_FORM_URLENCODED,
-            },
-            {
-              label: (
-                <>
-                  Url Encoded
-                  <CountBadge
-                    count={'form' in activeRequest.body && activeRequest.body.form.length}
-                  />
-                </>
-              ),
-              value: BODY_TYPE_FORM_MULTIPART,
-            },
+            { label: 'Url Encoded', value: BODY_TYPE_FORM_URLENCODED },
+            { label: 'Multi-Part', value: BODY_TYPE_FORM_MULTIPART },
             { type: 'separator', label: 'Text Content' },
             { label: 'GraphQL', value: BODY_TYPE_GRAPHQL },
             { label: 'JSON', value: BODY_TYPE_JSON },
@@ -221,21 +216,13 @@ export const RequestPane = memo(function RequestPane({
       },
       {
         value: TAB_PARAMS,
-        label: (
-          <div className="flex items-center">
-            Params
-            <CountBadge count={urlParameterPairs.length} />
-          </div>
-        ),
+        rightSlot: <CountBadge count={urlParameterPairs.length} />,
+        label: 'Params',
       },
       {
         value: TAB_HEADERS,
-        label: (
-          <div className="flex items-center">
-            Headers
-            <CountBadge count={activeRequest.headers.filter((h) => h.name).length} />
-          </div>
-        ),
+        label: 'Headers',
+        rightSlot: <CountBadge count={activeRequest.headers.filter((h) => h.name).length} />,
       },
       {
         value: TAB_AUTH,
@@ -271,13 +258,13 @@ export const RequestPane = memo(function RequestPane({
     [
       activeRequest.authentication,
       activeRequest.authenticationType,
-      activeRequest.body,
       activeRequest.bodyType,
       activeRequest.description,
       activeRequest.headers,
       activeRequest.method,
       activeRequestId,
       handleContentTypeChange,
+      numParams,
       toast,
       updateRequest,
       urlParameterPairs.length,
@@ -285,7 +272,7 @@ export const RequestPane = memo(function RequestPane({
   );
 
   const sendRequest = useSendAnyHttpRequest();
-  const { activeResponse } = usePinnedHttpResponse(activeRequest);
+  const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const cancelResponse = useCancelHttpResponse(activeResponse?.id ?? null);
   const isLoading = useIsResponseLoading(activeRequestId);
   const { updateKey } = useRequestUpdateKey(activeRequestId);

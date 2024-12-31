@@ -1,10 +1,14 @@
 import type { AnyModel, GrpcConnection, HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { atom, useAtomValue } from 'jotai';
 import type { ReactNode } from 'react';
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
 import { activeRequestAtom } from '../hooks/useActiveRequest';
+import { foldersAtom } from '../hooks/useFolders';
+import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
+import { httpRequestsAtom } from '../hooks/useHttpRequests';
 import { useScrollIntoView } from '../hooks/useScrollIntoView';
 import { useSidebarItemCollapsed } from '../hooks/useSidebarItemCollapsed';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
@@ -14,9 +18,9 @@ import { isResponseLoading } from '../lib/model_util';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { Icon } from './core/Icon';
 import { StatusTag } from './core/StatusTag';
-import { RequestContextMenu } from './RequestContextMenu';
 import type { SidebarTreeNode } from './Sidebar';
 import { sidebarSelectedIdAtom } from './SidebarAtoms';
+import { SidebarItemContextMenu } from './SidebarItemContextMenu';
 import type { SidebarItemsProps } from './SidebarItems';
 
 enum ItemTypes {
@@ -194,10 +198,29 @@ export const SidebarItem = memo(function SidebarItem({
 
   const handleCloseContextMenu = useCallback(() => setShowContextMenu(null), []);
 
-  const itemPrefix = (child.item.model === 'http_request' ||
-    child.item.model === 'grpc_request') && (
+  const itemAtom = useMemo(() => {
+    return atom((get) => {
+      if (itemModel === 'http_request') {
+        return get(httpRequestsAtom).find((v) => v.id === itemId);
+      } else if (itemModel === 'grpc_request') {
+        return get(grpcRequestsAtom).find((v) => v.id === itemId);
+      } else if (itemModel === 'folder') {
+        return get(foldersAtom).find((v) => v.id === itemId);
+      } else {
+        return null;
+      }
+    });
+  }, [itemId, itemModel])
+
+  const item = useAtomValue(itemAtom);
+
+  if (item == null) {
+    return null;
+  }
+
+  const itemPrefix = (item.model === 'http_request' || item.model === 'grpc_request') && (
     <HttpMethodTag
-      request={child.item}
+      request={item}
       className={classNames(!(active || selected) && 'text-text-subtlest')}
     />
   );
@@ -205,7 +228,11 @@ export const SidebarItem = memo(function SidebarItem({
   return (
     <li ref={ref} draggable>
       <div className={classNames(className, 'block relative group/item px-1.5 pb-0.5')}>
-        <RequestContextMenu child={child} show={showContextMenu} close={handleCloseContextMenu} />
+        <SidebarItemContextMenu
+          child={child}
+          show={showContextMenu}
+          close={handleCloseContextMenu}
+        />
         <button
           // tabIndex={-1} // Will prevent drag-n-drop
           disabled={editing}

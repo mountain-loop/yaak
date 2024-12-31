@@ -10,11 +10,13 @@ import { HStack } from '../Stacks';
 export type TabItem =
   | {
       value: string;
-      label: ReactNode;
+      label: string;
+      rightSlot?: ReactNode;
     }
   | {
       value: string;
       options: Omit<RadioDropdownProps, 'children'>;
+      rightSlot?: ReactNode;
     };
 
 interface Props {
@@ -63,7 +65,10 @@ export function Tabs({
   return (
     <div
       ref={ref}
-      className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 overflow-x-hidden')}
+      className={classNames(
+        className,
+        'h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 overflow-x-hidden',
+      )}
     >
       <div
         aria-label={label}
@@ -111,6 +116,7 @@ export function Tabs({
                     {option && 'shortLabel' in option
                       ? option.shortLabel
                       : (option?.label ?? 'Unknown')}
+                    {t.rightSlot}
                     <Icon
                       size="sm"
                       icon="chevron_down"
@@ -134,6 +140,7 @@ export function Tabs({
                   className={btnClassName}
                 >
                   {t.label}
+                  {t.rightSlot}
                 </button>
               );
             }

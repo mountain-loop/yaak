@@ -57,7 +57,7 @@ export type DropdownItem = DropdownItemDefault | DropdownItemSeparator;
 
 export interface DropdownProps {
   children: ReactElement<HTMLAttributes<HTMLButtonElement>>;
-  items: DropdownItem[];
+  items: DropdownItem[] | (() => DropdownItem[]);
   onOpen?: () => void;
   onClose?: () => void;
   fullWidth?: boolean;
@@ -75,13 +75,15 @@ export interface DropdownRef {
 }
 
 export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown(
-  { children, items, onOpen, onClose, hotKeyAction, fullWidth }: DropdownProps,
+  { children, items: itemsGetter, onOpen, onClose, hotKeyAction, fullWidth }: DropdownProps,
   ref,
 ) {
   const [isOpen, _setIsOpen] = useState<boolean>(false);
   const [defaultSelectedIndex, setDefaultSelectedIndex] = useState<number>();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<Omit<DropdownRef, 'open'>>(null);
+
+  const [items, setItems] = useState<DropdownItem[]>([]);
 
   const setIsOpen = useCallback(
     (o: SetStateAction<boolean>) => {
@@ -99,20 +101,24 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
     setDefaultSelectedIndex(undefined);
   }, [setIsOpen]);
 
-  useImperativeHandle(ref, () => ({
-    ...menuRef.current,
-    isOpen: isOpen,
-    toggle() {
-      if (!isOpen) this.open();
-      else this.close();
-    },
-    open() {
-      setIsOpen(true);
-    },
-    close() {
-      handleClose();
-    },
-  }), [handleClose, isOpen, setIsOpen]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      ...menuRef.current,
+      isOpen: isOpen,
+      toggle() {
+        if (!isOpen) this.open();
+        else this.close();
+      },
+      open() {
+        setIsOpen(true);
+      },
+      close() {
+        handleClose();
+      },
+    }),
+    [handleClose, isOpen, setIsOpen],
+  );
 
   useHotKey(hotKeyAction ?? null, () => {
     setDefaultSelectedIndex(0);
@@ -133,10 +139,11 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
           e.stopPropagation();
           setDefaultSelectedIndex(undefined);
           setIsOpen((o) => !o);
+          setItems(typeof itemsGetter === 'function' ? itemsGetter() : itemsGetter);
         }),
     };
     return cloneElement(existingChild, props);
-  }, [children, setIsOpen]);
+  }, [children, itemsGetter, setIsOpen]);
 
   useEffect(() => {
     buttonRef.current?.setAttribute('aria-expanded', isOpen.toString());
@@ -169,7 +176,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
 interface ContextMenuProps {
   triggerPosition: { x: number; y: number } | null;
   className?: string;
-  items: DropdownProps['items'];
+  items: DropdownItem[];
   onClose: () => void;
 }
 
@@ -204,294 +211,299 @@ export const ContextMenu = forwardRef<DropdownRef, ContextMenuProps>(function Co
 interface MenuProps {
   className?: string;
   defaultSelectedIndex?: number;
-  items: DropdownProps['items'];
   triggerShape: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'right'> | null;
   onClose: () => void;
   showTriangle?: boolean;
   fullWidth?: boolean;
   isOpen: boolean;
+  items: DropdownItem[];
 }
 
-const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle'>, MenuProps>(function Menu(
-  {
-    className,
-    isOpen,
-    items,
-    fullWidth,
-    onClose,
-    triggerShape,
-    defaultSelectedIndex,
-    showTriangle,
-  }: MenuProps,
-  ref,
-) {
-  const [selectedIndex, setSelectedIndex] = useStateWithDeps<number | null>(
-    defaultSelectedIndex ?? null,
-    [defaultSelectedIndex],
-  );
-  const [filter, setFilter] = useState<string>('');
-
-  const handleClose = useCallback(() => {
-    onClose();
-    setSelectedIndex(null);
-    setFilter('');
-  }, [onClose, setSelectedIndex]);
-
-  // Close menu on space bar
-  const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const isCharacter = e.key.length === 1;
-    const isSpecial = e.ctrlKey || e.metaKey || e.altKey;
-    if (isCharacter && !isSpecial) {
-      e.preventDefault();
-      setFilter((f) => f + e.key);
-      setSelectedIndex(0);
-    } else if (e.key === 'Backspace' && !isSpecial) {
-      e.preventDefault();
-      setFilter((f) => f.slice(0, -1));
-    }
-  };
-
-  useKey(
-    'Escape',
-    () => {
-      if (!isOpen) return;
-      if (filter !== '') setFilter('');
-      else handleClose();
-    },
-    {},
-    [isOpen, filter, setFilter, handleClose],
-  );
-
-  const handlePrev = useCallback(() => {
-    setSelectedIndex((currIndex) => {
-      let nextIndex = (currIndex ?? 0) - 1;
-      const maxTries = items.length;
-      for (let i = 0; i < maxTries; i++) {
-        if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
-          nextIndex--;
-        } else if (nextIndex < 0) {
-          nextIndex = items.length - 1;
-        } else {
-          break;
-        }
-      }
-      return nextIndex;
-    });
-  }, [items, setSelectedIndex]);
-
-  const handleNext = useCallback(() => {
-    setSelectedIndex((currIndex) => {
-      let nextIndex = (currIndex ?? -1) + 1;
-      const maxTries = items.length;
-      for (let i = 0; i < maxTries; i++) {
-        if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
-          nextIndex++;
-        } else if (nextIndex >= items.length) {
-          nextIndex = 0;
-        } else {
-          break;
-        }
-      }
-      return nextIndex;
-    });
-  }, [items, setSelectedIndex]);
-
-  useKey(
-    'ArrowUp',
-    (e) => {
-      if (!isOpen) return;
-      e.preventDefault();
-      handlePrev();
-    },
-    {},
-    [isOpen],
-  );
-
-  useKey(
-    'ArrowDown',
-    (e) => {
-      if (!isOpen) return;
-      e.preventDefault();
-      handleNext();
-    },
-    {},
-    [isOpen],
-  );
-
-  const handleSelect = useCallback(
-    (i: DropdownItem) => {
-      if (i.type !== 'separator' && !i.keepOpen) {
-        handleClose();
-      }
-      setSelectedIndex(null);
-      if (i.type !== 'separator' && typeof i.onSelect === 'function') {
-        i.onSelect();
-      }
-    },
-    [handleClose, setSelectedIndex],
-  );
-
-  useImperativeHandle(
+const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'>, MenuProps>(
+  function Menu(
+    {
+      className,
+      isOpen,
+      items,
+      fullWidth,
+      onClose,
+      triggerShape,
+      defaultSelectedIndex,
+      showTriangle,
+    }: MenuProps,
     ref,
-    () => ({
-      close: handleClose,
-      prev: handlePrev,
-      next: handleNext,
-      select: () => {
-        const item = items[selectedIndex ?? -1] ?? null;
-        if (!item) return;
-        handleSelect(item);
-      },
-    }),
-    [handleClose, handleNext, handlePrev, handleSelect, items, selectedIndex],
-  );
+  ) {
+    const [selectedIndex, setSelectedIndex] = useStateWithDeps<number | null>(
+      defaultSelectedIndex ?? null,
+      [defaultSelectedIndex],
+    );
+    const [filter, setFilter] = useState<string>('');
 
-  const styles = useMemo<{
-    container: CSSProperties;
-    menu: CSSProperties;
-    triangle: CSSProperties;
-    upsideDown: boolean;
-  }>(() => {
-    if (triggerShape == null) return { container: {}, triangle: {}, menu: {}, upsideDown: false };
+    const handleClose = useCallback(() => {
+      onClose();
+      setSelectedIndex(null);
+      setFilter('');
+    }, [onClose, setSelectedIndex]);
 
-    const menuMarginY = 5;
-    const docRect = document.documentElement.getBoundingClientRect();
-    const width = triggerShape.right - triggerShape.left;
-    const heightAbove = triggerShape.top;
-    const heightBelow = docRect.height - triggerShape.bottom;
-    const horizontalSpaceRemaining = docRect.width - triggerShape.left;
-    const top = triggerShape.bottom;
-    const onRight = horizontalSpaceRemaining < 200;
-    const upsideDown = heightBelow < heightAbove && heightBelow < items.length * 25 + 20 + 200;
-    const triggerWidth = triggerShape.right - triggerShape.left;
-    return {
-      upsideDown,
-      container: {
-        top: !upsideDown ? top + menuMarginY : undefined,
-        bottom: upsideDown
-          ? docRect.height - top - (triggerShape.top - triggerShape.bottom) + menuMarginY
-          : undefined,
-        right: onRight ? docRect.width - triggerShape.right : undefined,
-        left: !onRight ? triggerShape.left : undefined,
-        minWidth: fullWidth ? triggerWidth : undefined,
-        maxWidth: '40rem',
-      },
-      triangle: {
-        width: '0.4rem',
-        height: '0.4rem',
-        ...(onRight
-          ? { right: width / 2, marginRight: '-0.2rem' }
-          : { left: width / 2, marginLeft: '-0.2rem' }),
-        ...(upsideDown
-          ? { bottom: '-0.2rem', rotate: '225deg' }
-          : { top: '-0.2rem', rotate: '45deg' }),
-      },
-      menu: {
-        maxHeight: `${(upsideDown ? heightAbove : heightBelow) - 15}px`,
-      },
+    // Close menu on space bar
+    const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const isCharacter = e.key.length === 1;
+      const isSpecial = e.ctrlKey || e.metaKey || e.altKey;
+      if (isCharacter && !isSpecial) {
+        e.preventDefault();
+        setFilter((f) => f + e.key);
+        setSelectedIndex(0);
+      } else if (e.key === 'Backspace' && !isSpecial) {
+        e.preventDefault();
+        setFilter((f) => f.slice(0, -1));
+      }
     };
-  }, [fullWidth, items.length, triggerShape]);
 
-  const filteredItems = useMemo(
-    () => items.filter((i) => getNodeText(i.label).toLowerCase().includes(filter.toLowerCase())),
-    [items, filter],
-  );
+    useKey(
+      'Escape',
+      () => {
+        if (!isOpen) return;
+        if (filter !== '') setFilter('');
+        else handleClose();
+      },
+      {},
+      [isOpen, filter, setFilter, handleClose],
+    );
 
-  const handleFocus = useCallback(
-    (i: DropdownItem) => {
-      const index = filteredItems.findIndex((item) => item === i) ?? null;
-      setSelectedIndex(index);
-    },
-    [filteredItems, setSelectedIndex],
-  );
+    const handlePrev = useCallback(() => {
+      setSelectedIndex((currIndex) => {
+        let nextIndex = (currIndex ?? 0) - 1;
+        const maxTries = items.length;
+        for (let i = 0; i < maxTries; i++) {
+          if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
+            nextIndex--;
+          } else if (nextIndex < 0) {
+            nextIndex = items.length - 1;
+          } else {
+            break;
+          }
+        }
+        return nextIndex;
+      });
+    }, [items, setSelectedIndex]);
 
-  if (items.length === 0) return null;
+    const handleNext = useCallback(() => {
+      setSelectedIndex((currIndex) => {
+        let nextIndex = (currIndex ?? -1) + 1;
+        const maxTries = items.length;
+        for (let i = 0; i < maxTries; i++) {
+          if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
+            nextIndex++;
+          } else if (nextIndex >= items.length) {
+            nextIndex = 0;
+          } else {
+            break;
+          }
+        }
+        return nextIndex;
+      });
+    }, [items, setSelectedIndex]);
 
-  return (
-    <>
-      {filteredItems.map(
-        (item) =>
-          item.type !== 'separator' &&
-          !item.hotKeyLabelOnly && (
-            <MenuItemHotKey
-              key={item.key}
-              onSelect={handleSelect}
-              item={item}
-              action={item.hotKeyAction}
-            />
-          ),
-      )}
-      {isOpen && (
-        <Overlay open={true} variant="transparent" portalName="dropdown" zIndex={50}>
-          <div className="x-theme-menu">
-            <div tabIndex={-1} aria-hidden className="fixed inset-0 z-30" onClick={handleClose} />
-            <motion.div
-              tabIndex={0}
-              onKeyDown={handleMenuKeyDown}
-              initial={{ opacity: 0, y: (styles.upsideDown ? 1 : -1) * 5, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              role="menu"
-              aria-orientation="vertical"
-              dir="ltr"
-              style={styles.container}
-              className={classNames(className, 'outline-none my-1 pointer-events-auto fixed z-50')}
-            >
-              {showTriangle && (
-                <span
-                  aria-hidden
-                  style={styles.triangle}
-                  className="bg-surface absolute border-border-subtle border-t border-l"
-                />
-              )}
-              <VStack
-                style={styles.menu}
+    useKey(
+      'ArrowUp',
+      (e) => {
+        if (!isOpen) return;
+        e.preventDefault();
+        handlePrev();
+      },
+      {},
+      [isOpen],
+    );
+
+    useKey(
+      'ArrowDown',
+      (e) => {
+        if (!isOpen) return;
+        e.preventDefault();
+        handleNext();
+      },
+      {},
+      [isOpen],
+    );
+
+    const handleSelect = useCallback(
+      (i: DropdownItem) => {
+        if (i.type !== 'separator' && !i.keepOpen) {
+          handleClose();
+        }
+        setSelectedIndex(null);
+        if (i.type !== 'separator' && typeof i.onSelect === 'function') {
+          i.onSelect();
+        }
+      },
+      [handleClose, setSelectedIndex],
+    );
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        close: handleClose,
+        prev: handlePrev,
+        next: handleNext,
+        select: () => {
+          const item = items[selectedIndex ?? -1] ?? null;
+          if (!item) return;
+          handleSelect(item);
+        },
+      }),
+      [handleClose, handleNext, handlePrev, handleSelect, items, selectedIndex],
+    );
+
+    const styles = useMemo<{
+      container: CSSProperties;
+      menu: CSSProperties;
+      triangle: CSSProperties;
+      upsideDown: boolean;
+    }>(() => {
+      if (triggerShape == null) return { container: {}, triangle: {}, menu: {}, upsideDown: false };
+
+      const menuMarginY = 5;
+      const docRect = document.documentElement.getBoundingClientRect();
+      const width = triggerShape.right - triggerShape.left;
+      const heightAbove = triggerShape.top;
+      const heightBelow = docRect.height - triggerShape.bottom;
+      const horizontalSpaceRemaining = docRect.width - triggerShape.left;
+      const top = triggerShape.bottom;
+      const onRight = horizontalSpaceRemaining < 200;
+      const upsideDown = heightBelow < heightAbove && heightBelow < items.length * 25 + 20 + 200;
+      const triggerWidth = triggerShape.right - triggerShape.left;
+      return {
+        upsideDown,
+        container: {
+          top: !upsideDown ? top + menuMarginY : undefined,
+          bottom: upsideDown
+            ? docRect.height - top - (triggerShape.top - triggerShape.bottom) + menuMarginY
+            : undefined,
+          right: onRight ? docRect.width - triggerShape.right : undefined,
+          left: !onRight ? triggerShape.left : undefined,
+          minWidth: fullWidth ? triggerWidth : undefined,
+          maxWidth: '40rem',
+        },
+        triangle: {
+          width: '0.4rem',
+          height: '0.4rem',
+          ...(onRight
+            ? { right: width / 2, marginRight: '-0.2rem' }
+            : { left: width / 2, marginLeft: '-0.2rem' }),
+          ...(upsideDown
+            ? { bottom: '-0.2rem', rotate: '225deg' }
+            : { top: '-0.2rem', rotate: '45deg' }),
+        },
+        menu: {
+          maxHeight: `${(upsideDown ? heightAbove : heightBelow) - 15}px`,
+        },
+      };
+    }, [fullWidth, items.length, triggerShape]);
+
+    const filteredItems = useMemo(
+      () => items.filter((i) => getNodeText(i.label).toLowerCase().includes(filter.toLowerCase())),
+      [items, filter],
+    );
+
+    const handleFocus = useCallback(
+      (i: DropdownItem) => {
+        const index = filteredItems.findIndex((item) => item === i) ?? null;
+        setSelectedIndex(index);
+      },
+      [filteredItems, setSelectedIndex],
+    );
+
+    if (items.length === 0) return null;
+
+    return (
+      <>
+        {filteredItems.map(
+          (item) =>
+            item.type !== 'separator' &&
+            !item.hotKeyLabelOnly && (
+              <MenuItemHotKey
+                key={item.key}
+                onSelect={handleSelect}
+                item={item}
+                action={item.hotKeyAction}
+              />
+            ),
+        )}
+        {isOpen && (
+          <Overlay open={true} variant="transparent" portalName="dropdown" zIndex={50}>
+            <div className="x-theme-menu">
+              <div tabIndex={-1} aria-hidden className="fixed inset-0 z-30" onClick={handleClose} />
+              <motion.div
+                tabIndex={0}
+                onKeyDown={handleMenuKeyDown}
+                initial={{ opacity: 0, y: (styles.upsideDown ? 1 : -1) * 5, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                role="menu"
+                aria-orientation="vertical"
+                dir="ltr"
+                style={styles.container}
                 className={classNames(
                   className,
-                  'h-auto bg-surface rounded-md shadow-lg py-1.5 border',
-                  'border-border-subtle overflow-auto mx-0.5',
+                  'outline-none my-1 pointer-events-auto fixed z-50',
                 )}
               >
-                {filter && (
-                  <HStack
-                    space={2}
-                    className="pb-0.5 px-1.5 mb-2 text-sm border border-border-subtle mx-2 rounded font-mono h-xs"
-                  >
-                    <Icon icon="search" size="xs" className="text-text-subtle" />
-                    <div className="text">{filter}</div>
-                  </HStack>
+                {showTriangle && (
+                  <span
+                    aria-hidden
+                    style={styles.triangle}
+                    className="bg-surface absolute border-border-subtle border-t border-l"
+                  />
                 )}
-                {filteredItems.length === 0 && (
-                  <span className="text-text-subtlest text-center px-2 py-1">No matches</span>
-                )}
-                {filteredItems.map((item, i) => {
-                  if (item.hidden) {
-                    return null;
-                  }
-                  if (item.type === 'separator') {
+                <VStack
+                  style={styles.menu}
+                  className={classNames(
+                    className,
+                    'h-auto bg-surface rounded-md shadow-lg py-1.5 border',
+                    'border-border-subtle overflow-auto mx-0.5',
+                  )}
+                >
+                  {filter && (
+                    <HStack
+                      space={2}
+                      className="pb-0.5 px-1.5 mb-2 text-sm border border-border-subtle mx-2 rounded font-mono h-xs"
+                    >
+                      <Icon icon="search" size="xs" className="text-text-subtle" />
+                      <div className="text">{filter}</div>
+                    </HStack>
+                  )}
+                  {filteredItems.length === 0 && (
+                    <span className="text-text-subtlest text-center px-2 py-1">No matches</span>
+                  )}
+                  {filteredItems.map((item, i) => {
+                    if (item.hidden) {
+                      return null;
+                    }
+                    if (item.type === 'separator') {
+                      return (
+                        <Separator key={i} className={classNames('my-1.5', item.label && 'ml-2')}>
+                          {item.label}
+                        </Separator>
+                      );
+                    }
                     return (
-                      <Separator key={i} className={classNames('my-1.5', item.label && 'ml-2')}>
-                        {item.label}
-                      </Separator>
+                      <MenuItem
+                        focused={i === selectedIndex}
+                        onFocus={handleFocus}
+                        onSelect={handleSelect}
+                        key={item.key}
+                        item={item}
+                      />
                     );
-                  }
-                  return (
-                    <MenuItem
-                      focused={i === selectedIndex}
-                      onFocus={handleFocus}
-                      onSelect={handleSelect}
-                      key={item.key}
-                      item={item}
-                    />
-                  );
-                })}
-              </VStack>
-            </motion.div>
-          </div>
-        </Overlay>
-      )}
-    </>
-  );
-});
+                  })}
+                </VStack>
+              </motion.div>
+            </div>
+          </Overlay>
+        )}
+      </>
+    );
+  },
+);
 
 interface MenuItemProps {
   className?: string;

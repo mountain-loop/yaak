@@ -1,11 +1,15 @@
-import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
+import type {AnyModel, GrpcRequest, HttpRequest} from '@yaakapp-internal/models';
 
-export function fallbackRequestName(r: HttpRequest | GrpcRequest | null): string {
+export function fallbackRequestName(r: HttpRequest | GrpcRequest | AnyModel | null): string {
   if (r == null) return '';
 
   // Return name if it has one
-  if (r.name) {
+  if ('name' in r && r.name) {
     return r.name;
+  }
+
+  if (r.model !== 'http_request' && r.model !== 'grpc_request') {
+    return 'No Name';
   }
 
   // Replace variable syntax with variable name

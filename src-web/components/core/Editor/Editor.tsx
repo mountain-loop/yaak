@@ -1,5 +1,5 @@
-import { defaultKeymap, historyField } from '@codemirror/commands';
-import { foldState, forceParsing } from '@codemirror/language';
+import { defaultKeymap } from '@codemirror/commands';
+import { forceParsing } from '@codemirror/language';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { keymap, placeholder as placeholderExt, tooltips } from '@codemirror/view';
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
@@ -8,12 +8,12 @@ import classNames from 'classnames';
 import { EditorView } from 'codemirror';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
-  useEffect,
   Children,
   cloneElement,
   forwardRef,
   isValidElement,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -31,7 +31,7 @@ import { HStack } from '../Stacks';
 import './Editor.css';
 import { baseExtensions, getLanguageExtension, multiLineExtensions } from './extensions';
 import type { GenericCompletionConfig } from './genericCompletion';
-import { singleLineExt } from './singleLine';
+import { singleLineExtensions } from './singleLine';
 
 export interface EditorProps {
   id?: string;
@@ -122,7 +122,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   // Use ref so we can update the handler without re-initializing the editor
   const handleChange = useRef<EditorProps['onChange']>(onChange);
   useEffect(() => {
-    handleChange.current = onChange ? onChange : onChange;
+    handleChange.current = onChange;
   }, [onChange]);
 
   // Use ref so we can update the handler without re-initializing the editor
@@ -304,36 +304,35 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
           onClickMissingVariable,
           onClickPathParameter,
         });
-        const extensions = [
-          languageCompartment.of(langExt),
-          placeholderCompartment.current.of(
-            placeholderExt(placeholderElFromText(placeholder ?? '')),
-          ),
-          wrapLinesCompartment.current.of(wrapLines ? [EditorView.lineWrapping] : []),
-          ...getExtensions({
-            container,
-            readOnly,
-            singleLine,
-            hideGutter,
-            stateKey,
-            onChange: handleChange,
-            onPaste: handlePaste,
-            onPasteOverwrite: handlePasteOverwrite,
-            onFocus: handleFocus,
-            onBlur: handleBlur,
-            onKeyDown: handleKeyDown,
-          }),
-          ...(extraExtensions ?? []),
-        ];
 
-        const cachedJsonState = getCachedEditorState(stateKey);
-        const state = cachedJsonState
-          ? EditorState.fromJSON(
-              cachedJsonState,
-              { extensions },
-              { fold: foldState, history: historyField },
-            )
-          : EditorState.create({ doc: `${defaultValue ?? ''}`, extensions });
+        const cachedJsonState = getCachedEditorState(defaultValue ?? '', stateKey);
+
+        const state =
+          cachedJsonState ??
+          EditorState.create({
+            doc: `${defaultValue ?? ''}`,
+            extensions: [
+              languageCompartment.of(langExt),
+              placeholderCompartment.current.of(
+                placeholderExt(placeholderElFromText(placeholder ?? '')),
+              ),
+              wrapLinesCompartment.current.of(wrapLines ? [EditorView.lineWrapping] : []),
+              ...getExtensions({
+                container,
+                readOnly,
+                singleLine,
+                hideGutter,
+                stateKey,
+                onChange: handleChange,
+                onPaste: handlePaste,
+                onPasteOverwrite: handlePasteOverwrite,
+                onFocus: handleFocus,
+                onBlur: handleBlur,
+                onKeyDown: handleKeyDown,
+              }),
+              ...(extraExtensions ?? []),
+            ],
+          });
 
         const view = new EditorView({ state, parent: container });
 
@@ -515,7 +514,7 @@ function getExtensions({
     }),
     tooltips({ parent }),
     keymap.of(singleLine ? defaultKeymap.filter((k) => k.key !== 'Enter') : defaultKeymap),
-    ...(singleLine ? [singleLineExt()] : []),
+    ...(singleLine ? [singleLineExtensions()] : []),
     ...(!singleLine ? [multiLineExtensions({ hideGutter })] : []),
     ...(readOnly
       ? [EditorState.readOnly.of(true), EditorView.contentAttributes.of({ tabindex: '-1' })]
@@ -525,11 +524,16 @@ function getExtensions({
     // Things that must be last //
     // ------------------------ //
 
+    // Fire onChange event
     EditorView.updateListener.of((update) => {
       if (onChange && update.docChanged) {
         onChange.current?.(update.state.doc.toString());
-        saveCachedEditorState(stateKey, update.state);
       }
+    }),
+
+    // Cache editor state
+    EditorView.updateListener.of((update) => {
+      saveCachedEditorState(stateKey, update.state);
     }),
   ];
 }
@@ -540,20 +544,25 @@ const placeholderElFromText = (text: string) => {
   return el;
 };
 
+declare global {
+  interface Window {
+    editorStates: Record<string, EditorState>;
+  }
+}
+window.editorStates = window.editorStates ?? {};
+
 function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
   if (!stateKey || state == null) return;
-  const stateJson = state.toJSON({ history: historyField, folds: foldState });
-  sessionStorage.setItem(stateKey, JSON.stringify(stateJson));
+  window.editorStates[stateKey] = state;
 }
 
-function getCachedEditorState(stateKey: string | null) {
+function getCachedEditorState(doc: string, stateKey: string | null) {
   if (stateKey == null) return;
-  const serializedState = stateKey ? sessionStorage.getItem(stateKey) : null;
-  if (serializedState == null) return;
-  try {
-    return JSON.parse(serializedState);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (e) {
-    return null;
-  }
+
+  const state = window.editorStates[stateKey] ?? null;
+  if (state == null) return null;
+  if (state.doc.toString() !== doc) return null;
+
+  console.log('CACHED STATE', stateKey, state);
+  return state;
 }

@@ -1,7 +1,6 @@
 import type { GrpcConnection, HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import React, { Fragment, memo } from 'react';
-import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { VStack } from './core/Stacks';
 import { DropMarker } from './DropMarker';
 import type { SidebarTreeNode } from './Sidebar';
@@ -50,20 +49,16 @@ export const SidebarItems = memo(function SidebarItems({
     >
       {tree.children.map((child, i) => {
         return (
-          <Fragment key={child.item.id}>
-            {hoveredIndex === i && hoveredTree?.item.id === tree.item.id && <DropMarker />}
+          <Fragment key={child.id}>
+            {hoveredIndex === i && hoveredTree?.id === tree.id && <DropMarker />}
             <SidebarItem
-              itemId={child.item.id}
-              itemName={child.item.name}
-              itemFallbackName={
-                child.item.model === 'http_request' || child.item.model === 'grpc_request'
-                  ? fallbackRequestName(child.item)
-                  : 'New Folder'
-              }
-              itemModel={child.item.model}
-              latestHttpResponse={httpResponses.find((r) => r.requestId === child.item.id) ?? null}
+              itemId={child.id}
+              itemName={child.name}
+              itemFallbackName="TODO"
+              itemModel={child.model}
+              latestHttpResponse={httpResponses.find((r) => r.requestId === child.id) ?? null}
               latestGrpcConnection={
-                grpcConnections.find((c) => c.requestId === child.item.id) ?? null
+                grpcConnections.find((c) => c.requestId === child.id) ?? null
               }
               onMove={handleMove}
               onEnd={handleEnd}
@@ -71,30 +66,29 @@ export const SidebarItems = memo(function SidebarItems({
               onDragStart={handleDragStart}
               child={child}
             >
-              {child.item.model === 'folder' &&
-                draggingId !== child.item.id && (
-                  <SidebarItems
-                    draggingId={draggingId}
-                    handleDragStart={handleDragStart}
-                    handleEnd={handleEnd}
-                    handleMove={handleMove}
-                    hoveredIndex={hoveredIndex}
-                    hoveredTree={hoveredTree}
-                    httpResponses={httpResponses}
-                    grpcConnections={grpcConnections}
-                    onSelect={onSelect}
-                    selectedTree={selectedTree}
-                    tree={child}
-                    treeParentMap={treeParentMap}
-                  />
-                )}
+              {child.model === 'folder' && draggingId !== child.id && (
+                <SidebarItems
+                  draggingId={draggingId}
+                  handleDragStart={handleDragStart}
+                  handleEnd={handleEnd}
+                  handleMove={handleMove}
+                  hoveredIndex={hoveredIndex}
+                  hoveredTree={hoveredTree}
+                  httpResponses={httpResponses}
+                  grpcConnections={grpcConnections}
+                  onSelect={onSelect}
+                  selectedTree={selectedTree}
+                  tree={child}
+                  treeParentMap={treeParentMap}
+                />
+              )}
             </SidebarItem>
           </Fragment>
         );
       })}
-      {hoveredIndex === tree.children.length && hoveredTree?.item.id === tree.item.id && (
+      {hoveredIndex === tree.children.length && hoveredTree?.id === tree.id && (
         <DropMarker />
       )}
     </VStack>
   );
-})
+});

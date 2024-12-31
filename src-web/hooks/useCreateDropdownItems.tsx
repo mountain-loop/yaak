@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { DropdownItem } from '../components/core/Dropdown';
 import { Icon } from '../components/core/Icon';
+import { generateId } from '../lib/generateId';
 import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
 import { useCreateFolder } from './useCreateFolder';
 import { useCreateGrpcRequest } from './useCreateGrpcRequest';
@@ -36,7 +37,7 @@ export function useCreateDropdownItems({
             folderId,
             bodyType: BODY_TYPE_GRAPHQL,
             method: 'POST',
-            headers: [{ name: 'Content-Type', value: 'application/json' }],
+            headers: [{ name: 'Content-Type', value: 'application/json', id: generateId() }],
           }),
       },
       {

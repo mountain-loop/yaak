@@ -1,6 +1,8 @@
 import classNames from 'classnames';
 import React, { memo } from 'react';
+import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
+import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { CookieDropdown } from './CookieDropdown';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
@@ -19,6 +21,8 @@ interface Props {
 
 export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Props) {
   const togglePalette = useToggleCommandPalette();
+  const activeRequest = useActiveRequest();
+
   return (
     <div
       className={classNames(
@@ -36,7 +40,10 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         </HStack>
       </HStack>
       <div className="pointer-events-none w-full max-w-[30vw] mx-auto flex justify-center">
-        <RecentRequestsDropdown />
+        <RecentRequestsDropdown
+          activeRequestId={activeRequest?.id ?? null}
+          activeRequestName={fallbackRequestName(activeRequest)}
+        />
       </div>
       <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-1">
         <LicenseBadge />

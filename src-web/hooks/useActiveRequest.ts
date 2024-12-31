@@ -1,5 +1,6 @@
 import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
+import {fallbackRequestName} from "../lib/fallbackRequestName";
 import {jotaiStore} from "../lib/jotai";
 import { activeRequestIdAtom } from './useActiveRequestId';
 import { grpcRequestsAtom } from './useGrpcRequests';
@@ -19,6 +20,11 @@ export const activeRequestAtom = atom<HttpRequest | GrpcRequest | null>((get) =>
 export function getActiveRequest() {
   return jotaiStore.get(activeRequestAtom);
 }
+
+export const activeRequestNameAtom = atom(get => {
+  const activeRequest = get(activeRequestAtom);
+  return fallbackRequestName(activeRequest);
+});
 
 export function useActiveRequest<T extends keyof TypeMap>(
   model?: T | undefined,

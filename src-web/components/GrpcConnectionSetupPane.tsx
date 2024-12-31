@@ -136,12 +136,8 @@ export function GrpcConnectionSetupPane({
     () => [
       {
         value: TAB_DESCRIPTION,
-        label: (
-            <div className="flex items-center">
-              Info
-              {activeRequest.description && <CountBadge count={true} />}
-            </div>
-        ),
+        label: 'Info',
+        rightSlot: activeRequest.description && <CountBadge count={true} />,
       },
       { value: TAB_MESSAGE, label: 'Message' },
       {
@@ -187,10 +183,10 @@ export function GrpcConnectionSetupPane({
 
   const activeTab = activeTabs?.[activeRequest.id];
   const setActiveTab = useCallback(
-      (tab: string) => {
-        setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
-      },
-      [activeRequest.id, setActiveTabs],
+    (tab: string) => {
+      setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
+    },
+    [activeRequest.id, setActiveTabs],
   );
 
   const handleMetadataChange = useCallback(
@@ -224,7 +220,7 @@ export function GrpcConnectionSetupPane({
           onUrlChange={handleChangeUrl}
           onCancel={onCancel}
           isLoading={isStreaming}
-          stateKey={'grpc_url.'+activeRequest.id}
+          stateKey={'grpc_url.' + activeRequest.id}
         />
         <HStack space={1.5}>
           <RadioDropdown

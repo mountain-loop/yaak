@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { useDeleteFolder } from '../hooks/useDeleteFolder';
 import { useDeleteRequest } from '../hooks/useDeleteRequest';
+import { useDialog } from '../hooks/useDialog';
 import { useDuplicateFolder } from '../hooks/useDuplicateFolder';
 import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
 import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
@@ -15,7 +16,6 @@ import { getHttpRequest } from '../lib/store';
 import type { DropdownItem } from './core/Dropdown';
 import { ContextMenu } from './core/Dropdown';
 import { Icon } from './core/Icon';
-import { useDialog } from '../hooks/useDialog';
 import { FolderSettingsDialog } from './FolderSettingsDialog';
 import type { SidebarTreeNode } from './Sidebar';
 
@@ -25,31 +25,31 @@ interface Props {
   close: () => void;
 }
 
-export function RequestContextMenu({ child, show, close }: Props) {
+export function SidebarItemContextMenu({ child, show, close }: Props) {
   const sendManyRequests = useSendManyRequests();
-  const duplicateFolder = useDuplicateFolder(child.item.id);
-  const deleteFolder = useDeleteFolder(child.item.id);
+  const duplicateFolder = useDuplicateFolder(child.id);
+  const deleteFolder = useDeleteFolder(child.id);
   const httpRequestActions = useHttpRequestActions();
   const sendRequest = useSendAnyHttpRequest();
   const workspaces = useWorkspaces();
   const dialog = useDialog();
-  const deleteRequest = useDeleteRequest(child.item.id);
-  const renameRequest = useRenameRequest(child.item.id);
-  const duplicateHttpRequest = useDuplicateHttpRequest({ id: child.item.id, navigateAfter: true });
-  const duplicateGrpcRequest = useDuplicateGrpcRequest({ id: child.item.id, navigateAfter: true });
-  const moveToWorkspace = useMoveToWorkspace(child.item.id);
+  const deleteRequest = useDeleteRequest(child.id);
+  const renameRequest = useRenameRequest(child.id);
+  const duplicateHttpRequest = useDuplicateHttpRequest({ id: child.id, navigateAfter: true });
+  const duplicateGrpcRequest = useDuplicateGrpcRequest({ id: child.id, navigateAfter: true });
+  const moveToWorkspace = useMoveToWorkspace(child.id);
   const createDropdownItems = useCreateDropdownItems({
-    folderId: child.item.model === 'folder' ? child.item.id : null,
+    folderId: child.model === 'folder' ? child.id : null,
   });
 
   const items = useMemo<DropdownItem[]>(() => {
-    if (child.item.model === 'folder') {
+    if (child.model === 'folder') {
       return [
         {
           key: 'send-all',
           label: 'Send All',
           leftSlot: <Icon icon="send_horizontal" />,
-          onSelect: () => sendManyRequests.mutate(child.children.map((c) => c.item.id)),
+          onSelect: () => sendManyRequests.mutate(child.children.map((c) => c.id)),
         },
         {
           key: 'folder-settings',
@@ -60,7 +60,7 @@ export function RequestContextMenu({ child, show, close }: Props) {
               id: 'folder-settings',
               title: 'Folder Settings',
               size: 'md',
-              render: () => <FolderSettingsDialog folderId={child.item.id} />,
+              render: () => <FolderSettingsDialog folderId={child.id} />,
             }),
         },
         {
@@ -81,7 +81,7 @@ export function RequestContextMenu({ child, show, close }: Props) {
       ];
     } else {
       const requestItems: DropdownItem[] =
-        child.item.model === 'http_request'
+        child.model === 'http_request'
           ? [
               {
                 key: 'send-request',
@@ -89,7 +89,7 @@ export function RequestContextMenu({ child, show, close }: Props) {
                 hotKeyAction: 'http_request.send',
                 hotKeyLabelOnly: true, // Already bound in URL bar
                 leftSlot: <Icon icon="send_horizontal" />,
-                onSelect: () => sendRequest.mutate(child.item.id),
+                onSelect: () => sendRequest.mutate(child.id),
               },
               ...httpRequestActions.map((a) => ({
                 key: a.key,
@@ -97,7 +97,7 @@ export function RequestContextMenu({ child, show, close }: Props) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
                 onSelect: async () => {
-                  const request = await getHttpRequest(child.item.id);
+                  const request = await getHttpRequest(child.id);
                   if (request != null) await a.call(request);
                 },
               })),
@@ -119,7 +119,7 @@ export function RequestContextMenu({ child, show, close }: Props) {
           hotKeyLabelOnly: true, // Would trigger for every request (bad)
           leftSlot: <Icon icon="copy" />,
           onSelect: () =>
-            child.item.model === 'http_request'
+            child.model === 'http_request'
               ? duplicateHttpRequest.mutate()
               : duplicateGrpcRequest.mutate(),
         },
@@ -141,8 +141,8 @@ export function RequestContextMenu({ child, show, close }: Props) {
     }
   }, [
     child.children,
-    child.item.id,
-    child.item.model,
+    child.id,
+    child.model,
     createDropdownItems,
     deleteFolder,
     deleteRequest,

@@ -1,7 +1,7 @@
-import type { Transaction, TransactionSpec } from '@codemirror/state';
+import type {Extension, Transaction, TransactionSpec} from '@codemirror/state';
 import { EditorSelection, EditorState } from '@codemirror/state';
 
-export function singleLineExt() {
+export function singleLineExtensions(): Extension {
   return EditorState.transactionFilter.of(
     (tr: Transaction): TransactionSpec | TransactionSpec[] => {
       if (!tr.isUserEvent('input')) return tr;

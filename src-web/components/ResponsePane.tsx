@@ -1,4 +1,4 @@
-import type { HttpRequest, HttpResponse } from '@yaakapp-internal/models';
+import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties, ReactNode } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
@@ -32,15 +32,19 @@ import { VideoViewer } from './responseViewers/VideoViewer';
 interface Props {
   style?: CSSProperties;
   className?: string;
-  activeRequest: HttpRequest;
+  activeRequestId: string;
 }
 
 const TAB_BODY = 'body';
 const TAB_HEADERS = 'headers';
 const TAB_INFO = 'info';
 
-export const ResponsePane = memo(function ResponsePane({ style, className, activeRequest }: Props) {
-  const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequest);
+export const ResponsePane = memo(function ResponsePane({
+  style,
+  className,
+  activeRequestId,
+}: Props) {
+  const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
   const [viewMode, setViewMode] = useResponseViewMode(activeResponse?.requestId);
   const [activeTabs, setActiveTabs] = useLocalStorage<Record<string, string>>(
     'responsePaneActiveTabs',
@@ -64,13 +68,11 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
       },
       {
         value: TAB_HEADERS,
-        label: (
-          <div className="flex items-center">
-            Headers
-            <CountBadge
-              count={activeResponse?.headers.filter((h) => h.name && h.value).length ?? 0}
-            />
-          </div>
+        label: 'Headers',
+        rightSlot: (
+          <CountBadge
+            count={activeResponse?.headers.filter((h) => h.name && h.value).length ?? 0}
+          />
         ),
       },
       {
@@ -80,12 +82,12 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
     ],
     [activeResponse?.headers, contentType, setViewMode, viewMode],
   );
-  const activeTab = activeTabs?.[activeRequest.id];
+  const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(
-      (tab: string) => {
-        setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
-      },
-      [activeRequest.id, setActiveTabs],
+    (tab: string) => {
+      setActiveTabs((r) => ({ ...r, [activeRequestId]: tab }));
+    },
+    [activeRequestId, setActiveTabs],
   );
 
   const isLoading = isResponseLoading(activeResponse);
@@ -150,7 +152,7 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
             </Banner>
           ) : (
             <Tabs
-              key={activeRequest.id} // Freshen tabs on request change
+              key={activeRequestId} // Freshen tabs on request change
               value={activeTab}
               onChangeValue={setActiveTab}
               tabs={tabs}

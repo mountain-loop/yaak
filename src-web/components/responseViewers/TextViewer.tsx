@@ -167,7 +167,7 @@ export function TextViewer({
       language={language}
       actions={actions}
       extraExtensions={extraExtensions}
-      stateKey={null}
+      stateKey={`response_text.${responseId}`}
     />
   );
 }

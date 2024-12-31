@@ -2,15 +2,15 @@ import { useNavigate } from '@tanstack/react-router';
 import type { GrpcRequest } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
 import { trackEvent } from '../lib/analytics';
+import { jotaiStore } from '../lib/jotai';
 import { invokeCmd } from '../lib/tauri';
 import { getActiveRequest } from './useActiveRequest';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { activeWorkspaceAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 import { grpcRequestsAtom } from './useGrpcRequests';
 import { updateModelList } from './useSyncModelStores';
 
 export function useCreateGrpcRequest() {
-  const workspace = useActiveWorkspace();
   const setGrpcRequests = useSetAtom(grpcRequestsAtom);
   const navigate = useNavigate();
 
@@ -21,6 +21,7 @@ export function useCreateGrpcRequest() {
   >({
     mutationKey: ['create_grpc_request'],
     mutationFn: async (patch) => {
+      const workspace = jotaiStore.get(activeWorkspaceAtom);
       if (workspace === null) {
         throw new Error("Cannot create grpc request when there's no active workspace");
       }
@@ -46,7 +47,7 @@ export function useCreateGrpcRequest() {
       // Optimistic update
       setGrpcRequests(updateModelList(request));
 
-      navigate({
+      await navigate({
         to: '/workspaces/$workspaceId/requests/$requestId',
         params: {
           workspaceId: request.workspaceId,

@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react';
+import { generateId } from '../../lib/generateId';
 import { Editor } from './Editor/Editor';
 import type { PairEditorProps } from './PairEditor';
 
@@ -51,6 +52,7 @@ function lineToPair(line: string): PairEditorProps['pairs'][0] {
     enabled: true,
     name: (name ?? '').trim(),
     value: (value ?? '').trim(),
+    id: generateId(),
   };
   return pair;
 }

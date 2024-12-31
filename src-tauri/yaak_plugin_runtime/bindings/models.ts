@@ -2,17 +2,17 @@
 
 export type Environment = { model: "environment", id: string, workspaceId: string, environmentId: string | null, createdAt: string, updatedAt: string, name: string, variables: Array<EnvironmentVariable>, };
 
-export type EnvironmentVariable = { enabled?: boolean, name: string, value: string, };
+export type EnvironmentVariable = { enabled?: boolean, name: string, value: string, id: string, };
 
 export type Folder = { model: "folder", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, name: string, description: string, sortPriority: number, };
 
-export type GrpcMetadataEntry = { enabled?: boolean, name: string, value: string, };
+export type GrpcMetadataEntry = { enabled?: boolean, name: string, value: string, id: string, };
 
 export type GrpcRequest = { model: "grpc_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authenticationType: string | null, authentication: Record<string, any>, description: string, message: string, metadata: Array<GrpcMetadataEntry>, method: string | null, name: string, service: string | null, sortPriority: number, url: string, };
 
 export type HttpRequest = { model: "http_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, body: Record<string, any>, bodyType: string | null, description: string, headers: Array<HttpRequestHeader>, method: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
-export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, };
+export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, id: string, };
 
 export type HttpResponse = { model: "http_response", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, bodyPath: string | null, contentLength: number | null, elapsed: number, elapsedHeaders: number, error: string | null, headers: Array<HttpResponseHeader>, remoteAddr: string | null, status: number, statusReason: string | null, state: HttpResponseState, url: string, version: string | null, };
 
@@ -20,6 +20,6 @@ export type HttpResponseHeader = { name: string, value: string, };
 
 export type HttpResponseState = "initialized" | "connected" | "closed";
 
-export type HttpUrlParameter = { enabled?: boolean, name: string, value: string, };
+export type HttpUrlParameter = { enabled?: boolean, name: string, value: string, id: string, };
 
 export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };

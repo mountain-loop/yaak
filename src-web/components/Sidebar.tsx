@@ -1,24 +1,22 @@
 import { useNavigate } from '@tanstack/react-router';
-import type { Folder, GrpcRequest, HttpRequest, Workspace } from '@yaakapp-internal/models';
+import type { AnyModel, Folder, GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import { useAtom } from 'jotai';
-import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { useAtom, useAtomValue } from 'jotai';
+import React, { useCallback, useRef, useState } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
 import { getActiveRequest } from '../hooks/useActiveRequest';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
-import { useFolders } from '../hooks/useFolders';
 import { useGrpcConnections } from '../hooks/useGrpcConnections';
 import { useHotKey } from '../hooks/useHotKey';
 import { useHttpResponses } from '../hooks/useHttpResponses';
-import { useRequests } from '../hooks/useRequests';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { getSidebarCollapsedMap } from '../hooks/useSidebarItemCollapsed';
 import { useUpdateAnyFolder } from '../hooks/useUpdateAnyFolder';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { ContextMenu } from './core/Dropdown';
-import { sidebarSelectedIdAtom } from './SidebarAtoms';
+import { sidebarSelectedIdAtom, sidebarTreeAtom } from './SidebarAtoms';
 import type { SidebarItemProps } from './SidebarItem';
 import { SidebarItems } from './SidebarItems';
 
@@ -27,16 +25,21 @@ interface Props {
 }
 
 export interface SidebarTreeNode {
-  item: Workspace | Folder | HttpRequest | GrpcRequest;
+  id: string;
+  name: string;
+  model: AnyModel['model'];
+  sortPriority?: number;
+  workspaceId?: string;
+  folderId?: string | null;
   children: SidebarTreeNode[];
   depth: number;
 }
 
-export const Sidebar = memo(function Sidebar({ className }: Props) {
+export type SidebarModel = Folder | GrpcRequest | HttpRequest;
+
+export function Sidebar({ className }: Props) {
   const [hidden, setHidden] = useSidebarHidden();
   const sidebarRef = useRef<HTMLLIElement>(null);
-  const folders = useFolders();
-  const requests = useRequests();
   const activeWorkspace = useActiveWorkspace();
   const httpResponses = useHttpResponses();
   const grpcConnections = useGrpcConnections();
@@ -51,64 +54,7 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const navigate = useNavigate();
 
-  const { tree, treeParentMap, selectableRequests } = useMemo<{
-    tree: SidebarTreeNode | null;
-    treeParentMap: Record<string, SidebarTreeNode>;
-    selectableRequests: {
-      id: string;
-      index: number;
-      tree: SidebarTreeNode;
-    }[];
-  }>(() => {
-    const childrenMap: Record<string, (HttpRequest | GrpcRequest | Folder)[]> = {};
-    for (const item of [...requests, ...folders]) {
-      if (item.folderId == null) {
-        childrenMap[item.workspaceId] = childrenMap[item.workspaceId] ?? [];
-        childrenMap[item.workspaceId]!.push(item);
-      } else {
-        childrenMap[item.folderId] = childrenMap[item.folderId] ?? [];
-        childrenMap[item.folderId]!.push(item);
-      }
-    }
-
-    const treeParentMap: Record<string, SidebarTreeNode> = {};
-    const selectableRequests: {
-      id: string;
-      index: number;
-      tree: SidebarTreeNode;
-    }[] = [];
-
-    if (activeWorkspace == null) {
-      return { tree: null, treeParentMap, selectableRequests };
-    }
-
-    const selectedRequest: HttpRequest | GrpcRequest | null = null;
-    let selectableRequestIndex = 0;
-
-    // Put requests and folders into a tree structure
-    const next = (node: SidebarTreeNode): SidebarTreeNode => {
-      const childItems = childrenMap[node.item.id] ?? [];
-
-      // Recurse to children
-      const depth = node.depth + 1;
-      childItems.sort((a, b) => a.sortPriority - b.sortPriority);
-      for (const item of childItems) {
-        treeParentMap[item.id] = node;
-        // Add to children
-        node.children.push(next({ item, children: [], depth }));
-        // Add to selectable requests
-        if (item.model !== 'folder') {
-          selectableRequests.push({ id: item.id, index: selectableRequestIndex++, tree: node });
-        }
-      }
-
-      return node;
-    };
-
-    const tree = next({ item: activeWorkspace, children: [], depth: 0 });
-
-    return { tree, treeParentMap, selectableRequests, selectedRequest };
-  }, [activeWorkspace, requests, folders]);
+  const { tree, treeParentMap, selectableRequests } = useAtomValue(sidebarTreeAtom);
 
   const focusActiveRequest = useCallback(
     (
@@ -124,8 +70,7 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
       const { forced, noFocusSidebar } = args;
       const tree = forced?.tree ?? treeParentMap[activeRequest?.id ?? 'n/a'] ?? null;
       const children = tree?.children ?? [];
-      const id =
-        forced?.id ?? children.find((m) => m.item.id === activeRequest?.id)?.item.id ?? null;
+      const id = forced?.id ?? children.find((m) => m.id === activeRequest?.id)?.id ?? null;
 
       setHasFocus(true);
       setSelectedId(id);
@@ -145,19 +90,17 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
     async (id: string) => {
       const tree = treeParentMap[id ?? 'n/a'] ?? null;
       const children = tree?.children ?? [];
-      const node = children.find((m) => m.item.id === id) ?? null;
-      if (node == null || tree == null || node.item.model === 'workspace') {
+      const node = children.find((m) => m.id === id) ?? null;
+      if (node == null || tree == null || node.model === 'workspace') {
         return;
       }
 
-      const { item } = node;
-
-      if (item.model === 'http_request' || item.model === 'grpc_request') {
+      if (node.model === 'http_request' || node.model === 'grpc_request') {
         await navigate({
           to: '/workspaces/$workspaceId/requests/$requestId',
           params: {
             requestId: id,
-            workspaceId: item.workspaceId,
+            workspaceId: node.workspaceId ?? 'n/a',
           },
           search: (prev) => ({ ...prev }),
         });
@@ -259,14 +202,15 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
   const handleMove = useCallback<SidebarItemProps['onMove']>(
     async (id, side) => {
       let hoveredTree = treeParentMap[id] ?? null;
-      const dragIndex = hoveredTree?.children.findIndex((n) => n.item.id === id) ?? -99;
-      const hoveredItem = hoveredTree?.children[dragIndex]?.item ?? null;
+      const dragIndex = hoveredTree?.children.findIndex((n) => n.id === id) ?? -99;
+      const hoveredItem = hoveredTree?.children[dragIndex] ?? null;
       let hoveredIndex = dragIndex + (side === 'above' ? 0 : 1);
 
-      const isHoveredItemCollapsed = hoveredItem != null ? getSidebarCollapsedMap()[hoveredItem.id] : false;
+      const isHoveredItemCollapsed =
+        hoveredItem != null ? getSidebarCollapsedMap()[hoveredItem.id] : false;
       if (hoveredItem?.model === 'folder' && side === 'below' && !isHoveredItemCollapsed) {
         // Move into the folder if it's open and we're moving below it
-        hoveredTree = hoveredTree?.children.find((n) => n.item.id === id) ?? null;
+        hoveredTree = hoveredTree?.children.find((n) => n.id === id) ?? null;
         hoveredIndex = 0;
       }
 
@@ -290,19 +234,19 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
       }
 
       // Block dragging folder into itself
-      if (hoveredTree.item.id === itemId) {
+      if (hoveredTree.id === itemId) {
         return;
       }
 
       const parentTree = treeParentMap[itemId] ?? null;
-      const index = parentTree?.children.findIndex((n) => n.item.id === itemId) ?? -1;
+      const index = parentTree?.children.findIndex((n) => n.id === itemId) ?? -1;
       const child = parentTree?.children[index ?? -1];
       if (child == null || parentTree == null) return;
 
-      const movedToDifferentTree = hoveredTree.item.id !== parentTree.item.id;
+      const movedToDifferentTree = hoveredTree.id !== parentTree.id;
       const movedUpInSameTree = !movedToDifferentTree && hoveredIndex < index;
 
-      const newChildren = hoveredTree.children.filter((c) => c.item.id !== itemId);
+      const newChildren = hoveredTree.children.filter((c) => c.id !== itemId);
       if (movedToDifferentTree || movedUpInSameTree) {
         // Moving up or into a new tree is simply inserting before the hovered item
         newChildren.splice(hoveredIndex, 0, child);
@@ -311,42 +255,42 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
         newChildren.splice(hoveredIndex - 1, 0, child);
       }
 
-      const insertedIndex = newChildren.findIndex((c) => c.item === child.item);
-      const prev = newChildren[insertedIndex - 1]?.item;
-      const next = newChildren[insertedIndex + 1]?.item;
-      const beforePriority = prev == null || prev.model === 'workspace' ? 0 : prev.sortPriority;
-      const afterPriority = next == null || next.model === 'workspace' ? 0 : next.sortPriority;
+      const insertedIndex = newChildren.findIndex((c) => c.id === child.id);
+      const prev = newChildren[insertedIndex - 1];
+      const next = newChildren[insertedIndex + 1];
+      const beforePriority = prev?.sortPriority ?? 0;
+      const afterPriority = next?.sortPriority ?? 0;
 
-      const folderId = hoveredTree.item.model === 'folder' ? hoveredTree.item.id : null;
+      const folderId = hoveredTree.model === 'folder' ? hoveredTree.id : null;
       const shouldUpdateAll = afterPriority - beforePriority < 1;
 
       if (shouldUpdateAll) {
         await Promise.all(
           newChildren.map((child, i) => {
             const sortPriority = i * 1000;
-            if (child.item.model === 'folder') {
+            if (child.model === 'folder') {
               const updateFolder = (f: Folder) => ({ ...f, sortPriority, folderId });
-              return updateAnyFolder({ id: child.item.id, update: updateFolder });
-            } else if (child.item.model === 'grpc_request') {
+              return updateAnyFolder({ id: child.id, update: updateFolder });
+            } else if (child.model === 'grpc_request') {
               const updateRequest = (r: GrpcRequest) => ({ ...r, sortPriority, folderId });
-              return updateAnyGrpcRequest({ id: child.item.id, update: updateRequest });
-            } else if (child.item.model === 'http_request') {
+              return updateAnyGrpcRequest({ id: child.id, update: updateRequest });
+            } else if (child.model === 'http_request') {
               const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
-              return updateAnyHttpRequest({ id: child.item.id, update: updateRequest });
+              return updateAnyHttpRequest({ id: child.id, update: updateRequest });
             }
           }),
         );
       } else {
         const sortPriority = afterPriority - (afterPriority - beforePriority) / 2;
-        if (child.item.model === 'folder') {
+        if (child.model === 'folder') {
           const updateFolder = (f: Folder) => ({ ...f, sortPriority, folderId });
-          await updateAnyFolder({ id: child.item.id, update: updateFolder });
-        } else if (child.item.model === 'grpc_request') {
+          await updateAnyFolder({ id: child.id, update: updateFolder });
+        } else if (child.model === 'grpc_request') {
           const updateRequest = (r: GrpcRequest) => ({ ...r, sortPriority, folderId });
-          await updateAnyGrpcRequest({ id: child.item.id, update: updateRequest });
-        } else if (child.item.model === 'http_request') {
+          await updateAnyGrpcRequest({ id: child.id, update: updateRequest });
+        } else if (child.model === 'http_request') {
           const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
-          await updateAnyHttpRequest({ id: child.item.id, update: updateRequest });
+          await updateAnyHttpRequest({ id: child.id, update: updateRequest });
         }
       }
       setDraggingId(null);
@@ -420,4 +364,4 @@ export const Sidebar = memo(function Sidebar({ className }: Props) {
       </div>
     </aside>
   );
-});
+}

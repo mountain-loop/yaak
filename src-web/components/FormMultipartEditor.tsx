@@ -18,6 +18,7 @@ export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props
         value: p.file ?? p.value,
         contentType: p.contentType,
         isFile: !!p.file,
+        id: p.id,
       })),
     [request.body.form],
   );
@@ -31,6 +32,7 @@ export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props
           contentType: p.contentType,
           file: p.isFile ? p.value : undefined,
           value: p.isFile ? undefined : p.value,
+          id: p.id,
         })),
       }),
     [onChange],

@@ -1,3 +1,4 @@
+import {generateId} from "../lib/generateId";
 import { useFastMutation } from './useFastMutation';
 import type { HttpUrlParameter } from '@yaakapp-internal/models';
 import { useToast } from './useToast';
@@ -27,6 +28,7 @@ export function useImportQuerystring(requestId: string) {
         name,
         value,
         enabled: true,
+        id: generateId(),
       }));
 
       await updateRequest.mutateAsync({
