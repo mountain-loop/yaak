@@ -1,7 +1,7 @@
 import type { DialogProps } from '../components/core/Dialog';
-import { useDialog } from '../components/DialogContext';
 import type { ConfirmProps } from './Confirm';
 import { Confirm } from './Confirm';
+import { useDialog } from './useDialog';
 
 export function useConfirm() {
   const dialog = useDialog();

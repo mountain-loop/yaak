@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import type { EditorProps } from '../components/core/Editor';
 import { tryFormatJson, tryFormatXml } from '../lib/formatters';
+import type { EditorProps } from '../components/core/Editor/Editor';
 
 export function useFormatText({
   text,

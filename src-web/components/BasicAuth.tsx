@@ -17,6 +17,7 @@ export function BasicAuth<T extends HttpRequest | GrpcRequest>({ request }: Prop
       <Input
         useTemplating
         autocompleteVariables
+        stateKey={`basic.username.${request.id}`}
         forceUpdateKey={request.id}
         placeholder="username"
         label="Username"
@@ -47,6 +48,7 @@ export function BasicAuth<T extends HttpRequest | GrpcRequest>({ request }: Prop
         useTemplating
         autocompleteVariables
         forceUpdateKey={request?.id}
+        stateKey={`basic.password.${request.id}`}
         placeholder="password"
         label="Password"
         name="password"

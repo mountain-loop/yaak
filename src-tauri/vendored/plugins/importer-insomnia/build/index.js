@@ -7233,19 +7233,17 @@ function pluginHookImport(ctx, contents) {
   };
   const workspacesToImport = parsed.resources.filter(isWorkspace);
   for (const workspaceToImport of workspacesToImport) {
-    const baseEnvironment = parsed.resources.find(
-      (r) => isEnvironment(r) && r.parentId === workspaceToImport._id
-    );
+    console.log("IMPORT WORKSPACE", workspaceToImport);
     resources.workspaces.push({
       id: convertId(workspaceToImport._id),
       createdAt: new Date(workspacesToImport.created ?? Date.now()).toISOString().replace("Z", ""),
       updatedAt: new Date(workspacesToImport.updated ?? Date.now()).toISOString().replace("Z", ""),
       model: "workspace",
       name: workspaceToImport.name,
-      variables: baseEnvironment ? parseVariables(baseEnvironment.data) : []
+      description: workspacesToImport.description
     });
     const environmentsToImport = parsed.resources.filter(
-      (r) => isEnvironment(r) && r.parentId === baseEnvironment?._id
+      (r) => isEnvironment(r)
     );
     resources.environments.push(
       ...environmentsToImport.map((r) => importEnvironment(r, workspaceToImport._id))
@@ -7298,6 +7296,7 @@ function importFolder(f, workspaceId) {
     updatedAt: new Date(f.updated ?? Date.now()).toISOString().replace("Z", ""),
     folderId: f.parentId === workspaceId ? null : convertId(f.parentId),
     workspaceId: convertId(workspaceId),
+    description: f.description ?? null,
     model: "folder",
     name: f.name
   };
@@ -7315,6 +7314,7 @@ function importGrpcRequest(r, workspaceId, sortPriority = 0) {
     model: "grpc_request",
     sortPriority,
     name: r.name,
+    description: r.description ?? null,
     url: convertSyntax(r.url),
     service,
     method,
@@ -7381,6 +7381,7 @@ function importHttpRequest(r, workspaceId, sortPriority = 0) {
     model: "http_request",
     sortPriority,
     name: r.name,
+    description: r.description ?? null,
     url: convertSyntax(r.url),
     body,
     bodyType,
@@ -7393,13 +7394,6 @@ function importHttpRequest(r, workspaceId, sortPriority = 0) {
       value: h.value ?? ""
     })).filter(({ name, value }) => name !== "" || value !== "")
   };
-}
-function parseVariables(data) {
-  return Object.entries(data).map(([name, value]) => ({
-    enabled: true,
-    name,
-    value: `${value}`
-  }));
 }
 function convertSyntax(variable) {
   if (!isJSString(variable)) return variable;

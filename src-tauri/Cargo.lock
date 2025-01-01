@@ -7993,6 +7993,7 @@ dependencies = [
  "tauri-plugin-window-state",
  "tokio",
  "tokio-stream",
+ "ts-rs",
  "urlencoding",
  "uuid",
  "yaak-grpc",

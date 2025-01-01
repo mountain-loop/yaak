@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react';
-import { getKeyValue } from '../lib/keyValueStore';
-import { useActiveRequestId } from './useActiveRequestId';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { jotaiStore } from '../lib/jotai';
+import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
+import { activeRequestIdAtom } from './useActiveRequestId';
+import { activeWorkspaceIdAtom, useActiveWorkspace } from './useActiveWorkspace';
 import { useKeyValue } from './useKeyValue';
 import { useRequests } from './useRequests';
 
@@ -12,30 +13,39 @@ const fallback: string[] = [];
 export function useRecentRequests() {
   const requests = useRequests();
   const activeWorkspace = useActiveWorkspace();
-  const activeRequestId = useActiveRequestId();
 
-  const kv = useKeyValue<string[]>({
+  const { set: setRecentRequests, value: recentRequests } = useKeyValue<string[]>({
     key: kvKey(activeWorkspace?.id ?? 'n/a'),
     namespace,
     fallback,
   });
 
-  // Set history when active request changes
-  useEffect(() => {
-    kv.set((currentHistory) => {
-      if (activeRequestId === null) return currentHistory;
-      const withoutCurrentRequest = currentHistory.filter((id) => id !== activeRequestId);
-      return [activeRequestId, ...withoutCurrentRequest];
-    }).catch(console.error);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRequestId]);
-
   const onlyValidIds = useMemo(
-    () => kv.value?.filter((id) => requests.some((r) => r.id === id)) ?? [],
-    [kv.value, requests],
+    () => recentRequests?.filter((id) => requests.some((r) => r.id === id)) ?? [],
+    [recentRequests, requests],
   );
 
-  return onlyValidIds;
+  return [onlyValidIds, setRecentRequests] as const;
+}
+
+export function useSubscribeRecentRequests() {
+  useEffect(() => {
+    return jotaiStore.sub(activeRequestIdAtom, async () => {
+      const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+      const activeRequestId = jotaiStore.get(activeRequestIdAtom);
+      if (activeWorkspaceId == null) return;
+      if (activeRequestId == null) return;
+
+      const key = kvKey(activeWorkspaceId);
+
+      const recentIds = await getKeyValue<string[]>({ namespace, key, fallback });
+      if (recentIds[0] === activeRequestId) return; // Short-circuit
+
+      const withoutActiveId = recentIds.filter((id) => id !== activeRequestId);
+      const value = [activeRequestId, ...withoutActiveId];
+      await setKeyValue({ namespace, key, value });
+    });
+  }, []);
 }
 
 export async function getRecentRequests(workspaceId: string) {

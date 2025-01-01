@@ -15,8 +15,8 @@ export function Banner({ children, className, color = 'secondary' }: Props) {
           className,
           `x-theme-banner--${color}`,
           'whitespace-pre-wrap',
-          'border border-dashed border-border-subtle bg-surface',
-          'italic px-3 py-2 rounded select-auto cursor-text',
+          'border border-dashed border-border bg-surface',
+          'px-3 py-2 rounded select-auto cursor-text',
           'overflow-x-auto text-text',
         )}
       >

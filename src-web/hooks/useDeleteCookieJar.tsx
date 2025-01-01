@@ -1,18 +1,18 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { CookieJar } from '@yaakapp-internal/models';
-import {useSetAtom} from "jotai";
+import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
 import { invokeCmd } from '../lib/tauri';
 import { useConfirm } from './useConfirm';
-import {cookieJarsAtom} from "./useCookieJars";
-import {removeModelById} from "./useSyncModelStores";
+import { cookieJarsAtom } from './useCookieJars';
+import { removeModelById } from './useSyncModelStores';
 
 export function useDeleteCookieJar(cookieJar: CookieJar | null) {
   const confirm = useConfirm();
   const setCookieJars = useSetAtom(cookieJarsAtom);
 
-  return useMutation<CookieJar | null, string>({
+  return useFastMutation<CookieJar | null, string>({
     mutationKey: ['delete_cookie_jar', cookieJar?.id],
     mutationFn: async () => {
       const confirmed = await confirm({
@@ -33,6 +33,6 @@ export function useDeleteCookieJar(cookieJar: CookieJar | null) {
       if (cookieJar == null) return;
 
       setCookieJars(removeModelById(cookieJar));
-    }
+    },
   });
 }

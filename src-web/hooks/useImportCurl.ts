@@ -1,20 +1,19 @@
-import { useMutation } from '@tanstack/react-query';
 import type { HttpRequest } from '@yaakapp-internal/models';
-import { useToast } from '../components/ToastContext';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { getActiveWorkspaceId } from './useActiveWorkspace';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
+import { useFastMutation } from './useFastMutation';
 import { useRequestUpdateKey } from './useRequestUpdateKey';
+import { useToast } from './useToast';
 import { useUpdateAnyHttpRequest } from './useUpdateAnyHttpRequest';
 
 export function useImportCurl() {
-  const workspace = useActiveWorkspace();
   const updateRequest = useUpdateAnyHttpRequest();
   const createRequest = useCreateHttpRequest();
   const { wasUpdatedExternally } = useRequestUpdateKey(null);
   const toast = useToast();
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['import_curl'],
     mutationFn: async ({
       overwriteRequestId,
@@ -23,9 +22,10 @@ export function useImportCurl() {
       overwriteRequestId?: string;
       command: string;
     }) => {
+      const workspaceId = getActiveWorkspaceId();
       const request: HttpRequest = await invokeCmd('cmd_curl_to_request', {
         command,
-        workspaceId: workspace?.id,
+        workspaceId,
       });
 
       let verb;

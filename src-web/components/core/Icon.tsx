@@ -30,6 +30,7 @@ const icons = {
   circle_alert: lucide.CircleAlertIcon,
   clock: lucide.ClockIcon,
   code: lucide.CodeIcon,
+  columns_2: lucide.Columns2Icon,
   cookie: lucide.CookieIcon,
   copy: lucide.CopyIcon,
   copy_check: lucide.CopyCheck,

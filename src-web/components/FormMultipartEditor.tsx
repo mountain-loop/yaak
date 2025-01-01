@@ -1,25 +1,26 @@
-import { useCallback, useMemo } from 'react';
 import type { HttpRequest } from '@yaakapp-internal/models';
+import { useCallback, useMemo } from 'react';
 import type { Pair, PairEditorProps } from './core/PairEditor';
 import { PairEditor } from './core/PairEditor';
 
 type Props = {
   forceUpdateKey: string;
-  body: HttpRequest['body'];
+  request: HttpRequest;
   onChange: (body: HttpRequest['body']) => void;
 };
 
-export function FormMultipartEditor({ body, forceUpdateKey, onChange }: Props) {
+export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props) {
   const pairs = useMemo<Pair[]>(
     () =>
-      (Array.isArray(body.form) ? body.form : []).map((p) => ({
+      (Array.isArray(request.body.form) ? request.body.form : []).map((p) => ({
         enabled: p.enabled,
         name: p.name,
         value: p.file ?? p.value,
         contentType: p.contentType,
         isFile: !!p.file,
+        id: p.id,
       })),
-    [body.form],
+    [request.body.form],
   );
 
   const handleChange = useCallback<PairEditorProps['onChange']>(
@@ -31,6 +32,7 @@ export function FormMultipartEditor({ body, forceUpdateKey, onChange }: Props) {
           contentType: p.contentType,
           file: p.isFile ? p.value : undefined,
           value: p.isFile ? undefined : p.value,
+          id: p.id,
         })),
       }),
     [onChange],
@@ -44,6 +46,7 @@ export function FormMultipartEditor({ body, forceUpdateKey, onChange }: Props) {
       pairs={pairs}
       onChange={handleChange}
       forceUpdateKey={forceUpdateKey}
+      stateKey={'multipart.' + request.id}
     />
   );
 }

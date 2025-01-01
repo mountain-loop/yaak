@@ -8,22 +8,22 @@ import classNames from 'classnames';
 import { EditorView } from 'codemirror';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
-  useEffect,
   Children,
   cloneElement,
   forwardRef,
   isValidElement,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
 } from 'react';
 import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
+import { useDialog } from '../../../hooks/useDialog';
 import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useSettings } from '../../../hooks/useSettings';
 import { useTemplateFunctions } from '../../../hooks/useTemplateFunctions';
-import { useDialog } from '../../DialogContext';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
@@ -31,12 +31,7 @@ import { HStack } from '../Stacks';
 import './Editor.css';
 import { baseExtensions, getLanguageExtension, multiLineExtensions } from './extensions';
 import type { GenericCompletionConfig } from './genericCompletion';
-import { singleLineExt } from './singleLine';
-
-// Export some things so all the code-split parts are in this file
-export { buildClientSchema, getIntrospectionQuery } from 'graphql/utilities';
-export { graphql } from 'cm6-graphql';
-export { formatSdl } from 'format-graphql';
+import { singleLineExtensions } from './singleLine';
 
 export interface EditorProps {
   id?: string;
@@ -45,7 +40,16 @@ export interface EditorProps {
   type?: 'text' | 'password';
   className?: string;
   heightMode?: 'auto' | 'full';
-  language?: 'javascript' | 'json' | 'html' | 'xml' | 'graphql' | 'url' | 'pairs' | 'text';
+  language?:
+    | 'javascript'
+    | 'json'
+    | 'html'
+    | 'xml'
+    | 'graphql'
+    | 'url'
+    | 'pairs'
+    | 'text'
+    | 'markdown';
   forceUpdateKey?: string | number;
   autoFocus?: boolean;
   autoSelect?: boolean;
@@ -66,6 +70,8 @@ export interface EditorProps {
   autocompleteVariables?: boolean;
   extraExtensions?: Extension[];
   actions?: ReactNode;
+  hideGutter?: boolean;
+  stateKey: string | null;
 }
 
 const emptyVariables: EnvironmentVariable[] = [];
@@ -96,6 +102,8 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     autocompleteVariables,
     actions,
     wrapLines,
+    hideGutter,
+    stateKey,
   }: EditorProps,
   ref,
 ) {
@@ -109,12 +117,12 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   }
 
   const cm = useRef<{ view: EditorView; languageCompartment: Compartment } | null>(null);
-  useImperativeHandle(ref, () => cm.current?.view);
+  useImperativeHandle(ref, () => cm.current?.view, []);
 
   // Use ref so we can update the handler without re-initializing the editor
   const handleChange = useRef<EditorProps['onChange']>(onChange);
   useEffect(() => {
-    handleChange.current = onChange ? onChange : onChange;
+    handleChange.current = onChange;
   }, [onChange]);
 
   // Use ref so we can update the handler without re-initializing the editor
@@ -283,7 +291,6 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
         return;
       }
 
-      let view: EditorView;
       try {
         const languageCompartment = new Compartment();
         const langExt = getLanguageExtension({
@@ -298,30 +305,36 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
           onClickPathParameter,
         });
 
-        const state = EditorState.create({
-          doc: `${defaultValue ?? ''}`,
-          extensions: [
-            languageCompartment.of(langExt),
-            placeholderCompartment.current.of(
-              placeholderExt(placeholderElFromText(placeholder ?? '')),
-            ),
-            wrapLinesCompartment.current.of(wrapLines ? [EditorView.lineWrapping] : []),
-            ...getExtensions({
-              container,
-              readOnly,
-              singleLine,
-              onChange: handleChange,
-              onPaste: handlePaste,
-              onPasteOverwrite: handlePasteOverwrite,
-              onFocus: handleFocus,
-              onBlur: handleBlur,
-              onKeyDown: handleKeyDown,
-            }),
-            ...(extraExtensions ?? []),
-          ],
-        });
+        const cachedJsonState = getCachedEditorState(defaultValue ?? '', stateKey);
 
-        view = new EditorView({ state, parent: container });
+        const state =
+          cachedJsonState ??
+          EditorState.create({
+            doc: `${defaultValue ?? ''}`,
+            extensions: [
+              languageCompartment.of(langExt),
+              placeholderCompartment.current.of(
+                placeholderExt(placeholderElFromText(placeholder ?? '')),
+              ),
+              wrapLinesCompartment.current.of(wrapLines ? [EditorView.lineWrapping] : []),
+              ...getExtensions({
+                container,
+                readOnly,
+                singleLine,
+                hideGutter,
+                stateKey,
+                onChange: handleChange,
+                onPaste: handlePaste,
+                onPasteOverwrite: handlePasteOverwrite,
+                onFocus: handleFocus,
+                onBlur: handleBlur,
+                onKeyDown: handleKeyDown,
+              }),
+              ...(extraExtensions ?? []),
+            ],
+          });
+
+        const view = new EditorView({ state, parent: container });
 
         // For large documents, the parser may parse the max number of lines and fail to add
         // things like fold markers because of it.
@@ -374,7 +387,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   const decoratedActions = useMemo(() => {
     const results = [];
     const actionClassName = classNames(
-      'bg-surface transition-opacity opacity-0 group-hover:opacity-100 hover:!opacity-100 shadow',
+      'bg-surface transition-opacity transform-gpu opacity-0 group-hover:opacity-100 hover:!opacity-100 shadow',
     );
 
     if (format) {
@@ -452,16 +465,19 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 });
 
 function getExtensions({
+  stateKey,
   container,
   readOnly,
   singleLine,
+  hideGutter,
   onChange,
   onPaste,
   onPasteOverwrite,
   onFocus,
   onBlur,
   onKeyDown,
-}: Pick<EditorProps, 'singleLine' | 'readOnly'> & {
+}: Pick<EditorProps, 'singleLine' | 'readOnly' | 'hideGutter'> & {
+  stateKey: EditorProps['stateKey'];
   container: HTMLDivElement | null;
   onChange: MutableRefObject<EditorProps['onChange']>;
   onPaste: MutableRefObject<EditorProps['onPaste']>;
@@ -498,8 +514,8 @@ function getExtensions({
     }),
     tooltips({ parent }),
     keymap.of(singleLine ? defaultKeymap.filter((k) => k.key !== 'Enter') : defaultKeymap),
-    ...(singleLine ? [singleLineExt()] : []),
-    ...(!singleLine ? [multiLineExtensions] : []),
+    ...(singleLine ? [singleLineExtensions()] : []),
+    ...(!singleLine ? [multiLineExtensions({ hideGutter })] : []),
     ...(readOnly
       ? [EditorState.readOnly.of(true), EditorView.contentAttributes.of({ tabindex: '-1' })]
       : []),
@@ -508,10 +524,16 @@ function getExtensions({
     // Things that must be last //
     // ------------------------ //
 
+    // Fire onChange event
     EditorView.updateListener.of((update) => {
       if (onChange && update.docChanged) {
         onChange.current?.(update.state.doc.toString());
       }
+    }),
+
+    // Cache editor state
+    EditorView.updateListener.of((update) => {
+      saveCachedEditorState(stateKey, update.state);
     }),
   ];
 }
@@ -521,3 +543,25 @@ const placeholderElFromText = (text: string) => {
   el.innerHTML = text.replaceAll('\n', '<br/>');
   return el;
 };
+
+declare global {
+  interface Window {
+    editorStates: Record<string, EditorState>;
+  }
+}
+window.editorStates = window.editorStates ?? {};
+
+function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
+  if (!stateKey || state == null) return;
+  window.editorStates[stateKey] = state;
+}
+
+function getCachedEditorState(doc: string, stateKey: string | null) {
+  if (stateKey == null) return;
+
+  const state = window.editorStates[stateKey] ?? null;
+  if (state == null) return null;
+  if (state.doc.toString() !== doc) return null;
+
+  return state;
+}

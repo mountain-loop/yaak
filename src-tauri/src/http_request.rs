@@ -29,6 +29,11 @@ use yaak_models::models::{
 };
 use yaak_models::queries::{get_http_response, get_or_create_settings, get_workspace, update_response_if_id, upsert_cookie_jar, UpdateSource};
 use yaak_plugins::events::{RenderPurpose, WindowContext};
+use yaak_models::queries::{
+    get_base_environment, get_http_response, get_or_create_settings, get_workspace,
+    update_response_if_id, upsert_cookie_jar,
+};
+use yaak_plugin_runtime::events::{RenderPurpose, WindowContext};
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -40,6 +45,9 @@ pub async fn send_http_request<R: Runtime>(
 ) -> Result<HttpResponse, String> {
     let workspace =
         get_workspace(window, &request.workspace_id).await.expect("Failed to get Workspace");
+    let base_environment = get_base_environment(window, &request.workspace_id)
+        .await
+        .expect("Failed to get base environment");
     let settings = get_or_create_settings(window).await;
     let cb = PluginTemplateCallback::new(
         window.app_handle(),
@@ -51,7 +59,7 @@ pub async fn send_http_request<R: Runtime>(
     let response = Arc::new(Mutex::new(og_response.clone()));
 
     let rendered_request =
-        render_http_request(&request, &workspace, environment.as_ref(), &cb).await;
+        render_http_request(&request, &base_environment, environment.as_ref(), &cb).await;
 
     let mut url_string = rendered_request.url;
 

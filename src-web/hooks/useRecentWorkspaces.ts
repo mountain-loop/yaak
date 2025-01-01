@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
-import { getKeyValue } from '../lib/keyValueStore';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { jotaiStore } from '../lib/jotai';
+import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useKeyValue } from './useKeyValue';
 import { useWorkspaces } from './useWorkspaces';
 
@@ -10,35 +11,30 @@ const fallback: string[] = [];
 
 export function useRecentWorkspaces() {
   const workspaces = useWorkspaces();
-  const activeWorkspace = useActiveWorkspace();
-  const kv = useKeyValue<string[]>({
-    key: kvKey(),
-    namespace,
-    fallback,
-  });
-
-  // Set history when active request changes
-  useEffect(() => {
-    kv.set((currentHistory: string[]) => {
-      if (activeWorkspace === null) return currentHistory;
-      const withoutCurrent = currentHistory.filter((id) => id !== activeWorkspace.id);
-      return [activeWorkspace.id, ...withoutCurrent];
-    }).catch(console.error);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspace]);
+  const { value } = useKeyValue<string[]>({ key: kvKey(), namespace, fallback });
 
   const onlyValidIds = useMemo(
-    () => kv.value?.filter((id) => workspaces.some((w) => w.id === id)) ?? [],
-    [kv.value, workspaces],
+    () => value?.filter((id) => workspaces.some((w) => w.id === id)) ?? [],
+    [value, workspaces],
   );
 
   return onlyValidIds;
 }
 
-export async function getRecentWorkspaces() {
-  return getKeyValue<string[]>({
-    namespace,
-    key: kvKey(),
-    fallback: fallback,
-  });
+export function useSubscribeRecentWorkspaces() {
+  useEffect(() => {
+    return jotaiStore.sub(activeWorkspaceIdAtom, async () => {
+      const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+      if (activeWorkspaceId == null) return;
+
+      const key = kvKey();
+
+      const recentIds = await getKeyValue<string[]>({ namespace, key, fallback });
+      if (recentIds[0] === activeWorkspaceId) return; // Short-circuit
+
+      const withoutActiveId = recentIds.filter((id) => id !== activeWorkspaceId);
+      const value = [activeWorkspaceId, ...withoutActiveId];
+      await setKeyValue({ namespace, key, value });
+    });
+  }, []);
 }

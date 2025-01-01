@@ -1,14 +1,13 @@
 import classNames from 'classnames';
 import { memo, useCallback, useMemo } from 'react';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useEnvironments } from '../hooks/useEnvironments';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
-import { useDialog } from './DialogContext';
+import { useDialog } from '../hooks/useDialog';
 import { EnvironmentEditDialog } from './EnvironmentEditDialog';
 
 type Props = {
@@ -19,8 +18,7 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
   className,
   ...buttonProps
 }: Props) {
-  const environments = useEnvironments();
-  const activeWorkspace = useActiveWorkspace();
+  const { subEnvironments, baseEnvironment } = useEnvironments();
   const [activeEnvironment, setActiveEnvironmentId] = useActiveEnvironment();
   const dialog = useDialog();
 
@@ -36,22 +34,22 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
 
   const items: DropdownItem[] = useMemo(
     () => [
-      ...environments.map(
+      ...subEnvironments.map(
         (e) => ({
           key: e.id,
           label: e.name,
           leftSlot: e.id === activeEnvironment?.id ? <Icon icon="check" /> : <Icon icon="empty" />,
           onSelect: async () => {
             if (e.id !== activeEnvironment?.id) {
-              setActiveEnvironmentId(e.id);
+              await setActiveEnvironmentId(e.id);
             } else {
-              setActiveEnvironmentId(null);
+              await setActiveEnvironmentId(null);
             }
           },
         }),
         [activeEnvironment?.id],
       ),
-      ...((environments.length > 0
+      ...((subEnvironments.length > 0
         ? [{ type: 'separator', label: 'Environments' }]
         : []) as DropdownItem[]),
       {
@@ -62,11 +60,11 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         onSelect: showEnvironmentDialog,
       },
     ],
-    [activeEnvironment?.id, environments, setActiveEnvironmentId, showEnvironmentDialog],
+    [activeEnvironment?.id, subEnvironments, setActiveEnvironmentId, showEnvironmentDialog],
   );
 
-  const hasWorkspaceVars =
-    (activeWorkspace?.variables ?? []).filter((v) => v.enabled && (v.name || v.value)).length > 0;
+  const hasBaseVars =
+    (baseEnvironment?.variables ?? []).filter((v) => v.enabled && (v.name || v.value)).length > 0;
 
   return (
     <Dropdown items={items}>
@@ -75,14 +73,14 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         className={classNames(
           className,
           'text !px-2 truncate',
-          !activeEnvironment && !hasWorkspaceVars && 'text-text-subtlest italic',
+          !activeEnvironment && !hasBaseVars && 'text-text-subtlest italic',
         )}
         // If no environments, the button simply opens the dialog.
         // NOTE: We don't create a new button because we want to reuse the hotkey from the menu items
-        onClick={environments.length === 0 ? showEnvironmentDialog : undefined}
+        onClick={subEnvironments.length === 0 ? showEnvironmentDialog : undefined}
         {...buttonProps}
       >
-        {activeEnvironment?.name ?? (hasWorkspaceVars ? 'Environment' : 'No Environment')}
+        {activeEnvironment?.name ?? (hasBaseVars ? 'Environment' : 'No Environment')}
       </Button>
     </Dropdown>
   );

@@ -8,8 +8,8 @@ import { useFormatText } from '../../hooks/useFormatText';
 import { useResponseBodyEventSource } from '../../hooks/useResponseBodyEventSource';
 import { isJSON } from '../../lib/contentType';
 import { Button } from '../core/Button';
-import type { EditorProps } from '../core/Editor';
-import { Editor } from '../core/Editor';
+import type { EditorProps } from '../core/Editor/Editor';
+import { Editor } from '../core/Editor/Editor';
 import { Icon } from '../core/Icon';
 import { InlineCode } from '../core/InlineCode';
 import { Separator } from '../core/Separator';
@@ -110,7 +110,7 @@ function ActualEventStreamViewer({ response }: Props) {
 function FormattedEditor({ text, language }: { text: string; language: EditorProps['language'] }) {
   const formatted = useFormatText({ text, language, pretty: true });
   if (formatted.data == null) return null;
-  return <Editor readOnly defaultValue={formatted.data} language={language} />;
+  return <Editor readOnly defaultValue={formatted.data} language={language} stateKey={null} />;
 }
 
 function EventStreamEventsVirtual({

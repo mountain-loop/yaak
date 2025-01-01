@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { Environment } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai/index';
 import { getEnvironment } from '../lib/store';
@@ -8,11 +8,12 @@ import {updateModelList} from "./useSyncModelStores";
 
 export function useUpdateEnvironment(id: string | null) {
   const setEnvironments = useSetAtom(environmentsAtom);
-  return useMutation<
+  return useFastMutation<
     Environment,
     unknown,
     Partial<Environment> | ((r: Environment) => Environment)
   >({
+    toastyError: true,
     mutationKey: ['update_environment', id],
     mutationFn: async (v) => {
       const environment = await getEnvironment(id);

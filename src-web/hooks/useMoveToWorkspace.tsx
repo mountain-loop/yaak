@@ -1,20 +1,20 @@
-import { useMutation } from '@tanstack/react-query';
 import React from 'react';
-import { useDialog } from '../components/DialogContext';
 import { MoveToWorkspaceDialog } from '../components/MoveToWorkspaceDialog';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { useDialog } from './useDialog';
+import { useFastMutation } from './useFastMutation';
 import { useRequests } from './useRequests';
 
 export function useMoveToWorkspace(id: string) {
   const dialog = useDialog();
   const requests = useRequests();
   const request = requests.find((r) => r.id === id);
-  const activeWorkspace = useActiveWorkspace();
 
-  return useMutation<void, unknown>({
+  return useFastMutation<void, unknown>({
     mutationKey: ['move_workspace', id],
     mutationFn: async () => {
-      if (request == null || activeWorkspace == null) return;
+      const activeWorkspaceId = getActiveWorkspaceId();
+      if (request == null || activeWorkspaceId == null) return;
 
       dialog.show({
         id: 'change-workspace',
@@ -24,7 +24,7 @@ export function useMoveToWorkspace(id: string) {
           <MoveToWorkspaceDialog
             onDone={hide}
             request={request}
-            activeWorkspaceId={activeWorkspace.id}
+            activeWorkspaceId={activeWorkspaceId}
           />
         ),
       });

@@ -1,18 +1,57 @@
-import { useCallback, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useCookieJars } from './useCookieJars';
+import { useNavigate, useSearch } from '@tanstack/react-router';
+import type { CookieJar } from '@yaakapp-internal/models';
+import { atom, useAtomValue } from 'jotai/index';
+import { useCallback, useEffect } from 'react';
+import { jotaiStore } from '../lib/jotai';
+import { cookieJarsAtom, useCookieJars } from './useCookieJars';
 
 export const QUERY_COOKIE_JAR_ID = 'cookie_jar_id';
 
+export const activeCookieJarIdAtom = atom<string>();
+
+export const activeCookieJarAtom = atom<CookieJar | null>((get) => {
+  const activeId = get(activeCookieJarIdAtom);
+  return get(cookieJarsAtom)?.find((e) => e.id === activeId) ?? null;
+});
+
 export function useActiveCookieJar() {
-  const [activeCookieJarId, setActiveCookieJarId] = useActiveCookieJarId();
-  const cookieJars = useCookieJars();
+  const navigate = useNavigate({ from: '/workspaces/$workspaceId' });
+  const setId = useCallback(
+    (id: string) =>
+      navigate({
+        search: (prev) => ({ ...prev, cookie_jar_id: id }),
+      }),
+    [navigate],
+  );
+  const cookieJar = useAtomValue(activeCookieJarAtom);
+  return [cookieJar, setId] as const;
+}
 
-  const activeCookieJar = useMemo(() => {
-    return cookieJars?.find((cookieJar) => cookieJar.id === activeCookieJarId) ?? null;
-  }, [activeCookieJarId, cookieJars]);
+function useActiveCookieJarId() {
+  // NOTE: This query param is accessed from Rust side, so do not change
+  const { cookie_jar_id: id } = useSearch({ strict: false });
+  const navigate = useNavigate({ from: '/workspaces/$workspaceId' });
 
-  return [activeCookieJar ?? null, setActiveCookieJarId] as const;
+  const setId = useCallback(
+    (id: string) =>
+      navigate({
+        search: (prev) => ({ ...prev, cookie_jar_id: id }),
+      }),
+    [navigate],
+  );
+
+  return [id, setId] as const;
+}
+
+export function useSubscribeActiveCookieJarId() {
+  const { cookie_jar_id } = useSearch({ strict: false });
+  useEffect(() => {
+    jotaiStore.set(activeCookieJarIdAtom, cookie_jar_id ?? undefined);
+  }, [cookie_jar_id]);
+}
+
+export function getActiveCookieJar() {
+  return jotaiStore.get(activeCookieJarAtom);
 }
 
 export function useEnsureActiveCookieJar() {
@@ -34,24 +73,6 @@ export function useEnsureActiveCookieJar() {
 
     // There's no active jar, so set it to the first one
     console.log('Setting active cookie jar to', firstJar.id);
-    setActiveCookieJarId(firstJar.id);
+    setActiveCookieJarId(firstJar.id).catch(console.error);
   }, [activeCookieJarId, cookieJars, setActiveCookieJarId]);
-}
-
-function useActiveCookieJarId() {
-  // NOTE: This query param is accessed from Rust side, so do not change
-  const [params, setParams] = useSearchParams();
-  const id = params.get(QUERY_COOKIE_JAR_ID);
-
-  const setId = useCallback(
-    (id: string) => {
-      setParams((p) => {
-        const existing = Object.fromEntries(p);
-        return { ...existing, [QUERY_COOKIE_JAR_ID]: id };
-      });
-    },
-    [setParams],
-  );
-
-  return [id, setId] as const;
 }

@@ -1,4 +1,4 @@
-import useResizeObserver from '@react-hook/resize-observer';
+import useSize from '@react-hook/size';
 import classNames from 'classnames';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
@@ -43,7 +43,6 @@ export function SplitLayout({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeWorkspace = useActiveWorkspace();
-  const [verticalBasedOnSize, setVerticalBasedOnSize] = useState<boolean>(false);
   const [widthRaw, setWidth] = useLocalStorage<number>(
     `${name}_width::${activeWorkspace?.id ?? 'n/a'}`,
   );
@@ -62,10 +61,7 @@ export function SplitLayout({
     minHeightPx = 0;
   }
 
-  useResizeObserver(containerRef.current, ({ contentRect }) => {
-    setVerticalBasedOnSize(contentRect.width < STACK_VERTICAL_WIDTH);
-  });
-
+  const verticalBasedOnSize = useSize(containerRef.current)[0] < STACK_VERTICAL_WIDTH;
   const vertical = layout !== 'horizontal' && (layout === 'vertical' || verticalBasedOnSize);
 
   const styles = useMemo<CSSProperties>(() => {

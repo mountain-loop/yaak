@@ -1,20 +1,30 @@
 import { emit } from '@tauri-apps/api/event';
 import type { PromptTextRequest, PromptTextResponse } from '@yaakapp-internal/plugins';
 import { useEnsureActiveCookieJar } from '../hooks/useActiveCookieJar';
+import type { PromptTextRequest, PromptTextResponse } from '@yaakapp-internal/plugin';
+import { useEnsureActiveCookieJar, useSubscribeActiveCookieJarId } from '../hooks/useActiveCookieJar';
+import { useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
+import { useActiveRequest } from '../hooks/useActiveRequest';
+import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
+import { useSubscribeActiveWorkspaceId } from '../hooks/useActiveWorkspace';
 import { useActiveWorkspaceChangedToast } from '../hooks/useActiveWorkspaceChangedToast';
-import {useGenerateThemeCss} from "../hooks/useGenerateThemeCss";
+import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
+import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
+import { useGenerateThemeCss } from '../hooks/useGenerateThemeCss';
 import { useHotKey } from '../hooks/useHotKey';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { useNotificationToast } from '../hooks/useNotificationToast';
 import { usePrompt } from '../hooks/usePrompt';
-import { useRecentCookieJars } from '../hooks/useRecentCookieJars';
-import { useRecentEnvironments } from '../hooks/useRecentEnvironments';
-import { useRecentRequests } from '../hooks/useRecentRequests';
-import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
-import {useSyncFontSizeSetting} from "../hooks/useSyncFontSizeSetting";
-import {useSyncModelStores} from "../hooks/useSyncModelStores";
+import {useRecentCookieJars, useSubscribeRecentCookieJars} from '../hooks/useRecentCookieJars';
+import {useRecentEnvironments, useSubscribeRecentEnvironments} from '../hooks/useRecentEnvironments';
+import { useSubscribeRecentRequests } from '../hooks/useRecentRequests';
+import {useRecentWorkspaces, useSubscribeRecentWorkspaces} from '../hooks/useRecentWorkspaces';
+import { useSyncFontSizeSetting } from '../hooks/useSyncFontSizeSetting';
+import { useSyncModelStores } from '../hooks/useSyncModelStores';
 import { useSyncWorkspaceChildModels } from '../hooks/useSyncWorkspaceChildModels';
-import {useSyncZoomSetting} from "../hooks/useSyncZoomSetting";
+import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
+import { useSyncZoomSetting } from '../hooks/useSyncZoomSetting';
+import { useSubscribeTemplateFunctions } from '../hooks/useTemplateFunctions';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 
 export function GlobalHooks() {
@@ -22,18 +32,46 @@ export function GlobalHooks() {
   useSyncZoomSetting();
   useSyncFontSizeSetting();
   useGenerateThemeCss();
+  useSyncWorkspaceRequestTitle();
+
+  useSubscribeActiveWorkspaceId();
+  useSubscribeActiveRequestId();
+  useSubscribeActiveEnvironmentId();
+  useSubscribeActiveCookieJarId();
+
+  useSubscribeRecentRequests();
+  useSubscribeRecentWorkspaces();
+  useSubscribeRecentEnvironments();
+  useSubscribeRecentCookieJars();
 
   // Include here so they always update, even if no component references them
   useRecentWorkspaces();
   useRecentEnvironments();
   useRecentCookieJars();
-  useRecentRequests();
   useSyncWorkspaceChildModels();
+  useSubscribeTemplateFunctions();
 
   // Other useful things
   useNotificationToast();
   useActiveWorkspaceChangedToast();
   useEnsureActiveCookieJar();
+
+  const activeRequest = useActiveRequest();
+  const duplicateHttpRequest = useDuplicateHttpRequest({
+    id: activeRequest?.id ?? null,
+    navigateAfter: true,
+  });
+  const duplicateGrpcRequest = useDuplicateGrpcRequest({
+    id: activeRequest?.id ?? null,
+    navigateAfter: true,
+  });
+  useHotKey('http_request.duplicate', async () => {
+    if (activeRequest?.model === 'http_request') {
+      await duplicateHttpRequest.mutateAsync();
+    } else {
+      await duplicateGrpcRequest.mutateAsync();
+    }
+  });
 
   const toggleCommandPalette = useToggleCommandPalette();
   useHotKey('command_palette.toggle', toggleCommandPalette);

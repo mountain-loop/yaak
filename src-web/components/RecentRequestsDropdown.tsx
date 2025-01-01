@@ -1,31 +1,30 @@
+import { useNavigate } from '@tanstack/react-router';
 import classNames from 'classnames';
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useKeyPressEvent } from 'react-use';
-import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
-import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
-import { useAppRoutes } from '../hooks/useAppRoutes';
+import { getActiveWorkspaceId } from '../hooks/useActiveWorkspace';
+import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
 import { useHotKey } from '../hooks/useHotKey';
+import { httpRequestsAtom } from '../hooks/useHttpRequests';
 import { useRecentRequests } from '../hooks/useRecentRequests';
-import { useRequests } from '../hooks/useRequests';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
-import type { ButtonProps } from './core/Button';
+import { jotaiStore } from '../lib/jotai';
 import { Button } from './core/Button';
 import type { DropdownItem, DropdownRef } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { HttpMethodTag } from './core/HttpMethodTag';
 
-export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'className'>) {
-  const dropdownRef = useRef<DropdownRef>(null);
+interface Props {
+  className?: string;
+}
+
+export function RecentRequestsDropdown({ className }: Props) {
   const activeRequest = useActiveRequest();
-  const activeWorkspace = useActiveWorkspace();
-  const [activeEnvironment] = useActiveEnvironment();
-  const [activeCookieJar] = useActiveCookieJar();
-  const routes = useAppRoutes();
-  const allRecentRequestIds = useRecentRequests();
+  const dropdownRef = useRef<DropdownRef>(null);
+  const [allRecentRequestIds] = useRecentRequests();
   const recentRequestIds = useMemo(() => allRecentRequestIds.slice(1), [allRecentRequestIds]);
-  const requests = useRequests();
+  const navigate = useNavigate();
 
   // Handle key-up
   useKeyPressEvent('Control', undefined, () => {
@@ -43,9 +42,11 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
     dropdownRef.current?.prev?.();
   });
 
-  const items = useMemo<DropdownItem[]>(() => {
-    if (activeWorkspace === null) return [];
+  const getItems = useCallback(() => {
+    const activeWorkspaceId = getActiveWorkspaceId();
+    if (activeWorkspaceId === null) return [];
 
+    const requests = [...jotaiStore.get(httpRequestsAtom), ...jotaiStore.get(grpcRequestsAtom)];
     const recentRequestItems: DropdownItem[] = [];
     for (const id of recentRequestIds) {
       const request = requests.find((r) => r.id === id);
@@ -56,12 +57,14 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
         label: fallbackRequestName(request),
         // leftSlot: <CountBadge className="!ml-0 px-0 w-5" count={recentRequestItems.length} />,
         leftSlot: <HttpMethodTag className="text-right" shortNames request={request} />,
-        onSelect: () => {
-          routes.navigate('request', {
-            requestId: request.id,
-            workspaceId: activeWorkspace.id,
-            environmentId: activeEnvironment?.id ?? null,
-            cookieJarId: activeCookieJar?.id ?? null,
+        onSelect: async () => {
+          await navigate({
+            to: '/workspaces/$workspaceId/requests/$requestId',
+            params: {
+              requestId: request.id,
+              workspaceId: activeWorkspaceId,
+            },
+            search: (prev) => ({ ...prev }),
           });
         },
       });
@@ -79,10 +82,10 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
     }
 
     return recentRequestItems.slice(0, 20);
-  }, [activeWorkspace, recentRequestIds, requests, routes, activeEnvironment?.id, activeCookieJar?.id]);
+  }, [navigate, recentRequestIds]);
 
   return (
-    <Dropdown ref={dropdownRef} items={items}>
+    <Dropdown ref={dropdownRef} items={getItems}>
       <Button
         data-tauri-drag-region
         size="sm"
@@ -90,7 +93,7 @@ export function RecentRequestsDropdown({ className }: Pick<ButtonProps, 'classNa
         className={classNames(
           className,
           'truncate pointer-events-auto',
-          activeRequest === null && 'text-text-subtlest italic',
+          activeRequest == null && 'text-text-subtlest italic',
         )}
       >
         {fallbackRequestName(activeRequest)}

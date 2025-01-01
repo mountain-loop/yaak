@@ -24,6 +24,7 @@ type TauriCmd =
   | 'cmd_delete_http_response'
   | 'cmd_delete_workspace'
   | 'cmd_dismiss_notification'
+  | 'cmd_duplicate_folder'
   | 'cmd_duplicate_grpc_request'
   | 'cmd_duplicate_http_request'
   | 'cmd_export_data'
@@ -44,6 +45,7 @@ type TauriCmd =
   | 'cmd_import_data'
   | 'cmd_install_plugin'
   | 'cmd_list_cookie_jars'
+  | 'cmd_list_key_values'
   | 'cmd_list_environments'
   | 'cmd_list_folders'
   | 'cmd_list_grpc_connections'
@@ -79,5 +81,10 @@ type TauriCmd =
 
 export async function invokeCmd<T>(cmd: TauriCmd, args?: InvokeArgs): Promise<T> {
   // console.log('RUN COMMAND', cmd, args);
-  return invoke(cmd, args);
+  try {
+    return await invoke(cmd, args);
+  } catch (err) {
+    console.warn('Tauri command error', cmd, err);
+    throw err;
+  }
 }

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { CommandPalette } from '../components/CommandPalette';
-import { useDialog } from '../components/DialogContext';
+import { useDialog } from './useDialog';
 
 export function useToggleCommandPalette() {
   const dialog = useDialog();

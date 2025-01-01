@@ -1,13 +1,14 @@
 import classNames from 'classnames';
-import type { HTMLAttributes } from 'react';
+import type { HTMLAttributes, FocusEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { IconButton } from './IconButton';
 import type { InputProps } from './Input';
 import { HStack } from './Stacks';
 
-export type PlainInputProps = Omit<InputProps, 'wrapLines' | 'onKeyDown' | 'type'> &
+export type PlainInputProps = Omit<InputProps, 'wrapLines' | 'onKeyDown' | 'type' | 'stateKey'> &
   Pick<HTMLAttributes<HTMLInputElement>, 'onKeyDownCapture'> & {
+    onFocusRaw?: HTMLAttributes<HTMLInputElement>['onFocus'];
     type?: 'text' | 'password' | 'number';
     step?: number;
   };
@@ -27,16 +28,16 @@ export function PlainInput({
   onChange,
   onFocus,
   onPaste,
-  placeholder,
   require,
   rightSlot,
   size = 'md',
   type = 'text',
   validate,
   autoSelect,
-  step,
+  placeholder,
   autoFocus,
-  readOnly,
+  onKeyDownCapture,
+  onFocusRaw,
 }: PlainInputProps) {
   const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
   const [currentValue, setCurrentValue] = useState(defaultValue ?? '');
@@ -44,14 +45,15 @@ export function PlainInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleFocus = useCallback(() => {
+  const handleFocus = useCallback((e: FocusEvent<HTMLInputElement>) => {
+    onFocusRaw?.(e);
     setFocused(true);
     if (autoSelect) {
       inputRef.current?.select();
       textareaRef.current?.select();
     }
     onFocus?.();
-  }, [autoSelect, onFocus]);
+  }, [autoSelect, onFocus, onFocusRaw]);
 
   const handleBlur = useCallback(() => {
     setFocused(false);
@@ -130,7 +132,6 @@ export function PlainInput({
             id={id}
             type={type === 'password' && !obscured ? 'text' : type}
             defaultValue={defaultValue}
-            placeholder={placeholder}
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"
@@ -140,8 +141,8 @@ export function PlainInput({
             onFocus={handleFocus}
             onBlur={handleBlur}
             autoFocus={autoFocus}
-            step={step}
-            readOnly={readOnly}
+            placeholder={placeholder}
+            onKeyDownCapture={onKeyDownCapture}
           />
         </HStack>
         {type === 'password' && (

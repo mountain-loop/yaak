@@ -1,10 +1,10 @@
-import type { HttpRequest, HttpResponse } from '@yaakapp-internal/models';
+import type { HttpResponse } from '@yaakapp-internal/models';
 import { useHttpResponses } from './useHttpResponses';
 import { useKeyValue } from './useKeyValue';
 import { useLatestHttpResponse } from './useLatestHttpResponse';
 
-export function usePinnedHttpResponse(activeRequest: HttpRequest) {
-  const latestResponse = useLatestHttpResponse(activeRequest.id);
+export function usePinnedHttpResponse(activeRequestId: string) {
+  const latestResponse = useLatestHttpResponse(activeRequestId);
   const { set, value: pinnedResponseId } = useKeyValue<string | null>({
     // Key on the latest response instead of activeRequest because responses change out of band of active request
     key: ['pinned_http_response_id', latestResponse?.id ?? 'n/a'],
@@ -12,7 +12,7 @@ export function usePinnedHttpResponse(activeRequest: HttpRequest) {
     namespace: 'global',
   });
   const allResponses = useHttpResponses();
-  const responses = allResponses.filter((r) => r.requestId === activeRequest.id);
+  const responses = allResponses.filter((r) => r.requestId === activeRequestId);
   const activeResponse: HttpResponse | null =
     responses.find((r) => r.id === pinnedResponseId) ?? latestResponse;
 

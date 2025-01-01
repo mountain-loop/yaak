@@ -11,6 +11,8 @@ use crate::plugin::SqliteConnection;
 use chrono::NaiveDateTime;
 use log::{debug, error, warn};
 use nanoid::nanoid;
+use log::{debug, error, info};
+use rand::distributions::{Alphanumeric, DistString};
 use rusqlite::OptionalExtension;
 use sea_query::ColumnRef::Asterisk;
 use sea_query::Keyword::CurrentTimestamp;
@@ -131,6 +133,18 @@ pub async fn set_key_value_raw<R: Runtime>(
     (m, existing.is_none())
 }
 
+pub async fn list_key_values_raw<R: Runtime>(mgr: &impl Manager<R>) -> Result<Vec<KeyValue>> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::select()
+        .from(KeyValueIden::Table)
+        .column(Asterisk)
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+    Ok(items.map(|v| v.unwrap()).collect())
+}
+
 pub async fn get_key_value_raw<R: Runtime>(
     mgr: &impl Manager<R>,
     namespace: &str,
@@ -157,6 +171,7 @@ pub async fn list_workspaces<R: Runtime>(mgr: &impl Manager<R>) -> Result<Vec<Wo
     let (sql, params) = Query::select()
         .from(WorkspaceIden::Table)
         .column(Asterisk)
+        .order_by(WorkspaceIden::Name, Order::Asc)
         .build_rusqlite(SqliteQueryBuilder);
     let mut stmt = db.prepare(sql.as_str())?;
     let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
@@ -197,7 +212,6 @@ pub async fn upsert_workspace<R: Runtime>(
             WorkspaceIden::UpdatedAt,
             WorkspaceIden::Name,
             WorkspaceIden::Description,
-            WorkspaceIden::Variables,
             WorkspaceIden::SettingFollowRedirects,
             WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingSyncDir,
@@ -209,7 +223,7 @@ pub async fn upsert_workspace<R: Runtime>(
             CurrentTimestamp.into(),
             trimmed_name.into(),
             workspace.description.into(),
-            serde_json::to_string(&workspace.variables)?.into(),
+            workspace.setting_request_timeout.into(),
             workspace.setting_follow_redirects.into(),
             workspace.setting_request_timeout.into(),
             workspace.setting_sync_dir.into(),
@@ -221,7 +235,7 @@ pub async fn upsert_workspace<R: Runtime>(
                     WorkspaceIden::UpdatedAt,
                     WorkspaceIden::Name,
                     WorkspaceIden::Description,
-                    WorkspaceIden::Variables,
+                    WorkspaceIden::SettingRequestTimeout,
                     WorkspaceIden::SettingFollowRedirects,
                     WorkspaceIden::SettingRequestTimeout,
                     WorkspaceIden::SettingSyncDir,
@@ -321,6 +335,7 @@ pub async fn duplicate_grpc_request<R: Runtime>(
             return Err(ModelNotFound(id.to_string()));
         }
     };
+    request.sort_priority = request.sort_priority + 0.001;
     request.id = "".to_string();
     upsert_grpc_request(window, &request, update_source).await
 }
@@ -369,6 +384,7 @@ pub async fn upsert_grpc_request<R: Runtime>(
             GrpcRequestIden::CreatedAt,
             GrpcRequestIden::UpdatedAt,
             GrpcRequestIden::Name,
+            GrpcRequestIden::Description,
             GrpcRequestIden::WorkspaceId,
             GrpcRequestIden::FolderId,
             GrpcRequestIden::SortPriority,
@@ -381,17 +397,18 @@ pub async fn upsert_grpc_request<R: Runtime>(
             GrpcRequestIden::Metadata,
         ])
         .values_panic([
-            id.as_str().into(),
+            id.into(),
             CurrentTimestamp.into(),
             CurrentTimestamp.into(),
             trimmed_name.into(),
-            request.workspace_id.as_str().into(),
+            request.description.into(),
+            request.workspace_id.into(),
             request.folder_id.as_ref().map(|s| s.as_str()).into(),
             request.sort_priority.into(),
-            request.url.as_str().into(),
+            request.url.into(),
             request.service.as_ref().map(|s| s.as_str()).into(),
             request.method.as_ref().map(|s| s.as_str()).into(),
-            request.message.as_str().into(),
+            request.message.into(),
             request.authentication_type.as_ref().map(|s| s.as_str()).into(),
             serde_json::to_string(&request.authentication)?.into(),
             serde_json::to_string(&request.metadata)?.into(),
@@ -402,6 +419,7 @@ pub async fn upsert_grpc_request<R: Runtime>(
                     GrpcRequestIden::UpdatedAt,
                     GrpcRequestIden::WorkspaceId,
                     GrpcRequestIden::Name,
+                    GrpcRequestIden::Description,
                     GrpcRequestIden::FolderId,
                     GrpcRequestIden::SortPriority,
                     GrpcRequestIden::Url,
@@ -764,21 +782,41 @@ pub async fn upsert_cookie_jar<R: Runtime>(
 }
 
 pub async fn list_environments<R: Runtime>(
-    mgr: &impl Manager<R>,
+    window: &WebviewWindow<R>,
     workspace_id: &str,
 ) -> Result<Vec<Environment>> {
-    let dbm = &*mgr.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
+    let mut environments: Vec<Environment> = {
+        let dbm = &*window.state::<SqliteConnection>();
+        let db = dbm.0.lock().await.get().unwrap();
+        let (sql, params) = Query::select()
+            .from(EnvironmentIden::Table)
+            .cond_where(Expr::col(EnvironmentIden::WorkspaceId).eq(workspace_id))
+            .column(Asterisk)
+            .order_by(EnvironmentIden::Name, Order::Asc)
+            .build_rusqlite(SqliteQueryBuilder);
+        let mut stmt = db.prepare(sql.as_str())?;
+        let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+        items.map(|v| v.unwrap()).collect()
+    };
 
-    let (sql, params) = Query::select()
-        .from(EnvironmentIden::Table)
-        .cond_where(Expr::col(EnvironmentIden::WorkspaceId).eq(workspace_id))
-        .column(Asterisk)
-        .order_by(EnvironmentIden::CreatedAt, Order::Desc)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
+    let base_environment =
+        environments.iter().find(|e| e.environment_id == None && e.workspace_id == workspace_id);
+
+    if let None = base_environment {
+        info!("Creating base environment for {workspace_id}");
+        let base_environment = upsert_environment(
+            window,
+            Environment {
+                workspace_id: workspace_id.to_string(),
+                name: "Global Variables".to_string(),
+                ..Default::default()
+            },
+        )
+        .await?;
+        environments.push(base_environment);
+    }
+
+    Ok(environments)
 }
 
 pub async fn delete_environment<R: Runtime>(
@@ -843,6 +881,13 @@ pub async fn update_settings<R: Runtime>(
     settings: Settings,
     update_source: &UpdateSource,
 ) -> Result<Settings> {
+    // Correct for the bug where created_at was being updated by mistake
+    let created_at = if settings.created_at > settings.updated_at {
+        settings.updated_at
+    } else {
+        settings.created_at
+    };
+
     let dbm = &*window.app_handle().state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
 
@@ -857,6 +902,7 @@ pub async fn update_settings<R: Runtime>(
         .table(SettingsIden::Table)
         .cond_where(Expr::col(SettingsIden::Id).eq("default"))
         .values([
+            (SettingsIden::Id, "default".into()),
             (SettingsIden::CreatedAt, created_at.into()),
             (SettingsIden::UpdatedAt, CurrentTimestamp.into()),
             (SettingsIden::Appearance, settings.appearance.as_str().into()),
@@ -907,6 +953,7 @@ pub async fn upsert_environment<R: Runtime>(
             EnvironmentIden::Id,
             EnvironmentIden::CreatedAt,
             EnvironmentIden::UpdatedAt,
+            EnvironmentIden::EnvironmentId,
             EnvironmentIden::WorkspaceId,
             EnvironmentIden::Name,
             EnvironmentIden::Variables,
@@ -915,7 +962,8 @@ pub async fn upsert_environment<R: Runtime>(
             id.as_str().into(),
             CurrentTimestamp.into(),
             CurrentTimestamp.into(),
-            environment.workspace_id.as_str().into(),
+            environment.environment_id.into(),
+            environment.workspace_id.into(),
             trimmed_name.into(),
             serde_json::to_string(&environment.variables)?.into(),
         ])
@@ -945,6 +993,26 @@ pub async fn get_environment<R: Runtime>(mgr: &impl Manager<R>, id: &str) -> Res
         .from(EnvironmentIden::Table)
         .column(Asterisk)
         .cond_where(Expr::col(EnvironmentIden::Id).eq(id))
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
+}
+
+pub async fn get_base_environment<R: Runtime>(
+    mgr: &impl Manager<R>,
+    workspace_id: &str,
+) -> Result<Environment> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+
+    let (sql, params) = Query::select()
+        .from(EnvironmentIden::Table)
+        .column(Asterisk)
+        .cond_where(
+            Cond::all()
+                .add(Expr::col(EnvironmentIden::WorkspaceId).eq(workspace_id))
+                .add(Expr::col(EnvironmentIden::EnvironmentId).is_null()),
+        )
         .build_rusqlite(SqliteQueryBuilder);
     let mut stmt = db.prepare(sql.as_str())?;
     Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
@@ -1126,6 +1194,7 @@ pub async fn upsert_folder<R: Runtime>(
             FolderIden::WorkspaceId,
             FolderIden::FolderId,
             FolderIden::Name,
+            FolderIden::Description,
             FolderIden::SortPriority,
         ])
         .values_panic([
@@ -1135,6 +1204,7 @@ pub async fn upsert_folder<R: Runtime>(
             r.workspace_id.as_str().into(),
             r.folder_id.as_ref().map(|s| s.as_str()).into(),
             trimmed_name.into(),
+            r.description.into(),
             r.sort_priority.into(),
         ])
         .on_conflict(
@@ -1142,6 +1212,7 @@ pub async fn upsert_folder<R: Runtime>(
                 .update_columns([
                     FolderIden::UpdatedAt,
                     FolderIden::Name,
+                    FolderIden::Description,
                     FolderIden::FolderId,
                     FolderIden::SortPriority,
                 ])
@@ -1166,7 +1237,77 @@ pub async fn duplicate_http_request<R: Runtime>(
         Some(r) => r,
     };
     request.id = "".to_string();
+    request.sort_priority = request.sort_priority + 0.001;
     upsert_http_request(window, request, update_source).await
+}
+
+pub async fn duplicate_folder<R: Runtime>(
+    window: &WebviewWindow<R>,
+    src_folder: &Folder,
+) -> Result<()> {
+    let workspace_id = src_folder.workspace_id.as_str();
+
+    let http_requests = list_http_requests(window, workspace_id)
+        .await?
+        .into_iter()
+        .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+
+    let grpc_requests = list_grpc_requests(window, workspace_id)
+        .await?
+        .into_iter()
+        .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+
+    let folders = list_folders(window, workspace_id)
+        .await?
+        .into_iter()
+        .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+
+    let new_folder = upsert_folder(
+        window,
+        Folder {
+            id: "".into(),
+            sort_priority: src_folder.sort_priority + 0.001,
+            ..src_folder.clone()
+        },
+    )
+    .await?;
+
+    for m in http_requests {
+        upsert_http_request(
+            window,
+            HttpRequest {
+                id: "".into(),
+                folder_id: Some(new_folder.id.clone()),
+                sort_priority: m.sort_priority + 0.001,
+                ..m
+            },
+        )
+        .await?;
+    }
+    for m in grpc_requests {
+        upsert_grpc_request(
+            window,
+            GrpcRequest {
+                id: "".into(),
+                folder_id: Some(new_folder.id.clone()),
+                sort_priority: m.sort_priority + 0.001,
+                ..m
+            },
+        )
+        .await?;
+    }
+    for m in folders {
+        // Recurse down
+        Box::pin(duplicate_folder(
+            window,
+            &Folder {
+                folder_id: Some(new_folder.id.clone()),
+                ..m
+            },
+        ))
+        .await?;
+    }
+    Ok(())
 }
 
 pub async fn upsert_http_request<R: Runtime>(
@@ -1192,6 +1333,7 @@ pub async fn upsert_http_request<R: Runtime>(
             HttpRequestIden::WorkspaceId,
             HttpRequestIden::FolderId,
             HttpRequestIden::Name,
+            HttpRequestIden::Description,
             HttpRequestIden::Url,
             HttpRequestIden::UrlParameters,
             HttpRequestIden::Method,
@@ -1206,12 +1348,13 @@ pub async fn upsert_http_request<R: Runtime>(
             id.as_str().into(),
             CurrentTimestamp.into(),
             CurrentTimestamp.into(),
-            r.workspace_id.as_str().into(),
+            r.workspace_id.into(),
             r.folder_id.as_ref().map(|s| s.as_str()).into(),
             trimmed_name.into(),
-            r.url.as_str().into(),
+            r.description.into(),
+            r.url.into(),
             serde_json::to_string(&r.url_parameters)?.into(),
-            r.method.as_str().into(),
+            r.method.into(),
             serde_json::to_string(&r.body)?.into(),
             r.body_type.as_ref().map(|s| s.as_str()).into(),
             serde_json::to_string(&r.authentication)?.into(),
@@ -1225,6 +1368,7 @@ pub async fn upsert_http_request<R: Runtime>(
                     HttpRequestIden::UpdatedAt,
                     HttpRequestIden::WorkspaceId,
                     HttpRequestIden::Name,
+                    HttpRequestIden::Description,
                     HttpRequestIden::FolderId,
                     HttpRequestIden::Method,
                     HttpRequestIden::Headers,

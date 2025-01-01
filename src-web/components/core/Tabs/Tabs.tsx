@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
+import { trackEvent } from '../../../lib/analytics';
 import { Icon } from '../Icon';
 import type { RadioDropdownProps } from '../RadioDropdown';
 import { RadioDropdown } from '../RadioDropdown';
@@ -9,11 +10,13 @@ import { HStack } from '../Stacks';
 export type TabItem =
   | {
       value: string;
-      label: ReactNode;
+      label: string;
+      rightSlot?: ReactNode;
     }
   | {
       value: string;
       options: Omit<RadioDropdownProps, 'children'>;
+      rightSlot?: ReactNode;
     };
 
 interface Props {
@@ -39,6 +42,8 @@ export function Tabs({
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
 
+  value = value ?? tabs[0]?.value;
+
   // Update tabs when value changes
   useEffect(() => {
     const tabs = ref.current?.querySelectorAll<HTMLDivElement>(`[data-tab]`);
@@ -60,7 +65,10 @@ export function Tabs({
   return (
     <div
       ref={ref}
-      className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1')}
+      className={classNames(
+        className,
+        'h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 ',
+      )}
     >
       <div
         aria-label={label}
@@ -95,12 +103,20 @@ export function Tabs({
                   onChange={t.options.onChange}
                 >
                   <button
-                    onClick={isActive ? undefined : () => onChangeValue(t.value)}
+                    onClick={
+                      isActive
+                        ? undefined
+                        : () => {
+                            trackEvent('tab', 'click', { label, tab: t.value });
+                            onChangeValue(t.value);
+                          }
+                    }
                     className={btnClassName}
                   >
                     {option && 'shortLabel' in option
                       ? option.shortLabel
                       : (option?.label ?? 'Unknown')}
+                    {t.rightSlot}
                     <Icon
                       size="sm"
                       icon="chevron_down"
@@ -113,10 +129,18 @@ export function Tabs({
               return (
                 <button
                   key={t.value}
-                  onClick={() => onChangeValue(t.value)}
+                  onClick={
+                    isActive
+                      ? undefined
+                      : () => {
+                          trackEvent('tab', 'click', { label, tab: t.value });
+                          onChangeValue(t.value);
+                        }
+                  }
                   className={btnClassName}
                 >
                   {t.label}
+                  {t.rightSlot}
                 </button>
               );
             }

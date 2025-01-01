@@ -8,7 +8,7 @@ export function fallbackRequestName(r: HttpRequest | GrpcRequest | AnyModel | nu
   }
 
   // Return name if it has one
-  if (r.name) {
+  if ('name' in r && r.name) {
     return r.name;
   }
 

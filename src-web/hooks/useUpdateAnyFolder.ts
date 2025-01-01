@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { Folder } from '@yaakapp-internal/models';
 import {useSetAtom} from "jotai/index";
 import { getFolder } from '../lib/store';
@@ -8,7 +8,7 @@ import {updateModelList} from "./useSyncModelStores";
 
 export function useUpdateAnyFolder() {
   const setFolders = useSetAtom(foldersAtom);
-  return useMutation<Folder, unknown, { id: string; update: (r: Folder) => Folder }>({
+  return useFastMutation<Folder, unknown, { id: string; update: (r: Folder) => Folder }>({
     mutationKey: ['update_any_folder'],
     mutationFn: async ({ id, update }) => {
       const folder = await getFolder(id);

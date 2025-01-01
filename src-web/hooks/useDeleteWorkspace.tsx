@@ -1,24 +1,24 @@
-import { useMutation } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import type { Workspace } from '@yaakapp-internal/models';
-import {useSetAtom} from "jotai";
+import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveWorkspace } from './useActiveWorkspace';
-import { useAppRoutes } from './useAppRoutes';
+import { getActiveWorkspace } from './useActiveWorkspace';
 import { useConfirm } from './useConfirm';
-import {removeModelById} from "./useSyncModelStores";
-import {workspacesAtom} from "./useWorkspaces";
+import { useFastMutation } from './useFastMutation';
+import { removeModelById } from './useSyncModelStores';
+import { workspacesAtom } from './useWorkspaces';
 
 export function useDeleteWorkspace(workspace: Workspace | null) {
-  const activeWorkspace = useActiveWorkspace();
-  const routes = useAppRoutes();
   const confirm = useConfirm();
   const setWorkspaces = useSetAtom(workspacesAtom);
+  const navigate = useNavigate();
 
-  return useMutation<Workspace | null, string>({
+  return useFastMutation<Workspace | null, string>({
     mutationKey: ['delete_workspace', workspace?.id],
     mutationFn: async () => {
+      const workspace = getActiveWorkspace();
       const confirmed = await confirm({
         id: 'delete-workspace',
         title: 'Delete Workspace',
@@ -40,8 +40,9 @@ export function useDeleteWorkspace(workspace: Workspace | null) {
       setWorkspaces(removeModelById(workspace));
 
       const { id: workspaceId } = workspace;
+      const activeWorkspace = getActiveWorkspace();
       if (workspaceId === activeWorkspace?.id) {
-        routes.navigate('workspaces');
+        await navigate({ to: '/workspaces' });
       }
     },
   });

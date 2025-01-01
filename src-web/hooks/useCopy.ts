@@ -1,6 +1,6 @@
 import { clear, writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { useCallback } from 'react';
-import { useToast } from '../components/ToastContext';
+import { useToast } from './useToast';
 
 export function useCopy({ disableToast }: { disableToast?: boolean } = {}) {
   const toast = useToast();

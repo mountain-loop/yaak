@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import type { DialogProps } from '../components/core/Dialog';
-import { useDialog } from '../components/DialogContext';
 import type { AlertProps } from './Alert';
 import { Alert } from './Alert';
+import {useDialog} from "./useDialog";
 
 interface AlertArg {
   id: string;

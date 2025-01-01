@@ -7,7 +7,7 @@ import { Icon } from './Icon';
 export type RadioDropdownItem<T = string | null> =
   | {
       type?: 'default';
-      label: string;
+      label: ReactNode;
       shortLabel?: string;
       value: T;
       rightSlot?: ReactNode;
@@ -18,7 +18,7 @@ export interface RadioDropdownProps<T = string | null> {
   value: T;
   onChange: (value: T) => void;
   items: RadioDropdownItem<T>[];
-  extraItems?: DropdownProps['items'];
+  extraItems?: DropdownItem[];
   children: DropdownProps['children'];
 }
 
@@ -42,7 +42,7 @@ export function RadioDropdown<T = string | null>({
             rightSlot: item.rightSlot,
             onSelect: () => onChange(item.value),
             leftSlot: <Icon icon={value === item.value ? 'check' : 'empty'} />,
-          } as DropdownProps['items'][0];
+          } as DropdownItem;
         }
       }),
       ...((extraItems ? [{ type: 'separator' }, ...extraItems] : []) as DropdownItem[]),
