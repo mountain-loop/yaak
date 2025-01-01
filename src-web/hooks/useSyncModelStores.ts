@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import type { AnyModel, KeyValue } from '@yaakapp-internal/models';
+import type { AnyModel, KeyValue, ModelPayload } from '@yaakapp-internal/models';
 import { jotaiStore } from '../lib/jotai';
 import { buildKeyValueKey } from '../lib/keyValueStore';
 import { modelsEq } from '../lib/model_util';
@@ -20,97 +20,93 @@ import { useRequestUpdateKey } from './useRequestUpdateKey';
 import { settingsAtom } from './useSettings';
 import { workspacesAtom } from './useWorkspaces';
 
-export interface ModelPayload {
-  model: AnyModel;
-  windowLabel: string;
-}
-
 export function useSyncModelStores() {
   const activeWorkspace = useActiveWorkspace();
   const queryClient = useQueryClient();
   const { wasUpdatedExternally } = useRequestUpdateKey(null);
 
   useListenToTauriEvent<ModelPayload>('upserted_model', ({ payload }) => {
-    const { model, windowLabel } = payload;
     const queryKey =
-      model.model === 'grpc_event'
-        ? grpcEventsQueryKey(model)
-        : model.model === 'key_value'
-          ? keyValueQueryKey(model)
+      payload.model.model === 'grpc_event'
+        ? grpcEventsQueryKey(payload.model)
+        : payload.model.model === 'key_value'
+          ? keyValueQueryKey(payload.model)
           : null;
 
     // TODO: Move this logic to useRequestEditor() hook
-    if (model.model === 'http_request' && windowLabel !== getCurrentWebviewWindow().label) {
-      wasUpdatedExternally(model.id);
+    if (
+      payload.model.model === 'http_request' &&
+      (payload.windowLabel !== getCurrentWebviewWindow().label || payload.updateSource !== 'window')
+    ) {
+      wasUpdatedExternally(payload.model.id);
     }
 
     // Only sync models that belong to this workspace, if a workspace ID is present
-    if ('workspaceId' in model && model.workspaceId !== activeWorkspace?.id) {
+    if ('workspaceId' in payload.model && payload.model.workspaceId !== activeWorkspace?.id) {
       return;
     }
 
-    if (shouldIgnoreModel(model, windowLabel)) return;
+    if (shouldIgnoreModel(payload)) return;
 
-    if (model.model === 'workspace') {
-      jotaiStore.set(workspacesAtom, updateModelList(model));
-    } else if (model.model === 'plugin') {
-      jotaiStore.set(pluginsAtom, updateModelList(model));
-    } else if (model.model === 'http_request') {
-      jotaiStore.set(httpRequestsAtom, updateModelList(model));
-    } else if (model.model === 'folder') {
-      jotaiStore.set(foldersAtom, updateModelList(model));
-    } else if (model.model === 'http_response') {
-      jotaiStore.set(httpResponsesAtom, updateModelList(model));
-    } else if (model.model === 'grpc_request') {
-      jotaiStore.set(grpcRequestsAtom, updateModelList(model));
-    } else if (model.model === 'grpc_connection') {
-      jotaiStore.set(grpcConnectionsAtom, updateModelList(model));
-    } else if (model.model === 'environment') {
-      jotaiStore.set(environmentsAtom, updateModelList(model));
-    } else if (model.model === 'cookie_jar') {
-      jotaiStore.set(cookieJarsAtom, updateModelList(model));
-    } else if (model.model === 'settings') {
-      jotaiStore.set(settingsAtom, model);
-    } else if (model.model === 'key_value') {
-      jotaiStore.set(keyValuesAtom, updateModelList(model));
+    if (payload.model.model === 'workspace') {
+      jotaiStore.set(workspacesAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'plugin') {
+      jotaiStore.set(pluginsAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'http_request') {
+      jotaiStore.set(httpRequestsAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'folder') {
+      jotaiStore.set(foldersAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'http_response') {
+      jotaiStore.set(httpResponsesAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'grpc_request') {
+      jotaiStore.set(grpcRequestsAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'grpc_connection') {
+      jotaiStore.set(grpcConnectionsAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'environment') {
+      jotaiStore.set(environmentsAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'cookie_jar') {
+      jotaiStore.set(cookieJarsAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'settings') {
+      jotaiStore.set(settingsAtom, payload.model);
+    } else if (payload.model.model === 'key_value') {
+      jotaiStore.set(keyValuesAtom, updateModelList(payload.model));
     } else if (queryKey != null) {
       // TODO: Convert all models to use Jotai
       queryClient.setQueryData(queryKey, (current: unknown) => {
         if (Array.isArray(current)) {
-          return updateModelList(model)(current);
+          return updateModelList(payload.model)(current);
         }
       });
     }
   });
 
   useListenToTauriEvent<ModelPayload>('deleted_model', ({ payload }) => {
-    const { model, windowLabel } = payload;
-    if (shouldIgnoreModel(model, windowLabel)) return;
+    if (shouldIgnoreModel(payload)) return;
 
     console.log('Delete model', payload);
 
-    if (model.model === 'workspace') {
-      jotaiStore.set(workspacesAtom, removeModelById(model));
-    } else if (model.model === 'plugin') {
-      jotaiStore.set(pluginsAtom, removeModelById(model));
-    } else if (model.model === 'http_request') {
-      jotaiStore.set(httpRequestsAtom, removeModelById(model));
-    } else if (model.model === 'http_response') {
-      jotaiStore.set(httpResponsesAtom, removeModelById(model));
-    } else if (model.model === 'folder') {
-      jotaiStore.set(foldersAtom, removeModelById(model));
-    } else if (model.model === 'environment') {
-      jotaiStore.set(environmentsAtom, removeModelById(model));
-    } else if (model.model === 'grpc_request') {
-      jotaiStore.set(grpcRequestsAtom, removeModelById(model));
-    } else if (model.model === 'grpc_connection') {
-      jotaiStore.set(grpcConnectionsAtom, removeModelById(model));
-    } else if (model.model === 'grpc_event') {
-      queryClient.setQueryData(grpcEventsQueryKey(model), removeModelById(model));
-    } else if (model.model === 'key_value') {
-      queryClient.setQueryData(keyValueQueryKey(model), removeModelByKeyValue(model));
-    } else if (model.model === 'cookie_jar') {
-      jotaiStore.set(cookieJarsAtom, removeModelById(model));
+    if (payload.model.model === 'workspace') {
+      jotaiStore.set(workspacesAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'plugin') {
+      jotaiStore.set(pluginsAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'http_request') {
+      jotaiStore.set(httpRequestsAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'http_response') {
+      jotaiStore.set(httpResponsesAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'folder') {
+      jotaiStore.set(foldersAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'environment') {
+      jotaiStore.set(environmentsAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'grpc_request') {
+      jotaiStore.set(grpcRequestsAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'grpc_connection') {
+      jotaiStore.set(grpcConnectionsAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'grpc_event') {
+      queryClient.setQueryData(grpcEventsQueryKey(payload.model), removeModelById(payload.model));
+    } else if (payload.model.model === 'key_value') {
+      queryClient.setQueryData(keyValueQueryKey(payload.model), removeModelByKv(payload.model));
+    } else if (payload.model.model === 'cookie_jar') {
+      jotaiStore.set(cookieJarsAtom, removeModelById(payload.model));
     }
   });
 }
@@ -133,7 +129,7 @@ export function removeModelById<T extends { id: string }>(model: T) {
   return (entries: T[] | undefined) => entries?.filter((e) => e.id !== model.id) ?? [];
 }
 
-export function removeModelByKeyValue(model: KeyValue) {
+export function removeModelByKv(model: KeyValue) {
   return (entries: KeyValue[] | undefined) =>
     entries?.filter(
       (e) =>
@@ -145,13 +141,20 @@ export function removeModelByKeyValue(model: KeyValue) {
     ) ?? [];
 }
 
-const shouldIgnoreModel = (payload: AnyModel, windowLabel: string) => {
+function shouldIgnoreModel({ model, windowLabel, updateSource }: ModelPayload) {
+  // Never ignore same-window updates
   if (windowLabel === getCurrentWebviewWindow().label) {
-    // Never ignore same-window updates
     return false;
   }
-  if (payload.model === 'key_value') {
-    return payload.namespace === 'no_sync';
+
+  // Never ignore updates from non-user sources
+  if (updateSource !== 'window') {
+    return false;
   }
+
+  if (model.model === 'key_value') {
+    return model.namespace === 'no_sync';
+  }
+
   return false;
-};
+}

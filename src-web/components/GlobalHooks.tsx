@@ -1,8 +1,9 @@
 import { emit } from '@tauri-apps/api/event';
 import type { PromptTextRequest, PromptTextResponse } from '@yaakapp-internal/plugins';
-import { useEnsureActiveCookieJar } from '../hooks/useActiveCookieJar';
-import type { PromptTextRequest, PromptTextResponse } from '@yaakapp-internal/plugin';
-import { useEnsureActiveCookieJar, useSubscribeActiveCookieJarId } from '../hooks/useActiveCookieJar';
+import {
+  useEnsureActiveCookieJar,
+  useSubscribeActiveCookieJarId,
+} from '../hooks/useActiveCookieJar';
 import { useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
@@ -15,10 +16,13 @@ import { useHotKey } from '../hooks/useHotKey';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { useNotificationToast } from '../hooks/useNotificationToast';
 import { usePrompt } from '../hooks/usePrompt';
-import {useRecentCookieJars, useSubscribeRecentCookieJars} from '../hooks/useRecentCookieJars';
-import {useRecentEnvironments, useSubscribeRecentEnvironments} from '../hooks/useRecentEnvironments';
+import { useRecentCookieJars, useSubscribeRecentCookieJars } from '../hooks/useRecentCookieJars';
+import {
+  useRecentEnvironments,
+  useSubscribeRecentEnvironments,
+} from '../hooks/useRecentEnvironments';
 import { useSubscribeRecentRequests } from '../hooks/useRecentRequests';
-import {useRecentWorkspaces, useSubscribeRecentWorkspaces} from '../hooks/useRecentWorkspaces';
+import { useRecentWorkspaces, useSubscribeRecentWorkspaces } from '../hooks/useRecentWorkspaces';
 import { useSyncFontSizeSetting } from '../hooks/useSyncFontSizeSetting';
 import { useSyncModelStores } from '../hooks/useSyncModelStores';
 import { useSyncWorkspaceChildModels } from '../hooks/useSyncWorkspaceChildModels';

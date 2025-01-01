@@ -421,7 +421,7 @@ async fn upsert_model<R: Runtime>(window: &WebviewWindow<R>, m: &SyncModel) -> R
             upsert_http_request(window, m.to_owned(), &UpdateSource::Sync).await?;
         }
         SyncModel::GrpcRequest(m) => {
-            upsert_grpc_request(window, &m, &UpdateSource::Sync).await?;
+            upsert_grpc_request(window, m.to_owned(), &UpdateSource::Sync).await?;
         }
     };
     Ok(())

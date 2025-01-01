@@ -9,10 +9,8 @@ use crate::models::{
 };
 use crate::plugin::SqliteConnection;
 use chrono::NaiveDateTime;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use nanoid::nanoid;
-use log::{debug, error, info};
-use rand::distributions::{Alphanumeric, DistString};
 use rusqlite::OptionalExtension;
 use sea_query::ColumnRef::Asterisk;
 use sea_query::Keyword::CurrentTimestamp;
@@ -201,54 +199,57 @@ pub async fn upsert_workspace<R: Runtime>(
     };
     let trimmed_name = workspace.name.trim();
 
-    let dbm = &*window.app_handle().state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
+    let m: Workspace = {
+        let dbm = &*window.app_handle().state::<SqliteConnection>();
+        let db = dbm.0.lock().await.get().unwrap();
 
-    let (sql, params) = Query::insert()
-        .into_table(WorkspaceIden::Table)
-        .columns([
-            WorkspaceIden::Id,
-            WorkspaceIden::CreatedAt,
-            WorkspaceIden::UpdatedAt,
-            WorkspaceIden::Name,
-            WorkspaceIden::Description,
-            WorkspaceIden::SettingFollowRedirects,
-            WorkspaceIden::SettingRequestTimeout,
-            WorkspaceIden::SettingSyncDir,
-            WorkspaceIden::SettingValidateCertificates,
-        ])
-        .values_panic([
-            id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
-            trimmed_name.into(),
-            workspace.description.into(),
-            workspace.setting_request_timeout.into(),
-            workspace.setting_follow_redirects.into(),
-            workspace.setting_request_timeout.into(),
-            workspace.setting_sync_dir.into(),
-            workspace.setting_validate_certificates.into(),
-        ])
-        .on_conflict(
-            OnConflict::column(GrpcRequestIden::Id)
-                .update_columns([
-                    WorkspaceIden::UpdatedAt,
-                    WorkspaceIden::Name,
-                    WorkspaceIden::Description,
-                    WorkspaceIden::SettingRequestTimeout,
-                    WorkspaceIden::SettingFollowRedirects,
-                    WorkspaceIden::SettingRequestTimeout,
-                    WorkspaceIden::SettingSyncDir,
-                    WorkspaceIden::SettingValidateCertificates,
-                ])
-                .to_owned(),
-        )
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
+        let (sql, params) = Query::insert()
+            .into_table(WorkspaceIden::Table)
+            .columns([
+                WorkspaceIden::Id,
+                WorkspaceIden::CreatedAt,
+                WorkspaceIden::UpdatedAt,
+                WorkspaceIden::Name,
+                WorkspaceIden::Description,
+                WorkspaceIden::SettingFollowRedirects,
+                WorkspaceIden::SettingRequestTimeout,
+                WorkspaceIden::SettingSyncDir,
+                WorkspaceIden::SettingValidateCertificates,
+            ])
+            .values_panic([
+                id.as_str().into(),
+                CurrentTimestamp.into(),
+                CurrentTimestamp.into(),
+                trimmed_name.into(),
+                workspace.description.into(),
+                workspace.setting_request_timeout.into(),
+                workspace.setting_follow_redirects.into(),
+                workspace.setting_request_timeout.into(),
+                workspace.setting_sync_dir.into(),
+                workspace.setting_validate_certificates.into(),
+            ])
+            .on_conflict(
+                OnConflict::column(GrpcRequestIden::Id)
+                    .update_columns([
+                        WorkspaceIden::UpdatedAt,
+                        WorkspaceIden::Name,
+                        WorkspaceIden::Description,
+                        WorkspaceIden::SettingRequestTimeout,
+                        WorkspaceIden::SettingFollowRedirects,
+                        WorkspaceIden::SettingRequestTimeout,
+                        WorkspaceIden::SettingSyncDir,
+                        WorkspaceIden::SettingValidateCertificates,
+                    ])
+                    .to_owned(),
+            )
+            .returning_all()
+            .build_rusqlite(SqliteQueryBuilder);
 
-    let mut stmt = db.prepare(sql.as_str())?;
-    let m: Workspace = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+        let mut stmt = db.prepare(&sql)?;
+        stmt.query_row(&*params.as_params(), |row| row.try_into())?
+    };
     emit_upserted_model(window, &AnyModel::Workspace(m.to_owned()), update_source);
+    ensure_base_environment(window, &m.id).await?;
     Ok(m)
 }
 
@@ -337,7 +338,7 @@ pub async fn duplicate_grpc_request<R: Runtime>(
     };
     request.sort_priority = request.sort_priority + 0.001;
     request.id = "".to_string();
-    upsert_grpc_request(window, &request, update_source).await
+    upsert_grpc_request(window, request, update_source).await
 }
 
 pub async fn delete_grpc_request<R: Runtime>(
@@ -366,7 +367,7 @@ pub async fn delete_grpc_request<R: Runtime>(
 
 pub async fn upsert_grpc_request<R: Runtime>(
     window: &WebviewWindow<R>,
-    request: &GrpcRequest,
+    request: GrpcRequest,
     update_source: &UpdateSource,
 ) -> Result<GrpcRequest> {
     let id = match request.id.as_str() {
@@ -781,12 +782,37 @@ pub async fn upsert_cookie_jar<R: Runtime>(
     Ok(m)
 }
 
-pub async fn list_environments<R: Runtime>(
+pub async fn ensure_base_environment<R: Runtime>(
     window: &WebviewWindow<R>,
     workspace_id: &str,
+) -> Result<()> {
+    let environments = list_environments(window, workspace_id).await?;
+    let base_environment =
+        environments.iter().find(|e| e.environment_id == None && e.workspace_id == workspace_id);
+
+    if let None = base_environment {
+        info!("Creating base environment for {workspace_id}");
+        upsert_environment(
+            window,
+            Environment {
+                workspace_id: workspace_id.to_string(),
+                name: "Global Variables".to_string(),
+                ..Default::default()
+            },
+            &UpdateSource::Background,
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+pub async fn list_environments<R: Runtime>(
+    mgr: &impl Manager<R>,
+    workspace_id: &str,
 ) -> Result<Vec<Environment>> {
-    let mut environments: Vec<Environment> = {
-        let dbm = &*window.state::<SqliteConnection>();
+    let environments: Vec<Environment> = {
+        let dbm = &*mgr.state::<SqliteConnection>();
         let db = dbm.0.lock().await.get().unwrap();
         let (sql, params) = Query::select()
             .from(EnvironmentIden::Table)
@@ -798,23 +824,6 @@ pub async fn list_environments<R: Runtime>(
         let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
         items.map(|v| v.unwrap()).collect()
     };
-
-    let base_environment =
-        environments.iter().find(|e| e.environment_id == None && e.workspace_id == workspace_id);
-
-    if let None = base_environment {
-        info!("Creating base environment for {workspace_id}");
-        let base_environment = upsert_environment(
-            window,
-            Environment {
-                workspace_id: workspace_id.to_string(),
-                name: "Global Variables".to_string(),
-                ..Default::default()
-            },
-        )
-        .await?;
-        environments.push(base_environment);
-    }
 
     Ok(environments)
 }
@@ -890,13 +899,6 @@ pub async fn update_settings<R: Runtime>(
 
     let dbm = &*window.app_handle().state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
-
-    // Correct for the bug where created_at was being updated by mistake
-    let created_at = if settings.created_at > settings.updated_at {
-        settings.updated_at
-    } else {
-        settings.created_at
-    };
 
     let (sql, params) = Query::update()
         .table(SettingsIden::Table)
@@ -1269,6 +1271,7 @@ pub async fn duplicate_folder<R: Runtime>(
             sort_priority: src_folder.sort_priority + 0.001,
             ..src_folder.clone()
         },
+        &UpdateSource::Window,
     )
     .await?;
 
@@ -1281,6 +1284,7 @@ pub async fn duplicate_folder<R: Runtime>(
                 sort_priority: m.sort_priority + 0.001,
                 ..m
             },
+            &UpdateSource::Window,
         )
         .await?;
     }
@@ -1293,6 +1297,7 @@ pub async fn duplicate_folder<R: Runtime>(
                 sort_priority: m.sort_priority + 0.001,
                 ..m
             },
+            &UpdateSource::Window,
         )
         .await?;
     }

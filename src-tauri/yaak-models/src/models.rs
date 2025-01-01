@@ -152,7 +152,6 @@ impl<'s> TryFrom<&Row<'s>> for Workspace {
             setting_request_timeout: r.get("setting_request_timeout")?,
             setting_sync_dir: r.get("setting_sync_dir")?,
             setting_validate_certificates: r.get("setting_validate_certificates")?,
-            variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
         })
     }
 }

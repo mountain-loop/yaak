@@ -4,8 +4,10 @@ import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
 import { useDeleteWorkspace } from '../hooks/useDeleteWorkspace';
+import { useDialog } from '../hooks/useDialog';
 import { useOpenWorkspace } from '../hooks/useOpenWorkspace';
 import { useSettings } from '../hooks/useSettings';
+import { useUpdateWorkspace } from '../hooks/useUpdateWorkspace';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { getWorkspace } from '../lib/store';
 import type { ButtonProps } from './core/Button';
@@ -14,9 +16,10 @@ import type { DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
-import { useDialog } from '../hooks/useDialog';
 import { OpenWorkspaceDialog } from './OpenWorkspaceDialog';
 import { WorkspaceSettingsDialog } from './WorkpaceSettingsDialog';
+import { usePrompt } from '../hooks/usePrompt';
+import { InlineCode } from './core/InlineCode';
 
 type Props = Pick<ButtonProps, 'className' | 'justify' | 'forDropdown' | 'leftSlot'>;
 
@@ -27,13 +30,15 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   const workspaces = useWorkspaces();
   const activeWorkspace = useActiveWorkspace();
   const activeWorkspaceId = activeWorkspace?.id ?? null;
-  const deleteWorkspace = useDeleteWorkspace(activeWorkspace);
-  const createWorkspace = useCreateWorkspace();
+  const { mutate: deleteWorkspace } = useDeleteWorkspace(activeWorkspace);
+  const { mutate: createWorkspace } = useCreateWorkspace();
+  const { mutate: updateWorkspace } = useUpdateWorkspace(activeWorkspaceId);
+  const { mutate: deleteSendHistory } = useDeleteSendHistory();
   const dialog = useDialog();
+  const prompt = usePrompt();
   const settings = useSettings();
   const openWorkspace = useOpenWorkspace();
   const openWorkspaceNewWindow = settings?.openWorkspaceNewWindow ?? null;
-  const deleteSendHistory = useDeleteSendHistory();
 
   const orderedWorkspaces = useMemo(
     () => [...workspaces].sort((a, b) => (a.name.localeCompare(b.name) > 0 ? 1 : -1)),
@@ -83,20 +88,20 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
             defaultValue: activeWorkspace?.settingSyncDir ?? undefined,
           });
           if (settingSyncDir == null) return;
-          updateWorkspace.mutate({ settingSyncDir });
+          updateWorkspace({ settingSyncDir });
         },
       },
       {
         key: 'delete-responses',
         label: 'Clear Send History',
         leftSlot: <Icon icon="history" />,
-        onSelect: deleteSendHistory.mutate,
+        onSelect: deleteSendHistory,
       },
       {
         key: 'delete',
         label: 'Delete Workspace',
         leftSlot: <Icon icon="trash" />,
-        onSelect: deleteWorkspace.mutate,
+        onSelect: deleteWorkspace,
         variant: 'danger',
       },
       { type: 'separator' },
@@ -104,20 +109,23 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         key: 'create-workspace',
         label: 'New Workspace',
         leftSlot: <Icon icon="plus" />,
-        onSelect: createWorkspace.mutate,
+        onSelect: createWorkspace,
       },
     ];
 
     return { workspaceItems, extraItems };
   }, [
+    activeWorkspace?.id,
     activeWorkspace?.name,
     activeWorkspace?.settingSyncDir,
     activeWorkspaceId,
-    createWorkspace.mutate,
-    deleteSendHistory.mutate,
-    deleteWorkspace.mutate,
+    createWorkspace,
+    deleteSendHistory,
+    deleteWorkspace,
     dialog,
     orderedWorkspaces,
+    prompt,
+    updateWorkspace,
   ]);
 
   const handleChange = useCallback(

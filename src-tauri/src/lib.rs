@@ -53,26 +53,17 @@ use yaak_models::queries::{
     delete_all_http_responses_for_request, delete_all_http_responses_for_workspace,
     delete_cookie_jar, delete_environment, delete_folder, delete_grpc_connection,
     delete_grpc_request, delete_http_request, delete_http_response, delete_plugin,
-    delete_workspace, duplicate_grpc_request, duplicate_http_request, generate_id,
-    generate_model_id, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
-    get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
-    get_or_create_settings, get_plugin, get_workspace, get_workspace_export_resources,
-    list_cookie_jars, list_environments, list_folders, list_grpc_connections_for_workspace,
-    list_grpc_events, list_grpc_requests, list_http_requests, list_http_responses_for_request,
-    list_http_responses_for_workspace, list_plugins, list_workspaces, set_key_value_raw,
-    update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder,
-    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_http_request,
-    upsert_plugin, upsert_workspace, UpdateSource, WorkspaceExportResources,
     delete_workspace, duplicate_folder, duplicate_grpc_request, duplicate_http_request,
-    generate_id, generate_model_id, get_base_environment, get_cookie_jar, get_environment,
-    get_folder, get_grpc_connection, get_grpc_request, get_http_request, get_http_response,
-    get_key_value_raw, get_or_create_settings, get_plugin, get_workspace, list_cookie_jars,
-    list_environments, list_folders, list_grpc_connections_for_workspace, list_grpc_events,
-    list_grpc_requests, list_http_requests, list_http_responses_for_request,
-    list_http_responses_for_workspace, list_key_values_raw, list_plugins, list_workspaces,
-    set_key_value_raw, update_response_if_id, update_settings, upsert_cookie_jar,
-    upsert_environment, upsert_folder, upsert_grpc_connection, upsert_grpc_event,
-    upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
+    ensure_base_environment, generate_id, generate_model_id, get_base_environment, get_cookie_jar,
+    get_environment, get_folder, get_grpc_connection, get_grpc_request, get_http_request,
+    get_http_response, get_key_value_raw, get_or_create_settings, get_plugin, get_workspace,
+    get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
+    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
+    list_http_responses_for_request, list_http_responses_for_workspace, list_key_values_raw,
+    list_plugins, list_workspaces, set_key_value_raw, update_response_if_id, update_settings,
+    upsert_cookie_jar, upsert_environment, upsert_folder, upsert_grpc_connection,
+    upsert_grpc_event, upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
+    UpdateSource, WorkspaceExportResources,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpRequestActionRequest, FilterResponse, FindHttpResponsesResponse,
@@ -904,7 +895,9 @@ async fn cmd_import_data<R: Runtime>(
             if let Some(_) = imported_resources.environments.iter().find(|f| f.id == v.id) {
                 continue;
             }
-            let x = upsert_environment(&window, v).await.map_err(|e| e.to_string())?;
+            let x = upsert_environment(&window, v, &UpdateSource::Window)
+                .await
+                .map_err(|e| e.to_string())?;
             imported_resources.environments.push(x.clone());
         }
     }
@@ -956,7 +949,9 @@ async fn cmd_import_data<R: Runtime>(
         v.workspace_id =
             maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
         v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
-        let x = upsert_grpc_request(&window, v).await.map_err(|e| e.to_string())?;
+        let x = upsert_grpc_request(&window, v, &UpdateSource::Window)
+            .await
+            .map_err(|e| e.to_string())?;
         imported_resources.grpc_requests.push(x.clone());
     }
     info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
@@ -1349,7 +1344,7 @@ async fn cmd_update_grpc_request(
     request: GrpcRequest,
     w: WebviewWindow,
 ) -> Result<GrpcRequest, String> {
-    upsert_grpc_request(&w, &request, &UpdateSource::Window).await.map_err(|e| e.to_string())
+    upsert_grpc_request(&w, request, &UpdateSource::Window).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1468,6 +1463,9 @@ async fn cmd_list_environments(
     workspace_id: &str,
     w: WebviewWindow,
 ) -> Result<Vec<Environment>, String> {
+    // Not sure of a better place to put this...
+    ensure_base_environment(&w, workspace_id).await.map_err(|e| e.to_string())?;
+
     list_environments(&w, workspace_id).await.map_err(|e| e.to_string())
 }
 

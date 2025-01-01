@@ -1,9 +1,9 @@
-import type { ShowToastRequest } from '@yaakapp-internal/plugin';
+import type { ShowToastRequest } from '@yaakapp-internal/plugins';
 import { AnimatePresence } from 'framer-motion';
-import React, {type ReactNode, useContext, useMemo, useRef, useState} from 'react';
+import React, { type ReactNode, useContext, useMemo, useRef, useState } from 'react';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { generateId } from '../lib/generateId';
-import {Toast, type ToastProps} from './core/Toast';
+import { Toast, type ToastProps } from './core/Toast';
 import { Portal } from './Portal';
 import { ToastContext } from './ToastContext';
 
@@ -28,7 +28,6 @@ export interface Actions {
   show: (d: ToastEntry) => void;
   hide: (id: string) => void;
 }
-
 
 export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const [toasts, setToasts] = useState<ToastState['toasts']>([]);

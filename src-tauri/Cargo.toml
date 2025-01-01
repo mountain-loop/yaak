@@ -42,7 +42,6 @@ eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client
 hex_color = "3.0.0"
 http = "1"
 log = "0.4.21"
-mime_guess = "2.0.5"
 rand = "0.8.5"
 regex = "1.10.2"
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "native-tls-alpn"] }
@@ -61,7 +60,6 @@ tauri-plugin-window-state = "2.0.1"
 tokio = { version = "1.36.0", features = ["sync"] }
 tokio-stream = "0.1.15"
 ts-rs = { workspace = true }
-uuid = "1.7.0"
 mime_guess = "2.0.5"
 urlencoding = "2.1.3"
 uuid = "1.7.0"
