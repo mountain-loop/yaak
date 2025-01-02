@@ -35,7 +35,6 @@ import {
 } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
-import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import { graphql } from 'cm6-graphql';
 import { EditorView } from 'codemirror';
 import { pluralizeCount } from '../../../lib/pluralize';
