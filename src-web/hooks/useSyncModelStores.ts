@@ -1,3 +1,4 @@
+import deepEqual from '@gilbarbara/deep-equal';
 import { useQueryClient } from '@tanstack/react-query';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import type { AnyModel, KeyValue, ModelPayload } from '@yaakapp-internal/models';
@@ -117,7 +118,11 @@ export function updateModelList<T extends AnyModel>(model: T) {
 
   return (current: T[] | undefined): T[] => {
     const index = current?.findIndex((v) => modelsEq(v, model)) ?? -1;
-    if (index >= 0) {
+    const existingModel = current?.[index];
+    if (existingModel && deepEqual(existingModel, model)) {
+      // We already have the exact model, so do nothing
+      return current;
+    } else if (existingModel) {
       return [...(current ?? []).slice(0, index), model, ...(current ?? []).slice(index + 1)];
     } else {
       return pushToFront ? [model, ...(current ?? [])] : [...(current ?? []), model];
@@ -126,12 +131,21 @@ export function updateModelList<T extends AnyModel>(model: T) {
 }
 
 export function removeModelById<T extends { id: string }>(model: T) {
-  return (entries: T[] | undefined) => entries?.filter((e) => e.id !== model.id) ?? [];
+  return (prevEntries: T[] | undefined) => {
+    const entries = prevEntries?.filter((e) => e.id !== model.id) ?? [];
+
+    // Don't trigger an update if we didn't actually remove anything
+    if (entries.length === (prevEntries ?? []).length) {
+      return prevEntries ?? [];
+    }
+
+    return entries;
+  };
 }
 
 export function removeModelByKv(model: KeyValue) {
-  return (entries: KeyValue[] | undefined) =>
-    entries?.filter(
+  return (prevEntries: KeyValue[] | undefined) =>
+    prevEntries?.filter(
       (e) =>
         !(
           e.namespace === model.namespace &&

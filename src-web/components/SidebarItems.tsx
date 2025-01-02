@@ -54,19 +54,16 @@ export const SidebarItems = memo(function SidebarItems({
             <SidebarItem
               itemId={child.id}
               itemName={child.name}
-              itemFallbackName="TODO"
               itemModel={child.model}
               latestHttpResponse={httpResponses.find((r) => r.requestId === child.id) ?? null}
-              latestGrpcConnection={
-                grpcConnections.find((c) => c.requestId === child.id) ?? null
-              }
+              latestGrpcConnection={grpcConnections.find((c) => c.requestId === child.id) ?? null}
               onMove={handleMove}
               onEnd={handleEnd}
               onSelect={onSelect}
               onDragStart={handleDragStart}
               child={child}
             >
-              {child.model === 'folder' && draggingId !== child.id && (
+              {child.model === 'folder' && draggingId !== child.id ? (
                 <SidebarItems
                   draggingId={draggingId}
                   handleDragStart={handleDragStart}
@@ -81,14 +78,12 @@ export const SidebarItems = memo(function SidebarItems({
                   tree={child}
                   treeParentMap={treeParentMap}
                 />
-              )}
+              ) : null}
             </SidebarItem>
           </Fragment>
         );
       })}
-      {hoveredIndex === tree.children.length && hoveredTree?.id === tree.id && (
-        <DropMarker />
-      )}
+      {hoveredIndex === tree.children.length && hoveredTree?.id === tree.id && <DropMarker />}
     </VStack>
   );
 });

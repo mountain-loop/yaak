@@ -10,7 +10,7 @@ import { Button } from '../components/core/Button';
 import { FormattedError } from '../components/core/FormattedError';
 import { VStack } from '../components/core/Stacks';
 import { ImportDataDialog } from '../components/ImportDataDialog';
-import { count } from '../lib/pluralize';
+import { pluralizeCount } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
 import { getActiveWorkspace } from './useActiveWorkspace';
 import { useAlert } from './useAlert';
@@ -47,11 +47,11 @@ export function useImportData() {
         return (
           <VStack space={3} className="pb-4">
             <ul className="list-disc pl-6">
-              <li>{count('Workspace', workspaces.length)}</li>
-              <li>{count('Environment', environments.length)}</li>
-              <li>{count('Folder', folders.length)}</li>
-              <li>{count('HTTP Request', httpRequests.length)}</li>
-              <li>{count('GRPC Request', grpcRequests.length)}</li>
+              <li>{pluralizeCount('Workspace', workspaces.length)}</li>
+              <li>{pluralizeCount('Environment', environments.length)}</li>
+              <li>{pluralizeCount('Folder', folders.length)}</li>
+              <li>{pluralizeCount('HTTP Request', httpRequests.length)}</li>
+              <li>{pluralizeCount('GRPC Request', grpcRequests.length)}</li>
             </ul>
             <div>
               <Button className="ml-auto" onClick={hide} color="primary">

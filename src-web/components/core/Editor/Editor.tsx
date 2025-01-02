@@ -1,6 +1,7 @@
-import { defaultKeymap } from '@codemirror/commands';
-import { forceParsing } from '@codemirror/language';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { defaultKeymap, historyField } from '@codemirror/commands';
+import { foldState, forceParsing } from '@codemirror/language';
+import type { EditorStateConfig, Extension } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
 import { keymap, placeholder as placeholderExt, tooltips } from '@codemirror/view';
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import type { TemplateFunction } from '@yaakapp-internal/plugins';
@@ -23,13 +24,21 @@ import { useDialog } from '../../../hooks/useDialog';
 import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useSettings } from '../../../hooks/useSettings';
-import { useTemplateFunctions } from '../../../hooks/useTemplateFunctions';
+import {
+  useTemplateFunctions,
+  useTwigCompletionOptions,
+} from '../../../hooks/useTemplateFunctions';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
 import { HStack } from '../Stacks';
 import './Editor.css';
-import { baseExtensions, getLanguageExtension, multiLineExtensions } from './extensions';
+import {
+  baseExtensions,
+  emptyExtension,
+  getLanguageExtension,
+  multiLineExtensions,
+} from './extensions';
 import type { GenericCompletionConfig } from './genericCompletion';
 import { singleLineExtensions } from './singleLine';
 
@@ -73,6 +82,8 @@ export interface EditorProps {
   hideGutter?: boolean;
   stateKey: string | null;
 }
+
+const stateFields = { history: historyField, folds: foldState };
 
 const emptyVariables: EnvironmentVariable[] = [];
 
@@ -157,22 +168,32 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   // Update placeholder
   const placeholderCompartment = useRef(new Compartment());
-  useEffect(() => {
-    if (cm.current === null) return;
-    const effect = placeholderCompartment.current.reconfigure(
-      placeholderExt(placeholderElFromText(placeholder ?? '')),
-    );
-    cm.current?.view.dispatch({ effects: effect });
-  }, [placeholder]);
+  useEffect(
+    function configurePlaceholder() {
+      if (cm.current === null) return;
+      const ext = placeholderExt(placeholderElFromText(placeholder ?? ''));
+      const effect = placeholderCompartment.current.reconfigure(ext);
+      cm.current?.view.dispatch({ effects: effect });
+    },
+    [placeholder],
+  );
 
   // Update wrap lines
   const wrapLinesCompartment = useRef(new Compartment());
-  useEffect(() => {
-    if (cm.current === null) return;
-    const ext = wrapLines ? [EditorView.lineWrapping] : [];
-    const effect = wrapLinesCompartment.current.reconfigure(ext);
-    cm.current?.view.dispatch({ effects: effect });
-  }, [wrapLines]);
+  useEffect(
+    function configureWrapLines() {
+      if (cm.current === null) return;
+      const current = wrapLinesCompartment.current.get(cm.current.view.state) ?? emptyExtension;
+      // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
+      if (wrapLines && current !== emptyExtension) return; // Nothing to do
+      if (!wrapLines && current === emptyExtension) return; // Nothing to do
+
+      const ext = wrapLines ? EditorView.lineWrapping : emptyExtension;
+      const effect = wrapLinesCompartment.current.reconfigure(ext);
+      cm.current?.view.dispatch({ effects: effect });
+    },
+    [wrapLines],
+  );
 
   const dialog = useDialog();
   const onClickFunction = useCallback(
@@ -254,6 +275,8 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     [focusParamValue],
   );
 
+  const completionOptions = useTwigCompletionOptions(onClickFunction);
+
   // Update the language extension when the language changes
   useEffect(() => {
     if (cm.current === null) return;
@@ -263,8 +286,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       environmentVariables,
       useTemplating,
       autocomplete,
-      templateFunctions,
-      onClickFunction,
+      completionOptions,
       onClickVariable,
       onClickMissingVariable,
       onClickPathParameter,
@@ -280,11 +302,12 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     onClickVariable,
     onClickMissingVariable,
     onClickPathParameter,
+    completionOptions,
   ]);
 
   // Initialize the editor when ref mounts
   const initEditorRef = useCallback(
-    (container: HTMLDivElement | null) => {
+    function initEditorRef(container: HTMLDivElement | null) {
       if (container === null) {
         cm.current?.view.destroy();
         cm.current = null;
@@ -296,49 +319,50 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
         const langExt = getLanguageExtension({
           language,
           useTemplating,
+          completionOptions,
           autocomplete,
           environmentVariables,
-          templateFunctions,
           onClickVariable,
-          onClickFunction,
           onClickMissingVariable,
           onClickPathParameter,
         });
 
+        const extensions = [
+          languageCompartment.of(langExt),
+          placeholderCompartment.current.of(
+            placeholderExt(placeholderElFromText(placeholder ?? '')),
+          ),
+          wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : emptyExtension),
+          ...getExtensions({
+            container,
+            readOnly,
+            singleLine,
+            hideGutter,
+            stateKey,
+            onChange: handleChange,
+            onPaste: handlePaste,
+            onPasteOverwrite: handlePasteOverwrite,
+            onFocus: handleFocus,
+            onBlur: handleBlur,
+            onKeyDown: handleKeyDown,
+          }),
+          ...(extraExtensions ?? []),
+        ];
+
         const cachedJsonState = getCachedEditorState(defaultValue ?? '', stateKey);
 
-        const state =
-          cachedJsonState ??
-          EditorState.create({
-            doc: `${defaultValue ?? ''}`,
-            extensions: [
-              languageCompartment.of(langExt),
-              placeholderCompartment.current.of(
-                placeholderExt(placeholderElFromText(placeholder ?? '')),
-              ),
-              wrapLinesCompartment.current.of(wrapLines ? [EditorView.lineWrapping] : []),
-              ...getExtensions({
-                container,
-                readOnly,
-                singleLine,
-                hideGutter,
-                stateKey,
-                onChange: handleChange,
-                onPaste: handlePaste,
-                onPasteOverwrite: handlePasteOverwrite,
-                onFocus: handleFocus,
-                onBlur: handleBlur,
-                onKeyDown: handleKeyDown,
-              }),
-              ...(extraExtensions ?? []),
-            ],
-          });
+        const doc = `${defaultValue ?? ''}`;
+        const config: EditorStateConfig = { extensions, doc };
+
+        const state = cachedJsonState
+          ? EditorState.fromJSON(cachedJsonState, config, stateFields)
+          : EditorState.create(config);
 
         const view = new EditorView({ state, parent: container });
 
         // For large documents, the parser may parse the max number of lines and fail to add
         // things like fold markers because of it.
-        // This forces it to parse more but keeps the timeout to the default of 100ms.
+        // This forces it to parse more but keeps the timeout to the default of 100 ms.
         forceParsing(view, 9e6, 100);
 
         cm.current = { view, languageCompartment };
@@ -357,31 +381,34 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   );
 
   // For read-only mode, update content when `defaultValue` changes
-  useEffect(() => {
-    if (!readOnly || cm.current?.view == null || defaultValue == null) return;
+  useEffect(
+    function updateReadOnlyEditor() {
+      if (!readOnly || cm.current?.view == null || defaultValue == null) return;
 
-    // Replace codemirror contents
-    const currentDoc = cm.current.view.state.doc.toString();
-    if (defaultValue.startsWith(currentDoc)) {
-      // If we're just appending, append only the changes. This preserves
-      // things like scroll position.
-      cm.current.view.dispatch({
-        changes: cm.current.view.state.changes({
-          from: currentDoc.length,
-          insert: defaultValue.slice(currentDoc.length),
-        }),
-      });
-    } else {
-      // If we're replacing everything, reset the entire content
-      cm.current.view.dispatch({
-        changes: cm.current.view.state.changes({
-          from: 0,
-          to: currentDoc.length,
-          insert: defaultValue,
-        }),
-      });
-    }
-  }, [defaultValue, readOnly]);
+      // Replace codemirror contents
+      const currentDoc = cm.current.view.state.doc.toString();
+      if (defaultValue.startsWith(currentDoc)) {
+        // If we're just appending, append only the changes. This preserves
+        // things like scroll position.
+        cm.current.view.dispatch({
+          changes: cm.current.view.state.changes({
+            from: currentDoc.length,
+            insert: defaultValue.slice(currentDoc.length),
+          }),
+        });
+      } else {
+        // If we're replacing everything, reset the entire content
+        cm.current.view.dispatch({
+          changes: cm.current.view.state.changes({
+            from: 0,
+            to: currentDoc.length,
+            insert: defaultValue,
+          }),
+        });
+      }
+    },
+    [defaultValue, readOnly],
+  );
 
   // Add bg classes to actions, so they appear over the text
   const decoratedActions = useMemo(() => {
@@ -544,24 +571,25 @@ const placeholderElFromText = (text: string) => {
   return el;
 };
 
-declare global {
-  interface Window {
-    editorStates: Record<string, EditorState>;
-  }
-}
-window.editorStates = window.editorStates ?? {};
-
 function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
   if (!stateKey || state == null) return;
-  window.editorStates[stateKey] = state;
+  sessionStorage.setItem(stateKey, JSON.stringify(state.toJSON(stateFields)));
 }
 
 function getCachedEditorState(doc: string, stateKey: string | null) {
   if (stateKey == null) return;
 
-  const state = window.editorStates[stateKey] ?? null;
-  if (state == null) return null;
-  if (state.doc.toString() !== doc) return null;
+  const stateStr = sessionStorage.getItem(stateKey);
+  if (stateStr == null) return null;
 
-  return state;
+  try {
+    const state = JSON.parse(stateStr);
+    if (state.doc !== doc) return null;
+
+    return state;
+  } catch {
+    // Nothing
+  }
+
+  return null;
 }

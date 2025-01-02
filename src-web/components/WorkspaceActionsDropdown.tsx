@@ -2,12 +2,10 @@ import classNames from 'classnames';
 import { memo, useCallback, useMemo } from 'react';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
-import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
-import { useDeleteWorkspace } from '../hooks/useDeleteWorkspace';
+import {useDeleteSendHistory} from "../hooks/useDeleteSendHistory";
 import { useDialog } from '../hooks/useDialog';
 import { useOpenWorkspace } from '../hooks/useOpenWorkspace';
 import { useSettings } from '../hooks/useSettings';
-import { useUpdateWorkspace } from '../hooks/useUpdateWorkspace';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { getWorkspace } from '../lib/store';
 import type { ButtonProps } from './core/Button';
@@ -30,9 +28,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   const workspaces = useWorkspaces();
   const activeWorkspace = useActiveWorkspace();
   const activeWorkspaceId = activeWorkspace?.id ?? null;
-  const { mutate: deleteWorkspace } = useDeleteWorkspace(activeWorkspace);
   const { mutate: createWorkspace } = useCreateWorkspace();
-  const { mutate: updateWorkspace } = useUpdateWorkspace(activeWorkspaceId);
   const { mutate: deleteSendHistory } = useDeleteSendHistory();
   const dialog = useDialog();
   const prompt = usePrompt();
@@ -97,12 +93,6 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         leftSlot: <Icon icon="history" />,
         onSelect: deleteSendHistory,
       },
-      {
-        key: 'delete',
-        label: 'Delete Workspace',
-        leftSlot: <Icon icon="trash" />,
-        onSelect: deleteWorkspace,
-        variant: 'danger',
       },
       { type: 'separator' },
       {
@@ -119,10 +109,9 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     activeWorkspace?.name,
     activeWorkspace?.settingSyncDir,
     activeWorkspaceId,
+    dialog,
     createWorkspace,
     deleteSendHistory,
-    deleteWorkspace,
-    dialog,
     orderedWorkspaces,
     prompt,
     updateWorkspace,

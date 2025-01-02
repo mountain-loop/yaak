@@ -1,7 +1,7 @@
 import type { AnyModel, GrpcConnection, HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
-import type { ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
@@ -31,12 +31,11 @@ export type SidebarItemProps = {
   className?: string;
   itemId: string;
   itemName: string;
-  itemFallbackName: string;
   itemModel: AnyModel['model'];
   onMove: (id: string, side: 'above' | 'below') => void;
   onEnd: (id: string) => void;
   onDragStart: (id: string) => void;
-  children?: ReactNode;
+  children: ReactElement<typeof SidebarItem> | null;
   child: SidebarTreeNode;
   latestHttpResponse: HttpResponse | null;
   latestGrpcConnection: GrpcConnection | null;
@@ -57,7 +56,6 @@ export const SidebarItem = memo(function SidebarItem({
   onDragStart,
   onSelect,
   className,
-  itemFallbackName,
   latestHttpResponse,
   latestGrpcConnection,
   children,
@@ -210,7 +208,7 @@ export const SidebarItem = memo(function SidebarItem({
         return null;
       }
     });
-  }, [itemId, itemModel])
+  }, [itemId, itemModel]);
 
   const item = useAtomValue(itemAtom);
 
@@ -228,11 +226,13 @@ export const SidebarItem = memo(function SidebarItem({
   return (
     <li ref={ref} draggable>
       <div className={classNames(className, 'block relative group/item px-1.5 pb-0.5')}>
-        <SidebarItemContextMenu
-          child={child}
-          show={showContextMenu}
-          close={handleCloseContextMenu}
-        />
+        {showContextMenu && (
+          <SidebarItemContextMenu
+            child={child}
+            show={showContextMenu}
+            close={handleCloseContextMenu}
+          />
+        )}
         <button
           // tabIndex={-1} // Will prevent drag-n-drop
           disabled={editing}
@@ -271,7 +271,7 @@ export const SidebarItem = memo(function SidebarItem({
                 onKeyDown={handleInputKeyDown}
               />
             ) : (
-              <span className="truncate">{itemName || itemFallbackName}</span>
+              <span className="truncate">{itemName}</span>
             )}
           </div>
           {latestGrpcConnection ? (

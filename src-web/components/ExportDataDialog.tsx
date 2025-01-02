@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import slugify from 'slugify';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useWorkspaces } from '../hooks/useWorkspaces';
-import { count } from '../lib/pluralize';
+import { pluralizeCount } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
@@ -128,7 +128,7 @@ function ExportDataDialogContent({
           disabled={noneSelected}
           onClick={() => handleExport()}
         >
-          Export {count('Workspace', numSelected, { omitSingle: true, noneWord: 'Nothing' })}
+          Export {pluralizeCount('Workspace', numSelected, { omitSingle: true, noneWord: 'Nothing' })}
         </Button>
       </HStack>
     </VStack>

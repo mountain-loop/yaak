@@ -3,6 +3,10 @@ import { atom, useAtomValue } from 'jotai';
 
 export const cookieJarsAtom = atom<CookieJar[] | undefined>();
 
+export const sortedCookieJars = atom((get) =>
+  get(cookieJarsAtom)?.sort((a, b) => a.name.localeCompare(b.name)),
+);
+
 export function useCookieJars() {
-  return useAtomValue(cookieJarsAtom);
+  return useAtomValue(sortedCookieJars);
 }

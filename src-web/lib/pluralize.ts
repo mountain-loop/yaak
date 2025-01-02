@@ -5,7 +5,7 @@ export function pluralize(word: string, count: number): string {
   return `${word}s`;
 }
 
-export function count(
+export function pluralizeCount(
   word: string,
   count: number,
   opt: { omitSingle?: boolean; noneWord?: string } = {},

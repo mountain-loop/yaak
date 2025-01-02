@@ -6,8 +6,8 @@ import {
 } from '@codemirror/autocomplete';
 import { history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
-import { markdown } from '@codemirror/lang-markdown';
 import { json } from '@codemirror/lang-json';
+import { markdown } from '@codemirror/lang-markdown';
 import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
 import {
@@ -21,6 +21,7 @@ import {
 import { lintKeymap } from '@codemirror/lint';
 
 import { searchKeymap } from '@codemirror/search';
+import type { Extension } from '@codemirror/state';
 import { EditorState } from '@codemirror/state';
 import {
   crosshairCursor,
@@ -37,10 +38,13 @@ import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import { graphql } from 'cm6-graphql';
 import { EditorView } from 'codemirror';
-import type {EditorProps} from "./Editor";
+import { pluralizeCount } from '../../../lib/pluralize';
+import type { EditorProps } from './Editor';
 import { pairs } from './pairs/extension';
 import { text } from './text/extension';
+import type { TwigCompletionOption } from './twig/completion';
 import { twig } from './twig/extension';
+import { pathParametersPlugin } from './twig/pathParameters';
 import { url } from './url/extension';
 
 export const syntaxHighlightStyle = HighlightStyle.define([
@@ -83,23 +87,23 @@ const syntaxExtensions: Record<NonNullable<EditorProps['language']>, LanguageSup
   markdown: markdown(),
 };
 
+export const emptyExtension: Extension = [];
+
 export function getLanguageExtension({
   language,
   useTemplating = false,
   environmentVariables,
   autocomplete,
-  templateFunctions,
   onClickVariable,
-  onClickFunction,
   onClickMissingVariable,
   onClickPathParameter,
+  completionOptions,
 }: {
   environmentVariables: EnvironmentVariable[];
-  templateFunctions: TemplateFunction[];
-  onClickFunction: (option: TemplateFunction, tagValue: string, startPos: number) => void;
   onClickVariable: (option: EnvironmentVariable, tagValue: string, startPos: number) => void;
   onClickMissingVariable: (name: string, tagValue: string, startPos: number) => void;
   onClickPathParameter: (name: string) => void;
+  completionOptions: TwigCompletionOption[];
 } & Pick<EditorProps, 'language' | 'useTemplating' | 'autocomplete'>) {
   if (language === 'graphql') {
     return graphql();
@@ -110,15 +114,17 @@ export function getLanguageExtension({
     return base;
   }
 
+  const extraExtensions = language === 'url' ? [pathParametersPlugin(onClickPathParameter)] : [];
+
   return twig({
     base,
     environmentVariables,
-    templateFunctions,
+    completionOptions,
     autocomplete,
-    onClickFunction,
     onClickVariable,
     onClickMissingVariable,
     onClickPathParameter,
+    extraExtensions,
   });
 }
 
@@ -162,11 +168,15 @@ export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) =>
       const el = document.createElement('span');
       el.onclick = onclick;
       el.className = 'cm-foldPlaceholder';
-      el.innerText = prepared;
+      el.innerText = prepared || '…';
       el.title = 'unfold';
       el.ariaLabel = 'folded code';
       return el;
     },
+    /**
+     * Show the number of items when code folded. NOTE: this doesn't get called when restoring
+     * a previous serialized editor state, which is a bummer
+     */
     preparePlaceholder(state, range) {
       let count: number | undefined;
       let startToken = '{';
@@ -191,13 +201,9 @@ export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) =>
       }
 
       if (count !== undefined) {
-        const label = isArray ? 'item' : 'prop';
-        const plural = count === 1 ? '' : 's';
-
-        return `${count} ${label}${plural}`;
+        const label = isArray ? 'item' : 'key';
+        return pluralizeCount(label, count);
       }
-
-      return '…';
     },
   }),
   EditorState.allowMultipleSelections.of(true),

@@ -158,7 +158,6 @@ export const RequestPane = memo(function RequestPane({
       {
         value: TAB_DESCRIPTION,
         label: 'Info',
-        rightSlot: activeRequest.description ? <CountBadge count={true} /> : null,
       },
       {
         value: TAB_BODY,
@@ -272,7 +271,6 @@ export const RequestPane = memo(function RequestPane({
       activeRequest.authentication,
       activeRequest.authenticationType,
       activeRequest.bodyType,
-      activeRequest.description,
       activeRequest.headers,
       activeRequest.method,
       activeRequestId,

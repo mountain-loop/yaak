@@ -1,5 +1,5 @@
 import { useSetAtom } from 'jotai/index';
-import { count } from '../lib/pluralize';
+import { pluralizeCount } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
 import { getActiveWorkspaceId } from './useActiveWorkspace';
 import { useAlert } from './useAlert';
@@ -15,8 +15,8 @@ export function useDeleteSendHistory() {
   const httpResponses = useHttpResponses();
   const grpcConnections = useGrpcConnections();
   const labels = [
-    httpResponses.length > 0 ? count('Http Response', httpResponses.length) : null,
-    grpcConnections.length > 0 ? count('Grpc Connection', grpcConnections.length) : null,
+    httpResponses.length > 0 ? pluralizeCount('Http Response', httpResponses.length) : null,
+    grpcConnections.length > 0 ? pluralizeCount('Grpc Connection', grpcConnections.length) : null,
   ].filter((l) => l != null);
 
   return useFastMutation({

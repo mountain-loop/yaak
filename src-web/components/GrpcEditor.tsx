@@ -14,7 +14,7 @@ import { useAlert } from '../hooks/useAlert';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { tryFormatJson } from '../lib/formatters';
 import type { GrpcRequest } from '@yaakapp-internal/models';
-import { count } from '../lib/pluralize';
+import { pluralizeCount } from '../lib/pluralize';
 import { Button } from './core/Button';
 import { FormattedError } from './core/FormattedError';
 import { InlineCode } from './core/InlineCode';
@@ -164,7 +164,7 @@ export function GrpcEditor({
               : reflectionError
                 ? 'Server Error'
                 : protoFiles.length > 0
-                  ? count('File', protoFiles.length)
+                  ? pluralizeCount('File', protoFiles.length)
                   : services != null && protoFiles.length === 0
                     ? 'Schema Detected'
                     : 'Select Schema'}

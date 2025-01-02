@@ -1,4 +1,3 @@
-import { deepEqual } from '@tanstack/react-router';
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import {
@@ -14,9 +13,11 @@ import {
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
 import { usePrompt } from '../../hooks/usePrompt';
+import { useToggle } from '../../hooks/useToggle';
 import { generateId } from '../../lib/generateId';
 import { DropMarker } from '../DropMarker';
 import { SelectFile } from '../SelectFile';
+import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import type { DropdownItem } from './Dropdown';
 import { Dropdown } from './Dropdown';
@@ -62,6 +63,9 @@ export type Pair = {
   readOnlyName?: boolean;
 };
 
+/** Max number of pairs to show before prompting the user to reveal the rest */
+const MAX_INITIAL_PAIRS = 50;
+
 export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function PairEditor(
   {
     stateKey,
@@ -86,12 +90,8 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   const [forceFocusNamePairId, setForceFocusNamePairId] = useState<string | null>(null);
   const [forceFocusValuePairId, setForceFocusValuePairId] = useState<string | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [pairs, setPairs] = useState<Pair[]>(() => {
-    // Remove empty headers on initial render
-    const nonEmpty = originalPairs.filter((h) => !(h.name === '' && h.value === ''));
-    const pairs = nonEmpty.map((pair) => ensureValidPair(pair));
-    return [...pairs, ensureValidPair()];
-  });
+  const [pairs, setPairs] = useState<Pair[]>([]);
+  const [showAll, toggleShowAll] = useToggle(false);
 
   useImperativeHandle(
     ref,
@@ -105,16 +105,23 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   );
 
   useEffect(() => {
-    // Remove empty headers on initial render
-    // TODO: Make this not refresh the entire editor when forceUpdateKey changes, using some
-    //  sort of diff method or deterministic IDs based on array index and update key
-    const nonEmpty = originalPairs.filter(
-      (h, i) => i !== originalPairs.length - 1 && !(h.name === '' && h.value === ''),
-    );
-    const newPairs = nonEmpty.map((pair) => ensureValidPair(pair));
-    if (!deepEqual(pairs, newPairs)) {
-      setPairs(pairs);
+    // Remove empty headers on initial render and ensure they all have valid ids (pairs didn't used to have IDs)
+    const newPairs = [];
+    for (let i = 0; i < originalPairs.length; i++) {
+      const p = originalPairs[i];
+      if (!p) continue; // Make TS happy
+      if (isPairEmpty(p)) continue;
+      if (!p.id) p.id = generateId();
+      newPairs.push(p);
     }
+
+    // Add empty last pair if there is none
+    const lastPair = newPairs[newPairs.length - 1];
+    if (lastPair != null && !isPairEmpty(lastPair)) {
+      newPairs.push(emptyPair());
+    }
+
+    setPairs(newPairs);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceUpdateKey]);
@@ -181,23 +188,15 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
         setForceFocusValuePairId(null); // Remove focus override when something focused
         const isLast = pair.id === pairs[pairs.length - 1]?.id;
         if (isLast) {
-          const newPair = ensureValidPair();
           const prevPair = pairs[pairs.length - 1];
           setForceFocusNamePairId(prevPair?.id ?? null);
-          return [...pairs, newPair];
+          return [...pairs, emptyPair()];
         } else {
           return pairs;
         }
       }),
     [],
   );
-
-  // Ensure there's always at least one pair
-  useEffect(() => {
-    if (pairs.length === 0) {
-      setPairs((pairs) => [...pairs, ensureValidPair()]);
-    }
-  }, [pairs]);
 
   return (
     <div
@@ -213,6 +212,8 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
       )}
     >
       {pairs.map((p, i) => {
+        if (!showAll && i > MAX_INITIAL_PAIRS) return null;
+
         const isLast = i === pairs.length - 1;
         return (
           <Fragment key={p.id}>
@@ -245,6 +246,17 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
           </Fragment>
         );
       })}
+      {!showAll && pairs.length > MAX_INITIAL_PAIRS && (
+        <Button
+          onClick={toggleShowAll}
+          variant="border"
+          className="m-2"
+          size="xs"
+          event="pairs.reveal-more"
+        >
+          Show {pairs.length - MAX_INITIAL_PAIRS} More
+        </Button>
+      )}
     </div>
   );
 });
@@ -607,12 +619,15 @@ function FileActionsDropdown({
   );
 }
 
-function ensureValidPair(initialPair?: Pair): Pair {
+function emptyPair(): Pair {
   return {
-    name: initialPair?.name ?? '',
-    value: initialPair?.value ?? '',
-    enabled: initialPair?.enabled ?? true,
-    isFile: initialPair?.isFile ?? false,
-    id: initialPair?.id || generateId(),
+    enabled: true,
+    name: '',
+    value: '',
+    id: generateId(),
   };
+}
+
+function isPairEmpty(pair: Pair): boolean {
+  return !pair.name && !pair.value;
 }

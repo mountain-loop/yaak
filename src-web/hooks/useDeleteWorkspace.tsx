@@ -10,13 +10,13 @@ import { useFastMutation } from './useFastMutation';
 import { removeModelById } from './useSyncModelStores';
 import { workspacesAtom } from './useWorkspaces';
 
-export function useDeleteWorkspace(workspace: Workspace | null) {
+export function useDeleteWorkspace() {
   const confirm = useConfirm();
   const setWorkspaces = useSetAtom(workspacesAtom);
   const navigate = useNavigate();
 
   return useFastMutation<Workspace | null, string>({
-    mutationKey: ['delete_workspace', workspace?.id],
+    mutationKey: ['delete_workspace'],
     mutationFn: async () => {
       const workspace = getActiveWorkspace();
       const confirmed = await confirm({

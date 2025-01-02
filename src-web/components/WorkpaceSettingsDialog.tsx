@@ -1,5 +1,7 @@
+import { useDeleteWorkspace } from '../hooks/useDeleteWorkspace';
 import { useUpdateWorkspace } from '../hooks/useUpdateWorkspace';
 import { useWorkspaces } from '../hooks/useWorkspaces';
+import { Button } from './core/Button';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -12,12 +14,12 @@ export function WorkspaceSettingsDialog({ workspaceId }: Props) {
   const updateWorkspace = useUpdateWorkspace(workspaceId ?? null);
   const workspaces = useWorkspaces();
   const workspace = workspaces.find((w) => w.id === workspaceId);
+  const { mutate: deleteWorkspace } = useDeleteWorkspace();
 
   if (workspace == null) return null;
 
   return (
-    <VStack space={3} className="pb-3 max-h-[50vh]">
-        {workspace.id}
+    <VStack space={3} alignItems="start" className="pb-3 max-h-[50vh]">
       <PlainInput
         label="Workspace Name"
         defaultValue={workspace.name}
@@ -31,8 +33,14 @@ export function WorkspaceSettingsDialog({ workspaceId }: Props) {
         defaultValue={workspace.description}
         stateKey={`description.${workspace.id}`}
         onChange={(description) => updateWorkspace.mutate({ description })}
-        heightMode='auto'
+        heightMode="auto"
       />
+
+      <VStack space={3} className="mt-3" alignItems="start">
+        <Button onClick={() => deleteWorkspace()} color="danger" variant="border">
+          Delete Workspace
+        </Button>
+      </VStack>
     </VStack>
   );
 }
