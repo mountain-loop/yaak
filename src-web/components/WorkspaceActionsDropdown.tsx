@@ -75,7 +75,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         key: 'create-workspace',
         label: 'New Workspace',
         leftSlot: <Icon icon="plus" />,
-        onSelect: createWorkspace.show,
+        onSelect: createWorkspace,
       },
     ];
 
@@ -84,7 +84,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     activeWorkspace?.id,
     activeWorkspaceId,
     dialog,
-    createWorkspace.show,
+    createWorkspace,
     deleteSendHistory,
     orderedWorkspaces,
   ]);

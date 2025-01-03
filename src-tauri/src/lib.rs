@@ -1142,13 +1142,6 @@ async fn cmd_set_key_value(
 }
 
 #[tauri::command]
-async fn cmd_create_workspace(name: &str, w: WebviewWindow) -> Result<Workspace, String> {
-    upsert_workspace(&w, Workspace::new(name.to_string()), &UpdateSource::Window)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 async fn cmd_install_plugin<R: Runtime>(
     directory: &str,
     url: Option<String>,
@@ -1346,29 +1339,6 @@ async fn cmd_delete_http_request(
 #[tauri::command]
 async fn cmd_list_folders(workspace_id: &str, w: WebviewWindow) -> Result<Vec<Folder>, String> {
     list_folders(&w, workspace_id).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_create_folder(
-    workspace_id: &str,
-    name: &str,
-    sort_priority: f32,
-    folder_id: Option<&str>,
-    w: WebviewWindow,
-) -> Result<Folder, String> {
-    upsert_folder(
-        &w,
-        Folder {
-            workspace_id: workspace_id.to_string(),
-            name: name.to_string(),
-            folder_id: folder_id.map(|s| s.to_string()),
-            sort_priority,
-            ..Default::default()
-        },
-        &UpdateSource::Window,
-    )
-    .await
-    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1784,10 +1754,8 @@ pub fn run() {
             cmd_check_for_updates,
             cmd_create_cookie_jar,
             cmd_create_environment,
-            cmd_create_folder,
             cmd_create_grpc_request,
             cmd_create_http_request,
-            cmd_create_workspace,
             cmd_curl_to_request,
             cmd_delete_all_grpc_connections,
             cmd_delete_all_http_responses,

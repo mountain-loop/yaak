@@ -4,7 +4,7 @@ import { Icon } from '../components/core/Icon';
 import { generateId } from '../lib/generateId';
 import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
 import { getActiveRequest } from './useActiveRequest';
-import { useCreateFolder } from './useCreateFolder';
+import {useCommands} from "./useCommands";
 import { useCreateGrpcRequest } from './useCreateGrpcRequest';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
 
@@ -19,7 +19,7 @@ export function useCreateDropdownItems({
 } = {}): () => DropdownItem[] {
   const { mutate: createHttpRequest } = useCreateHttpRequest();
   const { mutate: createGrpcRequest } = useCreateGrpcRequest();
-  const { mutate: createFolder } = useCreateFolder();
+  const { createFolder } = useCommands();
 
   return useCallback((): DropdownItem[] => {
     const folderId =
@@ -62,7 +62,7 @@ export function useCreateDropdownItems({
               key: 'create-folder',
               label: 'Folder',
               leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-              onSelect: () => createFolder({ folderId }),
+              onSelect: () => createFolder.mutate({ folderId }),
             },
           ]) as DropdownItem[]),
     ];
