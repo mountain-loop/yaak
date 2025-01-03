@@ -13,7 +13,6 @@ export function useUpdateEnvironment(id: string | null) {
     unknown,
     Partial<Environment> | ((r: Environment) => Environment)
   >({
-    toastyError: true,
     mutationKey: ['update_environment', id],
     mutationFn: async (v) => {
       const environment = await getEnvironment(id);

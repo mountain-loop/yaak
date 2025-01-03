@@ -38,6 +38,7 @@ import { Icon } from './core/Icon';
 import { PlainInput } from './core/PlainInput';
 import { HStack } from './core/Stacks';
 import { EnvironmentEditDialog } from './EnvironmentEditDialog';
+import { useCommands } from '../hooks/useCommands';
 
 interface CommandPaletteGroup {
   key: string;
@@ -53,7 +54,7 @@ type CommandPaletteItem = {
 
 const MAX_PER_GROUP = 8;
 
-export function CommandPalette({ onClose }: { onClose: () => void }) {
+export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const [command, setCommand] = useDebouncedState<string>('', 150);
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const [activeEnvironment, setActiveEnvironmentId] = useActiveEnvironment();
@@ -68,6 +69,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const openWorkspace = useOpenWorkspace();
   const createWorkspace = useCreateWorkspace();
   const createHttpRequest = useCreateHttpRequest();
+  const { createFolder } = useCommands();
   const [activeCookieJar] = useActiveCookieJar();
   const createGrpcRequest = useCreateGrpcRequest();
   const createEnvironment = useCreateEnvironment();
@@ -91,12 +93,17 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       {
         key: 'app.create',
         label: 'Create Workspace',
-        onSelect: createWorkspace.mutate,
+        onSelect: createWorkspace,
       },
       {
         key: 'http_request.create',
         label: 'Create HTTP Request',
         onSelect: () => createHttpRequest.mutate({}),
+      },
+      {
+        key: 'folder.create',
+        label: 'Create Folder',
+        onSelect: () => createFolder.mutate({}),
       },
       {
         key: 'cookies.show',
@@ -183,9 +190,10 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     activeRequest,
     baseEnvironment,
     createEnvironment,
+    createFolder,
     createGrpcRequest,
     createHttpRequest,
-    createWorkspace.mutate,
+    createWorkspace,
     deleteRequest.mutate,
     dialog,
     httpRequestActions,
@@ -230,7 +238,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   }, [subEnvironments, recentEnvironments]);
 
   const sortedWorkspaces = useMemo(() => {
-    const r =  [...workspaces].sort((a, b) => {
+    const r = [...workspaces].sort((a, b) => {
       const aRecentIndex = recentWorkspaces.indexOf(a.id);
       const bRecentIndex = recentWorkspaces.indexOf(b.id);
 
@@ -309,7 +317,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     for (const w of sortedWorkspaces) {
       workspaceGroup.items.push({
         key: `switch-workspace-${w.id}`,
-        label: w.id + ' - ' + w.name,
+        label: w.name,
         onSelect: () => openWorkspace.mutate({ workspaceId: w.id, inNewWindow: false }),
       });
     }

@@ -15,7 +15,6 @@ export function useCreateEnvironment() {
   const setEnvironments = useSetAtom(environmentsAtom);
 
   return useFastMutation<Environment | null, unknown, Environment | null>({
-    toastyError: true,
     mutationKey: ['create_environment'],
     mutationFn: async (baseEnvironment) => {
       if (baseEnvironment == null) {

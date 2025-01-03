@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { CommandPalette } from '../components/CommandPalette';
+import { CommandPaletteDialog } from '../components/CommandPaletteDialog';
 import { useDialog } from './useDialog';
 
 export function useToggleCommandPalette() {
@@ -13,7 +13,7 @@ export function useToggleCommandPalette() {
       vAlign: 'top',
       noPadding: true,
       noScroll: true,
-      render: ({ hide }) => <CommandPalette onClose={hide} />,
+      render: ({ hide }) => <CommandPaletteDialog onClose={hide} />,
     });
   }, [dialog]);
 
