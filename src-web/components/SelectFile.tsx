@@ -6,7 +6,7 @@ import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
 
-type Props = ButtonProps & {
+type Props = Omit<ButtonProps, 'type'> & {
   onChange: (value: { filePath: string | null; contentType: string | null }) => void;
   filePath: string | null;
   directory?: boolean;

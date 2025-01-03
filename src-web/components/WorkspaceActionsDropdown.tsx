@@ -15,7 +15,7 @@ import { Icon } from './core/Icon';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
 import { OpenWorkspaceDialog } from './OpenWorkspaceDialog';
-import { WorkspaceSettingsDialog } from './WorkpaceSettingsDialog';
+import { WorkspaceSettingsDialog } from './WorkspaceSettingsDialog';
 
 type Props = Pick<ButtonProps, 'className' | 'justify' | 'forDropdown' | 'leftSlot'>;
 
@@ -26,7 +26,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   const workspaces = useWorkspaces();
   const activeWorkspace = useActiveWorkspace();
   const activeWorkspaceId = activeWorkspace?.id ?? null;
-  const { mutate: createWorkspace } = useCreateWorkspace();
+  const createWorkspace = useCreateWorkspace();
   const { mutate: deleteSendHistory } = useDeleteSendHistory();
   const dialog = useDialog();
   const settings = useSettings();
@@ -54,6 +54,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         key: 'workspace-settings',
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
+        hotKeyAction: 'workspace_settings.show',
         onSelect: async () => {
           dialog.show({
             id: 'workspace-settings',
@@ -74,7 +75,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         key: 'create-workspace',
         label: 'New Workspace',
         leftSlot: <Icon icon="plus" />,
-        onSelect: createWorkspace,
+        onSelect: createWorkspace.show,
       },
     ];
 
@@ -83,7 +84,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     activeWorkspace?.id,
     activeWorkspaceId,
     dialog,
-    createWorkspace,
+    createWorkspace.show,
     deleteSendHistory,
     orderedWorkspaces,
   ]);

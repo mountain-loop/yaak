@@ -881,7 +881,8 @@ pub struct SyncState {
 
     pub model_id: String,
     pub checksum: String,
-    pub path: String,
+    pub rel_path: String,
+    pub sync_dir: String,
 }
 
 #[derive(Iden)]
@@ -897,7 +898,8 @@ pub enum SyncStateIden {
     Checksum,
     FlushedAt,
     ModelId,
-    Path,
+    RelPath,
+    SyncDir,
 }
 
 impl<'s> TryFrom<&Row<'s>> for SyncState {
@@ -913,7 +915,8 @@ impl<'s> TryFrom<&Row<'s>> for SyncState {
             flushed_at: r.get("flushed_at")?,
             checksum: r.get("checksum")?,
             model_id: r.get("model_id")?,
-            path: r.get("path")?,
+            sync_dir: r.get("sync_dir")?,
+            rel_path: r.get("rel_path")?,
         })
     }
 }

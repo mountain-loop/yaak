@@ -14,7 +14,8 @@ CREATE TABLE sync_states
     flushed_at   DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
     checksum     TEXT                               NOT NULL,
     model_id     TEXT                               NOT NULL,
-    path         TEXT                               NOT NULL,
+    sync_dir     TEXT                               NOT NULL,
+    rel_path     TEXT                               NOT NULL,
 
     UNIQUE (workspace_id, model_id)
 );

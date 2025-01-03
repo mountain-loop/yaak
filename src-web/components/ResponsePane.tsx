@@ -105,7 +105,7 @@ export const ResponsePane = memo(function ResponsePane({
     >
       {activeResponse == null ? (
         <HotKeyList
-          hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'urlBar.focus']}
+          hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'url_bar.focus']}
         />
       ) : (
         <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">

@@ -48,22 +48,23 @@ use yaak_models::models::{
     ModelType, Plugin, Settings, Workspace,
 };
 use yaak_models::queries::{
-    cancel_pending_grpc_connections, cancel_pending_responses, create_default_http_response,
-    delete_all_grpc_connections, delete_all_grpc_connections_for_workspace,
-    delete_all_http_responses_for_request, delete_all_http_responses_for_workspace,
-    delete_cookie_jar, delete_environment, delete_folder, delete_grpc_connection,
-    delete_grpc_request, delete_http_request, delete_http_response, delete_plugin,
-    delete_workspace, duplicate_folder, duplicate_grpc_request, duplicate_http_request,
-    ensure_base_environment, generate_id, generate_model_id, get_base_environment, get_cookie_jar,
-    get_environment, get_folder, get_grpc_connection, get_grpc_request, get_http_request,
-    get_http_response, get_key_value_raw, get_or_create_settings, get_plugin, get_workspace,
-    get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
-    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
-    list_http_responses_for_request, list_http_responses_for_workspace, list_key_values_raw,
-    list_plugins, list_workspaces, set_key_value_raw, update_response_if_id, update_settings,
-    upsert_cookie_jar, upsert_environment, upsert_folder, upsert_grpc_connection,
-    upsert_grpc_event, upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
-    UpdateSource, WorkspaceExportResources,
+    batch_upsert, cancel_pending_grpc_connections, cancel_pending_responses,
+    create_default_http_response, delete_all_grpc_connections,
+    delete_all_grpc_connections_for_workspace, delete_all_http_responses_for_request,
+    delete_all_http_responses_for_workspace, delete_cookie_jar, delete_environment, delete_folder,
+    delete_grpc_connection, delete_grpc_request, delete_http_request, delete_http_response,
+    delete_plugin, delete_workspace, duplicate_folder, duplicate_grpc_request,
+    duplicate_http_request, ensure_base_environment, generate_id, generate_model_id,
+    get_base_environment, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
+    get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
+    get_or_create_settings, get_plugin, get_workspace, get_workspace_export_resources,
+    list_cookie_jars, list_environments, list_folders, list_grpc_connections_for_workspace,
+    list_grpc_events, list_grpc_requests, list_http_requests, list_http_responses_for_request,
+    list_http_responses_for_workspace, list_key_values_raw, list_plugins, list_workspaces,
+    set_key_value_raw, update_response_if_id, update_settings, upsert_cookie_jar,
+    upsert_environment, upsert_folder, upsert_grpc_connection, upsert_grpc_event,
+    upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace, BatchUpsertResult,
+    UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpRequestActionRequest, FilterResponse, FindHttpResponsesResponse,
@@ -571,7 +572,7 @@ async fn cmd_grpc_go<R: Runtime>(
                     .unwrap();
                 }
                 None => {
-                    // Server streaming doesn't return initial message
+                    // Server streaming doesn't return the initial message
                 }
             }
 
@@ -826,7 +827,7 @@ async fn cmd_import_data<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
     file_path: &str,
-) -> Result<WorkspaceExportResources, String> {
+) -> Result<BatchUpsertResult, String> {
     let file = read_to_string(file_path)
         .await
         .unwrap_or_else(|_| panic!("Unable to read file {}", file_path));
@@ -834,7 +835,6 @@ async fn cmd_import_data<R: Runtime>(
     let (import_result, plugin_name) =
         plugin_manager.import_data(&window, file_contents).await.map_err(|e| e.to_string())?;
 
-    let mut imported_resources = WorkspaceExportResources::default();
     let mut id_map: BTreeMap<String, String> = BTreeMap::new();
 
     fn maybe_gen_id(id: &str, model: ModelType, ids: &mut BTreeMap<String, String>) -> String {
@@ -865,96 +865,68 @@ async fn cmd_import_data<R: Runtime>(
 
     let resources = import_result.resources;
 
-    for mut v in resources.workspaces {
-        v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-        let x =
-            upsert_workspace(&window, v, &UpdateSource::Window).await.map_err(|e| e.to_string())?;
-        imported_resources.workspaces.push(x.clone());
-    }
-    info!("Imported {} workspaces", imported_resources.workspaces.len());
+    let workspaces: Vec<Workspace> = resources
+        .workspaces
+        .into_iter()
+        .map(|mut v| {
+            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v
+        })
+        .collect();
 
-    // Environments can foreign-key to themselves, so we need to import from
-    // the top of the tree to the bottom to avoid foreign key conflicts.
-    // We do this by looping until we've imported them all, only importing if:
-    //  - The parent has been imported
-    //  - The environment hasn't already been imported
-    // The loop exits when imported.len == to_import.len
-    while imported_resources.environments.len() < resources.environments.len() {
-        for mut v in resources.environments.clone() {
+    let environments: Vec<Environment> = resources
+        .environments
+        .into_iter()
+        .map(|mut v| {
             v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeEnvironment, &mut id_map);
             v.workspace_id =
                 maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
             v.environment_id =
                 maybe_gen_id_opt(v.environment_id, ModelType::TypeEnvironment, &mut id_map);
-            if let Some(fid) = v.environment_id.clone() {
-                let imported_parent = imported_resources.environments.iter().find(|f| f.id == fid);
-                if imported_parent.is_none() {
-                    continue;
-                }
-            }
-            if let Some(_) = imported_resources.environments.iter().find(|f| f.id == v.id) {
-                continue;
-            }
-            let x = upsert_environment(&window, v, &UpdateSource::Window)
-                .await
-                .map_err(|e| e.to_string())?;
-            imported_resources.environments.push(x.clone());
-        }
-    }
-    info!("Imported {} environments", imported_resources.environments.len());
+            v
+        })
+        .collect();
 
-    // Folders can foreign-key to themselves, so we need to import from
-    // the top of the tree to the bottom to avoid foreign key conflicts.
-    // We do this by looping until we've imported them all, only importing if:
-    //  - The parent folder has been imported
-    //  - The folder hasn't already been imported
-    // The loop exits when imported.len == to_import.len
-    while imported_resources.folders.len() < resources.folders.len() {
-        for mut v in resources.folders.clone() {
+    let folders: Vec<Folder> = resources
+        .folders
+        .into_iter()
+        .map(|mut v| {
             v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeFolder, &mut id_map);
             v.workspace_id =
                 maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
             v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
-            if let Some(fid) = v.folder_id.clone() {
-                let imported_parent = imported_resources.folders.iter().find(|f| f.id == fid);
-                if imported_parent.is_none() {
-                    continue;
-                }
-            }
-            if let Some(_) = imported_resources.folders.iter().find(|f| f.id == v.id) {
-                continue;
-            }
-            let x = upsert_folder(&window, v, &UpdateSource::Window)
-                .await
-                .map_err(|e| e.to_string())?;
-            imported_resources.folders.push(x.clone());
-        }
-    }
-    info!("Imported {} folders", imported_resources.folders.len());
+            v
+        })
+        .collect();
 
-    for mut v in resources.http_requests {
-        v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeHttpRequest, &mut id_map);
-        v.workspace_id =
-            maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-        v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
-        let x = upsert_http_request(&window, v, &UpdateSource::Window)
+    let http_requests: Vec<HttpRequest> = resources
+        .http_requests
+        .into_iter()
+        .map(|mut v| {
+            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeHttpRequest, &mut id_map);
+            v.workspace_id =
+                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
+            v
+        })
+        .collect();
+
+    let grpc_requests: Vec<GrpcRequest> = resources
+        .grpc_requests
+        .into_iter()
+        .map(|mut v| {
+            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeGrpcRequest, &mut id_map);
+            v.workspace_id =
+                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
+            v
+        })
+        .collect();
+
+    let upserted =
+        batch_upsert(&window, workspaces, environments, folders, http_requests, grpc_requests)
             .await
             .map_err(|e| e.to_string())?;
-        imported_resources.http_requests.push(x.clone());
-    }
-    info!("Imported {} http_requests", imported_resources.http_requests.len());
-
-    for mut v in resources.grpc_requests {
-        v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeGrpcRequest, &mut id_map);
-        v.workspace_id =
-            maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-        v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
-        let x = upsert_grpc_request(&window, v, &UpdateSource::Window)
-            .await
-            .map_err(|e| e.to_string())?;
-        imported_resources.grpc_requests.push(x.clone());
-    }
-    info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
 
     analytics::track_event(
         &window,
@@ -964,7 +936,7 @@ async fn cmd_import_data<R: Runtime>(
     )
     .await;
 
-    Ok(imported_resources)
+    Ok(upserted)
 }
 
 #[tauri::command]

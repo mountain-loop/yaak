@@ -18,6 +18,7 @@ use sea_query::{Cond, Expr, OnConflict, Order, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 
@@ -222,7 +223,6 @@ pub async fn upsert_workspace<R: Runtime>(
                 CurrentTimestamp.into(),
                 trimmed_name.into(),
                 workspace.description.into(),
-                workspace.setting_request_timeout.into(),
                 workspace.setting_follow_redirects.into(),
                 workspace.setting_request_timeout.into(),
                 workspace.setting_sync_dir.into(),
@@ -1787,13 +1787,18 @@ pub async fn get_sync_state_for_model<R: Runtime>(
 pub async fn list_sync_states_for_workspace<R: Runtime>(
     mgr: &impl Manager<R>,
     workspace_id: &str,
+    sync_dir: PathBuf,
 ) -> Result<Vec<SyncState>> {
     let dbm = &*mgr.state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
     let (sql, params) = Query::select()
         .from(SyncStateIden::Table)
         .column(Asterisk)
-        .cond_where(Expr::col(SyncStateIden::WorkspaceId).eq(workspace_id))
+        .cond_where(
+            Cond::all()
+                .add(Expr::col(SyncStateIden::WorkspaceId).eq(workspace_id))
+                .add(Expr::col(SyncStateIden::SyncDir).eq(sync_dir.to_string_lossy())),
+        )
         .build_rusqlite(SqliteQueryBuilder);
     let mut stmt = db.prepare(sql.as_str())?;
     let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
@@ -1822,7 +1827,8 @@ pub async fn upsert_sync_state<R: Runtime>(
             SyncStateIden::FlushedAt,
             SyncStateIden::Checksum,
             SyncStateIden::ModelId,
-            SyncStateIden::Path,
+            SyncStateIden::RelPath,
+            SyncStateIden::SyncDir,
         ])
         .values_panic([
             id.as_str().into(),
@@ -1832,7 +1838,8 @@ pub async fn upsert_sync_state<R: Runtime>(
             sync_state.flushed_at.into(),
             sync_state.checksum.into(),
             sync_state.model_id.into(),
-            sync_state.path.into(),
+            sync_state.rel_path.into(),
+            sync_state.sync_dir.into(),
         ])
         .on_conflict(
             OnConflict::columns(vec![SyncStateIden::WorkspaceId, SyncStateIden::ModelId])
@@ -1840,7 +1847,8 @@ pub async fn upsert_sync_state<R: Runtime>(
                     SyncStateIden::UpdatedAt,
                     SyncStateIden::FlushedAt,
                     SyncStateIden::Checksum,
-                    SyncStateIden::Path,
+                    SyncStateIden::RelPath,
+                    SyncStateIden::SyncDir,
                 ])
                 .to_owned(),
         )
@@ -1970,12 +1978,12 @@ pub struct WorkspaceExport {
     pub yaak_version: String,
     pub yaak_schema: i64,
     pub timestamp: NaiveDateTime,
-    pub resources: WorkspaceExportResources,
+    pub resources: BatchUpsertResult,
 }
 
 #[derive(Default, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
-pub struct WorkspaceExportResources {
+pub struct BatchUpsertResult {
     pub workspaces: Vec<Workspace>,
     pub environments: Vec<Environment>,
     pub folders: Vec<Folder>,
@@ -1983,9 +1991,69 @@ pub struct WorkspaceExportResources {
     pub grpc_requests: Vec<GrpcRequest>,
 }
 
-#[derive(Default, Debug, Deserialize, Serialize)]
-pub struct ImportResult {
-    pub resources: WorkspaceExportResources,
+pub async fn batch_upsert<R: Runtime>(
+    window: &WebviewWindow<R>,
+    workspaces: Vec<Workspace>,
+    environments: Vec<Environment>,
+    folders: Vec<Folder>,
+    http_requests: Vec<HttpRequest>,
+    grpc_requests: Vec<GrpcRequest>,
+) -> Result<BatchUpsertResult> {
+    let mut imported_resources = BatchUpsertResult::default();
+
+    for v in workspaces {
+        let x = upsert_workspace(&window, v, &UpdateSource::Window).await?;
+        imported_resources.workspaces.push(x.clone());
+    }
+    info!("Imported {} workspaces", imported_resources.workspaces.len());
+
+    while imported_resources.environments.len() < environments.len() {
+        for v in environments.clone() {
+            if let Some(fid) = v.environment_id.clone() {
+                let imported_parent = imported_resources.environments.iter().find(|f| f.id == fid);
+                if imported_parent.is_none() {
+                    continue;
+                }
+            }
+            if let Some(_) = imported_resources.environments.iter().find(|f| f.id == v.id) {
+                continue;
+            }
+            let x = upsert_environment(&window, v, &UpdateSource::Window).await?;
+            imported_resources.environments.push(x.clone());
+        }
+    }
+    info!("Imported {} environments", imported_resources.environments.len());
+
+    while imported_resources.folders.len() < folders.len() {
+        for v in folders.clone() {
+            if let Some(fid) = v.folder_id.clone() {
+                let imported_parent = imported_resources.folders.iter().find(|f| f.id == fid);
+                if imported_parent.is_none() {
+                    continue;
+                }
+            }
+            if let Some(_) = imported_resources.folders.iter().find(|f| f.id == v.id) {
+                continue;
+            }
+            let x = upsert_folder(&window, v, &UpdateSource::Window).await?;
+            imported_resources.folders.push(x.clone());
+        }
+    }
+    info!("Imported {} folders", imported_resources.folders.len());
+
+    for v in http_requests {
+        let x = upsert_http_request(&window, v, &UpdateSource::Window).await?;
+        imported_resources.http_requests.push(x.clone());
+    }
+    info!("Imported {} http_requests", imported_resources.http_requests.len());
+
+    for v in grpc_requests {
+        let x = upsert_grpc_request(&window, v, &UpdateSource::Window).await?;
+        imported_resources.grpc_requests.push(x.clone());
+    }
+    info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
+
+    Ok(imported_resources)
 }
 
 pub async fn get_workspace_export_resources<R: Runtime>(
@@ -1996,7 +2064,7 @@ pub async fn get_workspace_export_resources<R: Runtime>(
         yaak_version: mgr.package_info().version.clone().to_string(),
         yaak_schema: 2,
         timestamp: chrono::Utc::now().naive_utc(),
-        resources: WorkspaceExportResources {
+        resources: BatchUpsertResult {
             workspaces: Vec::new(),
             environments: Vec::new(),
             folders: Vec::new(),

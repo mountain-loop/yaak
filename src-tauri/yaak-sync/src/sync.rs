@@ -6,6 +6,7 @@ use log::{debug, warn};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
+use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak_models::models::{SyncState, Workspace};
@@ -28,10 +29,10 @@ impl Display for SyncOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             match self {
-                SyncOp::FsUpdate(m, _) => format!("DstUpdate({})", m.id()),
-                SyncOp::FsDelete(s, _) => format!("DstDelete({})", s.model_id),
-                SyncOp::DbUpdate(_, c) => format!("SrcUpdate({})", c.model.id()),
-                SyncOp::DbDelete(m, _) => format!("SrcDelete({})", m.id()),
+                SyncOp::FsUpdate(m, _) => format!("fs_update({})", m.id()),
+                SyncOp::FsDelete(s, _) => format!("fs_delete({})", s.model_id),
+                SyncOp::DbUpdate(_, c) => format!("db_update({})", c.model.id()),
+                SyncOp::DbDelete(m, _) => format!("db_delete({})", m.id()),
             }
             .as_str(),
         )
@@ -60,7 +61,7 @@ impl DbCandidate {
 #[derive(Debug, Clone)]
 struct FsCandidate {
     model: SyncModel,
-    path: PathBuf,
+    rel_path: PathBuf,
     checksum: String,
 }
 
@@ -69,11 +70,16 @@ pub(crate) async fn sync_fs<R: Runtime>(
     workspace_id: &str,
 ) -> Result<()> {
     let workspace = get_workspace(window, workspace_id).await?;
+    if let None = workspace.setting_sync_dir.to_owned() {
+        debug!("No syncing because sync dir is not configured");
+        return Ok(());
+    };
+
     let db_candidates = get_db_candidates(window, &workspace).await?;
     let fs_candidates = get_fs_candidates(&workspace)?;
     let sync_ops = compute_sync_ops(db_candidates, fs_candidates);
     let sync_state_ops = apply_sync_ops(window, &workspace, sync_ops).await?;
-    let result = apply_sync_state_ops(window, sync_state_ops).await;
+    let result = apply_sync_state_ops(window, &workspace, sync_state_ops).await;
 
     result
 }
@@ -84,7 +90,8 @@ async fn get_db_candidates<R: Runtime>(
 ) -> Result<Vec<DbCandidate>> {
     let workspace_id = workspace.id.as_str();
     let models = workspace_models(mgr, workspace).await;
-    let sync_states = list_sync_states_for_workspace(mgr, workspace_id).await?;
+    let sync_dir = get_workspace_sync_dir(workspace)?;
+    let sync_states = list_sync_states_for_workspace(mgr, workspace_id, sync_dir).await?;
 
     // 1. Add candidates for models (created/modified/unmodified)
     let mut candidates: Vec<DbCandidate> = models
@@ -126,6 +133,9 @@ fn get_fs_candidates(workspace: &Workspace) -> Result<Vec<FsCandidate>> {
         Some(d) => d,
     };
 
+    // Ensure the root directory exists
+    create_dir_all(dir.clone())?;
+
     let candidates = fs::read_dir(dir)?
         .filter_map(|dir_entry| {
             let dir_entry = dir_entry.ok()?;
@@ -150,8 +160,9 @@ fn get_fs_candidates(workspace: &Workspace) -> Result<Vec<FsCandidate>> {
                 return None;
             }
 
+            let rel_path = Path::new(&dir_entry.file_name()).to_path_buf();
             Some(FsCandidate {
-                path,
+                rel_path,
                 model,
                 checksum,
             })
@@ -274,14 +285,13 @@ async fn apply_sync_ops<R: Runtime>(
 enum SyncStateOp {
     Create {
         model_id: String,
-        workspace_id: String,
         checksum: String,
-        path: PathBuf,
+        rel_path: PathBuf,
     },
     Update {
         sync_state: SyncState,
         checksum: String,
-        path: PathBuf,
+        rel_path: PathBuf,
     },
     Delete(SyncState),
 }
@@ -294,25 +304,26 @@ async fn apply_sync_op<R: Runtime>(
 ) -> Result<SyncStateOp> {
     let sync_state_op = match op {
         SyncOp::FsUpdate(model, sync_state) => {
-            let path = prep_model_file_path(workspace, &model)?;
-            let (content, checksum) = model.to_file_contents(&path)?;
-            fs::write(&path, content)?;
+            let rel_path = derive_model_filename(&model);
+            let abs_path = derive_full_model_path(workspace, &model)?;
+            let (content, checksum) = model.to_file_contents(&rel_path)?;
+            fs::write(&abs_path, content)?;
             match sync_state.to_owned() {
                 None => SyncStateOp::Create {
-                    workspace_id: model.workspace_id(),
                     model_id: model.id(),
                     checksum,
-                    path,
+                    rel_path,
                 },
                 Some(sync_state) => SyncStateOp::Update {
                     sync_state,
                     checksum,
-                    path,
+                    rel_path,
                 },
             }
         }
         SyncOp::FsDelete(sync_state, Some(fs_candidate)) => {
-            fs::remove_file(&fs_candidate.path)?;
+            let abs_path = derive_full_model_path(workspace, &fs_candidate.model)?;
+            fs::remove_file(&abs_path)?;
             SyncStateOp::Delete(sync_state.to_owned())
         }
         SyncOp::FsDelete(sync_state, None) => SyncStateOp::Delete(sync_state.to_owned()),
@@ -320,15 +331,14 @@ async fn apply_sync_op<R: Runtime>(
             upsert_model(window, &fs_candidate.model).await?;
             match sync_state.to_owned() {
                 None => SyncStateOp::Create {
-                    workspace_id: fs_candidate.model.workspace_id(),
                     model_id: fs_candidate.model.id(),
                     checksum: fs_candidate.checksum.to_owned(),
-                    path: fs_candidate.path.to_owned(),
+                    rel_path: fs_candidate.rel_path.to_owned(),
                 },
                 Some(sync_state) => SyncStateOp::Update {
                     sync_state,
                     checksum: fs_candidate.checksum.to_owned(),
-                    path: fs_candidate.path.to_owned(),
+                    rel_path: fs_candidate.rel_path.to_owned(),
                 },
             }
         }
@@ -342,27 +352,33 @@ async fn apply_sync_op<R: Runtime>(
 }
 async fn apply_sync_state_ops<R: Runtime>(
     window: &WebviewWindow<R>,
+    workspace: &Workspace,
     ops: Vec<SyncStateOp>,
 ) -> Result<()> {
     for op in ops {
-        apply_sync_state_op(window, op).await?
+        apply_sync_state_op(window, workspace, op).await?
     }
     Ok(())
 }
 
-async fn apply_sync_state_op<R: Runtime>(window: &WebviewWindow<R>, op: SyncStateOp) -> Result<()> {
+async fn apply_sync_state_op<R: Runtime>(
+    window: &WebviewWindow<R>,
+    workspace: &Workspace,
+    op: SyncStateOp,
+) -> Result<()> {
+    let dir_path = get_workspace_sync_dir(workspace)?;
     match op {
         SyncStateOp::Create {
             checksum,
-            path,
+            rel_path,
             model_id,
-            workspace_id,
         } => {
             let sync_state = SyncState {
-                workspace_id,
+                workspace_id: workspace.to_owned().id,
                 model_id,
                 checksum,
-                path: path.to_str().unwrap().to_string(),
+                sync_dir: dir_path.to_str().unwrap().to_string(),
+                rel_path: rel_path.to_str().unwrap().to_string(),
                 flushed_at: Utc::now().naive_utc(),
                 ..Default::default()
             };
@@ -371,11 +387,12 @@ async fn apply_sync_state_op<R: Runtime>(window: &WebviewWindow<R>, op: SyncStat
         SyncStateOp::Update {
             sync_state,
             checksum,
-            path,
+            rel_path,
         } => {
             let sync_state = SyncState {
                 checksum,
-                path: path.to_str().unwrap().to_string(),
+                sync_dir: dir_path.to_str().unwrap().to_string(),
+                rel_path: rel_path.to_str().unwrap().to_string(),
                 flushed_at: Utc::now().naive_utc(),
                 ..sync_state
             };
@@ -389,21 +406,25 @@ async fn apply_sync_state_op<R: Runtime>(window: &WebviewWindow<R>, op: SyncStat
     Ok(())
 }
 
-fn prep_model_file_path(workspace: &Workspace, m: &SyncModel) -> Result<PathBuf> {
-    let dir = match workspace.setting_sync_dir.to_owned() {
-        Some(d) => d,
-        None => {
-            return Err(WorkspaceSyncNotConfigured(m.workspace_id()));
-        }
-    };
+fn get_workspace_sync_dir(workspace: &Workspace) -> Result<PathBuf> {
+    let workspace_id = workspace.to_owned().id;
+    match workspace.setting_sync_dir.to_owned() {
+        Some(d) => Ok(Path::new(&d).to_path_buf()),
+        None => Err(WorkspaceSyncNotConfigured(workspace_id)),
+    }
+}
 
-    let dir = Path::new(&dir);
-    let full_path = dir.join(format!("{}.yaml", m.id()));
-    let parent_dir = full_path.parent().unwrap();
+fn derive_full_model_path(workspace: &Workspace, m: &SyncModel) -> Result<PathBuf> {
+    let dir = get_workspace_sync_dir(workspace)?;
+    Ok(dir.join(derive_model_filename(m)))
+}
+
+fn derive_model_filename(m: &SyncModel) -> PathBuf {
+    let rel = format!("{}.yaml", m.id());
+    let rel = Path::new(&rel).to_path_buf();
 
     // Ensure parent dir exists
-    fs::create_dir_all(parent_dir)?;
-    Ok(full_path)
+    rel
 }
 
 async fn upsert_model<R: Runtime>(window: &WebviewWindow<R>, m: &SyncModel) -> Result<()> {

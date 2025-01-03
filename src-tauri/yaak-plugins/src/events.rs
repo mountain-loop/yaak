@@ -296,7 +296,7 @@ pub struct TemplateFunction {
     pub name: String,
     #[ts(optional)]
     pub description: Option<String>,
-    
+
     /// Also support alternative names. This is useful for not breaking existing
     /// tags when changing the `name` property
     #[ts(optional)]
@@ -321,15 +321,15 @@ pub enum TemplateFunctionArg {
 pub struct TemplateFunctionBaseArg {
     /// The name of the argument. Should be `camelCase` format
     pub name: String,
-    
+
     /// Whether the user must fill in the argument
     #[ts(optional)]
     pub optional: Option<bool>,
-    
-    /// The label of the input 
+
+    /// The label of the input
     #[ts(optional)]
     pub label: Option<String>,
-    
+
     /// The default value
     #[ts(optional)]
     pub default_value: Option<String>,
@@ -341,7 +341,7 @@ pub struct TemplateFunctionBaseArg {
 pub struct TemplateFunctionTextArg {
     #[serde(flatten)]
     pub base: TemplateFunctionBaseArg,
-    
+
     /// Placeholder for the text input
     #[ts(optional)]
     pub placeholder: Option<String>,
@@ -361,22 +361,22 @@ pub struct TemplateFunctionHttpRequestArg {
 pub struct TemplateFunctionFileArg {
     #[serde(flatten)]
     pub base: TemplateFunctionBaseArg,
-    
+
     /// The title of the file selection window
     pub title: String,
-    
+
     /// Allow selecting multiple files
     #[ts(optional)]
     pub multiple: Option<bool>,
-    
+
     // Select a directory, not a file
     #[ts(optional)]
     pub directory: Option<bool>,
-    
+
     // Default file path for selection dialog
     #[ts(optional)]
     pub default_path: Option<String>,
-    
+
     // Specify to only allow selection of certain file extensions
     #[ts(optional)]
     pub filters: Option<Vec<OpenFileFilter>>,
@@ -397,7 +397,7 @@ pub struct OpenFileFilter {
 pub struct TemplateFunctionSelectArg {
     #[serde(flatten)]
     pub base: TemplateFunctionBaseArg,
-    
+
     /// The options that will be available in the select input
     pub options: Vec<TemplateFunctionSelectOption>,
 }

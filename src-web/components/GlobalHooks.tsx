@@ -1,5 +1,6 @@
 import { emit } from '@tauri-apps/api/event';
 import type { PromptTextRequest, PromptTextResponse } from '@yaakapp-internal/plugins';
+import { useSyncActiveWorkspaceDir } from '@yaakapp-internal/sync';
 import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
@@ -7,7 +8,7 @@ import {
 import { useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
-import { useSubscribeActiveWorkspaceId } from '../hooks/useActiveWorkspace';
+import { useActiveWorkspace, useSubscribeActiveWorkspaceId } from '../hooks/useActiveWorkspace';
 import { useActiveWorkspaceChangedToast } from '../hooks/useActiveWorkspaceChangedToast';
 import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
 import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
@@ -48,7 +49,6 @@ export function GlobalHooks() {
   useSubscribeRecentEnvironments();
   useSubscribeRecentCookieJars();
 
-  // Include here so they always update, even if no component references them
   useRecentWorkspaces();
   useRecentEnvironments();
   useRecentCookieJars();
@@ -59,6 +59,9 @@ export function GlobalHooks() {
   useNotificationToast();
   useActiveWorkspaceChangedToast();
   useEnsureActiveCookieJar();
+
+  const activeWorkspace = useActiveWorkspace();
+  useSyncActiveWorkspaceDir(activeWorkspace);
 
   const activeRequest = useActiveRequest();
   const duplicateHttpRequest = useDuplicateHttpRequest({

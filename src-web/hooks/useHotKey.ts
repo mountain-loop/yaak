@@ -7,9 +7,13 @@ import { useOsInfo } from './useOsInfo';
 const HOLD_KEYS = ['Shift', 'Control', 'Command', 'Alt', 'Meta'];
 
 export type HotkeyAction =
+  | 'app.zoom_in'
+  | 'app.zoom_out'
+  | 'app.zoom_reset'
+  | 'command_palette.toggle'
   | 'environmentEditor.toggle'
-  | 'hotkeys.showHelp'
   | 'grpc_request.send'
+  | 'hotkeys.showHelp'
   | 'http_request.create'
   | 'http_request.duplicate'
   | 'http_request.send'
@@ -18,13 +22,14 @@ export type HotkeyAction =
   | 'request_switcher.toggle'
   | 'settings.show'
   | 'sidebar.focus'
-  | 'urlBar.focus'
-  | 'command_palette.toggle'
-  | 'app.zoom_in'
-  | 'app.zoom_out'
-  | 'app.zoom_reset';
+  | 'url_bar.focus'
+  | 'workspace_settings.show';
 
 const hotkeys: Record<HotkeyAction, string[]> = {
+  'app.zoom_in': ['CmdCtrl+='],
+  'app.zoom_out': ['CmdCtrl+-'],
+  'app.zoom_reset': ['CmdCtrl+0'],
+  'command_palette.toggle': ['CmdCtrl+k'],
   'environmentEditor.toggle': ['CmdCtrl+Shift+e'],
   'grpc_request.send': ['CmdCtrl+Enter', 'CmdCtrl+r'],
   'hotkeys.showHelp': ['CmdCtrl+Shift+/'],
@@ -36,14 +41,15 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'request_switcher.toggle': ['CmdCtrl+p'],
   'settings.show': ['CmdCtrl+,'],
   'sidebar.focus': ['CmdCtrl+b'],
-  'urlBar.focus': ['CmdCtrl+l'],
-  'command_palette.toggle': ['CmdCtrl+k'],
-  'app.zoom_in': ['CmdCtrl+='],
-  'app.zoom_out': ['CmdCtrl+-'],
-  'app.zoom_reset': ['CmdCtrl+0'],
+  'url_bar.focus': ['CmdCtrl+l'],
+  'workspace_settings.show': ['CmdCtrl+Shift+,'],
 };
 
 const hotkeyLabels: Record<HotkeyAction, string> = {
+  'app.zoom_in': 'Zoom In',
+  'app.zoom_out': 'Zoom Out',
+  'app.zoom_reset': 'Zoom to Actual Size',
+  'command_palette.toggle': 'Toggle Command Palette',
   'environmentEditor.toggle': 'Edit Environments',
   'grpc_request.send': 'Send Message',
   'hotkeys.showHelp': 'Show Keyboard Shortcuts',
@@ -55,11 +61,8 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'request_switcher.toggle': 'Toggle Request Switcher',
   'settings.show': 'Open Settings',
   'sidebar.focus': 'Focus or Toggle Sidebar',
-  'urlBar.focus': 'Focus URL',
-  'command_palette.toggle': 'Toggle Command Palette',
-  'app.zoom_in': 'Zoom In',
-  'app.zoom_out': 'Zoom Out',
-  'app.zoom_reset': 'Zoom to Actual Size',
+  'url_bar.focus': 'Focus URL',
+  'workspace_settings.show': 'Open Workspace Settings',
 };
 
 export const hotkeyActions: HotkeyAction[] = Object.keys(hotkeys) as (keyof typeof hotkeys)[];
@@ -165,7 +168,7 @@ export function useHotKeyLabel(action: HotkeyAction): string {
 
 export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {
   const osInfo = useOsInfo();
-  const trigger = action != null ? hotkeys[action]?.[0] ?? null : null;
+  const trigger = action != null ? (hotkeys[action]?.[0] ?? null) : null;
   if (trigger == null || osInfo == null) {
     return null;
   }

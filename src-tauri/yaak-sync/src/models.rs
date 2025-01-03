@@ -40,8 +40,8 @@ impl SyncModel {
         }
     }
 
-    pub fn to_file_contents(&self, file_path: &Path) -> Result<(Vec<u8>, String)> {
-        let ext = file_path.extension().unwrap_or_default();
+    pub fn to_file_contents(&self, rel_path: &Path) -> Result<(Vec<u8>, String)> {
+        let ext = rel_path.extension().unwrap_or_default();
         let content = if ext == "yaml" || ext == "yml" {
             serde_yaml::to_string(self)?
         } else {

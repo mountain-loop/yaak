@@ -21,7 +21,11 @@ export function useSyncWorkspaceChildModels() {
 async function sync() {
   const workspaceId = getActiveWorkspaceId();
   const args = { workspaceId };
+
+  if (workspaceId == null) return;
+
   console.log('Syncing model stores', args);
+
   // Set the things we need first, first
   jotaiStore.set(httpRequestsAtom, await invokeCmd('cmd_list_http_requests', args));
   jotaiStore.set(grpcRequestsAtom, await invokeCmd('cmd_list_grpc_requests', args));

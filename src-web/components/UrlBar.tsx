@@ -49,7 +49,7 @@ export const UrlBar = memo(function UrlBar({
   const inputRef = useRef<EditorView>(null);
   const [isFocused, setIsFocused] = useState<boolean>(false);
 
-  useHotKey('urlBar.focus', () => {
+  useHotKey('url_bar.focus', () => {
     const head = inputRef.current?.state.doc.length ?? 0;
     inputRef.current?.dispatch({
       selection: { anchor: 0, head },
