@@ -2,7 +2,8 @@
 
 Default permissions for the plugin
 
-- `allow-sync`
+- `allow-calculate`
+- `allow-apply`
 
 ## Permission Table
 
@@ -61,6 +62,58 @@ Enables the add command without any pre-configured scope.
 <td>
 
 Denies the add command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-sync:allow-apply`
+
+</td>
+<td>
+
+Enables the apply command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-sync:deny-apply`
+
+</td>
+<td>
+
+Denies the apply command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-sync:allow-calculate`
+
+</td>
+<td>
+
+Enables the calculate command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-sync:deny-calculate`
+
+</td>
+<td>
+
+Denies the calculate command without any pre-configured scope.
 
 </td>
 </tr>

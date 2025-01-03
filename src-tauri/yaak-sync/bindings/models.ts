@@ -18,4 +18,6 @@ export type HttpUrlParameter = { enabled?: boolean, name: string, value: string,
 
 export type SyncModel = { "type": "workspace" } & Workspace | { "type": "environment" } & Environment | { "type": "folder" } & Folder | { "type": "http_request" } & HttpRequest | { "type": "grpc_request" } & GrpcRequest;
 
+export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, relPath: string, syncDir: string, };
+
 export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, settingSyncDir: string | null, };

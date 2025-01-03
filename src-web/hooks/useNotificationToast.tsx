@@ -1,8 +1,8 @@
 import { open } from '@tauri-apps/plugin-shell';
 import { Button } from '../components/core/Button';
-import { useToast } from './useToast';
 import { invokeCmd } from '../lib/tauri';
 import { useListenToTauriEvent } from './useListenToTauriEvent';
+import { useToast } from './useToast';
 
 export function useNotificationToast() {
   const toast = useToast();
@@ -29,14 +29,14 @@ export function useNotificationToast() {
       message: payload.message,
       color: 'custom',
       onClose: () => markRead(payload.id),
-      action:
+      action: ({ hide }) =>
         actionLabel && actionUrl ? (
           <Button
             size="xs"
             color="secondary"
             className="mr-auto min-w-[5rem]"
             onClick={() => {
-              toast.hide(payload.id);
+              hide();
               return open(actionUrl);
             }}
           >

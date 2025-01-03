@@ -1,12 +1,16 @@
+import { applySync, calculateSync } from '@yaakapp-internal/sync';
 import classNames from 'classnames';
 import { memo, useCallback, useMemo } from 'react';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
+import { useAlert } from '../hooks/useAlert';
+import { useConfirm } from '../hooks/useConfirm';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
 import { useDialog } from '../hooks/useDialog';
 import { useOpenWorkspace } from '../hooks/useOpenWorkspace';
 import { useSettings } from '../hooks/useSettings';
 import { useWorkspaces } from '../hooks/useWorkspaces';
+import { pluralizeCount } from '../lib/pluralize';
 import { getWorkspace } from '../lib/store';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
@@ -25,10 +29,11 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
 }: Props) {
   const workspaces = useWorkspaces();
   const activeWorkspace = useActiveWorkspace();
-  const activeWorkspaceId = activeWorkspace?.id ?? null;
   const createWorkspace = useCreateWorkspace();
   const { mutate: deleteSendHistory } = useDeleteSendHistory();
   const dialog = useDialog();
+  const confirm = useConfirm();
+  const alert = useAlert();
   const settings = useSettings();
   const openWorkspace = useOpenWorkspace();
   const openWorkspaceNewWindow = settings?.openWorkspaceNewWindow ?? null;
@@ -46,7 +51,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       key: w.id,
       label: w.name,
       value: w.id,
-      leftSlot: w.id === activeWorkspaceId ? <Icon icon="check" /> : <Icon icon="empty" />,
+      leftSlot: w.id === activeWorkspace?.id ? <Icon icon="check" /> : <Icon icon="empty" />,
     }));
 
     const extraItems: DropdownItem[] = [
@@ -62,6 +67,46 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
             size: 'md',
             render: () => <WorkspaceSettingsDialog workspaceId={activeWorkspace?.id ?? null} />,
           });
+        },
+      },
+      {
+        key: 'sync',
+        label: 'Sync Workspace',
+        leftSlot: <Icon icon="folder_sync" />,
+        hidden: !activeWorkspace?.settingSyncDir,
+        onSelect: async () => {
+          if (activeWorkspace == null) return;
+
+          const ops = await calculateSync(activeWorkspace);
+          if (ops.length === 0) {
+            alert({
+              id: 'no-sync-changes',
+              title: 'No Changes',
+              body: 'There were no changes detected',
+            });
+            return;
+          }
+
+          const dbChanges = ops.filter((o) => o.type.startsWith('db'));
+
+          if (dbChanges.length === 0) {
+            await applySync(activeWorkspace, ops);
+          }
+
+          const confirmed = await confirm({
+            id: 'commit-sync',
+            title: 'Filesystem Changes',
+            confirmText: 'Apply Changes',
+            description: (
+              <p>
+                <strong>{pluralizeCount('filesystem change', dbChanges.length)} detected!</strong>
+                Do you want to update the workspace to match?
+              </p>
+            ),
+          });
+          if (confirmed) {
+            await applySync(activeWorkspace, ops);
+          }
         },
       },
       {
@@ -81,12 +126,13 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
 
     return { workspaceItems, extraItems };
   }, [
-    activeWorkspace?.id,
-    activeWorkspaceId,
-    dialog,
-    createWorkspace,
-    deleteSendHistory,
     orderedWorkspaces,
+    activeWorkspace,
+    deleteSendHistory,
+    createWorkspace,
+    dialog,
+    confirm,
+    alert,
   ]);
 
   const handleChange = useCallback(
@@ -116,7 +162,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       items={workspaceItems}
       extraItems={extraItems}
       onChange={handleChange}
-      value={activeWorkspaceId}
+      value={activeWorkspace?.id ?? null}
     >
       <Button
         size="sm"

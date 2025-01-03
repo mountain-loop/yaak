@@ -1,4 +1,4 @@
-use crate::commands::sync;
+use crate::commands::{apply, calculate};
 use tauri::{
     generate_handler,
     plugin::{Builder, TauriPlugin},
@@ -7,9 +7,9 @@ use tauri::{
 
 mod commands;
 mod error;
-mod sync;
 mod models;
+mod sync;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    Builder::new("yaak-sync").invoke_handler(generate_handler![sync]).build()
+    Builder::new("yaak-sync").invoke_handler(generate_handler![calculate, apply]).build()
 }

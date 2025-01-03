@@ -116,7 +116,7 @@ export function updateModelList<T extends AnyModel>(model: T) {
   // Mark these models as DESC instead of ASC
   const pushToFront = model.model === 'http_response' || model.model === 'grpc_connection';
 
-  return (current: T[] | undefined): T[] => {
+  return (current: T[] | undefined | null): T[] => {
     const index = current?.findIndex((v) => modelsEq(v, model)) ?? -1;
     const existingModel = current?.[index];
     if (existingModel && deepEqual(existingModel, model)) {

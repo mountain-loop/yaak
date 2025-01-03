@@ -3,12 +3,14 @@ use crate::error::Result;
 use crate::models::SyncModel;
 use chrono::Utc;
 use log::{debug, warn};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 use tauri::{Manager, Runtime, WebviewWindow};
+use ts_rs::TS;
 use yaak_models::models::{SyncState, Workspace};
 use yaak_models::queries::{
     delete_environment, delete_folder, delete_grpc_request, delete_http_request, delete_sync_state,
@@ -17,22 +19,44 @@ use yaak_models::queries::{
     upsert_http_request, upsert_sync_state, upsert_workspace, UpdateSource,
 };
 
-#[derive(Debug, Clone)]
-enum SyncOp {
-    FsUpdate(SyncModel, Option<SyncState>),
-    FsDelete(SyncState, Option<FsCandidate>),
-    DbUpdate(Option<SyncState>, FsCandidate),
-    DbDelete(SyncModel, SyncState),
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type")]
+#[ts(export, export_to = "sync.ts")]
+pub(crate) enum SyncOp {
+    FsCreate {
+        model: SyncModel,
+    },
+    FsUpdate {
+        model: SyncModel,
+        state: SyncState,
+    },
+    FsDelete {
+        state: SyncState,
+        fs: Option<FsCandidate>,
+    },
+    DbCreate {
+        fs: FsCandidate,
+    },
+    DbUpdate {
+        state: SyncState,
+        fs: FsCandidate,
+    },
+    DbDelete {
+        model: SyncModel,
+        state: SyncState,
+    },
 }
 
 impl Display for SyncOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             match self {
-                SyncOp::FsUpdate(m, _) => format!("fs_update({})", m.id()),
-                SyncOp::FsDelete(s, _) => format!("fs_delete({})", s.model_id),
-                SyncOp::DbUpdate(_, c) => format!("db_update({})", c.model.id()),
-                SyncOp::DbDelete(m, _) => format!("db_delete({})", m.id()),
+                SyncOp::FsCreate { model } => format!("fs_create({})", model.id()),
+                SyncOp::FsUpdate { model, .. } => format!("fs_update({})", model.id()),
+                SyncOp::FsDelete { state, .. } => format!("fs_delete({})", state.model_id),
+                SyncOp::DbCreate { fs } => format!("db_create({})", fs.model.id()),
+                SyncOp::DbUpdate { fs, .. } => format!("db_update({})", fs.model.id()),
+                SyncOp::DbDelete { model, .. } => format!("db_delete({})", model.id()),
             }
             .as_str(),
         )
@@ -58,26 +82,34 @@ impl DbCandidate {
     }
 }
 
-#[derive(Debug, Clone)]
-struct FsCandidate {
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", tag = "type")]
+#[ts(export, export_to = "sync.ts")]
+pub(crate) struct FsCandidate {
     model: SyncModel,
     rel_path: PathBuf,
     checksum: String,
 }
 
-pub(crate) async fn sync_fs<R: Runtime>(
+pub(crate) async fn calculate_sync<R: Runtime>(
+    window: &WebviewWindow<R>,
+    workspace_id: &str,
+) -> Result<Vec<SyncOp>> {
+    let workspace = get_workspace(window, workspace_id).await?;
+    let db_candidates = get_db_candidates(window, &workspace).await?;
+    let fs_candidates = get_fs_candidates(&workspace)?;
+    let sync_ops = compute_sync_ops(db_candidates, fs_candidates);
+
+    Ok(sync_ops)
+}
+
+pub(crate) async fn apply_sync<R: Runtime>(
     window: &WebviewWindow<R>,
     workspace_id: &str,
 ) -> Result<()> {
     let workspace = get_workspace(window, workspace_id).await?;
-    if let None = workspace.setting_sync_dir.to_owned() {
-        debug!("No syncing because sync dir is not configured");
-        return Ok(());
-    };
+    let sync_ops = calculate_sync(window, workspace_id).await?;
 
-    let db_candidates = get_db_candidates(window, &workspace).await?;
-    let fs_candidates = get_fs_candidates(&workspace)?;
-    let sync_ops = compute_sync_ops(db_candidates, fs_candidates);
     let sync_state_ops = apply_sync_ops(window, &workspace, sync_ops).await?;
     let result = apply_sync_state_ops(window, &workspace, sync_state_ops).await;
 
@@ -193,43 +225,65 @@ fn compute_sync_ops(
         .filter_map(|k| {
             let op = match (db_map.get(k), fs_map.get(k)) {
                 (None, None) => return None, // Can never happen
-                (None, Some(fs)) => SyncOp::DbUpdate(None, fs.to_owned()),
-                (Some(DbCandidate::Unmodified(model, sync_state)), None) => {
-                    SyncOp::DbDelete(model.to_owned(), sync_state.to_owned())
-                }
-                (Some(DbCandidate::Modified(model, sync_state)), None) => {
-                    SyncOp::FsUpdate(model.to_owned(), Some(sync_state.to_owned()))
-                }
-                (Some(DbCandidate::Added(model)), None) => SyncOp::FsUpdate(model.to_owned(), None),
+                (None, Some(fs)) => SyncOp::DbCreate { fs: fs.to_owned() },
+                (Some(DbCandidate::Unmodified(model, sync_state)), None) => SyncOp::DbDelete {
+                    model: model.to_owned(),
+                    state: sync_state.to_owned(),
+                },
+                (Some(DbCandidate::Modified(model, sync_state)), None) => SyncOp::FsUpdate {
+                    model: model.to_owned(),
+                    state: sync_state.to_owned(),
+                },
+                (Some(DbCandidate::Added(model)), None) => SyncOp::FsCreate {
+                    model: model.to_owned(),
+                },
                 (Some(DbCandidate::Deleted(sync_state)), None) => {
                     // Already deleted on FS, but sending it so the SyncState gets dealt with
-                    SyncOp::FsDelete(sync_state.to_owned(), None)
+                    SyncOp::FsDelete {
+                        state: sync_state.to_owned(),
+                        fs: None,
+                    }
                 }
                 (Some(DbCandidate::Unmodified(_, sync_state)), Some(fs_candidate)) => {
                     if sync_state.checksum == fs_candidate.checksum {
                         return None;
                     } else {
-                        SyncOp::DbUpdate(Some(sync_state.to_owned()), fs_candidate.to_owned())
+                        SyncOp::DbUpdate {
+                            state: sync_state.to_owned(),
+                            fs: fs_candidate.to_owned(),
+                        }
                     }
                 }
                 (Some(DbCandidate::Modified(model, sync_state)), Some(fs_candidate)) => {
                     if sync_state.checksum == fs_candidate.checksum {
-                        SyncOp::FsUpdate(model.to_owned(), Some(sync_state.to_owned()))
+                        SyncOp::FsUpdate {
+                            model: model.to_owned(),
+                            state: sync_state.to_owned(),
+                        }
                     } else if model.updated_at() < fs_candidate.model.updated_at() {
                         // CONFLICT! Write to DB if fs model is newer
-                        SyncOp::DbUpdate(Some(sync_state.to_owned()), fs_candidate.to_owned())
+                        SyncOp::DbUpdate {
+                            state: sync_state.to_owned(),
+                            fs: fs_candidate.to_owned(),
+                        }
                     } else {
                         // CONFLICT! Write to FS if db model is newer
-                        SyncOp::FsUpdate(model.to_owned(), Some(sync_state.to_owned()))
+                        SyncOp::FsUpdate {
+                            model: model.to_owned(),
+                            state: sync_state.to_owned(),
+                        }
                     }
                 }
                 (Some(DbCandidate::Added(model)), Some(_)) => {
                     // This would be super rare, so let's follow the user's intention
-                    SyncOp::FsUpdate(model.to_owned(), None)
+                    SyncOp::FsCreate {
+                        model: model.to_owned(),
+                    }
                 }
-                (Some(DbCandidate::Deleted(sync_state)), Some(fs_candidate)) => {
-                    SyncOp::FsDelete(sync_state.to_owned(), Some(fs_candidate.to_owned()))
-                }
+                (Some(DbCandidate::Deleted(sync_state)), Some(fs_candidate)) => SyncOp::FsDelete {
+                    state: sync_state.to_owned(),
+                    fs: Some(fs_candidate.to_owned()),
+                },
             };
             Some(op)
         })
@@ -289,11 +343,13 @@ enum SyncStateOp {
         rel_path: PathBuf,
     },
     Update {
-        sync_state: SyncState,
+        state: SyncState,
         checksum: String,
         rel_path: PathBuf,
     },
-    Delete(SyncState),
+    Delete {
+        state: SyncState,
+    },
 }
 
 /// Flush a DB model to the filesystem
@@ -303,48 +359,64 @@ async fn apply_sync_op<R: Runtime>(
     op: &SyncOp,
 ) -> Result<SyncStateOp> {
     let sync_state_op = match op {
-        SyncOp::FsUpdate(model, sync_state) => {
+        SyncOp::FsCreate { model } => {
             let rel_path = derive_model_filename(&model);
             let abs_path = derive_full_model_path(workspace, &model)?;
             let (content, checksum) = model.to_file_contents(&rel_path)?;
             fs::write(&abs_path, content)?;
-            match sync_state.to_owned() {
-                None => SyncStateOp::Create {
-                    model_id: model.id(),
-                    checksum,
-                    rel_path,
-                },
-                Some(sync_state) => SyncStateOp::Update {
-                    sync_state,
-                    checksum,
-                    rel_path,
-                },
+            SyncStateOp::Create {
+                model_id: model.id(),
+                checksum,
+                rel_path,
             }
         }
-        SyncOp::FsDelete(sync_state, Some(fs_candidate)) => {
-            let abs_path = derive_full_model_path(workspace, &fs_candidate.model)?;
-            fs::remove_file(&abs_path)?;
-            SyncStateOp::Delete(sync_state.to_owned())
-        }
-        SyncOp::FsDelete(sync_state, None) => SyncStateOp::Delete(sync_state.to_owned()),
-        SyncOp::DbUpdate(sync_state, fs_candidate) => {
-            upsert_model(window, &fs_candidate.model).await?;
-            match sync_state.to_owned() {
-                None => SyncStateOp::Create {
-                    model_id: fs_candidate.model.id(),
-                    checksum: fs_candidate.checksum.to_owned(),
-                    rel_path: fs_candidate.rel_path.to_owned(),
-                },
-                Some(sync_state) => SyncStateOp::Update {
-                    sync_state,
-                    checksum: fs_candidate.checksum.to_owned(),
-                    rel_path: fs_candidate.rel_path.to_owned(),
-                },
+        SyncOp::FsUpdate { model, state } => {
+            let rel_path = derive_model_filename(&model);
+            let abs_path = derive_full_model_path(workspace, &model)?;
+            let (content, checksum) = model.to_file_contents(&rel_path)?;
+            fs::write(&abs_path, content)?;
+            SyncStateOp::Update {
+                state: state.to_owned(),
+                checksum,
+                rel_path,
             }
         }
-        SyncOp::DbDelete(model, sync_state) => {
+        SyncOp::FsDelete {
+            state,
+            fs: fs_candidate,
+        } => match fs_candidate {
+            None => SyncStateOp::Delete {
+                state: state.to_owned(),
+            },
+            Some(fs_candidate) => {
+                let abs_path = derive_full_model_path(workspace, &fs_candidate.model)?;
+                fs::remove_file(&abs_path)?;
+                SyncStateOp::Delete {
+                    state: state.to_owned(),
+                }
+            }
+        },
+        SyncOp::DbCreate { fs } => {
+            upsert_model(window, &fs.model).await?;
+            SyncStateOp::Create {
+                model_id: fs.model.id(),
+                checksum: fs.checksum.to_owned(),
+                rel_path: fs.rel_path.to_owned(),
+            }
+        }
+        SyncOp::DbUpdate { state, fs } => {
+            upsert_model(window, &fs.model).await?;
+            SyncStateOp::Update {
+                state: state.to_owned(),
+                checksum: fs.checksum.to_owned(),
+                rel_path: fs.rel_path.to_owned(),
+            }
+        }
+        SyncOp::DbDelete { model, state } => {
             delete_model(window, model).await?;
-            SyncStateOp::Delete(sync_state.to_owned())
+            SyncStateOp::Delete {
+                state: state.to_owned(),
+            }
         }
     };
 
@@ -385,7 +457,7 @@ async fn apply_sync_state_op<R: Runtime>(
             upsert_sync_state(window, sync_state).await?;
         }
         SyncStateOp::Update {
-            sync_state,
+            state: sync_state,
             checksum,
             rel_path,
         } => {
@@ -398,8 +470,8 @@ async fn apply_sync_state_op<R: Runtime>(
             };
             upsert_sync_state(window, sync_state).await?;
         }
-        SyncStateOp::Delete(s) => {
-            delete_sync_state(window, s.id.as_str()).await?;
+        SyncStateOp::Delete { state } => {
+            delete_sync_state(window, state.id.as_str()).await?;
         }
     }
 

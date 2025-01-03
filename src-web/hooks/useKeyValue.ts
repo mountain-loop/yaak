@@ -8,7 +8,7 @@ import { buildKeyValueKey, extractKeyValueOrFallback, setKeyValue } from '../lib
 
 const DEFAULT_NAMESPACE = 'global';
 
-export const keyValuesAtom = atom<KeyValue[]>([]);
+export const keyValuesAtom = atom<KeyValue[] | null>(null);
 
 export function keyValueQueryKey({
   namespace = DEFAULT_NAMESPACE,
@@ -32,7 +32,7 @@ export function useKeyValue<T extends object | boolean | number | string | null>
   const keyValues = useAtomValue(keyValuesAtom);
   const keyValue =
     keyValues?.find((kv) => buildKeyValueKey(kv.key) === buildKeyValueKey(key)) ?? null;
-  const value = extractKeyValueOrFallback(keyValue, fallback);
+  const value = keyValues == null ? null : extractKeyValueOrFallback(keyValue, fallback);
   const isLoading = keyValues == null;
 
   const { mutateAsync } = useMutation<void, unknown, T>({
@@ -43,7 +43,7 @@ export function useKeyValue<T extends object | boolean | number | string | null>
   const set = useCallback(
     async (valueOrUpdate: ((v: T) => T) | T) => {
       if (typeof valueOrUpdate === 'function') {
-        const newV = valueOrUpdate(value);
+        const newV = valueOrUpdate(value ?? fallback);
         if (newV === value) return;
         await mutateAsync(newV);
       } else {

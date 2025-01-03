@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
+import { useCommands } from '../hooks/useCommands';
 import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
 import { useCreateGrpcRequest } from '../hooks/useCreateGrpcRequest';
 import { useCreateHttpRequest } from '../hooks/useCreateHttpRequest';
@@ -38,7 +39,6 @@ import { Icon } from './core/Icon';
 import { PlainInput } from './core/PlainInput';
 import { HStack } from './core/Stacks';
 import { EnvironmentEditDialog } from './EnvironmentEditDialog';
-import { useCommands } from '../hooks/useCommands';
 
 interface CommandPaletteGroup {
   key: string;
@@ -61,13 +61,13 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const httpRequestActions = useHttpRequestActions();
   const workspaces = useWorkspaces();
   const { subEnvironments } = useEnvironments();
+  const createWorkspace = useCreateWorkspace();
   const recentEnvironments = useRecentEnvironments();
   const recentWorkspaces = useRecentWorkspaces();
   const requests = useRequests();
   const activeRequest = useActiveRequest();
   const [recentRequests] = useRecentRequests();
   const openWorkspace = useOpenWorkspace();
-  const createWorkspace = useCreateWorkspace();
   const createHttpRequest = useCreateHttpRequest();
   const { createFolder } = useCommands();
   const [activeCookieJar] = useActiveCookieJar();
@@ -238,9 +238,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   }, [subEnvironments, recentEnvironments]);
 
   const sortedWorkspaces = useMemo(() => {
+    if (recentWorkspaces == null) {
+      // Should never happen
+      return workspaces;
+    }
+
     const r = [...workspaces].sort((a, b) => {
-      const aRecentIndex = recentWorkspaces.indexOf(a.id);
-      const bRecentIndex = recentWorkspaces.indexOf(b.id);
+      const aRecentIndex = recentWorkspaces?.indexOf(a.id);
+      const bRecentIndex = recentWorkspaces?.indexOf(b.id);
 
       if (aRecentIndex >= 0 && bRecentIndex >= 0) {
         return aRecentIndex - bRecentIndex;

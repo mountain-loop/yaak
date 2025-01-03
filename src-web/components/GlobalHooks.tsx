@@ -1,6 +1,5 @@
 import { emit } from '@tauri-apps/api/event';
 import type { PromptTextRequest, PromptTextResponse } from '@yaakapp-internal/plugins';
-import { useSyncActiveWorkspaceDir } from '@yaakapp-internal/sync';
 import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
@@ -8,7 +7,7 @@ import {
 import { useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
-import { useActiveWorkspace, useSubscribeActiveWorkspaceId } from '../hooks/useActiveWorkspace';
+import { useSubscribeActiveWorkspaceId } from '../hooks/useActiveWorkspace';
 import { useActiveWorkspaceChangedToast } from '../hooks/useActiveWorkspaceChangedToast';
 import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
 import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
@@ -17,13 +16,10 @@ import { useHotKey } from '../hooks/useHotKey';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { useNotificationToast } from '../hooks/useNotificationToast';
 import { usePrompt } from '../hooks/usePrompt';
-import { useRecentCookieJars, useSubscribeRecentCookieJars } from '../hooks/useRecentCookieJars';
-import {
-  useRecentEnvironments,
-  useSubscribeRecentEnvironments,
-} from '../hooks/useRecentEnvironments';
+import { useSubscribeRecentCookieJars } from '../hooks/useRecentCookieJars';
+import { useSubscribeRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { useSubscribeRecentRequests } from '../hooks/useRecentRequests';
-import { useRecentWorkspaces, useSubscribeRecentWorkspaces } from '../hooks/useRecentWorkspaces';
+import { useSubscribeRecentWorkspaces } from '../hooks/useRecentWorkspaces';
 import { useSyncFontSizeSetting } from '../hooks/useSyncFontSizeSetting';
 import { useSyncModelStores } from '../hooks/useSyncModelStores';
 import { useSyncWorkspaceChildModels } from '../hooks/useSyncWorkspaceChildModels';
@@ -49,9 +45,6 @@ export function GlobalHooks() {
   useSubscribeRecentEnvironments();
   useSubscribeRecentCookieJars();
 
-  useRecentWorkspaces();
-  useRecentEnvironments();
-  useRecentCookieJars();
   useSyncWorkspaceChildModels();
   useSubscribeTemplateFunctions();
 
@@ -59,9 +52,6 @@ export function GlobalHooks() {
   useNotificationToast();
   useActiveWorkspaceChangedToast();
   useEnsureActiveCookieJar();
-
-  const activeWorkspace = useActiveWorkspace();
-  useSyncActiveWorkspaceDir(activeWorkspace);
 
   const activeRequest = useActiveRequest();
   const duplicateHttpRequest = useDuplicateHttpRequest({

@@ -1,4 +1,4 @@
-const COMMANDS: &[&str] = &["sync"];
+const COMMANDS: &[&str] = &["calculate", "apply"];
 
 fn main() {
     tauri_plugin::Builder::new(COMMANDS).build();

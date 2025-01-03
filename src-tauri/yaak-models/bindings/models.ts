@@ -52,7 +52,7 @@ export type ProxySettingAuth = { user: string, password: string, };
 
 export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, editorFontSize: number, editorSoftWrap: boolean, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, telemetry: boolean, theme: string, themeDark: string, themeLight: string, updateChannel: string, proxy: ProxySetting | null, };
 
-export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, path: string, };
+export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, relPath: string, syncDir: string, };
 
 export type UpdateSource = "sync" | "window" | "plugin" | "background";
 

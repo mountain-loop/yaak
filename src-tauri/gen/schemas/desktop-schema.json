@@ -5183,6 +5183,16 @@
           "const": "yaak-sync:allow-add"
         },
         {
+          "description": "Enables the apply command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-apply"
+        },
+        {
+          "description": "Enables the calculate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:allow-calculate"
+        },
+        {
           "description": "Enables the check command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-sync:allow-check"
@@ -5276,6 +5286,16 @@
           "description": "Denies the add command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-sync:deny-add"
+        },
+        {
+          "description": "Denies the apply command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-apply"
+        },
+        {
+          "description": "Denies the calculate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-sync:deny-calculate"
         },
         {
           "description": "Denies the check command without any pre-configured scope.",

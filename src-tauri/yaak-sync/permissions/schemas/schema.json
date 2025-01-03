@@ -315,6 +315,26 @@
           "const": "deny-add"
         },
         {
+          "description": "Enables the apply command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-apply"
+        },
+        {
+          "description": "Denies the apply command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-apply"
+        },
+        {
+          "description": "Enables the calculate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-calculate"
+        },
+        {
+          "description": "Denies the calculate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-calculate"
+        },
+        {
           "description": "Enables the check command without any pre-configured scope.",
           "type": "string",
           "const": "allow-check"

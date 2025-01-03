@@ -12,7 +12,7 @@ export function RedirectToLatestWorkspace() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (workspaces.length === 0) {
+    if (workspaces.length === 0 || recentWorkspaces == null) {
       console.log('No workspaces found to redirect to. Skipping.');
       return;
     }
