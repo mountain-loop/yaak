@@ -64,17 +64,17 @@ export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Pr
                 </InlineCode>
               </>
             ),
-            action: (
+            action: ({ hide }) => (
               <Button
                 size="xs"
                 color="secondary"
                 className="mr-auto min-w-[5rem]"
                 onClick={async () => {
-                  toast.hide('workspace-moved');
                   await navigate({
                     to: '/workspaces/$workspaceId',
                     params: { workspaceId: selectedWorkspaceId },
                   });
+                  hide();
                 }}
               >
                 Switch to Workspace

@@ -2,13 +2,13 @@ import { applySync, calculateSync } from '@yaakapp-internal/sync';
 import classNames from 'classnames';
 import { memo, useCallback, useMemo } from 'react';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
-import { useAlert } from '../hooks/useAlert';
 import { useConfirm } from '../hooks/useConfirm';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
 import { useDialog } from '../hooks/useDialog';
 import { useOpenWorkspace } from '../hooks/useOpenWorkspace';
 import { useSettings } from '../hooks/useSettings';
+import { useToast } from '../hooks/useToast';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { pluralizeCount } from '../lib/pluralize';
 import { getWorkspace } from '../lib/store';
@@ -33,7 +33,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   const { mutate: deleteSendHistory } = useDeleteSendHistory();
   const dialog = useDialog();
   const confirm = useConfirm();
-  const alert = useAlert();
+  const toast = useToast();
   const settings = useSettings();
   const openWorkspace = useOpenWorkspace();
   const openWorkspaceNewWindow = settings?.openWorkspaceNewWindow ?? null;
@@ -79,10 +79,9 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
 
           const ops = await calculateSync(activeWorkspace);
           if (ops.length === 0) {
-            alert({
+            toast.show({
               id: 'no-sync-changes',
-              title: 'No Changes',
-              body: 'There were no changes detected',
+              message: 'No changes detected for sync',
             });
             return;
           }
@@ -91,6 +90,11 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
 
           if (dbChanges.length === 0) {
             await applySync(activeWorkspace, ops);
+            toast.show({
+              id: 'applied-sync-changes',
+              message: `Applied ${pluralizeCount('change', ops.length)}`,
+            });
+            return;
           }
 
           const confirmed = await confirm({
@@ -99,13 +103,17 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
             confirmText: 'Apply Changes',
             description: (
               <p>
-                <strong>{pluralizeCount('filesystem change', dbChanges.length)} detected!</strong>
-                Do you want to update the workspace to match?
+                <strong>The filesystem has changed since last sync.</strong> Do you want to update
+                the workspace to match?
               </p>
             ),
           });
           if (confirmed) {
             await applySync(activeWorkspace, ops);
+            toast.show({
+              id: 'applied-confirmed-sync-changes',
+              message: `Applied ${pluralizeCount('change', ops.length)}`,
+            });
           }
         },
       },
@@ -132,7 +140,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     createWorkspace,
     dialog,
     confirm,
-    alert,
+    toast,
   ]);
 
   const handleChange = useCallback(

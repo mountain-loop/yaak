@@ -59,7 +59,7 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
           `x-theme-toast x-theme-toast--${color}`,
           'pointer-events-auto overflow-hidden',
           'relative pointer-events-auto bg-surface text-text rounded-lg',
-          'border border-border shadow-lg w-[30rem]',
+          'border border-border shadow-lg w-[25rem]',
           'grid grid-cols-[1fr_auto]',
         )}
       >
