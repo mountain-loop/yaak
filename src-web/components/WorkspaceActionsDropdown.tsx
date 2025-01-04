@@ -99,12 +99,12 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
 
           const confirmed = await confirm({
             id: 'commit-sync',
-            title: 'Filesystem Changes',
+            title: 'Filesystem Changes Detected',
             confirmText: 'Apply Changes',
             description: (
               <p>
-                <strong>The filesystem has changed since last sync.</strong> Do you want to update
-                the workspace to match?
+                <strong>Changes detected in directory since last sync.</strong> Do you want to apply these
+                to the current workspace?
               </p>
             ),
           });
