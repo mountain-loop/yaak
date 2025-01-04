@@ -10,14 +10,17 @@ import { useOpenWorkspace } from '../hooks/useOpenWorkspace';
 import { useSettings } from '../hooks/useSettings';
 import { useToast } from '../hooks/useToast';
 import { useWorkspaces } from '../hooks/useWorkspaces';
+import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { pluralizeCount } from '../lib/pluralize';
 import { getWorkspace } from '../lib/store';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
+import { InlineCode } from './core/InlineCode';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
+import { VStack } from './core/Stacks';
 import { OpenWorkspaceDialog } from './OpenWorkspaceDialog';
 import { WorkspaceSettingsDialog } from './WorkspaceSettingsDialog';
 
@@ -102,10 +105,52 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
             title: 'Filesystem Changes Detected',
             confirmText: 'Apply Changes',
             description: (
-              <p>
-                <strong>Changes detected in directory since last sync.</strong> Do you want to apply these
-                to the current workspace?
-              </p>
+              <VStack space={3}>
+                <p>
+                  Some files in the directory have changed. Do you want to apply the updates to your
+                  workspace?
+                </p>
+                <table className="w-full text-sm mb-auto min-w-full max-w-full divide-y divide-surface-highlight">
+                  <thead>
+                    <tr>
+                      <th className="py-1 text-left">Name</th>
+                      <th className="py-1 text-right pl-4">Operation</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-highlight">
+                    {dbChanges.map((op, i) => {
+                      let name = '';
+                      let label = '';
+                      let color = '';
+
+                      if (op.type === 'dbCreate') {
+                        label = 'create';
+                        name = fallbackRequestName(op.fs.model);
+                        color = 'text-success';
+                      } else if (op.type === 'dbUpdate') {
+                        label = 'update';
+                        name = fallbackRequestName(op.fs.model);
+                        color = 'text-info';
+                      } else if (op.type === 'dbDelete') {
+                        label = 'delete';
+                        name = fallbackRequestName(op.model);
+                        color = 'text-danger';
+                      } else {
+                        return null;
+                      }
+
+                      return (
+                        <tr key={i} className="text-text">
+                          <td className="py-1">{name}</td>
+                          <td className="py-1 pl-4 text-right">
+                            <InlineCode className={color}>{label}</InlineCode>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </VStack>
             ),
           });
           if (confirmed) {
