@@ -16,6 +16,7 @@ use mime_guess::Mime;
 use reqwest::redirect::Policy;
 use reqwest::{multipart, Proxy, Url};
 use reqwest::{Method, Response};
+use reqwest::tls::Version;
 use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs;
@@ -75,6 +76,9 @@ pub async fn send_http_request<R: Runtime>(
         .deflate(true)
         .referer(false)
         .danger_accept_invalid_certs(!workspace.setting_validate_certificates)
+        .use_rustls_tls()
+        .min_tls_version(Version::TLS_1_0)
+        .max_tls_version(Version::TLS_1_3)
         .tls_info(true);
 
     match settings.proxy {

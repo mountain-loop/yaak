@@ -44,7 +44,7 @@ http = "1"
 log = "0.4.21"
 rand = "0.8.5"
 regex = "1.10.2"
-reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "native-tls-alpn"] }
+reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-native-roots"] }
 reqwest_cookie_store = "0.8.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
