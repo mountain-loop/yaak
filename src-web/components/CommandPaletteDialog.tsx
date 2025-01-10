@@ -2,6 +2,8 @@ import classNames from 'classnames';
 import { fuzzyFilter } from 'fuzzbunny';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createFolder } from '../commands/commands';
+import { switchWorkspace } from '../commands/switchWorkspace';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
@@ -16,7 +18,6 @@ import type { HotkeyAction } from '../hooks/useHotKey';
 import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useOpenSettings } from '../hooks/useOpenSettings';
-import { useSwitchWorkspace } from '../hooks/useSwitchWorkspace';
 import { useRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { useRecentRequests } from '../hooks/useRecentRequests';
 import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
@@ -38,7 +39,6 @@ import { Icon } from './core/Icon';
 import { PlainInput } from './core/PlainInput';
 import { HStack } from './core/Stacks';
 import { EnvironmentEditDialog } from './EnvironmentEditDialog';
-import { createFolder } from '../commands/commands';
 
 interface CommandPaletteGroup {
   key: string;
@@ -71,7 +71,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const [, setSidebarHidden] = useSidebarHidden();
   const { baseEnvironment } = useEnvironments();
   const { mutate: openSettings } = useOpenSettings();
-  const { mutate: switchWorkspace } = useSwitchWorkspace();
   const { mutate: createHttpRequest } = useCreateHttpRequest();
   const { mutate: createGrpcRequest } = useCreateGrpcRequest();
   const { mutate: createEnvironment } = useCreateEnvironment();
@@ -315,7 +314,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       workspaceGroup.items.push({
         key: `switch-workspace-${w.id}`,
         label: w.name,
-        onSelect: () => switchWorkspace({ workspaceId: w.id, inNewWindow: false }),
+        onSelect: () => switchWorkspace.mutate({ workspaceId: w.id, inNewWindow: false }),
       });
     }
 
@@ -327,7 +326,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     activeEnvironment?.id,
     setActiveEnvironmentId,
     sortedWorkspaces,
-    switchWorkspace,
   ]);
 
   const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);

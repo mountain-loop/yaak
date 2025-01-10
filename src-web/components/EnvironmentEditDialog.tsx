@@ -278,7 +278,7 @@ function SidebarButton({
             },
             {
               key: 'delete-environment',
-              variant: 'danger',
+              color: 'danger',
               label: 'Delete',
               leftSlot: <Icon icon="trash" size="sm" />,
               onSelect: () => deleteEnvironment.mutate(),

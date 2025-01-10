@@ -76,7 +76,7 @@ export const CookieDropdown = memo(function CookieDropdown() {
                     key: 'delete',
                     label: 'Delete',
                     leftSlot: <Icon icon="trash" />,
-                    variant: 'danger',
+                    color: 'danger',
                     onSelect: () => deleteCookieJar.mutateAsync(),
                   },
                 ]

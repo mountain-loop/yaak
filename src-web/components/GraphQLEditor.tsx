@@ -79,7 +79,7 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
                 label: 'Clear',
                 onSelect: clear,
                 hidden: !schema,
-                variant: 'danger',
+                color: 'danger',
                 leftSlot: <Icon icon="trash" />,
               },
               { type: 'separator', label: 'Setting' },

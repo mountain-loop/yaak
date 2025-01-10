@@ -4,7 +4,7 @@ import { createFastMutation } from '../hooks/useFastMutation';
 import { showSimpleAlert } from '../lib/alert';
 import { router } from '../lib/router';
 
-export const openWorkspace = createFastMutation({
+export const openWorkspaceFromSyncDir = createFastMutation({
   mutationKey: [],
   mutationFn: async () => {
     const dir = await open({

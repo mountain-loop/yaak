@@ -27,8 +27,9 @@ import { EventStreamViewer } from './responseViewers/EventStreamViewer';
 import { HTMLOrTextViewer } from './responseViewers/HTMLOrTextViewer';
 import { ImageViewer } from './responseViewers/ImageViewer';
 import { PdfViewer } from './responseViewers/PdfViewer';
-import {SvgViewer} from "./responseViewers/SvgViewer";
+import { SvgViewer } from './responseViewers/SvgViewer';
 import { VideoViewer } from './responseViewers/VideoViewer';
+import { ConfirmLargeResponse } from './ConfirmLargeResponse';
 
 interface Props {
   style?: CSSProperties;
@@ -162,33 +163,35 @@ export const ResponsePane = memo(function ResponsePane({
               tabListClassName="mt-1.5"
             >
               <TabContent value={TAB_BODY}>
-                {!activeResponse.contentLength ? (
-                  <div className="pb-2 h-full">
-                    <EmptyStateText>Empty Body</EmptyStateText>
-                  </div>
-                ) : contentType?.match(/^text\/event-stream$/i) && viewMode === 'pretty' ? (
-                  <EventStreamViewer response={activeResponse} />
-                ) : contentType?.match(/^image\/svg/) ? (
-                  <SvgViewer response={activeResponse} />
-                ) : contentType?.match(/^image/i) ? (
-                  <EnsureCompleteResponse response={activeResponse} render={ImageViewer} />
-                ) : contentType?.match(/^audio/i) ? (
-                  <EnsureCompleteResponse response={activeResponse} render={AudioViewer} />
-                ) : contentType?.match(/^video/i) ? (
-                  <EnsureCompleteResponse response={activeResponse} render={VideoViewer} />
-                ) : contentType?.match(/pdf/i) ? (
-                  <EnsureCompleteResponse response={activeResponse} render={PdfViewer} />
-                ) : contentType?.match(/csv|tab-separated/i) ? (
-                  <CsvViewer className="pb-2" response={activeResponse} />
-                ) : (
-                  // ) : viewMode === 'pretty' && contentType?.includes('json') ? (
-                  //   <JsonAttributeTree attrValue={activeResponse} />
-                  <HTMLOrTextViewer
-                    textViewerClassName="-mr-2 bg-surface" // Pull to the right
-                    response={activeResponse}
-                    pretty={viewMode === 'pretty'}
-                  />
-                )}
+                <ConfirmLargeResponse response={activeResponse}>
+                  {!activeResponse.contentLength ? (
+                    <div className="pb-2 h-full">
+                      <EmptyStateText>Empty Body</EmptyStateText>
+                    </div>
+                  ) : contentType?.match(/^text\/event-stream$/i) && viewMode === 'pretty' ? (
+                    <EventStreamViewer response={activeResponse} />
+                  ) : contentType?.match(/^image\/svg/) ? (
+                    <SvgViewer response={activeResponse} />
+                  ) : contentType?.match(/^image/i) ? (
+                    <EnsureCompleteResponse response={activeResponse} render={ImageViewer} />
+                  ) : contentType?.match(/^audio/i) ? (
+                    <EnsureCompleteResponse response={activeResponse} render={AudioViewer} />
+                  ) : contentType?.match(/^video/i) ? (
+                    <EnsureCompleteResponse response={activeResponse} render={VideoViewer} />
+                  ) : contentType?.match(/pdf/i) ? (
+                    <EnsureCompleteResponse response={activeResponse} render={PdfViewer} />
+                  ) : contentType?.match(/csv|tab-separated/i) ? (
+                    <CsvViewer className="pb-2" response={activeResponse} />
+                  ) : (
+                    // ) : viewMode === 'pretty' && contentType?.includes('json') ? (
+                    //   <JsonAttributeTree attrValue={activeResponse} />
+                    <HTMLOrTextViewer
+                      textViewerClassName="-mr-2 bg-surface" // Pull to the right
+                      response={activeResponse}
+                      pretty={viewMode === 'pretty'}
+                    />
+                  )}
+                </ConfirmLargeResponse>
               </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />

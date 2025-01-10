@@ -1,6 +1,6 @@
+import { upsertWorkspace } from '../commands/upsertWorkspace';
 import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
 import { useDeleteActiveWorkspace } from '../hooks/useDeleteActiveWorkspace';
-import { useUpdateWorkspace } from '../hooks/useUpdateWorkspace';
 import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { Banner } from './core/Banner';
@@ -21,7 +21,6 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
   const workspaces = useWorkspaces();
   const workspace = workspaces.find((w) => w.id === workspaceId);
   const workspaceMeta = useWorkspaceMeta();
-  const { mutate: updateWorkspace } = useUpdateWorkspace(workspaceId ?? null);
   const { mutateAsync: deleteActiveWorkspace } = useDeleteActiveWorkspace();
 
   if (workspace == null) {
@@ -44,7 +43,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
       <Input
         label="Workspace Name"
         defaultValue={workspace.name}
-        onChange={(name) => updateWorkspace({ name })}
+        onChange={(name) => upsertWorkspace.mutate({ ...workspace, name })}
         stateKey={`name.${workspace.id}`}
       />
 
@@ -54,7 +53,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
         className="min-h-[10rem] max-h-[25rem] border border-border px-2"
         defaultValue={workspace.description}
         stateKey={`description.${workspace.id}`}
-        onChange={(description) => updateWorkspace({ description })}
+        onChange={(description) => upsertWorkspace.mutate({ ...workspace, description })}
         heightMode="auto"
       />
 
@@ -62,7 +61,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
         <SyncToFilesystemSetting
           value={workspaceMeta.settingSyncDir}
           onChange={({ value: settingSyncDir }) => {
-            upsertWorkspaceMeta.mutate({ settingSyncDir });
+            upsertWorkspaceMeta.mutate({ ...workspaceMeta, settingSyncDir });
           }}
         />
         <Separator />

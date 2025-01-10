@@ -2,25 +2,16 @@ import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { createGlobalState } from 'react-use';
-import { useCopy } from '../../hooks/useCopy';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useFilterResponse } from '../../hooks/useFilterResponse';
 import { useFormatText } from '../../hooks/useFormatText';
-import { useToggle } from '../../hooks/useToggle';
-import { CopyButton } from '../CopyButton';
-import { Banner } from '../core/Banner';
-import { Button } from '../core/Button';
-import { hyperlink } from '../core/Editor/hyperlink/extension';
-import { IconButton } from '../core/IconButton';
-import { InlineCode } from '../core/InlineCode';
-import { Input } from '../core/Input';
-import { SizeTag } from '../core/SizeTag';
-import { HStack } from '../core/Stacks';
 import type { EditorProps } from '../core/Editor/Editor';
 import { Editor } from '../core/Editor/Editor';
+import { hyperlink } from '../core/Editor/hyperlink/extension';
+import { IconButton } from '../core/IconButton';
+import { Input } from '../core/Input';
 
 const extraExtensions = [hyperlink];
-const LARGE_RESPONSE_BYTES = 2 * 1000 * 1000;
 
 interface Props {
   pretty: boolean;
@@ -29,24 +20,13 @@ interface Props {
   language: EditorProps['language'];
   responseId: string;
   requestId: string;
-  onSaveResponse: () => void;
 }
 
 const useFilterText = createGlobalState<Record<string, string | null>>({});
 
-export function TextViewer({
-  language,
-  text,
-  responseId,
-  requestId,
-  pretty,
-  className,
-  onSaveResponse,
-}: Props) {
+export function TextViewer({ language, text, responseId, requestId, pretty, className }: Props) {
   const [filterTextMap, setFilterTextMap] = useFilterText();
-  const [showLargeResponse, toggleShowLargeResponse] = useToggle();
   const filterText = filterTextMap[requestId] ?? null;
-  const copy = useCopy();
   const debouncedFilterText = useDebouncedValue(filterText, 200);
   const setFilterText = useCallback(
     (v: string | null) => {
@@ -120,29 +100,6 @@ export function TextViewer({
   ]);
 
   const formattedBody = useFormatText({ text, language, pretty });
-
-  if (!showLargeResponse && text.length > LARGE_RESPONSE_BYTES) {
-    return (
-      <Banner color="primary" className="h-full flex flex-col gap-3">
-        <p>
-          Showing responses over{' '}
-          <InlineCode>
-            <SizeTag contentLength={LARGE_RESPONSE_BYTES} />
-          </InlineCode>{' '}
-          may impact performance
-        </p>
-        <HStack wrap space={2}>
-          <Button color="primary" size="xs" onClick={toggleShowLargeResponse}>
-            Reveal Response
-          </Button>
-          <Button variant="border" size="xs" onClick={onSaveResponse}>
-            Save to File
-          </Button>
-          <CopyButton variant="border" size="xs" onClick={() => copy(text)} text={text} />
-        </HStack>
-      </Banner>
-    );
-  }
 
   if (formattedBody.data == null) {
     return null;

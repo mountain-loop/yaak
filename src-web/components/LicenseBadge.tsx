@@ -1,14 +1,16 @@
 import type { LicenseCheckStatus } from '@yaakapp-internal/license';
 import { useLicense } from '@yaakapp-internal/license';
+import { appInfo } from '../hooks/useAppInfo';
 import { useOpenSettings } from '../hooks/useOpenSettings';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
-import {SettingsTab} from "./Settings/SettingsTab";
+import { SettingsTab } from './Settings/SettingsTab';
 
 const details: Record<
-  LicenseCheckStatus['type'],
+  LicenseCheckStatus['type'] | 'dev',
   { label: string; color: ButtonProps['color'] } | null
 > = {
+  dev: { label: 'Develop', color: 'secondary' },
   commercial_use: null,
   invalid_license: { label: 'License Error', color: 'danger' },
   personal_use: { label: 'Personal Use', color: 'primary' },
@@ -23,7 +25,8 @@ export function LicenseBadge() {
     return null;
   }
 
-  const detail = details[check.data.type];
+  const checkType = appInfo.isDev ? 'dev' : check.data.type;
+  const detail = details[checkType];
   if (detail == null) {
     return null;
   }

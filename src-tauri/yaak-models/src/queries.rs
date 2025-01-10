@@ -9,7 +9,7 @@ use crate::models::{
     WorkspaceMetaIden,
 };
 use crate::plugin::SqliteConnection;
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use log::{debug, error, info, warn};
 use nanoid::nanoid;
 use rusqlite::OptionalExtension;
@@ -19,7 +19,7 @@ use sea_query::{Cond, Expr, OnConflict, Order, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 
@@ -278,8 +278,8 @@ pub async fn upsert_workspace<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
+            timestamp_for_upsert(update_source, workspace.created_at).into(),
+            timestamp_for_upsert(update_source, workspace.updated_at).into(),
             trimmed_name.into(),
             workspace.description.into(),
             workspace.setting_follow_redirects.into(),
@@ -297,6 +297,7 @@ pub async fn upsert_workspace<R: Runtime>(
                     WorkspaceIden::SettingRequestTimeout,
                     WorkspaceIden::SettingValidateCertificates,
                 ])
+                .values([(WorkspaceIden::UpdatedAt, CurrentTimestamp.into())])
                 .to_owned(),
         )
         .returning_all()
@@ -333,8 +334,8 @@ pub async fn upsert_workspace_meta<R: Runtime>(
         .values_panic([
             id.as_str().into(),
             workspace_meta.workspace_id.into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
+            timestamp_for_upsert(update_source, workspace_meta.created_at).into(),
+            timestamp_for_upsert(update_source, workspace_meta.updated_at).into(),
             workspace_meta.setting_sync_dir.into(),
         ])
         .on_conflict(
@@ -500,8 +501,8 @@ pub async fn upsert_grpc_request<R: Runtime>(
         ])
         .values_panic([
             id.into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
+            timestamp_for_upsert(update_source, request.created_at).into(),
+            timestamp_for_upsert(update_source, request.updated_at).into(),
             trimmed_name.into(),
             request.description.into(),
             request.workspace_id.into(),
@@ -612,8 +613,8 @@ pub async fn upsert_grpc_connection<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
+            timestamp_for_upsert(update_source, connection.created_at).into(),
+            timestamp_for_upsert(update_source, connection.updated_at).into(),
             connection.workspace_id.as_str().into(),
             connection.request_id.as_str().into(),
             connection.service.as_str().into(),
@@ -771,8 +772,8 @@ pub async fn upsert_grpc_event<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
+            timestamp_for_upsert(update_source, event.created_at).into(),
+            timestamp_for_upsert(update_source, event.updated_at).into(),
             event.workspace_id.as_str().into(),
             event.request_id.as_str().into(),
             event.connection_id.as_str().into(),
@@ -859,8 +860,8 @@ pub async fn upsert_cookie_jar<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
+            timestamp_for_upsert(update_source, cookie_jar.created_at).into(),
+            timestamp_for_upsert(update_source, cookie_jar.updated_at).into(),
             cookie_jar.workspace_id.as_str().into(),
             trimmed_name.into(),
             serde_json::to_string(&cookie_jar.cookies)?.into(),
@@ -1064,8 +1065,8 @@ pub async fn upsert_environment<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
+            timestamp_for_upsert(update_source, environment.created_at).into(),
+            timestamp_for_upsert(update_source, environment.updated_at).into(),
             environment.environment_id.into(),
             environment.workspace_id.into(),
             trimmed_name.into(),
@@ -1174,8 +1175,8 @@ pub async fn upsert_plugin<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
+            timestamp_for_upsert(update_source, plugin.created_at).into(),
+            timestamp_for_upsert(update_source, plugin.updated_at).into(),
             plugin.checked_at.into(),
             plugin.directory.into(),
             plugin.url.into(),
@@ -1276,15 +1277,15 @@ pub async fn delete_folder<R: Runtime>(
 
 pub async fn upsert_folder<R: Runtime>(
     window: &WebviewWindow<R>,
-    r: Folder,
+    folder: Folder,
 
     update_source: &UpdateSource,
 ) -> Result<Folder> {
-    let id = match r.id.as_str() {
+    let id = match folder.id.as_str() {
         "" => generate_model_id(ModelType::TypeFolder),
-        _ => r.id.to_string(),
+        _ => folder.id.to_string(),
     };
-    let trimmed_name = r.name.trim();
+    let trimmed_name = folder.name.trim();
 
     let dbm = &*window.app_handle().state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -1303,13 +1304,13 @@ pub async fn upsert_folder<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
-            r.workspace_id.as_str().into(),
-            r.folder_id.as_ref().map(|s| s.as_str()).into(),
+            timestamp_for_upsert(update_source, folder.created_at).into(),
+            timestamp_for_upsert(update_source, folder.updated_at).into(),
+            folder.workspace_id.as_str().into(),
+            folder.folder_id.as_ref().map(|s| s.as_str()).into(),
             trimmed_name.into(),
-            r.description.into(),
-            r.sort_priority.into(),
+            folder.description.into(),
+            folder.sort_priority.into(),
         ])
         .on_conflict(
             OnConflict::column(GrpcEventIden::Id)
@@ -1419,14 +1420,14 @@ pub async fn duplicate_folder<R: Runtime>(
 
 pub async fn upsert_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
-    r: HttpRequest,
+    request: HttpRequest,
     update_source: &UpdateSource,
 ) -> Result<HttpRequest> {
-    let id = match r.id.as_str() {
+    let id = match request.id.as_str() {
         "" => generate_model_id(ModelType::TypeHttpRequest),
-        _ => r.id.to_string(),
+        _ => request.id.to_string(),
     };
-    let trimmed_name = r.name.trim();
+    let trimmed_name = request.name.trim();
 
     let dbm = &*window.app_handle().state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -1453,21 +1454,21 @@ pub async fn upsert_http_request<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
-            r.workspace_id.into(),
-            r.folder_id.as_ref().map(|s| s.as_str()).into(),
+            timestamp_for_upsert(update_source, request.created_at).into(),
+            timestamp_for_upsert(update_source, request.updated_at).into(),
+            request.workspace_id.into(),
+            request.folder_id.as_ref().map(|s| s.as_str()).into(),
             trimmed_name.into(),
-            r.description.into(),
-            r.url.into(),
-            serde_json::to_string(&r.url_parameters)?.into(),
-            r.method.into(),
-            serde_json::to_string(&r.body)?.into(),
-            r.body_type.as_ref().map(|s| s.as_str()).into(),
-            serde_json::to_string(&r.authentication)?.into(),
-            r.authentication_type.as_ref().map(|s| s.as_str()).into(),
-            serde_json::to_string(&r.headers)?.into(),
-            r.sort_priority.into(),
+            request.description.into(),
+            request.url.into(),
+            serde_json::to_string(&request.url_parameters)?.into(),
+            request.method.into(),
+            serde_json::to_string(&request.body)?.into(),
+            request.body_type.as_ref().map(|s| s.as_str()).into(),
+            serde_json::to_string(&request.authentication)?.into(),
+            request.authentication_type.as_ref().map(|s| s.as_str()).into(),
+            serde_json::to_string(&request.headers)?.into(),
+            request.sort_priority.into(),
         ])
         .on_conflict(
             OnConflict::column(GrpcEventIden::Id)
@@ -2105,57 +2106,68 @@ pub async fn batch_upsert<R: Runtime>(
 ) -> Result<BatchUpsertResult> {
     let mut imported_resources = BatchUpsertResult::default();
 
-    for v in workspaces {
-        let x = upsert_workspace(&window, v, update_source).await?;
-        imported_resources.workspaces.push(x.clone());
+    if workspaces.len() > 0 {
+        for v in workspaces {
+            let x = upsert_workspace(&window, v, update_source).await?;
+            imported_resources.workspaces.push(x.clone());
+        }
+        info!("Imported {} workspaces", imported_resources.workspaces.len());
     }
-    info!("Imported {} workspaces", imported_resources.workspaces.len());
 
-    while imported_resources.environments.len() < environments.len() {
-        for v in environments.clone() {
-            if let Some(fid) = v.environment_id.clone() {
-                let imported_parent = imported_resources.environments.iter().find(|f| f.id == fid);
-                if imported_parent.is_none() {
+    if environments.len() > 0 {
+        while imported_resources.environments.len() < environments.len() {
+            for v in environments.clone() {
+                if let Some(fid) = v.environment_id.clone() {
+                    let imported_parent =
+                        imported_resources.environments.iter().find(|f| f.id == fid);
+                    if imported_parent.is_none() {
+                        continue;
+                    }
+                }
+                if let Some(_) = imported_resources.environments.iter().find(|f| f.id == v.id) {
                     continue;
                 }
+                let x = upsert_environment(&window, v, update_source).await?;
+                imported_resources.environments.push(x.clone());
             }
-            if let Some(_) = imported_resources.environments.iter().find(|f| f.id == v.id) {
-                continue;
-            }
-            let x = upsert_environment(&window, v, update_source).await?;
-            imported_resources.environments.push(x.clone());
         }
+        info!("Imported {} environments", imported_resources.environments.len());
     }
-    info!("Imported {} environments", imported_resources.environments.len());
 
-    while imported_resources.folders.len() < folders.len() {
-        for v in folders.clone() {
-            if let Some(fid) = v.folder_id.clone() {
-                let imported_parent = imported_resources.folders.iter().find(|f| f.id == fid);
-                if imported_parent.is_none() {
+    if folders.len() > 0 {
+        while imported_resources.folders.len() < folders.len() {
+            for v in folders.clone() {
+                if let Some(fid) = v.folder_id.clone() {
+                    let imported_parent = imported_resources.folders.iter().find(|f| f.id == fid);
+                    if imported_parent.is_none() {
+                        continue;
+                    }
+                }
+                if let Some(_) = imported_resources.folders.iter().find(|f| f.id == v.id) {
                     continue;
                 }
+                let x = upsert_folder(&window, v, update_source).await?;
+                imported_resources.folders.push(x.clone());
             }
-            if let Some(_) = imported_resources.folders.iter().find(|f| f.id == v.id) {
-                continue;
-            }
-            let x = upsert_folder(&window, v, update_source).await?;
-            imported_resources.folders.push(x.clone());
         }
+        info!("Imported {} folders", imported_resources.folders.len());
     }
-    info!("Imported {} folders", imported_resources.folders.len());
 
-    for v in http_requests {
-        let x = upsert_http_request(&window, v, update_source).await?;
-        imported_resources.http_requests.push(x.clone());
+    if http_requests.len() > 0 {
+        for v in http_requests {
+            let x = upsert_http_request(&window, v, update_source).await?;
+            imported_resources.http_requests.push(x.clone());
+        }
+        info!("Imported {} http_requests", imported_resources.http_requests.len());
     }
-    info!("Imported {} http_requests", imported_resources.http_requests.len());
 
-    for v in grpc_requests {
-        let x = upsert_grpc_request(&window, v, update_source).await?;
-        imported_resources.grpc_requests.push(x.clone());
+    if grpc_requests.len() > 0 {
+        for v in grpc_requests {
+            let x = upsert_grpc_request(&window, v, update_source).await?;
+            imported_resources.grpc_requests.push(x.clone());
+        }
+        info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
     }
-    info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
 
     Ok(imported_resources)
 }
@@ -2167,7 +2179,7 @@ pub async fn get_workspace_export_resources<R: Runtime>(
     let mut data = WorkspaceExport {
         yaak_version: mgr.package_info().version.clone().to_string(),
         yaak_schema: 2,
-        timestamp: chrono::Utc::now().naive_utc(),
+        timestamp: Utc::now().naive_utc(),
         resources: BatchUpsertResult {
             workspaces: Vec::new(),
             environments: Vec::new(),
@@ -2196,4 +2208,22 @@ pub async fn get_workspace_export_resources<R: Runtime>(
     }
 
     data
+}
+
+// Generate the created_at or updated_at timestamps for an upsert operation, depending on the ID
+// provided.
+fn timestamp_for_upsert(update_source: &UpdateSource, dt: NaiveDateTime) -> NaiveDateTime {
+    match update_source {
+        // Sync and import operations always preserve timestamps
+        UpdateSource::Sync | UpdateSource::Import => {
+            if dt.and_utc().timestamp() == 0 {
+                // Sometimes data won't have timestamps (partial data)
+                Utc::now().naive_utc()
+            } else {
+                dt
+            }
+        }
+        // Other sources will always update to the latest time
+        _ => Utc::now().naive_utc(),
+    }
 }

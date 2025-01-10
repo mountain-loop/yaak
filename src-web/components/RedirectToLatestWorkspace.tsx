@@ -25,7 +25,7 @@ export function RedirectToLatestWorkspace() {
       const search = {
         cookie_jar_id: cookieJarId,
         environment_id: environmentId,
-        requestId: requestId,
+        request_id: requestId,
       };
 
       await router.navigate({ to: '/workspaces/$workspaceId', params, search });

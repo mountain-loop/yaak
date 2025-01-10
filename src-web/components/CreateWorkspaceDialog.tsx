@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { createWorkspace } from '../commands/commands';
+import { upsertWorkspace } from '../commands/upsertWorkspace';
+import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
+import { router } from '../lib/router';
+import { getWorkspaceMeta } from '../lib/store';
 import { Button } from './core/Button';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
@@ -26,7 +29,20 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         e.preventDefault();
         const { enabled, value } = settingSyncDir ?? {};
         if (enabled && !value) return;
-        await createWorkspace.mutateAsync({ name, settingSyncDir: value });
+        const workspace = await upsertWorkspace.mutateAsync({ name });
+        if (workspace == null) return;
+
+        // Do getWorkspaceMeta instead of naively creating one because it might have
+        // been created already when the store refreshes the workspace meta after
+        const workspaceMeta = await getWorkspaceMeta(workspace.id);
+        upsertWorkspaceMeta.mutate({ ...workspaceMeta, settingSyncDir: value });
+
+        // Navigate to workspace
+        await router.navigate({
+          to: '/workspaces/$workspaceId',
+          params: { workspaceId: workspace.id },
+        });
+
         hide();
       }}
     >

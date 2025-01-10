@@ -1,4 +1,4 @@
-import type { Folder, Workspace } from '@yaakapp-internal/models';
+import type { Folder } from '@yaakapp-internal/models';
 import { applySync, calculateSync } from '@yaakapp-internal/sync';
 import { Banner } from '../components/core/Banner';
 import { InlineCode } from '../components/core/InlineCode';
@@ -10,20 +10,7 @@ import { showConfirm } from '../lib/confirm';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { pluralizeCount } from '../lib/pluralize';
 import { showPrompt } from '../lib/prompt';
-import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
-
-export const createWorkspace = createFastMutation<Workspace, void, Partial<Workspace>>({
-  mutationKey: ['create_workspace'],
-  mutationFn: (patch) => invokeCmd<Workspace>('cmd_update_workspace', { workspace: patch }),
-  onSuccess: async (workspace) => {
-    await router.navigate({
-      to: '/workspaces/$workspaceId',
-      params: { workspaceId: workspace.id },
-    });
-  },
-  onSettled: () => trackEvent('workspace', 'create'),
-});
 
 export const createFolder = createFastMutation<
   Folder | null,
@@ -66,8 +53,10 @@ export const syncWorkspace = createFastMutation<
   mutationFn: async ({ workspaceId, syncDir }) => {
     const ops = (await calculateSync(workspaceId, syncDir)) ?? [];
     if (ops.length === 0) {
+      console.log('Nothing to sync', workspaceId, syncDir, ops);
       return;
     }
+    console.log('syncing workspace', workspaceId, syncDir, ops);
 
     const dbOps = ops.filter((o) => o.type.startsWith('db'));
 

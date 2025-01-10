@@ -344,7 +344,7 @@ function PairEditorRow({
         key: 'delete',
         label: 'Delete',
         onSelect: handleDelete,
-        variant: 'danger',
+        color: 'danger',
       },
     ],
     [handleDelete],

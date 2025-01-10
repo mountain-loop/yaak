@@ -1,6 +1,6 @@
-import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import { useEffect } from 'react';
 import { jotaiStore } from '../lib/jotai';
+import { getWorkspaceMeta } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
 import { activeWorkspaceIdAtom, getActiveWorkspaceId } from './useActiveWorkspace';
 import { cookieJarsAtom } from './useCookieJars';
@@ -26,10 +26,9 @@ async function sync() {
   jotaiStore.set(keyValuesAtom, await invokeCmd('cmd_list_key_values'));
 
   const workspaceId = getActiveWorkspaceId();
+  if (workspaceId == null) return;
+
   const args = { workspaceId };
-  if (workspaceId == null) {
-    return;
-  }
 
   // Set the things we need first, first
   jotaiStore.set(httpRequestsAtom, await invokeCmd('cmd_list_http_requests', args));
@@ -43,5 +42,5 @@ async function sync() {
   jotaiStore.set(environmentsAtom, await invokeCmd('cmd_list_environments', args));
 
   // Single models
-  jotaiStore.set(workspaceMetaAtom, await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', args));
+  jotaiStore.set(workspaceMetaAtom, await getWorkspaceMeta(workspaceId));
 }

@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::sync::{
     apply_sync_ops, apply_sync_state_ops, compute_sync_ops, get_db_candidates, get_fs_candidates,
-    SyncOp,
+    FsCandidate, SyncOp,
 };
 use crate::watch::{watch_directory, WatchEvent};
 use chrono::Utc;
@@ -23,16 +23,18 @@ pub async fn calculate<R: Runtime>(
     let fs_candidates = get_fs_candidates(sync_dir)
         .await?
         .into_iter()
-        // Strip out any non-workspace candidates
+        // Only keep items in the same workspace
         .filter(|fs| fs.model.workspace_id() == workspace_id)
-        .collect();
+        .collect::<Vec<FsCandidate>>();
+    // println!("\ndb_candidates: \n{}\n", serde_json::to_string_pretty(&db_candidates)?);
+    // println!("\nfs_candidates: \n{}\n", serde_json::to_string_pretty(&fs_candidates)?);
     Ok(compute_sync_ops(db_candidates, fs_candidates))
 }
 
 #[command]
 pub async fn calculate_fs(dir: &Path) -> Result<Vec<SyncOp>> {
     let db_candidates = Vec::new();
-    let fs_candidates = get_fs_candidates(Path::new(&dir)).await?;
+    let fs_candidates = get_fs_candidates(dir).await?;
     Ok(compute_sync_ops(db_candidates, fs_candidates))
 }
 

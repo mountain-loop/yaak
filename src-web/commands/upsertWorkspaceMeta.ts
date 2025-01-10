@@ -7,7 +7,7 @@ import { invokeCmd } from '../lib/tauri';
 export const upsertWorkspaceMeta = createFastMutation<
   WorkspaceMeta,
   unknown,
-  Partial<WorkspaceMeta>
+  WorkspaceMeta | (Partial<Omit<WorkspaceMeta, 'id'>> & { workspaceId: string })
 >({
   mutationKey: ['update_workspace_meta'],
   mutationFn: async (patch) => {

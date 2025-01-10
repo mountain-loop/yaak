@@ -20,7 +20,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import {useClickAway, useKey, useWindowSize} from 'react-use';
+import { useClickAway, useKey, useWindowSize } from 'react-use';
 import type { HotkeyAction } from '../../hooks/useHotKey';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
@@ -45,7 +45,7 @@ export type DropdownItemDefault = {
   keepOpen?: boolean;
   hotKeyAction?: HotkeyAction;
   hotKeyLabelOnly?: boolean;
-  variant?: 'default' | 'danger' | 'notify';
+  color?: 'default' | 'danger' | 'info' | 'warning' | 'notice';
   disabled?: boolean;
   hidden?: boolean;
   leftSlot?: ReactNode;
@@ -437,6 +437,11 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
               <motion.div
                 tabIndex={0}
                 onKeyDown={handleMenuKeyDown}
+                onContextMenu={e => {
+                  // Prevent showing any ancestor context menus
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
                 initial={{ opacity: 0, y: (styles.upsideDown ? 1 : -1) * 5, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 role="menu"
@@ -558,8 +563,10 @@ function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: Men
         'h-xs', // More compact
         'min-w-[8rem] outline-none px-2 mx-1.5 flex whitespace-nowrap',
         'focus:bg-surface-highlight focus:text rounded',
-        item.variant === 'danger' && '!text-danger',
-        item.variant === 'notify' && '!text-primary',
+        item.color === 'danger' && '!text-danger',
+        item.color === 'warning' && '!text-warning',
+        item.color === 'notice' && '!text-notice',
+        item.color === 'info' && '!text-info',
       )}
       {...props}
     >

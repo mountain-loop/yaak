@@ -72,7 +72,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         {
           key: 'delete-folder',
           label: 'Delete',
-          variant: 'danger',
+          color: 'danger',
           leftSlot: <Icon icon="trash" />,
           onSelect: () => deleteFolder.mutate(),
         },
@@ -132,7 +132,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         },
         {
           key: 'delete-request',
-          variant: 'danger',
+          color: 'danger',
           label: 'Delete',
           hotKeyAction: 'http_request.delete',
           hotKeyLabelOnly: true,

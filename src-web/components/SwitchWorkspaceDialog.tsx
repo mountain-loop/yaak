@@ -1,8 +1,8 @@
+import type { Workspace } from '@yaakapp-internal/models';
 import { useState } from 'react';
-import { useSwitchWorkspace } from '../hooks/useSwitchWorkspace';
+import { switchWorkspace } from '../commands/switchWorkspace';
 import { useSettings } from '../hooks/useSettings';
 import { useUpdateSettings } from '../hooks/useUpdateSettings';
-import type { Workspace } from '@yaakapp-internal/models';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { Icon } from './core/Icon';
@@ -15,7 +15,6 @@ interface Props {
 }
 
 export function SwitchWorkspaceDialog({ hide, workspace }: Props) {
-  const switchWorkspace = useSwitchWorkspace();
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const [remember, setRemember] = useState<boolean>(false);

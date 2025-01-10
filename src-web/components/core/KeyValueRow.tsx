@@ -22,14 +22,18 @@ export function KeyValueRows({ children }: Props) {
 
 interface KeyValueRowProps {
   label: ReactNode;
-  value: ReactNode;
+  children: ReactNode;
+  rightSlot?: ReactNode;
+  leftSlot?: ReactNode;
   labelClassName?: string;
   labelColor?: 'secondary' | 'primary' | 'info';
 }
 
 export function KeyValueRow({
   label,
-  value,
+  children,
+  rightSlot,
+  leftSlot,
   labelColor = 'secondary',
   labelClassName,
 }: KeyValueRowProps) {
@@ -47,7 +51,11 @@ export function KeyValueRow({
         <span className="select-text cursor-text">{label}</span>
       </td>
       <td className="select-none py-0.5 break-all align-top max-w-[15rem]">
-        <div className="select-text cursor-text max-h-[5rem] overflow-y-auto">{value}</div>
+        <div className="select-text cursor-text max-h-[5rem] overflow-y-auto grid grid-cols-[auto_minmax(0,1fr)_auto]">
+          {leftSlot ?? <span aria-hidden />}
+          {children}
+          {rightSlot ? <div className="ml-1.5">{rightSlot}</div> : <span aria-hidden />}
+        </div>
       </td>
     </>
   );

@@ -42,6 +42,8 @@ export function Tabs({
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
 
+  value = value ?? tabs[0]?.value;
+
   // Update tabs when value changes
   useEffect(() => {
     const tabs = ref.current?.querySelectorAll<HTMLDivElement>(`[data-tab]`);

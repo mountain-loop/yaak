@@ -76,7 +76,8 @@ impl Display for SyncOp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum DbCandidate {
     Added(SyncModel),
     Modified(SyncModel, SyncState),

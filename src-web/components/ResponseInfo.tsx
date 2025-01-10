@@ -11,8 +11,12 @@ export function ResponseInfo({ response }: Props) {
   return (
     <div className="overflow-auto h-full pb-4">
       <KeyValueRows>
-        <KeyValueRow labelColor="info" label="Version" value={response.version} />
-        <KeyValueRow labelColor="info" label="Remote Address" value={response.remoteAddr} />
+        <KeyValueRow labelColor="info" label="Version">
+          {response.version}
+        </KeyValueRow>
+        <KeyValueRow labelColor="info" label="Remote Address">
+          {response.remoteAddr}
+        </KeyValueRow>
         <KeyValueRow
           labelColor="info"
           label={
@@ -27,12 +31,13 @@ export function ResponseInfo({ response }: Props) {
               />
             </div>
           }
-          value={
+        >
+          {
             <div className="flex">
               <span className="select-text cursor-text">{response.url}</span>
             </div>
           }
-        />
+        </KeyValueRow>
       </KeyValueRows>
     </div>
   );

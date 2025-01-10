@@ -1,10 +1,12 @@
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import React from 'react';
+import { upsertWorkspace } from '../../commands/upsertWorkspace';
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
 import { useAppInfo } from '../../hooks/useAppInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { useSettings } from '../../hooks/useSettings';
 import { useUpdateSettings } from '../../hooks/useUpdateSettings';
-import { useUpdateWorkspace } from '../../hooks/useUpdateWorkspace';
+import { revealInFinderText } from '../../lib/reveal';
 import { Checkbox } from '../core/Checkbox';
 import { Heading } from '../core/Heading';
 import { IconButton } from '../core/IconButton';
@@ -16,7 +18,6 @@ import { VStack } from '../core/Stacks';
 
 export function SettingsGeneral() {
   const workspace = useActiveWorkspace();
-  const updateWorkspace = useUpdateWorkspace(workspace?.id ?? null);
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const appInfo = useAppInfo();
@@ -103,7 +104,9 @@ export function SettingsGeneral() {
           labelPosition="left"
           defaultValue={`${workspace.settingRequestTimeout}`}
           validate={(value) => parseInt(value) >= 0}
-          onChange={(v) => updateWorkspace.mutate({ settingRequestTimeout: parseInt(v) || 0 })}
+          onChange={(v) =>
+            upsertWorkspace.mutate({ ...workspace, settingRequestTimeout: parseInt(v) || 0 })
+          }
           type="number"
         />
 
@@ -112,7 +115,7 @@ export function SettingsGeneral() {
           title="Validate TLS Certificates"
           event="validate-certs"
           onChange={(settingValidateCertificates) =>
-            updateWorkspace.mutate({ settingValidateCertificates })
+            upsertWorkspace.mutate({ ...workspace, settingValidateCertificates })
           }
         />
 
@@ -120,7 +123,12 @@ export function SettingsGeneral() {
           checked={workspace.settingFollowRedirects}
           title="Follow Redirects"
           event="follow-redirects"
-          onChange={(settingFollowRedirects) => updateWorkspace.mutate({ settingFollowRedirects })}
+          onChange={(settingFollowRedirects) =>
+            upsertWorkspace.mutate({
+              ...workspace,
+              settingFollowRedirects,
+            })
+          }
         />
       </VStack>
 
@@ -128,9 +136,33 @@ export function SettingsGeneral() {
 
       <Heading size={2}>App Info</Heading>
       <KeyValueRows>
-        <KeyValueRow label="Version" value={appInfo.version} />
-        <KeyValueRow label="Data Directory" value={appInfo.appDataDir} />
-        <KeyValueRow label="Logs Directory" value={appInfo.appLogDir} />
+        <KeyValueRow label="Version">{appInfo.version}</KeyValueRow>
+        <KeyValueRow
+          label="Data Directory"
+          rightSlot={
+            <IconButton
+              title={revealInFinderText}
+              icon="folder_open"
+              size="2xs"
+              onClick={() => revealItemInDir(appInfo.appDataDir)}
+            />
+          }
+        >
+          {appInfo.appDataDir}
+        </KeyValueRow>
+        <KeyValueRow
+          label="Logs Directory"
+          rightSlot={
+            <IconButton
+              title={revealInFinderText}
+              icon="folder_open"
+              size="2xs"
+              onClick={() => revealItemInDir(appInfo.appLogDir)}
+            />
+          }
+        >
+          {appInfo.appLogDir}
+        </KeyValueRow>
       </KeyValueRows>
     </VStack>
   );
