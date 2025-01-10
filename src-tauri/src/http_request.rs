@@ -1,9 +1,3 @@
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-
 use crate::render::render_http_request;
 use crate::response_err;
 use crate::template_callback::PluginTemplateCallback;
@@ -16,8 +10,14 @@ use mime_guess::Mime;
 use reqwest::redirect::Policy;
 use reqwest::{multipart, Proxy, Url};
 use reqwest::{Method, Response};
-use reqwest::tls::Version;
+use rustls::ClientConfig;
+use rustls_platform_verifier::ConfigVerifierExt;
 use serde_json::Value;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs;
 use tokio::fs::{create_dir_all, File};
@@ -28,7 +28,10 @@ use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries::{get_base_environment, get_http_response, get_or_create_settings, get_workspace, update_response_if_id, upsert_cookie_jar, UpdateSource};
+use yaak_models::queries::{
+    get_base_environment, get_http_response, get_or_create_settings, get_workspace,
+    update_response_if_id, upsert_cookie_jar, UpdateSource,
+};
 use yaak_plugins::events::{RenderPurpose, WindowContext};
 
 pub async fn send_http_request<R: Runtime>(
@@ -75,11 +78,20 @@ pub async fn send_http_request<R: Runtime>(
         .brotli(true)
         .deflate(true)
         .referer(false)
-        .danger_accept_invalid_certs(!workspace.setting_validate_certificates)
-        .use_rustls_tls()
-        .min_tls_version(Version::TLS_1_0)
-        .max_tls_version(Version::TLS_1_3)
         .tls_info(true);
+
+    if workspace.setting_validate_certificates {
+        // Use platform-native verifier to validate certificates
+        client_builder =
+            client_builder.use_preconfigured_tls(ClientConfig::with_platform_verifier())
+    } else {
+        // Use rustls to skip validation because rustls_platform_verifier does not have this
+        // ability
+        client_builder = client_builder
+            .use_rustls_tls()
+            .danger_accept_invalid_hostnames(true)
+            .danger_accept_invalid_certs(true);
+    }
 
     match settings.proxy {
         Some(ProxySetting::Disabled) => client_builder = client_builder.no_proxy(),
