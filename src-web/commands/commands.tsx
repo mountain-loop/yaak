@@ -53,10 +53,10 @@ export const syncWorkspace = createFastMutation<
   mutationFn: async ({ workspaceId, syncDir }) => {
     const ops = (await calculateSync(workspaceId, syncDir)) ?? [];
     if (ops.length === 0) {
-      console.log('Nothing to sync', workspaceId, syncDir, ops);
+      console.log('Nothing to sync', workspaceId, syncDir);
       return;
     }
-    console.log('syncing workspace', workspaceId, syncDir, ops);
+    console.log('Syncing workspace', workspaceId, syncDir, ops);
 
     const dbOps = ops.filter((o) => o.type.startsWith('db'));
 

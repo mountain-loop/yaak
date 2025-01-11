@@ -16,17 +16,11 @@ export function initSync() {
   });
 }
 
-// TODO: This list should be derived from something, because we might forget something here
-const relevantModels: AnyModel['model'][] = [
-  'workspace',
-  'folder',
-  'environment',
-  'http_request',
-  'grpc_request',
-];
-
 function initForWorkspace(workspaceId: string, syncDir: string | null) {
-  console.log('Initializing directory sync for', workspaceId, syncDir);
+  // Sync on sync dir changes
+  if (syncDir == null) {
+    return;
+  }
 
   const debouncedSync = debounce(() => {
     if (syncDir == null) return;
@@ -34,22 +28,46 @@ function initForWorkspace(workspaceId: string, syncDir: string | null) {
   });
 
   // Sync on model upsert
-  listenToTauriEvent<ModelPayload>('upserted_model', (p) => {
-    const isRelevant = relevantModels.includes(p.payload.model.model);
-    if (isRelevant) debouncedSync();
+  const unsubUpsertedModels = listenToTauriEvent<ModelPayload>('upserted_model', (p) => {
+    if (isModelRelevant(workspaceId, p.payload.model)) {
+      debouncedSync();
+    }
   });
 
   // Sync on model deletion
-  listenToTauriEvent<ModelPayload>('deleted_model', (p) => {
-    const isRelevant = relevantModels.includes(p.payload.model.model);
-    if (isRelevant) debouncedSync();
+  const unsubDeletedModels = listenToTauriEvent<ModelPayload>('deleted_model', (p) => {
+    if (isModelRelevant(workspaceId, p.payload.model)) {
+      debouncedSync();
+    }
   });
 
-  // Sync on sync dir changes
-  if (syncDir != null) {
-    return watchWorkspaceFiles(workspaceId, syncDir, debouncedSync);
-  }
+  // Sync on file changes in sync directory
+  const unsubFileWatch = watchWorkspaceFiles(workspaceId, syncDir, debouncedSync);
+
+  console.log('Initializing directory sync for', workspaceId, syncDir);
 
   // Perform an initial sync operation
   debouncedSync();
+
+  return function unsub() {
+    unsubFileWatch();
+    unsubDeletedModels();
+    unsubUpsertedModels();
+  };
+}
+
+function isModelRelevant(workspaceId: string, m: AnyModel) {
+  if (
+    m.model !== 'workspace' &&
+    m.model !== 'folder' &&
+    m.model !== 'environment' &&
+    m.model !== 'http_request' &&
+    m.model !== 'grpc_request'
+  ) {
+    return false;
+  } else if (m.model === 'workspace') {
+    return m.id === workspaceId;
+  } else {
+    return m.workspaceId === workspaceId;
+  }
 }

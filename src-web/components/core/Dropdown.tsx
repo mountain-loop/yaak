@@ -7,6 +7,7 @@ import type {
   MouseEvent,
   ReactElement,
   ReactNode,
+  RefObject,
   SetStateAction,
 } from 'react';
 import React, {
@@ -20,7 +21,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useClickAway, useKey, useWindowSize } from 'react-use';
+import { useKey, useWindowSize } from 'react-use';
+import { useClickOutside } from '../../hooks/useClickOutside';
 import type { HotkeyAction } from '../../hooks/useHotKey';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
@@ -99,10 +101,6 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
     setDefaultSelectedIndex(undefined);
   }, [setIsOpen]);
 
-  const openDropdown = useCallback(() => {
-    setIsOpen((o) => !o);
-  }, [setIsOpen]);
-
   useImperativeHandle(
     ref,
     () => ({
@@ -113,18 +111,18 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
         else this.close();
       },
       open() {
-        openDropdown();
+        setIsOpen(true);
       },
       close() {
         handleClose();
       },
     }),
-    [handleClose, isOpen, openDropdown],
+    [handleClose, isOpen, setIsOpen],
   );
 
   useHotKey(hotKeyAction ?? null, () => {
     setDefaultSelectedIndex(0);
-    openDropdown();
+    setIsOpen(true);
   });
 
   const child = useMemo(() => {
@@ -134,17 +132,17 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
       ...existingChild.props,
       ref: buttonRef,
       'aria-haspopup': 'true',
-      onClick:
+      onMouseDown:
         existingChild.props?.onClick ??
         ((e: MouseEvent<HTMLButtonElement>) => {
           e.preventDefault();
           e.stopPropagation();
           setDefaultSelectedIndex(undefined);
-          openDropdown();
+          setIsOpen((o) => !o); // Toggle dropdown
         }),
     };
     return cloneElement(existingChild, props);
-  }, [children, openDropdown]);
+  }, [children, setIsOpen]);
 
   useEffect(() => {
     buttonRef.current?.setAttribute('aria-expanded', isOpen.toString());
@@ -163,6 +161,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
       <Menu
         ref={menuRef}
         showTriangle
+        triggerRef={buttonRef}
         fullWidth={fullWidth}
         defaultSelectedIndex={defaultSelectedIndex}
         items={items}
@@ -218,6 +217,7 @@ interface MenuProps {
   fullWidth?: boolean;
   isOpen: boolean;
   items: DropdownItem[];
+  triggerRef?: RefObject<HTMLButtonElement>;
 }
 
 const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'>, MenuProps>(
@@ -231,6 +231,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       triggerShape,
       defaultSelectedIndex,
       showTriangle,
+      triggerRef,
     }: MenuProps,
     ref,
   ) {
@@ -415,7 +416,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     );
 
     const menuRef = useRef<HTMLDivElement | null>(null);
-    useClickAway(menuRef, handleClose);
+    useClickOutside(menuRef, handleClose, triggerRef);
 
     return (
       <>
@@ -437,7 +438,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
               <motion.div
                 tabIndex={0}
                 onKeyDown={handleMenuKeyDown}
-                onContextMenu={e => {
+                onContextMenu={(e) => {
                   // Prevent showing any ancestor context menus
                   e.stopPropagation();
                   e.preventDefault();
