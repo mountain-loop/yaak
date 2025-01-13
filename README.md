@@ -13,7 +13,7 @@ in this repository if applicable.
 
 ## Contribution Policy
 
-Yaak open source, but only accepting contributions for bug fixes. See the
+Yaak is open source, but only accepting contributions for bug fixes. See the
 [`good first issue`](https://github.com/yaakapp/app/labels/good%20first%20issue) label for
 issues that are more approachable for contribution.
 
