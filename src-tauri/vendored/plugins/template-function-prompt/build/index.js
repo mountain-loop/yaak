@@ -29,6 +29,7 @@ var plugin = {
     description: "Prompt the user for input when sending a request",
     args: [
       { type: "text", name: "title", label: "Title" },
+      { type: "text", name: "label", label: "Label", optional: true },
       { type: "text", name: "defaultValue", label: "Default Value", optional: true },
       { type: "text", name: "placeholder", label: "Placeholder", optional: true }
     ],
