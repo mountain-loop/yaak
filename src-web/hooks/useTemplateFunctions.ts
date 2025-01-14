@@ -1,14 +1,52 @@
 import { useQuery } from '@tanstack/react-query';
-import type { GetTemplateFunctionsResponse } from '@yaakapp-internal/plugins';
-import { useState } from 'react';
+import type { GetTemplateFunctionsResponse, TemplateFunction } from '@yaakapp-internal/plugins';
+import { atom, useAtomValue } from 'jotai';
+import { useSetAtom } from 'jotai/index';
+import { useMemo, useState } from 'react';
+import type {TwigCompletionOption} from "../components/core/Editor/twig/completion";
 import { invokeCmd } from '../lib/tauri';
 import { usePluginsKey } from './usePlugins';
 
+const templateFunctionsAtom = atom<TemplateFunction[]>([]);
+
+export function useTwigCompletionOptions(
+  onClick: (fn: TemplateFunction, ragTag: string, pos: number) => void,
+) {
+  const templateFunctions = useTemplateFunctions();
+  return useMemo<TwigCompletionOption[]>(() => {
+    return (
+      templateFunctions.map((fn) => {
+        const NUM_ARGS = 2;
+        const shortArgs =
+          fn.args
+            .slice(0, NUM_ARGS)
+            .map((a) => a.name)
+            .join(', ') + (fn.args.length > NUM_ARGS ? ', …' : '');
+        return {
+          name: fn.name,
+          aliases: fn.aliases,
+          type: 'function',
+          description: fn.description,
+          args: fn.args.map((a) => ({ name: a.name })),
+          value: null,
+          label: `${fn.name}(${shortArgs})`,
+          onClick: (rawTag: string, startPos: number) => onClick(fn, rawTag, startPos),
+        };
+      }) ?? []
+    );
+  }, [onClick, templateFunctions]);
+}
+
 export function useTemplateFunctions() {
+  return useAtomValue(templateFunctionsAtom);
+}
+
+export function useSubscribeTemplateFunctions() {
   const pluginsKey = usePluginsKey();
   const [numFns, setNumFns] = useState<number>(0);
+  const setAtom = useSetAtom(templateFunctionsAtom);
 
-  const result = useQuery({
+  useQuery({
     queryKey: ['template_functions', pluginsKey],
     // Fetch periodically until functions are returned
     // NOTE: visibilitychange (refetchOnWindowFocus) does not work on Windows, so we'll rely on this logic
@@ -19,9 +57,9 @@ export function useTemplateFunctions() {
     queryFn: async () => {
       const result = await invokeCmd<GetTemplateFunctionsResponse[]>('cmd_template_functions');
       setNumFns(result.length);
-      return result;
+      const functions = result.flatMap((r) => r.functions) ?? [];
+      setAtom(functions);
+      return functions;
     },
   });
-
-  return result.data?.flatMap((r) => r.functions) ?? [];
 }

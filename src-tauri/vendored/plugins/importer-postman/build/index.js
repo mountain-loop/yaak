@@ -45,13 +45,20 @@ function pluginHookImport(_ctx, contents) {
     model: "workspace",
     id: generateId("workspace"),
     name: info.name || "Postman Import",
-    description: info.description?.content ?? info.description ?? "",
+    description: info.description?.content ?? info.description
+  };
+  exportResources.workspaces.push(workspace);
+  const environment = {
+    model: "environment",
+    id: generateId("environment"),
+    name: "Global Variables",
+    workspaceId: workspace.id,
     variables: root.variable?.map((v) => ({
       name: v.key,
       value: v.value
     })) ?? []
   };
-  exportResources.workspaces.push(workspace);
+  exportResources.environments.push(environment);
   const importItem = (v, folderId = null) => {
     if (typeof v.name === "string" && Array.isArray(v.item)) {
       const folder = {
@@ -91,6 +98,7 @@ function pluginHookImport(_ctx, contents) {
         workspaceId: workspace.id,
         folderId,
         name: v.name,
+        description: v.description || void 0,
         method: r.method || "GET",
         url,
         urlParameters,
@@ -108,7 +116,8 @@ function pluginHookImport(_ctx, contents) {
   for (const item of root.item) {
     importItem(item);
   }
-  return { resources: convertTemplateSyntax(exportResources) };
+  const resources = deleteUndefinedAttrs(convertTemplateSyntax(exportResources));
+  return { resources };
 }
 function convertUrl(url) {
   if (typeof url === "string") {
@@ -285,6 +294,17 @@ function convertTemplateSyntax(obj) {
   } else if (typeof obj === "object" && obj != null) {
     return Object.fromEntries(
       Object.entries(obj).map(([k, v]) => [k, convertTemplateSyntax(v)])
+    );
+  } else {
+    return obj;
+  }
+}
+function deleteUndefinedAttrs(obj) {
+  if (Array.isArray(obj) && obj != null) {
+    return obj.map(deleteUndefinedAttrs);
+  } else if (typeof obj === "object" && obj != null) {
+    return Object.fromEntries(
+      Object.entries(obj).filter(([, v]) => v !== void 0).map(([k, v]) => [k, deleteUndefinedAttrs(v)])
     );
   } else {
     return obj;

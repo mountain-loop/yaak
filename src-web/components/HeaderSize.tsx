@@ -1,10 +1,11 @@
 import classNames from 'classnames';
 import type { HTMLAttributes, ReactNode } from 'react';
 import React from 'react';
-import { useSettings } from '../hooks/useSettings';
 import { useOsInfo } from '../hooks/useOsInfo';
+import { useSettings } from '../hooks/useSettings';
 import { useStoplightsVisible } from '../hooks/useStoplightsVisible';
-import { WINDOW_CONTROLS_WIDTH, WindowControls } from './WindowControls';
+import { HEADER_SIZE_LG, HEADER_SIZE_MD, WINDOW_CONTROLS_WIDTH } from '../lib/constants';
+import { WindowControls } from './WindowControls';
 
 interface HeaderSizeProps extends HTMLAttributes<HTMLDivElement> {
   children?: ReactNode;
@@ -12,9 +13,6 @@ interface HeaderSizeProps extends HTMLAttributes<HTMLDivElement> {
   ignoreControlsSpacing?: boolean;
   onlyXWindowControl?: boolean;
 }
-
-export const HEADER_SIZE_MD = '27px';
-export const HEADER_SIZE_LG = '38px';
 
 export function HeaderSize({
   className,
@@ -33,7 +31,8 @@ export function HeaderSize({
       style={{
         ...style,
         // Add padding for macOS stoplights, but keep it the same width (account for the interface scale)
-        paddingLeft: (stoplightsVisible && !ignoreControlsSpacing) ? 72 / settings.interfaceScale : undefined,
+        paddingLeft:
+          stoplightsVisible && !ignoreControlsSpacing ? 72 / settings.interfaceScale : undefined,
         ...(size === 'md' ? { height: HEADER_SIZE_MD } : {}),
         ...(size === 'lg' ? { height: HEADER_SIZE_LG } : {}),
         ...(osInfo.osType === 'macos' || ignoreControlsSpacing

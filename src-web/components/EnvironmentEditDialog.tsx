@@ -1,15 +1,14 @@
+import type { Environment } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
 import { useDeleteEnvironment } from '../hooks/useDeleteEnvironment';
 import { useEnvironments } from '../hooks/useEnvironments';
 import { useKeyValue } from '../hooks/useKeyValue';
-import { usePrompt } from '../hooks/usePrompt';
 import { useUpdateEnvironment } from '../hooks/useUpdateEnvironment';
-import { useUpdateWorkspace } from '../hooks/useUpdateWorkspace';
-import type { Environment, Workspace } from '@yaakapp-internal/models';
+import { showPrompt } from '../lib/prompt';
+import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { ContextMenu } from './core/Dropdown';
 import type {
@@ -31,20 +30,18 @@ interface Props {
 }
 
 export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(
-    initialEnvironment?.id ?? null,
-  );
-  const environments = useEnvironments();
   const createEnvironment = useCreateEnvironment();
-  const activeWorkspace = useActiveWorkspace();
+  const { baseEnvironment, subEnvironments, allEnvironments } = useEnvironments();
 
-  const selectedEnvironment = useMemo(
-    () => environments.find((e) => e.id === selectedEnvironmentId) ?? null,
-    [environments, selectedEnvironmentId],
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(
+    initialEnvironment?.id ?? baseEnvironment?.id ?? null,
   );
+
+  const selectedEnvironment = allEnvironments.find((e) => e.id === selectedEnvironmentId);
 
   const handleCreateEnvironment = async () => {
-    const e = await createEnvironment.mutateAsync();
+    if (baseEnvironment == null) return;
+    const e = await createEnvironment.mutateAsync(baseEnvironment);
     if (e == null) return;
     setSelectedEnvironmentId(e.id);
   };
@@ -59,8 +56,8 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
         <aside className="w-full min-w-0 pt-2">
           <div className="min-w-0 h-full overflow-y-auto pt-1">
             <SidebarButton
-              active={selectedEnvironment?.id == null}
-              onClick={() => setSelectedEnvironmentId(null)}
+              active={selectedEnvironment?.id == baseEnvironment?.id}
+              onClick={() => setSelectedEnvironmentId(baseEnvironment?.id ?? null)}
               environment={null}
               rightSlot={
                 <IconButton
@@ -75,14 +72,14 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
                 />
               }
             >
-              Global Variables
+              {baseEnvironment?.name}
             </SidebarButton>
-            {environments.length > 0 && (
+            {subEnvironments.length > 0 && (
               <div className="px-2">
                 <Separator className="my-3"></Separator>
               </div>
             )}
-            {environments.map((e) => (
+            {subEnvironments.map((e) => (
               <SidebarButton
                 key={e.id}
                 active={selectedEnvironment?.id === e.id}
@@ -96,11 +93,20 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
         </aside>
       )}
       secondSlot={() =>
-        activeWorkspace != null && (
+        selectedEnvironmentId == null ? (
+          <div className="p-3 mt-10">
+            <Banner color="danger">No selected environment</Banner>
+          </div>
+        ) : selectedEnvironment == null ? (
+          <div className="p-3 mt-10">
+            <Banner color="danger">
+              Failed to find selected environment <InlineCode>{selectedEnvironmentId}</InlineCode>
+            </Banner>
+          </div>
+        ) : (
           <EnvironmentEditor
             className="pt-2 border-l border-border-subtle"
             environment={selectedEnvironment}
-            workspace={activeWorkspace}
           />
         )
       }
@@ -110,11 +116,9 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
 
 const EnvironmentEditor = function ({
   environment,
-  workspace,
   className,
 }: {
-  environment: Environment | null;
-  workspace: Workspace;
+  environment: Environment;
   className?: string;
 }) {
   const valueVisibility = useKeyValue<boolean>({
@@ -122,37 +126,25 @@ const EnvironmentEditor = function ({
     key: 'environmentValueVisibility',
     fallback: true,
   });
-  const environments = useEnvironments();
+  const { subEnvironments } = useEnvironments();
   const updateEnvironment = useUpdateEnvironment(environment?.id ?? null);
-  const updateWorkspace = useUpdateWorkspace(workspace.id);
-  const variables = environment == null ? workspace.variables : environment.variables;
   const handleChange = useCallback<PairEditorProps['onChange']>(
-    (variables) => {
-      if (environment != null) {
-        updateEnvironment.mutate({ variables });
-      } else {
-        updateWorkspace.mutate({ variables });
-      }
-    },
-    [updateWorkspace, updateEnvironment, environment],
+    (variables) => updateEnvironment.mutate({ variables }),
+    [updateEnvironment],
   );
 
   // Gather a list of env names from other environments, to help the user get them aligned
   const nameAutocomplete = useMemo<GenericCompletionConfig>(() => {
-    const otherEnvironments = environments.filter((e) => e.id !== environment?.id);
     const allVariableNames =
       environment == null
-        ? [
-            // Nothing to autocomplete if we're in the base environment
-          ]
-        : [
-            ...workspace.variables.map((v) => v.name),
-            ...otherEnvironments.flatMap((e) => e.variables.map((v) => v.name)),
-          ];
+        ? [] // Nothing to autocomplete if we're in the base environment
+        : subEnvironments
+            .filter((e) => e.environmentId != null)
+            .flatMap((e) => e.variables.map((v) => v.name));
 
     // Filter out empty strings and variables that already exist
     const variableNames = allVariableNames.filter(
-      (name) => name != '' && !variables.find((v) => v.name === name),
+      (name) => name != '' && !environment.variables.find((v) => v.name === name),
     );
     const uniqueVariableNames = [...new Set(variableNames)];
     const options = uniqueVariableNames.map(
@@ -162,19 +154,19 @@ const EnvironmentEditor = function ({
       }),
     );
     return { options };
-  }, [environments, variables, workspace, environment]);
+  }, [subEnvironments, environment]);
 
   const validateName = useCallback((name: string) => {
     // Empty just means the variable doesn't have a name yet, and is unusable
     if (name === '') return true;
-    return name.match(/^[a-z_][a-z0-9_]*$/i) != null;
+    return name.match(/^[a-z][a-z0-9_-]*$/i) != null;
   }, []);
 
   return (
     <VStack space={4} className={classNames(className, 'pl-4')}>
       <HStack space={2} className="justify-between">
         <Heading className="w-full flex items-center gap-1">
-          <div>{environment?.name ?? 'Global Variables'}</div>
+          <div>{environment?.name}</div>
           <IconButton
             iconClassName="text-text-subtlest"
             size="sm"
@@ -195,9 +187,10 @@ const EnvironmentEditor = function ({
           nameValidate={validateName}
           valueType={valueVisibility.value ? 'text' : 'password'}
           valueAutocompleteVariables={true}
-          forceUpdateKey={environment?.id ?? workspace?.id ?? 'n/a'}
-          pairs={variables}
+          forceUpdateKey={environment.id}
+          pairs={environment.variables}
           onChange={handleChange}
+          stateKey={`environment.${environment.id}`}
         />
       </div>
     </VStack>
@@ -219,7 +212,6 @@ function SidebarButton({
   rightSlot?: ReactNode;
   environment: Environment | null;
 }) {
-  const prompt = usePrompt();
   const updateEnvironment = useUpdateEnvironment(environment?.id ?? null);
   const deleteEnvironment = useDeleteEnvironment(environment);
   const [showContextMenu, setShowContextMenu] = useState<{
@@ -267,7 +259,7 @@ function SidebarButton({
               label: 'Rename',
               leftSlot: <Icon icon="pencil" size="sm" />,
               onSelect: async () => {
-                const name = await prompt({
+                const name = await showPrompt({
                   id: 'rename-environment',
                   title: 'Rename Environment',
                   description: (
@@ -286,7 +278,7 @@ function SidebarButton({
             },
             {
               key: 'delete-environment',
-              variant: 'danger',
+              color: 'danger',
               label: 'Delete',
               leftSlot: <Icon icon="trash" size="sm" />,
               onSelect: () => deleteEnvironment.mutate(),

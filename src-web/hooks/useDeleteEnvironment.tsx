@@ -1,21 +1,20 @@
-import { useMutation } from '@tanstack/react-query';
 import type { Environment } from '@yaakapp-internal/models';
-import {useSetAtom} from "jotai";
+import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
+import { showConfirm } from '../lib/confirm';
 import { invokeCmd } from '../lib/tauri';
-import { useConfirm } from './useConfirm';
-import {environmentsAtom} from "./useEnvironments";
-import {removeModelById} from "./useSyncModelStores";
+import { environmentsAtom } from './useEnvironments';
+import { useFastMutation } from './useFastMutation';
+import { removeModelById } from './useSyncModelStores';
 
 export function useDeleteEnvironment(environment: Environment | null) {
-  const confirm = useConfirm();
   const setEnvironments = useSetAtom(environmentsAtom);
 
-  return useMutation<Environment | null, string>({
+  return useFastMutation<Environment | null, string>({
     mutationKey: ['delete_environment', environment?.id],
     mutationFn: async () => {
-      const confirmed = await confirm({
+      const confirmed = await showConfirm({
         id: 'delete-environment',
         title: 'Delete Environment',
         variant: 'delete',
@@ -33,6 +32,6 @@ export function useDeleteEnvironment(environment: Environment | null) {
       if (environment == null) return;
 
       setEnvironments(removeModelById(environment));
-    }
+    },
   });
 }

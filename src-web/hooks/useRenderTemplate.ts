@@ -5,7 +5,7 @@ import { useActiveWorkspace } from './useActiveWorkspace';
 
 export function useRenderTemplate(template: string) {
   const workspaceId = useActiveWorkspace()?.id ?? 'n/a';
-  const environmentId = useActiveEnvironment()[0]?.id ?? null;
+  const environmentId = useActiveEnvironment()?.id ?? null;
   return useQuery<string>({
     placeholderData: (prev) => prev, // Keep previous data on refetch
     refetchOnWindowFocus: false,

@@ -3,8 +3,8 @@ use crate::error::Result;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
-use std::fs;
 use std::path::Path;
+use tokio::fs;
 use ts_rs::TS;
 use yaak_models::models::{AnyModel, Environment, Folder, GrpcRequest, HttpRequest, Workspace};
 
@@ -20,8 +20,8 @@ pub enum SyncModel {
 }
 
 impl SyncModel {
-    pub fn from_file(file_path: &Path) -> Result<Option<(SyncModel, Vec<u8>, String)>> {
-        let content = match fs::read(file_path) {
+    pub async fn from_file(file_path: &Path) -> Result<Option<(SyncModel, Vec<u8>, String)>> {
+        let content = match fs::read(file_path).await {
             Ok(c) => c,
             Err(_) => return Ok(None),
         };
@@ -40,8 +40,8 @@ impl SyncModel {
         }
     }
 
-    pub fn to_file_contents(&self, file_path: &Path) -> Result<(Vec<u8>, String)> {
-        let ext = file_path.extension().unwrap_or_default();
+    pub fn to_file_contents(&self, rel_path: &Path) -> Result<(Vec<u8>, String)> {
+        let ext = rel_path.extension().unwrap_or_default();
         let content = if ext == "yaml" || ext == "yml" {
             serde_yaml::to_string(self)?
         } else {
@@ -96,6 +96,7 @@ impl TryFrom<AnyModel> for SyncModel {
             AnyModel::GrpcRequest(m) => SyncModel::GrpcRequest(m),
             AnyModel::HttpRequest(m) => SyncModel::HttpRequest(m),
             AnyModel::Workspace(m) => SyncModel::Workspace(m),
+            AnyModel::WorkspaceMeta(m) => return Err(UnknownModel(m.model)),
             AnyModel::CookieJar(m) => return Err(UnknownModel(m.model)),
             AnyModel::GrpcConnection(m) => return Err(UnknownModel(m.model)),
             AnyModel::GrpcEvent(m) => return Err(UnknownModel(m.model)),

@@ -80,10 +80,7 @@ async fn render_tag<T: TemplateCallback>(
             match cb.run(name.as_str(), resolved_args.clone()).await {
                 Ok(s) => s,
                 Err(e) => {
-                    warn!(
-                        "Failed to run template callback {}({:?}): {}",
-                        name, resolved_args, e
-                    );
+                    warn!("Failed to run template callback {}({:?}): {}", name, resolved_args, e);
                     "".to_string()
                 }
             }
@@ -116,10 +113,7 @@ mod tests {
         let template = "";
         let vars = HashMap::new();
         let result = "";
-        assert_eq!(
-            parse_and_render(template, &vars, &empty_cb).await,
-            result.to_string()
-        );
+        assert_eq!(parse_and_render(template, &vars, &empty_cb).await, result.to_string());
     }
 
     #[tokio::test]
@@ -128,10 +122,7 @@ mod tests {
         let template = "Hello World!";
         let vars = HashMap::new();
         let result = "Hello World!";
-        assert_eq!(
-            parse_and_render(template, &vars, &empty_cb).await,
-            result.to_string()
-        );
+        assert_eq!(parse_and_render(template, &vars, &empty_cb).await, result.to_string());
     }
 
     #[tokio::test]
@@ -140,10 +131,7 @@ mod tests {
         let template = "${[ foo ]}";
         let vars = HashMap::from([("foo".to_string(), "bar".to_string())]);
         let result = "bar";
-        assert_eq!(
-            parse_and_render(template, &vars, &empty_cb).await,
-            result.to_string()
-        );
+        assert_eq!(parse_and_render(template, &vars, &empty_cb).await, result.to_string());
     }
 
     #[tokio::test]
@@ -156,10 +144,7 @@ mod tests {
         vars.insert("baz".to_string(), "baz".to_string());
 
         let result = "foo: bar: baz";
-        assert_eq!(
-            parse_and_render(template, &vars, &empty_cb).await,
-            result.to_string()
-        );
+        assert_eq!(parse_and_render(template, &vars, &empty_cb).await, result.to_string());
     }
 
     #[tokio::test]
@@ -168,10 +153,7 @@ mod tests {
         let template = "hello ${[ word ]} world!";
         let vars = HashMap::from([("word".to_string(), "cruel".to_string())]);
         let result = "hello cruel world!";
-        assert_eq!(
-            parse_and_render(template, &vars, &empty_cb).await,
-            result.to_string()
-        );
+        assert_eq!(parse_and_render(template, &vars, &empty_cb).await, result.to_string());
     }
 
     #[tokio::test]
@@ -187,12 +169,7 @@ mod tests {
                 fn_name: &str,
                 args: HashMap<String, String>,
             ) -> Result<String, String> {
-                Ok(format!(
-                    "{fn_name}: {}, {:?} {:?}",
-                    args.len(),
-                    args.get("a"),
-                    args.get("b")
-                ))
+                Ok(format!("{fn_name}: {}, {:?} {:?}", args.len(), args.get("a"), args.get("b")))
             }
         }
         assert_eq!(parse_and_render(template, &vars, &CB {}).await, result);
@@ -218,10 +195,7 @@ mod tests {
             }
         }
 
-        assert_eq!(
-            parse_and_render(template, &vars, &CB {}).await,
-            result.to_string()
-        );
+        assert_eq!(parse_and_render(template, &vars, &CB {}).await, result.to_string());
     }
 
     #[tokio::test]
@@ -241,9 +215,6 @@ mod tests {
             }
         }
 
-        assert_eq!(
-            parse_and_render(template, &vars, &CB {}).await,
-            result.to_string()
-        );
+        assert_eq!(parse_and_render(template, &vars, &CB {}).await, result.to_string());
     }
 }

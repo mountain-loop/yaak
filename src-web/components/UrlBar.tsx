@@ -1,9 +1,9 @@
+import type { HttpRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import type { FormEvent, ReactNode } from 'react';
 import { memo, useRef, useState } from 'react';
 import { useHotKey } from '../hooks/useHotKey';
-import type { HttpRequest } from '@yaakapp-internal/models';
 import type { IconProps } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import type { InputProps } from './core/Input';
@@ -25,6 +25,7 @@ type Props = Pick<HttpRequest, 'url'> & {
   forceUpdateKey: string;
   rightSlot?: ReactNode;
   autocomplete?: InputProps['autocomplete'];
+  stateKey: InputProps['stateKey'];
 };
 
 export const UrlBar = memo(function UrlBar({
@@ -43,11 +44,12 @@ export const UrlBar = memo(function UrlBar({
   autocomplete,
   rightSlot,
   isLoading,
+  stateKey,
 }: Props) {
   const inputRef = useRef<EditorView>(null);
   const [isFocused, setIsFocused] = useState<boolean>(false);
 
-  useHotKey('urlBar.focus', () => {
+  useHotKey('url_bar.focus', () => {
     const head = inputRef.current?.state.doc.length ?? 0;
     inputRef.current?.dispatch({
       selection: { anchor: 0, head },
@@ -64,14 +66,15 @@ export const UrlBar = memo(function UrlBar({
   return (
     <form onSubmit={handleSubmit} className={classNames('x-theme-urlBar', className)}>
       <Input
-        autocompleteVariables
         ref={inputRef}
-        size="sm"
+        autocompleteVariables
+        stateKey={stateKey}
+        size="md"
         wrapLines={isFocused}
         hideLabel
         useTemplating
         language="url"
-        className="pl-0 pr-1.5 py-0.5"
+        className="px-1.5 py-0.5"
         label="Enter URL"
         name="url"
         autocomplete={autocomplete}
@@ -86,26 +89,30 @@ export const UrlBar = memo(function UrlBar({
         leftSlot={
           method != null &&
           onMethodChange != null && (
-            <RequestMethodDropdown
-              method={method}
-              onChange={onMethodChange}
-              className="my-0.5 ml-0.5"
-            />
+            <div className="py-0.5">
+              <RequestMethodDropdown
+                method={method}
+                onChange={onMethodChange}
+                className="ml-0.5 !h-full"
+              />
+            </div>
           )
         }
         rightSlot={
           <>
             {rightSlot}
             {submitIcon !== null && (
-              <IconButton
-                size="xs"
-                iconSize="md"
-                title="Send Request"
-                type="submit"
-                className="w-8 my-0.5 mr-0.5"
-                icon={isLoading ? 'x' : submitIcon}
-                hotkeyAction="http_request.send"
-              />
+              <div className="py-0.5">
+                <IconButton
+                  size="xs"
+                  iconSize="md"
+                  title="Send Request"
+                  type="submit"
+                  className="w-8 mr-0.5 !h-full"
+                  icon={isLoading ? 'x' : submitIcon}
+                  hotkeyAction="http_request.send"
+                />
+              </div>
             )}
           </>
         }

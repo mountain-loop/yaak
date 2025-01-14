@@ -1,6 +1,6 @@
+import { debounce } from '@yaakapp-internal/lib';
 import type { Dispatch, SetStateAction } from 'react';
 import { useMemo, useState } from 'react';
-import { debounce } from '../lib/debounce';
 
 export function useDebouncedState<T>(
   defaultValue: T,

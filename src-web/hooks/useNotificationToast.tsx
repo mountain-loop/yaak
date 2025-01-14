@@ -1,12 +1,10 @@
-import { open } from '@tauri-apps/plugin-shell';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../components/core/Button';
-import { useToast } from '../components/ToastContext';
 import { invokeCmd } from '../lib/tauri';
 import { useListenToTauriEvent } from './useListenToTauriEvent';
+import { showToast } from '../lib/toast';
 
 export function useNotificationToast() {
-  const toast = useToast();
-
   const markRead = (id: string) => {
     invokeCmd('cmd_dismiss_notification', { notificationId: id }).catch(console.error);
   };
@@ -23,21 +21,21 @@ export function useNotificationToast() {
     console.log('Got notification event', payload);
     const actionUrl = payload.action?.url;
     const actionLabel = payload.action?.label;
-    toast.show({
+    showToast({
       id: payload.id,
       timeout: null,
       message: payload.message,
       color: 'custom',
       onClose: () => markRead(payload.id),
-      action:
+      action: ({ hide }) =>
         actionLabel && actionUrl ? (
           <Button
             size="xs"
             color="secondary"
             className="mr-auto min-w-[5rem]"
             onClick={() => {
-              toast.hide(payload.id);
-              return open(actionUrl);
+              hide();
+              return openUrl(actionUrl);
             }}
           >
             {actionLabel}

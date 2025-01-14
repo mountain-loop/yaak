@@ -1,16 +1,24 @@
 import { useGit } from '@yaakapp-internal/git';
-import { useDirectorySync } from '@yaakapp-internal/sync';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
+import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
+import { showDialog } from '../lib/dialog';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
-import { useDialog } from './DialogContext';
 import { GitCommitDialog } from './GitCommitDialog';
 
-export function SyncDropdown({ syncDir }: { syncDir: string }) {
+export function SyncDropdown() {
+  const workspaceMeta = useWorkspaceMeta();
+
+  if (workspaceMeta?.settingSyncDir == null) {
+    return null;
+  }
+
+  return <SyncDropdownWithSyncDir syncDir={workspaceMeta.settingSyncDir} />;
+}
+
+function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const workspace = useActiveWorkspace();
-  const dialog = useDialog();
   const [{ status }, { init }] = useGit(syncDir);
-  useDirectorySync(workspace);
 
   if (workspace == null) return null;
 
@@ -30,7 +38,7 @@ export function SyncDropdown({ syncDir }: { syncDir: string }) {
           label: 'Commit',
           leftSlot: <Icon icon="git_branch" />,
           onSelect() {
-            dialog.show({
+            showDialog({
               id: 'commit',
               title: 'Commit Changes',
               size: 'full',

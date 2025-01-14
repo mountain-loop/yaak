@@ -1,0 +1,26 @@
+{
+  "name": "@yaakapp/api",
+  "version": "0.2.17",
+  "main": "lib/index.js",
+  "typings": "./lib/index.d.ts",
+  "files": [
+    "lib/**/*"
+  ],
+  "scripts": {
+    "bootstrap": "npm run build",
+    "build": "run-s build:copy-types build:tsc",
+    "build:tsc": "tsc",
+    "build:copy-types": "run-p build:copy-types:*",
+    "build:copy-types:root": "cpy --flat ../../src-tauri/yaak-plugin-runtime/bindings/*.ts ./src/bindings",
+    "build:copy-types:next": "cpy --flat ../../src-tauri/yaak-plugin-runtime/bindings/serde_json/*.ts ./src/bindings/serde_json",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@types/node": "^22.5.4"
+  },
+  "devDependencies": {
+    "cpy-cli": "^5.0.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.6.2"
+  }
+}

@@ -1,24 +1,21 @@
-import { useMutation } from '@tanstack/react-query';
 import type { Environment } from '@yaakapp-internal/models';
-import {useSetAtom} from "jotai";
 import { trackEvent } from '../lib/analytics';
+import { showPrompt } from '../lib/prompt';
+import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveEnvironment } from './useActiveEnvironment';
-import { useActiveWorkspace } from './useActiveWorkspace';
-import {environmentsAtom} from "./useEnvironments";
-import { usePrompt } from './usePrompt';
-import {updateModelList} from "./useSyncModelStores";
+import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { useFastMutation } from './useFastMutation';
 
 export function useCreateEnvironment() {
-  const [, setActiveEnvironmentId] = useActiveEnvironment();
-  const prompt = usePrompt();
-  const workspace = useActiveWorkspace();
-  const setEnvironments = useSetAtom(environmentsAtom);
-
-  return useMutation<Environment | null, unknown, void>({
+  return useFastMutation<Environment | null, unknown, Environment | null>({
     mutationKey: ['create_environment'],
-    mutationFn: async () => {
-      const name = await prompt({
+    mutationFn: async (baseEnvironment) => {
+      if (baseEnvironment == null) {
+        throw new Error('No base environment passed');
+      }
+
+      const workspaceId = getActiveWorkspaceId();
+      const name = await showPrompt({
         id: 'new-environment',
         title: 'New Environment',
         description: 'Create multiple environments with different sets of variables',
@@ -32,17 +29,14 @@ export function useCreateEnvironment() {
       return invokeCmd('cmd_create_environment', {
         name,
         variables: [],
-        workspaceId: workspace?.id,
+        workspaceId,
+        environmentId: baseEnvironment.id,
       });
     },
     onSettled: () => trackEvent('environment', 'create'),
     onSuccess: async (environment) => {
       if (environment == null) return;
-
-      // Optimistic update
-      setEnvironments(updateModelList(environment));
-
-      setActiveEnvironmentId(environment.id);
+      setWorkspaceSearchParams({ environment_id: environment.id });
     },
   });
 }

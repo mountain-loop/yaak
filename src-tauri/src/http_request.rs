@@ -1,9 +1,3 @@
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-
 use crate::render::render_http_request;
 use crate::response_err;
 use crate::template_callback::PluginTemplateCallback;
@@ -16,7 +10,14 @@ use mime_guess::Mime;
 use reqwest::redirect::Policy;
 use reqwest::{multipart, Proxy, Url};
 use reqwest::{Method, Response};
+use rustls::ClientConfig;
+use rustls_platform_verifier::ConfigVerifierExt;
 use serde_json::Value;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs;
 use tokio::fs::{create_dir_all, File};
@@ -27,7 +28,10 @@ use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries::{get_http_response, get_or_create_settings, get_workspace, update_response_if_id, upsert_cookie_jar, UpdateSource};
+use yaak_models::queries::{
+    get_base_environment, get_http_response, get_or_create_settings, get_workspace,
+    update_response_if_id, upsert_cookie_jar, UpdateSource,
+};
 use yaak_plugins::events::{RenderPurpose, WindowContext};
 
 pub async fn send_http_request<R: Runtime>(
@@ -40,6 +44,9 @@ pub async fn send_http_request<R: Runtime>(
 ) -> Result<HttpResponse, String> {
     let workspace =
         get_workspace(window, &request.workspace_id).await.expect("Failed to get Workspace");
+    let base_environment = get_base_environment(window, &request.workspace_id)
+        .await
+        .expect("Failed to get base environment");
     let settings = get_or_create_settings(window).await;
     let cb = PluginTemplateCallback::new(
         window.app_handle(),
@@ -51,7 +58,7 @@ pub async fn send_http_request<R: Runtime>(
     let response = Arc::new(Mutex::new(og_response.clone()));
 
     let rendered_request =
-        render_http_request(&request, &workspace, environment.as_ref(), &cb).await;
+        render_http_request(&request, &base_environment, environment.as_ref(), &cb).await;
 
     let mut url_string = rendered_request.url;
 
@@ -71,8 +78,20 @@ pub async fn send_http_request<R: Runtime>(
         .brotli(true)
         .deflate(true)
         .referer(false)
-        .danger_accept_invalid_certs(!workspace.setting_validate_certificates)
         .tls_info(true);
+
+    if workspace.setting_validate_certificates {
+        // Use platform-native verifier to validate certificates
+        client_builder =
+            client_builder.use_preconfigured_tls(ClientConfig::with_platform_verifier())
+    } else {
+        // Use rustls to skip validation because rustls_platform_verifier does not have this
+        // ability
+        client_builder = client_builder
+            .use_rustls_tls()
+            .danger_accept_invalid_hostnames(true)
+            .danger_accept_invalid_certs(true);
+    }
 
     match settings.proxy {
         Some(ProxySetting::Disabled) => client_builder = client_builder.no_proxy(),
@@ -510,7 +529,9 @@ pub async fn send_http_request<R: Runtime>(
                             })
                             .collect::<Vec<_>>();
                         cookie_jar.cookies = json_cookies;
-                        if let Err(e) = upsert_cookie_jar(&window, &cookie_jar, &UpdateSource::Window).await {
+                        if let Err(e) =
+                            upsert_cookie_jar(&window, &cookie_jar, &UpdateSource::Window).await
+                        {
                             error!("Failed to update cookie jar: {}", e);
                         };
                     }

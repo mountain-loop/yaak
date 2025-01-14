@@ -315,6 +315,36 @@
           "const": "deny-add"
         },
         {
+          "description": "Enables the apply command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-apply"
+        },
+        {
+          "description": "Denies the apply command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-apply"
+        },
+        {
+          "description": "Enables the calculate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-calculate"
+        },
+        {
+          "description": "Denies the calculate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-calculate"
+        },
+        {
+          "description": "Enables the calculate_fs command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-calculate-fs"
+        },
+        {
+          "description": "Denies the calculate_fs command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-calculate-fs"
+        },
+        {
           "description": "Enables the check command without any pre-configured scope.",
           "type": "string",
           "const": "allow-check"
@@ -483,6 +513,16 @@
           "description": "Denies the unstage command without any pre-configured scope.",
           "type": "string",
           "const": "deny-unstage"
+        },
+        {
+          "description": "Enables the watch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-watch"
+        },
+        {
+          "description": "Denies the watch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-watch"
         },
         {
           "description": "Default permissions for the plugin",

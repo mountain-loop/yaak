@@ -19,7 +19,7 @@ export function useGrpc(
   protoFiles: string[],
 ) {
   const requestId = req?.id ?? 'n/a';
-  const [environment] = useActiveEnvironment();
+  const environment = useActiveEnvironment();
 
   const go = useMutation<void, string>({
     mutationKey: ['grpc_go', conn?.id],

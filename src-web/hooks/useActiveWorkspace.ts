@@ -1,19 +1,31 @@
+import { useParams } from '@tanstack/react-router';
 import type { Workspace } from '@yaakapp-internal/models';
-import { useMemo } from 'react';
-import { useParams } from 'react-router-dom';
-import { useWorkspaces } from './useWorkspaces';
+import { atom, useAtomValue } from 'jotai/index';
+import { useEffect } from 'react';
+import { jotaiStore } from '../lib/jotai';
+import { workspacesAtom } from './useWorkspaces';
+
+export const activeWorkspaceIdAtom = atom<string>();
+
+export const activeWorkspaceAtom = atom<Workspace | null>((get) => {
+  const activeWorkspaceId = get(activeWorkspaceIdAtom);
+  const workspaces = get(workspacesAtom);
+  return workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
+});
 
 export function useActiveWorkspace(): Workspace | null {
-  const workspaceId = useActiveWorkspaceId();
-  const workspaces = useWorkspaces();
-
-  return useMemo(
-    () => workspaces.find((w) => w.id === workspaceId) ?? null,
-    [workspaces, workspaceId],
-  );
+  return useAtomValue(activeWorkspaceAtom);
 }
 
-function useActiveWorkspaceId(): string | null {
-  const { workspaceId } = useParams();
-  return workspaceId ?? null;
+export function getActiveWorkspaceId() {
+  return jotaiStore.get(activeWorkspaceIdAtom) ?? null;
+}
+
+export function getActiveWorkspace() {
+  return jotaiStore.get(activeWorkspaceAtom) ?? null;
+}
+
+export function useSubscribeActiveWorkspaceId() {
+  const { workspaceId } = useParams({ strict: false });
+  useEffect(() => jotaiStore.set(activeWorkspaceIdAtom, workspaceId), [workspaceId]);
 }

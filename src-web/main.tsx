@@ -1,9 +1,11 @@
+import './main.css';
+import { RouterProvider } from '@tanstack/react-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { type } from '@tauri-apps/plugin-os';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './components/App';
-import './main.css';
+import { initSync } from './init/sync';
+import { router } from './lib/router';
 
 import('react-pdf').then(({ pdfjs }) => {
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -19,13 +21,28 @@ if (osType !== 'macos') {
 }
 
 window.addEventListener('keydown', (e) => {
-  // Hack to not go back in history on backspace. Check for document body
-  // or else it will prevent backspace in input fields.
-  if (e.key === 'Backspace' && e.target === document.body) e.preventDefault();
+  const rx = /input|select|textarea/i;
+
+  const target = e.target;
+  if (e.key !== 'Backspace') return;
+  if (!(target instanceof Element)) return;
+  if (target.getAttribute('contenteditable') !== null) return;
+
+  if (
+    !rx.test(target.tagName) ||
+    ('disabled' in target && target.disabled) ||
+    ('readOnly' in target && target.readOnly)
+  ) {
+    e.preventDefault();
+  }
 });
 
+// Initialize a bunch of watchers
+initSync();
+
+console.log('Creating React root');
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
-    <App />
+    <RouterProvider router={router} />
   </StrictMode>,
 );

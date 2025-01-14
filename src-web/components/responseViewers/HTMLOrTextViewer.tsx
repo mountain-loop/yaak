@@ -1,7 +1,6 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
 import { useContentTypeFromHeaders } from '../../hooks/useContentTypeFromHeaders';
 import { useResponseBodyText } from '../../hooks/useResponseBodyText';
-import { useSaveResponse } from '../../hooks/useSaveResponse';
 import { languageFromContentType } from '../../lib/contentType';
 import { BinaryViewer } from './BinaryViewer';
 import { TextViewer } from './TextViewer';
@@ -19,7 +18,6 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
     useContentTypeFromHeaders(response.headers),
     rawTextBody.data ?? '',
   );
-  const saveResponse = useSaveResponse(response);
 
   if (rawTextBody.isLoading) {
     return null;
@@ -31,7 +29,7 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
   }
 
   if (language === 'html' && pretty) {
-    return <WebPageViewer response={response}/>;
+    return <WebPageViewer response={response} />;
   } else {
     return (
       <TextViewer
@@ -39,7 +37,6 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
         text={rawTextBody.data}
         pretty={pretty}
         className={textViewerClassName}
-        onSaveResponse={saveResponse.mutate}
         responseId={response.id}
         requestId={response.requestId}
       />

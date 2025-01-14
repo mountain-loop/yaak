@@ -16,6 +16,7 @@
     "clipboard-manager:allow-read-text",
     "dialog:allow-open",
     "dialog:allow-save",
+    "fs:allow-read-dir",
     "fs:allow-read-file",
     "fs:allow-read-text-file",
     {
@@ -29,7 +30,10 @@
         }
       ]
     },
-    "shell:allow-open",
+    "opener:allow-open-url",
+    "opener:allow-open-path",
+    "opener:allow-default-urls",
+    "opener:allow-reveal-item-in-dir",
     "core:webview:allow-set-webview-zoom",
     "core:window:allow-close",
     "core:window:allow-internal-toggle-maximize",

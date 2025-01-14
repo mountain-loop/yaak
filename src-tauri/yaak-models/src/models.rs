@@ -4,6 +4,8 @@ use sea_query::Iden;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::fmt::Display;
+use std::str::FromStr;
 use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -26,6 +28,48 @@ pub struct ProxySettingAuth {
     pub password: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "models.ts")]
+pub enum EditorKeymap {
+    Default,
+    Vim,
+    Vscode,
+    Emacs,
+}
+
+impl FromStr for EditorKeymap {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "default" => Ok(Self::Default),
+            "vscode" => Ok(Self::Vscode),
+            "vim" => Ok(Self::Vim),
+            "emacs" => Ok(Self::Emacs),
+            _ => Ok(Self::default()),
+        }
+    }
+}
+
+impl Display for EditorKeymap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            EditorKeymap::Default => "default".to_string(),
+            EditorKeymap::Vscode => "vscode".to_string(),
+            EditorKeymap::Vim => "vim".to_string(),
+            EditorKeymap::Emacs => "emacs".to_string(),
+        };
+        write!(f, "{}", str)
+    }
+}
+
+impl Default for EditorKeymap {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "models.ts")]
@@ -42,12 +86,13 @@ pub struct Settings {
     pub interface_font_size: i32,
     pub interface_scale: f32,
     pub open_workspace_new_window: Option<bool>,
+    pub proxy: Option<ProxySetting>,
     pub telemetry: bool,
     pub theme: String,
     pub theme_dark: String,
     pub theme_light: String,
     pub update_channel: String,
-    pub proxy: Option<ProxySetting>,
+    pub editor_keymap: EditorKeymap,
 }
 
 #[derive(Iden)]
@@ -61,6 +106,7 @@ pub enum SettingsIden {
 
     Appearance,
     EditorFontSize,
+    EditorKeymap,
     EditorSoftWrap,
     InterfaceFontSize,
     InterfaceScale,
@@ -78,6 +124,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let proxy: Option<String> = r.get("proxy")?;
+        let editor_keymap: String = r.get("editor_keymap")?;
         Ok(Settings {
             id: r.get("id")?,
             model: r.get("model")?,
@@ -85,6 +132,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
             updated_at: r.get("updated_at")?,
             appearance: r.get("appearance")?,
             editor_font_size: r.get("editor_font_size")?,
+            editor_keymap: EditorKeymap::from_str(editor_keymap.as_str()).unwrap(),
             editor_soft_wrap: r.get("editor_soft_wrap")?,
             interface_font_size: r.get("interface_font_size")?,
             interface_scale: r.get("interface_scale")?,
@@ -110,7 +158,6 @@ pub struct Workspace {
     pub updated_at: NaiveDateTime,
     pub name: String,
     pub description: String,
-    pub variables: Vec<EnvironmentVariable>,
 
     // Settings
     #[serde(default = "default_true")]
@@ -118,7 +165,6 @@ pub struct Workspace {
     #[serde(default = "default_true")]
     pub setting_follow_redirects: bool,
     pub setting_request_timeout: i32,
-    pub setting_sync_dir: Option<String>,
 }
 
 #[derive(Iden)]
@@ -134,16 +180,13 @@ pub enum WorkspaceIden {
     Name,
     SettingFollowRedirects,
     SettingRequestTimeout,
-    SettingSyncDir,
     SettingValidateCertificates,
-    Variables,
 }
 
 impl<'s> TryFrom<&Row<'s>> for Workspace {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let variables: String = r.get("variables")?;
         Ok(Workspace {
             id: r.get("id")?,
             model: r.get("model")?,
@@ -153,9 +196,7 @@ impl<'s> TryFrom<&Row<'s>> for Workspace {
             description: r.get("description")?,
             setting_follow_redirects: r.get("setting_follow_redirects")?,
             setting_request_timeout: r.get("setting_request_timeout")?,
-            setting_sync_dir: r.get("setting_sync_dir")?,
             setting_validate_certificates: r.get("setting_validate_certificates")?,
-            variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
         })
     }
 }
@@ -169,6 +210,47 @@ impl Workspace {
             setting_follow_redirects: true,
             ..Default::default()
         }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "models.ts")]
+pub struct WorkspaceMeta {
+    #[ts(type = "\"workspace_meta\"")]
+    pub model: String,
+    pub id: String,
+    pub workspace_id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub setting_sync_dir: Option<String>,
+}
+
+#[derive(Iden)]
+pub enum WorkspaceMetaIden {
+    #[iden = "workspace_metas"]
+    Table,
+    Model,
+    Id,
+    WorkspaceId,
+    CreatedAt,
+    UpdatedAt,
+
+    SettingSyncDir,
+}
+
+impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        Ok(WorkspaceMeta {
+            id: r.get("id")?,
+            workspace_id: r.get("workspace_id")?,
+            model: r.get("model")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            setting_sync_dir: r.get("setting_sync_dir")?,
+        })
     }
 }
 
@@ -251,6 +333,7 @@ pub struct Environment {
     pub model: String,
     pub id: String,
     pub workspace_id: String,
+    pub environment_id: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 
@@ -266,6 +349,7 @@ pub enum EnvironmentIden {
     Id,
     CreatedAt,
     UpdatedAt,
+    EnvironmentId,
     WorkspaceId,
 
     Name,
@@ -281,6 +365,7 @@ impl<'s> TryFrom<&Row<'s>> for Environment {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
+            environment_id: r.get("environment_id")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
             name: r.get("name")?,
@@ -298,6 +383,7 @@ pub struct EnvironmentVariable {
     pub enabled: bool,
     pub name: String,
     pub value: String,
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -313,6 +399,7 @@ pub struct Folder {
     pub folder_id: Option<String>,
 
     pub name: String,
+    pub description: String,
     pub sort_priority: f32,
 }
 
@@ -328,6 +415,7 @@ pub enum FolderIden {
     UpdatedAt,
 
     Name,
+    Description,
     SortPriority,
 }
 
@@ -344,6 +432,7 @@ impl<'s> TryFrom<&Row<'s>> for Folder {
             updated_at: r.get("updated_at")?,
             folder_id: r.get("folder_id")?,
             name: r.get("name")?,
+            description: r.get("description")?,
         })
     }
 }
@@ -357,6 +446,7 @@ pub struct HttpRequestHeader {
     pub enabled: bool,
     pub name: String,
     pub value: String,
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -368,6 +458,7 @@ pub struct HttpUrlParameter {
     pub enabled: bool,
     pub name: String,
     pub value: String,
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -388,6 +479,7 @@ pub struct HttpRequest {
     #[ts(type = "Record<string, any>")]
     pub body: BTreeMap<String, Value>,
     pub body_type: Option<String>,
+    pub description: String,
     pub headers: Vec<HttpRequestHeader>,
     #[serde(default = "default_http_request_method")]
     pub method: String,
@@ -412,6 +504,7 @@ pub enum HttpRequestIden {
     AuthenticationType,
     Body,
     BodyType,
+    Description,
     Headers,
     Method,
     Name,
@@ -440,6 +533,7 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
             method: r.get("method")?,
             body: serde_json::from_str(body.as_str()).unwrap_or_default(),
             body_type: r.get("body_type")?,
+            description: r.get("description")?,
             authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
             authentication_type: r.get("authentication_type")?,
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
@@ -570,6 +664,7 @@ pub struct GrpcMetadataEntry {
     pub enabled: bool,
     pub name: String,
     pub value: String,
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -587,6 +682,7 @@ pub struct GrpcRequest {
     pub authentication_type: Option<String>,
     #[ts(type = "Record<string, any>")]
     pub authentication: BTreeMap<String, Value>,
+    pub description: String,
     pub message: String,
     pub metadata: Vec<GrpcMetadataEntry>,
     pub method: Option<String>,
@@ -609,6 +705,7 @@ pub enum GrpcRequestIden {
 
     Authentication,
     AuthenticationType,
+    Description,
     Message,
     Metadata,
     Method,
@@ -632,6 +729,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcRequest {
             updated_at: r.get("updated_at")?,
             folder_id: r.get("folder_id")?,
             name: r.get("name")?,
+            description: r.get("description")?,
             service: r.get("service")?,
             method: r.get("method")?,
             message: r.get("message")?,
@@ -869,7 +967,24 @@ pub struct SyncState {
 
     pub model_id: String,
     pub checksum: String,
-    pub path: String,
+    pub rel_path: String,
+    pub sync_dir: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "models.ts")]
+pub struct SyncHistory {
+    #[ts(type = "\"sync_history\"")]
+    pub model: String,
+    pub id: String,
+    pub workspace_id: String,
+    pub created_at: NaiveDateTime,
+
+    pub states: Vec<SyncState>,
+    pub checksum: String,
+    pub rel_path: String,
+    pub sync_dir: String,
 }
 
 #[derive(Iden)]
@@ -885,7 +1000,8 @@ pub enum SyncStateIden {
     Checksum,
     FlushedAt,
     ModelId,
-    Path,
+    RelPath,
+    SyncDir,
 }
 
 impl<'s> TryFrom<&Row<'s>> for SyncState {
@@ -901,7 +1017,8 @@ impl<'s> TryFrom<&Row<'s>> for SyncState {
             flushed_at: r.get("flushed_at")?,
             checksum: r.get("checksum")?,
             model_id: r.get("model_id")?,
-            path: r.get("path")?,
+            sync_dir: r.get("sync_dir")?,
+            rel_path: r.get("rel_path")?,
         })
     }
 }
@@ -967,6 +1084,7 @@ pub enum ModelType {
     TypeHttpResponse,
     TypePlugin,
     TypeWorkspace,
+    TypeWorkspaceMeta,
     TypeSyncState,
 }
 
@@ -983,6 +1101,7 @@ impl ModelType {
             ModelType::TypeHttpResponse => "rs",
             ModelType::TypePlugin => "pg",
             ModelType::TypeWorkspace => "wk",
+            ModelType::TypeWorkspaceMeta => "wm",
             ModelType::TypeSyncState => "ss",
         }
         .to_string()
@@ -1005,6 +1124,7 @@ pub enum AnyModel {
     Settings(Settings),
     KeyValue(KeyValue),
     Workspace(Workspace),
+    WorkspaceMeta(WorkspaceMeta),
 }
 
 impl<'de> Deserialize<'de> for AnyModel {
@@ -1028,9 +1148,7 @@ impl<'de> Deserialize<'de> for AnyModel {
             Some(m) if m == "environment" => {
                 AnyModel::Environment(serde_json::from_value(value).unwrap())
             }
-            Some(m) if m == "folder" => {
-                AnyModel::Folder(serde_json::from_value(value).unwrap())
-            }
+            Some(m) if m == "folder" => AnyModel::Folder(serde_json::from_value(value).unwrap()),
             Some(m) if m == "key_value" => {
                 AnyModel::KeyValue(serde_json::from_value(value).unwrap())
             }
@@ -1043,9 +1161,7 @@ impl<'de> Deserialize<'de> for AnyModel {
             Some(m) if m == "cookie_jar" => {
                 AnyModel::CookieJar(serde_json::from_value(value).unwrap())
             }
-            Some(m) if m == "plugin" => {
-                AnyModel::Plugin(serde_json::from_value(value).unwrap())
-            }
+            Some(m) if m == "plugin" => AnyModel::Plugin(serde_json::from_value(value).unwrap()),
             Some(m) => {
                 return Err(serde::de::Error::custom(format!("Unknown model {}", m)));
             }

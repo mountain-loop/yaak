@@ -9,6 +9,6 @@ export function useStateWithDeps<T>(defaultValue: T, deps: DependencyList) {
   useEffect(() => {
     setValue(defaultValue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps]);
   return [value, setValue] as const;
 }

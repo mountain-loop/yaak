@@ -156,7 +156,9 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
                     ) : (
                       <KeyValueRows>
                         {Object.entries(activeEvent.metadata).map(([key, value]) => (
-                          <KeyValueRow key={key} label={key} value={value} />
+                          <KeyValueRow key={key} label={key}>
+                            {value}
+                          </KeyValueRow>
                         ))}
                       </KeyValueRows>
                     )}

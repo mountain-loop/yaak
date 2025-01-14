@@ -16,9 +16,12 @@ export function useLicense() {
 
   // Check the license again after a license is activated
   useEffect(() => {
-    listen('license-activated', () => {
-      queryClient.invalidateQueries({ queryKey: CHECK_QUERY_KEY }).catch(console.error);
-    }).then(console.error);
+    const unlisten = listen('license-activated', async () => {
+      await queryClient.invalidateQueries({ queryKey: CHECK_QUERY_KEY });
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   const CHECK_QUERY_KEY = ['license.check'];

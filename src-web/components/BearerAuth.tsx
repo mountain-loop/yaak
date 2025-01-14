@@ -18,6 +18,7 @@ export function BearerAuth<T extends HttpRequest | GrpcRequest>({ request }: Pro
         useTemplating
         autocompleteVariables
         placeholder="token"
+        stateKey={`bearer.${request.id}`}
         type="password"
         label="Token"
         name="token"

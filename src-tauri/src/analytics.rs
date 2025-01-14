@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{Manager, Runtime, WebviewWindow};
 
+use ts_rs::TS;
 use yaak_models::queries::{
     generate_id, get_key_value_int, get_key_value_string, get_or_create_settings,
     set_key_value_int, set_key_value_string, UpdateSource,
@@ -16,11 +17,14 @@ const NAMESPACE: &str = "analytics";
 const NUM_LAUNCHES_KEY: &str = "num_launches";
 
 // serializable
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, TS)]
 #[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "analytics.ts")]
 pub enum AnalyticsResource {
     App,
     Appearance,
+    Button,
+    Checkbox,
     CookieJar,
     Dialog,
     Environment,
@@ -30,10 +34,13 @@ pub enum AnalyticsResource {
     GrpcRequest,
     HttpRequest,
     HttpResponse,
+    Link,
     KeyValue,
     Plugin,
+    Select,
     Setting,
     Sidebar,
+    Tab,
     Theme,
     Workspace,
 }
@@ -50,10 +57,12 @@ impl Display for AnalyticsResource {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, TS)]
 #[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "analytics.ts")]
 pub enum AnalyticsAction {
     Cancel,
+    Click,
     Commit,
     Create,
     Delete,

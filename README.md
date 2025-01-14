@@ -11,10 +11,16 @@ All feedback, bug reports, questions, and feature requests should be reported to
 [feedback.yaak.app](https://feedback.yaak.app). Issues will be duplicated
 in this repository if applicable.
 
+## Community Projects
+
+- [`yaak2postman`](https://github.com/BiteCraft/yaak2postman) CLI for converting Yaak data
+  exports to Postman-compatible collections
+
 ## Contribution Policy
 
-Yaak open source, but only accepting contributions for bug fixes. See the
+Yaak is open source, but only accepting contributions for bug fixes. See the
 [`good first issue`](https://github.com/yaakapp/app/labels/good%20first%20issue) label for
 issues that are more approachable for contribution.
 
-To get started, visit [`DEVELOPMENT.md`](DEVELOPMENT.md) for tips on setting up your environment.
+To get started, visit [`DEVELOPMENT.md`](DEVELOPMENT.md) for tips on setting up your
+environment.

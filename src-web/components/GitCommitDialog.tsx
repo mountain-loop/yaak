@@ -16,11 +16,11 @@ import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import type { CheckboxProps } from './core/Checkbox';
 import { Checkbox } from './core/Checkbox';
-import { Editor } from './core/Editor';
 import { InlineCode } from './core/InlineCode';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack } from './core/Stacks';
 import { EmptyStateText } from './EmptyStateText';
+import { Editor } from './core/Editor/Editor';
 
 interface Props {
   syncDir: string;
@@ -126,6 +126,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                 className="!text-base font-sans h-full rounded-md"
                 placeholder="Commit message..."
                 onChange={setMessage}
+                stateKey={null}
               />
             </div>
             {commit.error && <Banner color="danger">{commit.error}</Banner>}

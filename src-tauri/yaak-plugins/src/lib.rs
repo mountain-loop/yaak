@@ -1,15 +1,15 @@
-use std::process::exit;
+use crate::manager::PluginManager;
 use log::info;
+use std::process::exit;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, RunEvent, Runtime, State};
-use crate::manager::PluginManager;
 
 pub mod error;
 pub mod events;
 pub mod manager;
 mod nodejs;
-mod server;
 pub mod plugin_handle;
+mod server;
 mod util;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {

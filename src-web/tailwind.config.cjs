@@ -4,13 +4,21 @@ const sizes = {
   '2xs': '1.4rem',
   xs: '1.8rem',
   sm: '2.0rem',
-  md: '2.5rem',
+  md: '2.3rem',
 };
 
 /** @type {import("tailwindcss").Config} */
 module.exports = {
   darkMode: ['class', '[data-resolved-appearance="dark"]'],
-  content: ['./index.html', './**/*.{html,js,jsx,ts,tsx}'],
+  content: [
+    './*.{html,ts,tsx}',
+    './commands/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+    './hooks/**/*.{ts,tsx}',
+    './init/**/*.{ts,tsx}',
+    './lib/**/*.{ts,tsx}',
+    './routes/**/*.{ts,tsx}',
+  ],
   theme: {
     extend: {
       opacity: {

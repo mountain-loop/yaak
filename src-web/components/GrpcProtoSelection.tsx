@@ -2,7 +2,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
 import { useGrpcRequest } from '../hooks/useGrpcRequest';
-import { count } from '../lib/pluralize';
+import { pluralizeCount } from '../lib/pluralize';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
@@ -76,7 +76,7 @@ export function GrpcProtoSelection({ requestId }: Props) {
                   </span>
                 );
               })}
-              {services?.length > 5 && count('other', services?.length - 5)}
+              {services?.length > 5 && pluralizeCount('other', services?.length - 5)}
             </p>
           </Banner>
         )}

@@ -41,6 +41,24 @@ function pluginHookImport(_ctx, contents) {
     parsed.resources.httpRequests = parsed.resources.requests;
     delete parsed.resources["requests"];
   }
+  for (const workspace of parsed.resources.workspaces ?? []) {
+    if ("variables" in workspace) {
+      const baseEnvironment = {
+        id: `GENERATE_ID::base_env_${workspace["id"]}`,
+        name: "Global Variables",
+        variables: workspace.variables,
+        workspaceId: workspace.id
+      };
+      parsed.resources.environments = parsed.resources.environments ?? [];
+      parsed.resources.environments.push(baseEnvironment);
+      delete workspace.variables;
+      for (const environment of parsed.resources.environments) {
+        if (environment.workspaceId === workspace.id && environment.id !== baseEnvironment.id) {
+          environment.environmentId = baseEnvironment.id;
+        }
+      }
+    }
+  }
   return { resources: parsed.resources };
 }
 function isJSObject(obj) {

@@ -15,7 +15,7 @@ export interface ToastProps {
   onClose: () => void;
   className?: string;
   timeout: number | null;
-  action?: ReactNode;
+  action?: (args: { hide: () => void }) => ReactNode;
   icon?: ShowToastRequest['icon'];
   color?: ShowToastRequest['color'];
 }
@@ -59,15 +59,15 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
           `x-theme-toast x-theme-toast--${color}`,
           'pointer-events-auto overflow-hidden',
           'relative pointer-events-auto bg-surface text-text rounded-lg',
-          'border border-border shadow-lg max-w-[30rem]',
+          'border border-border shadow-lg w-[25rem]',
           'grid grid-cols-[1fr_auto]',
         )}
       >
-        <div className="px-3 py-3 flex items-center gap-2">
-          {toastIcon && <Icon icon={toastIcon} className="text-text-subtle" />}
-          <VStack space={2}>
+        <div className="px-3 py-3 flex items-start gap-2 w-full">
+          {toastIcon && <Icon icon={toastIcon} className="mt-1 text-text-subtle" />}
+          <VStack space={2} className="w-full">
             <div>{children}</div>
-            {action}
+            {action?.({ hide: onClose })}
           </VStack>
         </div>
 

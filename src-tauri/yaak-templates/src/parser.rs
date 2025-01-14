@@ -3,25 +3,20 @@ use std::fmt::Display;
 use ts_rs::TS;
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, TS)]
-#[ts(export, export_to="parser.ts")]
+#[ts(export, export_to = "parser.ts")]
 pub struct Tokens {
     pub tokens: Vec<Token>,
 }
 
 impl Display for Tokens {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let str = self
-            .tokens
-            .iter()
-            .map(|t| t.to_string())
-            .collect::<Vec<String>>()
-            .join("");
+        let str = self.tokens.iter().map(|t| t.to_string()).collect::<Vec<String>>().join("");
         write!(f, "{}", str)
     }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, TS)]
-#[ts(export, export_to="parser.ts")]
+#[ts(export, export_to = "parser.ts")]
 pub struct FnArg {
     pub name: String,
     pub value: Val,
@@ -36,7 +31,7 @@ impl Display for FnArg {
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
-#[ts(export, export_to="parser.ts")]
+#[ts(export, export_to = "parser.ts")]
 pub enum Val {
     Str { text: String },
     Var { name: String },
@@ -71,7 +66,7 @@ impl Display for Val {
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
-#[ts(export, export_to="parser.ts")]
+#[ts(export, export_to = "parser.ts")]
 pub enum Token {
     Raw { text: String },
     Tag { val: Val },
@@ -273,7 +268,12 @@ impl Parser {
         let mut text = String::new();
         while self.pos < self.chars.len() {
             let ch = self.peek_char();
-            if ch.is_alphanumeric() || ch == '_' {
+            let is_valid = if start_pos == self.pos {
+                ch.is_alphabetic() // First char has to be alphabetic
+            } else {
+                ch.is_alphanumeric() || ch == '-' || ch == '_'
+            };
+            if is_valid {
                 text.push(ch);
                 self.pos += 1;
             } else {
@@ -396,9 +396,7 @@ impl Parser {
             return false;
         }
 
-        let cmp = self.chars[self.pos..self.pos + value.len()]
-            .iter()
-            .collect::<String>();
+        let cmp = self.chars[self.pos..self.pos + value.len()].iter().collect::<String>();
 
         if cmp == value {
             // We have a match, so advance the current index
@@ -423,6 +421,63 @@ mod tests {
             vec![
                 Token::Tag {
                     val: Val::Var { name: "foo".into() }
+                },
+                Token::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn var_dashes() {
+        let mut p = Parser::new("${[ a-b ]}");
+        assert_eq!(
+            p.parse().tokens,
+            vec![
+                Token::Tag {
+                    val: Val::Var { name: "a-b".into() }
+                },
+                Token::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn var_underscores() {
+        let mut p = Parser::new("${[ a_b ]}");
+        assert_eq!(
+            p.parse().tokens,
+            vec![
+                Token::Tag {
+                    val: Val::Var { name: "a_b".into() }
+                },
+                Token::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn var_prefixes() {
+        let mut p = Parser::new("${[ -a ]}${[ _a ]}${[ 0a ]}");
+        assert_eq!(
+            p.parse().tokens,
+            vec![
+                Token::Raw {
+                    // Shouldn't be parsed, because they're invalid
+                    text: "${[ -a ]}${[ _a ]}${[ 0a ]}".into()
+                },
+                Token::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn var_underscore_prefix() {
+        let mut p = Parser::new("${[ _a ]}");
+        assert_eq!(
+            p.parse().tokens,
+            vec![
+                Token::Raw {
+                    text: "${[ _a ]}".into()
                 },
                 Token::Eof
             ]

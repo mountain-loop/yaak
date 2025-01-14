@@ -1,34 +1,25 @@
-import { useMutation } from '@tanstack/react-query';
 import type { GrpcRequest } from '@yaakapp-internal/models';
-import {useSetAtom} from "jotai";
 import { trackEvent } from '../lib/analytics';
+import { jotaiStore } from '../lib/jotai';
 import { invokeCmd } from '../lib/tauri';
-import {useActiveCookieJar} from "./useActiveCookieJar";
-import { useActiveEnvironment } from './useActiveEnvironment';
-import { useActiveRequest } from './useActiveRequest';
-import { useActiveWorkspace } from './useActiveWorkspace';
-import { useAppRoutes } from './useAppRoutes';
-import {grpcRequestsAtom} from "./useGrpcRequests";
-import {updateModelList} from "./useSyncModelStores";
+import { getActiveRequest } from './useActiveRequest';
+import { activeWorkspaceAtom } from './useActiveWorkspace';
+import { useFastMutation } from './useFastMutation';
+import { router } from '../lib/router';
 
 export function useCreateGrpcRequest() {
-  const workspace = useActiveWorkspace();
-  const [activeEnvironment] = useActiveEnvironment();
-  const [activeCookieJar] = useActiveCookieJar();
-  const activeRequest = useActiveRequest();
-  const routes = useAppRoutes();
-  const setGrpcRequests = useSetAtom(grpcRequestsAtom);
-
-  return useMutation<
+  return useFastMutation<
     GrpcRequest,
     unknown,
     Partial<Pick<GrpcRequest, 'name' | 'sortPriority' | 'folderId'>>
   >({
     mutationKey: ['create_grpc_request'],
     mutationFn: async (patch) => {
+      const workspace = jotaiStore.get(activeWorkspaceAtom);
       if (workspace === null) {
         throw new Error("Cannot create grpc request when there's no active workspace");
       }
+      const activeRequest = getActiveRequest();
       if (patch.sortPriority === undefined) {
         if (activeRequest != null) {
           // Place above currently active request
@@ -47,14 +38,10 @@ export function useCreateGrpcRequest() {
     },
     onSettled: () => trackEvent('grpc_request', 'create'),
     onSuccess: async (request) => {
-      // Optimistic update
-      setGrpcRequests(updateModelList(request));
-
-      routes.navigate('request', {
-        workspaceId: request.workspaceId,
-        requestId: request.id,
-        environmentId: activeEnvironment?.id ?? null,
-        cookieJarId: activeCookieJar?.id ?? null,
+      await router.navigate({
+        to: '/workspaces/$workspaceId',
+        params: { workspaceId: request.workspaceId },
+        search: (prev) => ({ ...prev, request_id: request.id }),
       });
     },
   });

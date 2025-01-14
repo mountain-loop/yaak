@@ -57,11 +57,8 @@ impl PluginHandle {
 
     pub async fn terminate(&self, window_context: WindowContext) -> Result<()> {
         info!("Terminating plugin {}", self.dir);
-        let event = self.build_event_to_send(
-            window_context,
-            &InternalEventPayload::TerminateRequest,
-            None,
-        );
+        let event =
+            self.build_event_to_send(window_context, &InternalEventPayload::TerminateRequest, None);
         self.send(&event).await
     }
 

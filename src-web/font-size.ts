@@ -1,6 +1,6 @@
 // Listen for settings changes, the re-compute theme
 import { listen } from '@tauri-apps/api/event';
-import type { ModelPayload } from './hooks/useSyncModelStores';
+import type { ModelPayload } from '@yaakapp-internal/models';
 import { getSettings } from './lib/store';
 
 function setFontSizeOnDocument(fontSize: number) {

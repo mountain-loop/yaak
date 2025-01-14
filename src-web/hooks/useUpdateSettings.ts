@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useFastMutation } from './useFastMutation';
 import type { Settings } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
 import { getSettings } from '../lib/store';
@@ -7,7 +7,7 @@ import { settingsAtom } from './useSettings';
 
 export function useUpdateSettings() {
   const setSettings = useSetAtom(settingsAtom);
-  return useMutation<Settings, unknown, Partial<Settings>>({
+  return useFastMutation<Settings, unknown, Partial<Settings>>({
     mutationKey: ['update_settings'],
     mutationFn: async (patch) => {
       const settings = await getSettings();

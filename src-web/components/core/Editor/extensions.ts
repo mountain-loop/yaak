@@ -7,6 +7,7 @@ import {
 import { history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
+import { markdown } from '@codemirror/lang-markdown';
 import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
 import {
@@ -33,13 +34,15 @@ import {
 } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
-import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import { graphql } from 'cm6-graphql';
 import { EditorView } from 'codemirror';
-import type { EditorProps } from './index';
+import { pluralizeCount } from '../../../lib/pluralize';
+import type { EditorProps } from './Editor';
 import { pairs } from './pairs/extension';
 import { text } from './text/extension';
+import type { TwigCompletionOption } from './twig/completion';
 import { twig } from './twig/extension';
+import { pathParametersPlugin } from './twig/pathParameters';
 import { url } from './url/extension';
 
 export const syntaxHighlightStyle = HighlightStyle.define([
@@ -79,6 +82,7 @@ const syntaxExtensions: Record<NonNullable<EditorProps['language']>, LanguageSup
   url: url(),
   pairs: pairs(),
   text: text(),
+  markdown: markdown(),
 };
 
 export function getLanguageExtension({
@@ -86,18 +90,16 @@ export function getLanguageExtension({
   useTemplating = false,
   environmentVariables,
   autocomplete,
-  templateFunctions,
   onClickVariable,
-  onClickFunction,
   onClickMissingVariable,
   onClickPathParameter,
+  completionOptions,
 }: {
   environmentVariables: EnvironmentVariable[];
-  templateFunctions: TemplateFunction[];
-  onClickFunction: (option: TemplateFunction, tagValue: string, startPos: number) => void;
   onClickVariable: (option: EnvironmentVariable, tagValue: string, startPos: number) => void;
   onClickMissingVariable: (name: string, tagValue: string, startPos: number) => void;
   onClickPathParameter: (name: string) => void;
+  completionOptions: TwigCompletionOption[];
 } & Pick<EditorProps, 'language' | 'useTemplating' | 'autocomplete'>) {
   if (language === 'graphql') {
     return graphql();
@@ -108,15 +110,17 @@ export function getLanguageExtension({
     return base;
   }
 
+  const extraExtensions = language === 'url' ? [pathParametersPlugin(onClickPathParameter)] : [];
+
   return twig({
     base,
     environmentVariables,
-    templateFunctions,
+    completionOptions,
     autocomplete,
-    onClickFunction,
     onClickVariable,
     onClickMissingVariable,
     onClickPathParameter,
+    extraExtensions,
   });
 }
 
@@ -138,29 +142,37 @@ export const baseExtensions = [
   keymap.of([...historyKeymap, ...completionKeymap]),
 ];
 
-export const multiLineExtensions = [
-  lineNumbers(),
-  foldGutter({
-    markerDOM: (open) => {
-      const el = document.createElement('div');
-      el.classList.add('fold-gutter-icon');
-      el.tabIndex = -1;
-      if (open) {
-        el.setAttribute('data-open', '');
-      }
-      return el;
-    },
-  }),
+export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) => [
+  hideGutter
+    ? []
+    : [
+        lineNumbers(),
+        foldGutter({
+          markerDOM: (open) => {
+            const el = document.createElement('div');
+            el.classList.add('fold-gutter-icon');
+            el.tabIndex = -1;
+            if (open) {
+              el.setAttribute('data-open', '');
+            }
+            return el;
+          },
+        }),
+      ],
   codeFolding({
-    placeholderDOM(view, onclick, prepared) {
+    placeholderDOM(_view, onclick, prepared) {
       const el = document.createElement('span');
       el.onclick = onclick;
       el.className = 'cm-foldPlaceholder';
-      el.innerText = prepared;
+      el.innerText = prepared || '…';
       el.title = 'unfold';
       el.ariaLabel = 'folded code';
       return el;
     },
+    /**
+     * Show the number of items when code folded. NOTE: this doesn't get called when restoring
+     * a previous serialized editor state, which is a bummer
+     */
     preparePlaceholder(state, range) {
       let count: number | undefined;
       let startToken = '{';
@@ -185,13 +197,9 @@ export const multiLineExtensions = [
       }
 
       if (count !== undefined) {
-        const label = isArray ? 'item' : 'prop';
-        const plural = count === 1 ? '' : 's';
-
-        return `${count} ${label}${plural}`;
+        const label = isArray ? 'item' : 'key';
+        return pluralizeCount(label, count);
       }
-
-      return '…';
     },
   }),
   EditorState.allowMultipleSelections.of(true),

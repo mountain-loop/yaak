@@ -8,14 +8,15 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'eslint-config-prettier',
   ],
+  plugins: ['react-refresh'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     project: ['./tsconfig.json'],
   },
   ignorePatterns: [
     'scripts/**/*',
-    'plugin-runtime/**/*',
-    'plugin-runtime-types/**/*',
+    'packages/plugin-runtime/**/*',
+    'packages/plugin-runtime-types/**/*',
     'src-tauri/**/*',
     'src-web/tailwind.config.cjs',
     'src-web/vite.config.ts',
@@ -32,6 +33,7 @@ module.exports = {
     },
   },
   rules: {
+    'react-refresh/only-export-components': 'error',
     'jsx-a11y/no-autofocus': 'off',
     'react/react-in-jsx-scope': 'off',
     'import/no-unresolved': 'off',

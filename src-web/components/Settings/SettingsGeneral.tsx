@@ -1,10 +1,12 @@
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import React from 'react';
+import { upsertWorkspace } from '../../commands/upsertWorkspace';
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
 import { useAppInfo } from '../../hooks/useAppInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { useSettings } from '../../hooks/useSettings';
 import { useUpdateSettings } from '../../hooks/useUpdateSettings';
-import { useUpdateWorkspace } from '../../hooks/useUpdateWorkspace';
+import { revealInFinderText } from '../../lib/reveal';
 import { Checkbox } from '../core/Checkbox';
 import { Heading } from '../core/Heading';
 import { IconButton } from '../core/IconButton';
@@ -16,7 +18,6 @@ import { VStack } from '../core/Stacks';
 
 export function SettingsGeneral() {
   const workspace = useActiveWorkspace();
-  const updateWorkspace = useUpdateWorkspace(workspace?.id ?? null);
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const appInfo = useAppInfo();
@@ -33,10 +34,11 @@ export function SettingsGeneral() {
           name="updateChannel"
           label="Update Channel"
           labelPosition="left"
-          labelClassName="w-[12rem]"
+          labelClassName="w-[14rem]"
           size="sm"
           value={settings.updateChannel}
           onChange={(updateChannel) => updateSettings.mutate({ updateChannel })}
+          event="update-channel"
           options={[
             { label: 'Stable (less frequent)', value: 'stable' },
             { label: 'Beta (more frequent)', value: 'beta' },
@@ -52,11 +54,12 @@ export function SettingsGeneral() {
         />
       </div>
       <Select
-        name="openWorkspace"
-        label="Open Workspace"
+        name="switchWorkspaceBehavior"
+        label="Switch Workspace Behavior"
         labelPosition="left"
-        labelClassName="w-[12rem]"
+        labelClassName="w-[14rem]"
         size="sm"
+        event="workspace-switch-behavior"
         value={
           settings.openWorkspaceNewWindow === true
             ? 'new'
@@ -80,12 +83,13 @@ export function SettingsGeneral() {
         className="mt-3"
         checked={settings.telemetry}
         title="Send Usage Statistics"
+        event="usage-statistics"
         onChange={(telemetry) => updateSettings.mutate({ telemetry })}
       />
 
       <Separator className="my-4" />
 
-      <Heading size={2}>
+      <Heading level={2}>
         Workspace{' '}
         <div className="inline-block ml-1 bg-surface-highlight px-2 py-0.5 rounded text text-shrink">
           {workspace.name}
@@ -96,36 +100,70 @@ export function SettingsGeneral() {
           size="sm"
           name="requestTimeout"
           label="Request Timeout (ms)"
+          labelClassName="w-[14rem]"
           placeholder="0"
           labelPosition="left"
           defaultValue={`${workspace.settingRequestTimeout}`}
           validate={(value) => parseInt(value) >= 0}
-          onChange={(v) => updateWorkspace.mutate({ settingRequestTimeout: parseInt(v) || 0 })}
+          onChange={(v) =>
+            upsertWorkspace.mutate({ ...workspace, settingRequestTimeout: parseInt(v) || 0 })
+          }
           type="number"
         />
 
         <Checkbox
           checked={workspace.settingValidateCertificates}
           title="Validate TLS Certificates"
+          event="validate-certs"
           onChange={(settingValidateCertificates) =>
-            updateWorkspace.mutate({ settingValidateCertificates })
+            upsertWorkspace.mutate({ ...workspace, settingValidateCertificates })
           }
         />
 
         <Checkbox
           checked={workspace.settingFollowRedirects}
           title="Follow Redirects"
-          onChange={(settingFollowRedirects) => updateWorkspace.mutate({ settingFollowRedirects })}
+          event="follow-redirects"
+          onChange={(settingFollowRedirects) =>
+            upsertWorkspace.mutate({
+              ...workspace,
+              settingFollowRedirects,
+            })
+          }
         />
       </VStack>
 
       <Separator className="my-4" />
 
-      <Heading size={2}>App Info</Heading>
+      <Heading level={2}>App Info</Heading>
       <KeyValueRows>
-        <KeyValueRow label="Version" value={appInfo.version} />
-        <KeyValueRow label="Data Directory" value={appInfo.appDataDir} />
-        <KeyValueRow label="Logs Directory" value={appInfo.appLogDir} />
+        <KeyValueRow label="Version">{appInfo.version}</KeyValueRow>
+        <KeyValueRow
+          label="Data Directory"
+          rightSlot={
+            <IconButton
+              title={revealInFinderText}
+              icon="folder_open"
+              size="2xs"
+              onClick={() => revealItemInDir(appInfo.appDataDir)}
+            />
+          }
+        >
+          {appInfo.appDataDir}
+        </KeyValueRow>
+        <KeyValueRow
+          label="Logs Directory"
+          rightSlot={
+            <IconButton
+              title={revealInFinderText}
+              icon="folder_open"
+              size="2xs"
+              onClick={() => revealItemInDir(appInfo.appLogDir)}
+            />
+          }
+        >
+          {appInfo.appLogDir}
+        </KeyValueRow>
       </KeyValueRows>
     </VStack>
   );

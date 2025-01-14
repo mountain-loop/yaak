@@ -31,11 +31,7 @@ impl TemplateCallback for PluginTemplateCallback {
         let window_context = self.window_context.to_owned();
         // The beta named the function `Response` but was changed in stable.
         // Keep this here for a while because there's no easy way to migrate
-        let fn_name = if fn_name == "Response" {
-            "response"
-        } else {
-            fn_name
-        };
+        let fn_name = if fn_name == "Response" { "response" } else { fn_name };
 
         let function = self
             .plugin_manager

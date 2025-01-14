@@ -1,56 +1,56 @@
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
-import type { HTMLAttributes, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
-import type { EditorProps } from './Editor';
-import { Editor } from './Editor';
+import type { EditorProps } from './Editor/Editor';
+import { Editor } from './Editor/Editor';
 import { IconButton } from './IconButton';
+import { Label } from './Label';
 import { HStack } from './Stacks';
 
-export type InputProps = Omit<
-  HTMLAttributes<HTMLInputElement>,
-  'onChange' | 'onFocus' | 'onKeyDown' | 'onPaste'
-> &
-  Pick<
-    EditorProps,
-    | 'language'
-    | 'useTemplating'
-    | 'autocomplete'
-    | 'forceUpdateKey'
-    | 'autoFocus'
-    | 'autoSelect'
-    | 'autocompleteVariables'
-    | 'onKeyDown'
-    | 'readOnly'
-  > & {
-    name?: string;
-    type?: 'text' | 'password';
-    label: ReactNode;
-    hideLabel?: boolean;
-    labelPosition?: 'top' | 'left';
-    labelClassName?: string;
-    containerClassName?: string;
-    onChange?: (value: string) => void;
-    onFocus?: () => void;
-    onBlur?: () => void;
-    onPaste?: (value: string) => void;
-    onPasteOverwrite?: (value: string) => void;
-    defaultValue?: string;
-    leftSlot?: ReactNode;
-    rightSlot?: ReactNode;
-    size?: 'xs' | 'sm' | 'md' | 'auto';
-    className?: string;
-    placeholder?: string;
-    validate?: boolean | ((v: string) => boolean);
-    require?: boolean;
-    wrapLines?: boolean;
-  };
+export type InputProps = Pick<
+  EditorProps,
+  | 'language'
+  | 'useTemplating'
+  | 'autocomplete'
+  | 'forceUpdateKey'
+  | 'autoFocus'
+  | 'autoSelect'
+  | 'autocompleteVariables'
+  | 'onKeyDown'
+  | 'readOnly'
+> & {
+  name?: string;
+  type?: 'text' | 'password';
+  label: ReactNode;
+  hideLabel?: boolean;
+  labelPosition?: 'top' | 'left';
+  labelClassName?: string;
+  containerClassName?: string;
+  inputWrapperClassName?: string;
+  onChange?: (value: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  onPaste?: (value: string) => void;
+  onPasteOverwrite?: (value: string) => void;
+  defaultValue?: string;
+  leftSlot?: ReactNode;
+  rightSlot?: ReactNode;
+  size?: 'xs' | 'sm' | 'md' | 'auto';
+  className?: string;
+  placeholder?: string;
+  validate?: boolean | ((v: string) => boolean);
+  require?: boolean;
+  wrapLines?: boolean;
+  stateKey: EditorProps['stateKey'];
+};
 
 export const Input = forwardRef<EditorView | undefined, InputProps>(function Input(
   {
     className,
     containerClassName,
+    inputWrapperClassName,
     defaultValue,
     forceUpdateKey,
     hideLabel,
@@ -71,6 +71,7 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
     type = 'text',
     validate,
     readOnly,
+    stateKey,
     ...props
   }: InputProps,
   ref,
@@ -136,16 +137,9 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
         labelPosition === 'top' && 'flex-row gap-0.5',
       )}
     >
-      <label
-        htmlFor={id}
-        className={classNames(
-          labelClassName,
-          'text-text-subtle whitespace-nowrap',
-          hideLabel && 'sr-only',
-        )}
-      >
+      <Label htmlFor={id} className={classNames(labelClassName, hideLabel && 'sr-only')}>
         {label}
-      </label>
+      </Label>
       <HStack
         alignItems="stretch"
         className={classNames(
@@ -163,7 +157,8 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
         {leftSlot}
         <HStack
           className={classNames(
-            'w-full min-w-0',
+            inputWrapperClassName,
+            'w-full min-w-0 px-2',
             leftSlot && 'pl-0.5 -ml-2',
             rightSlot && 'pr-0.5 -mr-2',
           )}
@@ -172,6 +167,7 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
             ref={ref}
             id={id}
             singleLine
+            stateKey={stateKey}
             wrapLines={wrapLines}
             onKeyDown={handleKeyDown}
             type={type === 'password' && !obscured ? 'text' : type}

@@ -1,25 +1,46 @@
-import { invoke } from '@tauri-apps/api/core';
-import { ModelPayload, Workspace } from '@yaakapp-internal/models';
-import { useListenToTauriEvent } from '@yaakapp/app/hooks/useListenToTauriEvent';
-import { debounce } from '@yaakapp/app/lib/debounce';
-import { useEffect } from 'react';
+import { Channel, invoke } from '@tauri-apps/api/core';
+import { emit } from '@tauri-apps/api/event';
+import { SyncOp } from './bindings/sync';
+import { WatchEvent, WatchResult } from './bindings/watch';
 
-const sync = async (workspace: Workspace) => {
-  if (workspace.settingSyncDir == null) return;
-  console.log('Syncing', workspace.settingSyncDir);
-  await invoke('plugin:yaak-sync|sync', {
-    workspaceId: workspace.id,
-    dir: workspace.settingSyncDir,
+export async function calculateSync(workspaceId: string, syncDir: string) {
+  return invoke<SyncOp[]>('plugin:yaak-sync|calculate', {
+    workspaceId,
+    syncDir,
   });
-};
-const debouncedSync = debounce(sync, 2000);
+}
 
-export function useDirectorySync(workspace: Workspace | null) {
-  useEffect(() => {
-    const t = setInterval(() => debouncedSync(workspace), 5000);
-    return () => clearInterval(t);
-  }, [workspace]);
+export async function calculateSyncFsOnly(dir: string) {
+  return invoke<SyncOp[]>('plugin:yaak-sync|calculate_fs', { dir });
+}
 
-  useListenToTauriEvent<ModelPayload>('upserted_model', () => debouncedSync(workspace));
-  useListenToTauriEvent<ModelPayload>('deleted_model', () => debouncedSync(workspace));
+export async function applySync(workspaceId: string, syncDir: string, syncOps: SyncOp[]) {
+  return invoke<void>('plugin:yaak-sync|apply', {
+    workspaceId,
+    syncDir,
+    syncOps: syncOps,
+  });
+}
+
+export function watchWorkspaceFiles(
+  workspaceId: string,
+  syncDir: string,
+  callback: (e: WatchEvent) => void,
+) {
+  const channel = new Channel<WatchEvent>();
+  channel.onmessage = callback;
+  const promise = invoke<WatchResult>('plugin:yaak-sync|watch', {
+    workspaceId,
+    syncDir,
+    channel,
+  });
+
+  return () => {
+    promise
+      .then(({ unlistenEvent }) => {
+        console.log('Cancelling workspace watch', workspaceId, unlistenEvent);
+        return emit(unlistenEvent);
+      })
+      .catch(console.error);
+  };
 }

@@ -1,14 +1,25 @@
+import { openUrl } from '@tauri-apps/plugin-opener';
 import type { LicenseCheckStatus } from '@yaakapp-internal/license';
 import { useLicense } from '@yaakapp-internal/license';
+import type { ReactNode } from 'react';
+import { appInfo } from '../hooks/useAppInfo';
 import { useOpenSettings } from '../hooks/useOpenSettings';
+import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
-import { SettingsTab } from './Settings/Settings';
+import {HStack} from "./core/Stacks";
+import { SettingsTab } from './Settings/SettingsTab';
+import { Icon } from './core/Icon';
 
-const labels: Record<LicenseCheckStatus['type'], string | null> = {
+const details: Record<
+  LicenseCheckStatus['type'] | 'dev' | 'beta',
+  { label: ReactNode; color: ButtonProps['color'] } | null
+> = {
+  beta: { label: <HStack space={1}><span>Beta Feedback</span><Icon size="xs" icon='external_link'/></HStack>, color: 'success' },
+  dev: { label: 'Develop', color: 'secondary' },
   commercial_use: null,
-  personal_use: 'Personal Use',
-  trial_ended: 'Personal Use',
-  trialing: 'Active Trial',
+  invalid_license: { label: 'License Error', color: 'danger' },
+  personal_use: { label: 'Personal Use', color: 'primary' },
+  trialing: { label: 'Personal Use', color: 'primary' },
 };
 
 export function LicenseBadge() {
@@ -19,8 +30,13 @@ export function LicenseBadge() {
     return null;
   }
 
-  const label = labels[check.data.type];
-  if (label == null) {
+  const checkType = appInfo.version.includes('beta')
+    ? 'beta'
+    : appInfo.isDev
+      ? 'dev'
+      : check.data.type;
+  const detail = details[checkType];
+  if (detail == null) {
     return null;
   }
 
@@ -29,14 +45,17 @@ export function LicenseBadge() {
       size="2xs"
       variant="border"
       className="!rounded-full mx-1"
-      onClick={() => openSettings.mutate()}
-      color={
-        check.data.type == 'trial_ended' || check.data.type === 'personal_use'
-          ? 'primary'
-          : 'success'
-      }
+      onClick={async () => {
+        if (checkType === 'beta') {
+          await openUrl('https://feedback.yaak.app/p/yaak-20-feedback');
+        } else {
+          openSettings.mutate();
+        }
+      }}
+      color={detail.color}
+      event={{ id: 'license-badge', status: check.data.type }}
     >
-      {label}
+      {detail.label}
     </Button>
   );
 }

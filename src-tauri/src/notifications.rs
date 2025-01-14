@@ -74,10 +74,7 @@ impl YaakNotifier {
             return Ok(());
         }
 
-        let notification = resp
-            .json::<YaakNotification>()
-            .await
-            .map_err(|e| e.to_string())?;
+        let notification = resp.json::<YaakNotification>().await.map_err(|e| e.to_string())?;
 
         let age = notification.timestamp.signed_duration_since(Utc::now());
         let seen = get_kv(window).await?;

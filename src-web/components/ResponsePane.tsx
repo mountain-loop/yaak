@@ -1,4 +1,4 @@
-import type { HttpRequest, HttpResponse } from '@yaakapp-internal/models';
+import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties, ReactNode } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
@@ -27,34 +27,32 @@ import { EventStreamViewer } from './responseViewers/EventStreamViewer';
 import { HTMLOrTextViewer } from './responseViewers/HTMLOrTextViewer';
 import { ImageViewer } from './responseViewers/ImageViewer';
 import { PdfViewer } from './responseViewers/PdfViewer';
+import { SvgViewer } from './responseViewers/SvgViewer';
 import { VideoViewer } from './responseViewers/VideoViewer';
+import { ConfirmLargeResponse } from './ConfirmLargeResponse';
 
 interface Props {
   style?: CSSProperties;
   className?: string;
-  activeRequest: HttpRequest;
+  activeRequestId: string;
 }
 
 const TAB_BODY = 'body';
 const TAB_HEADERS = 'headers';
 const TAB_INFO = 'info';
-const DEFAULT_TAB = TAB_BODY;
 
-export const ResponsePane = memo(function ResponsePane({ style, className, activeRequest }: Props) {
-  const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequest);
+export const ResponsePane = memo(function ResponsePane({
+  style,
+  className,
+  activeRequestId,
+}: Props) {
+  const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
   const [viewMode, setViewMode] = useResponseViewMode(activeResponse?.requestId);
   const [activeTabs, setActiveTabs] = useLocalStorage<Record<string, string>>(
     'responsePaneActiveTabs',
     {},
   );
   const contentType = useContentTypeFromHeaders(activeResponse?.headers ?? null);
-  const activeTab = activeTabs?.[activeRequest.id] ?? DEFAULT_TAB;
-  const setActiveTab = useCallback(
-    (tab: string) => {
-      setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
-    },
-    [activeRequest.id, setActiveTabs],
-  );
 
   const tabs = useMemo<TabItem[]>(
     () => [
@@ -72,13 +70,11 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
       },
       {
         value: TAB_HEADERS,
-        label: (
-          <div className="flex items-center">
-            Headers
-            <CountBadge
-              count={activeResponse?.headers.filter((h) => h.name && h.value).length ?? 0}
-            />
-          </div>
+        label: 'Headers',
+        rightSlot: (
+          <CountBadge
+            count={activeResponse?.headers.filter((h) => h.name && h.value).length ?? 0}
+          />
         ),
       },
       {
@@ -87,6 +83,13 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
       },
     ],
     [activeResponse?.headers, contentType, setViewMode, viewMode],
+  );
+  const activeTab = activeTabs?.[activeRequestId];
+  const setActiveTab = useCallback(
+    (tab: string) => {
+      setActiveTabs((r) => ({ ...r, [activeRequestId]: tab }));
+    },
+    [activeRequestId, setActiveTabs],
   );
 
   const isLoading = isResponseLoading(activeResponse);
@@ -104,7 +107,7 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
     >
       {activeResponse == null ? (
         <HotKeyList
-          hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'urlBar.focus']}
+          hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'url_bar.focus']}
         />
       ) : (
         <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">
@@ -151,7 +154,7 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
             </Banner>
           ) : (
             <Tabs
-              key={activeRequest.id} // Freshen tabs on request change
+              key={activeRequestId} // Freshen tabs on request change
               value={activeTab}
               onChangeValue={setActiveTab}
               tabs={tabs}
@@ -160,31 +163,35 @@ export const ResponsePane = memo(function ResponsePane({ style, className, activ
               tabListClassName="mt-1.5"
             >
               <TabContent value={TAB_BODY}>
-                {!activeResponse.contentLength ? (
-                  <div className="pb-2 h-full">
-                    <EmptyStateText>Empty Body</EmptyStateText>
-                  </div>
-                ) : contentType?.match(/^text\/event-stream$/i) && viewMode === 'pretty' ? (
-                  <EventStreamViewer response={activeResponse} />
-                ) : contentType?.match(/^image/i) ? (
-                  <EnsureCompleteResponse response={activeResponse} render={ImageViewer} />
-                ) : contentType?.match(/^audio/i) ? (
-                  <EnsureCompleteResponse response={activeResponse} render={AudioViewer} />
-                ) : contentType?.match(/^video/i) ? (
-                  <EnsureCompleteResponse response={activeResponse} render={VideoViewer} />
-                ) : contentType?.match(/pdf/i) ? (
-                  <EnsureCompleteResponse response={activeResponse} render={PdfViewer} />
-                ) : contentType?.match(/csv|tab-separated/i) ? (
-                  <CsvViewer className="pb-2" response={activeResponse} />
-                ) : (
-                  // ) : viewMode === 'pretty' && contentType?.includes('json') ? (
-                  //   <JsonAttributeTree attrValue={activeResponse} />
-                  <HTMLOrTextViewer
-                    textViewerClassName="-mr-2 bg-surface" // Pull to the right
-                    response={activeResponse}
-                    pretty={viewMode === 'pretty'}
-                  />
-                )}
+                <ConfirmLargeResponse response={activeResponse}>
+                  {!activeResponse.contentLength ? (
+                    <div className="pb-2 h-full">
+                      <EmptyStateText>Empty Body</EmptyStateText>
+                    </div>
+                  ) : contentType?.match(/^text\/event-stream$/i) && viewMode === 'pretty' ? (
+                    <EventStreamViewer response={activeResponse} />
+                  ) : contentType?.match(/^image\/svg/) ? (
+                    <SvgViewer response={activeResponse} />
+                  ) : contentType?.match(/^image/i) ? (
+                    <EnsureCompleteResponse response={activeResponse} render={ImageViewer} />
+                  ) : contentType?.match(/^audio/i) ? (
+                    <EnsureCompleteResponse response={activeResponse} render={AudioViewer} />
+                  ) : contentType?.match(/^video/i) ? (
+                    <EnsureCompleteResponse response={activeResponse} render={VideoViewer} />
+                  ) : contentType?.match(/pdf/i) ? (
+                    <EnsureCompleteResponse response={activeResponse} render={PdfViewer} />
+                  ) : contentType?.match(/csv|tab-separated/i) ? (
+                    <CsvViewer className="pb-2" response={activeResponse} />
+                  ) : (
+                    // ) : viewMode === 'pretty' && contentType?.includes('json') ? (
+                    //   <JsonAttributeTree attrValue={activeResponse} />
+                    <HTMLOrTextViewer
+                      textViewerClassName="-mr-2 bg-surface" // Pull to the right
+                      response={activeResponse}
+                      pretty={viewMode === 'pretty'}
+                    />
+                  )}
+                </ConfirmLargeResponse>
               </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />

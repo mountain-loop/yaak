@@ -7232,56 +7232,54 @@ function pluginHookImport(ctx, contents) {
     folders: []
   };
   const workspacesToImport = parsed.resources.filter(isWorkspace);
-  for (const workspaceToImport of workspacesToImport) {
-    const baseEnvironment = parsed.resources.find(
-      (r) => isEnvironment(r) && r.parentId === workspaceToImport._id
-    );
+  for (const w of workspacesToImport) {
     resources.workspaces.push({
-      id: convertId(workspaceToImport._id),
-      createdAt: new Date(workspacesToImport.created ?? Date.now()).toISOString().replace("Z", ""),
-      updatedAt: new Date(workspacesToImport.updated ?? Date.now()).toISOString().replace("Z", ""),
+      id: convertId(w._id),
+      createdAt: w.created ? new Date(w.created).toISOString().replace("Z", "") : void 0,
+      updatedAt: w.updated ? new Date(w.updated).toISOString().replace("Z", "") : void 0,
       model: "workspace",
-      name: workspaceToImport.name,
-      variables: baseEnvironment ? parseVariables(baseEnvironment.data) : []
+      name: w.name,
+      description: w.description || void 0
     });
     const environmentsToImport = parsed.resources.filter(
-      (r) => isEnvironment(r) && r.parentId === baseEnvironment?._id
+      (r) => isEnvironment(r)
     );
     resources.environments.push(
-      ...environmentsToImport.map((r) => importEnvironment(r, workspaceToImport._id))
+      ...environmentsToImport.map((r) => importEnvironment(r, w._id))
     );
     const nextFolder = (parentId) => {
       const children = parsed.resources.filter((r) => r.parentId === parentId);
       let sortPriority = 0;
       for (const child of children) {
         if (isRequestGroup(child)) {
-          resources.folders.push(importFolder(child, workspaceToImport._id));
+          resources.folders.push(importFolder(child, w._id));
           nextFolder(child._id);
         } else if (isHttpRequest(child)) {
           resources.httpRequests.push(
-            importHttpRequest(child, workspaceToImport._id, sortPriority++)
+            importHttpRequest(child, w._id, sortPriority++)
           );
         } else if (isGrpcRequest(child)) {
           resources.grpcRequests.push(
-            importGrpcRequest(child, workspaceToImport._id, sortPriority++)
+            importGrpcRequest(child, w._id, sortPriority++)
           );
         }
       }
     };
-    nextFolder(workspaceToImport._id);
+    nextFolder(w._id);
   }
   resources.httpRequests = resources.httpRequests.filter(Boolean);
   resources.grpcRequests = resources.grpcRequests.filter(Boolean);
   resources.environments = resources.environments.filter(Boolean);
   resources.workspaces = resources.workspaces.filter(Boolean);
-  return { resources };
+  return { resources: deleteUndefinedAttrs(resources) };
 }
 function importEnvironment(e, workspaceId) {
   return {
     id: convertId(e._id),
-    createdAt: new Date(e.created ?? Date.now()).toISOString().replace("Z", ""),
-    updatedAt: new Date(e.updated ?? Date.now()).toISOString().replace("Z", ""),
+    createdAt: e.created ? new Date(e.created).toISOString().replace("Z", "") : void 0,
+    updatedAt: e.updated ? new Date(e.updated).toISOString().replace("Z", "") : void 0,
     workspaceId: convertId(workspaceId),
+    environmentId: e.parentId === workspaceId ? null : convertId(e.parentId),
     model: "environment",
     name: e.name,
     variables: Object.entries(e.data).map(([name, value]) => ({
@@ -7294,10 +7292,11 @@ function importEnvironment(e, workspaceId) {
 function importFolder(f, workspaceId) {
   return {
     id: convertId(f._id),
-    createdAt: new Date(f.created ?? Date.now()).toISOString().replace("Z", ""),
-    updatedAt: new Date(f.updated ?? Date.now()).toISOString().replace("Z", ""),
+    createdAt: f.created ? new Date(f.created).toISOString().replace("Z", "") : void 0,
+    updatedAt: f.updated ? new Date(f.updated).toISOString().replace("Z", "") : void 0,
     folderId: f.parentId === workspaceId ? null : convertId(f.parentId),
     workspaceId: convertId(workspaceId),
+    description: f.description || void 0,
     model: "folder",
     name: f.name
   };
@@ -7308,13 +7307,14 @@ function importGrpcRequest(r, workspaceId, sortPriority = 0) {
   const method = parts[1] ?? null;
   return {
     id: convertId(r._id),
-    createdAt: new Date(r.created ?? Date.now()).toISOString().replace("Z", ""),
-    updatedAt: new Date(r.updated ?? Date.now()).toISOString().replace("Z", ""),
+    createdAt: r.created ? new Date(r.created).toISOString().replace("Z", "") : void 0,
+    updatedAt: r.updated ? new Date(r.updated).toISOString().replace("Z", "") : void 0,
     workspaceId: convertId(workspaceId),
     folderId: r.parentId === workspaceId ? null : convertId(r.parentId),
     model: "grpc_request",
     sortPriority,
     name: r.name,
+    description: r.description || void 0,
     url: convertSyntax(r.url),
     service,
     method,
@@ -7374,13 +7374,14 @@ function importHttpRequest(r, workspaceId, sortPriority = 0) {
   }
   return {
     id: convertId(r._id),
-    createdAt: new Date(r.created ?? Date.now()).toISOString().replace("Z", ""),
-    updatedAt: new Date(r.updated ?? Date.now()).toISOString().replace("Z", ""),
+    createdAt: r.created ? new Date(r.created).toISOString().replace("Z", "") : void 0,
+    updatedAt: r.updated ? new Date(r.updated).toISOString().replace("Z", "") : void 0,
     workspaceId: convertId(workspaceId),
     folderId: r.parentId === workspaceId ? null : convertId(r.parentId),
     model: "http_request",
     sortPriority,
     name: r.name,
+    description: r.description || void 0,
     url: convertSyntax(r.url),
     body,
     bodyType,
@@ -7393,13 +7394,6 @@ function importHttpRequest(r, workspaceId, sortPriority = 0) {
       value: h.value ?? ""
     })).filter(({ name, value }) => name !== "" || value !== "")
   };
-}
-function parseVariables(data) {
-  return Object.entries(data).map(([name, value]) => ({
-    enabled: true,
-    name,
-    value: `${value}`
-  }));
 }
 function convertSyntax(variable) {
   if (!isJSString(variable)) return variable;
@@ -7431,6 +7425,17 @@ function convertId(id) {
     return id;
   }
   return `GENERATE_ID::${id}`;
+}
+function deleteUndefinedAttrs(obj) {
+  if (Array.isArray(obj) && obj != null) {
+    return obj.map(deleteUndefinedAttrs);
+  } else if (typeof obj === "object" && obj != null) {
+    return Object.fromEntries(
+      Object.entries(obj).filter(([, v]) => v !== void 0).map(([k, v]) => [k, deleteUndefinedAttrs(v)])
+    );
+  } else {
+    return obj;
+  }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

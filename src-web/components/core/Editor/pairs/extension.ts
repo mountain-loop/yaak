@@ -1,11 +1,12 @@
 import { LanguageSupport, LRLanguage } from '@codemirror/language';
 import { parser } from './pairs';
 
-const urlLanguage = LRLanguage.define({
+const language = LRLanguage.define({
+  name: 'pairs',
   parser,
   languageData: {},
 });
 
 export function pairs() {
-  return new LanguageSupport(urlLanguage, []);
+  return new LanguageSupport(language, []);
 }

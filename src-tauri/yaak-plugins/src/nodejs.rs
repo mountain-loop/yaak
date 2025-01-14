@@ -1,8 +1,8 @@
-use std::net::SocketAddr;
 use crate::error::Result;
 use log::info;
 use serde;
 use serde::Deserialize;
+use std::net::SocketAddr;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_shell::process::CommandEvent;
@@ -20,15 +20,12 @@ pub async fn start_nodejs_plugin_runtime<R: Runtime>(
     addr: SocketAddr,
     kill_rx: &Receiver<bool>,
 ) -> Result<()> {
-    let plugin_runtime_main = app
-        .path()
-        .resolve("vendored/plugin-runtime", BaseDirectory::Resource)?
-        .join("index.cjs");
+    let plugin_runtime_main =
+        app.path().resolve("vendored/plugin-runtime", BaseDirectory::Resource)?.join("index.cjs");
 
     // HACK: Remove UNC prefix for Windows paths to pass to sidecar
-    let plugin_runtime_main = dunce::simplified(plugin_runtime_main.as_path())
-        .to_string_lossy()
-        .to_string();
+    let plugin_runtime_main =
+        dunce::simplified(plugin_runtime_main.as_path()).to_string_lossy().to_string();
 
     info!("Starting plugin runtime main={}", plugin_runtime_main);
 
@@ -59,10 +56,7 @@ pub async fn start_nodejs_plugin_runtime<R: Runtime>(
 
     // Check on child
     tokio::spawn(async move {
-        kill_rx
-            .wait_for(|b| *b == true)
-            .await
-            .expect("Kill channel errored");
+        kill_rx.wait_for(|b| *b == true).await.expect("Kill channel errored");
         info!("Killing plugin runtime");
         child.kill().expect("Failed to kill plugin runtime");
         info!("Killed plugin runtime");

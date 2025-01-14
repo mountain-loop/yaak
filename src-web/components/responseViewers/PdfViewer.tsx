@@ -1,4 +1,3 @@
-import useResizeObserver from '@react-hook/resize-observer';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import { convertFileSrc } from '@tauri-apps/api/core';
@@ -6,7 +5,7 @@ import './PdfViewer.css';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import React, { useRef, useState } from 'react';
 import { Document, Page } from 'react-pdf';
-import { useDebouncedState } from '../../hooks/useDebouncedState';
+import { useContainerSize } from '../../hooks/useContainerQuery';
 
 interface Props {
   bodyPath: string;
@@ -19,12 +18,9 @@ const options = {
 
 export function PdfViewer({ bodyPath }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useDebouncedState<number>(0, 100);
   const [numPages, setNumPages] = useState<number>();
 
-  useResizeObserver(containerRef.current ?? null, (v) => {
-    setContainerWidth(v.contentRect.width);
-  });
+  const { width: containerWidth } = useContainerSize(containerRef);
 
   const onDocumentLoadSuccess = ({ numPages: nextNumPages }: PDFDocumentProxy): void => {
     setNumPages(nextNumPages);

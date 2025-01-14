@@ -1,19 +1,23 @@
-import { defaultKeymap } from '@codemirror/commands';
-import { forceParsing } from '@codemirror/language';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { defaultKeymap, historyField } from '@codemirror/commands';
+import { foldState, forceParsing } from '@codemirror/language';
+import type { EditorStateConfig, Extension } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
 import { keymap, placeholder as placeholderExt, tooltips } from '@codemirror/view';
-import type { EnvironmentVariable } from '@yaakapp-internal/models';
+import { emacs } from '@replit/codemirror-emacs';
+import { vim } from '@replit/codemirror-vim';
+import { vscodeKeymap } from '@replit/codemirror-vscode-keymap';
+import type { EditorKeymap, EnvironmentVariable } from '@yaakapp-internal/models';
 import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { EditorView } from 'codemirror';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
-  useEffect,
   Children,
   cloneElement,
   forwardRef,
   isValidElement,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -22,8 +26,11 @@ import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironme
 import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useSettings } from '../../../hooks/useSettings';
-import { useTemplateFunctions } from '../../../hooks/useTemplateFunctions';
-import { useDialog } from '../../DialogContext';
+import {
+  useTemplateFunctions,
+  useTwigCompletionOptions,
+} from '../../../hooks/useTemplateFunctions';
+import { showDialog } from '../../../lib/dialog';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
@@ -31,12 +38,14 @@ import { HStack } from '../Stacks';
 import './Editor.css';
 import { baseExtensions, getLanguageExtension, multiLineExtensions } from './extensions';
 import type { GenericCompletionConfig } from './genericCompletion';
-import { singleLineExt } from './singleLine';
+import { singleLineExtensions } from './singleLine';
 
-// Export some things so all the code-split parts are in this file
-export { buildClientSchema, getIntrospectionQuery } from 'graphql/utilities';
-export { graphql } from 'cm6-graphql';
-export { formatSdl } from 'format-graphql';
+const keymapExtensions: Record<EditorKeymap, Extension> = {
+  vim: vim(),
+  emacs: emacs(),
+  vscode: keymap.of(vscodeKeymap),
+  default: [],
+};
 
 export interface EditorProps {
   id?: string;
@@ -45,7 +54,16 @@ export interface EditorProps {
   type?: 'text' | 'password';
   className?: string;
   heightMode?: 'auto' | 'full';
-  language?: 'javascript' | 'json' | 'html' | 'xml' | 'graphql' | 'url' | 'pairs' | 'text';
+  language?:
+    | 'javascript'
+    | 'json'
+    | 'html'
+    | 'xml'
+    | 'graphql'
+    | 'url'
+    | 'pairs'
+    | 'text'
+    | 'markdown';
   forceUpdateKey?: string | number;
   autoFocus?: boolean;
   autoSelect?: boolean;
@@ -66,9 +84,14 @@ export interface EditorProps {
   autocompleteVariables?: boolean;
   extraExtensions?: Extension[];
   actions?: ReactNode;
+  hideGutter?: boolean;
+  stateKey: string | null;
 }
 
+const stateFields = { history: historyField, folds: foldState };
+
 const emptyVariables: EnvironmentVariable[] = [];
+const emptyExtension: Extension = [];
 
 export const Editor = forwardRef<EditorView | undefined, EditorProps>(function Editor(
   {
@@ -96,10 +119,13 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     autocompleteVariables,
     actions,
     wrapLines,
+    hideGutter,
+    stateKey,
   }: EditorProps,
   ref,
 ) {
   const settings = useSettings();
+
   const templateFunctions = useTemplateFunctions();
   const allEnvironmentVariables = useActiveEnvironmentVariables();
   const environmentVariables = autocompleteVariables ? allEnvironmentVariables : emptyVariables;
@@ -109,12 +135,12 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   }
 
   const cm = useRef<{ view: EditorView; languageCompartment: Compartment } | null>(null);
-  useImperativeHandle(ref, () => cm.current?.view);
+  useImperativeHandle(ref, () => cm.current?.view, []);
 
   // Use ref so we can update the handler without re-initializing the editor
   const handleChange = useRef<EditorProps['onChange']>(onChange);
   useEffect(() => {
-    handleChange.current = onChange ? onChange : onChange;
+    handleChange.current = onChange;
   }, [onChange]);
 
   // Use ref so we can update the handler without re-initializing the editor
@@ -149,28 +175,56 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   // Update placeholder
   const placeholderCompartment = useRef(new Compartment());
-  useEffect(() => {
-    if (cm.current === null) return;
-    const effect = placeholderCompartment.current.reconfigure(
-      placeholderExt(placeholderElFromText(placeholder ?? '')),
-    );
-    cm.current?.view.dispatch({ effects: effect });
-  }, [placeholder]);
+  useEffect(
+    function configurePlaceholder() {
+      if (cm.current === null) return;
+      const ext = placeholderExt(placeholderElFromText(placeholder ?? ''));
+      const effect = placeholderCompartment.current.reconfigure(ext);
+      cm.current?.view.dispatch({ effects: effect });
+    },
+    [placeholder],
+  );
+
+  // Update vim
+  const keymapCompartment = useRef(new Compartment());
+  useEffect(
+    function configureKeymap() {
+      if (cm.current === null) return;
+      const current = keymapCompartment.current.get(cm.current.view.state) ?? [];
+      // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
+      if (settings.editorKeymap === 'default' && current === keymapExtensions['default']) return; // Nothing to do
+      if (settings.editorKeymap === 'vim' && current === keymapExtensions['vim']) return; // Nothing to do
+      if (settings.editorKeymap === 'vscode' && current === keymapExtensions['vscode']) return; // Nothing to do
+      if (settings.editorKeymap === 'emacs' && current === keymapExtensions['emacs']) return; // Nothing to do
+
+      const ext = keymapExtensions[settings.editorKeymap] ?? keymapExtensions['default'];
+      const effect = keymapCompartment.current.reconfigure(ext);
+      cm.current.view.dispatch({ effects: effect });
+    },
+    [settings.editorKeymap],
+  );
 
   // Update wrap lines
   const wrapLinesCompartment = useRef(new Compartment());
-  useEffect(() => {
-    if (cm.current === null) return;
-    const ext = wrapLines ? [EditorView.lineWrapping] : [];
-    const effect = wrapLinesCompartment.current.reconfigure(ext);
-    cm.current?.view.dispatch({ effects: effect });
-  }, [wrapLines]);
+  useEffect(
+    function configureWrapLines() {
+      if (cm.current === null) return;
+      const current = wrapLinesCompartment.current.get(cm.current.view.state) ?? emptyExtension;
+      // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
+      if (wrapLines && current !== emptyExtension) return; // Nothing to do
+      if (!wrapLines && current === emptyExtension) return; // Nothing to do
 
-  const dialog = useDialog();
+      const ext = wrapLines ? EditorView.lineWrapping : [];
+      const effect = wrapLinesCompartment.current.reconfigure(ext);
+      cm.current?.view.dispatch({ effects: effect });
+    },
+    [wrapLines],
+  );
+
   const onClickFunction = useCallback(
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
       const initialTokens = await parseTemplate(tagValue);
-      dialog.show({
+      showDialog({
         id: 'template-function',
         size: 'sm',
         title: 'Configure Function',
@@ -189,13 +243,13 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
         ),
       });
     },
-    [dialog],
+    [],
   );
 
   const onClickVariable = useCallback(
     async (_v: EnvironmentVariable, tagValue: string, startPos: number) => {
       const initialTokens = await parseTemplate(tagValue);
-      dialog.show({
+      showDialog({
         size: 'dynamic',
         id: 'template-variable',
         title: 'Change Variable',
@@ -212,13 +266,13 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
         ),
       });
     },
-    [dialog],
+    [],
   );
 
   const onClickMissingVariable = useCallback(
     async (_name: string, tagValue: string, startPos: number) => {
       const initialTokens = await parseTemplate(tagValue);
-      dialog.show({
+      showDialog({
         size: 'dynamic',
         id: 'template-variable',
         title: 'Configure Variable',
@@ -235,7 +289,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
         ),
       });
     },
-    [dialog],
+    [],
   );
 
   const [, { focusParamValue }] = useRequestEditor();
@@ -246,6 +300,8 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     [focusParamValue],
   );
 
+  const completionOptions = useTwigCompletionOptions(onClickFunction);
+
   // Update the language extension when the language changes
   useEffect(() => {
     if (cm.current === null) return;
@@ -255,8 +311,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       environmentVariables,
       useTemplating,
       autocomplete,
-      templateFunctions,
-      onClickFunction,
+      completionOptions,
       onClickVariable,
       onClickMissingVariable,
       onClickPathParameter,
@@ -272,60 +327,70 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     onClickVariable,
     onClickMissingVariable,
     onClickPathParameter,
+    completionOptions,
   ]);
 
   // Initialize the editor when ref mounts
   const initEditorRef = useCallback(
-    (container: HTMLDivElement | null) => {
+    function initEditorRef(container: HTMLDivElement | null) {
       if (container === null) {
         cm.current?.view.destroy();
         cm.current = null;
         return;
       }
 
-      let view: EditorView;
       try {
         const languageCompartment = new Compartment();
         const langExt = getLanguageExtension({
           language,
           useTemplating,
+          completionOptions,
           autocomplete,
           environmentVariables,
-          templateFunctions,
           onClickVariable,
-          onClickFunction,
           onClickMissingVariable,
           onClickPathParameter,
         });
 
-        const state = EditorState.create({
-          doc: `${defaultValue ?? ''}`,
-          extensions: [
-            languageCompartment.of(langExt),
-            placeholderCompartment.current.of(
-              placeholderExt(placeholderElFromText(placeholder ?? '')),
-            ),
-            wrapLinesCompartment.current.of(wrapLines ? [EditorView.lineWrapping] : []),
-            ...getExtensions({
-              container,
-              readOnly,
-              singleLine,
-              onChange: handleChange,
-              onPaste: handlePaste,
-              onPasteOverwrite: handlePasteOverwrite,
-              onFocus: handleFocus,
-              onBlur: handleBlur,
-              onKeyDown: handleKeyDown,
-            }),
-            ...(extraExtensions ?? []),
-          ],
-        });
+        const extensions = [
+          languageCompartment.of(langExt),
+          placeholderCompartment.current.of(
+            placeholderExt(placeholderElFromText(placeholder ?? '')),
+          ),
+          wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : []),
+          keymapCompartment.current.of(
+            keymapExtensions[settings.editorKeymap] ?? keymapExtensions['default'],
+          ),
+          ...getExtensions({
+            container,
+            readOnly,
+            singleLine,
+            hideGutter,
+            stateKey,
+            onChange: handleChange,
+            onPaste: handlePaste,
+            onPasteOverwrite: handlePasteOverwrite,
+            onFocus: handleFocus,
+            onBlur: handleBlur,
+            onKeyDown: handleKeyDown,
+          }),
+          ...(extraExtensions ?? []),
+        ];
 
-        view = new EditorView({ state, parent: container });
+        const cachedJsonState = getCachedEditorState(defaultValue ?? '', stateKey);
+
+        const doc = `${defaultValue ?? ''}`;
+        const config: EditorStateConfig = { extensions, doc };
+
+        const state = cachedJsonState
+          ? EditorState.fromJSON(cachedJsonState, config, stateFields)
+          : EditorState.create(config);
+
+        const view = new EditorView({ state, parent: container });
 
         // For large documents, the parser may parse the max number of lines and fail to add
         // things like fold markers because of it.
-        // This forces it to parse more but keeps the timeout to the default of 100ms.
+        // This forces it to parse more but keeps the timeout to the default of 100 ms.
         forceParsing(view, 9e6, 100);
 
         cm.current = { view, languageCompartment };
@@ -344,37 +409,40 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   );
 
   // For read-only mode, update content when `defaultValue` changes
-  useEffect(() => {
-    if (!readOnly || cm.current?.view == null || defaultValue == null) return;
+  useEffect(
+    function updateReadOnlyEditor() {
+      if (!readOnly || cm.current?.view == null || defaultValue == null) return;
 
-    // Replace codemirror contents
-    const currentDoc = cm.current.view.state.doc.toString();
-    if (defaultValue.startsWith(currentDoc)) {
-      // If we're just appending, append only the changes. This preserves
-      // things like scroll position.
-      cm.current.view.dispatch({
-        changes: cm.current.view.state.changes({
-          from: currentDoc.length,
-          insert: defaultValue.slice(currentDoc.length),
-        }),
-      });
-    } else {
-      // If we're replacing everything, reset the entire content
-      cm.current.view.dispatch({
-        changes: cm.current.view.state.changes({
-          from: 0,
-          to: currentDoc.length,
-          insert: defaultValue,
-        }),
-      });
-    }
-  }, [defaultValue, readOnly]);
+      // Replace codemirror contents
+      const currentDoc = cm.current.view.state.doc.toString();
+      if (defaultValue.startsWith(currentDoc)) {
+        // If we're just appending, append only the changes. This preserves
+        // things like scroll position.
+        cm.current.view.dispatch({
+          changes: cm.current.view.state.changes({
+            from: currentDoc.length,
+            insert: defaultValue.slice(currentDoc.length),
+          }),
+        });
+      } else {
+        // If we're replacing everything, reset the entire content
+        cm.current.view.dispatch({
+          changes: cm.current.view.state.changes({
+            from: 0,
+            to: currentDoc.length,
+            insert: defaultValue,
+          }),
+        });
+      }
+    },
+    [defaultValue, readOnly],
+  );
 
   // Add bg classes to actions, so they appear over the text
   const decoratedActions = useMemo(() => {
     const results = [];
     const actionClassName = classNames(
-      'bg-surface transition-opacity opacity-0 group-hover:opacity-100 hover:!opacity-100 shadow',
+      'bg-surface transition-opacity transform-gpu opacity-0 group-hover:opacity-100 hover:!opacity-100 shadow',
     );
 
     if (format) {
@@ -452,16 +520,19 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 });
 
 function getExtensions({
+  stateKey,
   container,
   readOnly,
   singleLine,
+  hideGutter,
   onChange,
   onPaste,
   onPasteOverwrite,
   onFocus,
   onBlur,
   onKeyDown,
-}: Pick<EditorProps, 'singleLine' | 'readOnly'> & {
+}: Pick<EditorProps, 'singleLine' | 'readOnly' | 'hideGutter'> & {
+  stateKey: EditorProps['stateKey'];
   container: HTMLDivElement | null;
   onChange: MutableRefObject<EditorProps['onChange']>;
   onPaste: MutableRefObject<EditorProps['onPaste']>;
@@ -498,8 +569,8 @@ function getExtensions({
     }),
     tooltips({ parent }),
     keymap.of(singleLine ? defaultKeymap.filter((k) => k.key !== 'Enter') : defaultKeymap),
-    ...(singleLine ? [singleLineExt()] : []),
-    ...(!singleLine ? [multiLineExtensions] : []),
+    ...(singleLine ? [singleLineExtensions()] : []),
+    ...(!singleLine ? [multiLineExtensions({ hideGutter })] : []),
     ...(readOnly
       ? [EditorState.readOnly.of(true), EditorView.contentAttributes.of({ tabindex: '-1' })]
       : []),
@@ -508,10 +579,16 @@ function getExtensions({
     // Things that must be last //
     // ------------------------ //
 
+    // Fire onChange event
     EditorView.updateListener.of((update) => {
       if (onChange && update.docChanged) {
         onChange.current?.(update.state.doc.toString());
       }
+    }),
+
+    // Cache editor state
+    EditorView.updateListener.of((update) => {
+      saveCachedEditorState(stateKey, update.state);
     }),
   ];
 }
@@ -521,3 +598,26 @@ const placeholderElFromText = (text: string) => {
   el.innerHTML = text.replaceAll('\n', '<br/>');
   return el;
 };
+
+function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
+  if (!stateKey || state == null) return;
+  sessionStorage.setItem(stateKey, JSON.stringify(state.toJSON(stateFields)));
+}
+
+function getCachedEditorState(doc: string, stateKey: string | null) {
+  if (stateKey == null) return;
+
+  const stateStr = sessionStorage.getItem(stateKey);
+  if (stateStr == null) return null;
+
+  try {
+    const state = JSON.parse(stateStr);
+    if (state.doc !== doc) return null;
+
+    return state;
+  } catch {
+    // Nothing
+  }
+
+  return null;
+}

@@ -1,20 +1,17 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAppRoutes } from '../hooks/useAppRoutes';
 import { getRecentCookieJars } from '../hooks/useRecentCookieJars';
 import { getRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { getRecentRequests } from '../hooks/useRecentRequests';
 import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
 import { useWorkspaces } from '../hooks/useWorkspaces';
+import { router } from '../lib/router';
 
 export function RedirectToLatestWorkspace() {
-  const navigate = useNavigate();
-  const routes = useAppRoutes();
   const workspaces = useWorkspaces();
   const recentWorkspaces = useRecentWorkspaces();
 
   useEffect(() => {
-    if (workspaces.length === 0) {
+    if (workspaces.length === 0 || recentWorkspaces == null) {
       console.log('No workspaces found to redirect to. Skipping.');
       return;
     }
@@ -24,14 +21,16 @@ export function RedirectToLatestWorkspace() {
       const environmentId = (await getRecentEnvironments(workspaceId))[0] ?? null;
       const cookieJarId = (await getRecentCookieJars(workspaceId))[0] ?? null;
       const requestId = (await getRecentRequests(workspaceId))[0] ?? null;
+      const params = { workspaceId };
+      const search = {
+        cookie_jar_id: cookieJarId,
+        environment_id: environmentId,
+        request_id: requestId,
+      };
 
-      if (workspaceId != null && requestId != null) {
-        navigate(routes.paths.request({ workspaceId, environmentId, requestId, cookieJarId }));
-      } else {
-        navigate(routes.paths.workspace({ workspaceId, environmentId, cookieJarId }));
-      }
+      await router.navigate({ to: '/workspaces/$workspaceId', params, search });
     })();
-  }, [navigate, recentWorkspaces, routes.paths, workspaces, workspaces.length]);
+  }, [recentWorkspaces, workspaces, workspaces.length]);
 
   return <></>;
 }

@@ -7,10 +7,8 @@ type TauriCmd =
   | 'cmd_create_cookie_jar'
   | 'cmd_create_environment'
   | 'cmd_template_tokens_to_string'
-  | 'cmd_create_folder'
   | 'cmd_create_grpc_request'
   | 'cmd_create_http_request'
-  | 'cmd_create_workspace'
   | 'cmd_curl_to_request'
   | 'cmd_delete_all_grpc_connections'
   | 'cmd_delete_all_http_responses'
@@ -24,6 +22,7 @@ type TauriCmd =
   | 'cmd_delete_http_response'
   | 'cmd_delete_workspace'
   | 'cmd_dismiss_notification'
+  | 'cmd_duplicate_folder'
   | 'cmd_duplicate_grpc_request'
   | 'cmd_duplicate_http_request'
   | 'cmd_export_data'
@@ -38,12 +37,14 @@ type TauriCmd =
   | 'cmd_get_key_value'
   | 'cmd_get_settings'
   | 'cmd_get_workspace'
+  | 'cmd_get_workspace_meta'
   | 'cmd_grpc_go'
   | 'cmd_grpc_reflect'
   | 'cmd_http_request_actions'
   | 'cmd_import_data'
   | 'cmd_install_plugin'
   | 'cmd_list_cookie_jars'
+  | 'cmd_list_key_values'
   | 'cmd_list_environments'
   | 'cmd_list_folders'
   | 'cmd_list_grpc_connections'
@@ -75,9 +76,15 @@ type TauriCmd =
   | 'cmd_update_http_request'
   | 'cmd_update_settings'
   | 'cmd_update_workspace'
+  | 'cmd_update_workspace_meta'
   | 'cmd_write_file_dev';
 
 export async function invokeCmd<T>(cmd: TauriCmd, args?: InvokeArgs): Promise<T> {
   // console.log('RUN COMMAND', cmd, args);
-  return invoke(cmd, args);
+  try {
+    return await invoke(cmd, args);
+  } catch (err) {
+    console.warn('Tauri command error', cmd, err);
+    throw err;
+  }
 }

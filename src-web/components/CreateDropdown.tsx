@@ -1,4 +1,3 @@
-import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import type { DropdownProps } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
@@ -8,15 +7,14 @@ interface Props extends Omit<DropdownProps, 'items'> {
 }
 
 export function CreateDropdown({ hideFolder, children, ...props }: Props) {
-  const activeRequest = useActiveRequest();
-  const folderId = activeRequest?.folderId ?? null;
-  const items = useCreateDropdownItems({
+  const getItems = useCreateDropdownItems({
     hideFolder,
     hideIcons: true,
-    folderId,
+    folderId: 'active-folder',
   });
+
   return (
-    <Dropdown items={items} {...props}>
+    <Dropdown items={getItems} {...props}>
       {children}
     </Dropdown>
   );

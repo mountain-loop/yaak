@@ -1,17 +1,17 @@
-import { useMutation } from '@tanstack/react-query';
 import type { HttpUrlParameter } from '@yaakapp-internal/models';
-import { useToast } from '../components/ToastContext';
+import { generateId } from '../lib/generateId';
 import { pluralize } from '../lib/pluralize';
 import { getHttpRequest } from '../lib/store';
+import { useFastMutation } from './useFastMutation';
 import { useRequestEditor } from './useRequestEditor';
+import { showToast } from '../lib/toast';
 import { useUpdateAnyHttpRequest } from './useUpdateAnyHttpRequest';
 
 export function useImportQuerystring(requestId: string) {
   const updateRequest = useUpdateAnyHttpRequest();
-  const toast = useToast();
   const [, { focusParamsTab, forceParamsRefresh, forceUrlRefresh }] = useRequestEditor();
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['import_querystring'],
     mutationFn: async (url: string) => {
       const split = url.split(/\?(.*)/s);
@@ -27,6 +27,7 @@ export function useImportQuerystring(requestId: string) {
         name,
         value,
         enabled: true,
+        id: generateId(),
       }));
 
       await updateRequest.mutateAsync({
@@ -38,7 +39,7 @@ export function useImportQuerystring(requestId: string) {
       });
 
       if (urlParameters.length > 0) {
-        toast.show({
+        showToast({
           id: 'querystring-imported',
           color: 'info',
           message: `Extracted ${urlParameters.length} ${pluralize('parameter', urlParameters.length)} from URL`,

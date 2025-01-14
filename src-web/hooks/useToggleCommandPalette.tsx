@@ -1,11 +1,10 @@
 import { useCallback } from 'react';
-import { CommandPalette } from '../components/CommandPalette';
-import { useDialog } from '../components/DialogContext';
+import { CommandPaletteDialog } from '../components/CommandPaletteDialog';
+import { toggleDialog } from '../lib/dialog';
 
 export function useToggleCommandPalette() {
-  const dialog = useDialog();
   const togglePalette = useCallback(() => {
-    dialog.toggle({
+    toggleDialog({
       id: 'command_palette',
       size: 'dynamic',
       hideX: true,
@@ -13,9 +12,9 @@ export function useToggleCommandPalette() {
       vAlign: 'top',
       noPadding: true,
       noScroll: true,
-      render: ({ hide }) => <CommandPalette onClose={hide} />,
+      render: ({ hide }) => <CommandPaletteDialog onClose={hide} />,
     });
-  }, [dialog]);
+  }, []);
 
   return togglePalette;
 }

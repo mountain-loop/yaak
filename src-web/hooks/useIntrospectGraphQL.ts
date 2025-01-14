@@ -1,7 +1,6 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
-import type { IntrospectionQuery } from 'graphql';
+import { buildClientSchema, getIntrospectionQuery, type IntrospectionQuery } from 'graphql';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { buildClientSchema, getIntrospectionQuery } from '../components/core/Editor';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { getResponseBodyText } from '../lib/responseBody';
 import { sendEphemeralRequest } from '../lib/sendEphemeralRequest';
@@ -21,7 +20,7 @@ export function useIntrospectGraphQL(
   // Debounce the request because it can change rapidly and we don't
   // want to send so too many requests.
   const request = useDebouncedValue(baseRequest);
-  const [activeEnvironment] = useActiveEnvironment();
+  const activeEnvironment = useActiveEnvironment();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>();
 

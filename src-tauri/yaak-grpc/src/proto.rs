@@ -104,7 +104,7 @@ pub async fn fill_pool_from_reflection(uri: &Uri) -> Result<DescriptorPool, Stri
         if service == "grpc.reflection.v1alpha.ServerReflection" {
             continue;
         }
-        if service == "grpc.reflection.v1.ServerReflection"{
+        if service == "grpc.reflection.v1.ServerReflection" {
             // TODO: update reflection client to use v1
             continue;
         }
@@ -316,8 +316,8 @@ mod topology {
                     zero_indegree.push(node.clone());
                 }
             }
-            for (node, deps) in data.out_graph.iter(){
-                if deps.is_empty(){
+            for (node, deps) in data.out_graph.iter() {
+                if deps.is_empty() {
                     zero_indegree.push(node.clone());
                 }
             }
@@ -344,8 +344,8 @@ mod topology {
             }
 
             let node = self.zero_indegree.pop().unwrap();
-            if let Some(parents) = self.data.in_graph.get(&node){
-                for parent in parents.iter(){
+            if let Some(parents) = self.data.in_graph.get(&node) {
+                for parent in parents.iter() {
                     let deps = self.data.out_graph.get_mut(parent).unwrap();
                     deps.remove(&node);
                     if deps.is_empty() {
@@ -360,7 +360,7 @@ mod topology {
     }
 
     #[test]
-    fn test_sort(){
+    fn test_sort() {
         {
             let mut topo_sort = SimpleTopoSort::new();
             topo_sort.insert("a", []);
@@ -390,5 +390,4 @@ mod topology {
             assert_eq!(iter.next(), None);
         }
     }
-
 }

@@ -54,7 +54,7 @@ export function extractKeyValue<T>(kv: KeyValue | null): T | undefined {
   }
 }
 
-function extractKeyValueOrFallback<T>(kv: KeyValue | null, fallback: T): T {
+export function extractKeyValueOrFallback<T>(kv: KeyValue | null, fallback: T): T {
   const v = extractKeyValue<T>(kv);
   if (v === undefined) return fallback;
   return v;

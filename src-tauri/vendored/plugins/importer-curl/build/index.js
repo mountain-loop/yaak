@@ -265,30 +265,31 @@ __export(src_exports, {
 module.exports = __toCommonJS(src_exports);
 var import_shell_quote = __toESM(require_shell_quote());
 var DATA_FLAGS = ["d", "data", "data-raw", "data-urlencode", "data-binary", "data-ascii"];
-var SUPPORTED_ARGS = [
-  ["url"],
-  // Specify the URL explicitly
-  ["user", "u"],
-  // Authentication
-  ["digest"],
-  // Apply auth as digest
-  ["header", "H"],
+var SUPPORTED_FLAGS = [
   ["cookie", "b"],
-  ["get", "G"],
-  // Put the post data in the URL
   ["d", "data"],
   // Add url encoded data
+  ["data-ascii"],
+  ["data-binary"],
   ["data-raw"],
   ["data-urlencode"],
-  ["data-binary"],
-  ["data-ascii"],
+  ["digest"],
+  // Apply auth as digest
   ["form", "F"],
   // Add multipart data
+  ["get", "G"],
+  // Put the post data in the URL
+  ["header", "H"],
   ["request", "X"],
   // Request method
+  ["url"],
+  // Specify the URL explicitly
+  ["url-query"],
+  ["user", "u"],
+  // Authentication
   DATA_FLAGS
 ].flatMap((v) => v);
-var BOOL_FLAGS = ["G", "get", "digest"];
+var BOOLEAN_FLAGS = ["G", "get", "digest"];
 function pluginHookImport(_ctx, rawData) {
   if (!rawData.match(/^\s*curl /)) {
     return null;
@@ -345,7 +346,7 @@ function pluginHookImport(_ctx, rawData) {
   };
 }
 function importCommand(parseEntries, workspaceId) {
-  const pairsByName = {};
+  const flagsByName = {};
   const singletons = [];
   for (let i = 1; i < parseEntries.length; i++) {
     let parseEntry = parseEntries[i];
@@ -355,12 +356,12 @@ function importCommand(parseEntries, workspaceId) {
     if (typeof parseEntry === "string" && parseEntry.match(/^-{1,2}[\w-]+/)) {
       const isSingleDash = parseEntry[0] === "-" && parseEntry[1] !== "-";
       let name = parseEntry.replace(/^-{1,2}/, "");
-      if (!SUPPORTED_ARGS.includes(name)) {
+      if (!SUPPORTED_FLAGS.includes(name)) {
         continue;
       }
       let value;
       const nextEntry = parseEntries[i + 1];
-      const hasValue = !BOOL_FLAGS.includes(name);
+      const hasValue = !BOOLEAN_FLAGS.includes(name);
       if (isSingleDash && name.length > 1) {
         value = name.slice(1);
         name = name.slice(0, 1);
@@ -370,31 +371,42 @@ function importCommand(parseEntries, workspaceId) {
       } else {
         value = true;
       }
-      pairsByName[name] = pairsByName[name] || [];
-      pairsByName[name].push(value);
+      flagsByName[name] = flagsByName[name] || [];
+      flagsByName[name].push(value);
     } else if (parseEntry) {
       singletons.push(parseEntry);
     }
   }
   let urlParameters;
   let url;
-  const urlArg = getPairValue(pairsByName, singletons[0] || "", ["url"]);
+  const urlArg = getPairValue(flagsByName, singletons[0] || "", ["url"]);
   const [baseUrl, search] = splitOnce(urlArg, "?");
   urlParameters = search?.split("&").map((p) => {
     const v = splitOnce(p, "=");
     return { name: decodeURIComponent(v[0] ?? ""), value: decodeURIComponent(v[1] ?? ""), enabled: true };
   }) ?? [];
   url = baseUrl ?? urlArg;
-  const [username, password] = getPairValue(pairsByName, "", ["u", "user"]).split(/:(.*)$/);
-  const isDigest = getPairValue(pairsByName, false, ["digest"]);
+  for (const p of flagsByName["url-query"] ?? []) {
+    if (typeof p !== "string") {
+      continue;
+    }
+    const [name, value] = p.split("=");
+    urlParameters.push({
+      name: name ?? "",
+      value: value ?? "",
+      enabled: true
+    });
+  }
+  const [username, password] = getPairValue(flagsByName, "", ["u", "user"]).split(/:(.*)$/);
+  const isDigest = getPairValue(flagsByName, false, ["digest"]);
   const authenticationType = username ? isDigest ? "digest" : "basic" : null;
   const authentication = username ? {
     username: username.trim(),
     password: (password ?? "").trim()
   } : {};
   const headers = [
-    ...pairsByName["header"] || [],
-    ...pairsByName["H"] || []
+    ...flagsByName["header"] || [],
+    ...flagsByName["H"] || []
   ].map((header) => {
     const [name, value] = header.split(/:(.*)$/);
     if (!value) {
@@ -411,8 +423,8 @@ function importCommand(parseEntries, workspaceId) {
     };
   });
   const cookieHeaderValue = [
-    ...pairsByName["cookie"] || [],
-    ...pairsByName["b"] || []
+    ...flagsByName["cookie"] || [],
+    ...flagsByName["b"] || []
   ].map((str) => {
     const name = str.split("=", 1)[0];
     const value = str.replace(`${name}=`, "");
@@ -428,12 +440,12 @@ function importCommand(parseEntries, workspaceId) {
       enabled: true
     });
   }
-  const dataParameters = pairsToDataParameters(pairsByName);
+  const dataParameters = pairsToDataParameters(flagsByName);
   const contentTypeHeader = headers.find((header) => header.name.toLowerCase() === "content-type");
   const mimeType = contentTypeHeader ? contentTypeHeader.value.split(";")[0] : null;
   const formDataParams = [
-    ...pairsByName["form"] || [],
-    ...pairsByName["F"] || []
+    ...flagsByName["form"] || [],
+    ...flagsByName["F"] || []
   ].map((str) => {
     const parts = str.split("=");
     const name = parts[0] ?? "";
@@ -451,7 +463,7 @@ function importCommand(parseEntries, workspaceId) {
   });
   let body = {};
   let bodyType = null;
-  const bodyAsGET = getPairValue(pairsByName, false, ["G", "get"]);
+  const bodyAsGET = getPairValue(flagsByName, false, ["G", "get"]);
   if (dataParameters.length > 0 && bodyAsGET) {
     urlParameters.push(...dataParameters);
   } else if (dataParameters.length > 0 && (mimeType == null || mimeType === "application/x-www-form-urlencoded")) {
@@ -486,7 +498,7 @@ function importCommand(parseEntries, workspaceId) {
       });
     }
   }
-  let method = getPairValue(pairsByName, "", ["X", "request"]).toUpperCase();
+  let method = getPairValue(flagsByName, "", ["X", "request"]).toUpperCase();
   if (method === "" && body) {
     method = "text" in body || "form" in body ? "POST" : "GET";
   }

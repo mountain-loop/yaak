@@ -7,6 +7,7 @@ import type {
   Plugin,
   Settings,
   Workspace,
+  WorkspaceMeta,
 } from '@yaakapp-internal/models';
 import { invokeCmd } from './tauri';
 
@@ -57,6 +58,10 @@ export async function getWorkspace(id: string | null): Promise<Workspace | null>
     return null;
   }
   return workspace;
+}
+
+export async function getWorkspaceMeta(workspaceId: string) {
+  return invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', { workspaceId });
 }
 
 export async function listWorkspaces(): Promise<Workspace[]> {

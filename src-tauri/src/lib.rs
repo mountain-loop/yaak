@@ -1,39 +1,6 @@
 extern crate core;
 #[cfg(target_os = "macos")]
 extern crate objc;
-
-use std::collections::BTreeMap;
-use std::fs::{create_dir_all, File};
-use std::path::PathBuf;
-use std::process::exit;
-use std::str::FromStr;
-use std::time::Duration;
-use std::{fs, panic};
-
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use chrono::Utc;
-use eventsource_client::{EventParser, SSE};
-use fern::colors::ColoredLevelConfig;
-use log::{debug, error, info, warn};
-use rand::random;
-use regex::Regex;
-use serde::Serialize;
-use serde_json::{json, Value};
-#[cfg(target_os = "macos")]
-use tauri::TitleBarStyle;
-use tauri::{AppHandle, Emitter, LogicalSize, RunEvent, State, WebviewUrl, WebviewWindow};
-use tauri::{Listener, Runtime};
-use tauri::{Manager, WindowEvent};
-use tauri_plugin_clipboard_manager::ClipboardExt;
-use tauri_plugin_log::{fern, Target, TargetKind};
-use tauri_plugin_shell::ShellExt;
-use tokio::fs::read_to_string;
-use tokio::sync::Mutex;
-use tokio::task::block_in_place;
-use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
-use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
-
 use crate::analytics::{AnalyticsAction, AnalyticsResource};
 use crate::grpc::metadata_to_map;
 use crate::http_request::send_http_request;
@@ -42,27 +9,59 @@ use crate::render::{render_grpc_request, render_http_request, render_json_value,
 use crate::template_callback::PluginTemplateCallback;
 use crate::updates::{UpdateMode, YaakUpdater};
 use crate::window_menu::app_menu;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use chrono::Utc;
+use eventsource_client::{EventParser, SSE};
+use log::{debug, error, info, warn};
+use rand::random;
+use regex::Regex;
+use serde::Serialize;
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
+use std::fs::{create_dir_all, File};
+use std::path::PathBuf;
+use std::process::exit;
+use std::str::FromStr;
+use std::time::Duration;
+use std::{fs, panic};
+#[cfg(target_os = "macos")]
+use tauri::TitleBarStyle;
+use tauri::{AppHandle, Emitter, LogicalSize, RunEvent, State, WebviewUrl, WebviewWindow};
+use tauri::{Listener, Runtime};
+use tauri::{Manager, WindowEvent};
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_log::fern::colors::ColoredLevelConfig;
+use tauri_plugin_log::{Builder, Target, TargetKind};
+use tauri_plugin_opener::OpenerExt;
+use tokio::fs::read_to_string;
+use tokio::sync::Mutex;
+use tokio::task::block_in_place;
+use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
+use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
 use yaak_models::models::{
     CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState,
     GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
-    ModelType, Plugin, Settings, Workspace,
+    ModelType, Plugin, Settings, Workspace, WorkspaceMeta,
 };
 use yaak_models::queries::{
-    cancel_pending_grpc_connections, cancel_pending_responses, create_default_http_response,
-    delete_all_grpc_connections, delete_all_grpc_connections_for_workspace,
-    delete_all_http_responses_for_request, delete_all_http_responses_for_workspace,
-    delete_cookie_jar, delete_environment, delete_folder, delete_grpc_connection,
-    delete_grpc_request, delete_http_request, delete_http_response, delete_plugin,
-    delete_workspace, duplicate_grpc_request, duplicate_http_request, generate_id,
-    generate_model_id, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
+    batch_upsert, cancel_pending_grpc_connections, cancel_pending_responses,
+    create_default_http_response, delete_all_grpc_connections,
+    delete_all_grpc_connections_for_workspace, delete_all_http_responses_for_request,
+    delete_all_http_responses_for_workspace, delete_cookie_jar, delete_environment, delete_folder,
+    delete_grpc_connection, delete_grpc_request, delete_http_request, delete_http_response,
+    delete_plugin, delete_workspace, duplicate_folder, duplicate_grpc_request,
+    duplicate_http_request, ensure_base_environment, generate_id, generate_model_id,
+    get_base_environment, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
     get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
-    get_or_create_settings, get_plugin, get_workspace, get_workspace_export_resources,
-    list_cookie_jars, list_environments, list_folders, list_grpc_connections_for_workspace,
-    list_grpc_events, list_grpc_requests, list_http_requests, list_http_responses_for_request,
-    list_http_responses_for_workspace, list_plugins, list_workspaces, set_key_value_raw,
-    update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder,
-    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_http_request,
-    upsert_plugin, upsert_workspace, UpdateSource, WorkspaceExportResources,
+    get_or_create_settings, get_or_create_workspace_meta, get_plugin, get_workspace,
+    get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
+    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
+    list_http_responses_for_request, list_http_responses_for_workspace, list_key_values_raw,
+    list_plugins, list_workspaces, set_key_value_raw, update_response_if_id, update_settings,
+    upsert_cookie_jar, upsert_environment, upsert_folder, upsert_grpc_connection,
+    upsert_grpc_event, upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
+    upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpRequestActionRequest, FilterResponse, FindHttpResponsesResponse,
@@ -142,10 +141,11 @@ async fn cmd_render_template<R: Runtime>(
         Some(id) => Some(get_environment(&window, id).await.map_err(|e| e.to_string())?),
         None => None,
     };
-    let workspace = get_workspace(&window, &workspace_id).await.map_err(|e| e.to_string())?;
+    let base_environment =
+        get_base_environment(&window, &workspace_id).await.map_err(|e| e.to_string())?;
     let rendered = render_template(
         template,
-        &workspace,
+        &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
             &app_handle,
@@ -207,10 +207,11 @@ async fn cmd_grpc_go<R: Runtime>(
         .await
         .map_err(|e| e.to_string())?
         .ok_or("Failed to find GRPC request")?;
-    let workspace = get_workspace(&window, &req.workspace_id).await.map_err(|e| e.to_string())?;
+    let base_environment =
+        get_base_environment(&window, &req.workspace_id).await.map_err(|e| e.to_string())?;
     let req = render_grpc_request(
         &req,
-        &workspace,
+        &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
             window.app_handle(),
@@ -338,7 +339,7 @@ async fn cmd_grpc_go<R: Runtime>(
     let cb = {
         let cancelled_rx = cancelled_rx.clone();
         let window = window.clone();
-        let workspace = workspace.clone();
+        let workspace = base_environment.clone();
         let environment = environment.clone();
         let base_msg = base_msg.clone();
         let method_desc = method_desc.clone();
@@ -436,7 +437,7 @@ async fn cmd_grpc_go<R: Runtime>(
         let msg = if req.message.is_empty() { "{}".to_string() } else { req.message };
         let msg = render_template(
             msg.as_str(),
-            &workspace.clone(),
+            &base_environment.clone(),
             environment.as_ref(),
             &PluginTemplateCallback::new(
                 window.app_handle(),
@@ -568,7 +569,7 @@ async fn cmd_grpc_go<R: Runtime>(
                     .unwrap();
                 }
                 None => {
-                    // Server streaming doesn't return initial message
+                    // Server streaming doesn't return the initial message
                 }
             }
 
@@ -823,7 +824,7 @@ async fn cmd_import_data<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
     file_path: &str,
-) -> Result<WorkspaceExportResources, String> {
+) -> Result<BatchUpsertResult, String> {
     let file = read_to_string(file_path)
         .await
         .unwrap_or_else(|_| panic!("Unable to read file {}", file_path));
@@ -831,7 +832,6 @@ async fn cmd_import_data<R: Runtime>(
     let (import_result, plugin_name) =
         plugin_manager.import_data(&window, file_contents).await.map_err(|e| e.to_string())?;
 
-    let mut imported_resources = WorkspaceExportResources::default();
     let mut id_map: BTreeMap<String, String> = BTreeMap::new();
 
     fn maybe_gen_id(id: &str, model: ModelType, ids: &mut BTreeMap<String, String>) -> String {
@@ -862,77 +862,75 @@ async fn cmd_import_data<R: Runtime>(
 
     let resources = import_result.resources;
 
-    for mut v in resources.workspaces {
-        v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-        let x =
-            upsert_workspace(&window, v, &UpdateSource::Window).await.map_err(|e| e.to_string())?;
-        imported_resources.workspaces.push(x.clone());
-    }
-    info!("Imported {} workspaces", imported_resources.workspaces.len());
+    let workspaces: Vec<Workspace> = resources
+        .workspaces
+        .into_iter()
+        .map(|mut v| {
+            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v
+        })
+        .collect();
 
-    for mut v in resources.environments {
-        v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeEnvironment, &mut id_map);
-        v.workspace_id =
-            maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-        let x = upsert_environment(&window, v, &UpdateSource::Window)
-            .await
-            .map_err(|e| e.to_string())?;
-        imported_resources.environments.push(x.clone());
-    }
-    info!("Imported {} environments", imported_resources.environments.len());
+    let environments: Vec<Environment> = resources
+        .environments
+        .into_iter()
+        .map(|mut v| {
+            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeEnvironment, &mut id_map);
+            v.workspace_id =
+                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v.environment_id =
+                maybe_gen_id_opt(v.environment_id, ModelType::TypeEnvironment, &mut id_map);
+            v
+        })
+        .collect();
 
-    // Folders can foreign-key to themselves, so we need to import from
-    // the top of the tree to the bottom to avoid foreign key conflicts.
-    // We do this by looping until we've imported them all, only importing if:
-    //  - The parent folder has been imported
-    //  - The folder hasn't already been imported
-    // The loop exits when imported.len == to_import.len
-    while imported_resources.folders.len() < resources.folders.len() {
-        for mut v in resources.folders.clone() {
+    let folders: Vec<Folder> = resources
+        .folders
+        .into_iter()
+        .map(|mut v| {
             v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeFolder, &mut id_map);
             v.workspace_id =
                 maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
             v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
-            if let Some(fid) = v.folder_id.clone() {
-                let imported_parent = imported_resources.folders.iter().find(|f| f.id == fid);
-                if imported_parent.is_none() {
-                    continue;
-                }
-            }
-            if let Some(_) = imported_resources.folders.iter().find(|f| f.id == v.id) {
-                continue;
-            }
-            let x = upsert_folder(&window, v, &UpdateSource::Window)
-                .await
-                .map_err(|e| e.to_string())?;
-            imported_resources.folders.push(x.clone());
-        }
-    }
-    info!("Imported {} folders", imported_resources.folders.len());
+            v
+        })
+        .collect();
 
-    for mut v in resources.http_requests {
-        v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeHttpRequest, &mut id_map);
-        v.workspace_id =
-            maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-        v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
-        let x = upsert_http_request(&window, v, &UpdateSource::Window)
-            .await
-            .map_err(|e| e.to_string())?;
-        imported_resources.http_requests.push(x.clone());
-    }
-    info!("Imported {} http_requests", imported_resources.http_requests.len());
+    let http_requests: Vec<HttpRequest> = resources
+        .http_requests
+        .into_iter()
+        .map(|mut v| {
+            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeHttpRequest, &mut id_map);
+            v.workspace_id =
+                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
+            v
+        })
+        .collect();
 
-    for mut v in resources.grpc_requests {
-        v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeGrpcRequest, &mut id_map);
-        v.workspace_id =
-            maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-        v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
-        let x = upsert_grpc_request(&window, &v, &UpdateSource::Window)
-            .await
-            .map_err(|e| e.to_string())?;
-        imported_resources.grpc_requests.push(x.clone());
-    }
-    info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
+    let grpc_requests: Vec<GrpcRequest> = resources
+        .grpc_requests
+        .into_iter()
+        .map(|mut v| {
+            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeGrpcRequest, &mut id_map);
+            v.workspace_id =
+                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
+            v
+        })
+        .collect();
+
+    let upserted = batch_upsert(
+        &window,
+        workspaces,
+        environments,
+        folders,
+        http_requests,
+        grpc_requests,
+        &UpdateSource::Import,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
     analytics::track_event(
         &window,
@@ -942,7 +940,7 @@ async fn cmd_import_data<R: Runtime>(
     )
     .await;
 
-    Ok(imported_resources)
+    Ok(upserted)
 }
 
 #[tauri::command]
@@ -1003,8 +1001,11 @@ async fn cmd_export_data(
     window: WebviewWindow,
     export_path: &str,
     workspace_ids: Vec<&str>,
+    include_environments: bool,
 ) -> Result<(), String> {
-    let export_data = get_workspace_export_resources(window.app_handle(), workspace_ids).await;
+    let export_data = get_workspace_export_resources(&window, workspace_ids, include_environments)
+        .await
+        .map_err(|e| e.to_string())?;
     let f = File::options()
         .create(true)
         .truncate(true)
@@ -1148,13 +1149,6 @@ async fn cmd_set_key_value(
 }
 
 #[tauri::command]
-async fn cmd_create_workspace(name: &str, w: WebviewWindow) -> Result<Workspace, String> {
-    upsert_workspace(&w, Workspace::new(name.to_string()), &UpdateSource::Window)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 async fn cmd_install_plugin<R: Runtime>(
     directory: &str,
     url: Option<String>,
@@ -1234,6 +1228,7 @@ async fn cmd_create_cookie_jar(
 #[tauri::command]
 async fn cmd_create_environment(
     workspace_id: &str,
+    environment_id: Option<&str>,
     name: &str,
     variables: Vec<EnvironmentVariable>,
     w: WebviewWindow,
@@ -1242,6 +1237,7 @@ async fn cmd_create_environment(
         &w,
         Environment {
             workspace_id: workspace_id.to_string(),
+            environment_id: environment_id.map(|s| s.to_string()),
             name: name.to_string(),
             variables,
             ..Default::default()
@@ -1262,7 +1258,7 @@ async fn cmd_create_grpc_request(
 ) -> Result<GrpcRequest, String> {
     upsert_grpc_request(
         &w,
-        &GrpcRequest {
+        GrpcRequest {
             workspace_id: workspace_id.to_string(),
             name: name.to_string(),
             folder_id: folder_id.map(|s| s.to_string()),
@@ -1278,6 +1274,15 @@ async fn cmd_create_grpc_request(
 #[tauri::command]
 async fn cmd_duplicate_grpc_request(id: &str, w: WebviewWindow) -> Result<GrpcRequest, String> {
     duplicate_grpc_request(&w, id, &UpdateSource::Window).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_duplicate_folder<R: Runtime>(
+    window: WebviewWindow<R>,
+    id: &str,
+) -> Result<(), String> {
+    let folder = get_folder(&window, id).await.map_err(|e| e.to_string())?;
+    duplicate_folder(&window, &folder).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1299,6 +1304,16 @@ async fn cmd_update_workspace(workspace: Workspace, w: WebviewWindow) -> Result<
 }
 
 #[tauri::command]
+async fn cmd_update_workspace_meta(
+    workspace_meta: WorkspaceMeta,
+    w: WebviewWindow,
+) -> Result<WorkspaceMeta, String> {
+    upsert_workspace_meta(&w, workspace_meta, &UpdateSource::Window)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn cmd_update_environment(
     environment: Environment,
     w: WebviewWindow,
@@ -1311,7 +1326,7 @@ async fn cmd_update_grpc_request(
     request: GrpcRequest,
     w: WebviewWindow,
 ) -> Result<GrpcRequest, String> {
-    upsert_grpc_request(&w, &request, &UpdateSource::Window).await.map_err(|e| e.to_string())
+    upsert_grpc_request(&w, request, &UpdateSource::Window).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1341,29 +1356,6 @@ async fn cmd_delete_http_request(
 #[tauri::command]
 async fn cmd_list_folders(workspace_id: &str, w: WebviewWindow) -> Result<Vec<Folder>, String> {
     list_folders(&w, workspace_id).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_create_folder(
-    workspace_id: &str,
-    name: &str,
-    sort_priority: f32,
-    folder_id: Option<&str>,
-    w: WebviewWindow,
-) -> Result<Folder, String> {
-    upsert_folder(
-        &w,
-        Folder {
-            workspace_id: workspace_id.to_string(),
-            name: name.to_string(),
-            folder_id: folder_id.map(|s| s.to_string()),
-            sort_priority,
-            ..Default::default()
-        },
-        &UpdateSource::Window,
-    )
-    .await
-    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1430,6 +1422,9 @@ async fn cmd_list_environments(
     workspace_id: &str,
     w: WebviewWindow,
 ) -> Result<Vec<Environment>, String> {
+    // Not sure of a better place to put this...
+    ensure_base_environment(&w, workspace_id).await.map_err(|e| e.to_string())?;
+
     list_environments(&w, workspace_id).await.map_err(|e| e.to_string())
 }
 
@@ -1521,65 +1516,79 @@ async fn cmd_list_cookie_jars(
 }
 
 #[tauri::command]
-async fn cmd_get_environment(id: &str, w: WebviewWindow) -> Result<Environment, String> {
-    get_environment(&w, id).await.map_err(|e| e.to_string())
+async fn cmd_list_key_values(window: WebviewWindow) -> Result<Vec<KeyValue>, String> {
+    list_key_values_raw(&window).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_get_workspace(id: &str, w: WebviewWindow) -> Result<Workspace, String> {
-    get_workspace(&w, id).await.map_err(|e| e.to_string())
+async fn cmd_get_environment(id: &str, window: WebviewWindow) -> Result<Environment, String> {
+    get_environment(&window, id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_get_workspace(id: &str, window: WebviewWindow) -> Result<Workspace, String> {
+    get_workspace(&window, id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn cmd_list_http_responses(
     workspace_id: &str,
     limit: Option<i64>,
-    w: WebviewWindow,
+    window: WebviewWindow,
 ) -> Result<Vec<HttpResponse>, String> {
-    list_http_responses_for_workspace(&w, workspace_id, limit).await.map_err(|e| e.to_string())
+    list_http_responses_for_workspace(&window, workspace_id, limit).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_http_response(id: &str, w: WebviewWindow) -> Result<HttpResponse, String> {
-    delete_http_response(&w, id, &UpdateSource::Window).await.map_err(|e| e.to_string())
+async fn cmd_delete_http_response(id: &str, window: WebviewWindow) -> Result<HttpResponse, String> {
+    delete_http_response(&window, id, &UpdateSource::Window).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_grpc_connection(id: &str, w: WebviewWindow) -> Result<GrpcConnection, String> {
-    delete_grpc_connection(&w, id, &UpdateSource::Window).await.map_err(|e| e.to_string())
+async fn cmd_delete_grpc_connection(
+    id: &str,
+    window: WebviewWindow,
+) -> Result<GrpcConnection, String> {
+    delete_grpc_connection(&window, id, &UpdateSource::Window).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_all_grpc_connections(request_id: &str, w: WebviewWindow) -> Result<(), String> {
-    delete_all_grpc_connections(&w, request_id, &UpdateSource::Window)
+async fn cmd_delete_all_grpc_connections(
+    request_id: &str,
+    window: WebviewWindow,
+) -> Result<(), String> {
+    delete_all_grpc_connections(&window, request_id, &UpdateSource::Window)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_send_history(workspace_id: &str, w: WebviewWindow) -> Result<(), String> {
-    delete_all_http_responses_for_workspace(&w, workspace_id, &UpdateSource::Window)
+async fn cmd_delete_send_history(workspace_id: &str, window: WebviewWindow) -> Result<(), String> {
+    delete_all_http_responses_for_workspace(&window, workspace_id, &UpdateSource::Window)
         .await
         .map_err(|e| e.to_string())?;
-    delete_all_grpc_connections_for_workspace(&w, workspace_id, &UpdateSource::Window)
+    delete_all_grpc_connections_for_workspace(&window, workspace_id, &UpdateSource::Window)
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-async fn cmd_delete_all_http_responses(request_id: &str, w: WebviewWindow) -> Result<(), String> {
-    delete_all_http_responses_for_request(&w, request_id, &UpdateSource::Window)
+async fn cmd_delete_all_http_responses(
+    request_id: &str,
+    window: WebviewWindow,
+) -> Result<(), String> {
+    delete_all_http_responses_for_request(&window, request_id, &UpdateSource::Window)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_workspaces(w: WebviewWindow) -> Result<Vec<Workspace>, String> {
-    let workspaces = list_workspaces(&w).await.expect("Failed to find workspaces");
+async fn cmd_list_workspaces(window: WebviewWindow) -> Result<Vec<Workspace>, String> {
+    let workspaces = list_workspaces(&window).await.expect("Failed to find workspaces");
     if workspaces.is_empty() {
         let workspace = upsert_workspace(
-            &w,
+            &window,
             Workspace {
                 name: "Yaak".to_string(),
                 setting_follow_redirects: true,
@@ -1594,6 +1603,17 @@ async fn cmd_list_workspaces(w: WebviewWindow) -> Result<Vec<Workspace>, String>
     } else {
         Ok(workspaces)
     }
+}
+
+#[tauri::command]
+async fn cmd_get_workspace_meta(
+    window: WebviewWindow,
+    workspace_id: &str,
+) -> Result<WorkspaceMeta, String> {
+    let workspace = get_workspace(&window, workspace_id).await.map_err(|e| e.to_string())?;
+    get_or_create_workspace_meta(&window, &workspace, &UpdateSource::Window)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1691,7 +1711,7 @@ pub fn run() {
     let mut builder =
         tauri::Builder::default()
             .plugin(
-                tauri_plugin_log::Builder::default()
+                Builder::default()
                     .targets([
                         Target::new(TargetKind::Stdout),
                         Target::new(TargetKind::LogDir { file_name: None }),
@@ -1714,10 +1734,46 @@ pub fn run() {
                     .level_for("swc_ecma_codegen", log::LevelFilter::Off)
                     .level_for("swc_ecma_transforms_base", log::LevelFilter::Off)
                     .with_colors(ColoredLevelConfig::default())
-                    .level(if is_dev() { log::LevelFilter::Trace } else { log::LevelFilter::Info })
+                    .level(if is_dev() { log::LevelFilter::Debug } else { log::LevelFilter::Info })
                     .build(),
             )
+            .plugin(
+                Builder::default()
+                    .targets([
+                        Target::new(TargetKind::Stdout),
+                        Target::new(TargetKind::LogDir { file_name: None }),
+                        Target::new(TargetKind::Webview),
+                    ])
+                    .level_for("plugin_runtime", log::LevelFilter::Info)
+                    .level_for("cookie_store", log::LevelFilter::Info)
+                    .level_for("eventsource_client::event_parser", log::LevelFilter::Info)
+                    .level_for("h2", log::LevelFilter::Info)
+                    .level_for("hyper", log::LevelFilter::Info)
+                    .level_for("hyper_util", log::LevelFilter::Info)
+                    .level_for("hyper_rustls", log::LevelFilter::Info)
+                    .level_for("reqwest", log::LevelFilter::Info)
+                    .level_for("sqlx", log::LevelFilter::Warn)
+                    .level_for("tao", log::LevelFilter::Info)
+                    .level_for("tokio_util", log::LevelFilter::Info)
+                    .level_for("tonic", log::LevelFilter::Info)
+                    .level_for("tower", log::LevelFilter::Info)
+                    .level_for("tracing", log::LevelFilter::Warn)
+                    .level_for("swc_ecma_codegen", log::LevelFilter::Off)
+                    .level_for("swc_ecma_transforms_base", log::LevelFilter::Off)
+                    .with_colors(ColoredLevelConfig::default())
+                    .level(if is_dev() { log::LevelFilter::Debug } else { log::LevelFilter::Info })
+                    .build(),
+            )
+            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                // When trying to open a new app instance (common operation on Linux),
+                // focus the first existing window we find instead of opening a new one
+                // TODO: Keep track of the last focused window and always focus that one
+                if let Some(window) = app.webview_windows().values().next() {
+                    let _ = window.set_focus();
+                }
+            }))
             .plugin(tauri_plugin_clipboard_manager::init())
+            .plugin(tauri_plugin_opener::init())
             .plugin(
                 tauri_plugin_window_state::Builder::default()
                     .with_denylist(&["ignored"])
@@ -1735,10 +1791,10 @@ pub fn run() {
             .plugin(tauri_plugin_dialog::init())
             .plugin(tauri_plugin_os::init())
             .plugin(tauri_plugin_fs::init())
-            .plugin(yaak_git::init())
             .plugin(yaak_license::init())
             .plugin(yaak_models::plugin::Builder::default().build())
             .plugin(yaak_plugins::init())
+            .plugin(yaak_git::init())
             .plugin(yaak_sync::init());
 
     #[cfg(target_os = "macos")]
@@ -1772,10 +1828,8 @@ pub fn run() {
             cmd_check_for_updates,
             cmd_create_cookie_jar,
             cmd_create_environment,
-            cmd_create_folder,
             cmd_create_grpc_request,
             cmd_create_http_request,
-            cmd_create_workspace,
             cmd_curl_to_request,
             cmd_delete_all_grpc_connections,
             cmd_delete_all_http_responses,
@@ -1789,6 +1843,7 @@ pub fn run() {
             cmd_delete_send_history,
             cmd_delete_workspace,
             cmd_dismiss_notification,
+            cmd_duplicate_folder,
             cmd_duplicate_grpc_request,
             cmd_duplicate_http_request,
             cmd_export_data,
@@ -1803,6 +1858,7 @@ pub fn run() {
             cmd_get_settings,
             cmd_get_sse_events,
             cmd_get_workspace,
+            cmd_get_workspace_meta,
             cmd_grpc_go,
             cmd_grpc_reflect,
             cmd_http_request_actions,
@@ -1814,6 +1870,7 @@ pub fn run() {
             cmd_list_grpc_connections,
             cmd_list_grpc_events,
             cmd_list_grpc_requests,
+            cmd_list_key_values,
             cmd_list_http_requests,
             cmd_list_http_responses,
             cmd_list_plugins,
@@ -1841,6 +1898,7 @@ pub fn run() {
             cmd_update_http_request,
             cmd_update_settings,
             cmd_update_workspace,
+            cmd_update_workspace_meta,
             cmd_write_file_dev,
         ])
         .register_uri_scheme_protocol("yaak", |_app, _req| {
@@ -1998,7 +2056,7 @@ fn create_window(handle: &AppHandle, config: CreateWindowConfig) -> WebviewWindo
             "settings" => w.emit("settings", true).unwrap(),
             "open_feedback" => {
                 if let Err(e) =
-                    webview_window.app_handle().shell().open("https://yaak.app/feedback", None)
+                    w.app_handle().opener().open_url("https://yaak.app/feedback", None::<&str>)
                 {
                     warn!("Failed to open feedback {e:?}")
                 }
@@ -2159,9 +2217,17 @@ async fn handle_plugin_event<R: Runtime>(
                 .await
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
+            let base_environment = get_base_environment(&window, workspace.id.as_str())
+                .await
+                .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let http_request =
-                render_http_request(&req.http_request, &workspace, environment.as_ref(), &cb).await;
+            let http_request = render_http_request(
+                &req.http_request,
+                &base_environment,
+                environment.as_ref(),
+                &cb,
+            )
+            .await;
             Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
                 http_request,
             }))
@@ -2174,8 +2240,12 @@ async fn handle_plugin_event<R: Runtime>(
                 .await
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
+            let base_environment = get_base_environment(&window, workspace.id.as_str())
+                .await
+                .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let data = render_json_value(req.data, &workspace, environment.as_ref(), &cb).await;
+            let data =
+                render_json_value(req.data, &base_environment, environment.as_ref(), &cb).await;
             Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))
         }
         InternalEventPayload::ReloadResponse => {

@@ -13,9 +13,6 @@ pub enum Error {
     #[error("Unknown model: {0}")]
     UnknownModel(String),
 
-    #[error("Workspace not configured for sync: {0}")]
-    WorkspaceSyncNotConfigured(String),
-
     #[error("I/o error: {0}")]
     IoError(#[from] io::Error),
 
@@ -24,6 +21,9 @@ pub enum Error {
 
     #[error("Invalid sync file: {0}")]
     InvalidSyncFile(String),
+
+    #[error("Watch error: {0}")]
+    NotifyError(#[from] notify::Error),
 }
 
 impl Serialize for Error {

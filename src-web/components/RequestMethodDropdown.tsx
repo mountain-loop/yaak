@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import { memo, useMemo } from 'react';
-import { usePrompt } from '../hooks/usePrompt';
+import { showPrompt } from '../lib/prompt';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
@@ -32,7 +32,6 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
   onChange,
   className,
 }: Props) {
-  const prompt = usePrompt();
   const extraItems = useMemo<DropdownItem[]>(
     () => [
       {
@@ -40,7 +39,7 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
         label: 'CUSTOM',
         leftSlot: <Icon icon="sparkles" />,
         onSelect: async () => {
-          const newMethod = await prompt({
+          const newMethod = await showPrompt({
             id: 'custom-method',
             label: 'Http Method',
             defaultValue: '',
@@ -54,7 +53,7 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
         },
       },
     ],
-    [onChange, prompt],
+    [onChange],
   );
 
   return (

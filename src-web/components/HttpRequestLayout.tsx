@@ -23,7 +23,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
           fullHeight={orientation === 'horizontal'}
         />
       )}
-      secondSlot={({ style }) => <ResponsePane activeRequest={activeRequest} style={style} />}
+      secondSlot={({ style }) => <ResponsePane activeRequestId={activeRequest.id} style={style} />}
     />
   );
 }
