@@ -115,7 +115,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         layout="vertical"
         defaultRatio={0.3}
         firstSlot={({ style }) => (
-          <div style={style} className="h-full overflow-y-auto -ml-1">
+          <div style={style} className="h-full overflow-y-auto -ml-1 pb-3">
             <TreeNodeChildren node={tree} depth={0} onCheck={checkNode} />
           </div>
         )}
