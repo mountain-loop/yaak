@@ -1,0 +1,11 @@
+[default]
+description = "Default permissions for the plugin"
+permissions = [
+    "allow-add",
+    "allow-checkout",
+    "allow-commit",
+    "allow-initialize",
+    "allow-log",
+    "allow-status",
+    "allow-unstage",
+]

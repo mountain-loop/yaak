@@ -58,7 +58,7 @@ export type SyncHistory = { model: "sync_history", id: string, workspaceId: stri
 
 export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, relPath: string, syncDir: string, };
 
-export type UpdateSource = "sync" | "window" | "plugin" | "background";
+export type UpdateSource = "sync" | "window" | "plugin" | "background" | "import";
 
 export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
 
