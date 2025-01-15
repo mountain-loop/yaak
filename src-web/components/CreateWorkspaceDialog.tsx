@@ -24,7 +24,6 @@ export function CreateWorkspaceDialog({ hide }: Props) {
       className="pb-3 max-h-[50vh]"
       onSubmit={async (e) => {
         e.preventDefault();
-        if (!settingSyncDir) return;
         const workspace = await upsertWorkspace.mutateAsync({ name });
         if (workspace == null) return;
 

@@ -64,24 +64,25 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         ancestors,
       };
 
-      node.children = status.data
-        .map((s) => {
-          const data = s.next ?? s.prev;
-          if (data == null) return null; // TODO: Is this right?
+      for (const s of status.data) {
+        const data = s.next ?? s.prev;
+        if (data == null) return null; // TODO: Is this right?
 
-          const childModel: TreeNode['model'] = YAML.parse(data);
-          // TODO: Figure out why not all of these show up
-          if ('folderId' in childModel && childModel.folderId != null) {
-            if (childModel.folderId === model.id) {
-              return next(childModel, [...ancestors, node]);
-            }
-          } else if ('workspaceId' in childModel && childModel.workspaceId === model.id) {
-            return next(childModel, [...ancestors, node]);
-          } else {
-            return null;
+        const childModel: TreeNode['model'] = YAML.parse(data);
+        // TODO: Figure out why not all of these show up
+        if ('folderId' in childModel && childModel.folderId != null) {
+          if (childModel.folderId === model.id) {
+            const c = next(childModel, [...ancestors, node]);
+            if (c != null) node.children.push(c);
           }
-        })
-        .filter((c) => c != null);
+        } else if ('workspaceId' in childModel && childModel.workspaceId === model.id) {
+          const c = next(childModel, [...ancestors, node]);
+          if (c != null) node.children.push(c);
+        } else {
+          // Do nothing
+        }
+      }
+
       return node;
     };
     return next(workspace, []);
