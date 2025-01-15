@@ -16,10 +16,6 @@ export const BODY_TYPE_FORM_URLENCODED = 'application/x-www-form-urlencoded';
 export const BODY_TYPE_FORM_MULTIPART = 'multipart/form-data';
 export const BODY_TYPE_XML = 'text/xml';
 
-export const AUTH_TYPE_NONE = null;
-export const AUTH_TYPE_BASIC = 'basic';
-export const AUTH_TYPE_BEARER = 'bearer';
-
 export function cookieDomain(cookie: Cookie): string {
   if (cookie.domain === 'NotPresent' || cookie.domain === 'Empty') {
     return 'n/a';
