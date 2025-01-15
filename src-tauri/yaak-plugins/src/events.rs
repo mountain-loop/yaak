@@ -68,7 +68,7 @@ pub enum InternalEventPayload {
     CallTemplateFunctionRequest(CallTemplateFunctionRequest),
     CallTemplateFunctionResponse(CallTemplateFunctionResponse),
 
-    GetAuthMiddlewareRequest(GetAuthMiddlewareRequest),
+    GetAuthMiddlewareRequest(EmptyPayload),
     GetAuthMiddlewareResponse(GetAuthMiddlewareResponse),
     CallAuthMiddlewareRequest(CallAuthMiddlewareRequest),
     CallAuthMiddlewareResponse(CallAuthMiddlewareResponse),
@@ -295,21 +295,14 @@ pub enum Icon {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export)]
-pub struct GetAuthMiddlewareRequest {
-    pub url: String,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export)]
+#[ts(export, export_to = "events.ts")]
 pub struct GetAuthMiddlewareResponse {
     pub auth_middleware: Vec<AuthMiddleware>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export)]
+#[ts(export, export_to = "events.ts")]
 pub struct AuthMiddleware {
     pub name: String,
     pub args: Vec<FormInput>,
@@ -317,16 +310,28 @@ pub struct AuthMiddleware {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export)]
+#[ts(export, export_to = "events.ts")]
 pub struct CallAuthMiddlewareRequest {
-    pub todo: String,
+    pub config: serde_json::Map<String, serde_json::Value>,
+    pub method: String,
+    pub url: String,
+    pub headers: Vec<HttpHeader>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export)]
+#[ts(export, export_to = "events.ts")]
+pub struct HttpHeader {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "events.ts")]
 pub struct CallAuthMiddlewareResponse {
-    pub todo: String,
+    pub url: String,
+    pub headers: Vec<HttpHeader>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

@@ -304,6 +304,25 @@ async function initialize() {
       }
 
       if (
+          payload.type === 'call_auth_middleware_request' &&
+          mod.plugin?.authentication
+      ) {
+        const auth = mod.plugin.authentication;
+        if (typeof auth?.onApply === 'function') {
+          const result = await auth.onApply(ctx, payload);
+          sendPayload(
+              windowContext,
+              {
+                ...result,
+                type: 'call_auth_middleware_response',
+              },
+              replyId,
+          );
+          return;
+        }
+      }
+
+      if (
         payload.type === 'call_http_request_action_request' &&
         Array.isArray(mod.plugin?.httpRequestActions)
       ) {

@@ -1,5 +1,4 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
-import { showAlert } from '../lib/alert';
 import { trackEvent } from '../lib/analytics';
 import { getHttpRequest } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
@@ -23,6 +22,5 @@ export function useSendAnyHttpRequest() {
       });
     },
     onSettled: () => trackEvent('http_request', 'send'),
-    onError: (err) => showAlert({ id: 'send-failed', title: 'Send Failed', body: err }),
   });
 }

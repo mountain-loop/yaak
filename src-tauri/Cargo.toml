@@ -41,7 +41,7 @@ openssl-sys = { version = "0.9", features = ["vendored"] } # For Ubuntu installa
 base64 = "0.22.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 datetime = "0.5.2"
-eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.13.0" }
+eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.14.0" }
 hex_color = "3.0.0"
 http = "1"
 log = "0.4.21"

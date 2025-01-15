@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use hyper::client::HttpConnector;
-use hyper::Client;
 use hyper_rustls::HttpsConnector;
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
 pub use prost_reflect::DynamicMessage;
 use prost_reflect::{DescriptorPool, MethodDescriptor, ServiceDescriptor};
 use serde_json::Deserializer;

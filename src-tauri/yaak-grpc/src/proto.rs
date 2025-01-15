@@ -5,9 +5,10 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use async_recursion::async_recursion;
-use hyper::client::HttpConnector;
-use hyper::Client;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use log::{debug, warn};
 use prost::Message;
 use prost_reflect::{DescriptorPool, MethodDescriptor};
@@ -21,10 +22,10 @@ use tonic::body::BoxBody;
 use tonic::codegen::http::uri::PathAndQuery;
 use tonic::transport::Uri;
 use tonic::Request;
-use tonic_reflection::pb::server_reflection_client::ServerReflectionClient;
-use tonic_reflection::pb::server_reflection_request::MessageRequest;
-use tonic_reflection::pb::server_reflection_response::MessageResponse;
-use tonic_reflection::pb::ServerReflectionRequest;
+use tonic_reflection::pb::v1::server_reflection_client::ServerReflectionClient;
+use tonic_reflection::pb::v1::server_reflection_request::MessageRequest;
+use tonic_reflection::pb::v1::server_reflection_response::MessageResponse;
+use tonic_reflection::pb::v1::ServerReflectionRequest;
 
 pub async fn fill_pool_from_files(
     app_handle: &AppHandle,
@@ -115,13 +116,16 @@ pub async fn fill_pool_from_reflection(uri: &Uri) -> Result<DescriptorPool, Stri
 }
 
 pub fn get_transport() -> Client<HttpsConnector<HttpConnector>, BoxBody> {
-    let connector = HttpsConnectorBuilder::new().with_native_roots();
+    let connector = HttpsConnectorBuilder::new().with_native_roots().unwrap();
     let connector = connector.https_or_http().enable_http2().wrap_connector({
         let mut http_connector = HttpConnector::new();
         http_connector.enforce_http(false);
         http_connector
     });
-    Client::builder().pool_max_idle_per_host(0).http2_only(true).build(connector)
+    Client::builder(TokioExecutor::new())
+        .pool_max_idle_per_host(0)
+        .http2_only(true)
+        .build(connector)
 }
 
 async fn list_services(

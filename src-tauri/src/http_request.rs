@@ -1,10 +1,8 @@
 use crate::render::render_http_request;
 use crate::response_err;
 use crate::template_callback::PluginTemplateCallback;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
 use http::header::{ACCEPT, USER_AGENT};
-use http::{HeaderMap, HeaderName, HeaderValue};
+use http::{HeaderMap, HeaderName, HeaderValue, Uri};
 use log::{debug, error, warn};
 use mime_guess::Mime;
 use reqwest::redirect::Policy;
@@ -32,7 +30,8 @@ use yaak_models::queries::{
     get_base_environment, get_http_response, get_or_create_settings, get_workspace,
     update_response_if_id, upsert_cookie_jar, UpdateSource,
 };
-use yaak_plugins::events::{RenderPurpose, WindowContext};
+use yaak_plugins::events::{CallAuthMiddlewareRequest, HttpHeader, RenderPurpose, WindowContext};
+use yaak_plugins::manager::PluginManager;
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -42,6 +41,7 @@ pub async fn send_http_request<R: Runtime>(
     cookie_jar: Option<CookieJar>,
     cancelled_rx: &mut Receiver<bool>,
 ) -> Result<HttpResponse, String> {
+    let plugin_manager = window.state::<PluginManager>();
     let workspace =
         get_workspace(window, &request.workspace_id).await.expect("Failed to get Workspace");
     let base_environment = get_base_environment(window, &request.workspace_id)
@@ -160,7 +160,7 @@ pub async fn send_http_request<R: Runtime>(
         query_params.push((p.name, p.value));
     }
 
-    let uri = match http::Uri::from_str(url_string.as_str()) {
+    let uri = match Uri::from_str(url_string.as_str()) {
         Ok(u) => u,
         Err(e) => {
             return Ok(response_err(
@@ -232,29 +232,6 @@ pub async fn send_http_request<R: Runtime>(
         };
 
         headers.insert(header_name, header_value);
-    }
-
-    if let Some(b) = &rendered_request.authentication_type {
-        let empty_value = &serde_json::to_value("").unwrap();
-        let a = rendered_request.authentication;
-
-        if b == "basic" {
-            let username = a.get("username").unwrap_or(empty_value).as_str().unwrap_or_default();
-            let password = a.get("password").unwrap_or(empty_value).as_str().unwrap_or_default();
-
-            let auth = format!("{username}:{password}");
-            let encoded = BASE64_STANDARD.encode(auth);
-            headers.insert(
-                "Authorization",
-                HeaderValue::from_str(&format!("Basic {}", encoded)).unwrap(),
-            );
-        } else if b == "bearer" {
-            let token = a.get("token").unwrap_or(empty_value).as_str().unwrap_or_default();
-            headers.insert(
-                "Authorization",
-                HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
-            );
-        }
     }
 
     let request_body = rendered_request.body;
@@ -383,13 +360,63 @@ pub async fn send_http_request<R: Runtime>(
     // Add headers last, because previous steps may modify them
     request_builder = request_builder.headers(headers);
 
-    let sendable_req = match request_builder.build() {
+    let mut sendable_req = match request_builder.build() {
         Ok(r) => r,
         Err(e) => {
             warn!("Failed to build request builder {e:?}");
             return Ok(response_err(&*response.lock().await, e.to_string(), window).await);
         }
     };
+
+    // Apply authentication
+
+    // Map legacy auth name values from before they were plugins
+    let auth_plugin_name = match request.authentication_type.clone() {
+        Some(s) if s == "basic" => Some("@yaakapp/auth-basic"),
+        Some(s) if s == "bearer" => Some("@yaakapp/auth-bearer"),
+        _ => None,
+    };
+    if let Some(plugin_name) = auth_plugin_name {
+        let req = CallAuthMiddlewareRequest {
+            config: serde_json::to_value(&request.authentication)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .to_owned(),
+            method: sendable_req.method().to_string(),
+            url: sendable_req.url().to_string(),
+            headers: sendable_req
+                .headers()
+                .iter()
+                .map(|(name, value)| HttpHeader {
+                    name: name.to_string(),
+                    value: value.to_str().unwrap_or_default().to_string(),
+                })
+                .collect(),
+        };
+        let plugin_result =
+            match plugin_manager.call_auth_middleware(window, plugin_name, req).await {
+                Ok(r) => r,
+                Err(e) => {
+                    return Ok(response_err(&*response.lock().await, e.to_string(), window).await);
+                }
+            };
+        
+        {
+            let url = sendable_req.url_mut();
+            *url = Url::parse(&plugin_result.url).unwrap();
+        }
+
+        {
+            let headers = sendable_req.headers_mut();
+            for header in plugin_result.headers {
+                headers.insert(
+                    HeaderName::from_str(&header.name).unwrap(),
+                    HeaderValue::from_str(&header.value).unwrap(),
+                );
+            }
+        };
+    }
 
     let (resp_tx, resp_rx) = oneshot::channel::<Result<Response, reqwest::Error>>();
     let (done_tx, done_rx) = oneshot::channel::<HttpResponse>();

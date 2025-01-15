@@ -52,7 +52,6 @@ export const RecentResponsesDropdown = function ResponsePane({
           label: 'Delete',
           leftSlot: <Icon icon="trash" />,
           onSelect: deleteResponse.mutate,
-          disabled: activeResponse.state !== 'closed',
         },
         {
           key: 'unpin',

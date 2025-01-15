@@ -1,11 +1,11 @@
 use crate::error::Error::{ClientNotInitializedErr, PluginErr, PluginNotFoundErr, UnknownEventErr};
 use crate::error::Result;
 use crate::events::{
-    BootRequest, CallHttpRequestActionRequest, CallTemplateFunctionArgs,
-    CallTemplateFunctionRequest, CallTemplateFunctionResponse, EmptyPayload, FilterRequest,
-    FilterResponse, GetHttpRequestActionsRequest, GetHttpRequestActionsResponse,
-    GetTemplateFunctionsResponse, ImportRequest, ImportResponse, InternalEvent,
-    InternalEventPayload, RenderPurpose, WindowContext,
+    BootRequest, CallAuthMiddlewareRequest, CallAuthMiddlewareResponse,
+    CallHttpRequestActionRequest, CallTemplateFunctionArgs, CallTemplateFunctionRequest,
+    CallTemplateFunctionResponse, EmptyPayload, FilterRequest, FilterResponse,
+    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, ImportRequest, ImportResponse,
+    InternalEvent, InternalEventPayload, RenderPurpose, WindowContext,
 };
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
@@ -456,6 +456,32 @@ impl PluginManager {
         );
         plugin.send(&event).await?;
         Ok(())
+    }
+
+    pub async fn call_auth_middleware<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+        plugin_name: &str,
+        req: CallAuthMiddlewareRequest,
+    ) -> Result<CallAuthMiddlewareResponse> {
+        let plugin = self
+            .get_plugin_by_name(plugin_name)
+            .await
+            .ok_or(PluginNotFoundErr(plugin_name.to_string()))?;
+        let event = self
+            .send_to_plugin_and_wait(
+                WindowContext::from_window(window),
+                &plugin,
+                &InternalEventPayload::CallAuthMiddlewareRequest(req),
+            )
+            .await?;
+        match event.payload {
+            InternalEventPayload::CallAuthMiddlewareResponse(resp) => Ok(resp),
+            InternalEventPayload::EmptyResponse(_) => {
+                Err(PluginErr("Auth plugin returned empty".to_string()))
+            }
+            e => Err(PluginErr(format!("Auth plugin returned invalid event {:?}", e))),
+        }
     }
 
     pub async fn call_template_function(
