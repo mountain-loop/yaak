@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { generateId } from '../../lib/generateId';
 import { Editor } from './Editor/Editor';
-import type { PairEditorProps } from './PairEditor';
+import type { PairEditorProps, PairWithId } from './PairEditor';
 
 type Props = PairEditorProps;
 
@@ -45,14 +45,12 @@ export function BulkPairEditor({
   );
 }
 
-function lineToPair(line: string): PairEditorProps['pairs'][0] {
+function lineToPair(line: string): PairWithId {
   const [, name, value] = line.match(/^(:?[^:]+):\s+(.*)$/) ?? [];
-
-  const pair: PairEditorProps['pairs'][0] = {
+  return {
     enabled: true,
     name: (name ?? '').trim(),
     value: (value ?? '').trim(),
     id: generateId(),
   };
-  return pair;
 }

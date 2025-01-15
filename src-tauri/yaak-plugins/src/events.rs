@@ -68,10 +68,10 @@ pub enum InternalEventPayload {
     CallTemplateFunctionRequest(CallTemplateFunctionRequest),
     CallTemplateFunctionResponse(CallTemplateFunctionResponse),
 
-    GetAuthMiddlewareRequest(EmptyPayload),
-    GetAuthMiddlewareResponse(GetAuthMiddlewareResponse),
-    CallAuthMiddlewareRequest(CallAuthMiddlewareRequest),
-    CallAuthMiddlewareResponse(CallAuthMiddlewareResponse),
+    GetHttpAuthenticationRequest(EmptyPayload),
+    GetHttpAuthenticationResponse(GetHttpAuthenticationResponse),
+    CallHttpAuthenticationRequest(CallHttpAuthenticationRequest),
+    CallHttpAuthenticationResponse(CallHttpAuthenticationResponse),
 
     CopyTextRequest(CopyTextRequest),
 
@@ -296,22 +296,15 @@ pub enum Icon {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "events.ts")]
-pub struct GetAuthMiddlewareResponse {
-    pub auth_middleware: Vec<AuthMiddleware>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "events.ts")]
-pub struct AuthMiddleware {
+pub struct GetHttpAuthenticationResponse {
     pub name: String,
-    pub args: Vec<FormInput>,
+    pub config: Vec<FormInput>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "events.ts")]
-pub struct CallAuthMiddlewareRequest {
+pub struct CallHttpAuthenticationRequest {
     pub config: serde_json::Map<String, serde_json::Value>,
     pub method: String,
     pub url: String,
@@ -329,7 +322,7 @@ pub struct HttpHeader {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "events.ts")]
-pub struct CallAuthMiddlewareResponse {
+pub struct CallHttpAuthenticationResponse {
     pub url: String,
     pub headers: Vec<HttpHeader>,
 }

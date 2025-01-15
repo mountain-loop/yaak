@@ -1,3 +1,4 @@
+import { AuthenticationPlugin } from './AuthenticationPlugin';
 import type { FilterPlugin } from './FilterPlugin';
 import type { HttpRequestActionPlugin } from './HttpRequestActionPlugin';
 import type { ImporterPlugin } from './ImporterPlugin';
@@ -13,6 +14,7 @@ export type PluginDefinition = {
   importer?: ImporterPlugin;
   theme?: ThemePlugin;
   filter?: FilterPlugin;
+  authentication?: AuthenticationPlugin;
   httpRequestActions?: HttpRequestActionPlugin[];
   templateFunctions?: TemplateFunctionPlugin[];
 };

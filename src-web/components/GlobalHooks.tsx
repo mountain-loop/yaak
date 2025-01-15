@@ -4,6 +4,7 @@ import type { ShowToastRequest } from '@yaakapp/api';
 import { useSubscribeActiveWorkspaceId } from '../hooks/useActiveWorkspace';
 import { useActiveWorkspaceChangedToast } from '../hooks/useActiveWorkspaceChangedToast';
 import { useGenerateThemeCss } from '../hooks/useGenerateThemeCss';
+import { useSubscribeHttpAuthentication } from '../hooks/useHttpAuthentication';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { useNotificationToast } from '../hooks/useNotificationToast';
 import { useSyncFontSizeSetting } from '../hooks/useSyncFontSizeSetting';
@@ -24,6 +25,7 @@ export function GlobalHooks() {
 
   useSyncWorkspaceChildModels();
   useSubscribeTemplateFunctions();
+  useSubscribeHttpAuthentication();
 
   // Other useful things
   useNotificationToast();

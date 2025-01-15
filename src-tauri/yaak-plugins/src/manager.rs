@@ -1,11 +1,12 @@
 use crate::error::Error::{ClientNotInitializedErr, PluginErr, PluginNotFoundErr, UnknownEventErr};
 use crate::error::Result;
 use crate::events::{
-    BootRequest, CallAuthMiddlewareRequest, CallAuthMiddlewareResponse,
+    BootRequest, CallHttpAuthenticationRequest, CallHttpAuthenticationResponse,
     CallHttpRequestActionRequest, CallTemplateFunctionArgs, CallTemplateFunctionRequest,
     CallTemplateFunctionResponse, EmptyPayload, FilterRequest, FilterResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, ImportRequest, ImportResponse,
-    InternalEvent, InternalEventPayload, RenderPurpose, WindowContext,
+    GetHttpAuthenticationResponse, GetHttpRequestActionsResponse, GetTemplateFunctionsResponse,
+    ImportRequest, ImportResponse, InternalEvent, InternalEventPayload, RenderPurpose,
+    WindowContext,
 };
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
@@ -441,6 +442,28 @@ impl PluginManager {
         Ok(all_actions)
     }
 
+    pub async fn get_http_authentication<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+    ) -> Result<Vec<GetHttpAuthenticationResponse>> {
+        let window_context = WindowContext::from_window(window);
+        let reply_events = self
+            .send_and_wait(
+                window_context,
+                &InternalEventPayload::GetHttpAuthenticationRequest(EmptyPayload {}),
+            )
+            .await?;
+
+        let mut results = Vec::new();
+        for event in reply_events {
+            if let InternalEventPayload::GetHttpAuthenticationResponse(resp) = event.payload {
+                results.push(resp.clone());
+            }
+        }
+
+        Ok(results)
+    }
+
     pub async fn call_http_request_action<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
@@ -462,8 +485,8 @@ impl PluginManager {
         &self,
         window: &WebviewWindow<R>,
         plugin_name: &str,
-        req: CallAuthMiddlewareRequest,
-    ) -> Result<CallAuthMiddlewareResponse> {
+        req: CallHttpAuthenticationRequest,
+    ) -> Result<CallHttpAuthenticationResponse> {
         let plugin = self
             .get_plugin_by_name(plugin_name)
             .await
@@ -472,11 +495,11 @@ impl PluginManager {
             .send_to_plugin_and_wait(
                 WindowContext::from_window(window),
                 &plugin,
-                &InternalEventPayload::CallAuthMiddlewareRequest(req),
+                &InternalEventPayload::CallHttpAuthenticationRequest(req),
             )
             .await?;
         match event.payload {
-            InternalEventPayload::CallAuthMiddlewareResponse(resp) => Ok(resp),
+            InternalEventPayload::CallHttpAuthenticationResponse(resp) => Ok(resp),
             InternalEventPayload::EmptyResponse(_) => {
                 Err(PluginErr("Auth plugin returned empty".to_string()))
             }

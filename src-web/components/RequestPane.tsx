@@ -8,6 +8,7 @@ import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useContentTypeFromHeaders } from '../hooks/useContentTypeFromHeaders';
 import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
+import { useHttpAuthentication } from '../hooks/useHttpAuthentication';
 import { httpRequestsAtom } from '../hooks/useHttpRequests';
 import { useImportCurl } from '../hooks/useImportCurl';
 import { useImportQuerystring } from '../hooks/useImportQuerystring';
@@ -97,6 +98,7 @@ export const RequestPane = memo(function RequestPane({
   const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
   const [{ urlKey }] = useRequestEditor();
   const contentType = useContentTypeFromHeaders(activeRequest.headers);
+  const authentication = useHttpAuthentication();
 
   const handleContentTypeChange = useCallback(
     async (contentType: string | null) => {
@@ -236,6 +238,12 @@ export const RequestPane = memo(function RequestPane({
         options: {
           value: activeRequest.authenticationType,
           items: [
+            ...authentication.map((a) => ({
+              label: a.name,
+              shortLabel: a.name,
+              value: a.name,
+            })),
+            { type: 'separator' },
             { label: 'Basic Auth', shortLabel: 'Basic', value: AUTH_TYPE_BASIC },
             { label: 'Bearer Token', shortLabel: 'Bearer', value: AUTH_TYPE_BEARER },
             { type: 'separator' },
@@ -272,6 +280,7 @@ export const RequestPane = memo(function RequestPane({
       activeRequest.headers,
       activeRequest.method,
       activeRequestId,
+      authentication,
       handleContentTypeChange,
       numParams,
       updateRequest,

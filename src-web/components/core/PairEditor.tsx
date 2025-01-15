@@ -43,7 +43,7 @@ export type PairEditorProps = {
   namePlaceholder?: string;
   nameValidate?: InputProps['validate'];
   noScroll?: boolean;
-  onChange: (pairs: Pair[]) => void;
+  onChange: (pairs: PairWithId[]) => void;
   pairs: Pair[];
   stateKey: InputProps['stateKey'];
   valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
@@ -54,13 +54,17 @@ export type PairEditorProps = {
 };
 
 export type Pair = {
-  id: string;
+  id?: string;
   enabled?: boolean;
   name: string;
   value: string;
   contentType?: string;
   isFile?: boolean;
   readOnlyName?: boolean;
+};
+
+export type PairWithId = Pair & {
+  id: string;
 };
 
 /** Max number of pairs to show before prompting the user to reveal the rest */
@@ -90,7 +94,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   const [forceFocusNamePairId, setForceFocusNamePairId] = useState<string | null>(null);
   const [forceFocusValuePairId, setForceFocusValuePairId] = useState<string | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [pairs, setPairs] = useState<Pair[]>([]);
+  const [pairs, setPairs] = useState<PairWithId[]>([]);
   const [showAll, toggleShowAll] = useToggle(false);
 
   useImperativeHandle(
@@ -105,14 +109,13 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   );
 
   useEffect(() => {
-    // Remove empty headers on initial render and ensure they all have valid ids (pairs didn't used to have IDs)
-    const newPairs = [];
+    // Remove empty headers on initial render and ensure they all have valid ids (pairs didn't use to have IDs)
+    const newPairs: PairWithId[] = [];
     for (let i = 0; i < originalPairs.length; i++) {
       const p = originalPairs[i];
       if (!p) continue; // Make TS happy
       if (isPairEmpty(p)) continue;
-      if (!p.id) p.id = generateId();
-      newPairs.push(p);
+      newPairs.push({ ...p, id: p.id ?? generateId() });
     }
 
     // Add empty last pair if there is none
@@ -127,7 +130,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   }, [forceUpdateKey]);
 
   const setPairsAndSave = useCallback(
-    (fn: (pairs: Pair[]) => Pair[]) => {
+    (fn: (pairs: PairWithId[]) => PairWithId[]) => {
       setPairs((oldPairs) => {
         const pairs = fn(oldPairs);
         onChange(pairs);
@@ -165,7 +168,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   );
 
   const handleChange = useCallback(
-    (pair: Pair) => setPairsAndSave((pairs) => pairs.map((p) => (pair.id !== p.id ? p : pair))),
+    (pair: PairWithId) => setPairsAndSave((pairs) => pairs.map((p) => (pair.id !== p.id ? p : pair))),
     [setPairsAndSave],
   );
 
@@ -267,15 +270,15 @@ enum ItemTypes {
 
 type PairEditorRowProps = {
   className?: string;
-  pair: Pair;
+  pair: PairWithId;
   forceFocusNamePairId?: string | null;
   forceFocusValuePairId?: string | null;
   onMove: (id: string, side: 'above' | 'below') => void;
   onEnd: (id: string) => void;
-  onChange: (pair: Pair) => void;
-  onDelete?: (pair: Pair, focusPrevious: boolean) => void;
-  onFocus?: (pair: Pair) => void;
-  onSubmit?: (pair: Pair) => void;
+  onChange: (pair: PairWithId) => void;
+  onDelete?: (pair: PairWithId, focusPrevious: boolean) => void;
+  onFocus?: (pair: PairWithId) => void;
+  onSubmit?: (pair: PairWithId) => void;
   isLast?: boolean;
   index: number;
 } & Pick<
@@ -618,7 +621,7 @@ function FileActionsDropdown({
   );
 }
 
-function emptyPair(): Pair {
+function emptyPair(): PairWithId {
   return {
     enabled: true,
     name: '',

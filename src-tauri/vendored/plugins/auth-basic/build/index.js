@@ -26,6 +26,15 @@ module.exports = __toCommonJS(src_exports);
 var plugin = {
   authentication: {
     name: "Basic",
+    config: [{
+      type: "text",
+      name: "username",
+      label: "Username"
+    }, {
+      type: "text",
+      name: "password",
+      label: "Password"
+    }],
     async onApply(_ctx, args) {
       const { username, password } = args.config;
       return {

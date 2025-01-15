@@ -7,15 +7,13 @@ import type { HttpResponse } from "./models";
 import type { JsonValue } from "./serde_json/JsonValue";
 import type { Workspace } from "./models";
 
-export type AuthMiddleware = { name: string, args: Array<FormInput>, };
-
 export type BootRequest = { dir: string, watch: boolean, };
 
 export type BootResponse = { name: string, version: string, capabilities: Array<string>, };
 
-export type CallAuthMiddlewareRequest = { config: { [key in string]?: JsonValue }, method: string, url: string, headers: Array<HttpHeader>, };
+export type CallHttpAuthenticationRequest = { config: { [key in string]?: JsonValue }, method: string, url: string, headers: Array<HttpHeader>, };
 
-export type CallAuthMiddlewareResponse = { url: string, headers: Array<HttpHeader>, };
+export type CallHttpAuthenticationResponse = { url: string, headers: Array<HttpHeader>, };
 
 export type CallHttpRequestActionArgs = { httpRequest: HttpRequest, };
 
@@ -155,7 +153,7 @@ label?: string,
  */
 defaultValue?: string, };
 
-export type GetAuthMiddlewareResponse = { authMiddleware: Array<AuthMiddleware>, };
+export type GetHttpAuthenticationResponse = { name: string, config: Array<FormInput>, };
 
 export type GetHttpRequestActionsRequest = Record<string, never>;
 
@@ -181,7 +179,7 @@ export type ImportResponse = { resources: ImportResources, };
 
 export type InternalEvent = { id: string, pluginRefId: string, replyId: string | null, payload: InternalEventPayload, windowContext: WindowContext, };
 
-export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & EmptyPayload | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_auth_middleware_request" } & EmptyPayload | { "type": "get_auth_middleware_response" } & GetAuthMiddlewareResponse | { "type": "call_auth_middleware_request" } & CallAuthMiddlewareRequest | { "type": "call_auth_middleware_response" } & CallAuthMiddlewareResponse | { "type": "copy_text_request" } & CopyTextRequest | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "empty_response" } & EmptyPayload;
+export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & EmptyPayload | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_request" } & EmptyPayload | { "type": "get_http_authentication_response" } & GetHttpAuthenticationResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "copy_text_request" } & CopyTextRequest | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "empty_response" } & EmptyPayload;
 
 export type PromptTextRequest = { id: string, title: string, label: string, description?: string, defaultValue?: string, placeholder?: string, 
 /**

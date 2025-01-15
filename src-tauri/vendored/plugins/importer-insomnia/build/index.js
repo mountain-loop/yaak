@@ -7283,6 +7283,7 @@ function importEnvironment(e, workspaceId) {
     model: "environment",
     name: e.name,
     variables: Object.entries(e.data).map(([name, value]) => ({
+      id: `${Math.random()}`,
       enabled: true,
       name,
       value: `${value}`

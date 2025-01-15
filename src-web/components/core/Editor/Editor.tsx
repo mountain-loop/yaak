@@ -26,10 +26,7 @@ import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironme
 import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useSettings } from '../../../hooks/useSettings';
-import {
-  useTemplateFunctions,
-  useTwigCompletionOptions,
-} from '../../../hooks/useTemplateFunctions';
+import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { showDialog } from '../../../lib/dialog';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
@@ -126,7 +123,6 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 ) {
   const settings = useSettings();
 
-  const templateFunctions = useTemplateFunctions();
   const allEnvironmentVariables = useActiveEnvironmentVariables();
   const environmentVariables = autocompleteVariables ? allEnvironmentVariables : emptyVariables;
 
@@ -300,7 +296,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     [focusParamValue],
   );
 
-  const completionOptions = useTwigCompletionOptions(onClickFunction);
+  const completionOptions = useTemplateFunctionCompletionOptions(onClickFunction);
 
   // Update the language extension when the language changes
   useEffect(() => {
@@ -322,7 +318,6 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     autocomplete,
     useTemplating,
     environmentVariables,
-    templateFunctions,
     onClickFunction,
     onClickVariable,
     onClickMissingVariable,

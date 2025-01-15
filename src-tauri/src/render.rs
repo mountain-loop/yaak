@@ -312,7 +312,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "xxx".into(),
             enabled: true,
-            id: "p1".into(),
+            id: None,
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo/bar"),
@@ -326,7 +326,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "xxx".into(),
             enabled: true,
-            id: "p1".into(),
+            id: None,
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo"),
@@ -340,7 +340,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "xxx".into(),
             enabled: true,
-            id: "p1".into(),
+            id: None,
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo?:foo"),
@@ -354,7 +354,7 @@ mod placeholder_tests {
             enabled: true,
             name: "".to_string(),
             value: "".to_string(),
-            id: "p1".into(),
+            id: None,
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:missing"),
@@ -368,7 +368,7 @@ mod placeholder_tests {
             enabled: false,
             name: ":foo".to_string(),
             value: "xxx".to_string(),
-            id: "p1".into(),
+            id: None,
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo"),
@@ -382,7 +382,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "xxx".into(),
             enabled: true,
-            id: "p1".into(),
+            id: None,
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foooo"),
@@ -396,7 +396,7 @@ mod placeholder_tests {
             name: ":foo".into(),
             value: "Hello World".into(),
             enabled: true,
-            id: "p1".into(),
+            id: None,
         };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo"),
@@ -413,13 +413,13 @@ mod placeholder_tests {
                     name: "b".to_string(),
                     value: "bbb".to_string(),
                     enabled: true,
-                    id: "p1".into(),
+                    id: None,
                 },
                 HttpUrlParameter {
                     name: ":a".to_string(),
                     value: "aaa".to_string(),
                     enabled: true,
-                    id: "p2".into(),
+                    id: None,
                 },
             ],
             ..Default::default()

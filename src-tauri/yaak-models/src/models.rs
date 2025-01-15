@@ -446,7 +446,8 @@ pub struct HttpRequestHeader {
     pub enabled: bool,
     pub name: String,
     pub value: String,
-    pub id: String,
+    #[ts(optional, as = "Option<String>")]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -458,7 +459,8 @@ pub struct HttpUrlParameter {
     pub enabled: bool,
     pub name: String,
     pub value: String,
-    pub id: String,
+    #[ts(optional, as = "Option<String>")]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -664,7 +666,8 @@ pub struct GrpcMetadataEntry {
     pub enabled: bool,
     pub name: String,
     pub value: String,
-    pub id: String,
+    #[ts(optional, as = "Option<String>")]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]

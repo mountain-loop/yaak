@@ -6,15 +6,15 @@ export type EnvironmentVariable = { enabled?: boolean, name: string, value: stri
 
 export type Folder = { model: "folder", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, name: string, description: string, sortPriority: number, };
 
-export type GrpcMetadataEntry = { enabled?: boolean, name: string, value: string, id: string, };
+export type GrpcMetadataEntry = { enabled?: boolean, name: string, value: string, id?: string, };
 
 export type GrpcRequest = { model: "grpc_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authenticationType: string | null, authentication: Record<string, any>, description: string, message: string, metadata: Array<GrpcMetadataEntry>, method: string | null, name: string, service: string | null, sortPriority: number, url: string, };
 
 export type HttpRequest = { model: "http_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, body: Record<string, any>, bodyType: string | null, description: string, headers: Array<HttpRequestHeader>, method: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
-export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, id: string, };
+export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, id?: string, };
 
-export type HttpUrlParameter = { enabled?: boolean, name: string, value: string, id: string, };
+export type HttpUrlParameter = { enabled?: boolean, name: string, value: string, id?: string, };
 
 export type SyncModel = { "type": "workspace" } & Workspace | { "type": "environment" } & Environment | { "type": "folder" } & Folder | { "type": "http_request" } & HttpRequest | { "type": "grpc_request" } & GrpcRequest;
 

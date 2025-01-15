@@ -1,12 +1,11 @@
 import type { Folder, HttpRequest } from '@yaakapp-internal/models';
 import type {
+  FormInputCheckbox,
+  FormInputFile,
+  FormInputHttpRequest,
+  FormInputSelect,
+  FormInputText,
   TemplateFunction,
-  TemplateFunctionArg,
-  TemplateFunctionCheckboxArg,
-  TemplateFunctionFileArg,
-  TemplateFunctionHttpRequestArg,
-  TemplateFunctionSelectArg,
-  TemplateFunctionTextArg,
 } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
@@ -101,7 +100,7 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
     <VStack className="pb-3" space={4}>
       <h1 className="font-mono !text-base">{templateFunction.name}(…)</h1>
       <VStack space={2}>
-        {templateFunction.args.map((a: TemplateFunctionArg, i: number) => {
+        {templateFunction.args.map((a, i) => {
           switch (a.type) {
             case 'select':
               return (
@@ -174,7 +173,7 @@ function TextArg({
   onChange,
   value,
 }: {
-  arg: TemplateFunctionTextArg;
+  arg: FormInputText;
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -208,7 +207,7 @@ function SelectArg({
   value,
   onChange,
 }: {
-  arg: TemplateFunctionSelectArg;
+  arg: FormInputSelect;
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -220,7 +219,7 @@ function SelectArg({
       value={value}
       options={[
         ...arg.options.map((a) => ({
-          label: a.label + (arg.defaultValue === a.value ? ' (default)' : ''),
+          label: a.name + (arg.defaultValue === a.value ? ' (default)' : ''),
           value: a.value === arg.defaultValue ? NULL_ARG : a.value,
         })),
       ]}
@@ -233,7 +232,7 @@ function FileArg({
   filePath,
   onChange,
 }: {
-  arg: TemplateFunctionFileArg;
+  arg: FormInputFile;
   filePath: string;
   onChange: (v: string | null) => void;
 }) {
@@ -251,7 +250,7 @@ function HttpRequestArg({
   value,
   onChange,
 }: {
-  arg: TemplateFunctionHttpRequestArg;
+  arg: FormInputHttpRequest;
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -267,7 +266,9 @@ function HttpRequestArg({
       options={[
         ...httpRequests.map((r) => {
           return {
-            label: buildRequestBreadcrumbs(r, folders).join(' / ') + (r.id == activeRequest?.id ? ' (current)' : ''),
+            label:
+              buildRequestBreadcrumbs(r, folders).join(' / ') +
+              (r.id == activeRequest?.id ? ' (current)' : ''),
             value: r.id,
           };
         }),
@@ -299,7 +300,7 @@ function CheckboxArg({
   onChange,
   value,
 }: {
-  arg: TemplateFunctionCheckboxArg;
+  arg: FormInputCheckbox;
   value: boolean;
   onChange: (v: boolean) => void;
 }) {

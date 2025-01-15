@@ -9,10 +9,10 @@ import { usePluginsKey } from './usePlugins';
 
 const templateFunctionsAtom = atom<TemplateFunction[]>([]);
 
-export function useTwigCompletionOptions(
+export function useTemplateFunctionCompletionOptions(
   onClick: (fn: TemplateFunction, ragTag: string, pos: number) => void,
 ) {
-  const templateFunctions = useTemplateFunctions();
+  const templateFunctions = useAtomValue(templateFunctionsAtom);
   return useMemo<TwigCompletionOption[]>(() => {
     return (
       templateFunctions.map((fn) => {
@@ -35,10 +35,6 @@ export function useTwigCompletionOptions(
       }) ?? []
     );
   }, [onClick, templateFunctions]);
-}
-
-export function useTemplateFunctions() {
-  return useAtomValue(templateFunctionsAtom);
 }
 
 export function useSubscribeTemplateFunctions() {

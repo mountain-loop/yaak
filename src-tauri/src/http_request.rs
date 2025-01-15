@@ -30,7 +30,7 @@ use yaak_models::queries::{
     get_base_environment, get_http_response, get_or_create_settings, get_workspace,
     update_response_if_id, upsert_cookie_jar, UpdateSource,
 };
-use yaak_plugins::events::{CallAuthMiddlewareRequest, HttpHeader, RenderPurpose, WindowContext};
+use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext};
 use yaak_plugins::manager::PluginManager;
 
 pub async fn send_http_request<R: Runtime>(
@@ -377,7 +377,7 @@ pub async fn send_http_request<R: Runtime>(
         _ => None,
     };
     if let Some(plugin_name) = auth_plugin_name {
-        let req = CallAuthMiddlewareRequest {
+        let req = CallHttpAuthenticationRequest {
             config: serde_json::to_value(&request.authentication)
                 .unwrap()
                 .as_object()
