@@ -90,6 +90,10 @@ const stateFields = { history: historyField, folds: foldState };
 const emptyVariables: EnvironmentVariable[] = [];
 const emptyExtension: Extension = [];
 
+// NOTE: For some reason, the cursor doesn't appear if the field is empty and there is no
+//  placeholder. So we set it to a space to force it to show.
+const emptyPlaceholder = ' ';
+
 export const Editor = forwardRef<EditorView | undefined, EditorProps>(function Editor(
   {
     readOnly,
@@ -174,7 +178,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   useEffect(
     function configurePlaceholder() {
       if (cm.current === null) return;
-      const ext = placeholderExt(placeholderElFromText(placeholder ?? ''));
+      const ext = placeholderExt(placeholderElFromText(placeholder || emptyPlaceholder));
       const effect = placeholderCompartment.current.reconfigure(ext);
       cm.current?.view.dispatch({ effects: effect });
     },
@@ -350,7 +354,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
         const extensions = [
           languageCompartment.of(langExt),
           placeholderCompartment.current.of(
-            placeholderExt(placeholderElFromText(placeholder ?? '')),
+            placeholderExt(placeholderElFromText(placeholder || emptyPlaceholder)),
           ),
           wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : []),
           keymapCompartment.current.of(

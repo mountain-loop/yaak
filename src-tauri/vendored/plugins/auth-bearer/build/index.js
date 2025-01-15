@@ -26,6 +26,11 @@ module.exports = __toCommonJS(src_exports);
 var plugin = {
   authentication: {
     name: "Bearer",
+    config: [{
+      type: "text",
+      name: "token",
+      label: "Token"
+    }],
     async onApply(_ctx, args) {
       const { token } = args.config;
       return {

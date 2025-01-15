@@ -1,14 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import type { GetHttpAuthenticationResponse } from '@yaakapp-internal/plugins';
-import {useAtomValue} from "jotai";
+import { useAtomValue } from 'jotai';
 import { atom, useSetAtom } from 'jotai/index';
 import { useState } from 'react';
 import { invokeCmd } from '../lib/tauri';
 
 const httpAuthenticationAtom = atom<GetHttpAuthenticationResponse[]>([]);
+const orderedHttpAuthenticationAtom = atom((get) =>
+  get(httpAuthenticationAtom).sort((a, b) => a.name.localeCompare(b.name)),
+);
 
 export function useHttpAuthentication() {
-  return useAtomValue(httpAuthenticationAtom);
+  return useAtomValue(orderedHttpAuthenticationAtom);
 }
 
 export function useSubscribeHttpAuthentication() {
@@ -24,7 +27,9 @@ export function useSubscribeHttpAuthentication() {
     refetchInterval: numResults > 0 ? Infinity : 1000,
     refetchOnMount: true,
     queryFn: async () => {
-      const result = await invokeCmd<GetHttpAuthenticationResponse[]>('cmd_get_http_authentication');
+      const result = await invokeCmd<GetHttpAuthenticationResponse[]>(
+        'cmd_get_http_authentication',
+      );
       setNumResults(result.length);
       setAtom(result);
       return result;

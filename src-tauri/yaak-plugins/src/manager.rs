@@ -456,7 +456,9 @@ impl PluginManager {
 
         let mut results = Vec::new();
         for event in reply_events {
-            if let InternalEventPayload::GetHttpAuthenticationResponse(resp) = event.payload {
+            if let InternalEventPayload::GetHttpAuthenticationResponse(mut resp) = event.payload {
+                let plugin = self.get_plugin_by_ref_id(&event.plugin_ref_id).await.unwrap();
+                resp.name = plugin.boot_resp.lock().await.name.clone();
                 results.push(resp.clone());
             }
         }
@@ -481,7 +483,7 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn call_auth_middleware<R: Runtime>(
+    pub async fn call_http_authentication<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
         plugin_name: &str,

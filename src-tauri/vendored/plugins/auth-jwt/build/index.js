@@ -3796,6 +3796,11 @@ var import_jsonwebtoken = __toESM(require_jsonwebtoken());
 var plugin = {
   authentication: {
     name: "JWT",
+    config: [{
+      type: "text",
+      name: "foo",
+      label: "Foo"
+    }],
     async onApply(_ctx, args) {
       const token = import_jsonwebtoken.default.sign({ foo: "bar" }, null);
       return {

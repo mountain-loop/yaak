@@ -37,8 +37,6 @@ import {
   BODY_TYPE_XML,
 } from '../lib/model_util';
 import { showToast } from '../lib/toast';
-import { BasicAuth } from './BasicAuth';
-import { BearerAuth } from './BearerAuth';
 import { BinaryFileEditor } from './BinaryFileEditor';
 import { CountBadge } from './core/CountBadge';
 import { Editor } from './core/Editor/Editor';
@@ -56,6 +54,7 @@ import { FormMultipartEditor } from './FormMultipartEditor';
 import { FormUrlencodedEditor } from './FormUrlencodedEditor';
 import { GraphQLEditor } from './GraphQLEditor';
 import { HeadersEditor } from './HeadersEditor';
+import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { UrlBar } from './UrlBar';
 import { UrlParametersEditor } from './UrlParameterEditor';
@@ -251,14 +250,9 @@ export const RequestPane = memo(function RequestPane({
           ],
           onChange: async (authenticationType) => {
             let authentication: HttpRequest['authentication'] = activeRequest.authentication;
-            if (authenticationType === AUTH_TYPE_BASIC) {
+            if (activeRequest.authenticationType !== authenticationType) {
               authentication = {
-                username: authentication.username ?? '',
-                password: authentication.password ?? '',
-              };
-            } else if (authenticationType === AUTH_TYPE_BEARER) {
-              authentication = {
-                token: authentication.token ?? '',
+                // Reset auth if changing types
               };
             }
             updateRequest({
@@ -393,15 +387,7 @@ export const RequestPane = memo(function RequestPane({
             tabListClassName="mt-2 !mb-1.5"
           >
             <TabContent value={TAB_AUTH}>
-              {activeRequest.authenticationType === AUTH_TYPE_BASIC ? (
-                <BasicAuth key={forceUpdateKey} request={activeRequest} />
-              ) : activeRequest.authenticationType === AUTH_TYPE_BEARER ? (
-                <BearerAuth key={forceUpdateKey} request={activeRequest} />
-              ) : (
-                <EmptyStateText>
-                  No Authentication {activeRequest.authenticationType}
-                </EmptyStateText>
-              )}
+              <HttpAuthenticationEditor request={activeRequest} />
             </TabContent>
             <TabContent value={TAB_HEADERS}>
               <HeadersEditor
