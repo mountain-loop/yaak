@@ -56,6 +56,7 @@ const icons = {
   help: lucide.CircleHelpIcon,
   history: lucide.HistoryIcon,
   house: lucide.HomeIcon,
+  import: lucide.ImportIcon,
   info: lucide.InfoIcon,
   keyboard: lucide.KeyboardIcon,
   left_panel_hidden: lucide.PanelLeftOpenIcon,

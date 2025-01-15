@@ -2275,7 +2275,7 @@ async fn handle_plugin_event<R: Runtime>(
                 render_json_value(req.data, &base_environment, environment.as_ref(), &cb).await;
             Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))
         }
-        InternalEventPayload::ReloadResponse => {
+        InternalEventPayload::ReloadResponse(_) => {
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for plugin reload");
             let plugins = list_plugins(app_handle).await.unwrap();

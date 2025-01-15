@@ -32,8 +32,9 @@ export function ImportCurlButton() {
         variant="border"
         color="success"
         className="rounded-full"
-        leftSlot={<Icon icon="paste" size="sm" />}
+        rightSlot={<Icon icon="import" size="sm" />}
         isLoading={isLoading}
+        title="Import Curl command from clipboard"
         onClick={async () => {
           setIsLoading(true);
           try {

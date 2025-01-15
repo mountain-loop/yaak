@@ -359,6 +359,7 @@ pub enum FormInput {
     Text(FormInputText),
     Select(FormInputSelect),
     Checkbox(FormInputCheckbox),
+    File(FormInputFile),
     HttpRequest(FormInputHttpRequest),
 }
 
@@ -404,9 +405,9 @@ pub struct FormInputHttpRequest {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "events.ts")]
-pub struct FormInputFileArg {
+pub struct FormInputFile {
     #[serde(flatten)]
-    pub base: TemplateFunctionBaseArg,
+    pub base: FormInputBase,
 
     /// The title of the file selection window
     pub title: String,

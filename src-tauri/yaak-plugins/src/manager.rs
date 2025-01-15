@@ -2,10 +2,10 @@ use crate::error::Error::{ClientNotInitializedErr, PluginErr, PluginNotFoundErr,
 use crate::error::Result;
 use crate::events::{
     BootRequest, CallHttpRequestActionRequest, CallTemplateFunctionArgs,
-    CallTemplateFunctionRequest, CallTemplateFunctionResponse, FilterRequest, FilterResponse,
-    GetHttpRequestActionsRequest, GetHttpRequestActionsResponse, GetTemplateFunctionsResponse,
-    ImportRequest, ImportResponse, InternalEvent, InternalEventPayload, RenderPurpose,
-    WindowContext,
+    CallTemplateFunctionRequest, CallTemplateFunctionResponse, EmptyPayload, FilterRequest,
+    FilterResponse, GetHttpRequestActionsRequest, GetHttpRequestActionsResponse,
+    GetTemplateFunctionsResponse, ImportRequest, ImportResponse, InternalEvent,
+    InternalEventPayload, RenderPurpose, WindowContext,
 };
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
@@ -402,9 +402,7 @@ impl PluginManager {
         let reply_events = self
             .send_and_wait(
                 WindowContext::from_window(window),
-                &InternalEventPayload::GetHttpRequestActionsRequest(
-                    GetHttpRequestActionsRequest {},
-                ),
+                &InternalEventPayload::GetHttpRequestActionsRequest(EmptyPayload {}),
             )
             .await?;
 
@@ -552,7 +550,7 @@ impl PluginManager {
 
         match event.payload {
             InternalEventPayload::FilterResponse(resp) => Ok(resp),
-            InternalEventPayload::EmptyResponse => {
+            InternalEventPayload::EmptyResponse(_) => {
                 Err(PluginErr("Filter returned empty".to_string()))
             }
             e => Err(PluginErr(format!("Export returned invalid event {:?}", e))),

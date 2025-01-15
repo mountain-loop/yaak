@@ -1,9 +1,6 @@
 use std::collections::HashMap;
-use tauri::{AppHandle, Manager};
-use yaak_plugin_runtime::events::{RenderPurpose, FormInput};
-use yaak_plugin_runtime::manager::PluginManager;
 use tauri::{AppHandle, Manager, Runtime};
-use yaak_plugins::events::{RenderPurpose, TemplateFunctionArg, WindowContext};
+use yaak_plugins::events::{FormInput, RenderPurpose, WindowContext};
 use yaak_plugins::manager::PluginManager;
 use yaak_templates::TemplateCallback;
 
