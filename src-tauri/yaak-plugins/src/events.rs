@@ -298,6 +298,7 @@ pub enum Icon {
 #[ts(export, export_to = "events.ts")]
 pub struct GetHttpAuthenticationResponse {
     pub name: String,
+    pub plugin_name: String,
     pub config: Vec<FormInput>,
 }
 

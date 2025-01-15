@@ -442,30 +442,6 @@ impl PluginManager {
         Ok(all_actions)
     }
 
-    pub async fn get_http_authentication<R: Runtime>(
-        &self,
-        window: &WebviewWindow<R>,
-    ) -> Result<Vec<GetHttpAuthenticationResponse>> {
-        let window_context = WindowContext::from_window(window);
-        let reply_events = self
-            .send_and_wait(
-                window_context,
-                &InternalEventPayload::GetHttpAuthenticationRequest(EmptyPayload {}),
-            )
-            .await?;
-
-        let mut results = Vec::new();
-        for event in reply_events {
-            if let InternalEventPayload::GetHttpAuthenticationResponse(mut resp) = event.payload {
-                let plugin = self.get_plugin_by_ref_id(&event.plugin_ref_id).await.unwrap();
-                resp.name = plugin.boot_resp.lock().await.name.clone();
-                results.push(resp.clone());
-            }
-        }
-
-        Ok(results)
-    }
-
     pub async fn call_http_request_action<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
@@ -481,6 +457,28 @@ impl PluginManager {
         );
         plugin.send(&event).await?;
         Ok(())
+    }
+
+    pub async fn get_http_authentication<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+    ) -> Result<Vec<GetHttpAuthenticationResponse>> {
+        let window_context = WindowContext::from_window(window);
+        let reply_events = self
+            .send_and_wait(
+                window_context,
+                &InternalEventPayload::GetHttpAuthenticationRequest(EmptyPayload {}),
+            )
+            .await?;
+
+        let mut results = Vec::new();
+        for event in reply_events {
+            if let InternalEventPayload::GetHttpAuthenticationResponse(resp) = event.payload {
+                results.push(resp.clone());
+            }
+        }
+
+        Ok(results)
     }
 
     pub async fn call_http_authentication<R: Runtime>(

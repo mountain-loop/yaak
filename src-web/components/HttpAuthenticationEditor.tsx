@@ -12,7 +12,7 @@ interface Props {
 export function HttpAuthenticationEditor({ request }: Props) {
   const updateHttpRequest = useUpdateAnyHttpRequest();
   const auths = useHttpAuthentication();
-  const auth = auths.find((a) => a.name === request.authenticationType);
+  const auth = auths.find((a) => a.pluginName === request.authenticationType);
 
   const handleChange = useCallback(
     (authentication: Record<string, boolean>) => {

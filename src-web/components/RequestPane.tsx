@@ -24,9 +24,6 @@ import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { tryFormatJson } from '../lib/formatters';
 import { generateId } from '../lib/generateId';
 import {
-  AUTH_TYPE_BASIC,
-  AUTH_TYPE_BEARER,
-  AUTH_TYPE_NONE,
   BODY_TYPE_BINARY,
   BODY_TYPE_FORM_MULTIPART,
   BODY_TYPE_FORM_URLENCODED,
@@ -239,14 +236,10 @@ export const RequestPane = memo(function RequestPane({
           items: [
             ...authentication.map((a) => ({
               label: a.name,
-              shortLabel: a.name,
-              value: a.name,
+              value: a.pluginName,
             })),
             { type: 'separator' },
-            { label: 'Basic Auth', shortLabel: 'Basic', value: AUTH_TYPE_BASIC },
-            { label: 'Bearer Token', shortLabel: 'Bearer', value: AUTH_TYPE_BEARER },
-            { type: 'separator' },
-            { label: 'No Authentication', shortLabel: 'Auth', value: AUTH_TYPE_NONE },
+            { label: 'No Authentication', shortLabel: 'Auth', value: null },
           ],
           onChange: async (authenticationType) => {
             let authentication: HttpRequest['authentication'] = activeRequest.authentication;

@@ -307,6 +307,7 @@ async function initialize() {
         const replyPayload: InternalEventPayload = {
           type: 'get_http_authentication_response',
           name: mod.plugin.authentication.name,
+          pluginName: pkg.name,
           config: mod.plugin.authentication.config,
         };
         sendPayload(windowContext, replyPayload, replyId);

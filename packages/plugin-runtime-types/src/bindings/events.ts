@@ -153,7 +153,7 @@ label?: string,
  */
 defaultValue?: string, };
 
-export type GetHttpAuthenticationResponse = { name: string, config: Array<FormInput>, };
+export type GetHttpAuthenticationResponse = { name: string, pluginName: string, config: Array<FormInput>, };
 
 export type GetHttpRequestActionsRequest = Record<string, never>;
 
