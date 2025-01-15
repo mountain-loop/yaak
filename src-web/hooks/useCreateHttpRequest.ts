@@ -1,27 +1,24 @@
-import { useMutation } from '@tanstack/react-query';
-import type { HttpRequest } from '@yaakapp/api';
+import type { HttpRequest } from '@yaakapp-internal/models';
 import { trackEvent } from '../lib/analytics';
+import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveEnvironment } from './useActiveEnvironment';
-import { useActiveRequest } from './useActiveRequest';
-import { useActiveWorkspace } from './useActiveWorkspace';
-import { useAppRoutes } from './useAppRoutes';
+import { getActiveRequest } from './useActiveRequest';
+import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { useFastMutation } from './useFastMutation';
 
 export function useCreateHttpRequest() {
-  const workspace = useActiveWorkspace();
-  const [activeEnvironment] = useActiveEnvironment();
-  const activeRequest = useActiveRequest();
-  const routes = useAppRoutes();
-
-  return useMutation<HttpRequest, unknown, Partial<HttpRequest>>({
+  return useFastMutation<HttpRequest, unknown, Partial<HttpRequest>>({
     mutationKey: ['create_http_request'],
-    mutationFn: (patch = {}) => {
-      if (workspace === null) {
+    mutationFn: async (patch = {}) => {
+      const workspaceId = getActiveWorkspaceId();
+      if (workspaceId == null) {
         throw new Error("Cannot create request when there's no active workspace");
       }
+
+      const activeRequest = getActiveRequest();
       if (patch.sortPriority === undefined) {
         if (activeRequest != null) {
-          // Place above currently-active request
+          // Place above currently active request
           patch.sortPriority = activeRequest.sortPriority - 0.0001;
         } else {
           // Place at the very top
@@ -29,16 +26,16 @@ export function useCreateHttpRequest() {
         }
       }
       patch.folderId = patch.folderId || activeRequest?.folderId;
-      return invokeCmd('cmd_create_http_request', {
-        request: { workspaceId: workspace.id, ...patch },
+      return invokeCmd<HttpRequest>('cmd_create_http_request', {
+        request: { workspaceId, ...patch },
       });
     },
     onSettled: () => trackEvent('http_request', 'create'),
     onSuccess: async (request) => {
-      routes.navigate('request', {
-        workspaceId: request.workspaceId,
-        requestId: request.id,
-        environmentId: activeEnvironment?.id,
+      await router.navigate({
+        to: '/workspaces/$workspaceId',
+        params: { workspaceId: request.workspaceId },
+        search: (prev) => ({ ...prev, request_id: request.id }),
       });
     },
   });

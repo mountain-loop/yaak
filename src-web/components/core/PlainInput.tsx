@@ -1,49 +1,63 @@
 import classNames from 'classnames';
-import { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
+import type { HTMLAttributes, FocusEvent } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { IconButton } from './IconButton';
 import type { InputProps } from './Input';
+import { Label } from './Label';
 import { HStack } from './Stacks';
 
-export type PlainInputProps = Omit<InputProps, 'wrapLines' | 'onKeyDown' | 'type'> & {
-  type?: 'text' | 'password' | 'number';
-  step?: number;
-};
+export type PlainInputProps = Omit<InputProps, 'wrapLines' | 'onKeyDown' | 'type' | 'stateKey'> &
+  Pick<HTMLAttributes<HTMLInputElement>, 'onKeyDownCapture'> & {
+    onFocusRaw?: HTMLAttributes<HTMLInputElement>['onFocus'];
+    type?: 'text' | 'password' | 'number';
+    step?: number;
+  };
 
-export const PlainInput = forwardRef<HTMLInputElement, PlainInputProps>(function Input(
-  {
-    className,
-    containerClassName,
-    defaultValue,
-    forceUpdateKey,
-    hideLabel,
-    label,
-    labelClassName,
-    labelPosition = 'top',
-    leftSlot,
-    name,
-    onBlur,
-    onChange,
-    onFocus,
-    onPaste,
-    placeholder,
-    require,
-    rightSlot,
-    size = 'md',
-    type = 'text',
-    validate,
-    ...props
-  }: PlainInputProps,
-  ref,
-) {
+export function PlainInput({
+  className,
+  containerClassName,
+  defaultValue,
+  forceUpdateKey,
+  hideLabel,
+  label,
+  labelClassName,
+  labelPosition = 'top',
+  leftSlot,
+  name,
+  onBlur,
+  onChange,
+  onFocus,
+  onPaste,
+  require,
+  rightSlot,
+  size = 'md',
+  type = 'text',
+  validate,
+  autoSelect,
+  placeholder,
+  autoFocus,
+  onKeyDownCapture,
+  onFocusRaw,
+}: PlainInputProps) {
   const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
   const [currentValue, setCurrentValue] = useState(defaultValue ?? '');
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleFocus = useCallback(() => {
-    setFocused(true);
-    onFocus?.();
-  }, [onFocus]);
+  const handleFocus = useCallback(
+    (e: FocusEvent<HTMLInputElement>) => {
+      onFocusRaw?.(e);
+      setFocused(true);
+      if (autoSelect) {
+        inputRef.current?.select();
+        textareaRef.current?.select();
+      }
+      onFocus?.();
+    },
+    [autoSelect, onFocus, onFocusRaw],
+  );
 
   const handleBlur = useCallback(() => {
     setFocused(false);
@@ -51,10 +65,10 @@ export const PlainInput = forwardRef<HTMLInputElement, PlainInputProps>(function
   }, [onBlur]);
 
   const id = `input-${name}`;
-  const inputClassName = classNames(
+  const commonClassName = classNames(
     className,
-    '!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder',
-    'px-1.5 text-xs font-mono cursor-text',
+    '!bg-transparent min-w-0 w-full focus:outline-none placeholder:text-placeholder',
+    'px-2 text-xs font-mono cursor-text',
   );
 
   const isValid = useMemo(() => {
@@ -84,16 +98,9 @@ export const PlainInput = forwardRef<HTMLInputElement, PlainInputProps>(function
         labelPosition === 'top' && 'flex-row gap-0.5',
       )}
     >
-      <label
-        htmlFor={id}
-        className={classNames(
-          labelClassName,
-          'text-text-subtle whitespace-nowrap',
-          hideLabel && 'sr-only',
-        )}
-      >
+      <Label htmlFor={id} className={classNames(labelClassName, 'flex-shrink-0', hideLabel && 'sr-only')}>
         {label}
-      </label>
+      </Label>
       <HStack
         alignItems="stretch"
         className={classNames(
@@ -117,18 +124,23 @@ export const PlainInput = forwardRef<HTMLInputElement, PlainInputProps>(function
           )}
         >
           <input
-            ref={ref}
+            ref={inputRef}
             key={forceUpdateKey}
             id={id}
             type={type === 'password' && !obscured ? 'text' : type}
             defaultValue={defaultValue}
-            placeholder={placeholder}
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
             onChange={(e) => handleChange(e.target.value)}
             onPaste={(e) => onPaste?.(e.clipboardData.getData('Text'))}
-            className={inputClassName}
+            className={classNames(commonClassName, 'h-auto')}
             onFocus={handleFocus}
             onBlur={handleBlur}
-            {...props}
+            required={require}
+            autoFocus={autoFocus}
+            placeholder={placeholder}
+            onKeyDownCapture={onKeyDownCapture}
           />
         </HStack>
         {type === 'password' && (
@@ -138,7 +150,7 @@ export const PlainInput = forwardRef<HTMLInputElement, PlainInputProps>(function
             className="mr-0.5 group/obscure !h-auto my-0.5"
             iconClassName="text-text-subtle group-hover/obscure:text"
             iconSize="sm"
-            icon={obscured ? 'eye' : 'eyeClosed'}
+            icon={obscured ? 'eye' : 'eye_closed'}
             onClick={() => setObscured((o) => !o)}
           />
         )}
@@ -146,7 +158,7 @@ export const PlainInput = forwardRef<HTMLInputElement, PlainInputProps>(function
       </HStack>
     </div>
   );
-});
+}
 
 function validateRequire(v: string) {
   return v.length > 0;

@@ -22,7 +22,7 @@ const emptyArray: string[] = [];
 export function GrpcConnectionLayout({ style }: Props) {
   const activeRequest = useActiveRequest('grpc_request');
   const updateRequest = useUpdateAnyGrpcRequest();
-  const connections = useGrpcConnections(activeRequest?.id ?? null);
+  const connections = useGrpcConnections().filter((c) => c.requestId === activeRequest?.id);
   const activeConnection = connections[0] ?? null;
   const messages = useGrpcEvents(activeConnection?.id ?? null);
   const protoFilesKv = useGrpcProtoFiles(activeRequest?.id ?? null);
@@ -120,7 +120,7 @@ export function GrpcConnectionLayout({ style }: Props) {
             ) : messages.length >= 0 ? (
               <GrpcConnectionMessagesPane activeRequest={activeRequest} methodType={methodType} />
             ) : (
-              <HotKeyList hotkeys={['grpc_request.send', 'sidebar.focus', 'urlBar.focus']} />
+              <HotKeyList hotkeys={['grpc_request.send', 'sidebar.focus', 'url_bar.focus']} />
             )}
           </div>
         )

@@ -1,17 +1,12 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import React from 'react';
-import type { HttpResponse } from '@yaakapp/api';
 
 interface Props {
-  response: HttpResponse;
+  bodyPath: string;
 }
 
-export function VideoViewer({ response }: Props) {
-  if (response.bodyPath === null) {
-    return <div>Empty response body</div>;
-  }
-
-  const src = convertFileSrc(response.bodyPath);
+export function VideoViewer({ bodyPath }: Props) {
+  const src = convertFileSrc(bodyPath);
 
   // eslint-disable-next-line jsx-a11y/media-has-caption
   return <video className="w-full" controls src={src}></video>;

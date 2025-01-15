@@ -69,7 +69,7 @@ function themeVariables(theme?: Partial<YaakColors>, base?: CSSVariables): CSSVa
       theme?.shadow ??
       YaakColor.black().translucify(isThemeDark(theme ?? ({} as Partial<YaakColors>)) ? 0.7 : 0.93),
     primary: theme?.primary,
-    secondary: theme?.primary,
+    secondary: theme?.secondary,
     info: theme?.info,
     success: theme?.success,
     notice: theme?.notice,
@@ -98,14 +98,23 @@ function templateTagColorVariables(color: YaakColor): Partial<CSSVariables> {
   };
 }
 
+function toastColorVariables(color: YaakColor): Partial<CSSVariables> {
+  return {
+    text: color.lift(0.8),
+    textSubtle: color,
+    surface: color.translucify(0.9),
+    surfaceHighlight: color.translucify(0.8),
+    border: color.lift(0.3).translucify(0.6),
+  };
+}
+
 function bannerColorVariables(color: YaakColor): Partial<CSSVariables> {
   return {
     text: color.lift(0.8),
     textSubtle: color.translucify(0.3),
     textSubtlest: color,
-    surface: color,
+    surface: color.translucify(0.9),
     border: color.lift(0.3).translucify(0.4),
-    surfaceHighlight: color.translucify(0.9),
   };
 }
 
@@ -201,6 +210,15 @@ function bannerCSS(color: YaakColorKey, colors?: Partial<YaakColors>): string | 
   );
 }
 
+function toastCSS(color: YaakColorKey, colors?: Partial<YaakColors>): string | null {
+  const yaakColor = colors?.[color];
+  if (yaakColor == null) {
+    return null;
+  }
+
+  return [variablesToCSS(`.x-theme-toast--${color}`, toastColorVariables(yaakColor))].join('\n\n');
+}
+
 function templateTagCSS(color: YaakColorKey, colors?: Partial<YaakColors>): string | null {
   const yaakColor = colors?.[color];
   if (yaakColor == null) {
@@ -252,6 +270,9 @@ export function getThemeCSS(theme: YaakTheme): string {
       ),
       ...Object.keys(colors ?? {}).map((key) =>
         bannerCSS(key as YaakColorKey, theme.components?.banner ?? colors),
+      ),
+      ...Object.keys(colors ?? {}).map((key) =>
+        toastCSS(key as YaakColorKey, theme.components?.banner ?? colors),
       ),
       ...Object.keys(colors ?? {}).map((key) =>
         templateTagCSS(key as YaakColorKey, theme.components?.templateTag ?? colors),

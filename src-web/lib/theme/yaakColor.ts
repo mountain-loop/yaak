@@ -98,7 +98,7 @@ export class YaakColor {
     const h = this.hue;
     const s = this.saturation;
     const l = this.lightness;
-    const a = this.alpha; // Convert from 0-1 to 0-255
+    const a = this.alpha;
 
     const [r, g, b] = parseColor(`hsl(${h},${s}%,${l}%)`).rgb;
     return rgbaToHex(r, g, b, a);

@@ -1,29 +1,29 @@
-import { useMutation } from '@tanstack/react-query';
-import type { CookieJar } from '@yaakapp/api';
+import type { CookieJar } from '@yaakapp-internal/models';
 import { trackEvent } from '../lib/analytics';
+import { showPrompt } from '../lib/prompt';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveWorkspace } from './useActiveWorkspace';
-import { usePrompt } from './usePrompt';
+import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { useFastMutation } from './useFastMutation';
 
 export function useCreateCookieJar() {
-  const workspace = useActiveWorkspace();
-  const prompt = usePrompt();
-
-  return useMutation<CookieJar>({
+  return useFastMutation<CookieJar | null>({
     mutationKey: ['create_cookie_jar'],
     mutationFn: async () => {
-      if (workspace === null) {
+      const workspaceId = getActiveWorkspaceId();
+      if (workspaceId == null) {
         throw new Error("Cannot create cookie jar when there's no active workspace");
       }
-      const name = await prompt({
+      const name = await showPrompt({
         id: 'new-cookie-jar',
-        name: 'name',
         title: 'New CookieJar',
         placeholder: 'My Jar',
+        confirmText: 'Create',
         label: 'Name',
         defaultValue: 'My Jar',
       });
-      return invokeCmd('cmd_create_cookie_jar', { workspaceId: workspace.id, name });
+      if (name == null) return null;
+
+      return invokeCmd('cmd_create_cookie_jar', { workspaceId, name });
     },
     onSettled: () => trackEvent('cookie_jar', 'create'),
   });

@@ -2,15 +2,25 @@ import classNames from 'classnames';
 import { motion } from 'framer-motion';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useWindowSize } from 'react-use';
-import { useActiveRequest } from '../hooks/useActiveRequest';
+import {useEnsureActiveCookieJar, useSubscribeActiveCookieJarId} from "../hooks/useActiveCookieJar";
+import {useSubscribeActiveEnvironmentId} from "../hooks/useActiveEnvironment";
+import {getActiveRequest, useActiveRequest} from '../hooks/useActiveRequest';
+import {useSubscribeActiveRequestId} from "../hooks/useActiveRequestId";
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
+import {useDuplicateGrpcRequest} from "../hooks/useDuplicateGrpcRequest";
+import {useDuplicateHttpRequest} from "../hooks/useDuplicateHttpRequest";
 import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
+import {useHotKey} from "../hooks/useHotKey";
 import { useImportData } from '../hooks/useImportData';
+import {useSubscribeRecentCookieJars} from "../hooks/useRecentCookieJars";
+import {useSubscribeRecentEnvironments} from "../hooks/useRecentEnvironments";
+import {useSubscribeRecentRequests} from "../hooks/useRecentRequests";
+import {useSubscribeRecentWorkspaces} from "../hooks/useRecentWorkspaces";
 import { useShouldFloatSidebar } from '../hooks/useShouldFloatSidebar';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
-import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
+import {useSyncWorkspaceRequestTitle} from "../hooks/useSyncWorkspaceRequestTitle";
+import {useToggleCommandPalette} from "../hooks/useToggleCommandPalette";
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -32,16 +42,14 @@ const head = { gridArea: 'head' };
 const body = { gridArea: 'body' };
 const drag = { gridArea: 'drag' };
 
-export default function Workspace() {
-  useSyncWorkspaceRequestTitle();
+export function Workspace() {
+  // First, subscribe to some things applicable to workspaces
+  useGlobalWorkspaceHooks();
+
   const workspaces = useWorkspaces();
-  const activeWorkspace = useActiveWorkspace();
   const { setWidth, width, resetWidth } = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
-  const activeRequest = useActiveRequest();
-  const windowSize = useWindowSize();
-  const importData = useImportData();
   const floating = useShouldFloatSidebar();
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const moveState = useRef<{ move: (e: MouseEvent) => void; up: (e: MouseEvent) => void } | null>(
@@ -103,14 +111,6 @@ export default function Workspace() {
     [sideWidth, floating],
   );
 
-  if (windowSize.width <= 100) {
-    return (
-      <div>
-        <Button>Send</Button>
-      </div>
-    );
-  }
-
   // We're loading still
   if (workspaces.length === 0) {
     return null;
@@ -170,34 +170,87 @@ export default function Workspace() {
       >
         <WorkspaceHeader className="pointer-events-none" />
       </HeaderSize>
-      {activeWorkspace == null ? (
-        <div className="m-auto">
-          <Banner color="warning" className="max-w-[30rem]">
-            The active workspace was not found. Select a workspace from the header menu or report
-            this bug to <FeedbackLink />
-          </Banner>
-        </div>
-      ) : activeRequest == null ? (
-        <HotKeyList
-          hotkeys={['http_request.create', 'sidebar.focus', 'settings.show']}
-          bottomSlot={
-            <HStack space={1} justifyContent="center" className="mt-3">
-              <Button variant="border" size="sm" onClick={() => importData.mutate()}>
-                Import
-              </Button>
-              <CreateDropdown hideFolder>
-                <Button variant="border" forDropdown size="sm">
-                  New Request
-                </Button>
-              </CreateDropdown>
-            </HStack>
-          }
-        />
-      ) : activeRequest.model === 'grpc_request' ? (
-        <GrpcConnectionLayout style={body} />
-      ) : (
-        <HttpRequestLayout activeRequest={activeRequest} style={body} />
-      )}
+      <WorkspaceBody />
     </div>
   );
+}
+
+function WorkspaceBody() {
+  const activeRequest = useActiveRequest();
+  const activeWorkspace = useActiveWorkspace();
+  const importData = useImportData();
+
+  if (activeWorkspace == null) {
+    return (
+      <div className="m-auto">
+        <Banner color="warning" className="max-w-[30rem]">
+          The active workspace was not found. Select a workspace from the header menu or report this
+          bug to <FeedbackLink />
+        </Banner>
+      </div>
+    );
+  }
+
+  if (activeRequest == null) {
+    return (
+      <HotKeyList
+        hotkeys={['http_request.create', 'sidebar.focus', 'settings.show']}
+        bottomSlot={
+          <HStack space={1} justifyContent="center" className="mt-3">
+            <Button variant="border" size="sm" onClick={() => importData.mutate()}>
+              Import
+            </Button>
+            <CreateDropdown hideFolder>
+              <Button variant="border" forDropdown size="sm">
+                New Request
+              </Button>
+            </CreateDropdown>
+          </HStack>
+        }
+      />
+    );
+  }
+
+  if (activeRequest.model === 'grpc_request') {
+    return <GrpcConnectionLayout style={body} />;
+  }
+
+  return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
+}
+
+function useGlobalWorkspaceHooks() {
+  useEnsureActiveCookieJar();
+
+  useSubscribeActiveRequestId();
+  useSubscribeActiveEnvironmentId();
+  useSubscribeActiveCookieJarId();
+
+  useSubscribeRecentRequests();
+  useSubscribeRecentWorkspaces();
+  useSubscribeRecentEnvironments();
+  useSubscribeRecentCookieJars();
+
+  useSyncWorkspaceRequestTitle();
+
+  const toggleCommandPalette = useToggleCommandPalette();
+  useHotKey('command_palette.toggle', toggleCommandPalette);
+
+  const activeRequest = useActiveRequest();
+  const duplicateHttpRequest = useDuplicateHttpRequest({
+    id: activeRequest?.id ?? null,
+    navigateAfter: true,
+  });
+  const duplicateGrpcRequest = useDuplicateGrpcRequest({
+    id: activeRequest?.id ?? null,
+    navigateAfter: true,
+  });
+
+  useHotKey('http_request.duplicate', async () => {
+    const activeRequest = getActiveRequest();
+    if (activeRequest?.model === 'http_request') {
+      await duplicateHttpRequest.mutateAsync();
+    } else {
+      await duplicateGrpcRequest.mutateAsync();
+    }
+  });
 }

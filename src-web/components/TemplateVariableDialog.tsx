@@ -1,5 +1,5 @@
+import type { Tokens } from '@yaakapp-internal/templates';
 import { useCallback, useMemo, useState } from 'react';
-import type { Tokens } from '../gen/Tokens';
 import { useActiveEnvironmentVariables } from '../hooks/useActiveEnvironmentVariables';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateTokensToString } from '../hooks/useTemplateTokensToString';
@@ -59,7 +59,7 @@ export function TemplateVariableDialog({ hide, onChange, initialTokens }: Props)
         />
       </VStack>
       <VStack>
-        <div className="text-sm text-text-subtle">Render Preview</div>
+        <div className="text-sm text-text-subtle">Preview</div>
         <InlineCode className="select-text cursor-text">{rendered.data}</InlineCode>
       </VStack>
       <Button color="primary" onClick={handleDone}>

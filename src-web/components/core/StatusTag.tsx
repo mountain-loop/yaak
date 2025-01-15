@@ -1,30 +1,34 @@
+import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import type { HttpResponse } from '@yaakapp/api';
 
 interface Props {
-  response: Pick<HttpResponse, 'status' | 'statusReason' | 'error'>;
+  response: HttpResponse;
   className?: string;
   showReason?: boolean;
 }
 
 export function StatusTag({ response, className, showReason }: Props) {
-  const { status } = response;
-  const label = status < 100 ? 'ERR' : status;
+  const { status, state } = response;
+  const label = status < 100 ? 'ERROR' : status;
   const category = `${status}`[0];
+  const isInitializing = state === 'initialized';
+
   return (
     <span
       className={classNames(
         className,
         'font-mono',
-        category === '0' && 'text-danger',
-        category === '1' && 'text-info',
-        category === '2' && 'text-success',
-        category === '3' && 'text-primary',
-        category === '4' && 'text-warning',
-        category === '5' && 'text-danger',
+        !isInitializing && category === '0' && 'text-danger',
+        !isInitializing && category === '1' && 'text-info',
+        !isInitializing && category === '2' && 'text-success',
+        !isInitializing && category === '3' && 'text-primary',
+        !isInitializing && category === '4' && 'text-warning',
+        !isInitializing && category === '5' && 'text-danger',
+        isInitializing && 'text-text-subtle',
       )}
     >
-      {label} {showReason && response.statusReason && response.statusReason}
+      {isInitializing ? 'CONNECTING' : label}{' '}
+      {showReason && response.statusReason && response.statusReason}
     </span>
   );
 }

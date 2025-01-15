@@ -1,6 +1,6 @@
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
-import type { GrpcRequest, HttpRequest } from '@yaakapp/api';
+import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 import { Input } from './core/Input';
 import { VStack } from './core/Stacks';
 
@@ -18,6 +18,7 @@ export function BearerAuth<T extends HttpRequest | GrpcRequest>({ request }: Pro
         useTemplating
         autocompleteVariables
         placeholder="token"
+        stateKey={`bearer.${request.id}`}
         type="password"
         label="Token"
         name="token"

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import React from 'react';
-import type { HttpRequest } from '@yaakapp/api';
+import type { HttpRequest } from '@yaakapp-internal/models';
 import { SplitLayout } from './core/SplitLayout';
 import { RequestPane } from './RequestPane';
 import { ResponsePane } from './ResponsePane';
@@ -23,7 +23,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
           fullHeight={orientation === 'horizontal'}
         />
       )}
-      secondSlot={({ style }) => <ResponsePane activeRequest={activeRequest} style={style} />}
+      secondSlot={({ style }) => <ResponsePane activeRequestId={activeRequest.id} style={style} />}
     />
   );
 }

@@ -1,7 +1,7 @@
-import type { Cookie } from '@yaakapp/api';
+import type { Cookie } from '@yaakapp-internal/models';
 import { useCookieJars } from '../hooks/useCookieJars';
 import { useUpdateCookieJar } from '../hooks/useUpdateCookieJar';
-import { cookieDomain } from '../lib/models';
+import { cookieDomain } from '../lib/model_util';
 import { Banner } from './core/Banner';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
@@ -12,8 +12,8 @@ interface Props {
 
 export const CookieDialog = function ({ cookieJarId }: Props) {
   const updateCookieJar = useUpdateCookieJar(cookieJarId ?? null);
-  const cookieJars = useCookieJars().data ?? [];
-  const cookieJar = cookieJars.find((c) => c.id === cookieJarId);
+  const cookieJars = useCookieJars();
+  const cookieJar = cookieJars?.find((c) => c.id === cookieJarId);
 
   if (cookieJar == null) {
     return <div>No cookie jar selected</div>;

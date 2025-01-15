@@ -1,4 +1,4 @@
-import type { HttpRequest, HttpResponse } from '@yaakapp/api';
+import type { HttpRequest, HttpResponse } from '@yaakapp-internal/models';
 import { invokeCmd } from './tauri';
 
 export async function sendEphemeralRequest(

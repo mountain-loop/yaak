@@ -1,32 +1,28 @@
-import { useMutation } from '@tanstack/react-query';
-import type { HttpResponse } from '@yaakapp/api';
+import type { HttpResponse } from '@yaakapp-internal/models';
+import { showAlert } from '../lib/alert';
 import { trackEvent } from '../lib/analytics';
+import { getHttpRequest } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveCookieJar } from './useActiveCookieJar';
-import { useActiveEnvironment } from './useActiveEnvironment';
-import { useAlert } from './useAlert';
-import { useHttpRequests } from './useHttpRequests';
+import { getActiveCookieJar } from './useActiveCookieJar';
+import { getActiveEnvironment } from './useActiveEnvironment';
+import { useFastMutation } from './useFastMutation';
 
 export function useSendAnyHttpRequest() {
-  const [environment] = useActiveEnvironment();
-  const alert = useAlert();
-  const [activeCookieJar] = useActiveCookieJar();
-  const requests = useHttpRequests();
-  return useMutation<HttpResponse | null, string, string | null>({
+  return useFastMutation<HttpResponse | null, string, string | null>({
     mutationKey: ['send_any_request'],
     mutationFn: async (id) => {
-      const request = requests.find((r) => r.id === id) ?? null;
+      const request = await getHttpRequest(id);
       if (request == null) {
         return null;
       }
 
       return invokeCmd('cmd_send_http_request', {
         request,
-        environmentId: environment?.id,
-        cookieJarId: activeCookieJar?.id,
+        environmentId: getActiveEnvironment()?.id,
+        cookieJarId: getActiveCookieJar()?.id,
       });
     },
     onSettled: () => trackEvent('http_request', 'send'),
-    onError: (err) => alert({ id: 'send-failed', title: 'Send Failed', body: err }),
+    onError: (err) => showAlert({ id: 'send-failed', title: 'Send Failed', body: err }),
   });
 }

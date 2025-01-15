@@ -1,5 +1,6 @@
 import classNames from 'classnames';
 import { motion } from 'framer-motion';
+import { atom, useAtom } from 'jotai';
 import type {
   CSSProperties,
   FocusEvent as ReactFocusEvent,
@@ -7,23 +8,26 @@ import type {
   MouseEvent,
   ReactElement,
   ReactNode,
+  RefObject,
   SetStateAction,
 } from 'react';
 import React, {
+  useEffect,
   Children,
   cloneElement,
   forwardRef,
   useCallback,
-  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import { useKey, useWindowSize } from 'react-use';
+import { useClickOutside } from '../../hooks/useClickOutside';
 import type { HotkeyAction } from '../../hooks/useHotKey';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
+import { generateId } from '../../lib/generateId';
 import { getNodeText } from '../../lib/getNodeText';
 import { Overlay } from '../Overlay';
 import { Button } from './Button';
@@ -45,7 +49,7 @@ export type DropdownItemDefault = {
   keepOpen?: boolean;
   hotKeyAction?: HotkeyAction;
   hotKeyLabelOnly?: boolean;
-  variant?: 'default' | 'danger' | 'notify';
+  color?: 'default' | 'danger' | 'info' | 'warning' | 'notice';
   disabled?: boolean;
   hidden?: boolean;
   leftSlot?: ReactNode;
@@ -69,50 +73,80 @@ export interface DropdownRef {
   open: () => void;
   toggle: () => void;
   close?: () => void;
-  next?: () => void;
-  prev?: () => void;
+  next?: (incrBy?: number) => void;
+  prev?: (incrBy?: number) => void;
   select?: () => void;
 }
+
+// Every dropdown gets a unique ID and we use this global atom to ensure
+// only one dropdown can be open at a time.
+// TODO: Also make ContextMenu use this
+const openAtom = atom<string | null>(null);
 
 export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown(
   { children, items, onOpen, onClose, hotKeyAction, fullWidth }: DropdownProps,
   ref,
 ) {
-  const [isOpen, _setIsOpen] = useState<boolean>(false);
-  const [defaultSelectedIndex, setDefaultSelectedIndex] = useState<number>();
+  const id = useRef(generateId()).current;
+  const [openId, setOpenId] = useAtom(openAtom);
+  const isOpen = openId === id;
+
+  // const [isOpen, _setIsOpen] = useState<boolean>(false);
+  const [defaultSelectedIndex, setDefaultSelectedIndex] = useState<number | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<Omit<DropdownRef, 'open'>>(null);
 
   const setIsOpen = useCallback(
     (o: SetStateAction<boolean>) => {
-      _setIsOpen(o);
-      if (o) onOpen?.();
-      else onClose?.();
+      setOpenId((prevId) => {
+        const prevIsOpen = prevId === id;
+        const newIsOpen = typeof o === 'function' ? o(prevIsOpen) : o;
+        return newIsOpen ? id : null; // Set global atom to current ID to signify open state
+      });
     },
-    [onClose, onOpen],
+    [id, setOpenId],
   );
 
-  const handleClose = useCallback(() => {
-    setIsOpen(false);
-    buttonRef.current?.focus();
-    // Reset so it triggers a render if opening sets to 0, for example
-    setDefaultSelectedIndex(undefined);
-  }, [setIsOpen]);
+  useEffect(() => {
+    if (isOpen) {
+      // Persist background color of button until we close the dropdown
+      buttonRef.current!.style.backgroundColor = window
+        .getComputedStyle(buttonRef.current!)
+        .getPropertyValue('background-color');
+      onOpen?.();
+    } else {
+      onClose?.();
+      buttonRef.current?.focus(); // Focus button
+      buttonRef.current!.style.backgroundColor = ''; // Clear persisted BG
+    }
 
-  useImperativeHandle(ref, () => ({
-    ...menuRef.current,
-    isOpen: isOpen,
-    toggle() {
-      if (!isOpen) this.open();
-      else this.close();
-    },
-    open() {
-      setIsOpen(true);
-    },
-    close() {
-      handleClose();
-    },
-  }));
+    // Set to different value when opened and closed to force it to update. This is to force
+    // <Menu/> to reset its selected-index state, which it does when this prop changes
+    setDefaultSelectedIndex(isOpen ? -1 : null);
+  }, [isOpen, onClose, onOpen]);
+
+  // Pull into variable so linter forces us to add it as a hook dep to useImperativeHandle. If we don't,
+  // the ref will not update when menuRef updates, causing stale callback state to be used.
+  const menuRefCurrent = menuRef.current;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      ...menuRefCurrent,
+      isOpen: isOpen,
+      toggle() {
+        if (!isOpen) this.open();
+        else this.close();
+      },
+      open() {
+        setIsOpen(true);
+      },
+      close() {
+        setIsOpen(false);
+      },
+    }),
+    [isOpen, setIsOpen, menuRefCurrent],
+  );
 
   useHotKey(hotKeyAction ?? null, () => {
     setDefaultSelectedIndex(0);
@@ -131,8 +165,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
         ((e: MouseEvent<HTMLButtonElement>) => {
           e.preventDefault();
           e.stopPropagation();
-          setDefaultSelectedIndex(undefined);
-          setIsOpen((o) => !o);
+          setIsOpen((o) => !o); // Toggle dropdown
         }),
     };
     return cloneElement(existingChild, props);
@@ -155,11 +188,12 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
       <Menu
         ref={menuRef}
         showTriangle
+        triggerRef={buttonRef}
         fullWidth={fullWidth}
         defaultSelectedIndex={defaultSelectedIndex}
         items={items}
         triggerShape={triggerRect ?? null}
-        onClose={handleClose}
+        onClose={() => setIsOpen(false)}
         isOpen={isOpen}
       />
     </>
@@ -191,8 +225,9 @@ export const ContextMenu = forwardRef<DropdownRef, ContextMenuProps>(function Co
 
   return (
     <Menu
-      isOpen // Always open because we return null if not
+      isOpen={true} // Always open because we return null if not
       className={className}
+      defaultSelectedIndex={null}
       ref={ref}
       items={items}
       onClose={onClose}
@@ -203,291 +238,310 @@ export const ContextMenu = forwardRef<DropdownRef, ContextMenuProps>(function Co
 
 interface MenuProps {
   className?: string;
-  defaultSelectedIndex?: number;
-  items: DropdownProps['items'];
+  defaultSelectedIndex: number | null;
   triggerShape: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'right'> | null;
   onClose: () => void;
   showTriangle?: boolean;
   fullWidth?: boolean;
   isOpen: boolean;
+  items: DropdownItem[];
+  triggerRef?: RefObject<HTMLButtonElement>;
 }
 
-const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle'>, MenuProps>(function Menu(
-  {
-    className,
-    isOpen,
-    items,
-    fullWidth,
-    onClose,
-    triggerShape,
-    defaultSelectedIndex,
-    showTriangle,
-  }: MenuProps,
-  ref,
-) {
-  const [selectedIndex, setSelectedIndex] = useStateWithDeps<number | null>(
-    defaultSelectedIndex ?? null,
-    [defaultSelectedIndex],
-  );
-  const [menuStyles, setMenuStyles] = useState<CSSProperties>({});
-  const [filter, setFilter] = useState<string>('');
-
-  // Calculate the max height so we can scroll
-  const initMenu = useCallback((el: HTMLDivElement | null) => {
-    if (el === null) return {};
-    const windowBox = document.documentElement.getBoundingClientRect();
-    const menuBox = el.getBoundingClientRect();
-    setMenuStyles({ maxHeight: windowBox.height - menuBox.top - 5 });
-  }, []);
-
-  const handleClose = useCallback(() => {
-    onClose();
-    setSelectedIndex(null);
-    setFilter('');
-  }, [onClose, setSelectedIndex]);
-
-  // Close menu on space bar
-  const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const isCharacter = e.key.length === 1;
-    const isSpecial = e.ctrlKey || e.metaKey || e.altKey;
-    if (isCharacter && !isSpecial) {
-      e.preventDefault();
-      setFilter((f) => (f + e.key).trim());
-      setSelectedIndex(0);
-    } else if (e.key === 'Backspace' && !isSpecial) {
-      e.preventDefault();
-      setFilter((f) => f.slice(0, -1));
-    }
-  };
-
-  useKey(
-    'Escape',
-    () => {
-      if (!isOpen) return;
-      if (filter !== '') setFilter('');
-      else handleClose();
-    },
-    {},
-    [isOpen, filter, setFilter, handleClose],
-  );
-
-  const handlePrev = useCallback(() => {
-    setSelectedIndex((currIndex) => {
-      let nextIndex = (currIndex ?? 0) - 1;
-      const maxTries = items.length;
-      for (let i = 0; i < maxTries; i++) {
-        if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
-          nextIndex--;
-        } else if (nextIndex < 0) {
-          nextIndex = items.length - 1;
-        } else {
-          break;
-        }
-      }
-      return nextIndex;
-    });
-  }, [items, setSelectedIndex]);
-
-  const handleNext = useCallback(() => {
-    setSelectedIndex((currIndex) => {
-      let nextIndex = (currIndex ?? -1) + 1;
-      const maxTries = items.length;
-      for (let i = 0; i < maxTries; i++) {
-        if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
-          nextIndex++;
-        } else if (nextIndex >= items.length) {
-          nextIndex = 0;
-        } else {
-          break;
-        }
-      }
-      return nextIndex;
-    });
-  }, [items, setSelectedIndex]);
-
-  useKey(
-    'ArrowUp',
-    (e) => {
-      if (!isOpen) return;
-      e.preventDefault();
-      handlePrev();
-    },
-    {},
-    [isOpen],
-  );
-
-  useKey(
-    'ArrowDown',
-    (e) => {
-      if (!isOpen) return;
-      e.preventDefault();
-      handleNext();
-    },
-    {},
-    [isOpen],
-  );
-
-  const handleSelect = useCallback(
-    (i: DropdownItem) => {
-      if (i.type !== 'separator' && !i.keepOpen) {
-        handleClose();
-      }
-      setSelectedIndex(null);
-      if (i.type !== 'separator' && typeof i.onSelect === 'function') {
-        i.onSelect();
-      }
-    },
-    [handleClose, setSelectedIndex],
-  );
-
-  useImperativeHandle(
+const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'>, MenuProps>(
+  function Menu(
+    {
+      className,
+      isOpen,
+      items,
+      fullWidth,
+      onClose,
+      triggerShape,
+      defaultSelectedIndex,
+      showTriangle,
+      triggerRef,
+    }: MenuProps,
     ref,
-    () => ({
-      close: handleClose,
-      prev: handlePrev,
-      next: handleNext,
-      select: () => {
-        const item = items[selectedIndex ?? -1] ?? null;
-        if (!item) return;
-        handleSelect(item);
-      },
-    }),
-    [handleClose, handleNext, handlePrev, handleSelect, items, selectedIndex],
-  );
+  ) {
+    const [selectedIndex, setSelectedIndex] = useStateWithDeps<number | null>(
+      defaultSelectedIndex ?? null,
+      [defaultSelectedIndex],
+    );
+    const [filter, setFilter] = useState<string>('');
 
-  const { containerStyles, triangleStyles } = useMemo<{
-    containerStyles: CSSProperties;
-    triangleStyles: CSSProperties | null;
-  }>(() => {
-    if (triggerShape == null) return { containerStyles: {}, triangleStyles: null };
+    const handleClose = useCallback(() => {
+      onClose();
+      setFilter('');
+    }, [onClose]);
 
-    const docRect = document.documentElement.getBoundingClientRect();
-    const width = triggerShape.right - triggerShape.left;
-    const heightAbove = triggerShape.top;
-    const heightBelow = docRect.height - triggerShape.bottom;
-    const hSpaceRemaining = docRect.width - triggerShape.left;
-    const top = triggerShape.bottom + 5;
-    const onRight = hSpaceRemaining < 200;
-    const upsideDown = heightAbove > heightBelow && heightBelow < 200;
-    const triggerWidth = triggerShape.right - triggerShape.left;
-    const containerStyles = {
-      top: !upsideDown ? top : undefined,
-      bottom: upsideDown ? docRect.height - top : undefined,
-      right: onRight ? docRect.width - triggerShape.right : undefined,
-      left: !onRight ? triggerShape.left : undefined,
-      minWidth: fullWidth ? triggerWidth : undefined,
-      maxWidth: '40rem',
+    // Close menu on space bar
+    const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const isCharacter = e.key.length === 1;
+      const isSpecial = e.ctrlKey || e.metaKey || e.altKey;
+      if (isCharacter && !isSpecial) {
+        e.preventDefault();
+        setFilter((f) => f + e.key);
+        setSelectedIndex(0);
+      } else if (e.key === 'Backspace' && !isSpecial) {
+        e.preventDefault();
+        setFilter((f) => f.slice(0, -1));
+      }
     };
-    const size = { top: '-0.2rem', width: '0.4rem', height: '0.4rem' };
-    const triangleStyles = onRight
-      ? { right: width / 2, marginRight: '-0.2rem', ...size }
-      : { left: width / 2, marginLeft: '-0.2rem', ...size };
-    return { containerStyles, triangleStyles };
-  }, [fullWidth, triggerShape]);
 
-  const filteredItems = useMemo(
-    () => items.filter((i) => getNodeText(i.label).toLowerCase().includes(filter.toLowerCase())),
-    [items, filter],
-  );
+    useKey(
+      'Escape',
+      () => {
+        if (!isOpen) return;
+        if (filter !== '') setFilter('');
+        else handleClose();
+      },
+      {},
+      [isOpen, filter, setFilter, handleClose],
+    );
 
-  const handleFocus = useCallback(
-    (i: DropdownItem) => {
-      const index = filteredItems.findIndex((item) => item === i) ?? null;
-      setSelectedIndex(index);
-    },
-    [filteredItems, setSelectedIndex],
-  );
+    const handlePrev = useCallback(
+      (incrBy = 1) => {
+        setSelectedIndex((currIndex) => {
+          let nextIndex = (currIndex ?? 0) - incrBy;
+          const maxTries = items.length;
+          for (let i = 0; i < maxTries; i++) {
+            if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
+              nextIndex--;
+            } else if (nextIndex < 0) {
+              nextIndex = items.length - 1;
+            } else {
+              break;
+            }
+          }
+          return nextIndex;
+        });
+      },
+      [items, setSelectedIndex],
+    );
 
-  if (items.length === 0) return null;
+    const handleNext = useCallback(
+      (incrBy: number = 1) => {
+        setSelectedIndex((currIndex) => {
+          let nextIndex = (currIndex ?? -1) + incrBy;
+          const maxTries = items.length;
+          for (let i = 0; i < maxTries; i++) {
+            if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
+              nextIndex++;
+            } else if (nextIndex >= items.length) {
+              nextIndex = 0;
+            } else {
+              break;
+            }
+          }
+          return nextIndex;
+        });
+      },
+      [items, setSelectedIndex],
+    );
 
-  return (
-    <>
-      {filteredItems.map(
-        (item) =>
-          item.type !== 'separator' &&
-          !item.hotKeyLabelOnly && (
-            <MenuItemHotKey
-              key={item.key}
-              onSelect={handleSelect}
-              item={item}
-              action={item.hotKeyAction}
-            />
-          ),
-      )}
-      {isOpen && (
-        <Overlay open variant="transparent" portalName="dropdown" zIndex={50}>
-          <div className="x-theme-menu">
-            <div tabIndex={-1} aria-hidden className="fixed inset-0 z-30" onClick={handleClose} />
+    useKey(
+      'ArrowUp',
+      (e) => {
+        if (!isOpen) return;
+        e.preventDefault();
+        handlePrev();
+      },
+      {},
+      [isOpen],
+    );
+
+    useKey(
+      'ArrowDown',
+      (e) => {
+        if (!isOpen) return;
+        e.preventDefault();
+        handleNext();
+      },
+      {},
+      [isOpen],
+    );
+
+    const handleSelect = useCallback(
+      (i: DropdownItem) => {
+        if (i.type !== 'separator' && !i.keepOpen) {
+          handleClose();
+        }
+        setSelectedIndex(null);
+        if (i.type !== 'separator' && typeof i.onSelect === 'function') {
+          i.onSelect();
+        }
+      },
+      [handleClose, setSelectedIndex],
+    );
+
+    useImperativeHandle(ref, () => {
+      return {
+        close: handleClose,
+        prev: handlePrev,
+        next: handleNext,
+        select() {
+          const item = items[selectedIndex ?? -1] ?? null;
+          if (!item) return;
+          handleSelect(item);
+        },
+      };
+    }, [handleClose, handleNext, handlePrev, handleSelect, items, selectedIndex]);
+
+    const styles = useMemo<{
+      container: CSSProperties;
+      menu: CSSProperties;
+      triangle: CSSProperties;
+      upsideDown: boolean;
+    }>(() => {
+      if (triggerShape == null) return { container: {}, triangle: {}, menu: {}, upsideDown: false };
+
+      const menuMarginY = 5;
+      const docRect = document.documentElement.getBoundingClientRect();
+      const width = triggerShape.right - triggerShape.left;
+      const heightAbove = triggerShape.top;
+      const heightBelow = docRect.height - triggerShape.bottom;
+      const horizontalSpaceRemaining = docRect.width - triggerShape.left;
+      const top = triggerShape.bottom;
+      const onRight = horizontalSpaceRemaining < 200;
+      const upsideDown = heightBelow < heightAbove && heightBelow < items.length * 25 + 20 + 200;
+      const triggerWidth = triggerShape.right - triggerShape.left;
+      return {
+        upsideDown,
+        container: {
+          top: !upsideDown ? top + menuMarginY : undefined,
+          bottom: upsideDown
+            ? docRect.height - top - (triggerShape.top - triggerShape.bottom) + menuMarginY
+            : undefined,
+          right: onRight ? docRect.width - triggerShape.right : undefined,
+          left: !onRight ? triggerShape.left : undefined,
+          minWidth: fullWidth ? triggerWidth : undefined,
+          maxWidth: '40rem',
+        },
+        triangle: {
+          width: '0.4rem',
+          height: '0.4rem',
+          ...(onRight
+            ? { right: width / 2, marginRight: '-0.2rem' }
+            : { left: width / 2, marginLeft: '-0.2rem' }),
+          ...(upsideDown
+            ? { bottom: '-0.2rem', rotate: '225deg' }
+            : { top: '-0.2rem', rotate: '45deg' }),
+        },
+        menu: {
+          maxHeight: `${(upsideDown ? heightAbove : heightBelow) - 15}px`,
+        },
+      };
+    }, [fullWidth, items.length, triggerShape]);
+
+    const filteredItems = useMemo(
+      () => items.filter((i) => getNodeText(i.label).toLowerCase().includes(filter.toLowerCase())),
+      [items, filter],
+    );
+
+    const handleFocus = useCallback(
+      (i: DropdownItem) => {
+        const index = filteredItems.findIndex((item) => item === i) ?? null;
+        setSelectedIndex(index);
+      },
+      [filteredItems, setSelectedIndex],
+    );
+
+    const menuRef = useRef<HTMLDivElement | null>(null);
+    useClickOutside(menuRef, handleClose, triggerRef);
+
+    return (
+      <>
+        {items.map(
+          (item) =>
+            item.type !== 'separator' &&
+            !item.hotKeyLabelOnly && (
+              <MenuItemHotKey
+                key={item.key}
+                onSelect={handleSelect}
+                item={item}
+                action={item.hotKeyAction}
+              />
+            ),
+        )}
+        {isOpen && (
+          <Overlay noBackdrop open={isOpen} portalName="dropdown-menu">
             <motion.div
+              ref={menuRef}
               tabIndex={0}
               onKeyDown={handleMenuKeyDown}
-              initial={{ opacity: 0, y: -5, scale: 0.98 }}
+              onContextMenu={(e) => {
+                // Prevent showing any ancestor context menus
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+              initial={{ opacity: 0, y: (styles.upsideDown ? 1 : -1) * 5, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               role="menu"
               aria-orientation="vertical"
               dir="ltr"
-              style={containerStyles}
-              className={classNames(className, 'outline-none my-1 pointer-events-auto fixed z-50')}
+              style={styles.container}
+              className={classNames(
+                className,
+                'x-theme-menu',
+                'outline-none my-1 pointer-events-auto fixed z-50',
+              )}
             >
-              {triangleStyles && showTriangle && (
+              {showTriangle && (
                 <span
                   aria-hidden
-                  style={triangleStyles}
-                  className="bg-surface absolute rotate-45 border-border-subtle border-t border-l"
+                  style={styles.triangle}
+                  className="bg-surface absolute border-border-subtle border-t border-l"
                 />
               )}
-              {containerStyles && (
-                <VStack
-                  ref={initMenu}
-                  style={menuStyles}
-                  className={classNames(
-                    className,
-                    'h-auto bg-surface rounded-md shadow-lg py-1.5 border',
-                    'border-border-subtle overflow-auto mb-1 mx-0.5',
-                  )}
-                >
-                  {filter && (
-                    <HStack
-                      space={2}
-                      className="pb-0.5 px-1.5 mb-2 text-sm border border-border-subtle mx-2 rounded font-mono h-xs"
-                    >
-                      <Icon icon="search" size="xs" className="text-text-subtle" />
-                      <div className="text">{filter}</div>
-                    </HStack>
-                  )}
-                  {filteredItems.length === 0 && (
-                    <span className="text-text-subtlest text-center px-2 py-1">No matches</span>
-                  )}
-                  {filteredItems.map((item, i) => {
-                    if (item.hidden) {
-                      return null;
-                    }
-                    if (item.type === 'separator') {
-                      return (
-                        <Separator key={i} className={classNames('my-1.5', item.label && 'ml-2')}>
-                          {item.label}
-                        </Separator>
-                      );
-                    }
+              <VStack
+                style={styles.menu}
+                className={classNames(
+                  className,
+                  'h-auto bg-surface rounded-md shadow-lg py-1.5 border',
+                  'border-border-subtle overflow-auto mx-0.5',
+                )}
+              >
+                {filter && (
+                  <HStack
+                    space={2}
+                    className="pb-0.5 px-1.5 mb-2 text-sm border border-border-subtle mx-2 rounded font-mono h-xs"
+                  >
+                    <Icon icon="search" size="xs" className="text-text-subtle" />
+                    <div className="text">{filter}</div>
+                  </HStack>
+                )}
+                {filteredItems.length === 0 && (
+                  <span className="text-text-subtlest text-center px-2 py-1">No matches</span>
+                )}
+                {filteredItems.map((item, i) => {
+                  if (item.hidden) {
+                    return null;
+                  }
+                  if (item.type === 'separator') {
                     return (
-                      <MenuItem
-                        focused={i === selectedIndex}
-                        onFocus={handleFocus}
-                        onSelect={handleSelect}
-                        key={item.key}
-                        item={item}
-                      />
+                      <Separator key={i} className={classNames('my-1.5', item.label && 'ml-2')}>
+                        {item.label}
+                      </Separator>
                     );
-                  })}
-                </VStack>
-              )}
+                  }
+                  return (
+                    <MenuItem
+                      focused={i === selectedIndex}
+                      onFocus={handleFocus}
+                      onSelect={handleSelect}
+                      key={item.key}
+                      item={item}
+                    />
+                  );
+                })}
+              </VStack>
             </motion.div>
-          </div>
-        </Overlay>
-      )}
-    </>
-  );
-});
+          </Overlay>
+        )}
+      </>
+    );
+  },
+);
 
 interface MenuItemProps {
   className?: string;
@@ -541,8 +595,10 @@ function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: Men
         'h-xs', // More compact
         'min-w-[8rem] outline-none px-2 mx-1.5 flex whitespace-nowrap',
         'focus:bg-surface-highlight focus:text rounded',
-        item.variant === 'danger' && '!text-danger',
-        item.variant === 'notify' && '!text-primary',
+        item.color === 'danger' && '!text-danger',
+        item.color === 'warning' && '!text-warning',
+        item.color === 'notice' && '!text-notice',
+        item.color === 'info' && '!text-info',
       )}
       {...props}
     >

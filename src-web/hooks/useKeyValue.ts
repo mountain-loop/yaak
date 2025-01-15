@@ -1,8 +1,14 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import type { KeyValue } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
+import { atom } from 'jotai/index';
 import { useCallback, useMemo } from 'react';
-import { buildKeyValueKey, getKeyValue, setKeyValue } from '../lib/keyValueStore';
+import { jotaiStore } from '../lib/jotai';
+import { buildKeyValueKey, extractKeyValueOrFallback, setKeyValue } from '../lib/keyValueStore';
 
 const DEFAULT_NAMESPACE = 'global';
+
+export const keyValuesAtom = atom<KeyValue[] | null>(null);
 
 export function keyValueQueryKey({
   namespace = DEFAULT_NAMESPACE,
@@ -14,54 +20,69 @@ export function keyValueQueryKey({
   return ['key_value', { namespace, key: buildKeyValueKey(key) }];
 }
 
-// eslint-disable-next-line @typescript-eslint/ban-types
-export function useKeyValue<T extends Object | null>({
+export function useKeyValue<T extends object | boolean | number | string | null>({
   namespace = DEFAULT_NAMESPACE,
   key,
   fallback,
 }: {
-  namespace?: 'global' | 'no_sync';
+  namespace?: 'global' | 'no_sync' | 'license';
   key: string | string[];
   fallback: T;
 }) {
-  const query = useQuery<T>({
-    queryKey: keyValueQueryKey({ namespace, key }),
-    queryFn: async () => getKeyValue({ namespace, key, fallback }),
-    refetchOnWindowFocus: false,
-  });
+  const keyValues = useAtomValue(keyValuesAtom);
+  const keyValue =
+    keyValues?.find((kv) => buildKeyValueKey(kv.key) === buildKeyValueKey(key)) ?? null;
+  const value = keyValues == null ? null : extractKeyValueOrFallback(keyValue, fallback);
+  const isLoading = keyValues == null;
 
-  const mutate = useMutation<void, unknown, T>({
+  const { mutateAsync } = useMutation<void, unknown, T>({
     mutationKey: ['set_key_value', namespace, key],
     mutationFn: (value) => setKeyValue<T>({ namespace, key, value }),
   });
 
   const set = useCallback(
-    async (value: ((v: T) => T) | T) => {
-      if (typeof value === 'function') {
-        await getKeyValue({ namespace, key, fallback }).then((kv) => {
-          const newV = value(kv);
-          if (newV === kv) return;
-          return mutate.mutateAsync(newV);
-        });
+    async (valueOrUpdate: ((v: T) => T) | T) => {
+      if (typeof valueOrUpdate === 'function') {
+        const newV = valueOrUpdate(value ?? fallback);
+        if (newV === value) return;
+        await mutateAsync(newV);
       } else {
         // TODO: Make this only update if the value is different. I tried this but it seems query.data
         //  is stale.
-        await mutate.mutateAsync(value);
+        await mutateAsync(valueOrUpdate);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fallback, key, namespace],
+    [typeof key === 'string' ? key : key.join('::'), namespace, value],
   );
 
-  const reset = useCallback(async () => mutate.mutateAsync(fallback), [mutate, fallback]);
+  const reset = useCallback(async () => mutateAsync(fallback), [fallback, mutateAsync]);
 
   return useMemo(
     () => ({
-      value: query.data,
-      isLoading: query.isLoading,
+      value,
+      isLoading,
       set,
       reset,
     }),
-    [query.data, query.isLoading, reset, set],
+    [isLoading, reset, set, value],
   );
+}
+
+export function getKeyValue<T extends object | boolean | number | string | null>({
+  namespace,
+  key,
+  fallback,
+}: {
+  namespace?: 'global' | 'no_sync' | 'license';
+  key: string | string[];
+  fallback: T;
+}) {
+  const keyValues = jotaiStore.get(keyValuesAtom);
+  const keyValue =
+    keyValues?.find(
+      (kv) => kv.namespace === namespace && buildKeyValueKey(kv.key) === buildKeyValueKey(key),
+    ) ?? null;
+  const value = extractKeyValueOrFallback(keyValue, fallback);
+  return value;
 }

@@ -1,0 +1,13 @@
+{
+  "name": "@yaakapp/filter-xpath",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build": "yaakcli build ./src/index.js",
+    "dev": "yaakcli dev ./src/index.js"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.8.10",
+    "xpath": "^0.0.34"
+  }
+}

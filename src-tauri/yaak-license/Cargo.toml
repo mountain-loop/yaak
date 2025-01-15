@@ -1,0 +1,20 @@
+[package]
+name = "yaak-license"
+links = "yaak-license"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+reqwest = { workspace = true, features = ["json"] }
+serde = { version = "1.0.208", features = ["derive"] }
+ts-rs = { workspace = true }
+thiserror = { workspace = true }
+tauri = { workspace = true }
+yaak-models = { workspace = true }
+chrono = "0.4.38"
+log = "0.4.22"
+serde_json = "1.0.132"
+
+[build-dependencies]
+tauri-plugin = { version = "2.0.3", features = ["build"] }

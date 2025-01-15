@@ -1,7 +1,7 @@
-import type { HttpResponse } from '@yaakapp/api';
+import type { HttpResponse } from '@yaakapp-internal/models';
 import { useContentTypeFromHeaders } from '../../hooks/useContentTypeFromHeaders';
 import { useResponseBodyText } from '../../hooks/useResponseBodyText';
-import { isJSON, languageFromContentType } from '../../lib/contentType';
+import { languageFromContentType } from '../../lib/contentType';
 import { BinaryViewer } from './BinaryViewer';
 import { TextViewer } from './TextViewer';
 import { WebPageViewer } from './WebPageViewer';
@@ -13,25 +13,33 @@ interface Props {
 }
 
 export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Props) {
-  const rawBody = useResponseBodyText(response);
-  let language = languageFromContentType(useContentTypeFromHeaders(response.headers));
+  const rawTextBody = useResponseBodyText(response);
+  const language = languageFromContentType(
+    useContentTypeFromHeaders(response.headers),
+    rawTextBody.data ?? '',
+  );
 
-  // A lot of APIs return JSON with `text/html` content type, so interpret as JSON if so
-  if (language === 'html' && isJSON(rawBody.data ?? '')) {
-    language = 'json';
-  }
-
-  if (rawBody.isLoading) {
+  if (rawTextBody.isLoading) {
     return null;
   }
 
-  if (rawBody.data == null) {
+  // Wasn't able to decode as text, so it must be binary
+  if (rawTextBody.data == null) {
     return <BinaryViewer response={response} />;
   }
 
   if (language === 'html' && pretty) {
     return <WebPageViewer response={response} />;
   } else {
-    return <TextViewer response={response} pretty={pretty} className={textViewerClassName} />;
+    return (
+      <TextViewer
+        language={language}
+        text={rawTextBody.data}
+        pretty={pretty}
+        className={textViewerClassName}
+        responseId={response.id}
+        requestId={response.requestId}
+      />
+    );
   }
 }

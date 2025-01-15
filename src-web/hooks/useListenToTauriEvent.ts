@@ -1,30 +1,24 @@
-import type { EventCallback, EventName, Options } from '@tauri-apps/api/event';
+import type { EventCallback, EventName } from '@tauri-apps/api/event';
 import { listen } from '@tauri-apps/api/event';
-import type { DependencyList } from 'react';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useEffect } from 'react';
 
 /**
  * React hook to listen to a Tauri event.
  */
-export function useListenToTauriEvent<T>(
-  event: EventName,
-  fn: EventCallback<T>,
-  options: Options | undefined = undefined,
-  deps: DependencyList = [],
-) {
-  useEffect(() => {
-    let unMounted = false;
-    let unsubFn: (() => void) | undefined = undefined;
+export function useListenToTauriEvent<T>(event: EventName, fn: EventCallback<T>) {
+  useEffect(() => listenToTauriEvent(event, fn), [event, fn]);
+}
 
-    listen(event, fn, options).then((unsub) => {
-      if (unMounted) unsub();
-      else unsubFn = unsub;
-    });
+export function listenToTauriEvent<T>(event: EventName, fn: EventCallback<T>) {
+  const unlisten = listen<T>(
+    event,
+    fn,
+    // Listen to `emit_all()` events or events specific to the current window
+    { target: { label: getCurrentWebviewWindow().label, kind: 'Window' } },
+  );
 
-    return () => {
-      unMounted = true;
-      unsubFn?.();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event, fn, ...deps]);
+  return () => {
+    unlisten.then((fn) => fn());
+  };
 }

@@ -7,7 +7,7 @@ import { Button } from './Button';
 import type { IconProps } from './Icon';
 import { Icon } from './Icon';
 
-type Props = IconProps &
+export type IconButtonProps = IconProps &
   ButtonProps & {
     showConfirm?: boolean;
     iconClassName?: string;
@@ -16,7 +16,7 @@ type Props = IconProps &
     showBadge?: boolean;
   };
 
-export const IconButton = forwardRef<HTMLButtonElement, Props>(function IconButton(
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   {
     showConfirm,
     icon,
@@ -30,7 +30,7 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(function IconButt
     iconSize,
     showBadge,
     ...props
-  }: Props,
+  }: IconButtonProps,
   ref,
 ) {
   const [confirmed, setConfirmed] = useTimedBoolean();

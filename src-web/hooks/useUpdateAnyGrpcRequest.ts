@@ -1,11 +1,15 @@
-import { useMutation } from '@tanstack/react-query';
-import type { GrpcRequest } from '@yaakapp/api';
+import { useFastMutation } from './useFastMutation';
+import type { GrpcRequest } from '@yaakapp-internal/models';
+import { useSetAtom } from 'jotai/index';
 import { getGrpcRequest } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
+import { grpcRequestsAtom } from './useGrpcRequests';
+import { updateModelList } from './useSyncModelStores';
 
 export function useUpdateAnyGrpcRequest() {
-  return useMutation<
-    void,
+  const setGrpcRequests = useSetAtom(grpcRequestsAtom);
+  return useFastMutation<
+    GrpcRequest,
     unknown,
     { id: string; update: Partial<GrpcRequest> | ((r: GrpcRequest) => GrpcRequest) }
   >({
@@ -18,7 +22,10 @@ export function useUpdateAnyGrpcRequest() {
 
       const patchedRequest =
         typeof update === 'function' ? update(request) : { ...request, ...update };
-      await invokeCmd('cmd_update_grpc_request', { request: patchedRequest });
+      return invokeCmd<GrpcRequest>('cmd_update_grpc_request', { request: patchedRequest });
+    },
+    onSuccess: (request) => {
+      setGrpcRequests(updateModelList(request));
     },
   });
 }

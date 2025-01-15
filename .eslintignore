@@ -1,5 +1,6 @@
 node_modules/
 dist/
-.prettierrc.cjs
 .eslintrc.cjs
-env.d.ts
+.prettierrc.cjs
+src-web/postcss.config.cjs
+src-web/vite.config.ts

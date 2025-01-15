@@ -1,19 +1,18 @@
-import { useMutation } from '@tanstack/react-query';
-import { useToast } from '../components/ToastContext';
+import type { HttpRequest } from '@yaakapp-internal/models';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { getActiveWorkspaceId } from './useActiveWorkspace';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
+import { useFastMutation } from './useFastMutation';
 import { useRequestUpdateKey } from './useRequestUpdateKey';
+import { showToast } from '../lib/toast';
 import { useUpdateAnyHttpRequest } from './useUpdateAnyHttpRequest';
 
 export function useImportCurl() {
-  const workspace = useActiveWorkspace();
   const updateRequest = useUpdateAnyHttpRequest();
   const createRequest = useCreateHttpRequest();
   const { wasUpdatedExternally } = useRequestUpdateKey(null);
-  const toast = useToast();
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['import_curl'],
     mutationFn: async ({
       overwriteRequestId,
@@ -22,11 +21,11 @@ export function useImportCurl() {
       overwriteRequestId?: string;
       command: string;
     }) => {
-      const request: Record<string, unknown> = await invokeCmd('cmd_curl_to_request', {
+      const workspaceId = getActiveWorkspaceId();
+      const request: HttpRequest = await invokeCmd('cmd_curl_to_request', {
         command,
-        workspaceId: workspace?.id,
+        workspaceId,
       });
-      delete request.id;
 
       let verb;
       if (overwriteRequestId == null) {
@@ -34,12 +33,24 @@ export function useImportCurl() {
         await createRequest.mutateAsync(request);
       } else {
         verb = 'Updated';
-        await updateRequest.mutateAsync({ id: overwriteRequestId, update: request });
+        await updateRequest.mutateAsync({
+          id: overwriteRequestId,
+          update: (r: HttpRequest) => ({
+            ...request,
+            id: r.id,
+            createdAt: r.createdAt,
+            workspaceId: r.workspaceId,
+            folderId: r.folderId,
+            name: r.name,
+            sortPriority: r.sortPriority,
+          }),
+        });
+
         setTimeout(() => wasUpdatedExternally(overwriteRequestId), 100);
       }
 
-      toast.show({
-        variant: 'success',
+      showToast({
+        color: 'success',
         message: `${verb} request from Curl`,
       });
     },

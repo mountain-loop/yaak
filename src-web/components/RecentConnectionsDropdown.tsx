@@ -1,8 +1,8 @@
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useDeleteGrpcConnection } from '../hooks/useDeleteGrpcConnection';
 import { useDeleteGrpcConnections } from '../hooks/useDeleteGrpcConnections';
-import type { GrpcConnection } from '@yaakapp/api';
-import { count } from '../lib/pluralize';
+import type { GrpcConnection } from '@yaakapp-internal/models';
+import { pluralizeCount } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
@@ -34,7 +34,7 @@ export function RecentConnectionsDropdown({
         },
         {
           key: 'clear-all',
-          label: `Clear ${count('Connection', connections.length)}`,
+          label: `Clear ${pluralizeCount('Connection', connections.length)}`,
           onSelect: deleteAllConnections.mutate,
           hidden: connections.length <= 1,
           disabled: connections.length === 0,
@@ -55,7 +55,7 @@ export function RecentConnectionsDropdown({
     >
       <IconButton
         title="Show connection history"
-        icon={activeConnection?.id === latestConnectionId ? 'chevronDown' : 'pin'}
+        icon={activeConnection?.id === latestConnectionId ? 'chevron_down' : 'pin'}
         className="ml-auto"
         size="sm"
         iconSize="md"

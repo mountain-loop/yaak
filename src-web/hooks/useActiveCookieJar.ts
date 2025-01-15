@@ -1,87 +1,60 @@
-import { useCallback, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useActiveWorkspace } from './useActiveWorkspace';
-import { useCookieJars } from './useCookieJars';
-import { useKeyValue } from './useKeyValue';
+import { useSearch } from '@tanstack/react-router';
+import type { CookieJar } from '@yaakapp-internal/models';
+import { atom, useAtomValue } from 'jotai/index';
+import { useEffect } from 'react';
+import { jotaiStore } from '../lib/jotai';
+import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
+import { cookieJarsAtom, useCookieJars } from './useCookieJars';
 
 export const QUERY_COOKIE_JAR_ID = 'cookie_jar_id';
 
+export const activeCookieJarAtom = atom<CookieJar | null>(null);
+
 export function useActiveCookieJar() {
-  const [activeCookieJarId, setActiveCookieJarId] = useActiveCookieJarId();
-  const cookieJars = useCookieJars();
+  return useAtomValue(activeCookieJarAtom);
+}
 
-  const activeCookieJar = useMemo(() => {
-    if (cookieJars.data == null) return undefined;
-    return cookieJars.data.find((cookieJar) => cookieJar.id === activeCookieJarId) ?? null;
-  }, [activeCookieJarId, cookieJars.data]);
+export function useSubscribeActiveCookieJarId() {
+  const search = useSearch({ strict: false });
+  const cookieJarId = search.cookie_jar_id;
+  const cookieJars = useAtomValue(cookieJarsAtom);
+  useEffect(() => {
+    if (search == null) return; // Happens during Vite hot reload
+    const activeCookieJar = cookieJars?.find((j) => j.id == cookieJarId) ?? null;
+    jotaiStore.set(activeCookieJarAtom, activeCookieJar);
+  }, [cookieJarId, cookieJars, search]);
+}
 
-  return [activeCookieJar ?? null, setActiveCookieJarId] as const;
+export function getActiveCookieJar() {
+  return jotaiStore.get(activeCookieJarAtom);
 }
 
 export function useEnsureActiveCookieJar() {
   const cookieJars = useCookieJars();
-  const [activeCookieJarId, setActiveCookieJarId] = useActiveCookieJarId();
-  useEffect(() => {
-    if (cookieJars.data == null) return;
+  const { cookie_jar_id: activeCookieJarId } = useSearch({ from: '/workspaces/$workspaceId/' });
 
-    if (cookieJars.data.find((j) => j.id === activeCookieJarId)) {
+  // Set the active cookie jar to the first one, if none set
+  useEffect(() => {
+    if (cookieJars == null) return; // Hasn't loaded yet
+
+    if (cookieJars.find((j) => j.id === activeCookieJarId)) {
       return; // There's an active jar
     }
 
-    const firstJar = cookieJars.data[0];
+    const firstJar = cookieJars[0];
     if (firstJar == null) {
       console.log("Workspace doesn't have any cookie jars to activate");
       return;
     }
 
     // There's no active jar, so set it to the first one
-    console.log('Setting active cookie jar to', firstJar.id);
-    setActiveCookieJarId(firstJar.id);
-  }, [activeCookieJarId, cookieJars, cookieJars.data, setActiveCookieJarId]);
-}
+    console.log('Defaulting active cookie jar to first jar', firstJar);
+    setWorkspaceSearchParams({ cookie_jar_id: firstJar.id });
 
-export function useMigrateActiveCookieJarId() {
-  const workspace = useActiveWorkspace();
-  const [, setActiveCookieJarId] = useActiveCookieJarId();
-  const {
-    set: setLegacyActiveCookieJarId,
-    value: legacyActiveCookieJarId,
-    isLoading: isLoadingLegacyActiveCookieJarId,
-  } = useKeyValue<string | null>({
-    namespace: 'global',
-    key: ['activeCookieJar', workspace?.id ?? 'n/a'],
-    fallback: null,
-  });
-
-  useEffect(() => {
-    if (legacyActiveCookieJarId == null || isLoadingLegacyActiveCookieJarId) return;
-
-    console.log('Migrating active cookie jar ID to query param', legacyActiveCookieJarId);
-    setActiveCookieJarId(legacyActiveCookieJarId);
-    setLegacyActiveCookieJarId(null).catch(console.error);
-  }, [
-    workspace,
-    isLoadingLegacyActiveCookieJarId,
-    legacyActiveCookieJarId,
-    setActiveCookieJarId,
-    setLegacyActiveCookieJarId,
-  ]);
-}
-
-function useActiveCookieJarId() {
-  // NOTE: This query param is accessed from Rust side, so do not change
-  const [params, setParams] = useSearchParams();
-  const id = params.get(QUERY_COOKIE_JAR_ID);
-
-  const setId = useCallback(
-    (id: string) => {
-      setParams((p) => {
-        const existing = Object.fromEntries(p);
-        return { ...existing, [QUERY_COOKIE_JAR_ID]: id };
-      });
-    },
-    [setParams],
-  );
-
-  return [id, setId] as const;
+    // NOTE: We only run this on cookieJars to prevent data races when switching workspaces since a lot of
+    //  things change when switching workspaces, and we don't currently have a good way to ensure that all
+    //  stores have updated.
+    // TODO: Create a global data store that can handle this case
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cookieJars]);
 }

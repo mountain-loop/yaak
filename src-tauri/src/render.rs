@@ -1,32 +1,39 @@
 use crate::template_callback::PluginTemplateCallback;
 use serde_json::{json, Map, Value};
-use std::collections::HashMap;
-use tauri::{AppHandle, Manager, Runtime};
+use std::collections::{BTreeMap, HashMap};
 use yaak_models::models::{
     Environment, EnvironmentVariable, GrpcMetadataEntry, GrpcRequest, HttpRequest,
-    HttpRequestHeader, HttpUrlParameter, Workspace,
+    HttpRequestHeader, HttpUrlParameter,
 };
 use yaak_templates::{parse_and_render, TemplateCallback};
 
-pub async fn render_template<R: Runtime>(
-    app_handle: &AppHandle<R>,
+pub async fn render_template<T: TemplateCallback>(
     template: &str,
-    w: &Workspace,
-    e: Option<&Environment>,
+    base_environment: &Environment,
+    environment: Option<&Environment>,
+    cb: &T,
 ) -> String {
-    let cb = &*app_handle.state::<PluginTemplateCallback>();
-    let vars = &variables_from_environment(w, e, cb).await;
+    let vars = &make_vars_hashmap(base_environment, environment);
     render(template, vars, cb).await
 }
 
-pub async fn render_grpc_request<R: Runtime>(
-    app_handle: &AppHandle<R>,
+pub async fn render_json_value<T: TemplateCallback>(
+    value: Value,
+    base_environment: &Environment,
+    environment: Option<&Environment>,
+    cb: &T,
+) -> Value {
+    let vars = &make_vars_hashmap(base_environment, environment);
+    render_json_value_raw(value, vars, cb).await
+}
+
+pub async fn render_grpc_request<T: TemplateCallback>(
     r: &GrpcRequest,
-    w: &Workspace,
-    e: Option<&Environment>,
+    base_environment: &Environment,
+    environment: Option<&Environment>,
+    cb: &T,
 ) -> GrpcRequest {
-    let cb = &*app_handle.state::<PluginTemplateCallback>();
-    let vars = &variables_from_environment(w, e, cb).await;
+    let vars = &make_vars_hashmap(base_environment, environment);
 
     let mut metadata = Vec::new();
     for p in r.metadata.clone() {
@@ -34,12 +41,13 @@ pub async fn render_grpc_request<R: Runtime>(
             enabled: p.enabled,
             name: render(p.name.as_str(), vars, cb).await,
             value: render(p.value.as_str(), vars, cb).await,
+            id: p.id,
         })
     }
 
-    let mut authentication = HashMap::new();
+    let mut authentication = BTreeMap::new();
     for (k, v) in r.authentication.clone() {
-        authentication.insert(k, render_json_value(v, vars, cb).await);
+        authentication.insert(k, render_json_value_raw(v, vars, cb).await);
     }
 
     let url = render(r.url.as_str(), vars, cb).await;
@@ -54,11 +62,11 @@ pub async fn render_grpc_request<R: Runtime>(
 
 pub async fn render_http_request(
     r: &HttpRequest,
-    w: &Workspace,
-    e: Option<&Environment>,
+    base_environment: &Environment,
+    environment: Option<&Environment>,
     cb: &PluginTemplateCallback,
 ) -> HttpRequest {
-    let vars = &variables_from_environment(w, e, cb).await;
+    let vars = &make_vars_hashmap(base_environment, environment);
 
     let mut url_parameters = Vec::new();
     for p in r.url_parameters.clone() {
@@ -66,6 +74,7 @@ pub async fn render_http_request(
             enabled: p.enabled,
             name: render(p.name.as_str(), vars, cb).await,
             value: render(p.value.as_str(), vars, cb).await,
+            id: p.id,
         })
     }
 
@@ -75,65 +84,46 @@ pub async fn render_http_request(
             enabled: p.enabled,
             name: render(p.name.as_str(), vars, cb).await,
             value: render(p.value.as_str(), vars, cb).await,
+            id: p.id,
         })
     }
 
-    let mut body = HashMap::new();
+    let mut body = BTreeMap::new();
     for (k, v) in r.body.clone() {
-        body.insert(k, render_json_value(v, vars, cb).await);
+        body.insert(k, render_json_value_raw(v, vars, cb).await);
     }
 
-    let mut authentication = HashMap::new();
+    let mut authentication = BTreeMap::new();
     for (k, v) in r.authentication.clone() {
-        authentication.insert(k, render_json_value(v, vars, cb).await);
+        authentication.insert(k, render_json_value_raw(v, vars, cb).await);
     }
 
     let url = render(r.url.clone().as_str(), vars, cb).await;
-    HttpRequest {
+    let req = HttpRequest {
         url,
         url_parameters,
         headers,
         body,
         authentication,
         ..r.to_owned()
-    }
+    };
+
+    // This doesn't fit perfectly with the concept of "rendering" but it kind of does
+    apply_path_placeholders(req)
 }
 
-pub async fn recursively_render_variables<'s, T: TemplateCallback>(
-    m: &HashMap<String, String>,
-    render_count: usize,
-    cb: &T,
-) -> HashMap<String, String> {
-    let mut did_render = false;
-    let mut new_map = m.clone();
-    for (k, v) in m.clone() {
-        let rendered = Box::pin(render(v.as_str(), m, cb)).await;
-        if rendered != v {
-            did_render = true
-        }
-        new_map.insert(k, rendered);
-    }
-
-    if did_render && render_count <= 3 {
-        new_map = Box::pin(recursively_render_variables(&new_map, render_count + 1, cb)).await;
-    }
-
-    new_map
-}
-
-pub async fn variables_from_environment<T: TemplateCallback>(
-    workspace: &Workspace,
+pub fn make_vars_hashmap(
+    base_environment: &Environment,
     environment: Option<&Environment>,
-    cb: &T,
 ) -> HashMap<String, String> {
     let mut variables = HashMap::new();
-    variables = add_variable_to_map(variables, &workspace.variables);
+    variables = add_variable_to_map(variables, &base_environment.variables);
 
     if let Some(e) = environment {
         variables = add_variable_to_map(variables, &e.variables);
     }
 
-    recursively_render_variables(&variables, 0, cb).await
+    variables
 }
 
 pub async fn render<T: TemplateCallback>(
@@ -161,7 +151,7 @@ fn add_variable_to_map(
     map
 }
 
-pub async fn render_json_value<T: TemplateCallback>(
+async fn render_json_value_raw<T: TemplateCallback>(
     v: Value,
     vars: &HashMap<String, String>,
     cb: &T,
@@ -171,7 +161,7 @@ pub async fn render_json_value<T: TemplateCallback>(
         Value::Array(a) => {
             let mut new_a = Vec::new();
             for v in a {
-                new_a.push(Box::pin(render_json_value(v, vars, cb)).await)
+                new_a.push(Box::pin(render_json_value_raw(v, vars, cb)).await)
             }
             json!(new_a)
         }
@@ -179,7 +169,7 @@ pub async fn render_json_value<T: TemplateCallback>(
             let mut new_o = Map::new();
             for (k, v) in o {
                 let key = Box::pin(render(k.as_str(), vars, cb)).await;
-                let value = Box::pin(render_json_value(v, vars, cb)).await;
+                let value = Box::pin(render_json_value_raw(v, vars, cb)).await;
                 new_o.insert(key, value);
             }
             json!(new_o)
@@ -189,7 +179,7 @@ pub async fn render_json_value<T: TemplateCallback>(
 }
 
 #[cfg(test)]
-mod tests {
+mod render_tests {
     use serde_json::json;
     use std::collections::HashMap;
     use yaak_templates::TemplateCallback;
@@ -212,7 +202,7 @@ mod tests {
         let mut vars = HashMap::new();
         vars.insert("a".to_string(), "aaa".to_string());
 
-        let result = super::render_json_value(v, &vars, &EmptyCB {}).await;
+        let result = super::render_json_value_raw(v, &vars, &EmptyCB {}).await;
         assert_eq!(result, json!("aaa"))
     }
 
@@ -222,7 +212,7 @@ mod tests {
         let mut vars = HashMap::new();
         vars.insert("a".to_string(), "aaa".to_string());
 
-        let result = super::render_json_value(v, &vars, &EmptyCB {}).await;
+        let result = super::render_json_value_raw(v, &vars, &EmptyCB {}).await;
         assert_eq!(result, json!(["aaa", "aaa"]))
     }
 
@@ -232,7 +222,7 @@ mod tests {
         let mut vars = HashMap::new();
         vars.insert("a".to_string(), "aaa".to_string());
 
-        let result = super::render_json_value(v, &vars, &EmptyCB {}).await;
+        let result = super::render_json_value_raw(v, &vars, &EmptyCB {}).await;
         assert_eq!(result, json!({"aaa": "aaa"}))
     }
 
@@ -249,14 +239,194 @@ mod tests {
         let mut vars = HashMap::new();
         vars.insert("a".to_string(), "aaa".to_string());
 
-        let result = super::render_json_value(v, &vars, &EmptyCB {}).await;
-        assert_eq!(result, json!([
-            123,
-            {"aaa": "aaa"},
-            null,
-            "aaa",
-            false,
-            {"x": ["aaa"]}
-        ]))
+        let result = super::render_json_value_raw(v, &vars, &EmptyCB {}).await;
+        assert_eq!(
+            result,
+            json!([
+                123,
+                {"aaa": "aaa"},
+                null,
+                "aaa",
+                false,
+                {"x": ["aaa"]}
+            ])
+        )
+    }
+}
+
+fn replace_path_placeholder(p: &HttpUrlParameter, url: &str) -> String {
+    if !p.enabled {
+        return url.to_string();
+    }
+
+    if !p.name.starts_with(":") {
+        return url.to_string();
+    }
+
+    let re = regex::Regex::new(format!("(/){}([/?#]|$)", p.name).as_str()).unwrap();
+    let result = re
+        .replace_all(url, |cap: &regex::Captures| {
+            format!(
+                "{}{}{}",
+                cap[1].to_string(),
+                urlencoding::encode(p.value.as_str()),
+                cap[2].to_string()
+            )
+        })
+        .into_owned();
+    result
+}
+
+fn apply_path_placeholders(rendered_request: HttpRequest) -> HttpRequest {
+    let mut url = rendered_request.url.to_owned();
+    let mut url_parameters = Vec::new();
+    for p in rendered_request.url_parameters.clone() {
+        if !p.enabled || p.name.is_empty() {
+            continue;
+        }
+
+        // Replace path parameters with values from URL parameters
+        let old_url_string = url.clone();
+        url = replace_path_placeholder(&p, url.as_str());
+
+        // Remove as param if it modified the URL
+        if old_url_string == url {
+            url_parameters.push(p);
+        }
+    }
+
+    let mut request = rendered_request.clone();
+    request.url_parameters = url_parameters;
+    request.url = url;
+    request
+}
+
+#[cfg(test)]
+mod placeholder_tests {
+    use crate::render::{apply_path_placeholders, replace_path_placeholder};
+    use yaak_models::models::{HttpRequest, HttpUrlParameter};
+
+    #[test]
+    fn placeholder_middle() {
+        let p = HttpUrlParameter {
+            name: ":foo".into(),
+            value: "xxx".into(),
+            enabled: true,
+            id: "p1".into(),
+        };
+        assert_eq!(
+            replace_path_placeholder(&p, "https://example.com/:foo/bar"),
+            "https://example.com/xxx/bar",
+        );
+    }
+
+    #[test]
+    fn placeholder_end() {
+        let p = HttpUrlParameter {
+            name: ":foo".into(),
+            value: "xxx".into(),
+            enabled: true,
+            id: "p1".into(),
+        };
+        assert_eq!(
+            replace_path_placeholder(&p, "https://example.com/:foo"),
+            "https://example.com/xxx",
+        );
+    }
+
+    #[test]
+    fn placeholder_query() {
+        let p = HttpUrlParameter {
+            name: ":foo".into(),
+            value: "xxx".into(),
+            enabled: true,
+            id: "p1".into(),
+        };
+        assert_eq!(
+            replace_path_placeholder(&p, "https://example.com/:foo?:foo"),
+            "https://example.com/xxx?:foo",
+        );
+    }
+
+    #[test]
+    fn placeholder_missing() {
+        let p = HttpUrlParameter {
+            enabled: true,
+            name: "".to_string(),
+            value: "".to_string(),
+            id: "p1".into(),
+        };
+        assert_eq!(
+            replace_path_placeholder(&p, "https://example.com/:missing"),
+            "https://example.com/:missing",
+        );
+    }
+
+    #[test]
+    fn placeholder_disabled() {
+        let p = HttpUrlParameter {
+            enabled: false,
+            name: ":foo".to_string(),
+            value: "xxx".to_string(),
+            id: "p1".into(),
+        };
+        assert_eq!(
+            replace_path_placeholder(&p, "https://example.com/:foo"),
+            "https://example.com/:foo",
+        );
+    }
+
+    #[test]
+    fn placeholder_prefix() {
+        let p = HttpUrlParameter {
+            name: ":foo".into(),
+            value: "xxx".into(),
+            enabled: true,
+            id: "p1".into(),
+        };
+        assert_eq!(
+            replace_path_placeholder(&p, "https://example.com/:foooo"),
+            "https://example.com/:foooo",
+        );
+    }
+
+    #[test]
+    fn placeholder_encode() {
+        let p = HttpUrlParameter {
+            name: ":foo".into(),
+            value: "Hello World".into(),
+            enabled: true,
+            id: "p1".into(),
+        };
+        assert_eq!(
+            replace_path_placeholder(&p, "https://example.com/:foo"),
+            "https://example.com/Hello%20World",
+        );
+    }
+
+    #[test]
+    fn apply_placeholder() {
+        let result = apply_path_placeholders(HttpRequest {
+            url: "example.com/:a/bar".to_string(),
+            url_parameters: vec![
+                HttpUrlParameter {
+                    name: "b".to_string(),
+                    value: "bbb".to_string(),
+                    enabled: true,
+                    id: "p1".into(),
+                },
+                HttpUrlParameter {
+                    name: ":a".to_string(),
+                    value: "aaa".to_string(),
+                    enabled: true,
+                    id: "p2".into(),
+                },
+            ],
+            ..Default::default()
+        });
+        assert_eq!(result.url, "example.com/aaa/bar");
+        assert_eq!(result.url_parameters.len(), 1);
+        assert_eq!(result.url_parameters[0].name, "b");
+        assert_eq!(result.url_parameters[0].value, "bbb");
     }
 }

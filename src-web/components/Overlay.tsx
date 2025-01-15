@@ -12,6 +12,7 @@ interface Props {
   onClose?: () => void;
   zIndex?: keyof typeof zIndexes;
   variant?: 'default' | 'transparent';
+  noBackdrop?: boolean;
 }
 
 const zIndexes: Record<number, string> = {
@@ -28,8 +29,21 @@ export function Overlay({
   open,
   onClose,
   portalName,
+  noBackdrop,
   children,
 }: Props) {
+  if (noBackdrop) {
+    return (
+      <Portal name={portalName}>
+        {open && (
+          <FocusTrap focusTrapOptions={{ clickOutsideDeactivates: true }}>
+            {/* NOTE: <div> wrapper is required for some reason, or FocusTrap complains */}
+            <div>{children}</div>
+          </FocusTrap>
+        )}
+      </Portal>
+    );
+  }
   return (
     <Portal name={portalName}>
       {open && (
@@ -44,11 +58,11 @@ export function Overlay({
               onClick={onClose}
               className={classNames(
                 'absolute inset-0',
-                variant === 'default' && 'bg-surface-backdrop backdrop-blur-sm',
+                variant === 'default' && 'bg-backdrop backdrop-blur-sm',
               )}
             />
 
-            {/* Show draggable region at the top */}
+            {/* Show the draggable region at the top */}
             {/* TODO: Figure out tauri drag region and also make clickable still */}
             {variant === 'default' && (
               <div data-tauri-drag-region className="absolute top-0 left-0 h-md right-0" />

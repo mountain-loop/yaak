@@ -2,7 +2,7 @@ import classNames from 'classnames';
 import Papa from 'papaparse';
 import { useMemo } from 'react';
 import { useResponseBodyText } from '../../hooks/useResponseBodyText';
-import type { HttpResponse } from '@yaakapp/api';
+import type { HttpResponse } from '@yaakapp-internal/models';
 
 interface Props {
   response: HttpResponse;

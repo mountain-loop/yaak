@@ -1,8 +1,8 @@
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import {
-  Fragment,
   forwardRef,
+  Fragment,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -12,17 +12,22 @@ import {
 } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
-import { v4 as uuid } from 'uuid';
-import { usePrompt } from '../../hooks/usePrompt';
+import { useToggle } from '../../hooks/useToggle';
+import { generateId } from '../../lib/generateId';
+import { showPrompt } from '../../lib/prompt';
 import { DropMarker } from '../DropMarker';
 import { SelectFile } from '../SelectFile';
+import { Button } from './Button';
 import { Checkbox } from './Checkbox';
+import type { DropdownItem } from './Dropdown';
 import { Dropdown } from './Dropdown';
 import type { GenericCompletionConfig } from './Editor/genericCompletion';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import type { InputProps } from './Input';
 import { Input } from './Input';
+import { PlainInput } from './PlainInput';
+import type { RadioDropdownItem } from './RadioDropdown';
 import { RadioDropdown } from './RadioDropdown';
 
 export interface PairEditorRef {
@@ -30,25 +35,26 @@ export interface PairEditorRef {
 }
 
 export type PairEditorProps = {
-  pairs: Pair[];
-  onChange: (pairs: Pair[]) => void;
-  forceUpdateKey?: string;
+  allowFileValues?: boolean;
   className?: string;
+  forceUpdateKey?: string;
+  nameAutocomplete?: GenericCompletionConfig;
+  nameAutocompleteVariables?: boolean;
   namePlaceholder?: string;
+  nameValidate?: InputProps['validate'];
+  noScroll?: boolean;
+  onChange: (pairs: Pair[]) => void;
+  pairs: Pair[];
+  stateKey: InputProps['stateKey'];
+  valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
+  valueAutocompleteVariables?: boolean;
   valuePlaceholder?: string;
   valueType?: 'text' | 'password';
-  nameAutocomplete?: GenericCompletionConfig;
-  valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
-  nameAutocompleteVariables?: boolean;
-  valueAutocompleteVariables?: boolean;
-  allowFileValues?: boolean;
-  nameValidate?: InputProps['validate'];
   valueValidate?: InputProps['validate'];
-  noScroll?: boolean;
 };
 
 export type Pair = {
-  id?: string;
+  id: string;
   enabled?: boolean;
   name: string;
   value: string;
@@ -57,65 +63,75 @@ export type Pair = {
   readOnlyName?: boolean;
 };
 
-type PairContainer = {
-  pair: Pair;
-  id: string;
-};
+/** Max number of pairs to show before prompting the user to reveal the rest */
+const MAX_INITIAL_PAIRS = 50;
 
 export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function PairEditor(
   {
+    stateKey,
+    allowFileValues,
     className,
     forceUpdateKey,
     nameAutocomplete,
     nameAutocompleteVariables,
     namePlaceholder,
     nameValidate,
-    valueType,
-    onChange,
     noScroll,
+    onChange,
     pairs: originalPairs,
     valueAutocomplete,
     valueAutocompleteVariables,
     valuePlaceholder,
+    valueType,
     valueValidate,
-    allowFileValues,
   }: PairEditorProps,
   ref,
 ) {
   const [forceFocusNamePairId, setForceFocusNamePairId] = useState<string | null>(null);
   const [forceFocusValuePairId, setForceFocusValuePairId] = useState<string | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [pairs, setPairs] = useState<PairContainer[]>(() => {
-    // Remove empty headers on initial render
-    const nonEmpty = originalPairs.filter((h) => !(h.name === '' && h.value === ''));
-    const pairs = nonEmpty.map((pair) => newPairContainer(pair));
-    return [...pairs, newPairContainer()];
-  });
+  const [pairs, setPairs] = useState<Pair[]>([]);
+  const [showAll, toggleShowAll] = useToggle(false);
 
-  useImperativeHandle(ref, () => ({
-    focusValue(index: number) {
-      const id = pairs[index]?.id ?? 'n/a';
-      setForceFocusValuePairId(id);
-    },
-  }));
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusValue(index: number) {
+        const id = pairs[index]?.id ?? 'n/a';
+        setForceFocusValuePairId(id);
+      },
+    }),
+    [pairs],
+  );
 
   useEffect(() => {
-    // Remove empty headers on initial render
-    // TODO: Make this not refresh the entire editor when forceUpdateKey changes, using some
-    //  sort of diff method or deterministic IDs based on array index and update key
-    const nonEmpty = originalPairs.filter((h) => !(h.name === '' && h.value === ''));
-    const pairs = nonEmpty.map((pair) => newPairContainer(pair));
-    setPairs([...pairs, newPairContainer()]);
+    // Remove empty headers on initial render and ensure they all have valid ids (pairs didn't used to have IDs)
+    const newPairs = [];
+    for (let i = 0; i < originalPairs.length; i++) {
+      const p = originalPairs[i];
+      if (!p) continue; // Make TS happy
+      if (isPairEmpty(p)) continue;
+      if (!p.id) p.id = generateId();
+      newPairs.push(p);
+    }
+
+    // Add empty last pair if there is none
+    const lastPair = newPairs[newPairs.length - 1];
+    if (lastPair == null || !isPairEmpty(lastPair)) {
+      newPairs.push(emptyPair());
+    }
+
+    setPairs(newPairs);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceUpdateKey]);
 
   const setPairsAndSave = useCallback(
-    (fn: (pairs: PairContainer[]) => PairContainer[]) => {
+    (fn: (pairs: Pair[]) => Pair[]) => {
       setPairs((oldPairs) => {
-        const pairs = fn(oldPairs).map((p) => p.pair);
+        const pairs = fn(oldPairs);
         onChange(pairs);
-        return fn(oldPairs);
+        return pairs;
       });
     },
     [onChange],
@@ -149,13 +165,12 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   );
 
   const handleChange = useCallback(
-    (pair: PairContainer) =>
-      setPairsAndSave((pairs) => pairs.map((p) => (pair.id !== p.id ? p : pair))),
+    (pair: Pair) => setPairsAndSave((pairs) => pairs.map((p) => (pair.id !== p.id ? p : pair))),
     [setPairsAndSave],
   );
 
   const handleDelete = useCallback(
-    (pair: PairContainer, focusPrevious: boolean) => {
+    (pair: Pair, focusPrevious: boolean) => {
       if (focusPrevious) {
         const index = pairs.findIndex((p) => p.id === pair.id);
         const id = pairs[index - 1]?.id ?? null;
@@ -167,22 +182,21 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   );
 
   const handleFocus = useCallback(
-    (pair: PairContainer) =>
+    (pair: Pair) =>
       setPairs((pairs) => {
         setForceFocusNamePairId(null); // Remove focus override when something focused
         setForceFocusValuePairId(null); // Remove focus override when something focused
         const isLast = pair.id === pairs[pairs.length - 1]?.id;
-        return isLast ? [...pairs, newPairContainer()] : pairs;
+        if (isLast) {
+          const prevPair = pairs[pairs.length - 1];
+          setForceFocusNamePairId(prevPair?.id ?? null);
+          return [...pairs, emptyPair()];
+        } else {
+          return pairs;
+        }
       }),
     [],
   );
-
-  // Ensure there's always at least one pair
-  useEffect(() => {
-    if (pairs.length === 0) {
-      setPairs((pairs) => [...pairs, newPairContainer()]);
-    }
-  }, [pairs]);
 
   return (
     <div
@@ -192,42 +206,57 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
         'pb-2 mb-auto h-full',
         !noScroll && 'overflow-y-auto max-h-full',
         // Move over the width of the drag handle
-        '-ml-3',
+        '-ml-3 -mr-2 pr-2',
         // Pad to make room for the drag divider
         'pt-0.5',
       )}
     >
       {pairs.map((p, i) => {
+        if (!showAll && i > MAX_INITIAL_PAIRS) return null;
+
         const isLast = i === pairs.length - 1;
         return (
           <Fragment key={p.id}>
             {hoveredIndex === i && <DropMarker />}
             <PairEditorRow
-              pairContainer={p}
-              className="py-1"
-              isLast={isLast}
               allowFileValues={allowFileValues}
-              nameAutocompleteVariables={nameAutocompleteVariables}
-              valueAutocompleteVariables={valueAutocompleteVariables}
-              valueType={valueType}
+              className="py-1"
               forceFocusNamePairId={forceFocusNamePairId}
               forceFocusValuePairId={forceFocusValuePairId}
               forceUpdateKey={forceUpdateKey}
+              index={i}
+              isLast={isLast}
               nameAutocomplete={nameAutocomplete}
-              valueAutocomplete={valueAutocomplete}
+              nameAutocompleteVariables={nameAutocompleteVariables}
               namePlaceholder={namePlaceholder}
-              valuePlaceholder={valuePlaceholder}
               nameValidate={nameValidate}
-              valueValidate={valueValidate}
               onChange={handleChange}
-              onFocus={handleFocus}
               onDelete={handleDelete}
               onEnd={handleEnd}
+              onFocus={handleFocus}
               onMove={handleMove}
+              pair={p}
+              stateKey={stateKey}
+              valueAutocomplete={valueAutocomplete}
+              valueAutocompleteVariables={valueAutocompleteVariables}
+              valuePlaceholder={valuePlaceholder}
+              valueType={valueType}
+              valueValidate={valueValidate}
             />
           </Fragment>
         );
       })}
+      {!showAll && pairs.length > MAX_INITIAL_PAIRS && (
+        <Button
+          onClick={toggleShowAll}
+          variant="border"
+          className="m-2"
+          size="xs"
+          event="pairs.reveal-more"
+        >
+          Show {pairs.length - MAX_INITIAL_PAIRS} More
+        </Button>
+      )}
     </div>
   );
 });
@@ -238,29 +267,31 @@ enum ItemTypes {
 
 type PairEditorRowProps = {
   className?: string;
-  pairContainer: PairContainer;
+  pair: Pair;
   forceFocusNamePairId?: string | null;
   forceFocusValuePairId?: string | null;
   onMove: (id: string, side: 'above' | 'below') => void;
   onEnd: (id: string) => void;
-  onChange: (pair: PairContainer) => void;
-  onDelete?: (pair: PairContainer, focusPrevious: boolean) => void;
-  onFocus?: (pair: PairContainer) => void;
-  onSubmit?: (pair: PairContainer) => void;
+  onChange: (pair: Pair) => void;
+  onDelete?: (pair: Pair, focusPrevious: boolean) => void;
+  onFocus?: (pair: Pair) => void;
+  onSubmit?: (pair: Pair) => void;
   isLast?: boolean;
+  index: number;
 } & Pick<
   PairEditorProps,
-  | 'nameAutocomplete'
-  | 'valueAutocomplete'
-  | 'nameAutocompleteVariables'
-  | 'valueAutocompleteVariables'
-  | 'valueType'
-  | 'namePlaceholder'
-  | 'valuePlaceholder'
-  | 'nameValidate'
-  | 'valueValidate'
-  | 'forceUpdateKey'
   | 'allowFileValues'
+  | 'forceUpdateKey'
+  | 'nameAutocomplete'
+  | 'nameAutocompleteVariables'
+  | 'namePlaceholder'
+  | 'nameValidate'
+  | 'stateKey'
+  | 'valueAutocomplete'
+  | 'valueAutocompleteVariables'
+  | 'valuePlaceholder'
+  | 'valueType'
+  | 'valueValidate'
 >;
 
 function PairEditorRow({
@@ -269,6 +300,7 @@ function PairEditorRow({
   forceFocusNamePairId,
   forceFocusValuePairId,
   forceUpdateKey,
+  index,
   isLast,
   nameAutocomplete,
   nameAutocompleteVariables,
@@ -279,69 +311,73 @@ function PairEditorRow({
   onEnd,
   onFocus,
   onMove,
-  pairContainer,
+  pair,
+  stateKey,
   valueAutocomplete,
   valueAutocompleteVariables,
   valuePlaceholder,
   valueType,
   valueValidate,
 }: PairEditorRowProps) {
-  const { id } = pairContainer;
   const ref = useRef<HTMLDivElement>(null);
-  const prompt = usePrompt();
   const nameInputRef = useRef<EditorView>(null);
   const valueInputRef = useRef<EditorView>(null);
 
   useEffect(() => {
-    if (forceFocusNamePairId === pairContainer.id) {
+    if (forceFocusNamePairId === pair.id) {
       nameInputRef.current?.focus();
     }
-  }, [forceFocusNamePairId, pairContainer.id]);
+  }, [forceFocusNamePairId, pair.id]);
 
   useEffect(() => {
-    if (forceFocusValuePairId === pairContainer.id) {
+    if (forceFocusValuePairId === pair.id) {
       valueInputRef.current?.focus();
     }
-  }, [forceFocusValuePairId, pairContainer.id]);
+  }, [forceFocusValuePairId, pair.id]);
+
+  const handleFocus = useCallback(() => onFocus?.(pair), [onFocus, pair]);
+  const handleDelete = useCallback(() => onDelete?.(pair, false), [onDelete, pair]);
+
+  const deleteItems = useMemo(
+    (): DropdownItem[] => [
+      {
+        key: 'delete',
+        label: 'Delete',
+        onSelect: handleDelete,
+        color: 'danger',
+      },
+    ],
+    [handleDelete],
+  );
 
   const handleChangeEnabled = useMemo(
-    () => (enabled: boolean) => onChange({ id, pair: { ...pairContainer.pair, enabled } }),
-    [id, onChange, pairContainer.pair],
+    () => (enabled: boolean) => onChange({ ...pair, enabled }),
+    [onChange, pair],
   );
 
   const handleChangeName = useMemo(
-    () => (name: string) => onChange({ id, pair: { ...pairContainer.pair, name } }),
-    [onChange, id, pairContainer.pair],
+    () => (name: string) => onChange({ ...pair, name }),
+    [onChange, pair],
   );
 
   const handleChangeValueText = useMemo(
-    () => (value: string) =>
-      onChange({ id, pair: { ...pairContainer.pair, value, isFile: false } }),
-    [onChange, id, pairContainer.pair],
+    () => (value: string) => onChange({ ...pair, value, isFile: false }),
+    [onChange, pair],
   );
 
   const handleChangeValueFile = useMemo(
     () =>
       ({ filePath }: { filePath: string | null }) =>
-        onChange({
-          id,
-          pair: { ...pairContainer.pair, value: filePath ?? '', isFile: true },
-        }),
-    [onChange, id, pairContainer.pair],
+        onChange({ ...pair, value: filePath ?? '', isFile: true }),
+    [onChange, pair],
   );
 
   const handleChangeValueContentType = useMemo(
-    () => (contentType: string) => onChange({ id, pair: { ...pairContainer.pair, contentType } }),
-    [onChange, id, pairContainer.pair],
+    () => (contentType: string) => onChange({ ...pair, contentType }),
+    [onChange, pair],
   );
 
-  const handleFocus = useCallback(() => onFocus?.(pairContainer), [onFocus, pairContainer]);
-  const handleDelete = useCallback(
-    () => onDelete?.(pairContainer, false),
-    [onDelete, pairContainer],
-  );
-
-  const [, connectDrop] = useDrop<PairContainer>(
+  const [, connectDrop] = useDrop<Pair>(
     {
       accept: ItemTypes.ROW,
       hover: (_, monitor) => {
@@ -350,7 +386,7 @@ function PairEditorRow({
         const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
         const clientOffset = monitor.getClientOffset();
         const hoverClientY = (clientOffset as XYCoord).y - hoverBoundingRect.top;
-        onMove(pairContainer.id, hoverClientY < hoverMiddleY ? 'above' : 'below');
+        onMove(pair.id, hoverClientY < hoverMiddleY ? 'above' : 'below');
       },
     },
     [onMove],
@@ -359,11 +395,11 @@ function PairEditorRow({
   const [, connectDrag] = useDrag(
     {
       type: ItemTypes.ROW,
-      item: () => pairContainer,
+      item: () => pair,
       collect: (m) => ({ isDragging: m.isDragging() }),
-      end: () => onEnd(pairContainer.id),
+      end: () => onEnd(pair.id),
     },
-    [pairContainer, onEnd],
+    [pair, onEnd],
   );
 
   connectDrag(ref);
@@ -376,7 +412,7 @@ function PairEditorRow({
         className,
         'group grid grid-cols-[auto_auto_minmax(0,1fr)_auto]',
         'grid-rows-1 items-center',
-        !pairContainer.pair.enabled && 'opacity-60',
+        !pair.enabled && 'opacity-60',
       )}
     >
       {!isLast ? (
@@ -386,16 +422,16 @@ function PairEditorRow({
             'justify-center opacity-0 group-hover:opacity-70',
           )}
         >
-          <Icon size="sm" icon="gripVertical" className="pointer-events-none" />
+          <Icon size="sm" icon="grip_vertical" className="pointer-events-none" />
         </div>
       ) : (
         <span className="w-3" />
       )}
       <Checkbox
         hideLabel
-        title={pairContainer.pair.enabled ? 'Disable item' : 'Enable item'}
+        title={pair.enabled ? 'Disable item' : 'Enable item'}
         disabled={isLast}
-        checked={isLast ? false : !!pairContainer.pair.enabled}
+        checked={isLast ? false : !!pair.enabled}
         className={classNames('pr-2', isLast && '!opacity-disabled')}
         onChange={handleChangeEnabled}
       />
@@ -406,127 +442,94 @@ function PairEditorRow({
           'gap-0.5 grid-cols-1 grid-rows-2',
         )}
       >
-        <Input
-          ref={nameInputRef}
-          hideLabel
-          useTemplating
-          readOnly={pairContainer.pair.readOnlyName}
-          size="sm"
-          require={!isLast && !!pairContainer.pair.enabled && !!pairContainer.pair.value}
-          validate={nameValidate}
-          forceUpdateKey={forceUpdateKey}
-          containerClassName={classNames(isLast && 'border-dashed')}
-          defaultValue={pairContainer.pair.name}
-          label="Name"
-          name="name"
-          onChange={handleChangeName}
-          onFocus={handleFocus}
-          placeholder={namePlaceholder ?? 'name'}
-          autocomplete={nameAutocomplete}
-          autocompleteVariables={nameAutocompleteVariables}
-        />
+        {isLast ? (
+          // Use PlainInput for last ones because there's a unique bug where clicking below
+          // the Codemirror input focuses it.
+          <PlainInput
+            hideLabel
+            size="sm"
+            containerClassName={classNames(isLast && 'border-dashed')}
+            label="Name"
+            name={`name[${index}]`}
+            onFocus={handleFocus}
+            placeholder={namePlaceholder ?? 'name'}
+          />
+        ) : (
+          <Input
+            ref={nameInputRef}
+            hideLabel
+            useTemplating
+            stateKey={`name.${pair.id}.${stateKey}`}
+            wrapLines={false}
+            readOnly={pair.readOnlyName}
+            size="sm"
+            require={!isLast && !!pair.enabled && !!pair.value}
+            validate={nameValidate}
+            forceUpdateKey={forceUpdateKey}
+            containerClassName={classNames(isLast && 'border-dashed')}
+            defaultValue={pair.name}
+            label="Name"
+            name={`name[${index}]`}
+            onChange={handleChangeName}
+            onFocus={handleFocus}
+            placeholder={namePlaceholder ?? 'name'}
+            autocomplete={nameAutocomplete}
+            autocompleteVariables={nameAutocompleteVariables}
+          />
+        )}
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
-          {pairContainer.pair.isFile ? (
-            <SelectFile
-              inline
-              size="xs"
-              filePath={pairContainer.pair.value}
-              onChange={handleChangeValueFile}
+          {pair.isFile ? (
+            <SelectFile inline size="xs" filePath={pair.value} onChange={handleChangeValueFile} />
+          ) : isLast ? (
+            // Use PlainInput for last ones because there's a unique bug where clicking below
+            // the Codemirror input focuses it.
+            <PlainInput
+              hideLabel
+              size="sm"
+              containerClassName={classNames(isLast && 'border-dashed')}
+              label="Value"
+              name={`value[${index}]`}
+              onFocus={handleFocus}
+              placeholder={valuePlaceholder ?? 'value'}
             />
           ) : (
             <Input
               ref={valueInputRef}
               hideLabel
               useTemplating
+              stateKey={`value.${pair.id}.${stateKey}`}
+              wrapLines={false}
               size="sm"
               containerClassName={classNames(isLast && 'border-dashed')}
               validate={valueValidate}
               forceUpdateKey={forceUpdateKey}
-              defaultValue={pairContainer.pair.value}
+              defaultValue={pair.value}
               label="Value"
-              name="value"
+              name={`value[${index}]`}
               onChange={handleChangeValueText}
               onFocus={handleFocus}
               type={isLast ? 'text' : valueType}
               placeholder={valuePlaceholder ?? 'value'}
-              autocomplete={valueAutocomplete?.(pairContainer.pair.name)}
+              autocomplete={valueAutocomplete?.(pair.name)}
               autocompleteVariables={valueAutocompleteVariables}
             />
           )}
         </div>
       </div>
       {allowFileValues ? (
-        <RadioDropdown
-          value={pairContainer.pair.isFile ? 'file' : 'text'}
-          onChange={(v) => {
-            if (v === 'file') handleChangeValueFile({ filePath: '' });
-            else handleChangeValueText('');
-          }}
-          items={[
-            { label: 'Text', value: 'text' },
-            { label: 'File', value: 'file' },
-          ]}
-          extraItems={[
-            {
-              key: 'mime',
-              label: 'Set Content-Type',
-              leftSlot: <Icon icon="pencil" />,
-              hidden: !pairContainer.pair.isFile,
-              onSelect: async () => {
-                const v = await prompt({
-                  id: 'content-type',
-                  require: false,
-                  title: 'Override Content-Type',
-                  label: 'Content-Type',
-                  placeholder: 'text/plain',
-                  defaultValue: pairContainer.pair.contentType ?? '',
-                  name: 'content-type',
-                  confirmLabel: 'Set',
-                  description: 'Leave blank to auto-detect',
-                });
-                handleChangeValueContentType(v);
-              },
-            },
-            {
-              key: 'clear-file',
-              label: 'Unset File',
-              leftSlot: <Icon icon="x" />,
-              hidden: !pairContainer.pair.isFile,
-              onSelect: async () => {
-                handleChangeValueFile({ filePath: null });
-              },
-            },
-            {
-              key: 'delete',
-              label: 'Delete',
-              onSelect: handleDelete,
-              variant: 'danger',
-              leftSlot: <Icon icon="trash" />,
-            },
-          ]}
-        >
-          <IconButton
-            iconSize="sm"
-            size="xs"
-            icon={isLast ? 'empty' : 'chevronDown'}
-            title="Select form data type"
-          />
-        </RadioDropdown>
+        <FileActionsDropdown
+          pair={pair}
+          onChangeFile={handleChangeValueFile}
+          onChangeText={handleChangeValueText}
+          onChangeContentType={handleChangeValueContentType}
+          onDelete={handleDelete}
+        />
       ) : (
-        <Dropdown
-          items={[
-            {
-              key: 'delete',
-              label: 'Delete',
-              onSelect: handleDelete,
-              variant: 'danger',
-            },
-          ]}
-        >
+        <Dropdown items={deleteItems}>
           <IconButton
             iconSize="sm"
             size="xs"
-            icon={isLast ? 'empty' : 'chevronDown'}
+            icon={isLast ? 'empty' : 'chevron_down'}
             title="Select form data type"
           />
         </Dropdown>
@@ -535,8 +538,95 @@ function PairEditorRow({
   );
 }
 
-const newPairContainer = (initialPair?: Pair): PairContainer => {
-  const id = initialPair?.id ?? uuid();
-  const pair = initialPair ?? { name: '', value: '', enabled: true, isFile: false };
-  return { id, pair };
-};
+const fileItems: RadioDropdownItem<string>[] = [
+  { label: 'Text', value: 'text' },
+  { label: 'File', value: 'file' },
+];
+
+function FileActionsDropdown({
+  pair,
+  onChangeFile,
+  onChangeText,
+  onChangeContentType,
+  onDelete,
+}: {
+  pair: Pair;
+  onChangeFile: ({ filePath }: { filePath: string | null }) => void;
+  onChangeText: (text: string) => void;
+  onChangeContentType: (contentType: string) => void;
+  onDelete: () => void;
+}) {
+  const onChange = useCallback(
+    (v: string) => {
+      if (v === 'file') onChangeFile({ filePath: '' });
+      else onChangeText('');
+    },
+    [onChangeFile, onChangeText],
+  );
+
+  const extraItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        key: 'mime',
+        label: 'Set Content-Type',
+        leftSlot: <Icon icon="pencil" />,
+        hidden: !pair.isFile,
+        onSelect: async () => {
+          const contentType = await showPrompt({
+            id: 'content-type',
+            require: false,
+            title: 'Override Content-Type',
+            label: 'Content-Type',
+            placeholder: 'text/plain',
+            defaultValue: pair.contentType ?? '',
+            confirmText: 'Set',
+            description: 'Leave blank to auto-detect',
+          });
+          if (contentType == null) return;
+          onChangeContentType(contentType);
+        },
+      },
+      {
+        key: 'clear-file',
+        label: 'Unset File',
+        leftSlot: <Icon icon="x" />,
+        hidden: pair.isFile,
+        onSelect: async () => {
+          onChangeFile({ filePath: null });
+        },
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        onSelect: onDelete,
+        variant: 'danger',
+        leftSlot: <Icon icon="trash" />,
+      },
+    ],
+    [onChangeContentType, onChangeFile, onDelete, pair.contentType, pair.isFile],
+  );
+
+  return (
+    <RadioDropdown
+      value={pair.isFile ? 'file' : 'text'}
+      onChange={onChange}
+      items={fileItems}
+      extraItems={extraItems}
+    >
+      <IconButton iconSize="sm" size="xs" icon="chevron_down" title="Select form data type" />
+    </RadioDropdown>
+  );
+}
+
+function emptyPair(): Pair {
+  return {
+    enabled: true,
+    name: '',
+    value: '',
+    id: generateId(),
+  };
+}
+
+function isPairEmpty(pair: Pair): boolean {
+  return !pair.name && !pair.value;
+}

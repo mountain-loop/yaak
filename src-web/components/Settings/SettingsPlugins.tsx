@@ -1,10 +1,11 @@
-import type { Plugin } from '@yaakapp/api';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import type { Plugin } from '@yaakapp-internal/models';
 import React from 'react';
-import { useCreatePlugin } from '../../hooks/useCreatePlugin';
+import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
 import { usePlugins, useRefreshPlugins } from '../../hooks/usePlugins';
+import { useUninstallPlugin } from '../../hooks/useUninstallPlugin';
 import { Button } from '../core/Button';
-import { Checkbox } from '../core/Checkbox';
 import { IconButton } from '../core/IconButton';
 import { InlineCode } from '../core/InlineCode';
 import { HStack } from '../core/Stacks';
@@ -14,7 +15,7 @@ import { SelectFile } from '../SelectFile';
 export function SettingsPlugins() {
   const [directory, setDirectory] = React.useState<string | null>(null);
   const plugins = usePlugins();
-  const createPlugin = useCreatePlugin();
+  const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
   return (
     <div className="grid grid-rows-[minmax(0,1fr)_auto] h-full">
@@ -30,7 +31,6 @@ export function SettingsPlugins() {
         <table className="w-full text-sm mb-auto min-w-full max-w-full divide-y divide-surface-highlight">
           <thead>
             <tr>
-              <th></th>
               <th className="py-2 text-left">Plugin</th>
               <th className="py-2 text-right">Version</th>
               <th></th>
@@ -61,7 +61,13 @@ export function SettingsPlugins() {
           />
           <HStack>
             {directory && (
-              <Button size="xs" type="submit" color="primary" className="ml-auto">
+              <Button
+                size="xs"
+                type="submit"
+                color="primary"
+                className="ml-auto"
+                event="plugin.add"
+              >
                 Add Plugin
               </Button>
             )}
@@ -70,7 +76,15 @@ export function SettingsPlugins() {
               icon="refresh"
               title="Reload plugins"
               spin={refreshPlugins.isPending}
+              event="plugin.reload"
               onClick={() => refreshPlugins.mutate()}
+            />
+            <IconButton
+              size="sm"
+              icon="help"
+              title="View documentation"
+              event="plugin.docs"
+              onClick={() => openUrl('https://feedback.yaak.app/help/articles/6911763-quick-start')}
             />
           </HStack>
         </footer>
@@ -81,15 +95,10 @@ export function SettingsPlugins() {
 
 function PluginInfo({ plugin }: { plugin: Plugin }) {
   const pluginInfo = usePluginInfo(plugin.id);
-  if (pluginInfo.data == null) return null;
+  const deletePlugin = useUninstallPlugin(plugin.id);
   return (
     <tr className="group">
-      <td className="pr-2">
-        <Checkbox hideLabel checked={true} title="foo" onChange={() => null} />
-      </td>
-      <td className="py-2 select-text cursor-text w-full">
-        <InlineCode>{pluginInfo.data?.name}</InlineCode>
-      </td>
+      <td className="py-2 select-text cursor-text w-full">{pluginInfo.data?.name}</td>
       <td className="py-2 select-text cursor-text text-right">
         <InlineCode>{pluginInfo.data?.version}</InlineCode>
       </td>
@@ -99,6 +108,8 @@ function PluginInfo({ plugin }: { plugin: Plugin }) {
           icon="trash"
           title="Uninstall plugin"
           className="text-text-subtlest"
+          event="plugin.delete"
+          onClick={() => deletePlugin.mutate()}
         />
       </td>
     </tr>

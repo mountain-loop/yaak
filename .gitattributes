@@ -1,0 +1,2 @@
+src-tauri/vendored/**/* linguist-generated=true
+src-tauri/gen/schemas/**/* linguist-generated=true

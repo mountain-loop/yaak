@@ -3,8 +3,8 @@ const path = require('node:path');
 const { execSync } = require('node:child_process');
 const pluginsDir = process.env.YAAK_PLUGINS_DIR;
 if (!pluginsDir) {
-  console.log('YAAK_PLUGINS_DIR is not set');
-  process.exit(1);
+  console.log('Skipping bundled plugins build because YAAK_PLUGINS_DIR is not set');
+  return;
 }
 
 console.log('Installing Yaak plugins dependencies', pluginsDir);

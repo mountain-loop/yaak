@@ -1,23 +1,23 @@
-import { useMutation } from '@tanstack/react-query';
-import type { GrpcRequest, HttpRequest } from '@yaakapp/api';
+import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 import { InlineCode } from '../components/core/InlineCode';
-import { usePrompt } from './usePrompt';
+import {showPrompt} from "../lib/prompt";
+import { useFastMutation } from './useFastMutation';
 import { useRequests } from './useRequests';
 import { useUpdateAnyGrpcRequest } from './useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from './useUpdateAnyHttpRequest';
 
 export function useRenameRequest(requestId: string | null) {
-  const prompt = usePrompt();
   const updateHttpRequest = useUpdateAnyHttpRequest();
   const updateGrpcRequest = useUpdateAnyGrpcRequest();
   const requests = useRequests();
 
-  return useMutation({
+  return useFastMutation({
+    mutationKey: ['rename_request'],
     mutationFn: async () => {
       const request = requests.find((r) => r.id === requestId);
       if (request == null) return;
 
-      const name = await prompt({
+      const name = await showPrompt({
         id: 'rename-request',
         title: 'Rename Request',
         description:
@@ -28,11 +28,14 @@ export function useRenameRequest(requestId: string | null) {
               Enter a new name for <InlineCode>{request.name}</InlineCode>
             </>
           ),
-        name: 'name',
         label: 'Name',
         placeholder: 'New Name',
         defaultValue: request.name,
+        confirmText: 'Save',
       });
+
+      if (name == null) return;
+
       if (request.model === 'http_request') {
         updateHttpRequest.mutate({ id: request.id, update: (r: HttpRequest) => ({ ...r, name }) });
       } else {

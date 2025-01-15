@@ -31,10 +31,10 @@ export function SidebarActions() {
         className="pointer-events-auto"
         size="sm"
         title="Show sidebar"
-        icon={hidden ? 'leftPanelHidden' : 'leftPanelVisible'}
+        icon={hidden ? 'left_panel_hidden' : 'left_panel_visible'}
       />
       <CreateDropdown hotKeyAction="http_request.create">
-        <IconButton size="sm" icon="plusCircle" title="Add Resource" />
+        <IconButton size="sm" icon="plus_circle" title="Add Resource" />
       </CreateDropdown>
     </HStack>
   );

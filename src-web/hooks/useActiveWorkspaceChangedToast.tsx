@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { InlineCode } from '../components/core/InlineCode';
-import { useToast } from '../components/ToastContext';
 import { useActiveWorkspace } from './useActiveWorkspace';
+import { showToast } from '../lib/toast';
 
 export function useActiveWorkspaceChangedToast() {
-  const toast = useToast();
   const activeWorkspace = useActiveWorkspace();
   const [id, setId] = useState<string | null>(activeWorkspace?.id ?? null);
 
@@ -17,14 +16,15 @@ export function useActiveWorkspaceChangedToast() {
     // Don't notify on the first load
     if (id === null) return;
 
-    toast.show({
-      id: 'workspace-changed',
+    showToast({
+      id: `workspace-changed-${activeWorkspace.id}`,
       timeout: 3000,
       message: (
         <>
-          Switched workspace to <InlineCode>{activeWorkspace.name}</InlineCode>
+          Activated workspace{' '}
+          <InlineCode className="whitespace-nowrap">{activeWorkspace.name}</InlineCode>
         </>
       ),
     });
-  }, [activeWorkspace, id, toast]);
+  }, [activeWorkspace, id]);
 }

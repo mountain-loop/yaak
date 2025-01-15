@@ -1,47 +1,64 @@
-use std::collections::HashMap;
-use std::fs;
-use std::fs::{create_dir_all, File};
-use std::io::Write;
+use crate::render::render_http_request;
+use crate::response_err;
+use crate::template_callback::PluginTemplateCallback;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use http::header::{ACCEPT, USER_AGENT};
+use http::{HeaderMap, HeaderName, HeaderValue};
+use log::{debug, error, warn};
+use mime_guess::Mime;
+use reqwest::redirect::Policy;
+use reqwest::{multipart, Proxy, Url};
+use reqwest::{Method, Response};
+use rustls::ClientConfig;
+use rustls_platform_verifier::ConfigVerifierExt;
+use serde_json::Value;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-
-use crate::render::render_http_request;
-use crate::response_err;
-use crate::template_callback::PluginTemplateCallback;
-use base64::Engine;
-use http::header::{ACCEPT, USER_AGENT};
-use http::{HeaderMap, HeaderName, HeaderValue};
-use log::{error, warn};
-use mime_guess::Mime;
-use reqwest::redirect::Policy;
-use reqwest::Method;
-use reqwest::{multipart, Url};
-use serde_json::Value;
 use tauri::{Manager, Runtime, WebviewWindow};
-use tokio::sync::oneshot;
+use tokio::fs;
+use tokio::fs::{create_dir_all, File};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
+use tokio::sync::{oneshot, Mutex};
 use yaak_models::models::{
-    Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader, HttpUrlParameter,
+    Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
+    HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries::{get_workspace, update_response_if_id, upsert_cookie_jar};
+use yaak_models::queries::{
+    get_base_environment, get_http_response, get_or_create_settings, get_workspace,
+    update_response_if_id, upsert_cookie_jar, UpdateSource,
+};
+use yaak_plugins::events::{RenderPurpose, WindowContext};
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
     request: &HttpRequest,
-    response: &HttpResponse,
+    og_response: &HttpResponse,
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
-    cancel_rx: &mut Receiver<bool>,
+    cancelled_rx: &mut Receiver<bool>,
 ) -> Result<HttpResponse, String> {
-    let workspace = get_workspace(window, &request.workspace_id)
+    let workspace =
+        get_workspace(window, &request.workspace_id).await.expect("Failed to get Workspace");
+    let base_environment = get_base_environment(window, &request.workspace_id)
         .await
-        .expect("Failed to get Workspace");
-    let cb = &*window.app_handle().state::<PluginTemplateCallback>();
-    let cb = cb.for_send();
+        .expect("Failed to get base environment");
+    let settings = get_or_create_settings(window).await;
+    let cb = PluginTemplateCallback::new(
+        window.app_handle(),
+        &WindowContext::from_window(window),
+        RenderPurpose::Send,
+    );
+
+    let response_id = og_response.id.clone();
+    let response = Arc::new(Mutex::new(og_response.clone()));
+
     let rendered_request =
-        render_http_request(&request, &workspace, environment.as_ref(), &cb).await;
+        render_http_request(&request, &base_environment, environment.as_ref(), &cb).await;
 
     let mut url_string = rendered_request.url;
 
@@ -49,6 +66,7 @@ pub async fn send_http_request<R: Runtime>(
     if !url_string.starts_with("http://") && !url_string.starts_with("https://") {
         url_string = format!("http://{}", url_string);
     }
+    debug!("Sending request to {url_string}");
 
     let mut client_builder = reqwest::Client::builder()
         .redirect(match workspace.setting_follow_redirects {
@@ -60,8 +78,45 @@ pub async fn send_http_request<R: Runtime>(
         .brotli(true)
         .deflate(true)
         .referer(false)
-        .danger_accept_invalid_certs(!workspace.setting_validate_certificates)
         .tls_info(true);
+
+    if workspace.setting_validate_certificates {
+        // Use platform-native verifier to validate certificates
+        client_builder =
+            client_builder.use_preconfigured_tls(ClientConfig::with_platform_verifier())
+    } else {
+        // Use rustls to skip validation because rustls_platform_verifier does not have this
+        // ability
+        client_builder = client_builder
+            .use_rustls_tls()
+            .danger_accept_invalid_hostnames(true)
+            .danger_accept_invalid_certs(true);
+    }
+
+    match settings.proxy {
+        Some(ProxySetting::Disabled) => client_builder = client_builder.no_proxy(),
+        Some(ProxySetting::Enabled { http, https, auth }) => {
+            debug!("Using proxy http={http} https={https}");
+            let mut proxy = Proxy::custom(move |url| {
+                let http = if http.is_empty() { None } else { Some(http.to_owned()) };
+                let https = if https.is_empty() { None } else { Some(https.to_owned()) };
+                let proxy_url = match (url.scheme(), http, https) {
+                    ("http", Some(proxy_url), _) => Some(proxy_url),
+                    ("https", _, Some(proxy_url)) => Some(proxy_url),
+                    _ => None,
+                };
+                proxy_url
+            });
+
+            if let Some(ProxySettingAuth { user, password }) = auth {
+                debug!("Using proxy auth");
+                proxy = proxy.basic_auth(user.as_str(), password.as_str());
+            }
+
+            client_builder = client_builder.proxy(proxy);
+        }
+        None => {} // Nothing to do for this one, as it is the default
+    }
 
     // Add cookie store if specified
     let maybe_cookie_manager = match cookie_jar.clone() {
@@ -102,38 +157,30 @@ pub async fn send_http_request<R: Runtime>(
         if !p.enabled || p.name.is_empty() {
             continue;
         }
-
-        // Replace path parameters with values from URL parameters
-        let old_url_string = url_string.clone();
-        url_string = replace_path_placeholder(&p, url_string.as_str());
-
-        // Treat as regular param if wasn't used as path param
-        if old_url_string == url_string {
-            query_params.push((p.name, p.value));
-        }
+        query_params.push((p.name, p.value));
     }
 
     let uri = match http::Uri::from_str(url_string.as_str()) {
         Ok(u) => u,
         Err(e) => {
-            return response_err(
-                response,
+            return Ok(response_err(
+                &*response.lock().await,
                 format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
                 window,
             )
-            .await;
+            .await);
         }
     };
     // Yes, we're parsing both URI and URL because they could return different errors
     let url = match Url::from_str(uri.to_string().as_str()) {
         Ok(u) => u,
         Err(e) => {
-            return response_err(
-                response,
+            return Ok(response_err(
+                &*response.lock().await,
                 format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
                 window,
             )
-            .await;
+            .await);
         }
     };
 
@@ -192,29 +239,17 @@ pub async fn send_http_request<R: Runtime>(
         let a = rendered_request.authentication;
 
         if b == "basic" {
-            let username = a
-                .get("username")
-                .unwrap_or(empty_value)
-                .as_str()
-                .unwrap_or_default();
-            let password = a
-                .get("password")
-                .unwrap_or(empty_value)
-                .as_str()
-                .unwrap_or_default();
+            let username = a.get("username").unwrap_or(empty_value).as_str().unwrap_or_default();
+            let password = a.get("password").unwrap_or(empty_value).as_str().unwrap_or_default();
 
             let auth = format!("{username}:{password}");
-            let encoded = base64::engine::general_purpose::STANDARD.encode(auth);
+            let encoded = BASE64_STANDARD.encode(auth);
             headers.insert(
                 "Authorization",
                 HeaderValue::from_str(&format!("Basic {}", encoded)).unwrap(),
             );
         } else if b == "bearer" {
-            let token = a
-                .get("token")
-                .unwrap_or(empty_value)
-                .as_str()
-                .unwrap_or_default();
+            let token = a.get("token").unwrap_or(empty_value).as_str().unwrap_or_default();
             headers.insert(
                 "Authorization",
                 HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
@@ -224,8 +259,17 @@ pub async fn send_http_request<R: Runtime>(
 
     let request_body = rendered_request.body;
     if let Some(body_type) = &rendered_request.body_type {
-        if request_body.contains_key("text") {
-            let body = get_str_h(&request_body, "text");
+        if body_type == "graphql" {
+            let query = get_str_h(&request_body, "query");
+            let variables = get_str_h(&request_body, "variables");
+            let body = if variables.trim().is_empty() {
+                format!(r#"{{"query":{}}}"#, serde_json::to_string(query).unwrap_or_default())
+            } else {
+                format!(
+                    r#"{{"query":{},"variables":{variables}}}"#,
+                    serde_json::to_string(query).unwrap_or_default()
+                )
+            };
             request_builder = request_builder.body(body.to_owned());
         } else if body_type == "application/x-www-form-urlencoded"
             && request_body.contains_key("form")
@@ -256,12 +300,12 @@ pub async fn send_http_request<R: Runtime>(
                 .as_str()
                 .unwrap_or_default();
 
-            match fs::read(file_path).map_err(|e| e.to_string()) {
+            match fs::read(file_path).await.map_err(|e| e.to_string()) {
                 Ok(f) => {
                     request_builder = request_builder.body(f);
                 }
                 Err(e) => {
-                    return response_err(response, e, window).await;
+                    return Ok(response_err(&*response.lock().await, e, window).await);
                 }
             }
         } else if body_type == "multipart/form-data" && request_body.contains_key("form") {
@@ -284,10 +328,15 @@ pub async fn send_http_request<R: Runtime>(
                             let mut part = if file_path.is_empty() {
                                 multipart::Part::text(value.clone())
                             } else {
-                                match fs::read(file_path.clone()) {
+                                match fs::read(file_path.clone()).await {
                                     Ok(f) => multipart::Part::bytes(f),
                                     Err(e) => {
-                                        return response_err(response, e.to_string(), window).await;
+                                        return Ok(response_err(
+                                            &*response.lock().await,
+                                            e.to_string(),
+                                            window,
+                                        )
+                                        .await);
                                     }
                                 }
                             };
@@ -302,9 +351,8 @@ pub async fn send_http_request<R: Runtime>(
                                     Mime::from_str("application/octet-stream").unwrap();
                                 let mime =
                                     mime_guess::from_path(file_path.clone()).first_or(default_mime);
-                                part = part
-                                    .mime_str(mime.essence_str())
-                                    .map_err(|e| e.to_string())?;
+                                part =
+                                    part.mime_str(mime.essence_str()).map_err(|e| e.to_string())?;
                             }
 
                             // Set file path if not empty
@@ -324,6 +372,9 @@ pub async fn send_http_request<R: Runtime>(
             }
             headers.remove("Content-Type"); // reqwest will add this automatically
             request_builder = request_builder.multipart(multipart_form);
+        } else if request_body.contains_key("text") {
+            let body = get_str_h(&request_body, "text");
+            request_builder = request_builder.body(body.to_owned());
         } else {
             warn!("Unsupported body type: {}", body_type);
         }
@@ -335,118 +386,181 @@ pub async fn send_http_request<R: Runtime>(
     let sendable_req = match request_builder.build() {
         Ok(r) => r,
         Err(e) => {
-            return response_err(response, e.to_string(), window).await;
+            warn!("Failed to build request builder {e:?}");
+            return Ok(response_err(&*response.lock().await, e.to_string(), window).await);
         }
     };
 
-    let start = std::time::Instant::now();
+    let (resp_tx, resp_rx) = oneshot::channel::<Result<Response, reqwest::Error>>();
+    let (done_tx, done_rx) = oneshot::channel::<HttpResponse>();
 
-    let (resp_tx, resp_rx) = oneshot::channel();
+    let start = std::time::Instant::now();
 
     tokio::spawn(async move {
         let _ = resp_tx.send(client.execute(sendable_req).await);
     });
 
     let raw_response = tokio::select! {
-        Ok(r) = resp_rx => {r}
-        _ = cancel_rx.changed() => {
-            return response_err(response, "Request was cancelled".to_string(), window).await;
+        Ok(r) = resp_rx => r,
+        _ = cancelled_rx.changed() => {
+            debug!("Request cancelled");
+            return Ok(response_err(&*response.lock().await, "Request was cancelled".to_string(), window).await);
         }
     };
 
-    match raw_response {
-        Ok(v) => {
-            let mut response = response.clone();
-            response.elapsed_headers = start.elapsed().as_millis() as i32;
-            let response_headers = v.headers().clone();
-            response.status = v.status().as_u16() as i32;
-            response.status_reason = v.status().canonical_reason().map(|s| s.to_string());
-            response.headers = response_headers
-                .iter()
-                .map(|(k, v)| HttpResponseHeader {
-                    name: k.as_str().to_string(),
-                    value: v.to_str().unwrap_or_default().to_string(),
-                })
-                .collect();
-            response.url = v.url().to_string();
-            response.remote_addr = v.remote_addr().map(|a| a.to_string());
-            response.version = match v.version() {
-                reqwest::Version::HTTP_09 => Some("HTTP/0.9".to_string()),
-                reqwest::Version::HTTP_10 => Some("HTTP/1.0".to_string()),
-                reqwest::Version::HTTP_11 => Some("HTTP/1.1".to_string()),
-                reqwest::Version::HTTP_2 => Some("HTTP/2".to_string()),
-                reqwest::Version::HTTP_3 => Some("HTTP/3".to_string()),
-                _ => None,
+    {
+        let window = window.clone();
+        let cancelled_rx = cancelled_rx.clone();
+        let response_id = response_id.clone();
+        let response = response.clone();
+        tokio::spawn(async move {
+            match raw_response {
+                Ok(mut v) => {
+                    let content_length = v.content_length();
+                    let response_headers = v.headers().clone();
+                    let dir = window.app_handle().path().app_data_dir().unwrap();
+                    let base_dir = dir.join("responses");
+                    create_dir_all(base_dir.clone()).await.expect("Failed to create responses dir");
+                    let body_path = if response_id.is_empty() {
+                        base_dir.join(uuid::Uuid::new_v4().to_string())
+                    } else {
+                        base_dir.join(response_id.clone())
+                    };
+
+                    {
+                        let mut r = response.lock().await;
+                        r.body_path = Some(body_path.to_str().unwrap().to_string());
+                        r.elapsed_headers = start.elapsed().as_millis() as i32;
+                        r.status = v.status().as_u16() as i32;
+                        r.status_reason = v.status().canonical_reason().map(|s| s.to_string());
+                        r.headers = response_headers
+                            .iter()
+                            .map(|(k, v)| HttpResponseHeader {
+                                name: k.as_str().to_string(),
+                                value: v.to_str().unwrap_or_default().to_string(),
+                            })
+                            .collect();
+                        r.url = v.url().to_string();
+                        r.remote_addr = v.remote_addr().map(|a| a.to_string());
+                        r.version = match v.version() {
+                            reqwest::Version::HTTP_09 => Some("HTTP/0.9".to_string()),
+                            reqwest::Version::HTTP_10 => Some("HTTP/1.0".to_string()),
+                            reqwest::Version::HTTP_11 => Some("HTTP/1.1".to_string()),
+                            reqwest::Version::HTTP_2 => Some("HTTP/2".to_string()),
+                            reqwest::Version::HTTP_3 => Some("HTTP/3".to_string()),
+                            _ => None,
+                        };
+
+                        r.state = HttpResponseState::Connected;
+                        update_response_if_id(&window, &r, &UpdateSource::Window)
+                            .await
+                            .expect("Failed to update response after connected");
+                    }
+
+                    // Write body to FS
+                    let mut f = File::options()
+                        .create(true)
+                        .truncate(true)
+                        .write(true)
+                        .open(&body_path)
+                        .await
+                        .expect("Failed to open file");
+
+                    let mut written_bytes: usize = 0;
+                    loop {
+                        let chunk = v.chunk().await;
+                        if *cancelled_rx.borrow() {
+                            // Request was canceled
+                            return;
+                        }
+                        match chunk {
+                            Ok(Some(bytes)) => {
+                                let mut r = response.lock().await;
+                                r.elapsed = start.elapsed().as_millis() as i32;
+                                f.write_all(&bytes).await.expect("Failed to write to file");
+                                f.flush().await.expect("Failed to flush file");
+                                written_bytes += bytes.len();
+                                r.content_length = Some(written_bytes as i32);
+                                update_response_if_id(&window, &r, &UpdateSource::Window)
+                                    .await
+                                    .expect("Failed to update response");
+                            }
+                            Ok(None) => {
+                                break;
+                            }
+                            Err(e) => {
+                                response_err(&*response.lock().await, e.to_string(), &window).await;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Set final content length
+                    {
+                        let mut r = response.lock().await;
+                        r.content_length = match content_length {
+                            Some(l) => Some(l as i32),
+                            None => Some(written_bytes as i32),
+                        };
+                        r.state = HttpResponseState::Closed;
+                        update_response_if_id(&window, &r, &UpdateSource::Window)
+                            .await
+                            .expect("Failed to update response");
+                    };
+
+                    // Add cookie store if specified
+                    if let Some((cookie_store, mut cookie_jar)) = maybe_cookie_manager {
+                        // let cookies = response_headers.get_all(SET_COOKIE).iter().map(|h| {
+                        //     println!("RESPONSE COOKIE: {}", h.to_str().unwrap());
+                        //     cookie_store::RawCookie::from_str(h.to_str().unwrap())
+                        //         .expect("Failed to parse cookie")
+                        // });
+                        // store.store_response_cookies(cookies, &url);
+
+                        let json_cookies: Vec<Cookie> = cookie_store
+                            .lock()
+                            .unwrap()
+                            .iter_any()
+                            .map(|c| {
+                                let json_cookie =
+                                    serde_json::to_value(&c).expect("Failed to serialize cookie");
+                                serde_json::from_value(json_cookie)
+                                    .expect("Failed to deserialize cookie")
+                            })
+                            .collect::<Vec<_>>();
+                        cookie_jar.cookies = json_cookies;
+                        if let Err(e) =
+                            upsert_cookie_jar(&window, &cookie_jar, &UpdateSource::Window).await
+                        {
+                            error!("Failed to update cookie jar: {}", e);
+                        };
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to execute request {e}");
+                    response_err(&*response.lock().await, format!("{e} → {e:?}"), &window).await;
+                }
             };
 
-            let content_length = v.content_length();
-            let body_bytes = v.bytes().await.expect("Failed to get body").to_vec();
-            response.elapsed = start.elapsed().as_millis() as i32;
+            let r = response.lock().await.clone();
+            done_tx.send(r).unwrap();
+        });
+    };
 
-            // Use content length if available, otherwise use body length
-            response.content_length = match content_length {
-                Some(l) => Some(l as i32),
-                None => Some(body_bytes.len() as i32),
-            };
-
-            {
-                // Write body to FS
-                let dir = window.app_handle().path().app_data_dir().unwrap();
-                let base_dir = dir.join("responses");
-                create_dir_all(base_dir.clone()).expect("Failed to create responses dir");
-                let body_path = match response.id.is_empty() {
-                    false => base_dir.join(response.id.clone()),
-                    true => base_dir.join(uuid::Uuid::new_v4().to_string()),
-                };
-                let mut f = File::options()
-                    .create(true)
-                    .truncate(true)
-                    .write(true)
-                    .open(&body_path)
-                    .expect("Failed to open file");
-                f.write_all(body_bytes.as_slice())
-                    .expect("Failed to write to file");
-                response.body_path = Some(
-                    body_path
-                        .to_str()
-                        .expect("Failed to get body path")
-                        .to_string(),
-                );
+    Ok(tokio::select! {
+        Ok(r) = done_rx => r,
+        _ = cancelled_rx.changed() => {
+            match get_http_response(window, response_id.as_str()).await {
+                Ok(mut r) => {
+                    r.state = HttpResponseState::Closed;
+                    update_response_if_id(&window, &r, &UpdateSource::Window).await.expect("Failed to update response")
+                },
+                _ => {
+                    response_err(&*response.lock().await, "Ephemeral request was cancelled".to_string(), &window).await
+                }.clone(),
             }
-
-            response = update_response_if_id(window, &response)
-                .await
-                .expect("Failed to update response");
-
-            // Add cookie store if specified
-            if let Some((cookie_store, mut cookie_jar)) = maybe_cookie_manager {
-                // let cookies = response_headers.get_all(SET_COOKIE).iter().map(|h| {
-                //     println!("RESPONSE COOKIE: {}", h.to_str().unwrap());
-                //     cookie_store::RawCookie::from_str(h.to_str().unwrap())
-                //         .expect("Failed to parse cookie")
-                // });
-                // store.store_response_cookies(cookies, &url);
-
-                let json_cookies: Vec<Cookie> = cookie_store
-                    .lock()
-                    .unwrap()
-                    .iter_any()
-                    .map(|c| {
-                        let json_cookie =
-                            serde_json::to_value(&c).expect("Failed to serialize cookie");
-                        serde_json::from_value(json_cookie).expect("Failed to deserialize cookie")
-                    })
-                    .collect::<Vec<_>>();
-                cookie_jar.cookies = json_cookies;
-                if let Err(e) = upsert_cookie_jar(window, &cookie_jar).await {
-                    error!("Failed to update cookie jar: {}", e);
-                };
-            }
-
-            Ok(response)
         }
-        Err(e) => response_err(response, e.to_string(), window).await,
-    }
+    })
 }
 
 fn ensure_proto(url_str: &str) -> String {
@@ -486,125 +600,9 @@ fn get_str<'a>(v: &'a Value, key: &str) -> &'a str {
     }
 }
 
-fn get_str_h<'a>(v: &'a HashMap<String, Value>, key: &str) -> &'a str {
+fn get_str_h<'a>(v: &'a BTreeMap<String, Value>, key: &str) -> &'a str {
     match v.get(key) {
         None => "",
         Some(v) => v.as_str().unwrap_or_default(),
-    }
-}
-
-fn replace_path_placeholder(p: &HttpUrlParameter, url: &str) -> String {
-    if !p.enabled {
-        return url.to_string();
-    }
-
-    let re = regex::Regex::new(format!("(/){}([/?#]|$)", p.name).as_str()).unwrap();
-    let result = re
-        .replace_all(url, |cap: &regex::Captures| {
-            format!(
-                "{}{}{}",
-                cap[1].to_string(),
-                urlencoding::encode(p.value.as_str()),
-                cap[2].to_string()
-            )
-        })
-        .into_owned();
-    result
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::http_request::replace_path_placeholder;
-    use yaak_models::models::HttpUrlParameter;
-
-    #[test]
-    fn placeholder_middle() {
-        let p = HttpUrlParameter {
-            name: ":foo".into(),
-            value: "xxx".into(),
-            enabled: true,
-        };
-        assert_eq!(
-            replace_path_placeholder(&p, "https://example.com/:foo/bar"),
-            "https://example.com/xxx/bar",
-        );
-    }
-
-    #[test]
-    fn placeholder_end() {
-        let p = HttpUrlParameter {
-            name: ":foo".into(),
-            value: "xxx".into(),
-            enabled: true,
-        };
-        assert_eq!(
-            replace_path_placeholder(&p, "https://example.com/:foo"),
-            "https://example.com/xxx",
-        );
-    }
-
-    #[test]
-    fn placeholder_query() {
-        let p = HttpUrlParameter {
-            name: ":foo".into(),
-            value: "xxx".into(),
-            enabled: true,
-        };
-        assert_eq!(
-            replace_path_placeholder(&p, "https://example.com/:foo?:foo"),
-            "https://example.com/xxx?:foo",
-        );
-    }
-
-    #[test]
-    fn placeholder_missing() {
-        let p = HttpUrlParameter {
-            enabled: true,
-            name: "".to_string(),
-            value: "".to_string(),
-        };
-        assert_eq!(
-            replace_path_placeholder(&p, "https://example.com/:missing"),
-            "https://example.com/:missing",
-        );
-    }
-
-    #[test]
-    fn placeholder_disabled() {
-        let p = HttpUrlParameter {
-            enabled: false,
-            name: ":foo".to_string(),
-            value: "xxx".to_string(),
-        };
-        assert_eq!(
-            replace_path_placeholder(&p, "https://example.com/:foo"),
-            "https://example.com/:foo",
-        );
-    }
-
-    #[test]
-    fn placeholder_prefix() {
-        let p = HttpUrlParameter {
-            name: ":foo".into(),
-            value: "xxx".into(),
-            enabled: true,
-        };
-        assert_eq!(
-            replace_path_placeholder(&p, "https://example.com/:foooo"),
-            "https://example.com/:foooo",
-        );
-    }
-
-    #[test]
-    fn placeholder_encode() {
-        let p = HttpUrlParameter {
-            name: ":foo".into(),
-            value: "Hello World".into(),
-            enabled: true,
-        };
-        assert_eq!(
-            replace_path_placeholder(&p, "https://example.com/:foo"),
-            "https://example.com/Hello%20World",
-        );
     }
 }

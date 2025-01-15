@@ -1,0 +1,9 @@
+{
+  "name": "@yaakapp/template-function-prompt",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build": "yaakcli build ./src/index.ts",
+    "dev": "yaakcli dev ./src/index.js"
+  }
+}

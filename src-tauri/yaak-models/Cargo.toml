@@ -1,0 +1,21 @@
+[package]
+name = "yaak-models"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+chrono = { version = "0.4.38", features = ["serde"] }
+log = "0.4.22"
+nanoid = "0.4.0"
+r2d2 = "0.8.10"
+r2d2_sqlite = { version = "0.25.0" }
+rusqlite = { version = "0.32.1", features = ["bundled", "chrono"] }
+sea-query = { version = "0.32.1", features = ["with-chrono", "attr"] }
+sea-query-rusqlite = { version = "0.7.0", features = ["with-chrono"] }
+serde = { version = "1.0.204", features = ["derive"] }
+serde_json = "1.0.122"
+sqlx = { version = "0.8.0", features = ["sqlite", "runtime-tokio-rustls"] }
+tauri = { workspace = true }
+thiserror = "1.0.63"
+ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }

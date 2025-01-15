@@ -101,7 +101,7 @@ export const JsonAttributeTree = ({
           <button className="group relative flex items-center pl-4 w-full" onClick={toggleExpanded}>
             <Icon
               size="xs"
-              icon="chevronRight"
+              icon="chevron_right"
               className={classNames(
                 'left-0 absolute transition-transform flex items-center',
                 'text-text-subtlest group-hover:text-text-subtle',

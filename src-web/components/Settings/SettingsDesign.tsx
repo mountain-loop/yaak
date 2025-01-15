@@ -1,14 +1,14 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import React, { useState } from 'react';
 import { useLocalStorage } from 'react-use';
-import { useThemes } from '../../hooks/useThemes';
 import { capitalize } from '../../lib/capitalize';
 import { invokeCmd } from '../../lib/tauri';
+import { getThemes } from '../../lib/theme/themes';
 import { yaakDark } from '../../lib/theme/themes/yaak';
 import { getThemeCSS } from '../../lib/theme/window';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
-import { Editor } from '../core/Editor';
+import {Editor} from "../core/Editor/Editor";
 import type { IconProps } from '../core/Icon';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';
@@ -31,23 +31,23 @@ const icons: IconProps['icon'][] = [
   'info',
   'box',
   'update',
-  'alert',
-  'arrowBigRightDash',
+  'alert_triangle',
+  'arrow_big_right_dash',
   'download',
   'copy',
-  'magicWand',
+  'magic_wand',
   'settings',
   'trash',
   'sparkles',
   'pencil',
   'paste',
   'search',
-  'sendHorizontal',
+  'send_horizontal',
 ];
 
-export function SettingsDesign() {
-  const themes = useThemes();
+const themes = getThemes();
 
+export function SettingsDesign() {
   const [exportDir, setExportDir] = useLocalStorage<string | null>('theme_export_dir', null);
   const [loadingExport, setLoadingExport] = useState<boolean>(false);
 
@@ -107,6 +107,7 @@ export function SettingsDesign() {
         placeholder="Placeholder"
         size="sm"
         rightSlot={<IconButton title="search" size="xs" className="w-8 m-0.5" icon="search" />}
+        stateKey={null}
       />
       <Editor
         defaultValue={[
@@ -118,6 +119,7 @@ export function SettingsDesign() {
         ].join('\n')}
         heightMode="auto"
         language="javascript"
+        stateKey={null}
       />
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap gap-1">

@@ -1,22 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
-import type { CookieJar } from '@yaakapp/api';
-import { invokeCmd } from '../lib/tauri';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import type { CookieJar } from '@yaakapp-internal/models';
+import { atom, useAtomValue } from 'jotai';
 
-export function cookieJarsQueryKey({ workspaceId }: { workspaceId: string }) {
-  return ['cookie_jars', { workspaceId }];
-}
+export const cookieJarsAtom = atom<CookieJar[] | undefined>();
+
+export const sortedCookieJars = atom((get) => {
+  return get(cookieJarsAtom)?.sort((a, b) => a.name.localeCompare(b.name));
+});
 
 export function useCookieJars() {
-  const workspace = useActiveWorkspace();
-  return useQuery({
-    enabled: workspace != null,
-    queryKey: cookieJarsQueryKey({ workspaceId: workspace?.id ?? 'n/a' }),
-    queryFn: async () => {
-      if (workspace == null) return [];
-      return (await invokeCmd('cmd_list_cookie_jars', {
-        workspaceId: workspace.id,
-      })) as CookieJar[];
-    },
-  });
+  return useAtomValue(sortedCookieJars);
 }

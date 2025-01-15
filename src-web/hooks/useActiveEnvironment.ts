@@ -1,38 +1,32 @@
-import { useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useEnvironments } from './useEnvironments';
-
-export function useActiveEnvironment() {
-  const [id, setId] = useActiveEnvironmentId();
-  const environments = useEnvironments();
-  const environment = useMemo(
-    () => environments.find((w) => w.id === id) ?? null,
-    [environments, id],
-  );
-  return [environment, setId] as const;
-}
+import { useSearch } from '@tanstack/react-router';
+import type { Environment } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
+import { atom } from 'jotai/index';
+import { useEffect } from 'react';
+import { jotaiStore } from '../lib/jotai';
+import { environmentsAtom } from './useEnvironments';
 
 export const QUERY_ENVIRONMENT_ID = 'environment_id';
 
-function useActiveEnvironmentId() {
-  // NOTE: This query param is accessed from Rust side, so do not change
-  const [params, setParams] = useSearchParams();
-  const id = params.get(QUERY_ENVIRONMENT_ID);
+export const activeEnvironmentIdAtom = atom<string>();
 
-  const setId = useCallback(
-    (id: string | null) => {
-      setParams((p) => {
-        const existing = Object.fromEntries(p);
-        if (id == null) {
-          delete existing[QUERY_ENVIRONMENT_ID];
-        } else {
-          existing[QUERY_ENVIRONMENT_ID] = id;
-        }
-        return existing;
-      });
-    },
-    [setParams],
+export const activeEnvironmentAtom = atom<Environment | null>((get) => {
+  const activeEnvironmentId = get(activeEnvironmentIdAtom);
+  return get(environmentsAtom).find((e) => e.id === activeEnvironmentId) ?? null;
+});
+
+export function useActiveEnvironment() {
+  return useAtomValue(activeEnvironmentAtom);
+}
+
+export function getActiveEnvironment() {
+  return jotaiStore.get(activeEnvironmentAtom);
+}
+
+export function useSubscribeActiveEnvironmentId() {
+  const { environment_id } = useSearch({ strict: false });
+  useEffect(
+    () => jotaiStore.set(activeEnvironmentIdAtom, environment_id ?? undefined),
+    [environment_id],
   );
-
-  return [id, setId] as const;
 }

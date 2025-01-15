@@ -1,4 +1,4 @@
-import type { HttpResponseHeader } from '@yaakapp/api';
+import type { HttpResponseHeader } from '@yaakapp-internal/models';
 import { useMemo } from 'react';
 
 export function useContentTypeFromHeaders(headers: HttpResponseHeader[] | null): string | null {

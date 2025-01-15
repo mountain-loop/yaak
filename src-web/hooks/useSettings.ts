@@ -1,4 +1,4 @@
-import type { Settings } from '@yaakapp/api';
+import type { Settings } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { atom } from 'jotai/index';
 import { getSettings } from '../lib/store';

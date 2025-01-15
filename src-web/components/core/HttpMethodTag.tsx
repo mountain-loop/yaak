@@ -1,5 +1,5 @@
 import classNames from 'classnames';
-import type { GrpcRequest, HttpRequest } from '@yaakapp/api';
+import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 
 interface Props {
   request: HttpRequest | GrpcRequest;
@@ -34,8 +34,8 @@ export function HttpMethodTag({ shortNames, request, className }: Props) {
     request.model === 'http_request' && request.bodyType === 'graphql'
       ? 'GQL'
       : request.model === 'grpc_request'
-      ? 'GRPC'
-      : request.method;
+        ? 'GRPC'
+        : request.method;
 
   const m = method.toLowerCase();
   const methodMap: Record<string, string> = shortNames ? shortMethodMap : longMethodMap;

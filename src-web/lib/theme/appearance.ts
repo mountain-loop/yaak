@@ -18,7 +18,9 @@ export async function getWindowAppearance(): Promise<Appearance> {
 export function subscribeToWindowAppearanceChange(
   cb: (appearance: Appearance) => void,
 ): () => void {
-  const container = { unsubscribe: () => {} };
+  const container = {
+    unsubscribe: () => {},
+  };
 
   getCurrentWebviewWindow()
     .onThemeChanged((t) => {
@@ -29,4 +31,18 @@ export function subscribeToWindowAppearanceChange(
     });
 
   return () => container.unsubscribe();
+}
+
+export function resolveAppearance(
+  preferredAppearance: Appearance,
+  appearanceSetting: string,
+): Appearance {
+  const appearance = appearanceSetting === 'system' ? preferredAppearance : appearanceSetting;
+  return appearance === 'dark' ? 'dark' : 'light';
+}
+
+export function subscribeToPreferredAppearance(cb: (a: Appearance) => void) {
+  cb(getCSSAppearance());
+  getWindowAppearance().then(cb);
+  subscribeToWindowAppearanceChange(cb);
 }

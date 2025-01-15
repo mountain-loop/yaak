@@ -1,3 +1,4 @@
+import type { ShowToastRequest } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
@@ -14,28 +15,24 @@ export interface ToastProps {
   onClose: () => void;
   className?: string;
   timeout: number | null;
-  action?: ReactNode;
-  variant?: 'custom' | 'copied' | 'success' | 'info' | 'warning' | 'error';
+  action?: (args: { hide: () => void }) => ReactNode;
+  icon?: ShowToastRequest['icon'];
+  color?: ShowToastRequest['color'];
 }
 
-const ICONS: Record<NonNullable<ToastProps['variant']>, IconProps['icon'] | null> = {
+const ICONS: Record<NonNullable<ToastProps['color']>, IconProps['icon'] | null> = {
   custom: null,
-  copied: 'copyCheck',
-  warning: 'alert',
-  error: 'alert',
+  default: 'info',
+  danger: 'alert_triangle',
   info: 'info',
-  success: 'checkCircle',
+  notice: 'alert_triangle',
+  primary: 'info',
+  secondary: 'info',
+  success: 'check_circle',
+  warning: 'alert_triangle',
 };
 
-export function Toast({
-  children,
-  className,
-  open,
-  onClose,
-  timeout,
-  action,
-  variant = 'info',
-}: ToastProps) {
+export function Toast({ children, open, onClose, timeout, action, icon, color }: ToastProps) {
   useKey(
     'Escape',
     () => {
@@ -45,8 +42,9 @@ export function Toast({
     {},
     [open],
   );
+  color = color ?? 'default';
 
-  const icon = variant in ICONS && ICONS[variant];
+  const toastIcon = icon ?? (color in ICONS && ICONS[color]);
 
   return (
     <motion.div
@@ -54,55 +52,45 @@ export function Toast({
       animate={{ opacity: 100, right: 0 }}
       exit={{ opacity: 0, right: '-100%' }}
       transition={{ duration: 0.2 }}
-      className={classNames(
-        className,
-        'x-theme-toast',
-        'pointer-events-auto',
-        'relative bg-surface pointer-events-auto',
-        'rounded-lg',
-        'border border-border-subtle shadow-lg',
-        'max-w-[calc(100vw-5rem)] max-h-[calc(100vh-6rem)]',
-        'w-[22rem] max-h-[80vh]',
-        'm-2 grid grid-cols-[1fr_auto]',
-        'text',
-      )}
+      className={classNames('bg-surface m-2 rounded-lg')}
     >
-      <div className="px-3 py-3 flex items-center gap-2">
-        {icon && (
-          <Icon
-            icon={icon}
-            className={classNames(
-              variant === 'success' && 'text-success',
-              variant === 'warning' && 'text-warning',
-              variant === 'error' && 'text-danger',
-              variant === 'copied' && 'text-primary',
-            )}
-          />
+      <div
+        className={classNames(
+          `x-theme-toast x-theme-toast--${color}`,
+          'pointer-events-auto overflow-hidden',
+          'relative pointer-events-auto bg-surface text-text rounded-lg',
+          'border border-border shadow-lg w-[25rem]',
+          'grid grid-cols-[1fr_auto]',
         )}
-        <VStack space={2}>
-          <div>{children}</div>
-          {action}
-        </VStack>
-      </div>
-
-      <IconButton
-        color="custom"
-        className="opacity-60"
-        title="Dismiss"
-        icon="x"
-        onClick={onClose}
-      />
-
-      {timeout != null && (
-        <div className="w-full absolute bottom-0 left-0 right-0">
-          <motion.div
-            className="bg-surface-highlight h-0.5"
-            initial={{ width: '100%' }}
-            animate={{ width: '0%', opacity: 0.2 }}
-            transition={{ duration: timeout / 1000, ease: 'linear' }}
-          />
+      >
+        <div className="px-3 py-3 flex items-start gap-2 w-full">
+          {toastIcon && <Icon icon={toastIcon} className="mt-1 text-text-subtle" />}
+          <VStack space={2} className="w-full">
+            <div>{children}</div>
+            {action?.({ hide: onClose })}
+          </VStack>
         </div>
-      )}
+
+        <IconButton
+          color={color}
+          variant="border"
+          className="opacity-60 border-0"
+          title="Dismiss"
+          icon="x"
+          onClick={onClose}
+        />
+
+        {timeout != null && (
+          <div className="w-full absolute bottom-0 left-0 right-0">
+            <motion.div
+              className="bg-surface-highlight h-[3px]"
+              initial={{ width: '100%' }}
+              animate={{ width: '0%', opacity: 0.2 }}
+              transition={{ duration: timeout / 1000, ease: 'linear' }}
+            />
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 }

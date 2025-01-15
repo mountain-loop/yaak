@@ -1,49 +1,55 @@
 import { useMemo } from 'react';
+import { createFolder } from '../commands/commands';
 import type { DropdownItem } from '../components/core/Dropdown';
 import { Icon } from '../components/core/Icon';
-import { BODY_TYPE_GRAPHQL } from '../lib/models';
-import { useCreateFolder } from './useCreateFolder';
+import { generateId } from '../lib/generateId';
+import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
+import { getActiveRequest } from './useActiveRequest';
 import { useCreateGrpcRequest } from './useCreateGrpcRequest';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
 
 export function useCreateDropdownItems({
   hideFolder,
   hideIcons,
-  folderId,
+  folderId: folderIdOption,
 }: {
   hideFolder?: boolean;
   hideIcons?: boolean;
-  folderId?: string | null;
+  folderId?: string | null | 'active-folder';
 } = {}): DropdownItem[] {
-  const createHttpRequest = useCreateHttpRequest();
-  const createGrpcRequest = useCreateGrpcRequest();
-  const createFolder = useCreateFolder();
+  const { mutate: createHttpRequest } = useCreateHttpRequest();
+  const { mutate: createGrpcRequest } = useCreateGrpcRequest();
 
-  return useMemo<DropdownItem[]>(
-    () => [
+  return useMemo((): DropdownItem[] => {
+    const folderId =
+      folderIdOption === 'active-folder' ? getActiveRequest()?.folderId : folderIdOption;
+
+    return [
       {
         key: 'create-http-request',
         label: 'HTTP Request',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-        onSelect: () => createHttpRequest.mutate({ folderId }),
+        onSelect: () => {
+          createHttpRequest({ folderId });
+        },
       },
       {
         key: 'create-graphql-request',
         label: 'GraphQL Query',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
         onSelect: () =>
-          createHttpRequest.mutate({
+          createHttpRequest({
             folderId,
             bodyType: BODY_TYPE_GRAPHQL,
             method: 'POST',
-            headers: [{ name: 'Content-Type', value: 'application/json' }],
+            headers: [{ name: 'Content-Type', value: 'application/json', id: generateId() }],
           }),
       },
       {
         key: 'create-grpc-request',
         label: 'gRPC Call',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-        onSelect: () => createGrpcRequest.mutate({ folderId }),
+        onSelect: () => createGrpcRequest({ folderId }),
       },
       ...((hideFolder
         ? []
@@ -58,7 +64,6 @@ export function useCreateDropdownItems({
               onSelect: () => createFolder.mutate({ folderId }),
             },
           ]) as DropdownItem[]),
-    ],
-    [createFolder, createGrpcRequest, createHttpRequest, folderId, hideFolder, hideIcons],
-  );
+    ];
+  }, [createGrpcRequest, createHttpRequest, folderIdOption, hideFolder, hideIcons]);
 }

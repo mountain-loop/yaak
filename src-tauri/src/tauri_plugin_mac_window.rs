@@ -1,8 +1,12 @@
+use crate::MAIN_WINDOW_PREFIX;
 use hex_color::HexColor;
 use log::warn;
 use objc::{msg_send, sel, sel_impl};
 use rand::{distributions::Alphanumeric, Rng};
-use tauri::{plugin::{Builder, TauriPlugin}, Manager, Runtime, Window, WindowEvent, Emitter, Listener};
+use tauri::{
+    plugin::{Builder, TauriPlugin},
+    Emitter, Listener, Manager, Runtime, Window, WindowEvent,
+};
 
 const WINDOW_CONTROL_PAD_X: f64 = 13.0;
 const WINDOW_CONTROL_PAD_Y: f64 = 18.0;
@@ -127,7 +131,7 @@ fn update_window_theme<R: Runtime>(window: Window<R>, color: HexColor) {
 
 #[cfg(target_os = "macos")]
 fn position_traffic_lights(ns_window_handle: UnsafeWindowHandle, x: f64, y: f64, label: String) {
-    if label.starts_with("nested_") {
+    if !label.starts_with(MAIN_WINDOW_PREFIX) {
         return;
     }
 
@@ -198,10 +202,9 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
     }
 
     unsafe {
-        let ns_win = window
-            .ns_window()
-            .expect("NS Window should exist to mount traffic light delegate.")
-            as id;
+        let ns_win =
+            window.ns_window().expect("NS Window should exist to mount traffic light delegate.")
+                as id;
 
         let current_delegate: id = ns_win.delegate();
 
@@ -318,10 +321,7 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
         ) {
             unsafe {
                 with_window_state(&*this, |state: &mut WindowState<R>| {
-                    state
-                        .window
-                        .emit("did-enter-fullscreen", ())
-                        .expect("Failed to emit event");
+                    state.window.emit("did-enter-fullscreen", ()).expect("Failed to emit event");
                 });
 
                 let super_del: id = *this.get_ivar("super_delegate");
@@ -335,10 +335,7 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
         ) {
             unsafe {
                 with_window_state(&*this, |state: &mut WindowState<R>| {
-                    state
-                        .window
-                        .emit("will-enter-fullscreen", ())
-                        .expect("Failed to emit event");
+                    state.window.emit("will-enter-fullscreen", ()).expect("Failed to emit event");
                 });
 
                 let super_del: id = *this.get_ivar("super_delegate");
@@ -352,10 +349,7 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
         ) {
             unsafe {
                 with_window_state(&*this, |state: &mut WindowState<R>| {
-                    state
-                        .window
-                        .emit("did-exit-fullscreen", ())
-                        .expect("Failed to emit event");
+                    state.window.emit("did-exit-fullscreen", ()).expect("Failed to emit event");
 
                     let id = state.window.ns_window().expect("Failed to emit event") as id;
                     position_traffic_lights(
@@ -377,10 +371,7 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
         ) {
             unsafe {
                 with_window_state(&*this, |state: &mut WindowState<R>| {
-                    state
-                        .window
-                        .emit("will-exit-fullscreen", ())
-                        .expect("Failed to emit event");
+                    state.window.emit("will-exit-fullscreen", ()).expect("Failed to emit event");
                 });
 
                 let super_del: id = *this.get_ivar("super_delegate");
@@ -428,11 +419,8 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
             window: window.clone(),
         };
         let app_box = Box::into_raw(Box::new(app_state)) as *mut c_void;
-        let random_str: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(20)
-            .map(char::from)
-            .collect();
+        let random_str: String =
+            rand::thread_rng().sample_iter(&Alphanumeric).take(20).map(char::from).collect();
 
         // We need to ensure we have a unique delegate name, otherwise we will panic while trying to create a duplicate
         // delegate with the same name.

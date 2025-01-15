@@ -2,6 +2,7 @@ import classNames from 'classnames';
 import type { CSSProperties, ReactNode } from 'react';
 import { useState } from 'react';
 import { useOsInfo } from '../../hooks/useOsInfo';
+import { trackEvent } from '../../lib/analytics';
 import type { ButtonProps } from './Button';
 import { Button } from './Button';
 import type { RadioDropdownItem } from './RadioDropdown';
@@ -20,6 +21,7 @@ export interface SelectProps<T extends string> {
   onChange: (value: T) => void;
   size?: ButtonProps['size'];
   className?: string;
+  event?: string;
 }
 
 export function Select<T extends string>({
@@ -33,12 +35,20 @@ export function Select<T extends string>({
   leftSlot,
   onChange,
   className,
+  event,
   size = 'md',
 }: SelectProps<T>) {
   const osInfo = useOsInfo();
   const [focused, setFocused] = useState<boolean>(false);
   const id = `input-${name}`;
   const isInvalidSelection = options.find((o) => 'value' in o && o.value === value) == null;
+
+  const handleChange = (value: T) => {
+    onChange?.(value);
+    if (event != null) {
+      trackEvent('select', 'click', { id: event, value });
+    }
+  };
 
   return (
     <div
@@ -79,7 +89,7 @@ export function Select<T extends string>({
           <select
             value={value}
             style={selectBackgroundStyles}
-            onChange={(e) => onChange(e.target.value as T)}
+            onChange={(e) => handleChange(e.target.value as T)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             className={classNames('pr-7 w-full outline-none bg-transparent')}
@@ -98,7 +108,7 @@ export function Select<T extends string>({
       ) : (
         // Use custom "select" component until Tauri can be configured to have select menus not always appear in
         // light mode
-        <RadioDropdown value={value} onChange={onChange} items={options}>
+        <RadioDropdown value={value} onChange={handleChange} items={options}>
           <Button
             className="w-full text-sm font-mono"
             justify="start"

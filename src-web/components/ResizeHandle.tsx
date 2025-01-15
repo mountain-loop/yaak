@@ -31,7 +31,7 @@ export function ResizeHandle({
       onDoubleClick={onReset}
       className={classNames(
         className,
-        'group z-10 flex',
+        'group z-10 flex select-none',
         // 'bg-fg-info', // For debugging
         vertical ? 'w-full h-3 cursor-row-resize' : 'h-full w-3 cursor-col-resize',
         justify === 'center' && 'justify-center',

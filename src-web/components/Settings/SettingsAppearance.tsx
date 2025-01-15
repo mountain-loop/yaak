@@ -1,16 +1,16 @@
+import type { EditorKeymap } from '@yaakapp-internal/models';
 import React from 'react';
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
 import { useResolvedAppearance } from '../../hooks/useResolvedAppearance';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import { useSettings } from '../../hooks/useSettings';
-import { useThemes } from '../../hooks/useThemes';
 import { useUpdateSettings } from '../../hooks/useUpdateSettings';
-import { trackEvent } from '../../lib/analytics';
 import { clamp } from '../../lib/clamp';
+import { getThemes } from '../../lib/theme/themes';
 import { isThemeDark } from '../../lib/theme/window';
 import type { ButtonProps } from '../core/Button';
 import { Checkbox } from '../core/Checkbox';
-import { Editor } from '../core/Editor';
+import { Editor } from '../core/Editor/Editor';
 import type { IconProps } from '../core/Icon';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';
@@ -19,9 +19,16 @@ import { Select } from '../core/Select';
 import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';
 
-const fontSizes = [
+const fontSizeOptions = [
   8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
 ].map((n) => ({ label: `${n}`, value: `${n}` }));
+
+const keymaps: { value: EditorKeymap; label: string }[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'vim', label: 'Vim' },
+  { value: 'vscode', label: 'VSCode' },
+  { value: 'emacs', label: 'Emacs' },
+];
 
 const buttonColors: ButtonProps['color'][] = [
   'primary',
@@ -38,26 +45,27 @@ const icons: IconProps['icon'][] = [
   'info',
   'box',
   'update',
-  'alert',
-  'arrowBigRightDash',
+  'alert_triangle',
+  'arrow_big_right_dash',
   'download',
   'copy',
-  'magicWand',
+  'magic_wand',
   'settings',
   'trash',
   'sparkles',
   'pencil',
   'paste',
   'search',
-  'sendHorizontal',
+  'send_horizontal',
 ];
+
+const { themes } = getThemes();
 
 export function SettingsAppearance() {
   const workspace = useActiveWorkspace();
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
   const appearance = useResolvedAppearance();
-  const { themes } = useThemes();
   const activeTheme = useResolvedTheme();
 
   if (settings == null || workspace == null) {
@@ -86,8 +94,9 @@ export function SettingsAppearance() {
         label="Font Size"
         labelPosition="left"
         value={`${settings.interfaceFontSize}`}
-        options={fontSizes}
+        options={fontSizeOptions}
         onChange={(v) => updateSettings.mutate({ interfaceFontSize: parseInt(v) })}
+        event="ui-font-size"
       />
       <Select
         size="sm"
@@ -95,13 +104,25 @@ export function SettingsAppearance() {
         label="Editor Font Size"
         labelPosition="left"
         value={`${settings.editorFontSize}`}
-        options={fontSizes}
+        options={fontSizeOptions}
         onChange={(v) => updateSettings.mutate({ editorFontSize: clamp(parseInt(v) || 14, 8, 30) })}
+        event="editor-font-size"
+      />
+      <Select
+        size="sm"
+        name="editorKeymap"
+        label="Editor Keymap"
+        labelPosition="left"
+        value={`${settings.editorKeymap}`}
+        options={keymaps}
+        onChange={(v) => updateSettings.mutate({ editorKeymap: v })}
+        event="editor-keymap"
       />
       <Checkbox
         checked={settings.editorSoftWrap}
         title="Wrap Editor Lines"
         onChange={(editorSoftWrap) => updateSettings.mutate({ editorSoftWrap })}
+        event="editor-wrap-lines"
       />
 
       <Separator className="my-4" />
@@ -112,10 +133,8 @@ export function SettingsAppearance() {
         labelPosition="top"
         size="sm"
         value={settings.appearance}
-        onChange={(appearance) => {
-          trackEvent('appearance', 'update', { appearance });
-          updateSettings.mutateAsync({ appearance });
-        }}
+        onChange={(appearance) => updateSettings.mutate({ appearance })}
+        event="appearance"
         options={[
           { label: 'Automatic', value: 'system' },
           { label: 'Light', value: 'light' },
@@ -133,10 +152,8 @@ export function SettingsAppearance() {
             className="flex-1"
             value={activeTheme.light.id}
             options={lightThemes}
-            onChange={(themeLight) => {
-              trackEvent('theme', 'update', { theme: themeLight, appearance: 'light' });
-              updateSettings.mutateAsync({ ...settings, themeLight });
-            }}
+            event="theme.light"
+            onChange={(themeLight) => updateSettings.mutate({ ...settings, themeLight })}
           />
         )}
         {(settings.appearance === 'system' || settings.appearance === 'dark') && (
@@ -149,10 +166,8 @@ export function SettingsAppearance() {
             size="sm"
             value={activeTheme.dark.id}
             options={darkThemes}
-            onChange={(themeDark) => {
-              trackEvent('theme', 'update', { theme: themeDark, appearance: 'dark' });
-              updateSettings.mutateAsync({ ...settings, themeDark });
-            }}
+            event="theme.dark"
+            onChange={(themeDark) => updateSettings.mutate({ ...settings, themeDark })}
           />
         )}
       </HStack>
@@ -161,9 +176,10 @@ export function SettingsAppearance() {
         space={3}
         className="mt-3 w-full bg-surface p-3 border border-dashed border-border-subtle rounded overflow-x-auto"
       >
-        <HStack className="text font-bold" space={2}>
-          Theme Preview{' '}
+        <HStack className="text" space={1.5}>
           <Icon icon={appearance === 'dark' ? 'moon' : 'sun'} className="text-text-subtle" />
+          <strong>{activeTheme.active.name}</strong>
+          <em>(preview)</em>
         </HStack>
         <HStack space={1.5} className="w-full">
           {buttonColors.map((c, i) => (
@@ -199,6 +215,7 @@ export function SettingsAppearance() {
           ].join('\n')}
           heightMode="auto"
           language="javascript"
+          stateKey={null}
         />
       </VStack>
     </VStack>

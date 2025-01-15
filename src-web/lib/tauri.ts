@@ -6,15 +6,13 @@ type TauriCmd =
   | 'cmd_check_for_updates'
   | 'cmd_create_cookie_jar'
   | 'cmd_create_environment'
-  | 'cmd_create_plugin'
   | 'cmd_template_tokens_to_string'
-  | 'cmd_create_folder'
   | 'cmd_create_grpc_request'
   | 'cmd_create_http_request'
-  | 'cmd_create_workspace'
   | 'cmd_curl_to_request'
   | 'cmd_delete_all_grpc_connections'
   | 'cmd_delete_all_http_responses'
+  | 'cmd_delete_send_history'
   | 'cmd_delete_cookie_jar'
   | 'cmd_delete_environment'
   | 'cmd_delete_folder'
@@ -24,23 +22,29 @@ type TauriCmd =
   | 'cmd_delete_http_response'
   | 'cmd_delete_workspace'
   | 'cmd_dismiss_notification'
+  | 'cmd_duplicate_folder'
   | 'cmd_duplicate_grpc_request'
   | 'cmd_duplicate_http_request'
   | 'cmd_export_data'
   | 'cmd_filter_response'
+  | 'cmd_format_json'
   | 'cmd_get_cookie_jar'
   | 'cmd_get_environment'
   | 'cmd_get_folder'
   | 'cmd_get_grpc_request'
   | 'cmd_get_http_request'
+  | 'cmd_get_sse_events'
   | 'cmd_get_key_value'
   | 'cmd_get_settings'
   | 'cmd_get_workspace'
+  | 'cmd_get_workspace_meta'
   | 'cmd_grpc_go'
   | 'cmd_grpc_reflect'
   | 'cmd_http_request_actions'
   | 'cmd_import_data'
+  | 'cmd_install_plugin'
   | 'cmd_list_cookie_jars'
+  | 'cmd_list_key_values'
   | 'cmd_list_environments'
   | 'cmd_list_folders'
   | 'cmd_list_grpc_connections'
@@ -51,8 +55,8 @@ type TauriCmd =
   | 'cmd_list_plugins'
   | 'cmd_list_workspaces'
   | 'cmd_metadata'
-  | 'cmd_new_nested_window'
-  | 'cmd_new_window'
+  | 'cmd_new_main_window'
+  | 'cmd_new_child_window'
   | 'cmd_parse_template'
   | 'cmd_plugin_info'
   | 'cmd_render_template'
@@ -64,6 +68,7 @@ type TauriCmd =
   | 'cmd_set_update_mode'
   | 'cmd_template_functions'
   | 'cmd_track_event'
+  | 'cmd_uninstall_plugin'
   | 'cmd_update_cookie_jar'
   | 'cmd_update_environment'
   | 'cmd_update_folder'
@@ -71,9 +76,15 @@ type TauriCmd =
   | 'cmd_update_http_request'
   | 'cmd_update_settings'
   | 'cmd_update_workspace'
+  | 'cmd_update_workspace_meta'
   | 'cmd_write_file_dev';
 
 export async function invokeCmd<T>(cmd: TauriCmd, args?: InvokeArgs): Promise<T> {
   // console.log('RUN COMMAND', cmd, args);
-  return invoke(cmd, args);
+  try {
+    return await invoke(cmd, args);
+  } catch (err) {
+    console.warn('Tauri command error', cmd, err);
+    throw err;
+  }
 }

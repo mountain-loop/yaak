@@ -3,6 +3,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import type { HotkeyAction } from '../../hooks/useHotKey';
 import { useFormattedHotkey, useHotKey } from '../../hooks/useHotKey';
+import { trackEvent } from '../../lib/analytics';
 import { Icon } from './Icon';
 
 export type ButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, 'color' | 'onChange'> & {
@@ -28,6 +29,7 @@ export type ButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, 'color' | 'onC
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
   hotkeyAction?: HotkeyAction;
+  event?: string | { id: string; [attr: string]: number | string };
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -48,12 +50,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     hotkeyAction,
     title,
     onClick,
+    event,
     ...props
   }: ButtonProps,
   ref,
 ) {
   const hotkeyTrigger = useFormattedHotkey(hotkeyAction ?? null)?.join('');
-  const fullTitle = hotkeyTrigger ? `${title}  ${hotkeyTrigger}` : title;
+  const fullTitle = hotkeyTrigger ? `${title ?? ''} ${hotkeyTrigger}`.trim() : title;
 
   const classes = classNames(
     className,
@@ -73,7 +76,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     size === 'md' && 'h-md px-3 rounded-md',
     size === 'sm' && 'h-sm px-2.5 rounded-md',
     size === 'xs' && 'h-xs px-2 text-sm rounded-md',
-    size === '2xs' && 'h-2xs px-1 text-xs rounded',
+    size === '2xs' && 'h-2xs px-2 text-xs rounded',
 
     // Solids
     variant === 'solid' && 'border-transparent',
@@ -107,7 +110,17 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       className={classes}
       disabled={disabled || isLoading}
-      onClick={onClick}
+      onClick={(e) => {
+        onClick?.(e);
+        if (event != null) {
+          trackEvent('button', 'click', typeof event === 'string' ? { id: event } : event);
+        }
+      }}
+      onDoubleClick={(e) => {
+        // Kind of a hack? This prevents double-clicks from going through buttons. For example, when
+        // double-clicking the workspace header to toggle window maximization
+        e.stopPropagation();
+      }}
       title={fullTitle}
       {...props}
     >
@@ -126,7 +139,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         {children}
       </div>
       {rightSlot && <div className="ml-1">{rightSlot}</div>}
-      {forDropdown && <Icon icon="chevronDown" size={size} className="ml-1 -mr-1" />}
+      {forDropdown && <Icon icon="chevron_down" size={size} className="ml-1 -mr-1" />}
     </button>
   );
 });

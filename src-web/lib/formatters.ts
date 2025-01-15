@@ -1,24 +1,37 @@
 import xmlFormat from 'xml-formatter';
+import { invokeCmd } from './tauri';
 
 const INDENT = '  ';
 
-export function tryFormatJson(text: string, pretty = true): string {
+export async function tryFormatJson(text: string): Promise<string> {
   if (text === '') return text;
 
   try {
-    if (pretty) return JSON.stringify(JSON.parse(text), null, INDENT);
-    else return JSON.stringify(JSON.parse(text));
-  } catch (_) {
-    return text;
+    const result = await invokeCmd<string>('cmd_format_json', { text });
+    return result;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (err) {
+    console.warn("Failed to format JSON", err);
+    // Nothing
   }
+
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (err) {
+    // Nothing
+  }
+
+  return text;
 }
 
-export function tryFormatXml(text: string): string {
+export async function tryFormatXml(text: string): Promise<string> {
   if (text === '') return text;
 
   try {
     return xmlFormat(text, { throwOnFailure: true, strictMode: false, indentation: INDENT });
-  } catch (_) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (err) {
     return text;
   }
 }

@@ -1,10 +1,10 @@
 const path = require('node:path');
 const decompress = require('decompress');
-const Downloader = require("nodejs-file-downloader");
-const {rmSync, cpSync, mkdirSync, existsSync} = require("node:fs");
-const {execSync} = require("node:child_process");
+const Downloader = require('nodejs-file-downloader');
+const { rmSync, cpSync, mkdirSync, existsSync } = require('node:fs');
+const { execSync } = require('node:child_process');
 
-const NODE_VERSION = 'v22.5.1';
+const NODE_VERSION = 'v22.9.0';
 
 // `${process.platform}_${process.arch}`
 const MAC_ARM = 'darwin_arm64';
@@ -39,20 +39,26 @@ const destDir = path.join(__dirname, `..`, 'src-tauri', 'vendored', 'node');
 const binDest = path.join(destDir, DST_BIN_MAP[key]);
 console.log(`Vendoring NodeJS ${NODE_VERSION} for ${key}`);
 
-if (existsSync(binDest) && execSync(`${binDest} --version`).toString('utf-8').trim() === NODE_VERSION) {
-  console.log("NodeJS already vendored");
+if (existsSync(binDest) && tryExecSync(`${binDest} --version`).trim() === NODE_VERSION) {
+  console.log('NodeJS already vendored');
   return;
 }
 
-rmSync(destDir, {recursive: true, force: true});
-mkdirSync(destDir, {recursive: true});
+rmSync(destDir, { recursive: true, force: true });
+mkdirSync(destDir, { recursive: true });
+
+const url = URL_MAP[key];
+const tmpDir = path.join(__dirname, 'tmp-node');
+rmSync(tmpDir, { recursive: true, force: true });
 
 (async function () {
-  const url = URL_MAP[key];
-  const tmpDir = path.join(__dirname, 'tmp', Date.now().toString());
-
   // Download GitHub release artifact
-  const {filePath} = await new Downloader({url, directory: tmpDir}).download();
+  console.log('Downloading NodeJS at', url);
+  const { filePath } = await new Downloader({
+    url,
+    directory: tmpDir,
+    timeout: 1000 * 60 * 2,
+  }).download();
 
   // Decompress to the same directory
   await decompress(filePath, tmpDir, {});
@@ -60,10 +66,18 @@ mkdirSync(destDir, {recursive: true});
   // Copy binary
   const binSrc = path.join(tmpDir, SRC_BIN_MAP[key]);
   cpSync(binSrc, binDest);
-  rmSync(tmpDir, {recursive: true, force: true});
+  rmSync(tmpDir, { recursive: true, force: true });
 
-  console.log("Downloaded NodeJS to", binDest);
-})().catch(err => {
+  console.log('Downloaded NodeJS to', binDest);
+})().catch((err) => {
   console.log('Script failed:', err);
   process.exit(1);
 });
+
+function tryExecSync(cmd) {
+  try {
+    return execSync(cmd).toString('utf-8');
+  } catch (_) {
+    return '';
+  }
+}

@@ -1,23 +1,25 @@
-import { useMutation } from '@tanstack/react-query';
-import type { Environment, Folder, GrpcRequest, HttpRequest, Workspace } from '@yaakapp/api';
+import type {
+  Environment,
+  Folder,
+  GrpcRequest,
+  HttpRequest,
+  Workspace,
+} from '@yaakapp-internal/models';
 import { Button } from '../components/core/Button';
 import { FormattedError } from '../components/core/FormattedError';
 import { VStack } from '../components/core/Stacks';
-import { useDialog } from '../components/DialogContext';
 import { ImportDataDialog } from '../components/ImportDataDialog';
-import { count } from '../lib/pluralize';
+import { showAlert } from '../lib/alert';
+import { showDialog } from '../lib/dialog';
+import { pluralizeCount } from '../lib/pluralize';
+import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveWorkspace } from './useActiveWorkspace';
-import { useAlert } from './useAlert';
-import { useAppRoutes } from './useAppRoutes';
+import { getActiveWorkspace } from './useActiveWorkspace';
+import { useFastMutation } from './useFastMutation';
 
 export function useImportData() {
-  const routes = useAppRoutes();
-  const dialog = useDialog();
-  const alert = useAlert();
-  const activeWorkspace = useActiveWorkspace();
-
   const importData = async (filePath: string): Promise<boolean> => {
+    const activeWorkspace = getActiveWorkspace();
     const imported: {
       workspaces: Workspace[];
       environments: Environment[];
@@ -31,7 +33,7 @@ export function useImportData() {
 
     const importedWorkspace = imported.workspaces[0];
 
-    dialog.show({
+    showDialog({
       id: 'import-complete',
       title: 'Import Complete',
       size: 'sm',
@@ -41,11 +43,11 @@ export function useImportData() {
         return (
           <VStack space={3} className="pb-4">
             <ul className="list-disc pl-6">
-              <li>{count('Workspace', workspaces.length)}</li>
-              <li>{count('Environment', environments.length)}</li>
-              <li>{count('Folder', folders.length)}</li>
-              <li>{count('HTTP Request', httpRequests.length)}</li>
-              <li>{count('GRPC Request', grpcRequests.length)}</li>
+              <li>{pluralizeCount('Workspace', workspaces.length)}</li>
+              <li>{pluralizeCount('Environment', environments.length)}</li>
+              <li>{pluralizeCount('Folder', folders.length)}</li>
+              <li>{pluralizeCount('HTTP Request', httpRequests.length)}</li>
+              <li>{pluralizeCount('GRPC Request', grpcRequests.length)}</li>
             </ul>
             <div>
               <Button className="ml-auto" onClick={hide} color="primary">
@@ -58,19 +60,21 @@ export function useImportData() {
     });
 
     if (importedWorkspace != null) {
-      routes.navigate('workspace', {
-        workspaceId: importedWorkspace.id,
-        environmentId: imported.environments[0]?.id,
+      const environmentId = imported.environments[0]?.id ?? null;
+      await router.navigate({
+        to: '/workspaces/$workspaceId',
+        params: { workspaceId: importedWorkspace.id },
+        search: { environment_id: environmentId },
       });
     }
 
     return true;
   };
 
-  return useMutation({
+  return useFastMutation({
     mutationKey: ['import_data'],
     onError: (err: string) => {
-      alert({
+      showAlert({
         id: 'import-failed',
         title: 'Import Failed',
         size: 'md',
@@ -79,7 +83,7 @@ export function useImportData() {
     },
     mutationFn: async () => {
       return new Promise<void>((resolve, reject) => {
-        dialog.show({
+        showDialog({
           id: 'import',
           title: 'Import Data',
           size: 'sm',

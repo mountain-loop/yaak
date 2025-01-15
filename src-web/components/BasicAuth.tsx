@@ -1,6 +1,6 @@
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
-import type { GrpcRequest, HttpRequest } from '@yaakapp/api';
+import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 import { Input } from './core/Input';
 import { VStack } from './core/Stacks';
 
@@ -17,6 +17,7 @@ export function BasicAuth<T extends HttpRequest | GrpcRequest>({ request }: Prop
       <Input
         useTemplating
         autocompleteVariables
+        stateKey={`basic.username.${request.id}`}
         forceUpdateKey={request.id}
         placeholder="username"
         label="Username"
@@ -47,6 +48,7 @@ export function BasicAuth<T extends HttpRequest | GrpcRequest>({ request }: Prop
         useTemplating
         autocompleteVariables
         forceUpdateKey={request?.id}
+        stateKey={`basic.password.${request.id}`}
         placeholder="password"
         label="Password"
         name="password"

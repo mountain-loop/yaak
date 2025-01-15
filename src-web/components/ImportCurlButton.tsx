@@ -28,9 +28,10 @@ export function ImportCurlButton() {
       transition={{ delay: 0.5 }}
     >
       <Button
-        size="xs"
+        size="2xs"
         variant="border"
-        color="primary"
+        color="success"
+        className="rounded-full"
         leftSlot={<Icon icon="paste" size="sm" />}
         isLoading={isLoading}
         onClick={async () => {
@@ -40,7 +41,7 @@ export function ImportCurlButton() {
             await clear(); // Clear the clipboard so the button goes away
             setClipboardText('');
           } catch (e) {
-            // Nothing
+            console.log('Failed to import curl', e);
           } finally {
             setIsLoading(false);
           }

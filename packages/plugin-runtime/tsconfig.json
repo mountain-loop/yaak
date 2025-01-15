@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "module": "node16",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "es2021",
+    "lib": ["es2021"],
+    "noImplicitAny": false,
+    "moduleResolution": "node16",
+    "sourceMap": true,
+    "outDir": "build",
+    "baseUrl": ".",
+    "paths": {
+      "*": [
+        "node_modules/*",
+        "src/types/*"
+      ]
+    }
+  },
+  "include": [
+    "src"
+  ]
+}

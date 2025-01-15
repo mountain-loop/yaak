@@ -1,4 +1,4 @@
-import type { HttpResponse } from '@yaakapp/api';
+import type { HttpResponse } from '@yaakapp-internal/models';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
 
 interface Props {
@@ -10,7 +10,9 @@ export function ResponseHeaders({ response }: Props) {
     <div className="overflow-auto h-full pb-4">
       <KeyValueRows>
         {response.headers.map((h, i) => (
-          <KeyValueRow labelColor="primary" key={i} label={h.name} value={h.value} />
+          <KeyValueRow labelColor="primary" key={i} label={h.name}>
+            {h.value}
+          </KeyValueRow>
         ))}
       </KeyValueRows>
     </div>

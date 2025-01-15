@@ -1,28 +1,30 @@
 import classNames from 'classnames';
+import type { ReactNode } from 'react';
+import { trackEvent } from '../../lib/analytics';
 import { Icon } from './Icon';
 import { HStack } from './Stacks';
 
-interface Props {
-  checked: boolean;
-  title: string;
+export interface CheckboxProps {
+  checked: boolean | 'indeterminate';
+  title: ReactNode;
   onChange: (checked: boolean) => void;
-  disabled?: boolean;
   className?: string;
+  disabled?: boolean;
   inputWrapperClassName?: string;
-  indeterminate?: boolean;
   hideLabel?: boolean;
+  event?: string;
 }
 
 export function Checkbox({
   checked,
-  indeterminate,
   onChange,
   className,
   inputWrapperClassName,
   disabled,
   title,
   hideLabel,
-}: Props) {
+  event,
+}: CheckboxProps) {
   return (
     <HStack
       as="label"
@@ -38,10 +40,18 @@ export function Checkbox({
           )}
           type="checkbox"
           disabled={disabled}
-          onChange={() => onChange(!checked)}
+          onChange={() => {
+            onChange(checked === 'indeterminate' ? true : !checked);
+            if (event != null) {
+              trackEvent('button', 'click', { id: event, checked: checked ? 'on' : 'off' });
+            }
+          }}
         />
         <div className="absolute inset-0 flex items-center justify-center">
-          <Icon size="sm" icon={indeterminate ? 'minus' : checked ? 'check' : 'empty'} />
+          <Icon
+            size="sm"
+            icon={checked === 'indeterminate' ? 'minus' : checked ? 'check' : 'empty'}
+          />
         </div>
       </div>
       {!hideLabel && title}

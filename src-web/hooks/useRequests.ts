@@ -1,9 +1,14 @@
-import { useMemo } from 'react';
-import { useGrpcRequests } from './useGrpcRequests';
-import { useHttpRequests } from './useHttpRequests';
+import { atom, useAtomValue } from 'jotai';
+import {jotaiStore} from "../lib/jotai";
+import { grpcRequestsAtom } from './useGrpcRequests';
+import { httpRequestsAtom } from './useHttpRequests';
+
+const requestsAtom = atom((get) => [...get(httpRequestsAtom), ...get(grpcRequestsAtom)]);
 
 export function useRequests() {
-  const httpRequests = useHttpRequests();
-  const grpcRequests = useGrpcRequests();
-  return useMemo(() => [...httpRequests, ...grpcRequests], [httpRequests, grpcRequests]);
+  return useAtomValue(requestsAtom);
+}
+
+export function getRequests() {
+  return jotaiStore.get(requestsAtom);
 }

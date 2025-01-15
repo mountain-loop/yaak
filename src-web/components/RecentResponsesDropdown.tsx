@@ -1,4 +1,4 @@
-import type { HttpResponse } from '@yaakapp/api';
+import type { HttpResponse } from '@yaakapp-internal/models';
 import { useCopyHttpResponse } from '../hooks/useCopyHttpResponse';
 import { useDeleteHttpResponse } from '../hooks/useDeleteHttpResponse';
 import { useDeleteHttpResponses } from '../hooks/useDeleteHttpResponses';
@@ -37,22 +37,22 @@ export const RecentResponsesDropdown = function ResponsePane({
           onSelect: saveResponse.mutate,
           leftSlot: <Icon icon="save" />,
           hidden: responses.length === 0,
-          disabled: responses.length === 0,
+          disabled: activeResponse.state !== 'closed' && activeResponse.status >= 100,
         },
         {
           key: 'copy',
-          label: 'Copy to Clipboard',
+          label: 'Copy Body',
           onSelect: copyResponse.mutate,
           leftSlot: <Icon icon="copy" />,
           hidden: responses.length === 0,
-          disabled: responses.length === 0,
+          disabled: activeResponse.state !== 'closed' && activeResponse.status >= 100,
         },
         {
           key: 'clear-single',
           label: 'Delete',
           leftSlot: <Icon icon="trash" />,
           onSelect: deleteResponse.mutate,
-          disabled: responses.length === 0,
+          disabled: activeResponse.state !== 'closed',
         },
         {
           key: 'unpin',
@@ -87,7 +87,7 @@ export const RecentResponsesDropdown = function ResponsePane({
     >
       <IconButton
         title="Show response history"
-        icon={activeResponse?.id === latestResponseId ? 'chevronDown' : 'pin'}
+        icon={activeResponse?.id === latestResponseId ? 'chevron_down' : 'pin'}
         className="m-0.5"
         size="sm"
         iconSize="md"

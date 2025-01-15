@@ -1,0 +1,10 @@
+{
+  "name": "@yaakapp/importer-postman",
+  "private": true,
+  "version": "0.0.1",
+  "main": "./build/index.js",
+  "scripts": {
+    "build": "yaakcli build ./src/index.js",
+    "dev": "yaakcli dev ./src/index.js"
+  }
+}

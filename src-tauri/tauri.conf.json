@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "identifier": "app.yaak.desktop",
   "build": {
-    "beforeBuildCommand": "npm run build",
-    "beforeDevCommand": "npm run dev:js",
+    "beforeBuildCommand": "npm run tauri-before-build",
+    "beforeDevCommand": "npm run tauri-before-dev",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
@@ -38,11 +38,15 @@
     }
   },
   "bundle": {
+    "publisher": "Yaak",
+    "license": "MIT",
+    "copyright": "Yaak",
+    "homepage": "https://yaak.app",
     "active": true,
     "category": "DeveloperTool",
     "externalBin": [
-      "vendored/protoc/yaakprotoc",
-      "vendored/node/yaaknode"
+      "vendored/node/yaaknode",
+      "vendored/protoc/yaakprotoc"
     ],
     "icon": [
       "icons/release/32x32.png",
@@ -52,12 +56,12 @@
       "icons/release/icon.ico"
     ],
     "longDescription": "A cross-platform desktop app for interacting with REST, GraphQL, and gRPC",
-    "resources": {
-      "migrations": "migrations",
-      "vendored/protoc/include": "protoc-include",
-      "vendored/plugins": "plugins",
-      "../plugin-runtime/build": "plugin-runtime"
-    },
+    "resources": [
+      "migrations",
+      "vendored/protoc/include",
+      "vendored/plugins",
+      "vendored/plugin-runtime"
+    ],
     "shortDescription": "Play with APIs, intuitively",
     "targets": [
       "app",
@@ -68,17 +72,14 @@
       "rpm"
     ],
     "createUpdaterArtifacts": "v1Compatible",
-    "iOS": {
-      "developmentTeam": "7PU3P6ELJ8"
-    },
     "macOS": {
+      "minimumSystemVersion": "13.0",
       "exceptionDomain": "",
       "entitlements": "macos/entitlements.plist",
       "frameworks": []
     },
     "windows": {
-      "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "signCommand": "trusted-signing-cli -e https://eus.codesigning.azure.net/ -a Yaak -c yaakapp %1"
     }
   }
 }

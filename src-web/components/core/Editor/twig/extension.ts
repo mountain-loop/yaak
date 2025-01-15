@@ -1,10 +1,11 @@
 import type { LanguageSupport } from '@codemirror/language';
 import { LRLanguage } from '@codemirror/language';
+import type { Extension } from '@codemirror/state';
 import { parseMixed } from '@lezer/common';
-import type { EnvironmentVariable, TemplateFunction } from '@yaakapp/api';
+import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import type { GenericCompletionConfig } from '../genericCompletion';
 import { genericCompletion } from '../genericCompletion';
-import { textLanguageName } from '../text/extension';
+import { textLanguage } from '../text/extension';
 import type { TwigCompletionOption } from './completion';
 import { twigCompletion } from './completion';
 import { templateTagsPlugin } from './templateTags';
@@ -13,21 +14,20 @@ import { parser as twigParser } from './twig';
 export function twig({
   base,
   environmentVariables,
-  templateFunctions,
+  completionOptions,
   autocomplete,
-  onClickFunction,
   onClickVariable,
   onClickMissingVariable,
-  onClickPathParameter,
+  extraExtensions,
 }: {
   base: LanguageSupport;
   environmentVariables: EnvironmentVariable[];
-  templateFunctions: TemplateFunction[];
+  completionOptions: TwigCompletionOption[];
   autocomplete?: GenericCompletionConfig;
-  onClickFunction: (option: TemplateFunction, tagValue: string, startPos: number) => void;
   onClickVariable: (option: EnvironmentVariable, tagValue: string, startPos: number) => void;
   onClickMissingVariable: (name: string, tagValue: string, startPos: number) => void;
   onClickPathParameter: (name: string) => void;
+  extraExtensions: Extension[];
 }) {
   const language = mixLanguage(base);
 
@@ -39,26 +39,7 @@ export function twig({
       onClick: (rawTag: string, startPos: number) => onClickVariable(v, rawTag, startPos),
     })) ?? [];
 
-  const functionOptions: TwigCompletionOption[] =
-    templateFunctions.map((fn) => {
-      const NUM_ARGS = 2;
-      const shortArgs =
-        fn.args
-          .slice(0, NUM_ARGS)
-          .map((a) => a.name)
-          .join(', ') + (fn.args.length > NUM_ARGS ? ', …' : '');
-      return {
-        name: fn.name,
-        type: 'function',
-        args: fn.args.map((a) => ({ name: a.name })),
-        value: null,
-        label: `${fn.name}(${shortArgs})`,
-        onClick: (rawTag: string, startPos: number) => onClickFunction(fn, rawTag, startPos),
-      };
-    }) ?? [];
-
-  const options = [...variableOptions, ...functionOptions];
-
+  const options = [...variableOptions, ...completionOptions];
   const completions = twigCompletion({ options });
 
   return [
@@ -68,17 +49,24 @@ export function twig({
     base.language.data.of({ autocomplete: completions }),
     language.data.of({ autocomplete: genericCompletion(autocomplete) }),
     base.language.data.of({ autocomplete: genericCompletion(autocomplete) }),
-    templateTagsPlugin(options, onClickMissingVariable, onClickPathParameter),
+    templateTagsPlugin(options, onClickMissingVariable),
+    ...extraExtensions,
   ];
 }
 
+const mixedLanguagesCache: Record<string, LRLanguage> = {};
+
 function mixLanguage(base: LanguageSupport): LRLanguage {
-  const name = 'twig';
+  // It can be slow to mix languages when there are hundreds of editors, so we'll cache them to speed it up
+  const cached = mixedLanguagesCache[base.language.name];
+  if (cached != null) {
+    return cached;
+  }
 
   const parser = twigParser.configure({
     wrap: parseMixed((node) => {
       // If the base language is text, we can overwrite at the top
-      if (base.language.name !== textLanguageName && !node.type.isTop) {
+      if (base.language.name !== textLanguage.name && !node.type.isTop) {
         return null;
       }
 
@@ -89,5 +77,7 @@ function mixLanguage(base: LanguageSupport): LRLanguage {
     }),
   });
 
-  return LRLanguage.define({ name, parser });
+  const language = LRLanguage.define({ name: 'twig', parser });
+  mixedLanguagesCache[base.language.name] = language;
+  return language;
 }

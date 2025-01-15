@@ -1,25 +1,30 @@
-import useResizeObserver from '@react-hook/resize-observer';
+import type { GrpcMetadataEntry, GrpcRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
 import type { CSSProperties } from 'react';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { createGlobalState } from 'react-use';
+import React, { useCallback, useMemo, useRef } from 'react';
+import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
-import type { GrpcMetadataEntry, GrpcRequest } from '@yaakapp/api';
-import { AUTH_TYPE_BASIC, AUTH_TYPE_BEARER, AUTH_TYPE_NONE } from '../lib/models';
+import { fallbackRequestName } from '../lib/fallbackRequestName';
+import { AUTH_TYPE_BASIC, AUTH_TYPE_BEARER, AUTH_TYPE_NONE } from '../lib/model_util';
 import { BasicAuth } from './BasicAuth';
 import { BearerAuth } from './BearerAuth';
 import { Button } from './core/Button';
+import { CountBadge } from './core/CountBadge';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
+import { PlainInput } from './core/PlainInput';
 import { RadioDropdown } from './core/RadioDropdown';
 import { HStack, VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { GrpcEditor } from './GrpcEditor';
+import { MarkdownEditor } from './MarkdownEditor';
 import { UrlBar } from './UrlBar';
 
 interface Props {
@@ -44,7 +49,12 @@ interface Props {
   services: ReflectResponseService[] | null;
 }
 
-const useActiveTab = createGlobalState<string>('message');
+const TAB_MESSAGE = 'message';
+const TAB_METADATA = 'metadata';
+const TAB_AUTH = 'auth';
+const TAB_DESCRIPTION = 'description';
+
+const tabsAtom = atomWithStorage<Record<string, string>>('grpcRequestPaneActiveTabs', {});
 
 export function GrpcConnectionSetupPane({
   style,
@@ -61,14 +71,11 @@ export function GrpcConnectionSetupPane({
   onSend,
 }: Props) {
   const updateRequest = useUpdateAnyGrpcRequest();
-  const [activeTab, setActiveTab] = useActiveTab();
+  const [activeTabs, setActiveTabs] = useAtom(tabsAtom);
   const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
 
-  const [paneSize, setPaneSize] = useState(99999);
   const urlContainerEl = useRef<HTMLDivElement>(null);
-  useResizeObserver<HTMLDivElement>(urlContainerEl.current, (entry) => {
-    setPaneSize(entry.contentRect.width);
-  });
+  const { width: paneWidth } = useContainerSize(urlContainerEl);
 
   const handleChangeUrl = useCallback(
     (url: string) => updateRequest.mutateAsync({ id: activeRequest.id, update: { url } }),
@@ -129,9 +136,14 @@ export function GrpcConnectionSetupPane({
 
   const tabs: TabItem[] = useMemo(
     () => [
-      { value: 'message', label: 'Message' },
       {
-        value: 'auth',
+        value: TAB_DESCRIPTION,
+        label: 'Info',
+        rightSlot: activeRequest.description && <CountBadge count={true} />,
+      },
+      { value: TAB_MESSAGE, label: 'Message' },
+      {
+        value: TAB_AUTH,
         label: 'Auth',
         options: {
           value: activeRequest.authenticationType,
@@ -160,19 +172,34 @@ export function GrpcConnectionSetupPane({
           },
         },
       },
-      { value: 'metadata', label: 'Metadata' },
+      { value: TAB_METADATA, label: 'Metadata' },
     ],
     [
       activeRequest.authentication,
       activeRequest.authenticationType,
+      activeRequest.description,
       activeRequest.id,
       updateRequest,
     ],
   );
 
+  const activeTab = activeTabs?.[activeRequest.id];
+  const setActiveTab = useCallback(
+    (tab: string) => {
+      setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
+    },
+    [activeRequest.id, setActiveTabs],
+  );
+
   const handleMetadataChange = useCallback(
     (metadata: GrpcMetadataEntry[]) =>
       updateRequest.mutate({ id: activeRequest.id, update: { metadata } }),
+    [activeRequest.id, updateRequest],
+  );
+
+  const handleDescriptionChange = useCallback(
+    (description: string) =>
+      updateRequest.mutate({ id: activeRequest.id, update: { description } }),
     [activeRequest.id, updateRequest],
   );
 
@@ -182,7 +209,7 @@ export function GrpcConnectionSetupPane({
         ref={urlContainerEl}
         className={classNames(
           'grid grid-cols-[minmax(0,1fr)_auto] gap-1.5',
-          paneSize < 400 && '!grid-cols-1',
+          paneWidth < 400 && '!grid-cols-1',
         )}
       >
         <UrlBar
@@ -195,6 +222,7 @@ export function GrpcConnectionSetupPane({
           onUrlChange={handleChangeUrl}
           onCancel={onCancel}
           isLoading={isStreaming}
+          stateKey={'grpc_url.' + activeRequest.id}
         />
         <HStack space={1.5}>
           <RadioDropdown
@@ -218,11 +246,11 @@ export function GrpcConnectionSetupPane({
             <Button
               size="sm"
               variant="border"
-              rightSlot={<Icon className="text-text-subtlest" size="sm" icon="chevronDown" />}
+              rightSlot={<Icon className="text-text-subtlest" size="sm" icon="chevron_down" />}
               disabled={isStreaming || services == null}
               className={classNames(
                 'font-mono text-editor min-w-[5rem] !ring-0',
-                paneSize < 400 && 'flex-1',
+                paneWidth < 400 && 'flex-1',
               )}
             >
               {select.options.find((o) => o.value === select.value)?.label ?? 'No Schema'}
@@ -254,7 +282,7 @@ export function GrpcConnectionSetupPane({
                 title={isStreaming ? 'Connect' : 'Send'}
                 hotkeyAction="grpc_request.send"
                 onClick={isStreaming ? handleSend : handleConnect}
-                icon={isStreaming ? 'sendHorizontal' : 'arrowUpDown'}
+                icon={isStreaming ? 'send_horizontal' : 'arrow_up_down'}
               />
             </>
           ) : (
@@ -269,8 +297,8 @@ export function GrpcConnectionSetupPane({
                 isStreaming
                   ? 'x'
                   : methodType.includes('streaming')
-                  ? 'arrowUpDown'
-                  : 'sendHorizontal'
+                    ? 'arrow_up_down'
+                    : 'send_horizontal'
               }
             />
           )}
@@ -310,7 +338,29 @@ export function GrpcConnectionSetupPane({
             pairs={activeRequest.metadata}
             onChange={handleMetadataChange}
             forceUpdateKey={forceUpdateKey}
+            stateKey={`grpc_metadata.${activeRequest.id}`}
           />
+        </TabContent>
+        <TabContent value={TAB_DESCRIPTION}>
+          <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">
+            <PlainInput
+              label="Request Name"
+              hideLabel
+              forceUpdateKey={forceUpdateKey}
+              defaultValue={activeRequest.name}
+              className="font-sans !text-xl !px-0"
+              containerClassName="border-0"
+              placeholder={fallbackRequestName(activeRequest)}
+              onChange={(name) => updateRequest.mutate({ id: activeRequest.id, update: { name } })}
+            />
+            <MarkdownEditor
+              name="request-description"
+              placeholder="Request description"
+              defaultValue={activeRequest.description}
+              stateKey={`description.${activeRequest.id}`}
+              onChange={handleDescriptionChange}
+            />
+          </div>
         </TabContent>
       </Tabs>
     </VStack>

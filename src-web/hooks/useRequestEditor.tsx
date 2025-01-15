@@ -1,4 +1,6 @@
 import EventEmitter from 'eventemitter3';
+import { atom } from 'jotai';
+import { useAtom } from 'jotai/index';
 import type { DependencyList } from 'react';
 import { useCallback, useEffect } from 'react';
 
@@ -20,7 +22,12 @@ export function useRequestEditorEvent<
   }, deps);
 }
 
+export const urlKeyAtom = atom<string>(Math.random().toString());
+export const urlParamsKeyAtom = atom<string>(Math.random().toString());
+
 export function useRequestEditor() {
+  const [urlParametersKey, setUrlParametersKey] = useAtom(urlParamsKeyAtom);
+  const [urlKey, setUrlKey] = useAtom(urlKeyAtom);
   const focusParamsTab = useCallback(() => {
     emitter.emit('request_pane.focus_tab', undefined);
   }, []);
@@ -33,10 +40,24 @@ export function useRequestEditor() {
     [focusParamsTab],
   );
 
-  return {
-    focusParamValue,
-    focusParamsTab,
-  };
+  const forceUrlRefresh = useCallback(() => setUrlKey(Math.random().toString()), [setUrlKey]);
+  const forceParamsRefresh = useCallback(
+    () => setUrlParametersKey(Math.random().toString()),
+    [setUrlParametersKey],
+  );
+
+  return [
+    {
+      urlParametersKey,
+      urlKey,
+    },
+    {
+      focusParamValue,
+      focusParamsTab,
+      forceParamsRefresh,
+      forceUrlRefresh,
+    },
+  ] as const;
 }
 
 const emitter = new (class RequestEditorEventEmitter {

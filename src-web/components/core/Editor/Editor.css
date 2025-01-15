@@ -4,10 +4,23 @@
   .cm-editor {
     @apply w-full block text-base;
 
+    /* Regular cursor */
     .cm-cursor {
       @apply border-text !important;
-      /* Widen the cursor */
+      /* Widen the cursor a bit */
       @apply border-l-[2px];
+    }
+
+    /* Vim-mode cursor */
+    .cm-fat-cursor {
+      @apply outline-0 bg-text !important;
+      @apply text-surface !important;
+    }
+
+    &:not(.cm-focused) {
+      .cm-cursor, .cm-fat-cursor {
+        @apply hidden;
+      }
     }
 
     &.cm-focused {
@@ -21,7 +34,7 @@
     .cm-line {
       @apply w-full;
       /* Important! Ensure it spans the entire width */
-      @apply w-full text-text pl-1 pr-1.5;
+      @apply w-full text-text px-0;
     }
 
     .cm-placeholder {
@@ -51,7 +64,7 @@
     /* Style gutters */
 
     .cm-gutters {
-      @apply border-0 text-text-subtlest bg-surface;
+      @apply border-0 text-text-subtlest bg-surface pr-1.5;
       /* Not sure why, but there's a tiny gap left of the gutter that you can see text
          through. Move left slightly to fix that. */
       @apply -left-[1px];
@@ -63,7 +76,7 @@
 
     .template-tag {
       /* Colors */
-      @apply bg-surface text-text-subtle border-border-subtle;
+      @apply bg-surface text-text-subtle border-border-subtle whitespace-nowrap;
       @apply hover:border-border-subtle hover:text-text hover:bg-surface-highlight;
 
       @apply inline border px-1 mx-[0.5px] rounded cursor-default dark:shadow;
@@ -86,7 +99,7 @@
 
   &.cm-singleline {
     .cm-editor {
-      @apply w-full h-auto;
+      @apply w-full h-full;
     }
 
     .cm-scroller {
@@ -94,7 +107,7 @@
     }
 
     .cm-line {
-      @apply px-2 overflow-hidden;
+      @apply overflow-hidden;
     }
   }
 
@@ -114,12 +127,6 @@
 
     .cm-scroller {
       @apply font-mono text-editor;
-      /*
-                               * Round corners or they'll stick out of the editor bounds of editor is rounded.
-                               * Could potentially be pushed up from the editor like we do with bg color but this
-                               * is probably fine.
-                               */
-      @apply rounded-lg;
     }
   }
 }
@@ -242,6 +249,11 @@
       @apply text-primary;
     }
 
+    &.cm-completionIcon-namespace::after {
+      content: 'n' !important;
+      @apply text-warning;
+    }
+
     &.cm-completionIcon-constant::after {
       content: 'c' !important;
       @apply text-notice;
@@ -267,10 +279,6 @@
       content: 'm' !important;
     }
 
-    &.cm-completionIcon-namespace::after {
-      content: 'n' !important;
-    }
-
     &.cm-completionIcon-property::after {
       content: 'a' !important;
     }
@@ -284,12 +292,8 @@
     }
   }
 
-  &.cm-completionInfo-right {
-    @apply ml-1 -mt-0.5 font-sans;
-  }
-
-  &.cm-completionInfo-right-narrow {
-    @apply ml-1;
+  &.cm-completionInfo {
+    @apply mx-0.5 -mt-0.5 font-sans;
   }
 
   * {

@@ -1,24 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
-import type { GrpcConnection } from '@yaakapp/api';
-import { invokeCmd } from '../lib/tauri';
+import type { GrpcConnection } from '@yaakapp-internal/models';
+import { atom, useAtomValue } from 'jotai/index';
 
-export function grpcConnectionsQueryKey({ requestId }: { requestId: string }) {
-  return ['grpc_connections', { requestId }];
-}
+export const grpcConnectionsAtom = atom<GrpcConnection[]>([]);
 
-export function useGrpcConnections(requestId: string | null) {
-  return (
-    useQuery<GrpcConnection[]>({
-      enabled: requestId !== null,
-      initialData: [],
-      queryKey: grpcConnectionsQueryKey({ requestId: requestId ?? 'n/a' }),
-      queryFn: async () => {
-        if (requestId == null) return [];
-        return (await invokeCmd('cmd_list_grpc_connections', {
-          requestId,
-          limit: 200,
-        })) as GrpcConnection[];
-      },
-    }).data ?? []
-  );
+export function useGrpcConnections() {
+  return useAtomValue(grpcConnectionsAtom);
 }

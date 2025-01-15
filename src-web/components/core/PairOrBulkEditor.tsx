@@ -33,7 +33,7 @@ export const PairOrBulkEditor = forwardRef<PairEditorRef, Props>(function PairOr
             'bg-surface text-text-subtle hover:text group-hover/wrapper:opacity-100',
           )}
           onClick={() => setUseBulk((b) => !b)}
-          icon={useBulk ? 'table' : 'fileCode'}
+          icon={useBulk ? 'table' : 'file_code'}
         />
       </div>
     </div>

@@ -1,0 +1,11 @@
+[package]
+name = "yaak-templates"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+log = "0.4.22"
+serde = { version = "1.0.208", features = ["derive"] }
+ts-rs = { version = "10.0.0" }
+tokio = { version = "1.39.3", features = ["macros", "rt"] }

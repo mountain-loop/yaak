@@ -1,7 +1,6 @@
-import type { HttpRequest } from '@yaakapp/api';
-import type { IntrospectionQuery } from 'graphql';
+import type { HttpRequest } from '@yaakapp-internal/models';
+import { buildClientSchema, getIntrospectionQuery, type IntrospectionQuery } from 'graphql';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { buildClientSchema, getIntrospectionQuery } from '../components/core/Editor';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { getResponseBodyText } from '../lib/responseBody';
 import { sendEphemeralRequest } from '../lib/sendEphemeralRequest';
@@ -14,12 +13,14 @@ const introspectionRequestBody = JSON.stringify({
   operationName: 'IntrospectionQuery',
 });
 
-export function useIntrospectGraphQL(baseRequest: HttpRequest) {
+export function useIntrospectGraphQL(
+  baseRequest: HttpRequest,
+  options: { disabled?: boolean } = {},
+) {
   // Debounce the request because it can change rapidly and we don't
   // want to send so too many requests.
   const request = useDebouncedValue(baseRequest);
-  const [activeEnvironment] = useActiveEnvironment();
-  const [refetchKey, setRefetchKey] = useState<number>(0);
+  const activeEnvironment = useActiveEnvironment();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>();
 
@@ -29,10 +30,11 @@ export function useIntrospectGraphQL(baseRequest: HttpRequest) {
     namespace: 'global',
   });
 
-  useEffect(() => {
-    const fetchIntrospection = async () => {
+  const refetch = useCallback(async () => {
+    try {
       setIsLoading(true);
       setError(undefined);
+
       const args = {
         ...baseRequest,
         bodyType: 'application/json',
@@ -44,42 +46,54 @@ export function useIntrospectGraphQL(baseRequest: HttpRequest) {
       );
 
       if (response.error) {
-        throw new Error(response.error);
+        return setError(response.error);
       }
 
       const bodyText = await getResponseBodyText(response);
       if (response.status < 200 || response.status >= 300) {
-        throw new Error(`Request failed with status ${response.status}.\n\n${bodyText}`);
+        return setError(`Request failed with status ${response.status}.\n\n${bodyText}`);
       }
 
       if (bodyText === null) {
-        throw new Error('Empty body returned in response');
+        return setError('Empty body returned in response');
       }
 
       const { data } = JSON.parse(bodyText);
       console.log(`Got introspection response for ${baseRequest.url}`, data);
       await setIntrospection(data);
-    };
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeEnvironment?.id, baseRequest, setIntrospection]);
 
-    fetchIntrospection()
-      .catch((e) => setError(e.message))
-      .finally(() => setIsLoading(false));
+  useEffect(() => {
+    // Skip introspection if automatic is disabled and we already have one
+    if (options.disabled) {
+      return;
+    }
+
+    refetch().catch(console.error);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request.id, request.url, request.method, refetchKey, activeEnvironment?.id]);
+  }, [request.id, request.url, request.method, activeEnvironment?.id]);
 
-  const refetch = useCallback(() => {
-    setRefetchKey((k) => k + 1);
-  }, []);
+  const clear = useCallback(async () => {
+    await setIntrospection(null);
+  }, [setIntrospection]);
 
   const schema = useMemo(() => {
+    if (introspection == null) {
+      return introspection;
+    }
     try {
-      return introspection ? buildClientSchema(introspection) : undefined;
+      return buildClientSchema(introspection);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       setError('message' in e ? e.message : String(e));
     }
   }, [introspection]);
 
-  return { schema, isLoading, error, refetch };
+  return { schema, isLoading, error, refetch, clear };
 }
