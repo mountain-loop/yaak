@@ -7,9 +7,15 @@ import type { HttpResponse } from "./models";
 import type { JsonValue } from "./serde_json/JsonValue";
 import type { Workspace } from "./models";
 
+export type AuthMiddleware = { name: string, args: Array<FormInput>, };
+
 export type BootRequest = { dir: string, watch: boolean, };
 
 export type BootResponse = { name: string, version: string, capabilities: Array<string>, };
+
+export type CallAuthMiddlewareRequest = { config: { [key in string]?: JsonValue }, method: string, url: string, headers: Array<HttpHeader>, };
+
+export type CallAuthMiddlewareResponse = { url: string, headers: Array<HttpHeader>, };
 
 export type CallHttpRequestActionArgs = { httpRequest: HttpRequest, };
 
@@ -25,9 +31,17 @@ export type Color = "custom" | "default" | "primary" | "secondary" | "info" | "s
 
 export type CopyTextRequest = { text: string, };
 
+export type EmptyPayload = {};
+
 export type ExportHttpRequestRequest = { httpRequest: HttpRequest, };
 
 export type ExportHttpRequestResponse = { content: string, };
+
+export type FileFilter = { name: string, 
+/**
+ * File extensions to require
+ */
+extensions: Array<string>, };
 
 export type FilterRequest = { content: string, filter: string, };
 
@@ -36,6 +50,112 @@ export type FilterResponse = { content: string, };
 export type FindHttpResponsesRequest = { requestId: string, limit?: number, };
 
 export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
+
+export type FormInput = { "type": "text" } & FormInputText | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest;
+
+export type FormInputBase = { name: string, 
+/**
+ * Whether the user must fill in the argument
+ */
+optional?: boolean, 
+/**
+ * The label of the input
+ */
+label?: string, 
+/**
+ * The default value
+ */
+defaultValue?: string, };
+
+export type FormInputCheckbox = { name: string, 
+/**
+ * Whether the user must fill in the argument
+ */
+optional?: boolean, 
+/**
+ * The label of the input
+ */
+label?: string, 
+/**
+ * The default value
+ */
+defaultValue?: string, };
+
+export type FormInputFile = { 
+/**
+ * The title of the file selection window
+ */
+title: string, 
+/**
+ * Allow selecting multiple files
+ */
+multiple?: boolean, directory?: boolean, defaultPath?: string, filters?: Array<FileFilter>, name: string, 
+/**
+ * Whether the user must fill in the argument
+ */
+optional?: boolean, 
+/**
+ * The label of the input
+ */
+label?: string, 
+/**
+ * The default value
+ */
+defaultValue?: string, };
+
+export type FormInputHttpRequest = { name: string, 
+/**
+ * Whether the user must fill in the argument
+ */
+optional?: boolean, 
+/**
+ * The label of the input
+ */
+label?: string, 
+/**
+ * The default value
+ */
+defaultValue?: string, };
+
+export type FormInputSelect = { 
+/**
+ * The options that will be available in the select input
+ */
+options: Array<FormInputSelectOption>, name: string, 
+/**
+ * Whether the user must fill in the argument
+ */
+optional?: boolean, 
+/**
+ * The label of the input
+ */
+label?: string, 
+/**
+ * The default value
+ */
+defaultValue?: string, };
+
+export type FormInputSelectOption = { name: string, value: string, };
+
+export type FormInputText = { 
+/**
+ * Placeholder for the text input
+ */
+placeholder?: string | null, name: string, 
+/**
+ * Whether the user must fill in the argument
+ */
+optional?: boolean, 
+/**
+ * The label of the input
+ */
+label?: string, 
+/**
+ * The default value
+ */
+defaultValue?: string, };
+
+export type GetAuthMiddlewareResponse = { authMiddleware: Array<AuthMiddleware>, };
 
 export type GetHttpRequestActionsRequest = Record<string, never>;
 
@@ -46,6 +166,8 @@ export type GetHttpRequestByIdRequest = { id: string, };
 export type GetHttpRequestByIdResponse = { httpRequest: HttpRequest | null, };
 
 export type GetTemplateFunctionsResponse = { functions: Array<TemplateFunction>, pluginRefId: string, };
+
+export type HttpHeader = { name: string, value: string, };
 
 export type HttpRequestAction = { key: string, label: string, icon?: Icon, };
 
@@ -59,13 +181,7 @@ export type ImportResponse = { resources: ImportResources, };
 
 export type InternalEvent = { id: string, pluginRefId: string, replyId: string | null, payload: InternalEventPayload, windowContext: WindowContext, };
 
-export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } | { "type": "reload_response" } | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "get_http_request_actions_request" } & GetHttpRequestActionsRequest | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "copy_text_request" } & CopyTextRequest | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "empty_response" };
-
-export type OpenFileFilter = { name: string, 
-/**
- * File extensions to require
- */
-extensions: Array<string>, };
+export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & EmptyPayload | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_auth_middleware_request" } & EmptyPayload | { "type": "get_auth_middleware_response" } & GetAuthMiddlewareResponse | { "type": "call_auth_middleware_request" } & CallAuthMiddlewareRequest | { "type": "call_auth_middleware_response" } & CallAuthMiddlewareResponse | { "type": "copy_text_request" } & CopyTextRequest | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "empty_response" } & EmptyPayload;
 
 export type PromptTextRequest = { id: string, title: string, label: string, description?: string, defaultValue?: string, placeholder?: string, 
 /**
@@ -100,135 +216,7 @@ export type TemplateFunction = { name: string, description?: string,
  * Also support alternative names. This is useful for not breaking existing
  * tags when changing the `name` property
  */
-aliases?: Array<string>, args: Array<TemplateFunctionArg>, };
-
-export type TemplateFunctionArg = { "type": "text" } & TemplateFunctionTextArg | { "type": "select" } & TemplateFunctionSelectArg | { "type": "checkbox" } & TemplateFunctionCheckboxArg | { "type": "http_request" } & TemplateFunctionHttpRequestArg | { "type": "file" } & TemplateFunctionFileArg;
-
-export type TemplateFunctionBaseArg = { 
-/**
- * The name of the argument. Should be `camelCase` format
- */
-name: string, 
-/**
- * Whether the user must fill in the argument
- */
-optional?: boolean, 
-/**
- * The label of the input
- */
-label?: string, 
-/**
- * The default value
- */
-defaultValue?: string, };
-
-export type TemplateFunctionCheckboxArg = { 
-/**
- * The name of the argument. Should be `camelCase` format
- */
-name: string, 
-/**
- * Whether the user must fill in the argument
- */
-optional?: boolean, 
-/**
- * The label of the input
- */
-label?: string, 
-/**
- * The default value
- */
-defaultValue?: string, };
-
-export type TemplateFunctionFileArg = { 
-/**
- * The title of the file selection window
- */
-title: string, 
-/**
- * Allow selecting multiple files
- */
-multiple?: boolean, directory?: boolean, defaultPath?: string, filters?: Array<OpenFileFilter>, 
-/**
- * The name of the argument. Should be `camelCase` format
- */
-name: string, 
-/**
- * Whether the user must fill in the argument
- */
-optional?: boolean, 
-/**
- * The label of the input
- */
-label?: string, 
-/**
- * The default value
- */
-defaultValue?: string, };
-
-export type TemplateFunctionHttpRequestArg = { 
-/**
- * The name of the argument. Should be `camelCase` format
- */
-name: string, 
-/**
- * Whether the user must fill in the argument
- */
-optional?: boolean, 
-/**
- * The label of the input
- */
-label?: string, 
-/**
- * The default value
- */
-defaultValue?: string, };
-
-export type TemplateFunctionSelectArg = { 
-/**
- * The options that will be available in the select input
- */
-options: Array<TemplateFunctionSelectOption>, 
-/**
- * The name of the argument. Should be `camelCase` format
- */
-name: string, 
-/**
- * Whether the user must fill in the argument
- */
-optional?: boolean, 
-/**
- * The label of the input
- */
-label?: string, 
-/**
- * The default value
- */
-defaultValue?: string, };
-
-export type TemplateFunctionSelectOption = { label: string, value: string, };
-
-export type TemplateFunctionTextArg = { 
-/**
- * Placeholder for the text input
- */
-placeholder?: string, 
-/**
- * The name of the argument. Should be `camelCase` format
- */
-name: string, 
-/**
- * Whether the user must fill in the argument
- */
-optional?: boolean, 
-/**
- * The label of the input
- */
-label?: string, 
-/**
- * The default value
- */
-defaultValue?: string, };
+aliases?: Array<string>, args: Array<FormInput>, };
 
 export type TemplateRenderRequest = { data: JsonValue, purpose: RenderPurpose, };
 

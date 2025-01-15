@@ -99,7 +99,7 @@ pub enum InternalEventPayload {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default)]
-#[ts(export, type = "{}")]
+#[ts(export, type = "{}", export_to = "events.ts")]
 pub struct EmptyPayload {}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
