@@ -34,6 +34,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind};
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 use tokio::fs::read_to_string;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
@@ -153,7 +154,7 @@ async fn cmd_render_template<R: Runtime>(
             RenderPurpose::Preview,
         ),
     )
-    .await;
+        .await;
     Ok(rendered)
 }
 
@@ -219,7 +220,7 @@ async fn cmd_grpc_go<R: Runtime>(
             RenderPurpose::Send,
         ),
     )
-    .await;
+        .await;
     let mut metadata = BTreeMap::new();
 
     // Add the rest of metadata
@@ -268,8 +269,8 @@ async fn cmd_grpc_go<R: Runtime>(
             },
             &UpdateSource::Window,
         )
-        .await
-        .map_err(|e| e.to_string())?
+            .await
+            .map_err(|e| e.to_string())?
     };
 
     let conn_id = conn.id.clone();
@@ -321,8 +322,8 @@ async fn cmd_grpc_go<R: Runtime>(
                 },
                 &UpdateSource::Window,
             )
-            .await
-            .map_err(|e| e.to_string())?;
+                .await
+                .map_err(|e| e.to_string())?;
             return Ok(conn_id);
         }
     };
@@ -377,7 +378,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                         RenderPurpose::Send,
                                     ),
                                 )
-                                .await
+                                    .await
                             })
                         })
                     };
@@ -395,8 +396,8 @@ async fn cmd_grpc_go<R: Runtime>(
                                     },
                                     &UpdateSource::Window,
                                 )
-                                .await
-                                .unwrap();
+                                    .await
+                                    .unwrap();
                             });
                             return;
                         }
@@ -412,8 +413,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::Window,
                         )
-                        .await
-                        .unwrap();
+                            .await
+                            .unwrap();
                     });
                 }
                 Ok(IncomingMsg::Commit) => {
@@ -445,7 +446,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 RenderPurpose::Send,
             ),
         )
-        .await;
+            .await;
 
         upsert_grpc_event(
             &window,
@@ -457,8 +458,8 @@ async fn cmd_grpc_go<R: Runtime>(
             },
             &UpdateSource::Window,
         )
-        .await
-        .unwrap();
+            .await
+            .unwrap();
 
         async move {
             let (maybe_stream, maybe_msg) =
@@ -496,8 +497,8 @@ async fn cmd_grpc_go<R: Runtime>(
                     },
                     &UpdateSource::Window,
                 )
-                .await
-                .unwrap();
+                    .await
+                    .unwrap();
             }
 
             match maybe_msg {
@@ -511,14 +512,14 @@ async fn cmd_grpc_go<R: Runtime>(
                             } else {
                                 "Received response with metadata"
                             }
-                            .to_string(),
+                                .to_string(),
                             event_type: GrpcEventType::Info,
                             ..base_event.clone()
                         },
                         &UpdateSource::Window,
                     )
-                    .await
-                    .unwrap();
+                        .await
+                        .unwrap();
                     upsert_grpc_event(
                         &window,
                         &GrpcEvent {
@@ -528,8 +529,8 @@ async fn cmd_grpc_go<R: Runtime>(
                         },
                         &UpdateSource::Window,
                     )
-                    .await
-                    .unwrap();
+                        .await
+                        .unwrap();
                     upsert_grpc_event(
                         &window,
                         &GrpcEvent {
@@ -540,8 +541,8 @@ async fn cmd_grpc_go<R: Runtime>(
                         },
                         &UpdateSource::Window,
                     )
-                    .await
-                    .unwrap();
+                        .await
+                        .unwrap();
                 }
                 Some(Err(e)) => {
                     upsert_grpc_event(
@@ -565,8 +566,8 @@ async fn cmd_grpc_go<R: Runtime>(
                         }),
                         &UpdateSource::Window,
                     )
-                    .await
-                    .unwrap();
+                        .await
+                        .unwrap();
                 }
                 None => {
                     // Server streaming doesn't return the initial message
@@ -584,14 +585,14 @@ async fn cmd_grpc_go<R: Runtime>(
                             } else {
                                 "Received response with metadata"
                             }
-                            .to_string(),
+                                .to_string(),
                             event_type: GrpcEventType::Info,
                             ..base_event.clone()
                         },
                         &UpdateSource::Window,
                     )
-                    .await
-                    .unwrap();
+                        .await
+                        .unwrap();
                     stream.into_inner()
                 }
                 Some(Err(e)) => {
@@ -617,8 +618,8 @@ async fn cmd_grpc_go<R: Runtime>(
                         }),
                         &UpdateSource::Window,
                     )
-                    .await
-                    .unwrap();
+                        .await
+                        .unwrap();
                     return;
                 }
                 None => return,
@@ -637,8 +638,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::Window,
                         )
-                        .await
-                        .unwrap();
+                            .await
+                            .unwrap();
                     }
                     Ok(None) => {
                         let trailers =
@@ -654,8 +655,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::Window,
                         )
-                        .await
-                        .unwrap();
+                            .await
+                            .unwrap();
                         break;
                     }
                     Err(status) => {
@@ -670,8 +671,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::Window,
                         )
-                        .await
-                        .unwrap();
+                            .await
+                            .unwrap();
                     }
                 }
             }
@@ -929,8 +930,8 @@ async fn cmd_import_data<R: Runtime>(
         grpc_requests,
         &UpdateSource::Import,
     )
-    .await
-    .map_err(|e| e.to_string())?;
+        .await
+        .map_err(|e| e.to_string())?;
 
     analytics::track_event(
         &window,
@@ -938,7 +939,7 @@ async fn cmd_import_data<R: Runtime>(
         AnalyticsAction::Import,
         Some(json!({ "plugin": plugin_name })),
     )
-    .await;
+        .await;
 
     Ok(upserted)
 }
@@ -984,7 +985,7 @@ async fn cmd_curl_to_request<R: Runtime>(
         AnalyticsAction::Import,
         Some(json!({ "plugin": plugin_name })),
     )
-    .await;
+        .await;
 
     import_result.resources.http_requests.get(0).ok_or("No curl command found".to_string()).map(
         |r| {
@@ -1169,8 +1170,8 @@ async fn cmd_install_plugin<R: Runtime>(
         },
         &UpdateSource::Window,
     )
-    .await
-    .map_err(|e| e.to_string())?;
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(plugin)
 }
@@ -1221,8 +1222,8 @@ async fn cmd_create_cookie_jar(
         },
         &UpdateSource::Window,
     )
-    .await
-    .map_err(|e| e.to_string())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1244,8 +1245,8 @@ async fn cmd_create_environment(
         },
         &UpdateSource::Window,
     )
-    .await
-    .map_err(|e| e.to_string())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1267,8 +1268,8 @@ async fn cmd_create_grpc_request(
         },
         &UpdateSource::Window,
     )
-    .await
-    .map_err(|e| e.to_string())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1507,8 +1508,8 @@ async fn cmd_list_cookie_jars(
             },
             &UpdateSource::Window,
         )
-        .await
-        .expect("Failed to create CookieJar");
+            .await
+            .expect("Failed to create CookieJar");
         Ok(vec![cookie_jar])
     } else {
         Ok(cookie_jars)
@@ -1597,8 +1598,8 @@ async fn cmd_list_workspaces(window: WebviewWindow) -> Result<Vec<Workspace>, St
             },
             &UpdateSource::Window,
         )
-        .await
-        .expect("Failed to create Workspace");
+            .await
+            .expect("Failed to create Workspace");
         Ok(vec![workspace])
     } else {
         Ok(workspaces)
@@ -1951,6 +1952,21 @@ pub fn run() {
                 }
                 _ => {}
             };
+
+            // Save window state on exit
+            match event {
+                RunEvent::WindowEvent {
+                    event: WindowEvent::CloseRequested { .. },
+                    ..
+                } => {
+                    if let Err(e) = app_handle.save_window_state(StateFlags::all()) {
+                        warn!("Failed to save window state {e:?}");
+                    } else {
+                        debug!("Saved window state");
+                    };
+                }
+                _ => {}
+            };
         });
 }
 
@@ -1974,7 +1990,7 @@ fn create_main_window(handle: &AppHandle, url: &str) -> WebviewWindow {
             Some(_) => counter += 1,
         }
     }
-    .expect("Failed to generate label for new window");
+        .expect("Failed to generate label for new window");
 
     let config = CreateWindowConfig {
         url,
@@ -1987,7 +2003,19 @@ fn create_main_window(handle: &AppHandle, url: &str) -> WebviewWindow {
             100.0 + random::<f64>() * 20.0,
         ),
     };
-    create_window(handle, config)
+
+    let window = create_window(handle, config);
+
+    // Restore window state if it's a main window
+    if !label.starts_with(OTHER_WINDOW_PREFIX) {
+        if let Err(e) = window.restore_state(StateFlags::all()) {
+            warn!("Failed to restore window state {e:?}");
+        } else {
+            debug!("Restored window state");
+        }
+    }
+
+    window
 }
 
 struct CreateWindowConfig<'s> {
@@ -2197,8 +2225,8 @@ async fn handle_plugin_event<R: Runtime>(
                 req.request_id.as_str(),
                 req.limit.map(|l| l as i64),
             )
-            .await
-            .unwrap_or_default();
+                .await
+                .unwrap_or_default();
             Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
                 http_responses,
             }))
@@ -2227,7 +2255,7 @@ async fn handle_plugin_event<R: Runtime>(
                 environment.as_ref(),
                 &cb,
             )
-            .await;
+                .await;
             Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
                 http_request,
             }))
@@ -2286,8 +2314,8 @@ async fn handle_plugin_event<R: Runtime>(
                 req.http_request.id.as_str(),
                 &UpdateSource::Plugin,
             )
-            .await
-            .unwrap();
+                .await
+                .unwrap();
 
             let result = send_http_request(
                 &window,
@@ -2297,7 +2325,7 @@ async fn handle_plugin_event<R: Runtime>(
                 cookie_jar,
                 &mut tokio::sync::watch::channel(false).1, // No-op cancel channel
             )
-            .await;
+                .await;
 
             let http_response = match result {
                 Ok(r) => r,

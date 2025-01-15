@@ -44,8 +44,15 @@ export function WindowControls({ className, onlyX }: Props) {
             color="custom"
             onClick={async () => {
               const w = getCurrentWebviewWindow();
-              await w.toggleMaximize();
-              setMaximized(await w.isMaximized());
+              const isMaximized = await w.isMaximized();
+              if (isMaximized) {
+                await w.unmaximize();
+                setMaximized(false);
+              } else {
+                await w.maximize();
+                setMaximized(true);
+              }
+              console.log("TOGGLE", isMaximized);
             }}
           >
             {maximized ? (

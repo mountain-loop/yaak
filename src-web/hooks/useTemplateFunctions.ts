@@ -52,7 +52,7 @@ export function useSubscribeTemplateFunctions() {
     // NOTE: visibilitychange (refetchOnWindowFocus) does not work on Windows, so we'll rely on this logic
     //  to refetch things until that's working again
     // TODO: Update plugin system to wait for plugins to initialize before sending the first event to them
-    refetchInterval: numFns > 0 ? 5000 : 1000,
+    refetchInterval: numFns > 0 ? Infinity : 1000,
     refetchOnMount: true,
     queryFn: async () => {
       const result = await invokeCmd<GetTemplateFunctionsResponse[]>('cmd_template_functions');
