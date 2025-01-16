@@ -51,14 +51,8 @@
       }
     }
 
-    /* Don't show selection on blurred input */
-
     .cm-selectionBackground {
-      @apply bg-transparent;
-    }
-
-    &.cm-focused .cm-selectionBackground {
-      @apply bg-selection;
+      @apply bg-selection !important;
     }
 
     /* Style gutters */

@@ -600,13 +600,16 @@ const placeholderElFromText = (text: string) => {
 
 function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
   if (!stateKey || state == null) return;
-  sessionStorage.setItem(stateKey, JSON.stringify(state.toJSON(stateFields)));
+  sessionStorage.setItem(
+    computeFullStateKey(stateKey),
+    JSON.stringify(state.toJSON(stateFields)),
+  );
 }
 
 function getCachedEditorState(doc: string, stateKey: string | null) {
   if (stateKey == null) return;
 
-  const stateStr = sessionStorage.getItem(stateKey);
+  const stateStr = sessionStorage.getItem(computeFullStateKey(stateKey));
   if (stateStr == null) return null;
 
   try {
@@ -619,4 +622,8 @@ function getCachedEditorState(doc: string, stateKey: string | null) {
   }
 
   return null;
+}
+
+function computeFullStateKey(stateKey: string): string {
+  return `editor.${stateKey}`;
 }

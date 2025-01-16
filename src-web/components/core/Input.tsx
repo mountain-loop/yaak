@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import type { ReactNode } from 'react';
-import { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import type { EditorProps } from './Editor/Editor';
 import { Editor } from './Editor/Editor';
@@ -46,7 +46,7 @@ export type InputProps = Pick<
   stateKey: EditorProps['stateKey'];
 };
 
-export const Input = forwardRef<EditorView | undefined, InputProps>(function Input(
+export const Input = forwardRef<EditorView, InputProps>(function Input(
   {
     className,
     containerClassName,
@@ -79,6 +79,8 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
   const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
   const [currentValue, setCurrentValue] = useState(defaultValue ?? '');
   const [focused, setFocused] = useState(false);
+  const editorRef = useRef<EditorView | null>(null);
+  useImperativeHandle<EditorView | null, EditorView | null>(ref, () => editorRef.current);
 
   const handleFocus = useCallback(() => {
     if (readOnly) return;
@@ -88,6 +90,7 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
 
   const handleBlur = useCallback(() => {
     setFocused(false);
+    editorRef.current?.dispatch({ selection: { anchor: 0 } });
     onBlur?.();
   }, [onBlur]);
 
@@ -164,7 +167,7 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
           )}
         >
           <Editor
-            ref={ref}
+            ref={editorRef}
             id={id}
             singleLine
             stateKey={stateKey}

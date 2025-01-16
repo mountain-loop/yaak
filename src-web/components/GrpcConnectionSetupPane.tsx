@@ -210,6 +210,7 @@ export function GrpcConnectionSetupPane({
         )}
       >
         <UrlBar
+          key={forceUpdateKey}
           url={activeRequest.url ?? ''}
           method={null}
           submitIcon={null}
