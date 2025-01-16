@@ -51,7 +51,6 @@ impl AutoReflectionClient {
         };
 
         if self.use_v1alpha {
-            debug!("Sending reflection with v1alpha");
             let request = Request::new(tokio_stream::once(to_v1alpha_request(reflection_request)));
             self.client_v1alpha
                 .server_reflection_info(request)
@@ -71,7 +70,6 @@ impl AutoReflectionClient {
                 .ok_or("No reflection response".to_string())
                 .map(|resp| to_v1_msg_response(resp))
         } else {
-            debug!("Sending reflection with v1");
             let request = Request::new(tokio_stream::once(reflection_request));
             let resp = self.client_v1.server_reflection_info(request).await;
             match resp {
@@ -79,6 +77,7 @@ impl AutoReflectionClient {
                 Err(e) => match e.code().clone() {
                     tonic::Code::Unimplemented => {
                         // If v1 fails, change to v1alpha and try again
+                        debug!("gRPC schema reflection falling back to v1alpha");
                         self.use_v1alpha = true;
                         return self.send_reflection_request(message).await;
                     }
