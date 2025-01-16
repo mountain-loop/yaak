@@ -5,7 +5,9 @@ use serde_json::Deserializer;
 mod codec;
 mod json_schema;
 pub mod manager;
-mod proto;
+mod reflection;
+mod transport;
+mod client;
 
 pub use tonic::metadata::*;
 pub use tonic::Code;

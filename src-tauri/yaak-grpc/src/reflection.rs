@@ -3,12 +3,9 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use crate::client::AutoReflectionClient;
 use anyhow::anyhow;
 use async_recursion::async_recursion;
-use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
 use log::{debug, warn};
 use prost::Message;
 use prost_reflect::{DescriptorPool, MethodDescriptor};
@@ -17,15 +14,10 @@ use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
 use tokio::fs;
-use tokio_stream::StreamExt;
-use tonic::body::BoxBody;
 use tonic::codegen::http::uri::PathAndQuery;
 use tonic::transport::Uri;
-use tonic::Request;
-use tonic_reflection::pb::v1::server_reflection_client::ServerReflectionClient;
 use tonic_reflection::pb::v1::server_reflection_request::MessageRequest;
 use tonic_reflection::pb::v1::server_reflection_response::MessageResponse;
-use tonic_reflection::pb::v1::ServerReflectionRequest;
 
 pub async fn fill_pool_from_files(
     app_handle: &AppHandle,
@@ -99,7 +91,7 @@ pub async fn fill_pool_from_files(
 
 pub async fn fill_pool_from_reflection(uri: &Uri) -> Result<DescriptorPool, String> {
     let mut pool = DescriptorPool::new();
-    let mut client = ServerReflectionClient::with_origin(get_transport(), uri.clone());
+    let mut client = AutoReflectionClient::new(uri);
 
     for service in list_services(&mut client).await? {
         if service == "grpc.reflection.v1alpha.ServerReflection" {
@@ -115,24 +107,8 @@ pub async fn fill_pool_from_reflection(uri: &Uri) -> Result<DescriptorPool, Stri
     Ok(pool)
 }
 
-pub fn get_transport() -> Client<HttpsConnector<HttpConnector>, BoxBody> {
-    let connector = HttpsConnectorBuilder::new().with_platform_verifier();
-    let connector = connector.https_or_http().enable_http2().wrap_connector({
-        let mut http_connector = HttpConnector::new();
-        http_connector.enforce_http(false);
-        http_connector
-    });
-    Client::builder(TokioExecutor::new())
-        .pool_max_idle_per_host(0)
-        .http2_only(true)
-        .build(connector)
-}
-
-async fn list_services(
-    reflect_client: &mut ServerReflectionClient<Client<HttpsConnector<HttpConnector>, BoxBody>>,
-) -> Result<Vec<String>, String> {
-    let response =
-        send_reflection_request(reflect_client, MessageRequest::ListServices("".into())).await?;
+async fn list_services(client: &mut AutoReflectionClient) -> Result<Vec<String>, String> {
+    let response = client.send_reflection_request(MessageRequest::ListServices("".into())).await?;
 
     let list_services_response = match response {
         MessageResponse::ListServicesResponse(resp) => resp,
@@ -145,13 +121,11 @@ async fn list_services(
 async fn file_descriptor_set_from_service_name(
     service_name: &str,
     pool: &mut DescriptorPool,
-    client: &mut ServerReflectionClient<Client<HttpsConnector<HttpConnector>, BoxBody>>,
+    client: &mut AutoReflectionClient,
 ) {
-    let response = match send_reflection_request(
-        client,
-        MessageRequest::FileContainingSymbol(service_name.into()),
-    )
-    .await
+    let response = match client
+        .send_reflection_request(MessageRequest::FileContainingSymbol(service_name.into()))
+        .await
     {
         Ok(resp) => resp,
         Err(e) => {
@@ -173,7 +147,7 @@ async fn file_descriptor_set_from_service_name(
 async fn add_file_descriptors_to_pool(
     fds: Vec<Vec<u8>>,
     pool: &mut DescriptorPool,
-    client: &mut ServerReflectionClient<Client<HttpsConnector<HttpConnector>, BoxBody>>,
+    client: &mut AutoReflectionClient,
 ) {
     let mut topo_sort = topology::SimpleTopoSort::new();
     let mut fd_mapping = std::collections::HashMap::with_capacity(fds.len());
@@ -202,15 +176,15 @@ async fn add_file_descriptors_to_pool(
 async fn file_descriptor_set_by_filename(
     filename: &str,
     pool: &mut DescriptorPool,
-    client: &mut ServerReflectionClient<Client<HttpsConnector<HttpConnector>, BoxBody>>,
+    client: &mut AutoReflectionClient,
 ) {
     // We already fetched this file
     if let Some(_) = pool.get_file_by_name(filename) {
         return;
     }
 
-    let response =
-        send_reflection_request(client, MessageRequest::FileByFilename(filename.into())).await;
+    let msg = MessageRequest::FileByFilename(filename.into());
+    let response = client.send_reflection_request(msg).await;
     let file_descriptor_response = match response {
         Ok(MessageResponse::FileDescriptorResponse(resp)) => resp,
         Ok(_) => {
@@ -224,35 +198,6 @@ async fn file_descriptor_set_by_filename(
 
     add_file_descriptors_to_pool(file_descriptor_response.file_descriptor_proto, pool, client)
         .await;
-}
-
-async fn send_reflection_request(
-    client: &mut ServerReflectionClient<Client<HttpsConnector<HttpConnector>, BoxBody>>,
-    message: MessageRequest,
-) -> Result<MessageResponse, String> {
-    let reflection_request = ServerReflectionRequest {
-        host: "".into(), // Doesn't matter
-        message_request: Some(message),
-    };
-
-    let request = Request::new(tokio_stream::once(reflection_request));
-
-    client
-        .server_reflection_info(request)
-        .await
-        .map_err(|e| match e.code() {
-            tonic::Code::Unavailable => "Failed to connect to endpoint".to_string(),
-            tonic::Code::Unauthenticated => "Authentication failed".to_string(),
-            tonic::Code::DeadlineExceeded => "Deadline exceeded".to_string(),
-            _ => e.to_string(),
-        })?
-        .into_inner()
-        .next()
-        .await
-        .expect("steamed response")
-        .map_err(|e| e.to_string())?
-        .message_response
-        .ok_or("No reflection response".to_string())
 }
 
 pub fn method_desc_to_path(md: &MethodDescriptor) -> PathAndQuery {
@@ -296,8 +241,8 @@ mod topology {
     where
         T: Eq + std::hash::Hash + Clone,
     {
-        type IntoIter = SimpleTopoSortIter<T>;
         type Item = <SimpleTopoSortIter<T> as Iterator>::Item;
+        type IntoIter = SimpleTopoSortIter<T>;
 
         fn into_iter(self) -> Self::IntoIter {
             SimpleTopoSortIter::new(self)

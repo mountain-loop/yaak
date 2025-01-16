@@ -16,10 +16,11 @@ use tonic::transport::Uri;
 use tonic::{IntoRequest, IntoStreamingRequest, Request, Response, Status, Streaming};
 
 use crate::codec::DynamicCodec;
-use crate::proto::{
-    fill_pool_from_files, fill_pool_from_reflection, get_transport, method_desc_to_path,
+use crate::reflection::{
+    fill_pool_from_files, fill_pool_from_reflection, method_desc_to_path,
 };
 use crate::{json_schema, MethodDefinition, ServiceDefinition};
+use crate::transport::get_transport;
 
 #[derive(Clone)]
 pub struct GrpcConnection {
