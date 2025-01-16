@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import { motion } from 'framer-motion';
-import { atom, useAtom } from 'jotai';
+import { atom } from 'jotai';
 import type {
   CSSProperties,
   FocusEvent as ReactFocusEvent,
@@ -12,11 +12,11 @@ import type {
   SetStateAction,
 } from 'react';
 import React, {
-  useEffect,
   Children,
   cloneElement,
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -29,6 +29,7 @@ import { useHotKey } from '../../hooks/useHotKey';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { generateId } from '../../lib/generateId';
 import { getNodeText } from '../../lib/getNodeText';
+import { jotaiStore } from '../../lib/jotai';
 import { Overlay } from '../Overlay';
 import { Button } from './Button';
 import { HotKey } from './HotKey';
@@ -62,15 +63,13 @@ export type DropdownItem = DropdownItemDefault | DropdownItemSeparator;
 export interface DropdownProps {
   children: ReactElement<HTMLAttributes<HTMLButtonElement>>;
   items: DropdownItem[];
-  onOpen?: () => void;
-  onClose?: () => void;
   fullWidth?: boolean;
   hotKeyAction?: HotkeyAction;
 }
 
 export interface DropdownRef {
   isOpen: boolean;
-  open: () => void;
+  open: (index?: number) => void;
   toggle: () => void;
   close?: () => void;
   next?: (incrBy?: number) => void;
@@ -84,46 +83,52 @@ export interface DropdownRef {
 const openAtom = atom<string | null>(null);
 
 export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown(
-  { children, items, onOpen, onClose, hotKeyAction, fullWidth }: DropdownProps,
+  { children, items, hotKeyAction, fullWidth }: DropdownProps,
   ref,
 ) {
-  const id = useRef(generateId()).current;
-  const [openId, setOpenId] = useAtom(openAtom);
-  const isOpen = openId === id;
+  const id = useRef(generateId());
+  const [isOpen, _setIsOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    return jotaiStore.sub(openAtom, () => {
+      const globalOpenId = jotaiStore.get(openAtom);
+      const newIsOpen = globalOpenId === id.current;
+      if (newIsOpen !== isOpen) {
+        _setIsOpen(newIsOpen);
+      }
+    });
+  }, [isOpen, _setIsOpen]);
 
   // const [isOpen, _setIsOpen] = useState<boolean>(false);
   const [defaultSelectedIndex, setDefaultSelectedIndex] = useState<number | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<Omit<DropdownRef, 'open'>>(null);
 
-  const setIsOpen = useCallback(
-    (o: SetStateAction<boolean>) => {
-      setOpenId((prevId) => {
-        const prevIsOpen = prevId === id;
-        const newIsOpen = typeof o === 'function' ? o(prevIsOpen) : o;
-        return newIsOpen ? id : null; // Set global atom to current ID to signify open state
-      });
-    },
-    [id, setOpenId],
-  );
-
-  useEffect(() => {
-    if (isOpen) {
+  const setIsOpen = useCallback((o: SetStateAction<boolean>) => {
+    jotaiStore.set(openAtom, (prevId) => {
+      const prevIsOpen = prevId === id.current;
+      const newIsOpen = typeof o === 'function' ? o(prevIsOpen) : o;
       // Persist background color of button until we close the dropdown
-      buttonRef.current!.style.backgroundColor = window
-        .getComputedStyle(buttonRef.current!)
-        .getPropertyValue('background-color');
-      onOpen?.();
-    } else {
-      onClose?.();
+      if (newIsOpen) {
+        buttonRef.current!.style.backgroundColor = window
+          .getComputedStyle(buttonRef.current!)
+          .getPropertyValue('background-color');
+      }
+      return newIsOpen ? id.current : null; // Set global atom to current ID to signify open state
+    });
+  }, []);
+
+  // Because a different dropdown can cause ours to close, a useEffect([isOpen]) is the only method
+  // we have of detecting the dropdown closed, to do cleanup.
+  useEffect(() => {
+    if (!isOpen) {
       buttonRef.current?.focus(); // Focus button
       buttonRef.current!.style.backgroundColor = ''; // Clear persisted BG
+      // Set to different value when opened and closed to force it to update. This is to force
+      // <Menu/> to reset its selected-index state, which it does when this prop changes
+      setDefaultSelectedIndex(null);
     }
-
-    // Set to different value when opened and closed to force it to update. This is to force
-    // <Menu/> to reset its selected-index state, which it does when this prop changes
-    setDefaultSelectedIndex(isOpen ? -1 : null);
-  }, [isOpen, onClose, onOpen]);
+  }, [isOpen]);
 
   // Pull into variable so linter forces us to add it as a hook dep to useImperativeHandle. If we don't,
   // the ref will not update when menuRef updates, causing stale callback state to be used.
@@ -138,8 +143,9 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
         if (!isOpen) this.open();
         else this.close();
       },
-      open() {
+      open(index?: number) {
         setIsOpen(true);
+        setDefaultSelectedIndex(index ?? -1);
       },
       close() {
         setIsOpen(false);
@@ -264,10 +270,17 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     ref,
   ) {
     const [selectedIndex, setSelectedIndex] = useStateWithDeps<number | null>(
-      defaultSelectedIndex ?? null,
+      defaultSelectedIndex ?? -1,
       [defaultSelectedIndex],
     );
     const [filter, setFilter] = useState<string>('');
+
+    // HACK: Use a ref to track selectedIndex so our closure functions (eg. select()) can
+    //  have access to the latest value.
+    const selectedIndexRef = useRef(selectedIndex);
+    useEffect(() => {
+      selectedIndexRef.current = selectedIndex;
+    }, [selectedIndex]);
 
     const handleClose = useCallback(() => {
       onClose();
@@ -380,12 +393,12 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
         prev: handlePrev,
         next: handleNext,
         select() {
-          const item = items[selectedIndex ?? -1] ?? null;
+          const item = items[selectedIndexRef.current ?? -1] ?? null;
           if (!item) return;
           handleSelect(item);
         },
       };
-    }, [handleClose, handleNext, handlePrev, handleSelect, items, selectedIndex]);
+    }, [handleClose, handleNext, handlePrev, handleSelect, items]);
 
     const styles = useMemo<{
       container: CSSProperties;

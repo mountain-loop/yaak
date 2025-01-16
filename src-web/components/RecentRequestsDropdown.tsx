@@ -1,11 +1,11 @@
 import classNames from 'classnames';
 import { useMemo, useRef } from 'react';
-import { useKeyPressEvent } from 'react-use';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { getActiveWorkspaceId } from '../hooks/useActiveWorkspace';
 import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
 import { useHotKey } from '../hooks/useHotKey';
 import { httpRequestsAtom } from '../hooks/useHttpRequests';
+import { useKeyboardEvent } from '../hooks/useKeyboardEvent';
 import { useRecentRequests } from '../hooks/useRecentRequests';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { jotaiStore } from '../lib/jotai';
@@ -27,16 +27,16 @@ export function RecentRequestsDropdown({ className }: Props) {
   // Handle key-up
   // TODO: Somehow make useHotKey have this functionality. Note: e.key does not work
   //  on Linux, for example, when Control is mapped to CAPS. This will never fire.
-  useKeyPressEvent('Control', undefined, () => {
-    if (!dropdownRef.current?.isOpen) return;
-    dropdownRef.current?.select?.();
+  useKeyboardEvent('keyup', 'Control', () => {
+    if (dropdownRef.current?.isOpen) {
+      dropdownRef.current?.select?.();
+    }
   });
 
   useHotKey('request_switcher.prev', () => {
     if (!dropdownRef.current?.isOpen) {
-      dropdownRef.current?.open();
       // Select the second because the first is the current request
-      dropdownRef.current?.next?.(2);
+      dropdownRef.current?.open(1);
     } else {
       dropdownRef.current?.next?.();
     }
