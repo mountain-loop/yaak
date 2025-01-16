@@ -29,11 +29,13 @@ var plugin = {
     config: [{
       type: "text",
       name: "username",
-      label: "Username"
+      label: "Username",
+      optional: true
     }, {
       type: "text",
       name: "password",
-      label: "Password"
+      label: "Password",
+      optional: true
     }],
     async onApply(_ctx, args) {
       const { username, password } = args.config;

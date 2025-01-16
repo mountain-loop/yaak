@@ -29,7 +29,8 @@ var plugin = {
     config: [{
       type: "text",
       name: "token",
-      label: "Token"
+      label: "Token",
+      optional: true
     }],
     async onApply(_ctx, args) {
       const { token } = args.config;
