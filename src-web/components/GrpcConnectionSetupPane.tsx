@@ -135,11 +135,6 @@ export function GrpcConnectionSetupPane({
 
   const tabs: TabItem[] = useMemo(
     () => [
-      {
-        value: TAB_DESCRIPTION,
-        label: 'Info',
-        rightSlot: activeRequest.description && <CountBadge count={true} />,
-      },
       { value: TAB_MESSAGE, label: 'Message' },
       {
         value: TAB_AUTH,
@@ -169,6 +164,11 @@ export function GrpcConnectionSetupPane({
         },
       },
       { value: TAB_METADATA, label: 'Metadata' },
+      {
+        value: TAB_DESCRIPTION,
+        label: 'Info',
+        rightSlot: activeRequest.description && <CountBadge count={true} />,
+      },
     ],
     [
       activeRequest.authentication,

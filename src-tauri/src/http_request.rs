@@ -369,7 +369,7 @@ pub async fn send_http_request<R: Runtime>(
     };
 
     // Apply authentication
-
+    
     // Map legacy auth name values from before they were plugins
     let auth_plugin_name = match request.authentication_type.clone() {
         Some(s) if s == "basic" => Some("@yaakapp/auth-basic".to_string()),

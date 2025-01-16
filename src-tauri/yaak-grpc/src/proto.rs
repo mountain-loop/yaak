@@ -116,7 +116,7 @@ pub async fn fill_pool_from_reflection(uri: &Uri) -> Result<DescriptorPool, Stri
 }
 
 pub fn get_transport() -> Client<HttpsConnector<HttpConnector>, BoxBody> {
-    let connector = HttpsConnectorBuilder::new().with_native_roots().unwrap();
+    let connector = HttpsConnectorBuilder::new().with_platform_verifier();
     let connector = connector.https_or_http().enable_http2().wrap_connector({
         let mut http_connector = HttpConnector::new();
         http_connector.enforce_http(false);

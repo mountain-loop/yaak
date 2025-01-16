@@ -38,12 +38,11 @@ cocoa = "0.26.0"
 openssl-sys = { version = "0.9", features = ["vendored"] } # For Ubuntu installation to work
 
 [dependencies]
-base64 = "0.22.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 datetime = "0.5.2"
 eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.14.0" }
 hex_color = "3.0.0"
-http = "1"
+http = { version = "1.2.0", default-features = false }
 log = "0.4.21"
 rand = "0.8.5"
 regex = "1.10.2"

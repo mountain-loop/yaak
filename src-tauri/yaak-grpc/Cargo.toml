@@ -17,8 +17,8 @@ prost-reflect = { version = "0.14.4", features = ["serde", "derive"] }
 log = "0.4.20"
 anyhow = "1.0.79"
 hyper = "1.5.2"
-hyper-util = { version = "0.1.10", features = ['client-legacy', 'client'] }
-hyper-rustls = { version = "0.27.5", features = ["http2", "rustls-native-certs", "rustls-platform-verifier"] }
+hyper-util = { version = "0.1.10", features = ["client-legacy", "client"] }
+hyper-rustls = { version = "0.27.5", default-features = false, features = ["http2", "rustls-platform-verifier"] }
 uuid = { version = "1.7.0", features = ["v4"] }
 tauri = { workspace = true }
 tauri-plugin-shell = { workspace = true }

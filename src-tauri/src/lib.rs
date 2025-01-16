@@ -9,8 +9,6 @@ use crate::render::{render_grpc_request, render_http_request, render_json_value,
 use crate::template_callback::PluginTemplateCallback;
 use crate::updates::{UpdateMode, YaakUpdater};
 use crate::window_menu::app_menu;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
 use chrono::Utc;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, info, warn};
@@ -65,11 +63,11 @@ use yaak_models::queries::{
     upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
-    BootResponse, CallHttpRequestActionRequest, FilterResponse, FindHttpResponsesResponse,
-    GetHttpAuthenticationResponse, GetHttpRequestActionsResponse, GetHttpRequestByIdResponse,
-    GetTemplateFunctionsResponse, Icon, InternalEvent, InternalEventPayload, PromptTextResponse,
-    RenderHttpRequestResponse, RenderPurpose, SendHttpRequestResponse, ShowToastRequest,
-    TemplateRenderResponse, WindowContext,
+    BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
+    FindHttpResponsesResponse, GetHttpAuthenticationResponse, GetHttpRequestActionsResponse,
+    GetHttpRequestByIdResponse, GetTemplateFunctionsResponse, HttpHeader, Icon, InternalEvent,
+    InternalEventPayload, PromptTextResponse, RenderHttpRequestResponse, RenderPurpose,
+    SendHttpRequestResponse, ShowToastRequest, TemplateRenderResponse, WindowContext,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -198,6 +196,7 @@ async fn cmd_grpc_go<R: Runtime>(
     environment_id: Option<&str>,
     proto_files: Vec<String>,
     window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> Result<String, String> {
     let environment = match environment_id {
@@ -210,7 +209,7 @@ async fn cmd_grpc_go<R: Runtime>(
         .ok_or("Failed to find GRPC request")?;
     let base_environment =
         get_base_environment(&window, &req.workspace_id).await.map_err(|e| e.to_string())?;
-    let req = render_grpc_request(
+    let mut req = render_grpc_request(
         &req,
         &base_environment,
         environment.as_ref(),
@@ -236,21 +235,37 @@ async fn cmd_grpc_go<R: Runtime>(
         metadata.insert(h.name, h.value);
     }
 
-    if let Some(b) = &req.authentication_type {
-        let req = req.clone();
-        let empty_value = &serde_json::to_value("").unwrap();
-        let a = req.authentication;
+    // Map legacy auth name values from before they were plugins
+    let auth_plugin_name = match req.authentication_type.clone() {
+        Some(s) if s == "basic" => Some("@yaakapp/auth-basic".to_string()),
+        Some(s) if s == "bearer" => Some("@yaakapp/auth-bearer".to_string()),
+        _ => req.authentication_type.to_owned(),
+    };
+    if let Some(plugin_name) = auth_plugin_name {
+        let plugin_req = CallHttpAuthenticationRequest {
+            config: serde_json::to_value(&req.authentication)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .to_owned(),
+            method: "POST".to_string(),
+            url: req.url.clone(),
+            headers: metadata
+                .iter()
+                .map(|(name, value)| HttpHeader {
+                    name: name.to_string(),
+                    value: value.to_string(),
+                })
+                .collect(),
+        };
+        let plugin_result = plugin_manager
+            .call_http_authentication(&window, &plugin_name, plugin_req)
+            .await
+            .map_err(|e| e.to_string())?;
 
-        if b == "basic" {
-            let username = a.get("username").unwrap_or(empty_value).as_str().unwrap_or("");
-            let password = a.get("password").unwrap_or(empty_value).as_str().unwrap_or("");
-
-            let auth = format!("{username}:{password}");
-            let encoded = BASE64_STANDARD.encode(auth);
-            metadata.insert("Authorization".to_string(), format!("Basic {}", encoded));
-        } else if b == "bearer" {
-            let token = a.get("token").unwrap_or(empty_value).as_str().unwrap_or("");
-            metadata.insert("Authorization".to_string(), format!("Bearer {token}"));
+        req.url = plugin_result.url;
+        for header in plugin_result.headers {
+            metadata.insert(header.name, header.value);
         }
     }
 
