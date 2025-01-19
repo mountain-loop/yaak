@@ -1,5 +1,4 @@
 import type { BootRequest, InternalEvent } from '@yaakapp-internal/plugins';
-import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import type { EventChannel } from './EventChannel';
 import type { PluginWorkerData } from './index.worker';
@@ -24,13 +23,13 @@ export class PluginHandle {
   }
 
   #createWorker(): Worker {
-    const workerPath =
-      process.env.YAAK_WORKER_PATH ?? path.join(import.meta.dirname, 'index.worker.ts');
+    const workerUrl = new URL('./index.worker.ts', import.meta.url).href;
     const workerData: PluginWorkerData = {
       pluginRefId: this.pluginRefId,
       bootRequest: this.bootRequest,
     };
-    const worker = new Worker(workerPath, {
+    const worker = new Worker(workerUrl, {
+      type: 'module',
       workerData,
     });
 

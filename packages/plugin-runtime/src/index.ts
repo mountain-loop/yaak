@@ -27,8 +27,8 @@ ws.addEventListener('close', () => {
 
 // Listen for incoming events from plugins
 events.listen((e) => {
-  console.log('SEND EVENT TO APP', e);
-  ws.send(JSON.stringify(e));
+  const eventStr = JSON.stringify(e);
+  ws.send(eventStr);
 });
 
 async function handleIncoming(msg: MessageEvent) {

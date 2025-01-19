@@ -4,9 +4,9 @@ use log::{error, info, warn};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Mutex};
+use tokio_tungstenite::accept_async_with_config;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{accept_async, accept_async_with_config};
 
 #[derive(Clone)]
 pub(crate) struct PluginRuntimeServerWebsocket {
@@ -79,8 +79,6 @@ impl PluginRuntimeServerWebsocket {
                             }
                         };
 
-                        println!("-------- WS RECEIVE {event:?}");
-
                         // Send event to subscribers
                         // Emit event to the channel for server to handle
                         if let Err(e) = plugin_to_app_events_tx.try_send(event.clone()) {
@@ -95,11 +93,9 @@ impl PluginRuntimeServerWebsocket {
                                 return;
                             },
                             Some(event) => {
-                                println!("-------- WS SENDING {event:?}");
                                 let event_bytes = serde_json::to_string(&event).unwrap();
                                 let msg = Message::text(event_bytes);
                                 ws_sender.send(msg).await.unwrap();
-                                println!("-------- WS SENDING {event:?}");
                             }
                         }
                     }

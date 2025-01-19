@@ -33,8 +33,8 @@ pub async fn start_nodejs_plugin_runtime<R: Runtime>(
 
     let cmd = app.shell().sidecar("yaakdeno")?.env("PORT", addr.port().to_string()).args(&[
         "run",
-        "--allow-all",
-        "--unstable-sloppy-imports",
+        "--allow-all", // Must have all permissions to give child workers permissions
+        "--unstable-sloppy-imports", // To have `./foo/bar` imports
         &plugin_runtime_main,
     ]);
 

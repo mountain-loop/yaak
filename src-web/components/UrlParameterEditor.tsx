@@ -23,7 +23,7 @@ export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey 
       if (pairIndex >= 0) {
         pairEditor.current?.focusValue(pairIndex);
       } else {
-        console.log("Couldn't find pair to focus", { name, pairs });
+        console.log(`Couldn't find pair to focus`, { name, pairs });
       }
     },
     [pairs],

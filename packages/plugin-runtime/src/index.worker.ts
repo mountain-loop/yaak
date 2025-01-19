@@ -34,27 +34,13 @@ async function initialize() {
     bootRequest: { dir: pluginDir, watch: enableWatch },
     pluginRefId,
   }: PluginWorkerData = workerData;
+
   const pathPkg = path.join(pluginDir, 'package.json');
-
   const pathMod = path.posix.join(pluginDir, 'src', 'index.ts');
-
-  async function importModule() {
-    const mod = await import(pathMod);
-    return mod;
-  }
 
   const pkg = JSON.parse(readFileSync(pathPkg, 'utf8'));
 
   prefixStdout(`[plugin][${pkg.name}] %s`);
-
-  let mod = await importModule();
-
-  const capabilities: string[] = [];
-  if (typeof mod.pluginHookExport === 'function') capabilities.push('export');
-  if (typeof mod.pluginHookImport === 'function') capabilities.push('import');
-  if (typeof mod.pluginHookResponseFilter === 'function') capabilities.push('filter');
-
-  console.log('Plugin initialized', pkg.name, { capabilities, enableWatch });
 
   function buildEventToSend(
     windowContext: WindowContext,
@@ -117,20 +103,16 @@ async function initialize() {
     return promise as unknown as Promise<T>;
   }
 
-  async function reloadModule() {
-    mod = await importModule();
-  }
-
-  // Reload plugin if JS or package.json changes
+  // Reload plugin if the JS or package.json changes
   const windowContextNone: WindowContext = { type: 'none' };
-  const cb = async () => {
-    await reloadModule();
+  const fileChangeCallback = async () => {
+    await importModule();
     return sendPayload(windowContextNone, { type: 'reload_response' }, null);
   };
 
   if (enableWatch) {
-    watchFile(pathMod, cb);
-    watchFile(pathPkg, cb);
+    watchFile(pathMod, fileChangeCallback);
+    watchFile(pathPkg, fileChangeCallback);
   }
 
   const newCtx = (event: InternalEvent): Context => ({
@@ -205,13 +187,26 @@ async function initialize() {
     },
   });
 
+  let mod;
+  async function importModule() {
+    mod = await import(pathMod);
+  }
+
   // Message comes into the plugin to be processed
   parentPort!.on('message', async (event: InternalEvent) => {
-    console.log("PLUGIN WORKER RECEIVED EVENT", event);
     const { windowContext, payload, id: replyId } = event;
     const ctx = newCtx(event);
     try {
       if (payload.type === 'boot_request') {
+
+        await importModule();
+
+        const capabilities: string[] = [];
+        if (typeof mod.pluginHookExport === 'function') capabilities.push('export');
+        if (typeof mod.pluginHookImport === 'function') capabilities.push('import');
+        if (typeof mod.pluginHookResponseFilter === 'function') capabilities.push('filter');
+
+        // console.log('Plugin initialized', pkg.name, { capabilities, enableWatch });
         const payload: InternalEventPayload = {
           type: 'boot_response',
           name: pkg.name,
@@ -375,7 +370,7 @@ async function initialize() {
       }
 
       if (payload.type === 'reload_request') {
-        await reloadModule();
+        await importModule();
       }
     } catch (err) {
       console.log('Plugin call threw exception', payload.type, err);
