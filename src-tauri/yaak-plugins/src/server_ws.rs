@@ -1,14 +1,12 @@
 use crate::events::InternalEvent;
-use crate::server::plugin_runtime::EventStreamEvent;
 use futures_util::{SinkExt, StreamExt};
-use log::{info, warn};
+use log::{error, info, warn};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::interval;
-use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{accept_async, accept_async_with_config};
 
 #[derive(Clone)]
 pub(crate) struct PluginRuntimeServerWebsocket {
@@ -48,17 +46,18 @@ impl PluginRuntimeServerWebsocket {
         let client_connect_tx = self.client_connect_tx.clone();
 
         let addr = stream.peer_addr().expect("connected streams should have a peer address");
-        info!("Peer address: {}", addr);
 
-        let ws_stream =
-            accept_async(stream).await.expect("Error during the websocket handshake occurred");
+        let conf = WebSocketConfig::default();
+        let ws_stream = accept_async_with_config(stream, Some(conf))
+            .await
+            .expect("Error during the websocket handshake occurred");
 
         let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
         tauri::async_runtime::spawn(async move {
             client_connect_tx.send(true).expect("Failed to send client ready event");
 
-            info!("New WebSocket connection: {}", addr);
+            info!("New plugin runtime websocket connection: {}", addr);
 
             loop {
                 tokio::select! {
@@ -80,6 +79,8 @@ impl PluginRuntimeServerWebsocket {
                             }
                         };
 
+                        println!("-------- WS RECEIVE {event:?}");
+
                         // Send event to subscribers
                         // Emit event to the channel for server to handle
                         if let Err(e) = plugin_to_app_events_tx.try_send(event.clone()) {
@@ -89,11 +90,16 @@ impl PluginRuntimeServerWebsocket {
 
                     event_for_plugin = to_plugin_rx.recv() => {
                         match event_for_plugin {
-                            None => continue,
+                            None => {
+                                error!("Plugin runtime client WS channel closed");
+                                return;
+                            },
                             Some(event) => {
-                                let event_bytes = serde_json::to_string_pretty(&event).unwrap();
+                                println!("-------- WS SENDING {event:?}");
+                                let event_bytes = serde_json::to_string(&event).unwrap();
                                 let msg = Message::text(event_bytes);
                                 ws_sender.send(msg).await.unwrap();
+                                println!("-------- WS SENDING {event:?}");
                             }
                         }
                     }

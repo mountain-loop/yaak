@@ -5,7 +5,7 @@ export class EventChannel {
   emitter: EventEmitter = new EventEmitter();
 
   emit(e: InternalEvent) {
-    this.emitter.emit('__plugin_event__', { event: JSON.stringify(e) });
+    this.emitter.emit('__plugin_event__', e);
   }
 
   listen(cb: (e: InternalEvent) => void) {

@@ -61,7 +61,14 @@ async function initialize() {
     payload: InternalEventPayload,
     replyId: string | null = null,
   ): InternalEvent {
-    return { pluginRefId, id: genId(), replyId, payload, windowContext };
+    return {
+      pluginRefId,
+      pluginName: path.basename(pluginDir),
+      id: genId(),
+      replyId,
+      payload,
+      windowContext,
+    };
   }
 
   function sendEmpty(windowContext: WindowContext, replyId: string | null = null): string {
@@ -200,6 +207,7 @@ async function initialize() {
 
   // Message comes into the plugin to be processed
   parentPort!.on('message', async (event: InternalEvent) => {
+    console.log("PLUGIN WORKER RECEIVED EVENT", event);
     const { windowContext, payload, id: replyId } = event;
     const ctx = newCtx(event);
     try {

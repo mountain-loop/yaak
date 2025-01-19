@@ -1,10 +1,9 @@
 use crate::error::Result;
 use crate::events::{BootResponse, InternalEvent, InternalEventPayload, WindowContext};
-use crate::server::plugin_runtime::EventStreamEvent;
 use crate::util::gen_id;
-use log::{error, info};
+use log::info;
+use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::{mpsc, Mutex};
 
 #[derive(Clone)]
@@ -47,9 +46,11 @@ impl PluginHandle {
         payload: &InternalEventPayload,
         reply_id: Option<String>,
     ) -> InternalEvent {
+        let dir = Path::new(&self.dir);
         InternalEvent {
             id: gen_id(),
             plugin_ref_id: self.ref_id.clone(),
+            plugin_name: dir.file_name().unwrap().to_str().unwrap().to_string(),
             reply_id,
             payload: payload.clone(),
             window_context,

@@ -5,7 +5,6 @@ use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, RunEvent, Runtime, State};
 
 mod nodejs;
-mod server;
 mod server_ws;
 mod util;
 pub mod error;

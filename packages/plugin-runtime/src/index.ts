@@ -1,4 +1,4 @@
-import type { InternalEvent } from '@yaakapp/api';
+import { InternalEvent } from '@yaakapp-internal/plugins';
 import { EventChannel } from './EventChannel';
 import { PluginHandle } from './PluginHandle';
 
@@ -12,28 +12,27 @@ ws.addEventListener('message', async (e) => {
   try {
     await handleIncoming(e);
   } catch (err) {
-    console.log("FAILED TO HANDLE", err);
+    console.log('Failed to handle incoming plugin event', err);
   }
 });
-ws.addEventListener('open', (e) => {
-  console.log('WEBSOCKET CONNECTION OPENED');
+ws.addEventListener('open', () => {
+  console.log('Plugin runtime connected to websocket');
 });
 ws.addEventListener('error', (e) => {
-  console.log('WEBSOCKET CONNECTION ERROR', e);
+  console.error('Plugin runtime websocket error', e);
 });
-ws.addEventListener('close', (e) => {
-  console.log('WEBSOCKET CONNECTION CLOSE', e);
+ws.addEventListener('close', () => {
+  console.log('Plugin runtime websocket closed');
 });
 
 // Listen for incoming events from plugins
-events.listen(e => {
-  console.log('SENDING EVENT TO APP', e);
-  ws.send(JSON.stringify(e, null, 2));
-})
+events.listen((e) => {
+  console.log('SEND EVENT TO APP', e);
+  ws.send(JSON.stringify(e));
+});
 
 async function handleIncoming(msg: MessageEvent) {
   const pluginEvent: InternalEvent = JSON.parse(msg.data);
-  console.log('WEBSOCKET CONNECTION MESSAGE', pluginEvent);
   // Handle special event to bootstrap plugin
   if (pluginEvent.payload.type === 'boot_request') {
     const plugin = new PluginHandle(pluginEvent.pluginRefId, pluginEvent.payload, events);

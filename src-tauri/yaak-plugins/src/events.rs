@@ -11,6 +11,7 @@ use yaak_models::models::{Environment, Folder, GrpcRequest, HttpRequest, HttpRes
 pub struct InternalEvent {
     pub id: String,
     pub plugin_ref_id: String,
+    pub plugin_name: String,
     pub reply_id: Option<String>,
     pub payload: InternalEventPayload,
     pub window_context: WindowContext,
