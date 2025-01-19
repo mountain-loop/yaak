@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-unstage"
+description = "Enables the unstage command without any pre-configured scope."
+commands.allow = ["unstage"]
+
+[[permission]]
+identifier = "deny-unstage"
+description = "Denies the unstage command without any pre-configured scope."
+commands.deny = ["unstage"]

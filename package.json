@@ -11,6 +11,7 @@
     "packages/plugin-runtime-types",
     "packages/common-lib",
     "src-tauri/yaak-license",
+    "src-tauri/yaak-git",
     "src-tauri/yaak-models",
     "src-tauri/yaak-plugins",
     "src-tauri/yaak-sse",

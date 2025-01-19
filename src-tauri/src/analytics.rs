@@ -4,6 +4,7 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{Manager, Runtime, WebviewWindow};
+
 use ts_rs::TS;
 use yaak_models::queries::{
     generate_id, get_key_value_int, get_key_value_string, get_or_create_settings,

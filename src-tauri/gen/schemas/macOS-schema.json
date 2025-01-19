@@ -5415,6 +5415,81 @@
         {
           "description": "Default permissions for the plugin",
           "type": "string",
+          "const": "yaak-git:default"
+        },
+        {
+          "description": "Enables the add command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-add"
+        },
+        {
+          "description": "Enables the checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-checkout"
+        },
+        {
+          "description": "Enables the commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-commit"
+        },
+        {
+          "description": "Enables the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-initialize"
+        },
+        {
+          "description": "Enables the log command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-log"
+        },
+        {
+          "description": "Enables the status command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-status"
+        },
+        {
+          "description": "Enables the unstage command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-unstage"
+        },
+        {
+          "description": "Denies the add command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-add"
+        },
+        {
+          "description": "Denies the checkout command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-checkout"
+        },
+        {
+          "description": "Denies the commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-commit"
+        },
+        {
+          "description": "Denies the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-initialize"
+        },
+        {
+          "description": "Denies the log command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-log"
+        },
+        {
+          "description": "Denies the status command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-status"
+        },
+        {
+          "description": "Denies the unstage command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-unstage"
+        },
+        {
+          "description": "Default permissions for the plugin",
+          "type": "string",
           "const": "yaak-license:default"
         },
         {
