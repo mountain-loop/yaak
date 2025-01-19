@@ -24,7 +24,8 @@ export class PluginHandle {
   }
 
   #createWorker(): Worker {
-    const workerPath = process.env.YAAK_WORKER_PATH ?? path.join(__dirname, 'index.worker.cjs');
+    const workerPath =
+      process.env.YAAK_WORKER_PATH ?? path.join(import.meta.dirname, 'index.worker.ts');
     const workerData: PluginWorkerData = {
       pluginRefId: this.pluginRefId,
       bootRequest: this.bootRequest,

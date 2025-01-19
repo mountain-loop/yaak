@@ -12,8 +12,7 @@ use crate::events::{
 };
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
-use crate::server::plugin_runtime::plugin_runtime_server::PluginRuntimeServer;
-use crate::server::PluginRuntimeServerImpl;
+use crate::server_ws::PluginRuntimeServerWebsocket;
 use log::{info, warn};
 use std::collections::HashMap;
 use std::env;
@@ -25,8 +24,6 @@ use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::read_dir;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex};
-use tonic::codegen::tokio_stream;
-use tonic::transport::Server;
 use yaak_models::queries::{generate_id, list_plugins};
 
 #[derive(Clone)]
@@ -34,7 +31,7 @@ pub struct PluginManager {
     subscribers: Arc<Mutex<HashMap<String, mpsc::Sender<InternalEvent>>>>,
     plugins: Arc<Mutex<Vec<PluginHandle>>>,
     kill_tx: tokio::sync::watch::Sender<bool>,
-    grpc_service: Arc<PluginRuntimeServerImpl>,
+    ws_service: Arc<PluginRuntimeServerWebsocket>,
 }
 
 #[derive(Clone)]
@@ -50,13 +47,13 @@ impl PluginManager {
 
         let (client_disconnect_tx, mut client_disconnect_rx) = mpsc::channel(128);
         let (client_connect_tx, mut client_connect_rx) = tokio::sync::watch::channel(false);
-        let grpc_service =
-            PluginRuntimeServerImpl::new(events_tx, client_disconnect_tx, client_connect_tx);
+        let ws_service =
+            PluginRuntimeServerWebsocket::new(events_tx, client_disconnect_tx, client_connect_tx);
 
         let plugin_manager = PluginManager {
             plugins: Arc::new(Mutex::new(Vec::new())),
             subscribers: Arc::new(Mutex::new(HashMap::new())),
-            grpc_service: Arc::new(grpc_service.clone()),
+            ws_service: Arc::new(ws_service.clone()),
             kill_tx: kill_server_tx,
         };
 
@@ -79,14 +76,9 @@ impl PluginManager {
             }
         });
 
-        info!("Starting plugin server");
-
-        let svc = PluginRuntimeServer::new(grpc_service.to_owned())
-            .max_encoding_message_size(usize::MAX)
-            .max_decoding_message_size(usize::MAX);
-        let listen_addr = match option_env!("PORT") {
-            None => "localhost:0".to_string(),
+        let listen_addr = match option_env!("YAAK_PLUGIN_SERVER_PORT") {
             Some(port) => format!("localhost:{port}"),
+            None => "localhost:0".to_string(),
         };
         let listener = tauri::async_runtime::block_on(async move {
             TcpListener::bind(listen_addr).await.expect("Failed to bind TCP listener")
@@ -114,14 +106,9 @@ impl PluginManager {
         };
 
         // 1. Spawn server in the background
-        info!("Starting gRPC plugin server on {addr}");
+        info!("Starting plugin server on {addr}");
         tauri::async_runtime::spawn(async move {
-            Server::builder()
-                .timeout(Duration::from_secs(10))
-                .add_service(svc)
-                .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
-                .await
-                .expect("grpc plugin runtime server failed to start");
+            ws_service.listen(listener).await;
         });
 
         // 2. Start Node.js runtime and initialize plugins
@@ -203,7 +190,7 @@ impl PluginManager {
         watch: bool,
     ) -> Result<()> {
         info!("Adding plugin by dir {dir}");
-        let maybe_tx = self.grpc_service.app_to_plugin_events_tx.lock().await;
+        let maybe_tx = self.ws_service.app_to_plugin_events_tx.lock().await;
         let tx = match &*maybe_tx {
             None => return Err(ClientNotInitializedErr),
             Some(tx) => tx,
@@ -502,7 +489,7 @@ impl PluginManager {
         // Clone for mutability
         let mut req = req.clone();
 
-        // Fill in default values 
+        // Fill in default values
         for arg in authentication.config.clone() {
             let base = match arg {
                 FormInput::Text(a) => a.base,

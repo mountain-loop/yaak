@@ -3805,7 +3805,8 @@ var algorithms = [
   "PS512",
   "ES256",
   "ES384",
-  "ES512"
+  "ES512",
+  "none"
 ];
 var defaultAlgorithm = algorithms[0];
 var plugin = {
@@ -3818,26 +3819,29 @@ var plugin = {
         type: "select",
         name: "algorithm",
         label: "Algorithm",
+        hideLabel: true,
         defaultValue: defaultAlgorithm,
-        options: algorithms.map((value) => ({ name: value, value }))
+        options: algorithms.map((value) => ({ name: value === "none" ? "None" : value, value }))
       },
       {
-        type: "text",
+        type: "editor",
         name: "secret",
-        label: "Secret",
-        optional: true
+        label: "Secret or Private Key",
+        optional: true,
+        hideGutter: true
       },
       {
         type: "checkbox",
         name: "secretBase64",
-        label: "Secret Base64 Encoded"
+        label: "Secret is base64 encoded"
       },
       {
         type: "editor",
         name: "payload",
         label: "Payload",
         language: "json",
-        optional: true
+        defaultValue: '{\n  "foo": "bar"\n}',
+        placeholder: "{ }"
       }
     ],
     async onApply(_ctx, args) {

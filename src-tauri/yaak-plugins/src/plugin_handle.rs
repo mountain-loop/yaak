@@ -2,20 +2,21 @@ use crate::error::Result;
 use crate::events::{BootResponse, InternalEvent, InternalEventPayload, WindowContext};
 use crate::server::plugin_runtime::EventStreamEvent;
 use crate::util::gen_id;
-use log::info;
+use log::{error, info};
 use std::sync::Arc;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::{mpsc, Mutex};
 
 #[derive(Clone)]
 pub struct PluginHandle {
     pub ref_id: String,
     pub dir: String,
-    pub(crate) to_plugin_tx: Arc<Mutex<mpsc::Sender<tonic::Result<EventStreamEvent>>>>,
+    pub(crate) to_plugin_tx: Arc<Mutex<mpsc::Sender<InternalEvent>>>,
     pub(crate) boot_resp: Arc<Mutex<BootResponse>>,
 }
 
 impl PluginHandle {
-    pub fn new(dir: &str, tx: mpsc::Sender<tonic::Result<EventStreamEvent>>) -> Self {
+    pub fn new(dir: &str, tx: mpsc::Sender<InternalEvent>) -> Self {
         let ref_id = gen_id();
 
         PluginHandle {
@@ -63,13 +64,7 @@ impl PluginHandle {
     }
 
     pub(crate) async fn send(&self, event: &InternalEvent) -> Result<()> {
-        self.to_plugin_tx
-            .lock()
-            .await
-            .send(Ok(EventStreamEvent {
-                event: serde_json::to_string(event)?,
-            }))
-            .await?;
+        self.to_plugin_tx.lock().await.send(event.to_owned()).await?;
         Ok(())
     }
 

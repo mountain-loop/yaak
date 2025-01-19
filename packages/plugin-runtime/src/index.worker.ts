@@ -36,12 +36,11 @@ async function initialize() {
   }: PluginWorkerData = workerData;
   const pathPkg = path.join(pluginDir, 'package.json');
 
-  const pathMod = path.posix.join(pluginDir, 'build', 'index.js');
+  const pathMod = path.posix.join(pluginDir, 'src', 'index.ts');
 
   async function importModule() {
-    const id = require.resolve(pathMod);
-    delete require.cache[id];
-    return require(id);
+    const mod = await import(pathMod);
+    return mod;
   }
 
   const pkg = JSON.parse(readFileSync(pathPkg, 'utf8'));

@@ -46,6 +46,7 @@
     "category": "DeveloperTool",
     "externalBin": [
       "vendored/node/yaaknode",
+      "vendored/deno/yaakdeno",
       "vendored/protoc/yaakprotoc"
     ],
     "icon": [
