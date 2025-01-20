@@ -63,11 +63,12 @@ use yaak_models::queries::{
     upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
-    BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
-    FindHttpResponsesResponse, GetHttpAuthenticationResponse, GetHttpRequestActionsResponse,
-    GetHttpRequestByIdResponse, GetTemplateFunctionsResponse, HttpHeader, Icon, InternalEvent,
-    InternalEventPayload, PromptTextResponse, RenderHttpRequestResponse, RenderPurpose,
-    SendHttpRequestResponse, ShowToastRequest, TemplateRenderResponse, WindowContext,
+    BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, Color,
+    FilterResponse, FindHttpResponsesResponse, GetHttpAuthenticationResponse,
+    GetHttpRequestActionsResponse, GetHttpRequestByIdResponse, GetTemplateFunctionsResponse,
+    HttpHeader, Icon, InternalEvent, InternalEventPayload, PromptTextResponse,
+    RenderHttpRequestResponse, RenderPurpose, SendHttpRequestResponse, ShowToastRequest,
+    TemplateRenderResponse, WindowContext,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -2290,6 +2291,21 @@ async fn handle_plugin_event<R: Runtime>(
             let data =
                 render_json_value(req.data, &base_environment, environment.as_ref(), &cb).await;
             Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))
+        }
+        InternalEventPayload::ErrorResponse(resp) => {
+            let window = get_window_from_window_context(app_handle, &window_context)
+                .expect("Failed to find window for plugin reload");
+            let toast_event = plugin_handle.build_event_to_send(
+                WindowContext::from_window(&window),
+                &InternalEventPayload::ShowToastRequest(ShowToastRequest {
+                    message: resp.error,
+                    color: Some(Color::Danger),
+                    ..Default::default()
+                }),
+                None,
+            );
+            Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await;
+            None
         }
         InternalEventPayload::ReloadResponse(_) => {
             let window = get_window_from_window_context(app_handle, &window_context)

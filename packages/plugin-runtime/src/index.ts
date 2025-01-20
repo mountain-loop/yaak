@@ -1,29 +1,25 @@
 import type { InternalEvent } from '@yaakapp/api';
 import { EventChannel } from './EventChannel';
 import { PluginHandle } from './PluginHandle';
+import WebSocket from 'ws';
 
-const port = process.env.PORT || '50051';
+const port = process.env.YAAK_PLUGIN_SERVER_PORT || '9442';
 
 const events = new EventChannel();
 const plugins: Record<string, PluginHandle> = {};
 
 const ws = new WebSocket(`ws://localhost:${port}`);
-ws.addEventListener('message', async (e) => {
+
+ws.on('message', async (e: Buffer) => {
   try {
-    await handleIncoming(e);
+    await handleIncoming(e.toString());
   } catch (err) {
     console.log('Failed to handle incoming plugin event', err);
   }
 });
-ws.addEventListener('open', () => {
-  console.log('Plugin runtime connected to websocket');
-});
-ws.addEventListener('error', (e) => {
-  console.error('Plugin runtime websocket error', e);
-});
-ws.addEventListener('close', () => {
-  console.log('Plugin runtime websocket closed');
-});
+ws.on('open', (e) => console.log('Plugin runtime connected to websocket', e));
+ws.on('error', (e) => console.error('Plugin runtime websocket error', e));
+ws.on('close', (e) => console.log('Plugin runtime websocket closed', e));
 
 // Listen for incoming events from plugins
 events.listen((e) => {
@@ -31,8 +27,8 @@ events.listen((e) => {
   ws.send(eventStr);
 });
 
-async function handleIncoming(msg: MessageEvent) {
-  const pluginEvent: InternalEvent = JSON.parse(msg.data);
+async function handleIncoming(msg: string) {
+  const pluginEvent: InternalEvent = JSON.parse(msg);
   // Handle special event to bootstrap plugin
   if (pluginEvent.payload.type === 'boot_request') {
     const plugin = new PluginHandle(pluginEvent.pluginRefId, pluginEvent.payload, events);

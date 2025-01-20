@@ -96,12 +96,21 @@ pub enum InternalEventPayload {
     /// Returned when a plugin doesn't get run, just so the server
     /// has something to listen for
     EmptyResponse(EmptyPayload),
+
+    ErrorResponse(ErrorResponse),
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default)]
 #[ts(export, type = "{}", export_to = "events.ts")]
 pub struct EmptyPayload {}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export, export_to = "events.ts")]
+pub struct ErrorResponse {
+    pub error: String,
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]

@@ -34,34 +34,34 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var require_safe_buffer = __commonJS({
   "../../node_modules/safe-buffer/index.js"(exports2, module2) {
     var buffer = require("buffer");
-    var Buffer2 = buffer.Buffer;
+    var Buffer3 = buffer.Buffer;
     function copyProps(src, dst) {
       for (var key in src) {
         dst[key] = src[key];
       }
     }
-    if (Buffer2.from && Buffer2.alloc && Buffer2.allocUnsafe && Buffer2.allocUnsafeSlow) {
+    if (Buffer3.from && Buffer3.alloc && Buffer3.allocUnsafe && Buffer3.allocUnsafeSlow) {
       module2.exports = buffer;
     } else {
       copyProps(buffer, exports2);
       exports2.Buffer = SafeBuffer;
     }
     function SafeBuffer(arg, encodingOrOffset, length) {
-      return Buffer2(arg, encodingOrOffset, length);
+      return Buffer3(arg, encodingOrOffset, length);
     }
-    SafeBuffer.prototype = Object.create(Buffer2.prototype);
-    copyProps(Buffer2, SafeBuffer);
+    SafeBuffer.prototype = Object.create(Buffer3.prototype);
+    copyProps(Buffer3, SafeBuffer);
     SafeBuffer.from = function(arg, encodingOrOffset, length) {
       if (typeof arg === "number") {
         throw new TypeError("Argument must not be a number");
       }
-      return Buffer2(arg, encodingOrOffset, length);
+      return Buffer3(arg, encodingOrOffset, length);
     };
     SafeBuffer.alloc = function(size, fill, encoding) {
       if (typeof size !== "number") {
         throw new TypeError("Argument must be a number");
       }
-      var buf = Buffer2(size);
+      var buf = Buffer3(size);
       if (fill !== void 0) {
         if (typeof encoding === "string") {
           buf.fill(fill, encoding);
@@ -77,7 +77,7 @@ var require_safe_buffer = __commonJS({
       if (typeof size !== "number") {
         throw new TypeError("Argument must be a number");
       }
-      return Buffer2(size);
+      return Buffer3(size);
     };
     SafeBuffer.allocUnsafeSlow = function(size) {
       if (typeof size !== "number") {
@@ -91,7 +91,7 @@ var require_safe_buffer = __commonJS({
 // ../../node_modules/jws/lib/data-stream.js
 var require_data_stream = __commonJS({
   "../../node_modules/jws/lib/data-stream.js"(exports2, module2) {
-    var Buffer2 = require_safe_buffer().Buffer;
+    var Buffer3 = require_safe_buffer().Buffer;
     var Stream = require("stream");
     var util = require("util");
     function DataStream(data) {
@@ -99,11 +99,11 @@ var require_data_stream = __commonJS({
       this.writable = true;
       this.readable = true;
       if (!data) {
-        this.buffer = Buffer2.alloc(0);
+        this.buffer = Buffer3.alloc(0);
         return this;
       }
       if (typeof data.pipe === "function") {
-        this.buffer = Buffer2.alloc(0);
+        this.buffer = Buffer3.alloc(0);
         data.pipe(this);
         return this;
       }
@@ -121,7 +121,7 @@ var require_data_stream = __commonJS({
     }
     util.inherits(DataStream, Stream);
     DataStream.prototype.write = function write(data) {
-      this.buffer = Buffer2.concat([this.buffer, Buffer2.from(data)]);
+      this.buffer = Buffer3.concat([this.buffer, Buffer3.from(data)]);
       this.emit("data", data);
     };
     DataStream.prototype.end = function end(data) {
@@ -140,11 +140,11 @@ var require_data_stream = __commonJS({
 var require_buffer_equal_constant_time = __commonJS({
   "../../node_modules/buffer-equal-constant-time/index.js"(exports2, module2) {
     "use strict";
-    var Buffer2 = require("buffer").Buffer;
+    var Buffer3 = require("buffer").Buffer;
     var SlowBuffer = require("buffer").SlowBuffer;
     module2.exports = bufferEq;
     function bufferEq(a, b) {
-      if (!Buffer2.isBuffer(a) || !Buffer2.isBuffer(b)) {
+      if (!Buffer3.isBuffer(a) || !Buffer3.isBuffer(b)) {
         return false;
       }
       if (a.length !== b.length) {
@@ -157,14 +157,14 @@ var require_buffer_equal_constant_time = __commonJS({
       return c === 0;
     }
     bufferEq.install = function() {
-      Buffer2.prototype.equal = SlowBuffer.prototype.equal = function equal(that) {
+      Buffer3.prototype.equal = SlowBuffer.prototype.equal = function equal(that) {
         return bufferEq(this, that);
       };
     };
-    var origBufEqual = Buffer2.prototype.equal;
+    var origBufEqual = Buffer3.prototype.equal;
     var origSlowBufEqual = SlowBuffer.prototype.equal;
     bufferEq.restore = function() {
-      Buffer2.prototype.equal = origBufEqual;
+      Buffer3.prototype.equal = origBufEqual;
       SlowBuffer.prototype.equal = origSlowBufEqual;
     };
   }
@@ -198,7 +198,7 @@ var require_param_bytes_for_alg = __commonJS({
 var require_ecdsa_sig_formatter = __commonJS({
   "../../node_modules/ecdsa-sig-formatter/src/ecdsa-sig-formatter.js"(exports2, module2) {
     "use strict";
-    var Buffer2 = require_safe_buffer().Buffer;
+    var Buffer3 = require_safe_buffer().Buffer;
     var getParamBytesForAlg = require_param_bytes_for_alg();
     var MAX_OCTET = 128;
     var CLASS_UNIVERSAL = 0;
@@ -211,10 +211,10 @@ var require_ecdsa_sig_formatter = __commonJS({
       return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
     }
     function signatureAsBuffer(signature) {
-      if (Buffer2.isBuffer(signature)) {
+      if (Buffer3.isBuffer(signature)) {
         return signature;
       } else if ("string" === typeof signature) {
-        return Buffer2.from(signature, "base64");
+        return Buffer3.from(signature, "base64");
       }
       throw new TypeError("ECDSA signature must be a Base64 string or a Buffer");
     }
@@ -262,7 +262,7 @@ var require_ecdsa_sig_formatter = __commonJS({
         throw new Error('Expected to consume entire buffer, but "' + (inputLength - offset) + '" bytes remain');
       }
       var rPadding = paramBytes - rLength, sPadding = paramBytes - sLength;
-      var dst = Buffer2.allocUnsafe(rPadding + rLength + sPadding + sLength);
+      var dst = Buffer3.allocUnsafe(rPadding + rLength + sPadding + sLength);
       for (offset = 0; offset < rPadding; ++offset) {
         dst[offset] = 0;
       }
@@ -300,7 +300,7 @@ var require_ecdsa_sig_formatter = __commonJS({
       var sLength = paramBytes - sPadding;
       var rsBytes = 1 + 1 + rLength + 1 + 1 + sLength;
       var shortLength = rsBytes < MAX_OCTET;
-      var dst = Buffer2.allocUnsafe((shortLength ? 2 : 3) + rsBytes);
+      var dst = Buffer3.allocUnsafe((shortLength ? 2 : 3) + rsBytes);
       var offset = 0;
       dst[offset++] = ENCODED_TAG_SEQ;
       if (shortLength) {
@@ -338,7 +338,7 @@ var require_ecdsa_sig_formatter = __commonJS({
 var require_jwa = __commonJS({
   "../../node_modules/jwa/index.js"(exports2, module2) {
     var bufferEqual = require_buffer_equal_constant_time();
-    var Buffer2 = require_safe_buffer().Buffer;
+    var Buffer3 = require_safe_buffer().Buffer;
     var crypto = require("crypto");
     var formatEcdsa = require_ecdsa_sig_formatter();
     var util = require("util");
@@ -352,7 +352,7 @@ var require_jwa = __commonJS({
       MSG_INVALID_SECRET += "or a KeyObject";
     }
     function checkIsPublicKey(key) {
-      if (Buffer2.isBuffer(key)) {
+      if (Buffer3.isBuffer(key)) {
         return;
       }
       if (typeof key === "string") {
@@ -375,7 +375,7 @@ var require_jwa = __commonJS({
       }
     }
     function checkIsPrivateKey(key) {
-      if (Buffer2.isBuffer(key)) {
+      if (Buffer3.isBuffer(key)) {
         return;
       }
       if (typeof key === "string") {
@@ -387,7 +387,7 @@ var require_jwa = __commonJS({
       throw typeError(MSG_INVALID_SIGNER_KEY);
     }
     function checkIsSecretKey(key) {
-      if (Buffer2.isBuffer(key)) {
+      if (Buffer3.isBuffer(key)) {
         return;
       }
       if (typeof key === "string") {
@@ -425,7 +425,7 @@ var require_jwa = __commonJS({
       return new TypeError(errMsg);
     }
     function bufferOrString(obj) {
-      return Buffer2.isBuffer(obj) || typeof obj === "string";
+      return Buffer3.isBuffer(obj) || typeof obj === "string";
     }
     function normalizeInput(thing) {
       if (!bufferOrString(thing))
@@ -444,7 +444,7 @@ var require_jwa = __commonJS({
     function createHmacVerifier(bits) {
       return function verify(thing, signature, secret) {
         var computedSig = createHmacSigner(bits)(thing, secret);
-        return bufferEqual(Buffer2.from(signature), Buffer2.from(computedSig));
+        return bufferEqual(Buffer3.from(signature), Buffer3.from(computedSig));
       };
     }
     function createKeySigner(bits) {
@@ -550,11 +550,11 @@ var require_jwa = __commonJS({
 // ../../node_modules/jws/lib/tostring.js
 var require_tostring = __commonJS({
   "../../node_modules/jws/lib/tostring.js"(exports2, module2) {
-    var Buffer2 = require("buffer").Buffer;
+    var Buffer3 = require("buffer").Buffer;
     module2.exports = function toString(obj) {
       if (typeof obj === "string")
         return obj;
-      if (typeof obj === "number" || Buffer2.isBuffer(obj))
+      if (typeof obj === "number" || Buffer3.isBuffer(obj))
         return obj.toString();
       return JSON.stringify(obj);
     };
@@ -564,14 +564,14 @@ var require_tostring = __commonJS({
 // ../../node_modules/jws/lib/sign-stream.js
 var require_sign_stream = __commonJS({
   "../../node_modules/jws/lib/sign-stream.js"(exports2, module2) {
-    var Buffer2 = require_safe_buffer().Buffer;
+    var Buffer3 = require_safe_buffer().Buffer;
     var DataStream = require_data_stream();
     var jwa = require_jwa();
     var Stream = require("stream");
     var toString = require_tostring();
     var util = require("util");
     function base64url(string, encoding) {
-      return Buffer2.from(string, encoding).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+      return Buffer3.from(string, encoding).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
     }
     function jwsSecuredInput(header, payload, encoding) {
       encoding = encoding || "utf8";
@@ -634,7 +634,7 @@ var require_sign_stream = __commonJS({
 // ../../node_modules/jws/lib/verify-stream.js
 var require_verify_stream = __commonJS({
   "../../node_modules/jws/lib/verify-stream.js"(exports2, module2) {
-    var Buffer2 = require_safe_buffer().Buffer;
+    var Buffer3 = require_safe_buffer().Buffer;
     var DataStream = require_data_stream();
     var jwa = require_jwa();
     var Stream = require("stream");
@@ -655,7 +655,7 @@ var require_verify_stream = __commonJS({
     }
     function headerFromJWS(jwsSig) {
       var encodedHeader = jwsSig.split(".", 1)[0];
-      return safeJsonParse(Buffer2.from(encodedHeader, "base64").toString("binary"));
+      return safeJsonParse(Buffer3.from(encodedHeader, "base64").toString("binary"));
     }
     function securedInputFromJWS(jwsSig) {
       return jwsSig.split(".", 2).join(".");
@@ -666,7 +666,7 @@ var require_verify_stream = __commonJS({
     function payloadFromJWS(jwsSig, encoding) {
       encoding = encoding || "utf8";
       var payload = jwsSig.split(".")[1];
-      return Buffer2.from(payload, "base64").toString(encoding);
+      return Buffer3.from(payload, "base64").toString(encoding);
     }
     function isValidJws(string) {
       return JWS_REGEX.test(string) && !!headerFromJWS(string);
@@ -3793,6 +3793,7 @@ __export(src_exports, {
 });
 module.exports = __toCommonJS(src_exports);
 var import_jsonwebtoken = __toESM(require_jsonwebtoken());
+var import_node_buffer = __toESM(require("node:buffer"));
 var algorithms = [
   "HS256",
   "HS384",
@@ -3846,7 +3847,7 @@ var plugin = {
     ],
     async onApply(_ctx, args) {
       const { algorithm, secret: _secret, secretBase64, payload } = args.config;
-      const secret = secretBase64 ? Buffer.from(`${_secret}`, "base64") : `${_secret}`;
+      const secret = secretBase64 ? import_node_buffer.default.from(`${_secret}`, "base64") : `${_secret}`;
       const token = import_jsonwebtoken.default.sign(`${payload}`, secret, { algorithm });
       const value = `Bearer ${token}`;
       return { setHeaders: [{ name: "Authorization", value }] };

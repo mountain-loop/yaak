@@ -4,6 +4,14 @@
     "bootstrap": "npm run build",
     "build": "run-p build:*",
     "build:main": "esbuild src/index.ts --bundle --platform=node --outfile=../../src-tauri/vendored/plugin-runtime/index.cjs",
-    "build:worker": "esbuild src/index.worker.ts --bundle --platform=node --outfile=../../src-tauri/vendored/plugin-runtime/index.worker.cjs"
+    "build:worker": "esbuild src/index.worker.ts --bundle --platform=node --outfile=../../src-tauri/vendored/plugin-runtime/index.worker.cjs",
+    "build:__main": "esbuild src/index.ts --bundle --platform=node --outfile=../../src-tauri/target/debug/vendored/plugin-runtime/index.cjs",
+    "build:__worker": "esbuild src/index.ts --bundle --platform=node --outfile=../../src-tauri/target/debug/vendored/plugin-runtime/index.worker.cjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
   }
 }

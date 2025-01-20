@@ -20,10 +20,8 @@ pub async fn start_nodejs_plugin_runtime<R: Runtime>(
     addr: SocketAddr,
     kill_rx: &Receiver<bool>,
 ) -> Result<()> {
-    let plugin_runtime_main = app
-        .path()
-        .resolve("vendored/plugin-runtime", BaseDirectory::Resource)?
-        .join("index.cjs");
+    let plugin_runtime_main =
+        app.path().resolve("vendored/plugin-runtime", BaseDirectory::Resource)?.join("index.cjs");
 
     // HACK: Remove UNC prefix for Windows paths to pass to sidecar
     let plugin_runtime_main =
@@ -31,12 +29,11 @@ pub async fn start_nodejs_plugin_runtime<R: Runtime>(
 
     info!("Starting plugin runtime main={}", plugin_runtime_main);
 
-    let cmd = app.shell().sidecar("yaakdeno")?.env("PORT", addr.port().to_string()).args(&[
-        "run",
-        "--allow-all", // Must have all permissions to give child workers permissions
-        "--unstable-sloppy-imports", // To have `./foo/bar` imports
-        &plugin_runtime_main,
-    ]);
+    let cmd = app
+        .shell()
+        .sidecar("yaaknode")?
+        .env("YAAK_PLUGIN_RUNTIME_PORT", addr.port().to_string())
+        .args(&[&plugin_runtime_main]);
 
     let (mut child_rx, child) = cmd.spawn()?;
     info!("Spawned plugin runtime");
