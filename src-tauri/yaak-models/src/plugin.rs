@@ -65,7 +65,7 @@ impl Builder {
 async fn must_migrate_db<R: Runtime>(app_handle: &AppHandle<R>, sqlite_file_path: &PathBuf) {
     info!("Connecting to database at {sqlite_file_path:?}");
     let sqlite_file_path = sqlite_file_path.to_str().unwrap().to_string();
-    let opts = SqliteConnectOptions::from_str(&sqlite_file_path).unwrap();
+    let opts = SqliteConnectOptions::from_str(&sqlite_file_path).unwrap().create_if_missing(true);
     let pool = SqlitePool::connect_with(opts).await.expect("Failed to connect to database");
     let p = app_handle
         .path()
