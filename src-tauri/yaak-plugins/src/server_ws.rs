@@ -1,4 +1,4 @@
-use crate::events::InternalEvent;
+use crate::events::{ErrorResponse, InternalEvent, InternalEventPayload, InternalEventRawPayload};
 use futures_util::{SinkExt, StreamExt};
 use log::{error, info, warn};
 use std::sync::Arc;
@@ -71,17 +71,39 @@ impl PluginRuntimeServerWebsocket {
                             None => break,
                         };
 
-                        let event = match serde_json::from_str::<InternalEvent>(&msg.into_text().unwrap()) {
+                        // Skip non-text messages
+                        if !msg.is_text() {
+                            return;
+                        }
+
+                        let event = match serde_json::from_str::<InternalEventRawPayload>(&msg.into_text().unwrap()) {
                             Ok(e) => e,
                             Err(e) => {
-                                warn!("Failed to decode plugin event {e:?}");
+                                error!("Failed to decode plugin event {e:?}");
                                 continue;
                             }
                         };
 
+                        // Parse everything but the payload so we can catch errors on that, specifically
+                        let payload = serde_json::from_value::<InternalEventPayload>(event.payload)
+                            .unwrap_or_else(|e| {
+                                InternalEventPayload::ErrorResponse(ErrorResponse {
+                                    error: format!("Plugin error from {}: {e:?}", event.plugin_name),
+                                })
+                            });
+
+                        let event = InternalEvent{
+                            id: event.id,
+                            payload,
+                            plugin_ref_id: event.plugin_ref_id,
+                            plugin_name: event.plugin_name,
+                            window_context: event.window_context,
+                            reply_id: event.reply_id,
+                        };
+
                         // Send event to subscribers
                         // Emit event to the channel for server to handle
-                        if let Err(e) = plugin_to_app_events_tx.try_send(event.clone()) {
+                        if let Err(e) = plugin_to_app_events_tx.try_send(event) {
                             warn!("Failed to send to channel. Receiver probably isn't listening: {:?}", e);
                         }
                     }

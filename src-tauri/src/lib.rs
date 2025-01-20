@@ -32,7 +32,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind};
 use tauri_plugin_opener::OpenerExt;
-use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::fs::read_to_string;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;

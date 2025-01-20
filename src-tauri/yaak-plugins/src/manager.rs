@@ -344,21 +344,23 @@ impl PluginManager {
             .collect::<Vec<InternalEvent>>();
 
         // 2. Spawn thread to subscribe to incoming events and check reply ids
-        let send_events_fut = {
+        let sub_events_fut = {
             let events_to_send = events_to_send.clone();
 
             tokio::spawn(async move {
                 let mut found_events = Vec::new();
 
                 while let Some(event) = rx.recv().await {
-                    if events_to_send
+                    let matched_sent_event = events_to_send
                         .iter()
                         .find(|e| Some(e.id.to_owned()) == event.reply_id)
-                        .is_some()
-                    {
+                        .is_some();
+                    if matched_sent_event {
                         found_events.push(event.clone());
                     };
-                    if found_events.len() == events_to_send.len() {
+                    
+                    let found_them_all = found_events.len() == events_to_send.len();
+                    if found_them_all{
                         break;
                     }
                 }
@@ -377,7 +379,7 @@ impl PluginManager {
         }
 
         // 4. Join on the spawned thread
-        let events = send_events_fut.await.expect("Thread didn't succeed");
+        let events = sub_events_fut.await.expect("Thread didn't succeed");
 
         // 5. Unsubscribe
         self.unsubscribe(rx_id.as_str()).await;

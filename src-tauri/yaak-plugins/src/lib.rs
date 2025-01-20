@@ -4,13 +4,13 @@ use std::process::exit;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, RunEvent, Runtime, State};
 
-mod nodejs;
-mod server_ws;
-mod util;
 pub mod error;
 pub mod events;
 pub mod manager;
+mod nodejs;
 pub mod plugin_handle;
+mod server_ws;
+mod util;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-plugins")

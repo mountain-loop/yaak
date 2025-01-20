@@ -2,12 +2,12 @@ use prost_reflect::{DynamicMessage, MethodDescriptor, SerializeOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Deserializer;
 
+mod client;
 mod codec;
 mod json_schema;
 pub mod manager;
 mod reflection;
 mod transport;
-mod client;
 
 pub use tonic::metadata::*;
 pub use tonic::Code;

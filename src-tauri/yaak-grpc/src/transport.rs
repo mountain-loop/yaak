@@ -1,6 +1,6 @@
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use tonic::body::BoxBody;
 
@@ -16,4 +16,3 @@ pub(crate) fn get_transport() -> Client<HttpsConnector<HttpConnector>, BoxBody> 
         .http2_only(true)
         .build(connector)
 }
-
