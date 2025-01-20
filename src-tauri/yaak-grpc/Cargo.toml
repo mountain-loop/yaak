@@ -5,23 +5,23 @@ edition = "2021"
 publish = false
 
 [dependencies]
-tonic = "0.12.3"
+anyhow = "1.0.79"
+async-recursion = "1.1.1"
+dunce = "1.0.4"
+hyper = "1.5.2"
+hyper-rustls = { version = "0.27.5", default-features = false, features = ["http2", "rustls-platform-verifier"] }
+hyper-util = { version = "0.1.10", features = ["client-legacy", "client"] }
+log = "0.4.20"
+md5 = "0.7.0"
 prost = "0.13.4"
-tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "fs"] }
-tonic-reflection = "0.12.3"
-tokio-stream = "0.1.14"
+prost-reflect = { version = "0.14.4", default-features = false, features = ["serde", "derive"] }
 prost-types = "0.13.4"
 serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.113"
-prost-reflect = { version = "0.14.4", default-features = false, features = ["serde", "derive"] }
-log = "0.4.20"
-anyhow = "1.0.79"
-hyper = "1.5.2"
-hyper-util = { version = "0.1.10", features = ["client-legacy", "client"] }
-hyper-rustls = { version = "0.27.5", default-features = false, features = ["http2", "rustls-platform-verifier"] }
-uuid = { version = "1.7.0", features = ["v4"] }
 tauri = { workspace = true }
 tauri-plugin-shell = { workspace = true }
-md5 = "0.7.0"
-dunce = "1.0.4"
-async-recursion = "1.1.1"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "fs"] }
+tokio-stream = "0.1.14"
+tonic = { version = "0.12.3", default-features = false, features = ["transport"] }
+tonic-reflection = "0.12.3"
+uuid = { version = "1.7.0", features = ["v4"] }

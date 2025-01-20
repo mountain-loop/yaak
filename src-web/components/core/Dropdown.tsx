@@ -122,8 +122,8 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   // we have of detecting the dropdown closed, to do cleanup.
   useEffect(() => {
     if (!isOpen) {
-      buttonRef.current?.focus(); // Focus button
-      buttonRef.current!.style.backgroundColor = ''; // Clear persisted BG
+      // Clear persisted BG
+      buttonRef.current!.style.backgroundColor = '';
       // Set to different value when opened and closed to force it to update. This is to force
       // <Menu/> to reset its selected-index state, which it does when this prop changes
       setDefaultSelectedIndex(null);
