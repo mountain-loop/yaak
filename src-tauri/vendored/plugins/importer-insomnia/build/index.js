@@ -7208,11 +7208,21 @@ var require_dist = __commonJS({
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
-  pluginHookImport: () => pluginHookImport
+  convertInsomnia: () => convertInsomnia,
+  plugin: () => plugin
 });
 module.exports = __toCommonJS(src_exports);
 var import_yaml = __toESM(require_dist());
-function pluginHookImport(ctx, contents) {
+var plugin = {
+  importer: {
+    name: "Insomnia",
+    description: "Import Insomnia workspaces",
+    onImport(_ctx, args) {
+      return convertInsomnia(args.text);
+    }
+  }
+};
+function convertInsomnia(contents) {
   let parsed;
   try {
     parsed = JSON.parse(contents);
@@ -7439,5 +7449,6 @@ function deleteUndefinedAttrs(obj) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  pluginHookImport
+  convertInsomnia,
+  plugin
 });

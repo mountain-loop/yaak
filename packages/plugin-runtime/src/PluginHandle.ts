@@ -1,7 +1,8 @@
-import type { BootRequest, InternalEvent } from '@yaakapp-internal/plugins';
+import type { BootRequest, InternalEvent } from '@yaakapp/api';
 import { Worker } from 'node:worker_threads';
 import type { EventChannel } from './EventChannel';
 import type { PluginWorkerData } from './index.worker';
+import path from 'node:path';
 
 export class PluginHandle {
   #worker: Worker;
@@ -23,17 +24,19 @@ export class PluginHandle {
   }
 
   #createWorker(): Worker {
-    const workerUrl = new URL('./index.worker.ts', import.meta.url).href;
+    const workerPath = path.join(__dirname, './index.worker.cjs');
     const workerData: PluginWorkerData = {
       pluginRefId: this.pluginRefId,
       bootRequest: this.bootRequest,
     };
-    const worker = new Worker(workerUrl, {
-      type: 'module',
+    const worker = new Worker(workerPath, {
       workerData,
+      deno: {
+        permissions: 'none',
+      },
     });
 
-    worker.on('message', (e) => this.events.emit(e));
+    worker.on('message', (e: InternalEvent) => this.events.emit(e));
     worker.on('error', this.#handleError.bind(this));
     worker.on('exit', this.#handleExit.bind(this));
 
@@ -42,11 +45,11 @@ export class PluginHandle {
     return worker;
   }
 
-  async #handleError(err: Error) {
+  #handleError(err: Error) {
     console.error('Plugin errored', this.bootRequest.dir, err);
   }
 
-  async #handleExit(code: number) {
+  #handleExit(code: number) {
     if (code === 0) {
       console.log('Plugin exited successfully', this.bootRequest.dir);
     } else {

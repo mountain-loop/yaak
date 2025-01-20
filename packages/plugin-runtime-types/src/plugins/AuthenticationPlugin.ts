@@ -2,8 +2,8 @@ import {
   CallHttpAuthenticationRequest,
   CallHttpAuthenticationResponse,
   GetHttpAuthenticationResponse,
-} from '..';
-import type { Context } from './Context';
+} from '../bindings/events';
+import { Context } from './Context';
 
 export type AuthenticationPlugin = Omit<GetHttpAuthenticationResponse, 'pluginName'> & {
   onApply(

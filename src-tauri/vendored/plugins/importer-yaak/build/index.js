@@ -20,10 +20,20 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
-  pluginHookImport: () => pluginHookImport
+  migrateImport: () => migrateImport,
+  plugin: () => plugin
 });
 module.exports = __toCommonJS(src_exports);
-function pluginHookImport(_ctx, contents) {
+var plugin = {
+  importer: {
+    name: "Yaak",
+    description: "Yaak official format",
+    onImport(_ctx, args) {
+      return migrateImport(args.text);
+    }
+  }
+};
+function migrateImport(contents) {
   let parsed;
   try {
     parsed = JSON.parse(contents);
@@ -66,5 +76,6 @@ function isJSObject(obj) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  pluginHookImport
+  migrateImport,
+  plugin
 });

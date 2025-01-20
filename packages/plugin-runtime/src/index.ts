@@ -1,4 +1,4 @@
-import { InternalEvent } from '@yaakapp-internal/plugins';
+import type { InternalEvent } from '@yaakapp/api';
 import { EventChannel } from './EventChannel';
 import { PluginHandle } from './PluginHandle';
 

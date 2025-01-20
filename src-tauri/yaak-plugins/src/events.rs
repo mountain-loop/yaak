@@ -117,7 +117,6 @@ pub struct BootRequest {
 pub struct BootResponse {
     pub name: String,
     pub version: String,
-    pub capabilities: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

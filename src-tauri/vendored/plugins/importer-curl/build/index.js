@@ -260,7 +260,8 @@ var require_shell_quote = __commonJS({
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
-  pluginHookImport: () => pluginHookImport
+  convertCurl: () => convertCurl,
+  plugin: () => plugin
 });
 module.exports = __toCommonJS(src_exports);
 var import_shell_quote = __toESM(require_shell_quote());
@@ -290,7 +291,16 @@ var SUPPORTED_FLAGS = [
   DATA_FLAGS
 ].flatMap((v) => v);
 var BOOLEAN_FLAGS = ["G", "get", "digest"];
-function pluginHookImport(_ctx, rawData) {
+var plugin = {
+  importer: {
+    name: "cURL",
+    description: "Import cURL commands",
+    onImport(_ctx, args) {
+      return convertCurl(args.text);
+    }
+  }
+};
+function convertCurl(rawData) {
   if (!rawData.match(/^\s*curl /)) {
     return null;
   }
@@ -570,5 +580,6 @@ function generateId(model) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  pluginHookImport
+  convertCurl,
+  plugin
 });

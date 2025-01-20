@@ -24,7 +24,7 @@ export type Colors = {
   danger?: string;
 };
 
-export type Theme = Colors & {
+export type Index = Colors & {
   id: string;
   name: string;
   components?: Partial<{

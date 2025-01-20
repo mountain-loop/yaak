@@ -7,21 +7,17 @@ publish = false
 [dependencies]
 dunce = "1.0.4"
 log = "0.4.21"
-prost = "0.13.1"
 rand = "0.8.5"
 serde = { version = "1.0.198", features = ["derive"] }
 serde_json = "1.0.113"
 tauri = { workspace = true }
 tauri-plugin-shell = { workspace = true }
 tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread", "process"] }
-tonic = { version = "0.12.3"}
-ts-rs = { workspace = true }
+tonic = { version = "0.12.3" }
+ts-rs = { workspace = true, features = ["import-esm"] }
 thiserror = "2.0.7"
 yaak-models = { workspace = true }
 regex = "1.10.6"
 path-slash = "0.2.1"
 tokio-tungstenite = "0.26.1"
 futures-util = "0.3.30"
-
-[build-dependencies]
-tonic-build = "0.12.1"

@@ -24,7 +24,7 @@
     "app-dev": "tauri dev --no-watch --config ./src-tauri/tauri-dev.conf.json",
     "build": "npm run --workspaces --if-present build",
     "bootstrap": "run-p bootstrap:* && npm run --workspaces --if-present bootstrap",
-    "bootstrap:vendor-node": "node scripts/vendor-node.cjs",
+    "bootstrap:vendor-deno": "node scripts/vendor-deno.cjs",
     "bootstrap:vendor-plugins": "node scripts/vendor-plugins.cjs",
     "bootstrap:vendor-protoc": "node scripts/vendor-protoc.cjs",
     "lint": "npm run --workspaces --if-present lint",

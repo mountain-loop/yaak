@@ -20,8 +20,8 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
-  plugin: () => plugin,
-  pluginHookExport: () => pluginHookExport
+  convertToCurl: () => convertToCurl,
+  plugin: () => plugin
 });
 module.exports = __toCommonJS(src_exports);
 var NEWLINE = "\\\n ";
@@ -32,13 +32,13 @@ var plugin = {
     icon: "copy",
     async onSelect(ctx, args) {
       const rendered_request = await ctx.httpRequest.render({ httpRequest: args.httpRequest, purpose: "preview" });
-      const data = await pluginHookExport(ctx, rendered_request);
+      const data = await convertToCurl(rendered_request);
       ctx.clipboard.copyText(data);
       ctx.toast.show({ message: "Curl copied to clipboard", icon: "copy" });
     }
   }]
 };
-async function pluginHookExport(_ctx, request) {
+async function convertToCurl(request) {
   const xs = ["curl"];
   if (request.method) xs.push("-X", request.method);
   if (request.url) xs.push(quote(request.url));
@@ -104,6 +104,6 @@ function maybeParseJSON(v, fallback) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  plugin,
-  pluginHookExport
+  convertToCurl,
+  plugin
 });
