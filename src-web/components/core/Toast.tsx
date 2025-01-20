@@ -57,7 +57,7 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
       <div
         className={classNames(
           `x-theme-toast x-theme-toast--${color}`,
-          'pointer-events-auto overflow-hidden',
+          'pointer-events-auto overflow-hidden break-all',
           'relative pointer-events-auto bg-surface text-text rounded-lg',
           'border border-border shadow-lg w-[25rem]',
           'grid grid-cols-[1fr_auto]',
