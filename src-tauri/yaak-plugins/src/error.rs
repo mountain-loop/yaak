@@ -14,9 +14,6 @@ pub enum Error {
     #[error("Tauri shell error: {0}")]
     TauriShellErr(#[from] tauri_plugin_shell::Error),
 
-    #[error("Grpc transport error: {0}")]
-    GrpcTransportErr(#[from] tonic::transport::Error),
-
     #[error("Grpc send error: {0}")]
     GrpcSendErr(#[from] SendError<InternalEvent>),
 
