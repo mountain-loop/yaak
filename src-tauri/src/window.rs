@@ -43,10 +43,14 @@ pub(crate) fn create_window<R: Runtime>(
 
     if let Some((w, h)) = config.inner_size {
         win_builder = win_builder.inner_size(w, h);
+    } else {
+        win_builder = win_builder.inner_size(600.0, 600.0);
     }
 
     if let Some((x, y)) = config.position {
         win_builder = win_builder.position(x, y);
+    } else {
+        win_builder = win_builder.center();
     }
 
     if let Some(tx) = config.navigation_tx {

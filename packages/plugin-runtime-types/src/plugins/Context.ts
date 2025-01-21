@@ -28,7 +28,7 @@ export interface Context {
   window: {
     openUrl(
       args: OpenWindowRequest & { onNavigate?: (args: { url: string }) => void },
-    ): Promise<void>;
+    ): Promise<{ close: () => void }>;
   };
   httpRequest: {
     send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse['httpResponse']>;

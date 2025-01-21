@@ -78,39 +78,47 @@ var plugin = {
           const authorizationUrl = new URL(`${args.config.authorizationUrl ?? ""}`);
           authorizationUrl.searchParams.set("client_id", `${args.config.clientId ?? ""}`);
           authorizationUrl.searchParams.set("redirect_uri", `${args.config.redirectUri ?? ""}`);
-          authorizationUrl.searchParams.set("scope", `${args.config.scope ?? ""}`);
-          await ctx.window.openUrl({
-            url: authorizationUrl.toString(),
+          authorizationUrl.searchParams.set("response_type", "code");
+          if (args.config.scope) {
+            authorizationUrl.searchParams.set("scope", `${args.config.scope ?? ""}`);
+          }
+          const url = authorizationUrl.toString();
+          console.log("Opening authorization url", url);
+          let { close } = await ctx.window.openUrl({
+            url,
+            label: "oauth2Thing",
             async onNavigate({ url: urlStr }) {
-              const url = new URL(urlStr);
-              const code = url.searchParams.get("code");
+              const url2 = new URL(urlStr);
+              const code = url2.searchParams.get("code");
               if (!code) return;
-              resolve({ setHeaders: [{ name: "Authorization", value: `Bearer ${code}` }] });
               const req = {
                 method: "POST",
-                bodyType: "application/x-www-form-urlencoded",
-                body: {
-                  form: [
-                    { name: "client_id", value: args.config.clientId || "" },
-                    { name: "client_secret", value: args.config.clientSecret || "" },
-                    { name: "code", value: code || "" },
-                    { name: "redirect_uri", value: args.config.redirectUri || "" }
-                  ]
-                },
                 url: `${args.config.accessTokenUrl}`,
+                urlParameters: [
+                  { name: "client_id", value: `${args.config.clientId || ""}` },
+                  { name: "client_secret", value: `${args.config.clientSecret || ""}` },
+                  { name: "code", value: `${code || ""}` },
+                  { name: "redirect_uri", value: `${args.config.redirectUri || ""}` }
+                ],
                 headers: [
                   { name: "Accept", value: "application/json" },
                   { name: "Content-Type", value: "application/x-www-form-urlencoded" }
                 ],
                 workspaceId: "wk_woHS9oiCdW"
               };
-              console.log("SENDING AUTH TOKEN REQUSET", JSON.stringify(req, null, 1));
               const resp = await ctx.httpRequest.send({
                 // @ts-ignore
                 httpRequest: req
               });
               const body = (0, import_node_fs.readFileSync)(resp.bodyPath ?? "", "utf8");
-              console.log("RECEIVED RESPONSE", resp.status, body);
+              if (resp.status < 200 || resp.status >= 300) {
+                reject(new Error("Failed to fetch access token with status=" + resp.status));
+              }
+              const bodyObj = JSON.parse(body);
+              const accessToken = bodyObj["access_token"];
+              console.log("GOT ACCESS TOKEN", accessToken);
+              resolve({ setHeaders: [{ name: "Authorization", value: `Bearer ${accessToken}` }] });
+              close();
             }
           });
         } catch (err) {

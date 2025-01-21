@@ -159,6 +159,7 @@ function initialize(workerData: PluginWorkerData) {
     },
     window: {
       async openUrl({ onNavigate, ...args }) {
+        args.label = args.label || `${Math.random()}`;
         const payload: InternalEventPayload = { type: 'open_window_request', ...args };
         const onEvent = (event: InternalEventPayload) => {
           if (event.type === 'window_navigate_event') {
@@ -166,6 +167,15 @@ function initialize(workerData: PluginWorkerData) {
           }
         };
         sendAndListenForEvents(event.windowContext, payload, onEvent);
+        return {
+          close: () => {
+            const closePayload: InternalEventPayload = {
+              type: 'close_window_request',
+              label: args.label,
+            };
+            sendPayload(event.windowContext, closePayload, null);
+          },
+        };
       },
     },
     prompt: {

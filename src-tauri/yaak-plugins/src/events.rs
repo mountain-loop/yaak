@@ -96,6 +96,7 @@ pub enum InternalEventPayload {
 
     OpenWindowRequest(OpenWindowRequest),
     WindowNavigateEvent(WindowNavigateEvent),
+    CloseWindowRequest(CloseWindowRequest),
 
     TemplateRenderRequest(TemplateRenderRequest),
     TemplateRenderResponse(TemplateRenderResponse),
@@ -245,6 +246,27 @@ pub struct TemplateRenderResponse {
 #[ts(export, export_to = "events.ts")]
 pub struct OpenWindowRequest {
     pub url: String,
+    /// Label for window. If not provided, a random one will be generated.
+    pub label: String,
+    #[ts(optional)]
+    pub title: Option<String>,
+    #[ts(optional)]
+    pub size: Option<WindowSize>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "events.ts")]
+pub struct WindowSize {
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "events.ts")]
+pub struct CloseWindowRequest {
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

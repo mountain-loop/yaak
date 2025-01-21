@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::queries::{
-    create_default_http_response, generate_id, get_base_environment, get_http_request,
+    create_default_http_response, get_base_environment, get_http_request,
     list_http_responses_for_request, list_plugins, upsert_plugin, UpdateSource,
 };
 use yaak_plugins::events::{
@@ -190,14 +190,16 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             }))
         }
         InternalEventPayload::OpenWindowRequest(req) => {
-            let label = format!("plugin_window_{}", generate_id());
+            let label = req.label;
             let (tx, mut rx) = tokio::sync::mpsc::channel(128);
             let win_config = CreateWindowConfig {
                 url: &req.url,
                 label: &label.clone(),
-                title: "",
+                title: &req.title.unwrap_or_default(),
                 navigation_tx: Some(tx),
-                ..Default::default()
+                inner_size: req.size.map(|s| (s.width, s.height)),
+                position: None,
+                hide_titlebar: false,
             };
             create_window(app_handle, win_config);
 
@@ -215,6 +217,14 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     plugin_handle.send(&event_to_send).await.unwrap();
                 }
             });
+            None
+        }
+        InternalEventPayload::CloseWindowRequest(req) => {
+            println!("CLOSING WINDOW {req:?}");
+            if let Some(window) = app_handle.webview_windows().get(&req.label) {
+                println!("CLOSING WINDOW!!");
+                window.close().expect("Failed to close window");
+            }
             None
         }
         _ => None,
