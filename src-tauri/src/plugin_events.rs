@@ -114,7 +114,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for plugin reload");
             let toast_event = plugin_handle.build_event_to_send(
-                WindowContext::from_window(&window),
+                &WindowContext::from_window(&window),
                 &InternalEventPayload::ShowToastRequest(ShowToastRequest {
                     message: resp.error,
                     color: Some(Color::Danger),
@@ -141,7 +141,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 upsert_plugin(&window, new_plugin, &UpdateSource::Plugin).await.unwrap();
             }
             let toast_event = plugin_handle.build_event_to_send(
-                WindowContext::from_window(&window),
+                &WindowContext::from_window(&window),
                 &InternalEventPayload::ShowToastRequest(ShowToastRequest {
                     message: format!("Reloaded plugin {}", plugin_handle.dir),
                     icon: Some(Icon::Info),
@@ -195,7 +195,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let win_config = CreateWindowConfig {
                 url: &req.url,
                 label: &label.clone(),
-                title: "Hello",
+                title: "",
                 navigation_tx: Some(tx),
                 ..Default::default()
             };
@@ -205,13 +205,11 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let plugin_handle = plugin_handle.clone();
             tauri::async_runtime::spawn(async move {
                 while let Some(url) = rx.recv().await {
+                    let label = label.clone();
+                    let url = url.to_string();
                     let event_to_send = plugin_handle.build_event_to_send(
-                        WindowContext::Label {
-                            label: label.clone(),
-                        },
-                        &InternalEventPayload::WindowNavigateEvent(WindowNavigateEvent {
-                            url: url.to_string(),
-                        }),
+                        &WindowContext::Label { label },
+                        &InternalEventPayload::WindowNavigateEvent(WindowNavigateEvent { url }),
                         Some(event_id.clone()),
                     );
                     plugin_handle.send(&event_to_send).await.unwrap();

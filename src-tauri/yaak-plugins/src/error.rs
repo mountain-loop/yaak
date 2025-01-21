@@ -20,6 +20,9 @@ pub enum Error {
     #[error("JSON error: {0}")]
     JsonErr(#[from] serde_json::Error),
 
+    #[error("Timeout elapsed: {0}")]
+    TimeoutElapsed(#[from] tokio::time::error::Elapsed),
+
     #[error("Plugin not found: {0}")]
     PluginNotFoundErr(String),
 

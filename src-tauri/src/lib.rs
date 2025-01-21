@@ -1166,7 +1166,7 @@ async fn cmd_install_plugin<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> Result<Plugin, String> {
     plugin_manager
-        .add_plugin_by_dir(WindowContext::from_window(&window), &directory, true)
+        .add_plugin_by_dir(&WindowContext::from_window(&window), &directory, true)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1196,7 +1196,7 @@ async fn cmd_uninstall_plugin<R: Runtime>(
         .map_err(|e| e.to_string())?;
 
     plugin_manager
-        .uninstall(WindowContext::from_window(&window), plugin.directory.as_str())
+        .uninstall(&WindowContext::from_window(&window), plugin.directory.as_str())
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1449,7 +1449,7 @@ async fn cmd_reload_plugins<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<(), String> {
     plugin_manager
-        .initialize_all_plugins(window.app_handle(), WindowContext::from_window(&window))
+        .initialize_all_plugins(window.app_handle(), &WindowContext::from_window(&window))
         .await
         .map_err(|e| e.to_string())?;
     Ok(())

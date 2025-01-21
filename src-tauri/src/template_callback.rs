@@ -28,14 +28,13 @@ impl PluginTemplateCallback {
 
 impl TemplateCallback for PluginTemplateCallback {
     async fn run(&self, fn_name: &str, args: HashMap<String, String>) -> Result<String, String> {
-        let window_context = self.window_context.to_owned();
         // The beta named the function `Response` but was changed in stable.
         // Keep this here for a while because there's no easy way to migrate
         let fn_name = if fn_name == "Response" { "response" } else { fn_name };
 
         let function = self
             .plugin_manager
-            .get_template_functions_with_context(window_context.to_owned())
+            .get_template_functions_with_context(&self.window_context)
             .await
             .map_err(|e| e.to_string())?
             .iter()
@@ -63,7 +62,7 @@ impl TemplateCallback for PluginTemplateCallback {
         let resp = self
             .plugin_manager
             .call_template_function(
-                window_context,
+                &self.window_context,
                 fn_name,
                 args_with_defaults,
                 self.render_purpose.to_owned(),

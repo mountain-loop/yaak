@@ -33,7 +33,7 @@ impl PluginHandle {
 
     pub fn build_event_to_send(
         &self,
-        window_context: WindowContext,
+        window_context: &WindowContext,
         payload: &InternalEventPayload,
         reply_id: Option<String>,
     ) -> InternalEvent {
@@ -42,7 +42,7 @@ impl PluginHandle {
 
     pub(crate) fn build_event_to_send_raw(
         &self,
-        window_context: WindowContext,
+        window_context: &WindowContext,
         payload: &InternalEventPayload,
         reply_id: Option<String>,
     ) -> InternalEvent {
@@ -53,11 +53,11 @@ impl PluginHandle {
             plugin_name: dir.file_name().unwrap().to_str().unwrap().to_string(),
             reply_id,
             payload: payload.clone(),
-            window_context,
+            window_context: window_context.clone(),
         }
     }
 
-    pub async fn terminate(&self, window_context: WindowContext) -> Result<()> {
+    pub async fn terminate(&self, window_context: &WindowContext) -> Result<()> {
         info!("Terminating plugin {}", self.dir);
         let event =
             self.build_event_to_send(window_context, &InternalEventPayload::TerminateRequest, None);
