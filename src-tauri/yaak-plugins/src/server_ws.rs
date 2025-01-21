@@ -85,8 +85,9 @@ impl PluginRuntimeServerWebsocket {
                         };
 
                         // Parse everything but the payload so we can catch errors on that, specifically
-                        let payload = serde_json::from_value::<InternalEventPayload>(event.payload)
+                        let payload = serde_json::from_value::<InternalEventPayload>(event.payload.clone())
                             .unwrap_or_else(|e| {
+                                warn!("Plugin error from {}: {:?} {}", event.plugin_name, e, event.payload);
                                 InternalEventPayload::ErrorResponse(ErrorResponse {
                                     error: format!("Plugin error from {}: {e:?}", event.plugin_name),
                                 })

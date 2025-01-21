@@ -34,7 +34,7 @@
     "tauri-before-dev": "npm run --workspaces --if-present dev"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.2.4",
+    "@tauri-apps/cli": "^2.2.5",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",
     "eslint": "^8",

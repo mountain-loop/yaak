@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 use tauri::{Runtime, WebviewWindow};
 use ts_rs::TS;
@@ -29,7 +28,7 @@ pub(crate) struct InternalEventRawPayload {
     pub plugin_name: String,
     pub reply_id: Option<String>,
     pub window_context: WindowContext,
-    pub payload: Value,
+    pub payload: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -84,6 +83,7 @@ pub enum InternalEventPayload {
     CallTemplateFunctionRequest(CallTemplateFunctionRequest),
     CallTemplateFunctionResponse(CallTemplateFunctionResponse),
 
+    // Http Authentication
     GetHttpAuthenticationRequest(EmptyPayload),
     GetHttpAuthenticationResponse(GetHttpAuthenticationResponse),
     CallHttpAuthenticationRequest(CallHttpAuthenticationRequest),
@@ -93,6 +93,9 @@ pub enum InternalEventPayload {
 
     RenderHttpRequestRequest(RenderHttpRequestRequest),
     RenderHttpRequestResponse(RenderHttpRequestResponse),
+
+    OpenWindowRequest(OpenWindowRequest),
+    WindowNavigateEvent(WindowNavigateEvent),
 
     TemplateRenderRequest(TemplateRenderRequest),
     TemplateRenderResponse(TemplateRenderResponse),
@@ -235,6 +238,20 @@ pub struct TemplateRenderRequest {
 #[ts(export, export_to = "events.ts")]
 pub struct TemplateRenderResponse {
     pub data: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "events.ts")]
+pub struct OpenWindowRequest {
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "events.ts")]
+pub struct WindowNavigateEvent {
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

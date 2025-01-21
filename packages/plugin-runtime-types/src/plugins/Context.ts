@@ -3,6 +3,7 @@ import type {
   FindHttpResponsesResponse,
   GetHttpRequestByIdRequest,
   GetHttpRequestByIdResponse,
+  OpenWindowRequest,
   PromptTextRequest,
   PromptTextResponse,
   RenderHttpRequestRequest,
@@ -12,7 +13,7 @@ import type {
   ShowToastRequest,
   TemplateRenderRequest,
   TemplateRenderResponse,
-} from "../bindings/events.ts";
+} from '../bindings/events.ts';
 
 export interface Context {
   clipboard: {
@@ -22,27 +23,22 @@ export interface Context {
     show(args: ShowToastRequest): Promise<void>;
   };
   prompt: {
-    text(args: PromptTextRequest): Promise<PromptTextResponse["value"]>;
+    text(args: PromptTextRequest): Promise<PromptTextResponse['value']>;
+  };
+  window: {
+    openUrl(
+      args: OpenWindowRequest & { onNavigate?: (args: { url: string }) => void },
+    ): Promise<void>;
   };
   httpRequest: {
-    send(
-      args: SendHttpRequestRequest,
-    ): Promise<SendHttpRequestResponse["httpResponse"]>;
-    getById(
-      args: GetHttpRequestByIdRequest,
-    ): Promise<GetHttpRequestByIdResponse["httpRequest"]>;
-    render(
-      args: RenderHttpRequestRequest,
-    ): Promise<RenderHttpRequestResponse["httpRequest"]>;
+    send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse['httpResponse']>;
+    getById(args: GetHttpRequestByIdRequest): Promise<GetHttpRequestByIdResponse['httpRequest']>;
+    render(args: RenderHttpRequestRequest): Promise<RenderHttpRequestResponse['httpRequest']>;
   };
   httpResponse: {
-    find(
-      args: FindHttpResponsesRequest,
-    ): Promise<FindHttpResponsesResponse["httpResponses"]>;
+    find(args: FindHttpResponsesRequest): Promise<FindHttpResponsesResponse['httpResponses']>;
   };
   templates: {
-    render(
-      args: TemplateRenderRequest,
-    ): Promise<TemplateRenderResponse["data"]>;
+    render(args: TemplateRenderRequest): Promise<TemplateRenderResponse['data']>;
   };
 }

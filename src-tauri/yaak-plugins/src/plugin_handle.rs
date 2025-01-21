@@ -64,7 +64,7 @@ impl PluginHandle {
         self.send(&event).await
     }
 
-    pub(crate) async fn send(&self, event: &InternalEvent) -> Result<()> {
+    pub async fn send(&self, event: &InternalEvent) -> Result<()> {
         self.to_plugin_tx.lock().await.send(event.to_owned()).await?;
         Ok(())
     }

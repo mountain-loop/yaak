@@ -70,7 +70,7 @@ pub async fn send_http_request<R: Runtime>(
     if !url_string.starts_with("http://") && !url_string.starts_with("https://") {
         url_string = format!("http://{}", url_string);
     }
-    debug!("Sending request to {url_string}");
+    debug!("Sending request to {} {url_string}", request.method);
 
     let mut client_builder = reqwest::Client::builder()
         .redirect(match workspace.setting_follow_redirects {

@@ -3,9 +3,9 @@ use tauri::menu::{
     WINDOW_SUBMENU_ID,
 };
 pub use tauri::AppHandle;
-use tauri::Wry;
+use tauri::Runtime;
 
-pub fn app_menu(app_handle: &AppHandle) -> tauri::Result<Menu<Wry>> {
+pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let pkg_info = app_handle.package_info();
     let config = app_handle.config();
     let about_metadata = AboutMetadata {
@@ -37,7 +37,7 @@ pub fn app_menu(app_handle: &AppHandle) -> tauri::Result<Menu<Wry>> {
         true,
         &[
             #[cfg(not(target_os = "macos"))]
-            &PredefinedMenuItem::about(app_handle, None, Some(about_metadata))?,
+            &PredefinedMenuItem::about(app_handle, None, Some(about_metadata.clone()))?,
             #[cfg(target_os = "macos")]
             &MenuItemBuilder::with_id("open_feedback".to_string(), "Give Feedback")
                 .build(app_handle)?,

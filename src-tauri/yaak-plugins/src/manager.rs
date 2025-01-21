@@ -86,7 +86,7 @@ impl PluginManager {
         let addr = listener.local_addr().expect("Failed to get local address");
 
         // 1. Reload all plugins when the Node.js runtime connects
-        {
+        let init_plugins_task = {
             let plugin_manager = plugin_manager.clone();
             let app_handle = app_handle.clone();
             tauri::async_runtime::spawn(async move {
@@ -102,7 +102,7 @@ impl PluginManager {
                         warn!("Failed to receive from client connection rx {e:?}");
                     }
                 }
-            });
+            })
         };
 
         // 1. Spawn server in the background
@@ -114,6 +114,12 @@ impl PluginManager {
         // 2. Start Node.js runtime and initialize plugins
         tauri::async_runtime::block_on(async move {
             start_nodejs_plugin_runtime(&app_handle, addr, &kill_server_rx).await.unwrap();
+            info!("Waiting for plugins to initialize");
+            init_plugins_task.await.unwrap();
+        });
+
+        // 3. Block waiting for plugins to initialize
+        tauri::async_runtime::block_on(async move {
         });
 
         plugin_manager
@@ -358,9 +364,9 @@ impl PluginManager {
                     if matched_sent_event {
                         found_events.push(event.clone());
                     };
-                    
+
                     let found_them_all = found_events.len() == events_to_send.len();
-                    if found_them_all{
+                    if found_them_all {
                         break;
                     }
                 }

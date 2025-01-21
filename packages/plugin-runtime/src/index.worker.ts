@@ -19,8 +19,15 @@ import type { Stats } from 'node:fs';
 import { readFileSync, statSync, watch } from 'node:fs';
 import path from 'node:path';
 import * as util from 'node:util';
+import { parentPort as nullableParentPort, workerData } from 'node:worker_threads';
+import Promise from '../../../../../Library/Caches/deno/npm/registry.npmjs.org/any-promise/1.3.0';
 import { interceptStdout } from './interceptStdout';
-import { parentPort, workerData } from 'node:worker_threads';
+
+if (nullableParentPort == null) {
+  throw new Error('Worker does not have access to parentPort');
+}
+
+const parentPort = nullableParentPort;
 
 export interface PluginWorkerData {
   bootRequest: BootRequest;
@@ -73,7 +80,7 @@ function initialize(workerData: PluginWorkerData) {
     if (event.payload.type !== 'empty_response') {
       console.log('Sending event to app', event.id, event.payload.type);
     }
-    parentPort!.postMessage(event);
+    parentPort.postMessage(event);
   }
 
   function sendAndWaitForReply<T extends Omit<InternalEventPayload, 'type'>>(
@@ -84,14 +91,15 @@ function initialize(workerData: PluginWorkerData) {
     const eventToSend = buildEventToSend(windowContext, payload, null);
 
     // 2. Spawn listener in background
-    const promise = new Promise<InternalEventPayload>((resolve) => {
+    const promise = new Promise<T>((resolve) => {
       const cb = (event: InternalEvent) => {
         if (event.replyId === eventToSend.id) {
-          parentPort!.off('message', cb); // Unlisten, now that we're done
-          resolve(event.payload); // Not type-safe but oh well
+          parentPort.off('message', cb); // Unlisten, now that we're done
+          const { type: _, ...payload } = event.payload;
+          resolve(payload as T);
         }
       };
-      parentPort!.on('message', cb);
+      parentPort.on('message', cb);
     });
 
     // 3. Send the event after we start listening (to prevent race)
@@ -101,10 +109,29 @@ function initialize(workerData: PluginWorkerData) {
     return promise as unknown as Promise<T>;
   }
 
+  function sendAndListenForEvents(
+    windowContext: WindowContext,
+    payload: InternalEventPayload,
+    onEvent: (event: InternalEventPayload) => void,
+  ): void {
+    // 1. Build event to send
+    const eventToSend = buildEventToSend(windowContext, payload, null);
+
+    // 2. Listen for replies in the background
+    parentPort.on('message', (event: InternalEvent) => {
+      if (event.replyId === eventToSend.id) {
+        onEvent(event.payload);
+      }
+    });
+
+    // 3. Send the event after we start listening (to prevent race)
+    sendEvent(eventToSend);
+  }
+
   // Reload plugin if the JS or package.json changes
   const windowContextNone: WindowContext = { type: 'none' };
   const fileChangeCallback = async () => {
-    await importModule();
+    importModule();
     return sendPayload(windowContextNone, { type: 'reload_response' }, null);
   };
 
@@ -128,6 +155,17 @@ function initialize(workerData: PluginWorkerData) {
           type: 'show_toast_request',
           ...args,
         });
+      },
+    },
+    window: {
+      async openUrl({ onNavigate, ...args }) {
+        const payload: InternalEventPayload = { type: 'open_window_request', ...args };
+        const onEvent = (event: InternalEventPayload) => {
+          if (event.type === 'window_navigate_event') {
+            onNavigate?.(event);
+          }
+        };
+        sendAndListenForEvents(event.windowContext, payload, onEvent);
       },
     },
     prompt: {
@@ -210,19 +248,11 @@ function initialize(workerData: PluginWorkerData) {
     delete require.cache[id];
     plug = require(id).plugin;
   }
+
   importModule();
 
-  if (pkg.name?.includes('yaak-faker')) {
-    sendPayload(
-      { type: 'none' },
-      { type: 'error_response', error: 'Failed to initialize Faker plugin' },
-      null,
-    );
-    return;
-  }
-
   // Message comes into the plugin to be processed
-  parentPort!.on('message', async (event: InternalEvent) => {
+  parentPort.on('message', async (event: InternalEvent) => {
     const ctx = newCtx(event);
     const { windowContext, payload, id: replyId } = event;
     try {
@@ -371,7 +401,7 @@ function initialize(workerData: PluginWorkerData) {
       }
 
       if (payload.type === 'reload_request') {
-        await importModule();
+        importModule();
       }
     } catch (err) {
       console.log('Plugin call threw exception', payload.type, err);

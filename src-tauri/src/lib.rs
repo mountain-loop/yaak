@@ -6,13 +6,11 @@ use crate::encoding::read_response_body;
 use crate::grpc::metadata_to_map;
 use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
-use crate::render::{render_grpc_request, render_http_request, render_json_value, render_template};
+use crate::render::{render_grpc_request, render_template};
 use crate::template_callback::PluginTemplateCallback;
 use crate::updates::{UpdateMode, YaakUpdater};
-use crate::window_menu::app_menu;
-use chrono::Utc;
 use eventsource_client::{EventParser, SSE};
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use rand::random;
 use regex::Regex;
 use serde::Serialize;
@@ -20,19 +18,14 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
-use std::process::exit;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{fs, panic};
-#[cfg(target_os = "macos")]
-use tauri::TitleBarStyle;
-use tauri::{AppHandle, Emitter, LogicalSize, RunEvent, State, WebviewUrl, WebviewWindow};
+use tauri::{AppHandle, Emitter, RunEvent, State, WebviewWindow};
 use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
-use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind};
-use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::fs::read_to_string;
 use tokio::sync::Mutex;
@@ -57,22 +50,18 @@ use yaak_models::queries::{
     get_or_create_settings, get_or_create_workspace_meta, get_plugin, get_workspace,
     get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
     list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
-    list_http_responses_for_request, list_http_responses_for_workspace, list_key_values_raw,
-    list_plugins, list_workspaces, set_key_value_raw, update_response_if_id, update_settings,
-    upsert_cookie_jar, upsert_environment, upsert_folder, upsert_grpc_connection,
-    upsert_grpc_event, upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
+    list_http_responses_for_workspace, list_key_values_raw, list_plugins, list_workspaces,
+    set_key_value_raw, update_response_if_id, update_settings, upsert_cookie_jar,
+    upsert_environment, upsert_folder, upsert_grpc_connection, upsert_grpc_event,
+    upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
     upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
-    BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, Color,
-    FilterResponse, FindHttpResponsesResponse, GetHttpAuthenticationResponse,
-    GetHttpRequestActionsResponse, GetHttpRequestByIdResponse, GetTemplateFunctionsResponse,
-    HttpHeader, Icon, InternalEvent, InternalEventPayload, PromptTextResponse,
-    RenderHttpRequestResponse, RenderPurpose, SendHttpRequestResponse, ShowToastRequest,
-    TemplateRenderResponse, WindowContext,
+    BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
+    GetHttpAuthenticationResponse, GetHttpRequestActionsResponse, GetTemplateFunctionsResponse,
+    HttpHeader, PromptTextResponse, RenderPurpose, WindowContext,
 };
 use yaak_plugins::manager::PluginManager;
-use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
 use yaak_templates::{Parser, Tokens};
@@ -82,11 +71,13 @@ mod encoding;
 mod grpc;
 mod http_request;
 mod notifications;
+mod plugin_events;
 mod render;
 #[cfg(target_os = "macos")]
 mod tauri_plugin_mac_window;
 mod template_callback;
 mod updates;
+mod window;
 mod window_menu;
 
 const DEFAULT_WINDOW_WIDTH: f64 = 1100.0;
@@ -1656,15 +1647,17 @@ async fn cmd_new_child_window(
         current_pos.y + current_size.height / 2.0 - inner_size.1 / 2.0,
     );
 
-    let config = CreateWindowConfig {
+    let config = window::CreateWindowConfig {
         label: label.as_str(),
         title,
         url,
-        inner_size,
-        position,
+        inner_size: Some(inner_size),
+        position: Some(position),
+        navigation_tx: None,
+        hide_titlebar: true,
     };
 
-    let child_window = create_window(&app_handle, config);
+    let child_window = window::create_window(&app_handle, config);
 
     // NOTE: These listeners will remain active even when the windows close. Unfortunately,
     //   there's no way to unlisten to events for now, so we just have to be defensive.
@@ -1998,113 +1991,21 @@ fn create_main_window(handle: &AppHandle, url: &str) -> WebviewWindow {
     }
     .expect("Failed to generate label for new window");
 
-    let config = CreateWindowConfig {
+    let config = window::CreateWindowConfig {
         url,
         label: label.as_str(),
         title: "Yaak",
-        inner_size: (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
-        position: (
+        inner_size: Some((DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)),
+        position: Some((
             // Offset by random amount so it's easier to differentiate
             100.0 + random::<f64>() * 20.0,
             100.0 + random::<f64>() * 20.0,
-        ),
+        )),
+        navigation_tx: None,
+        hide_titlebar: true,
     };
 
-    create_window(handle, config)
-}
-
-struct CreateWindowConfig<'s> {
-    url: &'s str,
-    label: &'s str,
-    title: &'s str,
-    inner_size: (f64, f64),
-    position: (f64, f64),
-}
-
-fn create_window(handle: &AppHandle, config: CreateWindowConfig) -> WebviewWindow {
-    #[allow(unused_variables)]
-    let menu = app_menu(handle).unwrap();
-
-    // This causes the window to not be clickable (in AppImage), so disable on Linux
-    #[cfg(not(target_os = "linux"))]
-    handle.set_menu(menu).expect("Failed to set app menu");
-
-    info!("Create new window label={}", config.label);
-
-    let mut win_builder =
-        tauri::WebviewWindowBuilder::new(handle, config.label, WebviewUrl::App(config.url.into()))
-            .title(config.title)
-            .resizable(true)
-            .visible(false) // To prevent theme flashing, the frontend code calls show() immediately after configuring the theme
-            .fullscreen(false)
-            .disable_drag_drop_handler() // Required for frontend Dnd on windows
-            .inner_size(config.inner_size.0, config.inner_size.1)
-            .position(config.position.0, config.position.1)
-            .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
-
-    // Add macOS-only things
-    #[cfg(target_os = "macos")]
-    {
-        win_builder = win_builder.hidden_title(true).title_bar_style(TitleBarStyle::Overlay);
-    }
-
-    // Add non-MacOS things
-    #[cfg(not(target_os = "macos"))]
-    {
-        // Doesn't seem to work from Rust, here, so we do it in main.tsx
-        win_builder = win_builder.decorations(false);
-    }
-
-    if let Some(w) = handle.webview_windows().get(config.label) {
-        info!("Webview with label {} already exists. Focusing existing", config.label);
-        w.set_focus().unwrap();
-        return w.to_owned();
-    }
-
-    let win = win_builder.build().unwrap();
-
-    let webview_window = win.clone();
-    win.on_menu_event(move |w, event| {
-        if !w.is_focused().unwrap() {
-            return;
-        }
-
-        let event_id = event.id().0.as_str();
-        match event_id {
-            "quit" => exit(0),
-            "close" => w.close().unwrap(),
-            "zoom_reset" => w.emit("zoom_reset", true).unwrap(),
-            "zoom_in" => w.emit("zoom_in", true).unwrap(),
-            "zoom_out" => w.emit("zoom_out", true).unwrap(),
-            "settings" => w.emit("settings", true).unwrap(),
-            "open_feedback" => {
-                if let Err(e) =
-                    w.app_handle().opener().open_url("https://yaak.app/feedback", None::<&str>)
-                {
-                    warn!("Failed to open feedback {e:?}")
-                }
-            }
-
-            // Commands for development
-            "dev.reset_size" => webview_window
-                .set_size(LogicalSize::new(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT))
-                .unwrap(),
-            "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
-            "dev.generate_theme_css" => {
-                w.emit("generate_theme_css", true).unwrap();
-            }
-            "dev.toggle_devtools" => {
-                if webview_window.is_devtools_open() {
-                    webview_window.close_devtools();
-                } else {
-                    webview_window.open_devtools();
-                }
-            }
-            _ => {}
-        }
-    });
-
-    win
+    window::create_window(handle, config)
 }
 
 async fn get_update_mode(h: &AppHandle) -> UpdateMode {
@@ -2140,7 +2041,7 @@ fn monitor_plugin_events<R: Runtime>(app_handle: &AppHandle<R>) {
             // We might have recursive back-and-forth calls between app and plugin, so we don't
             // want to block here
             tauri::async_runtime::spawn(async move {
-                handle_plugin_event(&app_handle, &event, &plugin).await;
+                crate::plugin_events::handle_plugin_event(&app_handle, &event, &plugin).await;
             });
         }
         plugin_manager.unsubscribe(rx_id.as_str()).await;
@@ -2182,179 +2083,6 @@ async fn call_frontend<T: Serialize + Clone, R: Runtime>(
 
     let v = rx.borrow();
     v.clone()
-}
-
-async fn handle_plugin_event<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    event: &InternalEvent,
-    plugin_handle: &PluginHandle,
-) {
-    // info!("Got event to app {}", event.id);
-    let window_context = event.window_context.to_owned();
-    let response_event: Option<InternalEventPayload> = match event.clone().payload {
-        InternalEventPayload::CopyTextRequest(req) => {
-            app_handle
-                .clipboard()
-                .write_text(req.text.as_str())
-                .expect("Failed to write text to clipboard");
-            None
-        }
-        InternalEventPayload::ShowToastRequest(req) => {
-            match window_context {
-                WindowContext::Label { label } => app_handle
-                    .emit_to(label, "show_toast", req)
-                    .expect("Failed to emit show_toast to window"),
-                _ => app_handle.emit("show_toast", req).expect("Failed to emit show_toast"),
-            };
-            None
-        }
-        InternalEventPayload::PromptTextRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render");
-            let resp = call_frontend(window, "show_prompt", req).await;
-            Some(InternalEventPayload::PromptTextResponse(resp))
-        }
-        InternalEventPayload::FindHttpResponsesRequest(req) => {
-            let http_responses = list_http_responses_for_request(
-                app_handle,
-                req.request_id.as_str(),
-                req.limit.map(|l| l as i64),
-            )
-            .await
-            .unwrap_or_default();
-            Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
-                http_responses,
-            }))
-        }
-        InternalEventPayload::GetHttpRequestByIdRequest(req) => {
-            let http_request = get_http_request(app_handle, req.id.as_str()).await.unwrap();
-            Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
-                http_request,
-            }))
-        }
-        InternalEventPayload::RenderHttpRequestRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render http request");
-
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
-            let environment = environment_from_window(&window).await;
-            let base_environment = get_base_environment(&window, workspace.id.as_str())
-                .await
-                .expect("Failed to get base environment");
-            let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let http_request = render_http_request(
-                &req.http_request,
-                &base_environment,
-                environment.as_ref(),
-                &cb,
-            )
-            .await;
-            Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
-                http_request,
-            }))
-        }
-        InternalEventPayload::TemplateRenderRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render");
-
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
-            let environment = environment_from_window(&window).await;
-            let base_environment = get_base_environment(&window, workspace.id.as_str())
-                .await
-                .expect("Failed to get base environment");
-            let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let data =
-                render_json_value(req.data, &base_environment, environment.as_ref(), &cb).await;
-            Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))
-        }
-        InternalEventPayload::ErrorResponse(resp) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for plugin reload");
-            let toast_event = plugin_handle.build_event_to_send(
-                WindowContext::from_window(&window),
-                &InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                    message: resp.error,
-                    color: Some(Color::Danger),
-                    ..Default::default()
-                }),
-                None,
-            );
-            Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await;
-            None
-        }
-        InternalEventPayload::ReloadResponse(_) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for plugin reload");
-            let plugins = list_plugins(app_handle).await.unwrap();
-            for plugin in plugins {
-                if plugin.directory != plugin_handle.dir {
-                    continue;
-                }
-
-                let new_plugin = Plugin {
-                    updated_at: Utc::now().naive_utc(), // TODO: Add reloaded_at field to use instead
-                    ..plugin
-                };
-                upsert_plugin(&window, new_plugin, &UpdateSource::Plugin).await.unwrap();
-            }
-            let toast_event = plugin_handle.build_event_to_send(
-                WindowContext::from_window(&window),
-                &InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                    message: format!("Reloaded plugin {}", plugin_handle.dir),
-                    icon: Some(Icon::Info),
-                    ..Default::default()
-                }),
-                None,
-            );
-            Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await;
-            None
-        }
-        InternalEventPayload::SendHttpRequestRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for sending HTTP request");
-            let cookie_jar = cookie_jar_from_window(&window).await;
-            let environment = environment_from_window(&window).await;
-
-            let resp = create_default_http_response(
-                &window,
-                req.http_request.id.as_str(),
-                &UpdateSource::Plugin,
-            )
-            .await
-            .unwrap();
-
-            let result = send_http_request(
-                &window,
-                &req.http_request,
-                &resp,
-                environment,
-                cookie_jar,
-                &mut tokio::sync::watch::channel(false).1, // No-op cancel channel
-            )
-            .await;
-
-            let http_response = match result {
-                Ok(r) => r,
-                Err(_e) => return,
-            };
-
-            Some(InternalEventPayload::SendHttpRequestResponse(SendHttpRequestResponse {
-                http_response,
-            }))
-        }
-        _ => None,
-    };
-
-    if let Some(e) = response_event {
-        let plugin_manager: State<'_, PluginManager> = app_handle.state();
-        if let Err(e) = plugin_manager.reply(&event, &e).await {
-            warn!("Failed to reply to plugin manager: {:?}", e)
-        }
-    }
 }
 
 fn get_window_from_window_context<R: Runtime>(
