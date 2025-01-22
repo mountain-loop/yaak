@@ -167,8 +167,8 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     function configurePlaceholder() {
       if (cm.current === null) return;
       const ext = placeholderExt(placeholderElFromText(placeholder ?? '', type));
-      const effect = placeholderCompartment.current.reconfigure(ext);
-      cm.current?.view.dispatch({ effects: effect });
+      const effects = placeholderCompartment.current.reconfigure(ext);
+      cm.current?.view.dispatch({ effects });
     },
     [placeholder, type],
   );
@@ -186,8 +186,8 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       if (settings.editorKeymap === 'emacs' && current === keymapExtensions['emacs']) return; // Nothing to do
 
       const ext = keymapExtensions[settings.editorKeymap] ?? keymapExtensions['default'];
-      const effect = keymapCompartment.current.reconfigure(ext);
-      cm.current.view.dispatch({ effects: effect });
+      const effects = keymapCompartment.current.reconfigure(ext);
+      cm.current.view.dispatch({ effects });
     },
     [settings.editorKeymap],
   );
@@ -202,9 +202,9 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       if (wrapLines && current !== emptyExtension) return; // Nothing to do
       if (!wrapLines && current === emptyExtension) return; // Nothing to do
 
-      const ext = wrapLines ? EditorView.lineWrapping : [];
-      const effect = wrapLinesCompartment.current.reconfigure(ext);
-      cm.current?.view.dispatch({ effects: effect });
+      const ext = wrapLines ? EditorView.lineWrapping : emptyExtension;
+      const effects = wrapLinesCompartment.current.reconfigure(ext);
+      cm.current?.view.dispatch({ effects });
     },
     [wrapLines],
   );
@@ -344,7 +344,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
           placeholderCompartment.current.of(
             placeholderExt(placeholderElFromText(placeholder ?? '', type)),
           ),
-          wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : []),
+          wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : emptyExtension),
           keymapCompartment.current.of(
             keymapExtensions[settings.editorKeymap] ?? keymapExtensions['default'],
           ),
