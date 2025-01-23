@@ -352,11 +352,24 @@ function initialize(workerData: PluginWorkerData) {
         return;
       }
 
-      if (payload.type === 'get_http_authentication_request' && plug?.authentication) {
-        const { onApply: _, ...auth } = plug.authentication;
+      if (payload.type === 'get_http_authentication_summary_request' && plug?.authentication) {
+        const { name, shortLabel, label } = plug.authentication;
         const replyPayload: InternalEventPayload = {
-          ...auth,
-          type: 'get_http_authentication_response',
+          type: 'get_http_authentication_summary_response',
+          name,
+          label,
+          shortLabel,
+        };
+
+        sendPayload(windowContext, replyPayload, replyId);
+        return;
+      }
+
+      if (payload.type === 'get_http_authentication_config_request' && plug?.authentication) {
+        const { config } = plug.authentication;
+        const replyPayload: InternalEventPayload = {
+          type: 'get_http_authentication_config_response',
+          config: typeof config === 'function' ? await config(ctx, payload) : config,
         };
 
         sendPayload(windowContext, replyPayload, replyId);
@@ -370,8 +383,8 @@ function initialize(workerData: PluginWorkerData) {
           sendPayload(
             windowContext,
             {
-              ...result,
               type: 'call_http_authentication_response',
+              setHeaders: result.setHeaders,
             },
             replyId,
           );

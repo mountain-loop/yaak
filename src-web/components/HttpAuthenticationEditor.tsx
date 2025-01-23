@@ -1,6 +1,6 @@
 import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 import React, { useCallback } from 'react';
-import { useHttpAuthentication } from '../hooks/useHttpAuthentication';
+import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthentication';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { DynamicForm } from './DynamicForm';
@@ -13,8 +13,7 @@ interface Props {
 export function HttpAuthenticationEditor({ request }: Props) {
   const updateHttpRequest = useUpdateAnyHttpRequest();
   const updateGrpcRequest = useUpdateAnyGrpcRequest();
-  const auths = useHttpAuthentication();
-  const auth = auths.find((a) => a.name === request.authenticationType);
+  const auth = useHttpAuthenticationConfig(request.authenticationType, request.authentication);
 
   const handleChange = useCallback(
     (authentication: Record<string, boolean>) => {
@@ -33,7 +32,7 @@ export function HttpAuthenticationEditor({ request }: Props) {
     [request.id, request.model, updateGrpcRequest, updateHttpRequest],
   );
 
-  if (auth == null) {
+  if (auth.data == null) {
     return <EmptyStateText>No Authentication {request.authenticationType}</EmptyStateText>;
   }
 
@@ -42,7 +41,7 @@ export function HttpAuthenticationEditor({ request }: Props) {
       autocompleteVariables
       useTemplating
       stateKey={`auth.${request.id}.${request.authenticationType}`}
-      config={auth.config}
+      config={auth.data.config}
       data={request.authentication}
       onChange={handleChange}
     />

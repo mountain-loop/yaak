@@ -6,7 +6,7 @@ import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useRef } from 'react';
 import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
-import { useHttpAuthentication } from '../hooks/useHttpAuthentication';
+import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
@@ -69,7 +69,7 @@ export function GrpcConnectionSetupPane({
   onSend,
 }: Props) {
   const updateRequest = useUpdateAnyGrpcRequest();
-  const authentication = useHttpAuthentication();
+  const authentication = useHttpAuthenticationSummaries();
   const [activeTabs, setActiveTabs] = useAtom(tabsAtom);
   const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
 

@@ -11,7 +11,7 @@ export type BootRequest = { dir: string, watch: boolean, };
 
 export type BootResponse = { name: string, version: string, };
 
-export type CallHttpAuthenticationRequest = { config: { [key in string]?: JsonValue }, method: string, url: string, headers: Array<HttpHeader>, };
+export type CallHttpAuthenticationRequest = { config: { [key in string]?: JsonPrimitive }, method: string, url: string, headers: Array<HttpHeader>, };
 
 export type CallHttpAuthenticationResponse = { 
 /**
@@ -64,6 +64,11 @@ export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" 
 
 export type FormInputBase = { name: string, 
 /**
+ * Whether this input is visible for the given configuration. Use this to
+ * make branching forms.
+ */
+hidden?: boolean, 
+/**
  * Whether the user must fill in the argument
  */
 optional?: boolean, 
@@ -81,6 +86,11 @@ hideLabel?: boolean,
 defaultValue?: string, };
 
 export type FormInputCheckbox = { name: string, 
+/**
+ * Whether this input is visible for the given configuration. Use this to
+ * make branching forms.
+ */
+hidden?: boolean, 
 /**
  * Whether the user must fill in the argument
  */
@@ -112,6 +122,11 @@ hideGutter?: boolean,
  */
 language?: EditorLanguage, name: string, 
 /**
+ * Whether this input is visible for the given configuration. Use this to
+ * make branching forms.
+ */
+hidden?: boolean, 
+/**
  * Whether the user must fill in the argument
  */
 optional?: boolean, 
@@ -138,6 +153,11 @@ title: string,
  */
 multiple?: boolean, directory?: boolean, defaultPath?: string, filters?: Array<FileFilter>, name: string, 
 /**
+ * Whether this input is visible for the given configuration. Use this to
+ * make branching forms.
+ */
+hidden?: boolean, 
+/**
  * Whether the user must fill in the argument
  */
 optional?: boolean, 
@@ -155,6 +175,11 @@ hideLabel?: boolean,
 defaultValue?: string, };
 
 export type FormInputHttpRequest = { name: string, 
+/**
+ * Whether this input is visible for the given configuration. Use this to
+ * make branching forms.
+ */
+hidden?: boolean, 
 /**
  * Whether the user must fill in the argument
  */
@@ -177,6 +202,11 @@ export type FormInputSelect = {
  * The options that will be available in the select input
  */
 options: Array<FormInputSelectOption>, name: string, 
+/**
+ * Whether this input is visible for the given configuration. Use this to
+ * make branching forms.
+ */
+hidden?: boolean, 
 /**
  * Whether the user must fill in the argument
  */
@@ -206,6 +236,11 @@ placeholder?: string | null,
  */
 password?: boolean, name: string, 
 /**
+ * Whether this input is visible for the given configuration. Use this to
+ * make branching forms.
+ */
+hidden?: boolean, 
+/**
  * Whether the user must fill in the argument
  */
 optional?: boolean, 
@@ -222,7 +257,11 @@ hideLabel?: boolean,
  */
 defaultValue?: string, };
 
-export type GetHttpAuthenticationResponse = { name: string, label: string, shortLabel: string, config: Array<FormInput>, };
+export type GetHttpAuthenticationConfigRequest = { config: { [key in string]?: JsonPrimitive }, };
+
+export type GetHttpAuthenticationConfigResponse = { config: Array<FormInput>, };
+
+export type GetHttpAuthenticationSummaryResponse = { name: string, label: string, shortLabel: string, };
 
 export type GetHttpRequestActionsRequest = Record<string, never>;
 
@@ -248,7 +287,9 @@ export type ImportResponse = { resources: ImportResources, };
 
 export type InternalEvent = { id: string, pluginRefId: string, pluginName: string, replyId: string | null, windowContext: WindowContext, payload: InternalEventPayload, };
 
-export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & EmptyPayload | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_request" } & EmptyPayload | { "type": "get_http_authentication_response" } & GetHttpAuthenticationResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "copy_text_request" } & CopyTextRequest | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "open_window_request" } & OpenWindowRequest | { "type": "window_navigate_event" } & WindowNavigateEvent | { "type": "close_window_request" } & CloseWindowRequest | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "empty_response" } & EmptyPayload | { "type": "error_response" } & ErrorResponse;
+export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & EmptyPayload | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_summary_request" } & EmptyPayload | { "type": "get_http_authentication_summary_response" } & GetHttpAuthenticationSummaryResponse | { "type": "get_http_authentication_config_request" } & GetHttpAuthenticationConfigRequest | { "type": "get_http_authentication_config_response" } & GetHttpAuthenticationConfigResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "copy_text_request" } & CopyTextRequest | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "open_window_request" } & OpenWindowRequest | { "type": "window_navigate_event" } & WindowNavigateEvent | { "type": "close_window_request" } & CloseWindowRequest | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "empty_response" } & EmptyPayload | { "type": "error_response" } & ErrorResponse;
+
+export type JsonPrimitive = string | number | boolean | null;
 
 export type OpenWindowRequest = { url: string, 
 /**
@@ -278,7 +319,7 @@ export type RenderHttpRequestResponse = { httpRequest: HttpRequest, };
 
 export type RenderPurpose = "send" | "preview";
 
-export type SendHttpRequestRequest = { httpRequest: HttpRequest, };
+export type SendHttpRequestRequest = { httpRequest: Partial<HttpRequest>, };
 
 export type SendHttpRequestResponse = { httpResponse: HttpResponse, };
 

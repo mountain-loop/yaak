@@ -376,11 +376,8 @@ pub async fn send_http_request<R: Runtime>(
 
     if let Some(auth_name) = request.authentication_type.to_owned() {
         let req = CallHttpAuthenticationRequest {
-            config: serde_json::to_value(&request.authentication)
-                .unwrap()
-                .as_object()
-                .unwrap()
-                .to_owned(),
+            config: serde_json::from_value(serde_json::to_value(&request.authentication).unwrap())
+                .unwrap(),
             method: sendable_req.method().to_string(),
             url: sendable_req.url().to_string(),
             headers: sendable_req

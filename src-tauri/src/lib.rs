@@ -15,7 +15,7 @@ use rand::random;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -58,8 +58,9 @@ use yaak_models::queries::{
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
-    GetHttpAuthenticationResponse, GetHttpRequestActionsResponse, GetTemplateFunctionsResponse,
-    HttpHeader, PromptTextResponse, RenderPurpose, WindowContext,
+    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
+    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, HttpHeader, JsonPrimitive,
+    PromptTextResponse, RenderPurpose, WindowContext,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_sse::sse::ServerSentEvent;
@@ -233,7 +234,7 @@ async fn cmd_grpc_go<R: Runtime>(
     if let Some(auth_name) = request.authentication_type.clone() {
         let auth = request.authentication.clone();
         let plugin_req = CallHttpAuthenticationRequest {
-            config: serde_json::to_value(&auth).unwrap().as_object().unwrap().to_owned(),
+            config: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
             method: "POST".to_string(),
             url: request.url.clone(),
             headers: metadata
@@ -960,13 +961,28 @@ async fn cmd_template_functions<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_get_http_authentication<R: Runtime>(
+async fn cmd_get_http_authentication_summaries<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> Result<Vec<GetHttpAuthenticationResponse>, String> {
-    let results =
-        plugin_manager.get_http_authentication(&window).await.map_err(|e| e.to_string())?;
+) -> Result<Vec<GetHttpAuthenticationSummaryResponse>, String> {
+    let results = plugin_manager
+        .get_http_authentication_summaries(&window)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(results.into_iter().map(|(_, a)| a).collect())
+}
+
+#[tauri::command]
+async fn cmd_get_http_authentication_config<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+    auth_name: &str,
+    config: HashMap<String, JsonPrimitive>,
+) -> Result<GetHttpAuthenticationConfigResponse, String> {
+    plugin_manager
+        .get_http_authentication_config(&window, auth_name, config)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1852,7 +1868,8 @@ pub fn run() {
             cmd_get_environment,
             cmd_get_folder,
             cmd_get_grpc_request,
-            cmd_get_http_authentication,
+            cmd_get_http_authentication_summaries,
+            cmd_get_http_authentication_config,
             cmd_get_http_request,
             cmd_get_key_value,
             cmd_get_settings,

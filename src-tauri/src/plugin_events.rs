@@ -155,15 +155,23 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         InternalEventPayload::SendHttpRequestRequest(req) => {
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for sending HTTP request");
+            let mut http_request = req.http_request;
+            let workspace = workspace_from_window(&window)
+                .await
+                .expect("Failed to get workspace_id from window URL");
             let cookie_jar = cookie_jar_from_window(&window).await;
             let environment = environment_from_window(&window).await;
 
-            let resp = if req.http_request.id.is_empty() {
+            if http_request.workspace_id.is_empty() {
+                http_request.workspace_id = workspace.id;
+            }
+
+            let resp = if http_request.id.is_empty() {
                 HttpResponse::new()
             } else {
                 create_default_http_response(
                     &window,
-                    req.http_request.id.as_str(),
+                    http_request.id.as_str(),
                     &UpdateSource::Plugin,
                 )
                 .await
@@ -172,7 +180,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
 
             let result = send_http_request(
                 &window,
-                &req.http_request,
+                &http_request,
                 &resp,
                 environment,
                 cookie_jar,
@@ -220,9 +228,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             None
         }
         InternalEventPayload::CloseWindowRequest(req) => {
-            println!("CLOSING WINDOW {req:?}");
             if let Some(window) = app_handle.webview_windows().get(&req.label) {
-                println!("CLOSING WINDOW!!");
                 window.close().expect("Failed to close window");
             }
             None

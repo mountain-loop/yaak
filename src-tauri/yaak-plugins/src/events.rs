@@ -84,8 +84,11 @@ pub enum InternalEventPayload {
     CallTemplateFunctionResponse(CallTemplateFunctionResponse),
 
     // Http Authentication
-    GetHttpAuthenticationRequest(EmptyPayload),
-    GetHttpAuthenticationResponse(GetHttpAuthenticationResponse),
+    GetHttpAuthenticationSummaryRequest(EmptyPayload),
+    GetHttpAuthenticationSummaryResponse(GetHttpAuthenticationSummaryResponse),
+    GetHttpAuthenticationConfigRequest(GetHttpAuthenticationConfigRequest),
+    GetHttpAuthenticationConfigResponse(GetHttpAuthenticationConfigResponse),
+
     CallHttpAuthenticationRequest(CallHttpAuthenticationRequest),
     CallHttpAuthenticationResponse(CallHttpAuthenticationResponse),
 
@@ -194,6 +197,7 @@ pub struct ExportHttpRequestResponse {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "events.ts")]
 pub struct SendHttpRequestRequest {
+    #[ts(type = "Partial<HttpRequest>")]
     pub http_request: HttpRequest,
 }
 
@@ -359,10 +363,23 @@ pub enum Icon {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "events.ts")]
-pub struct GetHttpAuthenticationResponse {
+pub struct GetHttpAuthenticationSummaryResponse {
     pub name: String,
     pub label: String,
     pub short_label: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "events.ts")]
+pub struct GetHttpAuthenticationConfigRequest {
+    pub config: HashMap<String, JsonPrimitive>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "events.ts")]
+pub struct GetHttpAuthenticationConfigResponse {
     pub config: Vec<FormInput>,
 }
 
@@ -378,10 +395,20 @@ pub struct HttpHeader {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "events.ts")]
 pub struct CallHttpAuthenticationRequest {
-    pub config: serde_json::Map<String, serde_json::Value>,
+    pub config: HashMap<String, JsonPrimitive>,
     pub method: String,
     pub url: String,
     pub headers: Vec<HttpHeader>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+#[ts(export, export_to = "events.ts")]
+pub enum JsonPrimitive {
+    String(String),
+    Number(f64),
+    Boolean(bool),
+    Null,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -434,6 +461,11 @@ pub enum FormInput {
 pub struct FormInputBase {
     pub name: String,
 
+    /// Whether this input is visible for the given configuration. Use this to
+    /// make branching forms.
+    #[ts(optional)]
+    pub hidden: Option<bool>,
+
     /// Whether the user must fill in the argument
     #[ts(optional)]
     pub optional: Option<bool>,
@@ -452,7 +484,7 @@ pub struct FormInputBase {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(default, rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "events.ts")]
 pub struct FormInputText {
     #[serde(flatten)]

@@ -4,27 +4,29 @@ import type { HTMLAttributes } from 'react';
 export function Label({
   htmlFor,
   className,
-  optional,
   children,
   visuallyHidden,
-  otherTags = [],
+  optional,
+  tags = [],
   ...props
 }: HTMLAttributes<HTMLLabelElement> & {
   htmlFor: string;
   optional?: boolean;
-  otherTags?: string[];
+  tags?: string[];
   visuallyHidden?: boolean;
 }) {
-  const tags = optional ? ['optional', ...otherTags] : otherTags;
+  if (!optional) {
+    tags.unshift('required');
+  }
   return (
     <label
+      htmlFor={htmlFor}
       className={classNames(
         className,
         visuallyHidden && 'sr-only',
-        'flex-shrink-0',
+        'flex-shrink-0 text-sm',
         'text-text-subtle whitespace-nowrap flex items-center gap-1',
       )}
-      htmlFor={htmlFor}
       {...props}
     >
       {children}

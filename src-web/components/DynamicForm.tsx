@@ -51,6 +51,10 @@ export function DynamicForm<T extends Record<string, string | boolean>>({
   return (
     <VStack space={3} className="h-full overflow-auto">
       {config.map((a, i) => {
+        if (a.hidden) {
+          return null;
+        }
+
         switch (a.type) {
           case 'select':
             return (
@@ -190,7 +194,7 @@ function EditorArg({
         htmlFor={id}
         optional={arg.optional}
         visuallyHidden={arg.hideLabel}
-        otherTags={arg.language ? [capitalize(arg.language)] : undefined}
+        tags={arg.language ? [capitalize(arg.language)] : undefined}
       >
         {arg.label}
       </Label>
