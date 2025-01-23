@@ -501,6 +501,10 @@ pub struct FormInputText {
     #[ts(optional)]
     pub password: Option<bool>,
 
+    /// Whether to allow newlines in the input, like a <textarea/>
+    #[ts(optional)]
+    pub multi_line: Option<bool>,
+
     #[ts(optional)]
     pub completion_options: Option<Vec<GenericCompletionOption>>,
 }

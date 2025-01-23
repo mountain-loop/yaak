@@ -34,6 +34,36 @@ var defaultGrantType = grantTypes[0].value;
 function onlyTypes(config, ...grantTypes2) {
   return !grantTypes2.find((t) => t === String(config.grantType ?? defaultGrantType));
 }
+var authorizationUrls = [
+  "https://MY_SHOP.myshopify.com/admin/oauth/access_token",
+  "https://account.box.com/api/oauth2/authorize",
+  "https://accounts.google.com/o/oauth2/v2/auth",
+  "https://api.imgur.com/oauth2/authorize",
+  "https://bitly.com/oauth/authorize",
+  "https://github.com/login/oauth/authorize",
+  "https://gitlab.example.com/oauth/authorize",
+  "https://medium.com/m/oauth/authorize",
+  "https://public-api.wordpress.com/oauth2/authorize",
+  "https://slack.com/oauth/authorize",
+  "https://todoist.com/oauth/authorize",
+  "https://www.dropbox.com/oauth2/authorize",
+  "https://www.linkedin.com/oauth/v2/authorization"
+];
+var accessTokenUrls = [
+  "https://MY_SHOP.myshopify.com/admin/oauth/authorize",
+  "https://api-ssl.bitly.com/oauth/access_token",
+  "https://api.box.com/oauth2/token",
+  "https://api.dropboxapi.com/oauth2/token",
+  "https://api.imgur.com/oauth2/token",
+  "https://api.medium.com/v1/tokens",
+  "https://github.com/login/oauth/access_token",
+  "https://gitlab.example.com/oauth/token",
+  "https://public-api.wordpress.com/oauth2/token",
+  "https://slack.com/api/oauth.access",
+  "https://todoist.com/oauth/access_token",
+  "https://www.googleapis.com/oauth2/v4/token",
+  "https://www.linkedin.com/oauth/v2/accessToken"
+];
 var plugin = {
   authentication: {
     name: "oauth2",
@@ -64,14 +94,15 @@ var plugin = {
           label: "Authorization URL",
           optional: true,
           hidden: onlyTypes(config, "authorization_code", "implicit"),
-          completionOptions: []
+          completionOptions: authorizationUrls.map((url) => ({ label: url, value: url }))
         },
         {
           type: "text",
           name: "accessTokenUrl",
           label: "Access Token URL",
           optional: true,
-          hidden: onlyTypes(config, "authorization_code", "resource_owner", "client_credential")
+          hidden: onlyTypes(config, "authorization_code", "resource_owner", "client_credential"),
+          completionOptions: accessTokenUrls.map((url) => ({ label: url, value: url }))
         },
         {
           type: "text",
@@ -110,9 +141,11 @@ var plugin = {
       ];
     },
     async onApply(ctx, args) {
+      const accessTokenUrl = String(args.config.accessTokenUrl);
+      const authorizationUrl = String(args.config.authorizationUrl);
       const token = await getAuthorizationCode(ctx, {
-        accessTokenUrl: String(args.config.accessTokenUrl),
-        authorizationUrl: String(args.config.authorizationUrl),
+        accessTokenUrl: accessTokenUrl.match(/^https?:\/\//) ? accessTokenUrl : `https://${accessTokenUrl}`,
+        authorizationUrl: authorizationUrl.match(/^https?:\/\//) ? authorizationUrl : `https://${authorizationUrl}`,
         clientId: String(args.config.clientId),
         clientSecret: String(args.config.clientSecret),
         redirectUri: String(args.config.redirectUri),

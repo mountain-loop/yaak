@@ -3824,11 +3824,12 @@ var plugin = {
         options: algorithms.map((value) => ({ name: value === "none" ? "None" : value, value }))
       },
       {
-        type: "editor",
+        type: "text",
         name: "secret",
         label: "Secret or Private Key",
+        password: true,
         optional: true,
-        hideGutter: true
+        multiLine: true
       },
       {
         type: "checkbox",

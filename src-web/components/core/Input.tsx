@@ -197,7 +197,11 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
             onChange={handleChange}
             onPaste={onPaste}
             onPasteOverwrite={onPasteOverwrite}
-            className={classNames(editorClassName, multiLine && 'py-1.5')}
+            className={classNames(
+              editorClassName,
+              multiLine && size === 'md' && 'py-1.5',
+              multiLine && size === 'sm' && 'py-1',
+            )}
             onFocus={handleFocus}
             onBlur={handleBlur}
             readOnly={readOnly}

@@ -25,6 +25,7 @@ import { SelectFile } from './SelectFile';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const DYNAMIC_FORM_NULL_ARG = '__NULL__';
+const INPUT_SIZE = 'sm';
 
 export function DynamicForm<T extends Record<string, string | boolean>>({
   config,
@@ -149,11 +150,13 @@ function TextArg({
   return (
     <Input
       name={arg.name}
+      multiLine={arg.multiLine}
       onChange={handleChange}
       defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
       required={!arg.optional}
       type={arg.password ? 'password' : 'text'}
       label={arg.label ?? arg.name}
+      size={INPUT_SIZE}
       hideLabel={arg.label == null}
       placeholder={arg.placeholder ?? arg.defaultValue ?? ''}
       autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
@@ -202,7 +205,7 @@ function EditorArg({
       <Editor
         id={id}
         className={classNames(
-          'border border-border rounded-md overflow-hidden px-2 py-1.5',
+          'border border-border rounded-md overflow-hidden px-2 py-1',
           'focus-within:border-border-focus',
           'max-h-[15rem]', // So it doesn't take up too much space
         )}
@@ -238,6 +241,7 @@ function SelectArg({
       onChange={onChange}
       hideLabel={arg.hideLabel}
       value={value}
+      size={INPUT_SIZE}
       options={[
         ...arg.options.map((a) => ({
           label: a.name,
