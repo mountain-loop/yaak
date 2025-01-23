@@ -31,8 +31,10 @@ var grantTypes = [
   { name: "Client Credentials", value: "client_credential" }
 ];
 var defaultGrantType = grantTypes[0].value;
-function hiddenIfNot(config, ...grantTypes2) {
-  return !grantTypes2.find((t) => t === String(config.grantType ?? defaultGrantType));
+function hiddenIfNot(...grantTypes2) {
+  return ({ config }) => {
+    return { hidden: !grantTypes2.find((t) => t === String(config.grantType ?? defaultGrantType)) };
+  };
 }
 var authorizationUrls = [
   "https://MY_SHOP.myshopify.com/admin/oauth/access_token",
@@ -69,81 +71,79 @@ var plugin = {
     name: "oauth2",
     label: "OAuth 2",
     shortLabel: "OAuth 2.0",
-    config: (_ctx, { config }) => {
-      return [
-        {
-          type: "select",
-          name: "grantType",
-          label: "Grant Type",
-          hideLabel: true,
-          defaultValue: defaultGrantType,
-          options: grantTypes
-        },
-        // Always-present fields
-        { type: "text", name: "clientId", label: "Client ID", optional: true },
-        {
-          type: "text",
-          name: "clientSecret",
-          label: "Client Secret",
-          optional: true,
-          hidden: hiddenIfNot(config, "authorization_code", "resource_owner", "client_credential")
-        },
-        {
-          type: "text",
-          name: "authorizationUrl",
-          label: "Authorization URL",
-          optional: true,
-          hidden: hiddenIfNot(config, "authorization_code", "implicit"),
-          completionOptions: authorizationUrls.map((url) => ({ label: url, value: url }))
-        },
-        {
-          type: "text",
-          name: "accessTokenUrl",
-          label: "Access Token URL",
-          optional: true,
-          hidden: hiddenIfNot(config, "authorization_code", "resource_owner", "client_credential"),
-          completionOptions: accessTokenUrls.map((url) => ({ label: url, value: url }))
-        },
-        {
-          type: "text",
-          name: "username",
-          label: "Username",
-          optional: true,
-          hidden: hiddenIfNot(config, "resource_owner")
-        },
-        {
-          type: "text",
-          name: "password",
-          label: "Password",
-          password: true,
-          optional: true,
-          hidden: hiddenIfNot(config, "resource_owner")
-        },
-        {
-          type: "text",
-          name: "redirectUri",
-          label: "Redirect URI",
-          optional: true,
-          hidden: hiddenIfNot(config, "authorization_code", "implicit")
-        },
-        {
-          type: "text",
-          name: "scope",
-          label: "Scope",
-          optional: true
-        },
-        {
-          type: "text",
-          name: "state",
-          label: "State",
-          optional: true
-        }
-      ];
-    },
+    config: [
+      {
+        type: "select",
+        name: "grantType",
+        label: "Grant Type",
+        hideLabel: true,
+        defaultValue: defaultGrantType,
+        options: grantTypes
+      },
+      // Always-present fields
+      { type: "text", name: "clientId", label: "Client ID", optional: true },
+      {
+        type: "text",
+        name: "clientSecret",
+        label: "Client Secret",
+        optional: true,
+        dynamic: hiddenIfNot("authorization_code", "resource_owner", "client_credential")
+      },
+      {
+        type: "text",
+        name: "authorizationUrl",
+        label: "Authorization URL",
+        optional: true,
+        dynamic: hiddenIfNot("authorization_code", "implicit"),
+        completionOptions: authorizationUrls.map((url) => ({ label: url, value: url }))
+      },
+      {
+        type: "text",
+        name: "accessTokenUrl",
+        label: "Access Token URL",
+        optional: true,
+        dynamic: hiddenIfNot("authorization_code", "resource_owner", "client_credential"),
+        completionOptions: accessTokenUrls.map((url) => ({ label: url, value: url }))
+      },
+      {
+        type: "text",
+        name: "username",
+        label: "Username",
+        optional: true,
+        dynamic: hiddenIfNot("resource_owner")
+      },
+      {
+        type: "text",
+        name: "password",
+        label: "Password",
+        password: true,
+        optional: true,
+        dynamic: hiddenIfNot("resource_owner")
+      },
+      {
+        type: "text",
+        name: "redirectUri",
+        label: "Redirect URI",
+        optional: true,
+        dynamic: hiddenIfNot("authorization_code", "implicit")
+      },
+      {
+        type: "text",
+        name: "scope",
+        label: "Scope",
+        optional: true
+      },
+      {
+        type: "text",
+        name: "state",
+        label: "State",
+        optional: true
+      }
+    ],
     async onApply(ctx, args) {
       const accessTokenUrl = String(args.config.accessTokenUrl);
       const authorizationUrl = String(args.config.authorizationUrl);
-      const token = await getAuthorizationCode(ctx, {
+      const token = await getAuthorizationCode(ctx, args.requestId, {
         accessTokenUrl: accessTokenUrl.match(/^https?:\/\//) ? accessTokenUrl : `https://${accessTokenUrl}`,
         authorizationUrl: authorizationUrl.match(/^https?:\/\//) ? authorizationUrl : `https://${authorizationUrl}`,
         clientId: String(args.config.clientId),
@@ -156,7 +156,7 @@ var plugin = {
     }
   }
 };
-function getAuthorizationCode(ctx, {
+function getAuthorizationCode(ctx, requestId, {
   accessTokenUrl,
   clientId,
   clientSecret,
@@ -165,15 +165,21 @@ function getAuthorizationCode(ctx, {
   state,
   ...config
 }) {
-  const authorizationUrl = new URL(`${config.authorizationUrl ?? ""}`);
-  authorizationUrl.searchParams.set("client_id", clientId);
-  authorizationUrl.searchParams.set("redirect_uri", redirectUri);
-  authorizationUrl.searchParams.set("response_type", "code");
-  if (scope) authorizationUrl.searchParams.set("scope", scope);
-  if (state) authorizationUrl.searchParams.set("state", state);
-  const authorizationUrlStr = authorizationUrl.toString();
-  console.log("Opening authorization url", authorizationUrlStr);
   return new Promise(async (resolve, reject) => {
+    const token = await getToken(ctx, requestId);
+    if (token) {
+      console.log("USING EXISTING TOKEN", token);
+      resolve(token.response.access_token);
+      return;
+    }
+    const authorizationUrl = new URL(`${config.authorizationUrl ?? ""}`);
+    authorizationUrl.searchParams.set("client_id", clientId);
+    authorizationUrl.searchParams.set("redirect_uri", redirectUri);
+    authorizationUrl.searchParams.set("response_type", "code");
+    if (scope) authorizationUrl.searchParams.set("scope", scope);
+    if (state) authorizationUrl.searchParams.set("state", state);
+    const authorizationUrlStr = authorizationUrl.toString();
+    console.log("Opening authorization url", authorizationUrlStr);
     let { close } = await ctx.window.openUrl({
       url: authorizationUrlStr,
       label: "oauth-authorization-url",
@@ -205,20 +211,24 @@ function getAuthorizationCode(ctx, {
           reject(new Error("Failed to fetch access token with status=" + resp.status));
         }
         const bodyObj = JSON.parse(body);
-        console.log("Got OAUTH response", bodyObj);
-        storeToken(ctx);
-        const accessToken = bodyObj["access_token"];
-        resolve(accessToken);
+        const token2 = await storeToken(ctx, requestId, bodyObj);
+        resolve(token2.response.access_token);
       }
     });
   });
 }
 async function storeToken(ctx, requestId, response) {
   const expiresAt = response.expires_in ? Date.now() + response.expires_in * 1e3 : null;
-  await ctx.store.set(tokenStoreKey(requestId), {
+  const token = {
     response,
     expiresAt
-  });
+  };
+  console.log("STORING TOKEN", token);
+  await ctx.store.set(tokenStoreKey(requestId), token);
+  return token;
+}
+async function getToken(ctx, requestId) {
+  return ctx.store.get(tokenStoreKey(requestId));
 }
 function tokenStoreKey(requestId) {
   return ["token", requestId].join("_");

@@ -5,6 +5,7 @@ import type {
   Context,
   DeleteKeyValueResponse,
   FindHttpResponsesResponse,
+  FormInput,
   GetHttpRequestByIdResponse,
   GetKeyValueResponse,
   HttpRequestAction,
@@ -395,9 +396,20 @@ function initialize(workerData: PluginWorkerData) {
 
       if (payload.type === 'get_http_authentication_config_request' && plug?.authentication) {
         const { config } = plug.authentication;
+        const resolvedConfig: FormInput[] = [];
+        for (let i = 0; i < config.length; i++) {
+          let v = config[i];
+          if ('dynamic' in v) {
+            const dynamicAttrs = await v.dynamic(payload);
+            const { dynamic, ...other } = v;
+            resolvedConfig.push({ ...other, ...dynamicAttrs } as FormInput);
+          } else {
+            resolvedConfig.push(v);
+          }
+        }
         const replyPayload: InternalEventPayload = {
           type: 'get_http_authentication_config_response',
-          config: typeof config === 'function' ? await config(ctx, payload) : config,
+          config: resolvedConfig,
         };
 
         sendPayload(windowContext, replyPayload, replyId);
