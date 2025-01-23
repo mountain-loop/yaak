@@ -93,7 +93,10 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
 
   const handleBlur = useCallback(() => {
     setFocused(false);
-    editorRef.current?.dispatch({ selection: { anchor: 0 } });
+    // Move cursor to end of selection on blur
+    editorRef.current?.dispatch({
+      selection: { anchor: editorRef.current.state.doc.length },
+    });
     onBlur?.();
   }, [onBlur]);
 

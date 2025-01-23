@@ -94,7 +94,6 @@ export const RequestPane = memo(function RequestPane({
   const [{ urlKey }] = useRequestEditor();
   const contentType = useContentTypeFromHeaders(activeRequest.headers);
   const authentication = useHttpAuthenticationSummaries();
-  console.log("AUTHENTISCATION", authentication);
 
   const handleContentTypeChange = useCallback(
     async (contentType: string | null) => {
