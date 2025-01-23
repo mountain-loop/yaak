@@ -11,16 +11,8 @@ use log::warn;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::models::{HttpResponse, Plugin};
-use yaak_models::queries::{
-    create_default_http_response, get_base_environment, get_http_request,
-    list_http_responses_for_request, list_plugins, set_plugin_key_value, upsert_plugin,
-    UpdateSource,
-};
-use yaak_plugins::events::{
-    Color, FindHttpResponsesResponse, GetHttpRequestByIdResponse, Icon, InternalEvent,
-    InternalEventPayload, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse,
-    ShowToastRequest, TemplateRenderResponse, WindowContext, WindowNavigateEvent,
-};
+use yaak_models::queries::{create_default_http_response, delete_plugin_key_value, get_base_environment, get_http_request, get_plugin_key_value, list_http_responses_for_request, list_plugins, set_plugin_key_value, upsert_plugin, UpdateSource};
+use yaak_plugins::events::{Color, DeleteKeyValueResponse, FindHttpResponsesResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse, WindowContext, WindowNavigateEvent};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
 
@@ -238,6 +230,16 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let name = plugin_handle.name().await;
             set_plugin_key_value(app_handle, &name, &req.key, &req.value).await;
             Some(InternalEventPayload::SetKeyValueResponse(SetKeyValueResponse {}))
+        }
+        InternalEventPayload::GetKeyValueRequest(req) => {
+            let name = plugin_handle.name().await;
+            let value = get_plugin_key_value(app_handle, &name, &req.key).await.map(|v| v.value);
+            Some(InternalEventPayload::GetKeyValueResponse(GetKeyValueResponse { value }))
+        }
+        InternalEventPayload::DeleteKeyValueRequest(req) => {
+            let name = plugin_handle.name().await;
+            let deleted = delete_plugin_key_value(app_handle, &name, &req.key).await;
+            Some(InternalEventPayload::DeleteKeyValueResponse(DeleteKeyValueResponse { deleted }))
         }
         _ => None,
     };
