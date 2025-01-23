@@ -53,7 +53,6 @@ export function useSubscribeHttpAuthentication() {
         const result = await invokeCmd<GetHttpAuthenticationSummaryResponse[]>(
           'cmd_get_http_authentication_summaries',
         );
-        console.log('RESULT', result);
         setNumResults(result.length);
         setAtom(result);
         return result;

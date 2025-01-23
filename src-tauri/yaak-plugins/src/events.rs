@@ -250,7 +250,7 @@ pub struct TemplateRenderResponse {
 #[ts(export, export_to = "events.ts")]
 pub struct OpenWindowRequest {
     pub url: String,
-    /// Label for window. If not provided, a random one will be generated.
+    /// Label for the window. If not provided, a random one will be generated.
     pub label: String,
     #[ts(optional)]
     pub title: Option<String>,
@@ -285,8 +285,10 @@ pub struct WindowNavigateEvent {
 #[ts(export, export_to = "events.ts")]
 pub struct ShowToastRequest {
     pub message: String,
+
     #[ts(optional)]
     pub color: Option<Color>,
+
     #[ts(optional)]
     pub icon: Option<Icon>,
 }
@@ -459,6 +461,7 @@ pub enum FormInput {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "events.ts")]
 pub struct FormInputBase {
+    /// The name of the input. The value will be stored at this object attribute in the resulting data
     pub name: String,
 
     /// Whether this input is visible for the given configuration. Use this to
@@ -484,7 +487,7 @@ pub struct FormInputBase {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
+#[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "events.ts")]
 pub struct FormInputText {
     #[serde(flatten)]
@@ -497,6 +500,9 @@ pub struct FormInputText {
     /// Placeholder for the text input
     #[ts(optional)]
     pub password: Option<bool>,
+
+    #[ts(optional)]
+    pub completion_options: Option<Vec<GenericCompletionOption>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -536,6 +542,37 @@ pub struct FormInputEditor {
     /// Language for syntax highlighting
     #[ts(optional)]
     pub language: Option<EditorLanguage>,
+
+    #[ts(optional)]
+    pub completion_options: Option<Vec<GenericCompletionOption>>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "events.ts")]
+pub struct GenericCompletionOption {
+    label: String,
+
+    #[ts(optional)]
+    detail: Option<String>,
+
+    #[ts(optional)]
+    info: Option<String>,
+
+    #[ts(optional)]
+    #[serde(rename = "type")]
+    pub type_: Option<CompletionOptionType>,
+
+    #[ts(optional)]
+    pub boost: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "events.ts")]
+pub enum CompletionOptionType {
+    Constant,
+    Variable,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

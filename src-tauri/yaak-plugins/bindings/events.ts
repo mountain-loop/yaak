@@ -34,6 +34,8 @@ export type CloseWindowRequest = { label: string, };
 
 export type Color = "custom" | "default" | "primary" | "secondary" | "info" | "success" | "notice" | "warning" | "danger";
 
+export type CompletionOptionType = "constant" | "variable";
+
 export type CopyTextRequest = { text: string, };
 
 export type EditorLanguage = "text" | "javascript" | "json" | "html" | "xml" | "graphql" | "markdown";
@@ -62,7 +64,11 @@ export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
 
 export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest;
 
-export type FormInputBase = { name: string, 
+export type FormInputBase = { 
+/**
+ * The name of the input. The value will be stored at this object attribute in the resulting data
+ */
+name: string, 
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
@@ -85,7 +91,11 @@ hideLabel?: boolean,
  */
 defaultValue?: string, };
 
-export type FormInputCheckbox = { name: string, 
+export type FormInputCheckbox = { 
+/**
+ * The name of the input. The value will be stored at this object attribute in the resulting data
+ */
+name: string, 
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
@@ -120,7 +130,11 @@ hideGutter?: boolean,
 /**
  * Language for syntax highlighting
  */
-language?: EditorLanguage, name: string, 
+language?: EditorLanguage, completionOptions?: Array<GenericCompletionOption>, 
+/**
+ * The name of the input. The value will be stored at this object attribute in the resulting data
+ */
+name: string, 
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
@@ -151,7 +165,11 @@ title: string,
 /**
  * Allow selecting multiple files
  */
-multiple?: boolean, directory?: boolean, defaultPath?: string, filters?: Array<FileFilter>, name: string, 
+multiple?: boolean, directory?: boolean, defaultPath?: string, filters?: Array<FileFilter>, 
+/**
+ * The name of the input. The value will be stored at this object attribute in the resulting data
+ */
+name: string, 
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
@@ -174,7 +192,11 @@ hideLabel?: boolean,
  */
 defaultValue?: string, };
 
-export type FormInputHttpRequest = { name: string, 
+export type FormInputHttpRequest = { 
+/**
+ * The name of the input. The value will be stored at this object attribute in the resulting data
+ */
+name: string, 
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
@@ -201,7 +223,11 @@ export type FormInputSelect = {
 /**
  * The options that will be available in the select input
  */
-options: Array<FormInputSelectOption>, name: string, 
+options: Array<FormInputSelectOption>, 
+/**
+ * The name of the input. The value will be stored at this object attribute in the resulting data
+ */
+name: string, 
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
@@ -234,7 +260,11 @@ placeholder?: string | null,
 /**
  * Placeholder for the text input
  */
-password?: boolean, name: string, 
+password?: boolean, completionOptions?: Array<GenericCompletionOption>, 
+/**
+ * The name of the input. The value will be stored at this object attribute in the resulting data
+ */
+name: string, 
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
@@ -256,6 +286,8 @@ hideLabel?: boolean,
  * The default value
  */
 defaultValue?: string, };
+
+export type GenericCompletionOption = { label: string, detail?: string, info?: string, type?: CompletionOptionType, boost?: bigint, };
 
 export type GetHttpAuthenticationConfigRequest = { config: { [key in string]?: JsonPrimitive }, };
 
@@ -293,7 +325,7 @@ export type JsonPrimitive = string | number | boolean | null;
 
 export type OpenWindowRequest = { url: string, 
 /**
- * Label for window. If not provided, a random one will be generated.
+ * Label for the window. If not provided, a random one will be generated.
  */
 label: string, title?: string, size?: WindowSize, };
 

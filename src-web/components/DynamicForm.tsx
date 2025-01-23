@@ -156,6 +156,7 @@ function TextArg({
       label={arg.label ?? arg.name}
       hideLabel={arg.label == null}
       placeholder={arg.placeholder ?? arg.defaultValue ?? ''}
+      autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
       useTemplating={useTemplating}
       autocompleteVariables={autocompleteVariables}
       stateKey={stateKey}
@@ -205,6 +206,7 @@ function EditorArg({
           'focus-within:border-border-focus',
           'max-h-[15rem]', // So it doesn't take up too much space
         )}
+        autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
         language={arg.language}
         onChange={handleChange}
         heightMode="auto"

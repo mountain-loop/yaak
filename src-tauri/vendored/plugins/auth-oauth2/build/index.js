@@ -25,113 +25,90 @@ __export(src_exports, {
 module.exports = __toCommonJS(src_exports);
 var import_node_fs = require("node:fs");
 var grantTypes = [
-  { name: "Authorization Code", value: "authorization_code" /* AuthorizationCode */ },
-  { name: "Implicit", value: "implicit" /* Implicit */ },
-  { name: "Resource Owner Password Credential", value: "resource_owner_password_credential" /* ResourceOwnerPasswordCredential */ },
-  { name: "Client Credentials", value: "client_credentials" /* ClientCredentials */ }
+  { name: "Authorization Code", value: "authorization_code" },
+  { name: "Implicit", value: "implicit" },
+  { name: "Resource Owner Password Credential", value: "resource_owner" },
+  { name: "Client Credentials", value: "client_credential" }
 ];
 var defaultGrantType = grantTypes[0].value;
+function onlyTypes(config, ...grantTypes2) {
+  return !grantTypes2.find((t) => t === String(config.grantType ?? defaultGrantType));
+}
 var plugin = {
   authentication: {
     name: "oauth2",
     label: "OAuth 2",
     shortLabel: "OAuth 2.0",
-    config: (_ctx, { config }) => [
-      {
-        type: "select",
-        name: "grantType",
-        label: "Grant Type",
-        hideLabel: true,
-        defaultValue: defaultGrantType,
-        options: grantTypes
-      },
-      // Always-present fields
-      { type: "text", name: "clientId", label: "Client ID", optional: true },
-      {
-        type: "text",
-        name: "authorizationUrl",
-        label: "Authorization URL",
-        optional: true
-        // visible: {
-        //   type: 'value_in',
-        //   name: 'grantType',
-        //   values: [GrantType.AuthorizationCode, GrantType.Implicit],
-        // },
-      },
-      {
-        type: "text",
-        name: "accessTokenUrl",
-        label: "Access Token URL",
-        optional: true
-        // visible: {
-        //   type: 'value_in',
-        //   name: 'grantType',
-        //   values: [GrantType.AuthorizationCode, GrantType.ResourceOwnerPasswordCredential, GrantType.ClientCredentials],
-        // },
-      },
-      {
-        type: "text",
-        name: "clientSecret",
-        label: "Client Secret",
-        optional: true
-        // visible: {
-        //   type: 'value_in',
-        //   name: 'grantType',
-        //   values: [GrantType.AuthorizationCode, GrantType.ResourceOwnerPasswordCredential, GrantType.ClientCredentials],
-        // },
-      },
-      {
-        type: "text",
-        name: "username",
-        label: "Username",
-        optional: true
-        // visible: {
-        //   type: 'value_in',
-        //   name: 'grantType',
-        //   values: [GrantType.ResourceOwnerPasswordCredential],
-        // },
-      },
-      {
-        type: "text",
-        name: "password",
-        label: "Password",
-        password: true,
-        optional: true
-        // visible: {
-        //   type: 'value_in',
-        //   name: 'grantType',
-        //   values: [GrantType.ResourceOwnerPasswordCredential],
-        // },
-      },
-      {
-        type: "text",
-        name: "redirectUri",
-        label: "Redirect URI",
-        optional: true
-        // visible: {
-        //   type: 'value_in',
-        //   name: 'grantType',
-        //   values: [GrantType.AuthorizationCode, GrantType.Implicit],
-        // },
-      },
-      {
-        type: "text",
-        name: "scope",
-        label: "Scope",
-        optional: true
-        // visible: {
-        //   type: 'value_in',
-        //   name: 'grantType',
-        //   values: [],
-        // },
-      },
-      {
-        type: "text",
-        name: "state",
-        label: "State",
-        optional: true
-      }
-    ],
+    config: (_ctx, { config }) => {
+      return [
+        {
+          type: "select",
+          name: "grantType",
+          label: "Grant Type",
+          hideLabel: true,
+          defaultValue: defaultGrantType,
+          options: grantTypes
+        },
+        // Always-present fields
+        { type: "text", name: "clientId", label: "Client ID", optional: true },
+        {
+          type: "text",
+          name: "clientSecret",
+          label: "Client Secret",
+          optional: true,
+          hidden: onlyTypes(config, "authorization_code", "resource_owner", "client_credential")
+        },
+        {
+          type: "text",
+          name: "authorizationUrl",
+          label: "Authorization URL",
+          optional: true,
+          hidden: onlyTypes(config, "authorization_code", "implicit"),
+          completionOptions: []
+        },
+        {
+          type: "text",
+          name: "accessTokenUrl",
+          label: "Access Token URL",
+          optional: true,
+          hidden: onlyTypes(config, "authorization_code", "resource_owner", "client_credential")
+        },
+        {
+          type: "text",
+          name: "username",
+          label: "Username",
+          optional: true,
+          hidden: onlyTypes(config, "resource_owner")
+        },
+        {
+          type: "text",
+          name: "password",
+          label: "Password",
+          password: true,
+          optional: true,
+          hidden: onlyTypes(config, "resource_owner")
+        },
+        {
+          type: "text",
+          name: "redirectUri",
+          label: "Redirect URI",
+          optional: true,
+          hidden: onlyTypes(config, "authorization_code", "implicit")
+        },
+        {
+          type: "text",
+          name: "scope",
+          label: "Scope",
+          optional: true
+        },
+        {
+          type: "text",
+          name: "state",
+          label: "State",
+          optional: true
+        }
+      ];
+    },
     async onApply(ctx, args) {
       const token = await getAuthorizationCode(ctx, {
         accessTokenUrl: String(args.config.accessTokenUrl),

@@ -6,8 +6,9 @@ export function Label({
   className,
   children,
   visuallyHidden,
-  optional,
   tags = [],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  optional,
   ...props
 }: HTMLAttributes<HTMLLabelElement> & {
   htmlFor: string;
@@ -15,9 +16,6 @@ export function Label({
   tags?: string[];
   visuallyHidden?: boolean;
 }) {
-  if (!optional) {
-    tags.unshift('required');
-  }
   return (
     <label
       htmlFor={htmlFor}
