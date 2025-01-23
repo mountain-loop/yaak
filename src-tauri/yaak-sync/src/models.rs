@@ -10,7 +10,7 @@ use yaak_models::models::{AnyModel, Environment, Folder, GrpcRequest, HttpReques
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum SyncModel {
     Workspace(Workspace),
     Environment(Environment),

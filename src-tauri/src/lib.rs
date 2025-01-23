@@ -234,6 +234,7 @@ async fn cmd_grpc_go<R: Runtime>(
     if let Some(auth_name) = request.authentication_type.clone() {
         let auth = request.authentication.clone();
         let plugin_req = CallHttpAuthenticationRequest {
+            request_id: request.id.clone(),
             config: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
             method: "POST".to_string(),
             url: request.url.clone(),

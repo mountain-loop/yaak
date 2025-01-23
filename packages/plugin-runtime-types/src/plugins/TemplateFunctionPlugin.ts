@@ -1,7 +1,7 @@
 import {
   CallTemplateFunctionArgs,
   TemplateFunction,
-} from "../bindings/events";
+} from "../bindings/gen_events";
 import { Context } from "./Context";
 
 export type TemplateFunctionPlugin = TemplateFunction & {

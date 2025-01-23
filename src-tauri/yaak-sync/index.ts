@@ -1,7 +1,7 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
-import { SyncOp } from './bindings/sync';
-import { WatchEvent, WatchResult } from './bindings/watch';
+import { SyncOp } from './bindings/gen_sync';
+import { WatchEvent, WatchResult } from './bindings/gen_watch';
 
 export async function calculateSync(workspaceId: string, syncDir: string) {
   return invoke<SyncOp[]>('plugin:yaak-sync|calculate', {

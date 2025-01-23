@@ -15,7 +15,7 @@ const TRIAL_SECONDS: u64 = 3600 * 24 * 14;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct CheckActivationRequestPayload {
     pub activation_id: String,
 }

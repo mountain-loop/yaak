@@ -10,7 +10,7 @@ use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum ProxySetting {
     Enabled {
         http: String,
@@ -22,7 +22,7 @@ pub enum ProxySetting {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct ProxySettingAuth {
     pub user: String,
     pub password: String,
@@ -30,7 +30,7 @@ pub struct ProxySettingAuth {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum EditorKeymap {
     Default,
     Vim,
@@ -72,7 +72,7 @@ impl Default for EditorKeymap {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Settings {
     #[ts(type = "\"settings\"")]
     pub model: String,
@@ -149,7 +149,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Workspace {
     #[ts(type = "\"workspace\"")]
     pub model: String,
@@ -215,7 +215,7 @@ impl Workspace {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct WorkspaceMeta {
     #[ts(type = "\"workspace_meta\"")]
     pub model: String,
@@ -255,7 +255,7 @@ impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 enum CookieDomain {
     HostOnly(String),
     Suffix(String),
@@ -264,14 +264,14 @@ enum CookieDomain {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 enum CookieExpires {
     AtUtc(String),
     SessionEnd,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Cookie {
     raw_cookie: String,
     domain: CookieDomain,
@@ -281,7 +281,7 @@ pub struct Cookie {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct CookieJar {
     #[ts(type = "\"cookie_jar\"")]
     pub model: String,
@@ -327,7 +327,7 @@ impl<'s> TryFrom<&Row<'s>> for CookieJar {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Environment {
     #[ts(type = "\"environment\"")]
     pub model: String,
@@ -376,7 +376,7 @@ impl<'s> TryFrom<&Row<'s>> for Environment {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct EnvironmentVariable {
     #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
@@ -389,7 +389,7 @@ pub struct EnvironmentVariable {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Folder {
     #[ts(type = "\"folder\"")]
     pub model: String,
@@ -440,7 +440,7 @@ impl<'s> TryFrom<&Row<'s>> for Folder {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpRequestHeader {
     #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
@@ -453,7 +453,7 @@ pub struct HttpRequestHeader {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpUrlParameter {
     #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
@@ -466,7 +466,7 @@ pub struct HttpUrlParameter {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpRequest {
     #[ts(type = "\"http_request\"")]
     pub model: String,
@@ -548,7 +548,7 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpResponseHeader {
     pub name: String,
     pub value: String,
@@ -556,7 +556,7 @@ pub struct HttpResponseHeader {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum HttpResponseState {
     Initialized,
     Connected,
@@ -571,7 +571,7 @@ impl Default for HttpResponseState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpResponse {
     #[ts(type = "\"http_response\"")]
     pub model: String,
@@ -660,7 +660,7 @@ impl HttpResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcMetadataEntry {
     #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
@@ -673,7 +673,7 @@ pub struct GrpcMetadataEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcRequest {
     #[ts(type = "\"grpc_request\"")]
     pub model: String,
@@ -748,7 +748,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum GrpcConnectionState {
     Initialized,
     Connected,
@@ -763,7 +763,7 @@ impl Default for GrpcConnectionState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcConnection {
     #[ts(type = "\"grpc_connection\"")]
     pub model: String,
@@ -831,7 +831,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcConnection {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, TS)]
 #[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum GrpcEventType {
     Info,
     Error,
@@ -849,7 +849,7 @@ impl Default for GrpcEventType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcEvent {
     #[ts(type = "\"grpc_event\"")]
     pub model: String,
@@ -911,7 +911,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Plugin {
     #[ts(type = "\"plugin\"")]
     pub model: String,
@@ -959,7 +959,7 @@ impl<'s> TryFrom<&Row<'s>> for Plugin {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct SyncState {
     #[ts(type = "\"sync_state\"")]
     pub model: String,
@@ -977,7 +977,7 @@ pub struct SyncState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct SyncHistory {
     #[ts(type = "\"sync_history\"")]
     pub model: String,
@@ -1029,7 +1029,7 @@ impl<'s> TryFrom<&Row<'s>> for SyncState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct KeyValue {
     #[ts(type = "\"key_value\"")]
     pub model: String,
@@ -1063,6 +1063,48 @@ impl<'s> TryFrom<&Row<'s>> for KeyValue {
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
             namespace: r.get("namespace")?,
+            key: r.get("key")?,
+            value: r.get("value")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct PluginKeyValue {
+    #[ts(type = "\"plugin_key_value\"")]
+    pub model: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+
+    pub plugin_name: String,
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Iden)]
+pub enum PluginKeyValueIden {
+    #[iden = "plugin_key_values"]
+    Table,
+    Model,
+    CreatedAt,
+    UpdatedAt,
+
+    PluginName,
+    Key,
+    Value,
+}
+
+impl<'s> TryFrom<&Row<'s>> for PluginKeyValue {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        Ok(PluginKeyValue {
+            model: r.get("model")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            plugin_name: r.get("plugin_name")?,
             key: r.get("key")?,
             value: r.get("value")?,
         })
@@ -1114,7 +1156,7 @@ impl ModelType {
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase", untagged)]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum AnyModel {
     CookieJar(CookieJar),
     Environment(Environment),

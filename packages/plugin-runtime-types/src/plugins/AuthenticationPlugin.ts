@@ -4,7 +4,7 @@ import {
   GetHttpAuthenticationConfigRequest,
   GetHttpAuthenticationConfigResponse,
   GetHttpAuthenticationSummaryResponse,
-} from '../bindings/events';
+} from '../bindings/gen_events';
 import { MaybePromise } from '../helpers';
 import { Context } from './Context';
 

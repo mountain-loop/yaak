@@ -21,7 +21,7 @@ use yaak_models::queries::{
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
-#[ts(export, export_to = "sync.ts")]
+#[ts(export, export_to = "gen_sync.ts")]
 pub(crate) enum SyncOp {
     FsCreate {
         model: SyncModel,
@@ -98,7 +98,7 @@ impl DbCandidate {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
-#[ts(export, export_to = "sync.ts")]
+#[ts(export, export_to = "gen_sync.ts")]
 pub(crate) struct FsCandidate {
     pub(crate) model: SyncModel,
     pub(crate) rel_path: PathBuf,

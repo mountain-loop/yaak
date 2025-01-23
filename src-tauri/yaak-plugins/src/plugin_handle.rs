@@ -26,6 +26,10 @@ impl PluginHandle {
         }
     }
 
+    pub async fn name(&self) -> String {
+        self.boot_resp.lock().await.name.clone()
+    }
+
     pub async fn info(&self) -> BootResponse {
         let resp = &*self.boot_resp.lock().await;
         resp.clone()

@@ -1,8 +1,12 @@
+// OAuth 2.0 spec -> https://datatracker.ietf.org/doc/html/rfc6749
+
 import type {
   BootRequest,
   Context,
+  DeleteKeyValueResponse,
   FindHttpResponsesResponse,
   GetHttpRequestByIdResponse,
+  GetKeyValueResponse,
   HttpRequestAction,
   InternalEvent,
   InternalEventPayload,
@@ -247,6 +251,30 @@ function initialize(workerData: PluginWorkerData) {
           payload,
         );
         return result.data;
+      },
+    },
+    store: {
+      async get<T>(key: string) {
+        const payload = { type: 'get_key_value_request', key } as const;
+        const result = await sendAndWaitForReply<GetKeyValueResponse>(event.windowContext, payload);
+        return result.value ? (JSON.parse(result.value) as T) : undefined;
+      },
+      async set<T>(key: string, value: T) {
+        const valueStr = JSON.stringify(value);
+        const payload: InternalEventPayload = {
+          type: 'set_key_value_request',
+          key,
+          value: valueStr,
+        };
+        await sendAndWaitForReply<GetKeyValueResponse>(event.windowContext, payload);
+      },
+      async delete(key: string) {
+        const payload = { type: 'delete_key_value_request', key } as const;
+        const result = await sendAndWaitForReply<DeleteKeyValueResponse>(
+          event.windowContext,
+          payload,
+        );
+        return result.deleted;
       },
     },
   });

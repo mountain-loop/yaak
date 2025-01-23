@@ -13,7 +13,7 @@ import type {
   ShowToastRequest,
   TemplateRenderRequest,
   TemplateRenderResponse,
-} from '../bindings/events.ts';
+} from '../bindings/gen_events.ts';
 
 export interface Context {
   clipboard: {
@@ -24,6 +24,11 @@ export interface Context {
   };
   prompt: {
     text(args: PromptTextRequest): Promise<PromptTextResponse['value']>;
+  };
+  store: {
+    set<T>(key: string, value: T): Promise<void>;
+    get<T>(key: string): Promise<T | undefined>;
+    delete(key: string): Promise<boolean>;
   };
   window: {
     openUrl(

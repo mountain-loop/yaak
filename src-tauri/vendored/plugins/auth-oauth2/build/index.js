@@ -31,7 +31,7 @@ var grantTypes = [
   { name: "Client Credentials", value: "client_credential" }
 ];
 var defaultGrantType = grantTypes[0].value;
-function onlyTypes(config, ...grantTypes2) {
+function hiddenIfNot(config, ...grantTypes2) {
   return !grantTypes2.find((t) => t === String(config.grantType ?? defaultGrantType));
 }
 var authorizationUrls = [
@@ -86,14 +86,14 @@ var plugin = {
           name: "clientSecret",
           label: "Client Secret",
           optional: true,
-          hidden: onlyTypes(config, "authorization_code", "resource_owner", "client_credential")
+          hidden: hiddenIfNot(config, "authorization_code", "resource_owner", "client_credential")
         },
         {
           type: "text",
           name: "authorizationUrl",
           label: "Authorization URL",
           optional: true,
-          hidden: onlyTypes(config, "authorization_code", "implicit"),
+          hidden: hiddenIfNot(config, "authorization_code", "implicit"),
           completionOptions: authorizationUrls.map((url) => ({ label: url, value: url }))
         },
         {
@@ -101,7 +101,7 @@ var plugin = {
           name: "accessTokenUrl",
           label: "Access Token URL",
           optional: true,
-          hidden: onlyTypes(config, "authorization_code", "resource_owner", "client_credential"),
+          hidden: hiddenIfNot(config, "authorization_code", "resource_owner", "client_credential"),
           completionOptions: accessTokenUrls.map((url) => ({ label: url, value: url }))
         },
         {
@@ -109,7 +109,7 @@ var plugin = {
           name: "username",
           label: "Username",
           optional: true,
-          hidden: onlyTypes(config, "resource_owner")
+          hidden: hiddenIfNot(config, "resource_owner")
         },
         {
           type: "text",
@@ -117,14 +117,14 @@ var plugin = {
           label: "Password",
           password: true,
           optional: true,
-          hidden: onlyTypes(config, "resource_owner")
+          hidden: hiddenIfNot(config, "resource_owner")
         },
         {
           type: "text",
           name: "redirectUri",
           label: "Redirect URI",
           optional: true,
-          hidden: onlyTypes(config, "authorization_code", "implicit")
+          hidden: hiddenIfNot(config, "authorization_code", "implicit")
         },
         {
           type: "text",
@@ -205,11 +205,23 @@ function getAuthorizationCode(ctx, {
           reject(new Error("Failed to fetch access token with status=" + resp.status));
         }
         const bodyObj = JSON.parse(body);
+        console.log("Got OAUTH response", bodyObj);
+        storeToken(ctx);
         const accessToken = bodyObj["access_token"];
         resolve(accessToken);
       }
     });
   });
+}
+async function storeToken(ctx, requestId, response) {
+  const expiresAt = response.expires_in ? Date.now() + response.expires_in * 1e3 : null;
+  await ctx.store.set(tokenStoreKey(requestId), {
+    response,
+    expiresAt
+  });
+}
+function tokenStoreKey(requestId) {
+  return ["token", requestId].join("_");
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

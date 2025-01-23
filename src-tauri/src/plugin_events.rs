@@ -13,12 +13,13 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::queries::{
     create_default_http_response, get_base_environment, get_http_request,
-    list_http_responses_for_request, list_plugins, upsert_plugin, UpdateSource,
+    list_http_responses_for_request, list_plugins, set_plugin_key_value, upsert_plugin,
+    UpdateSource,
 };
 use yaak_plugins::events::{
     Color, FindHttpResponsesResponse, GetHttpRequestByIdResponse, Icon, InternalEvent,
-    InternalEventPayload, RenderHttpRequestResponse, SendHttpRequestResponse, ShowToastRequest,
-    TemplateRenderResponse, WindowContext, WindowNavigateEvent,
+    InternalEventPayload, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse,
+    ShowToastRequest, TemplateRenderResponse, WindowContext, WindowNavigateEvent,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -232,6 +233,11 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 window.close().expect("Failed to close window");
             }
             None
+        }
+        InternalEventPayload::SetKeyValueRequest(req) => {
+            let name = plugin_handle.name().await;
+            set_plugin_key_value(app_handle, &name, &req.key, &req.value).await;
+            Some(InternalEventPayload::SetKeyValueResponse(SetKeyValueResponse {}))
         }
         _ => None,
     };

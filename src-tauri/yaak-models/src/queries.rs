@@ -1,13 +1,6 @@
 use crate::error::Error::ModelNotFound;
 use crate::error::Result;
-use crate::models::{
-    AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
-    GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
-    GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader,
-    HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden,
-    Settings, SettingsIden, SyncState, SyncStateIden, Workspace, WorkspaceIden, WorkspaceMeta,
-    WorkspaceMetaIden,
-};
+use crate::models::{AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden, GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader, HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden, PluginKeyValue, PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden, Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden};
 use crate::plugin::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
 use log::{debug, error, info, warn};
@@ -163,6 +156,90 @@ pub async fn get_key_value_raw<R: Runtime>(
         .build_rusqlite(SqliteQueryBuilder);
 
     db.query_row(sql.as_str(), &*params.as_params(), |row| row.try_into()).ok()
+}
+
+pub async fn get_plugin_key_value<R: Runtime>(
+    mgr: &impl Manager<R>,
+    plugin_name: &str,
+    key: &str,
+) -> Option<PluginKeyValue> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::select()
+        .from(PluginKeyValueIden::Table)
+        .column(Asterisk)
+        .cond_where(
+            Cond::all()
+                .add(Expr::col(PluginKeyValueIden::PluginName).eq(plugin_name))
+                .add(Expr::col(PluginKeyValueIden::Key).eq(key)),
+        )
+        .build_rusqlite(SqliteQueryBuilder);
+
+    db.query_row(sql.as_str(), &*params.as_params(), |row| row.try_into()).ok()
+}
+
+pub async fn set_plugin_key_value<R: Runtime>(
+    mgr: &impl Manager<R>,
+    plugin_name: &str,
+    key: &str,
+    value: &str,
+) -> (PluginKeyValue, bool) {
+    let existing = get_plugin_key_value(mgr, plugin_name, key).await;
+
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::insert()
+        .into_table(PluginKeyValueIden::Table)
+        .columns([
+            PluginKeyValueIden::CreatedAt,
+            PluginKeyValueIden::UpdatedAt,
+            PluginKeyValueIden::PluginName,
+            PluginKeyValueIden::Key,
+            PluginKeyValueIden::Value,
+        ])
+        .values_panic([
+            CurrentTimestamp.into(),
+            CurrentTimestamp.into(),
+            plugin_name.into(),
+            key.into(),
+            value.into(),
+        ])
+        .on_conflict(
+            OnConflict::new()
+                .update_columns([PluginKeyValueIden::UpdatedAt, PluginKeyValueIden::Value])
+                .to_owned(),
+        )
+        .returning_all()
+        .build_rusqlite(SqliteQueryBuilder);
+
+    let mut stmt = db.prepare(sql.as_str()).expect("Failed to prepare PluginKeyValue upsert");
+    let m: PluginKeyValue = stmt
+        .query_row(&*params.as_params(), |row| row.try_into())
+        .expect("Failed to upsert KeyValue");
+    (m, existing.is_none())
+}
+
+pub async fn delete_plugin_key_value<R: Runtime>(
+    mgr: &impl Manager<R>,
+    plugin_name: &str,
+    key: &str,
+) -> bool {
+    if let None = get_plugin_key_value(mgr, plugin_name, key).await {
+        return false;
+    }
+
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::delete()
+        .from_table(PluginKeyValueIden::Table)
+        .cond_where(
+            Cond::all()
+                .add(Expr::col(PluginKeyValueIden::PluginName).eq(plugin_name))
+                .add(Expr::col(PluginKeyValueIden::Key).eq(key)),
+        )
+        .build_rusqlite(SqliteQueryBuilder);
+    db.execute(sql.as_str(), &*params.as_params()).expect("Failed to delete PluginKeyValue");
+    true
 }
 
 pub async fn list_workspaces<R: Runtime>(mgr: &impl Manager<R>) -> Result<Vec<Workspace>> {
@@ -1999,7 +2076,7 @@ pub fn generate_id() -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct ModelPayload {
     pub model: AnyModel,
     pub window_label: String,
@@ -2008,7 +2085,7 @@ pub struct ModelPayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum UpdateSource {
     Sync,
     Window,
