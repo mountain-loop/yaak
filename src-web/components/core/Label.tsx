@@ -7,12 +7,11 @@ export function Label({
   children,
   visuallyHidden,
   tags = [],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  optional,
+  required,
   ...props
 }: HTMLAttributes<HTMLLabelElement> & {
   htmlFor: string;
-  optional?: boolean;
+  required?: boolean;
   tags?: string[];
   visuallyHidden?: boolean;
 }) {
@@ -27,7 +26,10 @@ export function Label({
       )}
       {...props}
     >
-      {children}
+      <span>
+        {children}
+        {required === true && <span className="text-text-subtlest">*</span>}
+      </span>
       {tags.map((tag, i) => (
         <span key={i} className="text-xs text-text-subtlest">
           ({tag})

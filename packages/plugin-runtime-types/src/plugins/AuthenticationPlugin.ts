@@ -12,7 +12,7 @@ type DynamicFormInput = FormInput & {
   dynamic(
     ctx: Context,
     args: GetHttpAuthenticationConfigRequest,
-  ): MaybePromise<Partial<FormInput>>;
+  ): MaybePromise<Partial<FormInput> | undefined | null>;
 };
 
 export type AuthenticationPlugin = GetHttpAuthenticationSummaryResponse & {

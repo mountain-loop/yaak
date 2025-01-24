@@ -2,7 +2,7 @@ import type { PromptTextRequest } from '@yaakapp-internal/plugins';
 import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useState } from 'react';
 import { Button } from './Button';
-import { Input } from './Input';
+import { PlainInput } from './PlainInput';
 import { HStack } from './Stacks';
 
 export type PromptProps = Omit<PromptTextRequest, 'id' | 'title' | 'description'> & {
@@ -35,7 +35,7 @@ export function Prompt({
       className="grid grid-rows-[auto_auto] grid-cols-[minmax(0,1fr)] gap-4 mb-4"
       onSubmit={handleSubmit}
     >
-      <Input
+      <PlainInput
         hideLabel
         autoSelect
         required={required}
@@ -43,7 +43,6 @@ export function Prompt({
         label={label}
         defaultValue={defaultValue}
         onChange={setValue}
-        stateKey={null}
       />
       <HStack space={2} justifyContent="end">
         <Button onClick={onCancel} variant="border" color="secondary">

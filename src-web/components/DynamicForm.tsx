@@ -106,7 +106,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 useTemplating={useTemplating || false}
                 autocompleteVariables={autocompleteVariables || false}
                 onChange={(v) => setDataAttr(input.name, v)}
-                value={data[input.name] ? String(data[input.name]) : (input.defaultValue ?? '')}
+                value={data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')}
               />
             );
           case 'editor':
@@ -118,7 +118,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 useTemplating={useTemplating || false}
                 autocompleteVariables={autocompleteVariables || false}
                 onChange={(v) => setDataAttr(input.name, v)}
-                value={data[input.name] ? String(data[input.name]) : (input.defaultValue ?? '')}
+                value={data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')}
               />
             );
           case 'checkbox':
@@ -127,7 +127,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 key={i + stateKey}
                 arg={input}
                 onChange={(v) => setDataAttr(input.name, v)}
-                value={data[input.name] !== undefined ? data[input.name] === true : false}
+                value={data[input.name] != null ? data[input.name] === true : false}
               />
             );
           case 'http_request':
@@ -136,7 +136,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 key={i + stateKey}
                 arg={input}
                 onChange={(v) => setDataAttr(input.name, v)}
-                value={data[input.name] ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG}
+                value={data[input.name] != null ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG}
               />
             );
           case 'file':
@@ -145,7 +145,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 key={i + stateKey}
                 arg={input}
                 onChange={(v) => setDataAttr(input.name, v)}
-                filePath={data[input.name] ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG}
+                filePath={data[input.name] != null ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG}
               />
             );
           case 'accordion':
@@ -253,7 +253,7 @@ function EditorArg({
     <div className=" w-full grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)]">
       <Label
         htmlFor={id}
-        optional={arg.optional}
+        required={!arg.optional}
         visuallyHidden={arg.hideLabel}
         tags={arg.language ? [capitalize(arg.language)] : undefined}
       >

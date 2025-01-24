@@ -11,6 +11,7 @@ import type {
   HttpRequestAction,
   InternalEvent,
   InternalEventPayload,
+  JsonPrimitive,
   PluginDefinition,
   PromptTextResponse,
   RenderHttpRequestResponse,
@@ -419,12 +420,7 @@ function initialize(workerData: PluginWorkerData) {
       if (payload.type === 'call_http_authentication_request' && plug?.authentication) {
         const auth = plug.authentication;
         if (typeof auth?.onApply === 'function') {
-          for (const arg of auth.args) {
-            if (!('defaultValue' in arg)) continue;
-            if (payload.values[arg.name] === undefined) {
-              payload.values[arg.name] = arg.defaultValue;
-            }
-          }
+          applyFormInputDefaults(auth.args, payload.values);
           const result = await auth.onApply(ctx, payload);
           sendPayload(
             windowContext,
@@ -456,13 +452,7 @@ function initialize(workerData: PluginWorkerData) {
       ) {
         const action = plug.templateFunctions.find((a) => a.name === payload.name);
         if (typeof action?.onRender === 'function') {
-          // Set default values
-          for (const arg of action.args) {
-            if (!('defaultValue' in arg)) continue;
-            if (action.args[arg.name] === undefined) {
-              action.args[arg.name] = arg.defaultValue;
-            }
-          }
+          applyFormInputDefaults(action.args, payload.args.values);
           const result = await action.onRender(ctx, payload.args);
           sendPayload(
             windowContext,
@@ -489,7 +479,7 @@ function initialize(workerData: PluginWorkerData) {
         },
         replyId,
       );
-      // TODO: Return errors to server
+      return;
     }
 
     // No matches, so send back an empty response so the caller doesn't block forever
@@ -539,4 +529,18 @@ function watchFile(filepath: string, cb: (filepath: string) => void) {
     }
     watchedFiles[filepath] = stat;
   });
+}
+
+/** Recursively apply form input defaults to a set of values */
+function applyFormInputDefaults(
+  inputs: FormInput[],
+  values: { [p: string]: JsonPrimitive | undefined },
+) {
+  for (const input of inputs) {
+    if ('inputs' in input) {
+      applyFormInputDefaults(input.inputs, values);
+    } else if ('defaultValue' in input && values[input.name] === undefined) {
+      values[input.name] = input.defaultValue;
+    }
+  }
 }

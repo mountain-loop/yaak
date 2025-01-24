@@ -262,7 +262,7 @@ pub async fn send_http_request<R: Runtime>(
                     None => {}
                     Some(a) => {
                         for p in a {
-                            let enabled = get_bool(p, "enabled");
+                            let enabled = get_bool(p, "enabled", true);
                             let name = get_str(p, "name");
                             if !enabled || name.is_empty() {
                                 continue;
@@ -296,7 +296,7 @@ pub async fn send_http_request<R: Runtime>(
                     None => {}
                     Some(fd) => {
                         for p in fd {
-                            let enabled = get_bool(p, "enabled");
+                            let enabled = get_bool(p, "enabled", true);
                             let name = get_str(p, "name").to_string();
 
                             if !enabled || name.is_empty() {
@@ -602,10 +602,10 @@ fn ensure_proto(url_str: &str) -> String {
     format!("http://{url_str}")
 }
 
-fn get_bool(v: &Value, key: &str) -> bool {
+fn get_bool(v: &Value, key: &str, fallback: bool) -> bool {
     match v.get(key) {
-        None => false,
-        Some(v) => v.as_bool().unwrap_or_default(),
+        None => fallback,
+        Some(v) => v.as_bool().unwrap_or(fallback),
     }
 }
 

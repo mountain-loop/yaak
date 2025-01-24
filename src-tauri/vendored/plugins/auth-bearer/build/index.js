@@ -28,15 +28,15 @@ var plugin = {
     name: "bearer",
     label: "Bearer Token",
     shortLabel: "Bearer",
-    config: [{
+    args: [{
       type: "text",
       name: "token",
       label: "Token",
       optional: true,
       password: true
     }],
-    async onApply(_ctx, args) {
-      const { token } = args.config;
+    async onApply(_ctx, { values }) {
+      const { token } = values;
       const value = `Bearer ${token}`.trim();
       return { setHeaders: [{ name: "Authorization", value }] };
     }

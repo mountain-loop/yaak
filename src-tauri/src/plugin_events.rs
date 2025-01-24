@@ -11,8 +11,17 @@ use log::warn;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::models::{HttpResponse, Plugin};
-use yaak_models::queries::{create_default_http_response, delete_plugin_key_value, get_base_environment, get_http_request, get_plugin_key_value, list_http_responses_for_request, list_plugins, set_plugin_key_value, upsert_plugin, UpdateSource};
-use yaak_plugins::events::{Color, DeleteKeyValueResponse, FindHttpResponsesResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse, WindowContext, WindowNavigateEvent};
+use yaak_models::queries::{
+    create_default_http_response, delete_plugin_key_value, get_base_environment, get_http_request,
+    get_plugin_key_value, list_http_responses_for_request, list_plugins, set_plugin_key_value,
+    upsert_plugin, UpdateSource,
+};
+use yaak_plugins::events::{
+    Color, DeleteKeyValueResponse, FindHttpResponsesResponse, GetHttpRequestByIdResponse,
+    GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload, RenderHttpRequestResponse,
+    SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse,
+    WindowContext, WindowNavigateEvent,
+};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
 
@@ -109,7 +118,11 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let toast_event = plugin_handle.build_event_to_send(
                 &WindowContext::from_window(&window),
                 &InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                    message: resp.error,
+                    message: format!(
+                        "Plugin error from {}: {}",
+                        plugin_handle.name().await,
+                        resp.error
+                    ),
                     color: Some(Color::Danger),
                     ..Default::default()
                 }),

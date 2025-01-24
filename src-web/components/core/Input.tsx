@@ -82,6 +82,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
   const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
   const [currentValue, setCurrentValue] = useState(defaultValue ?? '');
   const [focused, setFocused] = useState(false);
+  const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [stateKey, forceUpdateKey]);
   const editorRef = useRef<EditorView | null>(null);
   useImperativeHandle<EditorView | null, EditorView | null>(ref, () => editorRef.current);
 
@@ -121,13 +122,14 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
     (value: string) => {
       setCurrentValue(value);
       onChange?.(value);
+      setHasChanged(true);
     },
-    [onChange],
+    [onChange, setHasChanged],
   );
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Submit nearest form on Enter key press
+  // Submit the nearest form on Enter key press
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key !== 'Enter') return;
@@ -152,7 +154,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
     >
       <Label
         htmlFor={id.current}
-        optional={!required}
+        required={required}
         visuallyHidden={hideLabel}
         className={classNames(labelClassName)}
       >
@@ -166,7 +168,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
           'relative w-full rounded-md text',
           'border',
           focused ? 'border-border-focus' : 'border-border',
-          !isValid && '!border-danger',
+          !isValid && hasChanged && '!border-danger',
           size === 'md' && 'min-h-md',
           size === 'sm' && 'min-h-sm',
           size === 'xs' && 'min-h-xs',

@@ -3814,7 +3814,7 @@ var plugin = {
     name: "jwt",
     label: "JWT Bearer",
     shortLabel: "JWT",
-    config: [
+    args: [
       {
         type: "select",
         name: "algorithm",
@@ -3845,8 +3845,8 @@ var plugin = {
         placeholder: "{ }"
       }
     ],
-    async onApply(_ctx, args) {
-      const { algorithm, secret: _secret, secretBase64, payload } = args.config;
+    async onApply(_ctx, { values }) {
+      const { algorithm, secret: _secret, secretBase64, payload } = values;
       const secret = secretBase64 ? Buffer.from(`${_secret}`, "base64") : `${_secret}`;
       const token = import_jsonwebtoken.default.sign(`${payload}`, secret, { algorithm });
       const value = `Bearer ${token}`;

@@ -9,7 +9,9 @@ import { atom, useSetAtom } from 'jotai/index';
 import { useState } from 'react';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
+import {useHttpResponses} from "./useHttpResponses";
 import { usePluginsKey } from './usePlugins';
+import { md5 } from 'js-md5';
 
 const httpAuthenticationSummariesAtom = atom<GetHttpAuthenticationSummaryResponse[]>([]);
 const orderedHttpAuthenticationAtom = atom((get) =>
@@ -25,8 +27,14 @@ export function useHttpAuthenticationConfig(
   config: Record<string, JsonPrimitive>,
   requestId: string,
 ) {
+  const responses = useHttpResponses();
+
+  // Some auth handlers like OAuth 2.0 show the current token after a successful request. To
+  // handle that, we'll force the auth to re-fetch after each new response
+  const responseKey = md5(responses.map(r => r.id).join(':'));
+
   return useQuery({
-    queryKey: ['http_authentication_config', { requestId, authName, config }],
+    queryKey: ['http_authentication_config', { requestId, authName, config }, responseKey],
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: () =>
       invokeCmd<GetHttpAuthenticationConfigResponse>('cmd_get_http_authentication_config', {
