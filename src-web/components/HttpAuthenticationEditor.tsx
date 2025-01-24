@@ -13,7 +13,7 @@ interface Props {
 export function HttpAuthenticationEditor({ request }: Props) {
   const updateHttpRequest = useUpdateAnyHttpRequest();
   const updateGrpcRequest = useUpdateAnyGrpcRequest();
-  const auth = useHttpAuthenticationConfig(request.authenticationType, request.authentication);
+  const auth = useHttpAuthenticationConfig(request.authenticationType, request.authentication, request.id);
 
   const handleChange = useCallback(
     (authentication: Record<string, boolean>) => {
@@ -41,7 +41,7 @@ export function HttpAuthenticationEditor({ request }: Props) {
       autocompleteVariables
       useTemplating
       stateKey={`auth.${request.id}.${request.authenticationType}`}
-      config={auth.data.config}
+      inputs={auth.data.args}
       data={request.authentication}
       onChange={handleChange}
     />

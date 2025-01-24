@@ -79,7 +79,7 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
     <VStack className="pb-3" space={4}>
       <h1 className="font-mono !text-base">{templateFunction.name}(…)</h1>
       <DynamicForm
-        config={templateFunction.args}
+        inputs={templateFunction.args}
         data={argValues}
         onChange={setArgValues}
         stateKey={`template_function.${templateFunction.name}`}

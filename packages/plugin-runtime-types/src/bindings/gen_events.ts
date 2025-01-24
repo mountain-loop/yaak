@@ -11,7 +11,7 @@ export type BootRequest = { dir: string, watch: boolean, };
 
 export type BootResponse = { name: string, version: string, };
 
-export type CallHttpAuthenticationRequest = { requestId: string, config: { [key in string]?: JsonPrimitive }, method: string, url: string, headers: Array<HttpHeader>, };
+export type CallHttpAuthenticationRequest = { requestId: string, values: { [key in string]?: JsonPrimitive }, method: string, url: string, headers: Array<HttpHeader>, };
 
 export type CallHttpAuthenticationResponse = { 
 /**
@@ -35,6 +35,8 @@ export type CloseWindowRequest = { label: string, };
 export type Color = "custom" | "default" | "primary" | "secondary" | "info" | "success" | "notice" | "warning" | "danger";
 
 export type CompletionOptionType = "constant" | "variable";
+
+export type Content = { "type": "text", content: string, } | { "type": "markdown", content: string, };
 
 export type CopyTextRequest = { text: string, };
 
@@ -66,7 +68,11 @@ export type FindHttpResponsesRequest = { requestId: string, limit?: number, };
 
 export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
 
-export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest;
+export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "banner" } & FormInputBanner;
+
+export type FormInputAccordion = { label: string, inputs: Array<FormInput>, hidden?: boolean, };
+
+export type FormInputBanner = { content: Content, hidden?: boolean, };
 
 export type FormInputBase = { 
 /**
@@ -297,9 +303,9 @@ defaultValue?: string, };
 
 export type GenericCompletionOption = { label: string, detail?: string, info?: string, type?: CompletionOptionType, boost?: bigint, };
 
-export type GetHttpAuthenticationConfigRequest = { config: { [key in string]?: JsonPrimitive }, };
+export type GetHttpAuthenticationConfigRequest = { requestId: string, values: { [key in string]?: JsonPrimitive }, };
 
-export type GetHttpAuthenticationConfigResponse = { config: Array<FormInput>, };
+export type GetHttpAuthenticationConfigResponse = { args: Array<FormInput>, };
 
 export type GetHttpAuthenticationSummaryResponse = { name: string, label: string, shortLabel: string, };
 

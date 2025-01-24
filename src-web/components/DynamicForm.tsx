@@ -7,6 +7,7 @@ import type {
   FormInputHttpRequest,
   FormInputSelect,
   FormInputText,
+  JsonPrimitive,
 } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { useCallback } from 'react';
@@ -15,56 +16,84 @@ import { useFolders } from '../hooks/useFolders';
 import { useHttpRequests } from '../hooks/useHttpRequests';
 import { capitalize } from '../lib/capitalize';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
+import { Banner } from './core/Banner';
 import { Checkbox } from './core/Checkbox';
 import { Editor } from './core/Editor/Editor';
 import { Input } from './core/Input';
 import { Label } from './core/Label';
 import { Select } from './core/Select';
 import { VStack } from './core/Stacks';
+import { Markdown } from './Markdown';
 import { SelectFile } from './SelectFile';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const DYNAMIC_FORM_NULL_ARG = '__NULL__';
 const INPUT_SIZE = 'sm';
 
-export function DynamicForm<T extends Record<string, string | boolean>>({
-  config,
-  data,
-  onChange,
-  useTemplating,
-  autocompleteVariables,
-  stateKey,
-}: {
-  config: FormInput[];
+interface Props<T> {
+  inputs: FormInput[];
   onChange: (value: T) => void;
   data: T;
   useTemplating?: boolean;
   autocompleteVariables?: boolean;
   stateKey: string;
-}) {
+}
+
+export function DynamicForm<T extends Record<string, JsonPrimitive>>({
+  inputs,
+  data,
+  onChange,
+  useTemplating,
+  autocompleteVariables,
+  stateKey,
+}: Props<T>) {
   const setDataAttr = useCallback(
-    (name: string, value: string | boolean | null) => {
+    (name: string, value: JsonPrimitive) => {
       onChange({ ...data, [name]: value == DYNAMIC_FORM_NULL_ARG ? undefined : value });
     },
     [data, onChange],
   );
 
   return (
+    <FormInputs
+      inputs={inputs}
+      setDataAttr={setDataAttr}
+      stateKey={stateKey}
+      useTemplating={useTemplating}
+      autocompleteVariables={autocompleteVariables}
+      data={data}
+    />
+  );
+}
+
+function FormInputs<T extends Record<string, JsonPrimitive>>({
+  inputs,
+  autocompleteVariables,
+  stateKey,
+  useTemplating,
+  setDataAttr,
+  data,
+}: Pick<Props<T>, 'inputs' | 'useTemplating' | 'autocompleteVariables' | 'stateKey' | 'data'> & {
+  setDataAttr: (name: string, value: JsonPrimitive) => void;
+}) {
+  return (
     <VStack space={3} className="h-full overflow-auto">
-      {config.map((a, i) => {
-        if (a.hidden) {
+      {inputs.map((input, i) => {
+        if ('hidden' in input && input.hidden) {
           return null;
         }
 
-        switch (a.type) {
+        switch (input.type) {
           case 'select':
             return (
               <SelectArg
                 key={i + stateKey}
-                arg={a}
-                onChange={(v) => setDataAttr(a.name, v)}
+                arg={input}
+                onChange={(v) => setDataAttr(input.name, v)}
                 value={
-                  data[a.name] ? String(data[a.name]) : (a.defaultValue ?? DYNAMIC_FORM_NULL_ARG)
+                  data[input.name]
+                    ? String(data[input.name])
+                    : (input.defaultValue ?? DYNAMIC_FORM_NULL_ARG)
                 }
               />
             );
@@ -73,11 +102,11 @@ export function DynamicForm<T extends Record<string, string | boolean>>({
               <TextArg
                 key={i}
                 stateKey={stateKey}
-                arg={a}
+                arg={input}
                 useTemplating={useTemplating || false}
                 autocompleteVariables={autocompleteVariables || false}
-                onChange={(v) => setDataAttr(a.name, v)}
-                value={data[a.name] ? String(data[a.name]) : (a.defaultValue ?? '')}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={data[input.name] ? String(data[input.name]) : (input.defaultValue ?? '')}
               />
             );
           case 'editor':
@@ -85,39 +114,67 @@ export function DynamicForm<T extends Record<string, string | boolean>>({
               <EditorArg
                 key={i}
                 stateKey={stateKey}
-                arg={a}
+                arg={input}
                 useTemplating={useTemplating || false}
                 autocompleteVariables={autocompleteVariables || false}
-                onChange={(v) => setDataAttr(a.name, v)}
-                value={data[a.name] ? String(data[a.name]) : (a.defaultValue ?? '')}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={data[input.name] ? String(data[input.name]) : (input.defaultValue ?? '')}
               />
             );
           case 'checkbox':
             return (
               <CheckboxArg
                 key={i + stateKey}
-                arg={a}
-                onChange={(v) => setDataAttr(a.name, v)}
-                value={data[a.name] !== undefined ? data[a.name] === true : false}
+                arg={input}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={data[input.name] !== undefined ? data[input.name] === true : false}
               />
             );
           case 'http_request':
             return (
               <HttpRequestArg
                 key={i + stateKey}
-                arg={a}
-                onChange={(v) => setDataAttr(a.name, v)}
-                value={data[a.name] ? String(data[a.name]) : DYNAMIC_FORM_NULL_ARG}
+                arg={input}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={data[input.name] ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG}
               />
             );
           case 'file':
             return (
               <FileArg
                 key={i + stateKey}
-                arg={a}
-                onChange={(v) => setDataAttr(a.name, v)}
-                filePath={data[a.name] ? String(data[a.name]) : DYNAMIC_FORM_NULL_ARG}
+                arg={input}
+                onChange={(v) => setDataAttr(input.name, v)}
+                filePath={data[input.name] ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG}
               />
+            );
+          case 'accordion':
+            return (
+              <Banner key={i} className="!p-0">
+                <details>
+                  <summary className="px-3 py-1.5 text-text-subtle">
+                    {input.label}
+                  </summary>
+                  <div className="mb-3 px-3">
+                    <FormInputs
+                      data={data}
+                      inputs={input.inputs}
+                      setDataAttr={setDataAttr}
+                      stateKey={stateKey}
+                    />
+                  </div>
+                </details>
+              </Banner>
+            );
+          case 'banner':
+            return (
+              <Banner key={i} color="secondary">
+                {input.content.type === 'markdown' ? (
+                  <Markdown>{input.content.content}</Markdown>
+                ) : (
+                  <div>{input.content.content}</div>
+                )}
+              </Banner>
             );
         }
       })}

@@ -395,21 +395,21 @@ function initialize(workerData: PluginWorkerData) {
       }
 
       if (payload.type === 'get_http_authentication_config_request' && plug?.authentication) {
-        const { config } = plug.authentication;
-        const resolvedConfig: FormInput[] = [];
-        for (let i = 0; i < config.length; i++) {
-          let v = config[i];
+        const { args } = plug.authentication;
+        const resolvedArgs: FormInput[] = [];
+        for (let i = 0; i < args.length; i++) {
+          let v = args[i];
           if ('dynamic' in v) {
-            const dynamicAttrs = await v.dynamic(payload);
+            const dynamicAttrs = await v.dynamic(ctx, payload);
             const { dynamic, ...other } = v;
-            resolvedConfig.push({ ...other, ...dynamicAttrs } as FormInput);
+            resolvedArgs.push({ ...other, ...dynamicAttrs } as FormInput);
           } else {
-            resolvedConfig.push(v);
+            resolvedArgs.push(v);
           }
         }
         const replyPayload: InternalEventPayload = {
           type: 'get_http_authentication_config_response',
-          config: resolvedConfig,
+          args: resolvedArgs,
         };
 
         sendPayload(windowContext, replyPayload, replyId);
@@ -419,6 +419,12 @@ function initialize(workerData: PluginWorkerData) {
       if (payload.type === 'call_http_authentication_request' && plug?.authentication) {
         const auth = plug.authentication;
         if (typeof auth?.onApply === 'function') {
+          for (const arg of auth.args) {
+            if (!('defaultValue' in arg)) continue;
+            if (payload.values[arg.name] === undefined) {
+              payload.values[arg.name] = arg.defaultValue;
+            }
+          }
           const result = await auth.onApply(ctx, payload);
           sendPayload(
             windowContext,
@@ -450,6 +456,13 @@ function initialize(workerData: PluginWorkerData) {
       ) {
         const action = plug.templateFunctions.find((a) => a.name === payload.name);
         if (typeof action?.onRender === 'function') {
+          // Set default values
+          for (const arg of action.args) {
+            if (!('defaultValue' in arg)) continue;
+            if (action.args[arg.name] === undefined) {
+              action.args[arg.name] = arg.defaultValue;
+            }
+          }
           const result = await action.onRender(ctx, payload.args);
           sendPayload(
             windowContext,

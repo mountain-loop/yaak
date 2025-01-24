@@ -32,8 +32,8 @@ var grantTypes = [
 ];
 var defaultGrantType = grantTypes[0].value;
 function hiddenIfNot(...grantTypes2) {
-  return ({ config }) => {
-    return { hidden: !grantTypes2.find((t) => t === String(config.grantType ?? defaultGrantType)) };
+  return (_ctx, { values }) => {
+    return { hidden: !grantTypes2.find((t) => t === String(values.grantType ?? defaultGrantType)) };
   };
 }
 var authorizationUrls = [
@@ -69,9 +69,9 @@ var accessTokenUrls = [
 var plugin = {
   authentication: {
     name: "oauth2",
-    label: "OAuth 2",
-    shortLabel: "OAuth 2.0",
-    config: [
+    label: "OAuth 2.0",
+    shortLabel: "OAuth 2",
+    args: [
       {
         type: "select",
         name: "grantType",
@@ -86,6 +86,7 @@ var plugin = {
         type: "text",
         name: "clientSecret",
         label: "Client Secret",
+        password: true,
         optional: true,
         dynamic: hiddenIfNot("authorization_code", "resource_owner", "client_credential")
       },
@@ -128,29 +129,35 @@ var plugin = {
         dynamic: hiddenIfNot("authorization_code", "implicit")
       },
       {
-        type: "text",
-        name: "scope",
-        label: "Scope",
-        optional: true
+        type: "accordion",
+        label: "Advanced",
+        inputs: [
+          { type: "text", name: "scope", label: "Scope", optional: true },
+          { type: "text", name: "state", label: "State", optional: true }
+        ]
       },
       {
-        type: "text",
-        name: "state",
-        label: "State",
-        optional: true
+        type: "banner",
+        content: { type: "markdown", content: "Hello" },
+        async dynamic(ctx, args) {
+          const token = await getToken(ctx, args.requestId);
+          return {
+            content: { type: "markdown", content: "hello " + token?.response.access_token }
+          };
+        }
       }
     ],
     async onApply(ctx, args) {
-      const accessTokenUrl = String(args.config.accessTokenUrl);
-      const authorizationUrl = String(args.config.authorizationUrl);
+      const accessTokenUrl = String(args.values.accessTokenUrl);
+      const authorizationUrl = String(args.values.authorizationUrl);
       const token = await getAuthorizationCode(ctx, args.requestId, {
         accessTokenUrl: accessTokenUrl.match(/^https?:\/\//) ? accessTokenUrl : `https://${accessTokenUrl}`,
         authorizationUrl: authorizationUrl.match(/^https?:\/\//) ? authorizationUrl : `https://${authorizationUrl}`,
-        clientId: String(args.config.clientId),
-        clientSecret: String(args.config.clientSecret),
-        redirectUri: String(args.config.redirectUri),
-        scope: String(args.config.scope),
-        state: String(args.config.state)
+        clientId: String(args.values.clientId),
+        clientSecret: String(args.values.clientSecret),
+        redirectUri: String(args.values.redirectUri),
+        scope: String(args.values.scope),
+        state: String(args.values.state)
       });
       return { setHeaders: [{ name: "Authorization", value: `Bearer ${token}` }] };
     }
@@ -168,7 +175,6 @@ function getAuthorizationCode(ctx, requestId, {
   return new Promise(async (resolve, reject) => {
     const token = await getToken(ctx, requestId);
     if (token) {
-      console.log("USING EXISTING TOKEN", token);
       resolve(token.response.access_token);
       return;
     }

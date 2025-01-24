@@ -1,12 +1,9 @@
 import classNames from 'classnames';
 import { useRef, useState } from 'react';
-import type { Components } from 'react-markdown';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import type { EditorProps } from './core/Editor/Editor';
 import { Editor } from './core/Editor/Editor';
-import { Prose } from './Prose';
 import { SegmentedControl } from './core/SegmentedControl';
+import { Markdown } from './Markdown';
 
 type ViewMode = 'edit' | 'preview';
 
@@ -47,11 +44,9 @@ export function MarkdownEditor({
     defaultValue.length === 0 ? (
       <p className="text-text-subtlest">No description</p>
     ) : (
-      <Prose className="max-w-xl overflow-y-auto max-h-full [&_*]:cursor-auto [&_*]:select-auto">
-        <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-          {defaultValue}
-        </Markdown>
-      </Prose>
+      <Markdown className="max-w-xl overflow-y-auto max-h-full [&_*]:cursor-auto [&_*]:select-auto">
+        {defaultValue}
+      </Markdown>
     );
 
   const contents = viewMode === 'preview' ? preview : editor;
@@ -88,17 +83,3 @@ export function MarkdownEditor({
     </div>
   );
 }
-
-const markdownComponents: Partial<Components> = {
-  // Ensure links open in external browser by adding target="_blank"
-  a: ({ href, children, ...rest }) => {
-    if (href && !href.match(/https?:\/\//)) {
-      href = `http://${href}`;
-    }
-    return (
-      <a target="_blank" rel="noreferrer noopener" href={href} {...rest}>
-        {children}
-      </a>
-    );
-  },
-};

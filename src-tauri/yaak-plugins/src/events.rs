@@ -382,14 +382,15 @@ pub struct GetHttpAuthenticationSummaryResponse {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct GetHttpAuthenticationConfigRequest {
-    pub config: HashMap<String, JsonPrimitive>,
+    pub request_id: String,
+    pub values: HashMap<String, JsonPrimitive>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct GetHttpAuthenticationConfigResponse {
-    pub config: Vec<FormInput>,
+    pub args: Vec<FormInput>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -405,7 +406,7 @@ pub struct HttpHeader {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct CallHttpAuthenticationRequest {
     pub request_id: String,
-    pub config: HashMap<String, JsonPrimitive>,
+    pub values: HashMap<String, JsonPrimitive>,
     pub method: String,
     pub url: String,
     pub headers: Vec<HttpHeader>,
@@ -463,6 +464,8 @@ pub enum FormInput {
     Checkbox(FormInputCheckbox),
     File(FormInputFile),
     HttpRequest(FormInputHttpRequest),
+    Accordion(FormInputAccordion),
+    Banner(FormInputBanner),
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -656,6 +659,43 @@ pub struct FormInputCheckbox {
 pub struct FormInputSelectOption {
     pub name: String,
     pub value: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct FormInputAccordion {
+    pub label: String,
+    pub inputs: Vec<FormInput>,
+
+    #[ts(optional)]
+    pub hidden: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct FormInputBanner {
+    pub content: Content,
+
+    #[ts(optional)]
+    pub hidden: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case", tag = "type")]
+#[ts(export, export_to = "gen_events.ts")]
+pub enum Content {
+    Text { content: String },
+    Markdown { content: String },
+}
+
+impl Default for Content {
+    fn default() -> Self {
+        Self::Text {
+            content: String::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

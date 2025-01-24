@@ -491,7 +491,8 @@ impl PluginManager {
         &self,
         window: &WebviewWindow<R>,
         auth_name: &str,
-        config: HashMap<String, JsonPrimitive>,
+        values: HashMap<String, JsonPrimitive>,
+        request_id: &str,
     ) -> Result<GetHttpAuthenticationConfigResponse> {
         let results = self.get_http_authentication_summaries(window).await?;
         let plugin = results
@@ -504,7 +505,10 @@ impl PluginManager {
                 &WindowContext::from_window(window),
                 &plugin,
                 &InternalEventPayload::GetHttpAuthenticationConfigRequest(
-                    GetHttpAuthenticationConfigRequest { config },
+                    GetHttpAuthenticationConfigRequest {
+                        values,
+                        request_id: request_id.to_string(),
+                    },
                 ),
             )
             .await?;

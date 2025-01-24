@@ -8,14 +8,15 @@ import {
 import { MaybePromise } from '../helpers';
 import { Context } from './Context';
 
-type DynamicFormInput = Pick<FormInput, 'name' | 'type' | 'defaultValue'> & {
-  dynamic: (
+type DynamicFormInput = FormInput & {
+  dynamic(
+    ctx: Context,
     args: GetHttpAuthenticationConfigRequest,
-  ) => MaybePromise<Omit<FormInput, 'name' | 'type' | 'defaultValue'>>;
+  ): MaybePromise<Partial<FormInput>>;
 };
 
 export type AuthenticationPlugin = GetHttpAuthenticationSummaryResponse & {
-  config: (FormInput | DynamicFormInput)[];
+  args: (FormInput | DynamicFormInput)[];
   onApply(
     ctx: Context,
     args: CallHttpAuthenticationRequest,

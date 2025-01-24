@@ -235,7 +235,7 @@ async fn cmd_grpc_go<R: Runtime>(
         let auth = request.authentication.clone();
         let plugin_req = CallHttpAuthenticationRequest {
             request_id: request.id.clone(),
-            config: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
+            values: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
             method: "POST".to_string(),
             url: request.url.clone(),
             headers: metadata
@@ -979,9 +979,10 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
     auth_name: &str,
     config: HashMap<String, JsonPrimitive>,
+    request_id: &str,
 ) -> Result<GetHttpAuthenticationConfigResponse, String> {
     plugin_manager
-        .get_http_authentication_config(&window, auth_name, config)
+        .get_http_authentication_config(&window, auth_name, config, request_id)
         .await
         .map_err(|e| e.to_string())
 }

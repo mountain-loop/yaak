@@ -7,7 +7,7 @@ interface Props {
   color?: 'primary' | 'secondary' | 'success' | 'notice' | 'warning' | 'danger' | 'info';
 }
 
-export function Banner({ children, className, color = 'secondary' }: Props) {
+export function Banner({ children, className, color }: Props) {
   return (
     <div>
       <div

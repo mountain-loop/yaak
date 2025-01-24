@@ -30,10 +30,8 @@
         }
       ]
     },
-    "opener:allow-open-url",
-    "opener:allow-open-path",
-    "opener:allow-default-urls",
-    "opener:allow-reveal-item-in-dir",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
     "core:webview:allow-set-webview-zoom",
     "core:window:allow-close",
     "core:window:allow-internal-toggle-maximize",
@@ -47,8 +45,11 @@
     "core:window:allow-start-dragging",
     "core:window:allow-theme",
     "core:window:allow-unmaximize",
-    "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-write-text",
+    "opener:allow-default-urls",
+    "opener:allow-open-path",
+    "opener:allow-open-url",
+    "opener:allow-reveal-item-in-dir",
+    "shell:allow-open",
     "yaak-license:default",
     "yaak-sync:default"
   ]

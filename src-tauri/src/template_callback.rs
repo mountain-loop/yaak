@@ -53,6 +53,8 @@ impl TemplateCallback for PluginTemplateCallback {
                 FormInput::Checkbox(a) => a.base,
                 FormInput::File(a) => a.base,
                 FormInput::HttpRequest(a) => a.base,
+                FormInput::Accordion(_) => continue,
+                FormInput::Banner(_) => continue,
             };
             if let None = args_with_defaults.get(base.name.as_str()) {
                 args_with_defaults.insert(base.name, base.default_value.unwrap_or_default());

@@ -9,7 +9,7 @@ import { atom, useSetAtom } from 'jotai/index';
 import { useState } from 'react';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
-import {usePluginsKey} from "./usePlugins";
+import { usePluginsKey } from './usePlugins';
 
 const httpAuthenticationSummariesAtom = atom<GetHttpAuthenticationSummaryResponse[]>([]);
 const orderedHttpAuthenticationAtom = atom((get) =>
@@ -23,14 +23,16 @@ export function useHttpAuthenticationSummaries() {
 export function useHttpAuthenticationConfig(
   authName: string | null,
   config: Record<string, JsonPrimitive>,
+  requestId: string,
 ) {
   return useQuery({
-    queryKey: ['http_authentication_config', authName, config],
+    queryKey: ['http_authentication_config', { requestId, authName, config }],
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: () =>
       invokeCmd<GetHttpAuthenticationConfigResponse>('cmd_get_http_authentication_config', {
         authName,
         config,
+        requestId,
       }),
   });
 }
