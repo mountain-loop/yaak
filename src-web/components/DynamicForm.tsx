@@ -37,6 +37,7 @@ interface Props<T> {
   useTemplating?: boolean;
   autocompleteVariables?: boolean;
   stateKey: string;
+  disabled?: boolean;
 }
 
 export function DynamicForm<T extends Record<string, JsonPrimitive>>({
@@ -46,6 +47,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
   useTemplating,
   autocompleteVariables,
   stateKey,
+  disabled,
 }: Props<T>) {
   const setDataAttr = useCallback(
     (name: string, value: JsonPrimitive) => {
@@ -56,6 +58,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
 
   return (
     <FormInputs
+      disabled={disabled}
       inputs={inputs}
       setDataAttr={setDataAttr}
       stateKey={stateKey}
@@ -73,14 +76,20 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
   useTemplating,
   setDataAttr,
   data,
+  disabled,
 }: Pick<Props<T>, 'inputs' | 'useTemplating' | 'autocompleteVariables' | 'stateKey' | 'data'> & {
   setDataAttr: (name: string, value: JsonPrimitive) => void;
+  disabled?: boolean;
 }) {
   return (
     <VStack space={3} className="h-full overflow-auto">
       {inputs.map((input, i) => {
         if ('hidden' in input && input.hidden) {
           return null;
+        }
+
+        if ('disabled' in input && disabled != null) {
+          input.disabled = disabled;
         }
 
         switch (input.type) {
@@ -106,7 +115,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 useTemplating={useTemplating || false}
                 autocompleteVariables={autocompleteVariables || false}
                 onChange={(v) => setDataAttr(input.name, v)}
-                value={data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')}
+                value={
+                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')
+                }
               />
             );
           case 'editor':
@@ -118,7 +129,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 useTemplating={useTemplating || false}
                 autocompleteVariables={autocompleteVariables || false}
                 onChange={(v) => setDataAttr(input.name, v)}
-                value={data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')}
+                value={
+                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')
+                }
               />
             );
           case 'checkbox':
@@ -145,19 +158,20 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 key={i + stateKey}
                 arg={input}
                 onChange={(v) => setDataAttr(input.name, v)}
-                filePath={data[input.name] != null ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG}
+                filePath={
+                  data[input.name] != null ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG
+                }
               />
             );
           case 'accordion':
             return (
-              <Banner key={i} className="!p-0">
+              <Banner key={i} className={classNames('!p-0', disabled && 'opacity-disabled')}>
                 <details>
-                  <summary className="px-3 py-1.5 text-text-subtle">
-                    {input.label}
-                  </summary>
+                  <summary className="px-3 py-1.5 text-text-subtle">{input.label}</summary>
                   <div className="mb-3 px-3">
                     <FormInputs
                       data={data}
+                      disabled={disabled}
                       inputs={input.inputs}
                       setDataAttr={setDataAttr}
                       stateKey={stateKey}
@@ -168,14 +182,22 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
             );
           case 'banner':
             return (
-              <Banner key={i} color="secondary">
-                {input.content.type === 'markdown' ? (
-                  <Markdown>{input.content.content}</Markdown>
-                ) : (
-                  <div>{input.content.content}</div>
-                )}
+              <Banner
+                key={i}
+                color={input.color}
+                className={classNames(disabled && 'opacity-disabled')}
+              >
+                <FormInputs
+                  data={data}
+                  disabled={disabled}
+                  inputs={input.inputs}
+                  setDataAttr={setDataAttr}
+                  stateKey={stateKey}
+                />
               </Banner>
             );
+          case 'markdown':
+            return <Markdown>{input.content}</Markdown>;
         }
       })}
     </VStack>
@@ -211,6 +233,7 @@ function TextArg({
       onChange={handleChange}
       defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
       required={!arg.optional}
+      disabled={arg.disabled}
       type={arg.password ? 'password' : 'text'}
       label={arg.label ?? arg.name}
       size={INPUT_SIZE}
@@ -267,6 +290,7 @@ function EditorArg({
           'max-h-[15rem]', // So it doesn't take up too much space
         )}
         autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
+        disabled={arg.disabled}
         language={arg.language}
         onChange={handleChange}
         heightMode="auto"
@@ -299,12 +323,8 @@ function SelectArg({
       hideLabel={arg.hideLabel}
       value={value}
       size={INPUT_SIZE}
-      options={[
-        ...arg.options.map((a) => ({
-          label: a.name,
-          value: a.value,
-        })),
-      ]}
+      disabled={arg.disabled}
+      options={arg.options}
     />
   );
 }
@@ -320,6 +340,7 @@ function FileArg({
 }) {
   return (
     <SelectFile
+      disabled={arg.disabled}
       onChange={({ filePath }) => onChange(filePath)}
       filePath={filePath === '__NULL__' ? null : filePath}
       directory={!!arg.directory}
@@ -345,6 +366,7 @@ function HttpRequestArg({
       name={arg.name}
       onChange={onChange}
       value={value}
+      disabled={arg.disabled}
       options={[
         ...httpRequests.map((r) => {
           return {
@@ -390,6 +412,7 @@ function CheckboxArg({
     <Checkbox
       onChange={onChange}
       checked={value}
+      disabled={arg.disabled}
       title={arg.label ?? arg.name}
       hideLabel={arg.label == null}
     />

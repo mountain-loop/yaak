@@ -26,7 +26,61 @@ module.exports = __toCommonJS(src_exports);
 
 // src/grants/authorizationCode.ts
 var import_node_crypto = require("node:crypto");
+
+// src/getAccessToken.ts
 var import_node_fs = require("node:fs");
+async function getAccessToken(ctx, {
+  accessTokenUrl,
+  scope,
+  params,
+  grantType,
+  credentialsInBody,
+  clientId,
+  clientSecret
+}) {
+  console.log("Getting access token", accessTokenUrl);
+  const httpRequest = {
+    method: "POST",
+    url: accessTokenUrl,
+    bodyType: "application/x-www-form-urlencoded",
+    body: {
+      form: [
+        { name: "grant_type", value: grantType },
+        ...params
+      ]
+    },
+    headers: [
+      { name: "User-Agent", value: "yaak" },
+      { name: "Accept", value: "application/x-www-form-urlencoded, application/json" },
+      { name: "Content-Type", value: "application/x-www-form-urlencoded" }
+    ]
+  };
+  if (scope) httpRequest.body.form.push({ name: "scope", value: scope });
+  if (credentialsInBody) {
+    httpRequest.body.form.push({ name: "client_id", value: clientId });
+    httpRequest.body.form.push({ name: "client_secret", value: clientSecret });
+  } else {
+    const value = "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    httpRequest.headers.push({ name: "Authorization", value });
+  }
+  console.log("SENDING REQUEST", JSON.stringify(httpRequest, null, 2));
+  const resp = await ctx.httpRequest.send({ httpRequest });
+  const body = (0, import_node_fs.readFileSync)(resp.bodyPath ?? "", "utf8");
+  if (resp.status < 200 || resp.status >= 300) {
+    throw new Error("Failed to fetch access token with status=" + resp.status);
+  }
+  let response;
+  try {
+    response = JSON.parse(body);
+  } catch {
+    response = Object.fromEntries(new URLSearchParams(body));
+  }
+  if (response.error) {
+    throw new Error("Failed to fetch access token with " + response.error);
+  }
+  console.log("ACCESS TOKEN RESPONSE", response);
+  return response;
+}
 
 // src/store.ts
 async function storeToken(ctx, requestId, response) {
@@ -60,6 +114,7 @@ function getAuthorizationCode(ctx, requestId, {
   redirectUri,
   scope,
   state,
+  credentialsInBody,
   pkce
 }) {
   return new Promise(async (resolve, reject) => {
@@ -79,7 +134,7 @@ function getAuthorizationCode(ctx, requestId, {
       authorizationUrl.searchParams.set("code_challenge_method", challengeMethod);
     }
     const authorizationUrlStr = authorizationUrl.toString();
-    console.log("Opening authorization url", authorizationUrlStr);
+    console.log("Authorizing", authorizationUrlStr);
     let { close } = await ctx.window.openUrl({
       url: authorizationUrlStr,
       label: "oauth-authorization-url",
@@ -93,29 +148,23 @@ function getAuthorizationCode(ctx, requestId, {
           return;
         }
         close();
-        const urlParameters = [
-          { name: "client_id", value: clientId },
-          { name: "code", value: code }
-        ];
-        if (clientSecret) urlParameters.push({ name: "client_secret", value: clientSecret });
-        if (redirectUri) urlParameters.push({ name: "redirect_uri", value: redirectUri });
-        const resp = await ctx.httpRequest.send({
-          httpRequest: {
-            method: "POST",
-            url: accessTokenUrl,
-            urlParameters,
-            headers: [
-              { name: "Accept", value: "application/json" },
-              { name: "Content-Type", value: "application/x-www-form-urlencoded" }
-            ]
-          }
+        const response = await getAccessToken(ctx, {
+          grantType: "authorization_code",
+          accessTokenUrl,
+          clientId,
+          clientSecret,
+          scope,
+          credentialsInBody,
+          params: [
+            { name: "code", value: code },
+            ...redirectUri ? [{ name: "redirect_uri", value: redirectUri }] : []
+          ]
         });
-        const body = (0, import_node_fs.readFileSync)(resp.bodyPath ?? "", "utf8");
-        if (resp.status < 200 || resp.status >= 300) {
-          reject(new Error("Failed to fetch access token with status=" + resp.status));
+        try {
+          resolve(await storeToken(ctx, requestId, response));
+        } catch (err) {
+          reject(err);
         }
-        const response = JSON.parse(body);
-        storeToken(ctx, requestId, response).then((token2) => resolve(token2.response.access_token), reject);
       }
     });
   });
@@ -132,6 +181,29 @@ function createPkceCodeChallenge(verifier, method) {
 }
 function encodeForPkce(bytes) {
   return bytes.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+// src/grants/clientCredentials.ts
+async function getClientCredentials(ctx, requestId, {
+  accessTokenUrl,
+  clientId,
+  clientSecret,
+  scope,
+  credentialsInBody
+}) {
+  const token = await getToken(ctx, requestId);
+  if (token) {
+  }
+  const response = await getAccessToken(ctx, {
+    grantType: "client_credentials",
+    accessTokenUrl,
+    clientId,
+    clientSecret,
+    scope,
+    credentialsInBody,
+    params: []
+  });
+  return storeToken(ctx, requestId, response);
 }
 
 // src/grants/implicit.ts
@@ -157,7 +229,6 @@ function getImplicit(ctx, requestId, {
       authorizationUrl.searchParams.set("nonce", String(Math.floor(Math.random() * 9999999999999) + 1));
     }
     const authorizationUrlStr = authorizationUrl.toString();
-    console.log("Opening authorization url", authorizationUrlStr);
     let { close } = await ctx.window.openUrl({
       url: authorizationUrlStr,
       label: "oauth-authorization-url",
@@ -175,18 +246,50 @@ function getImplicit(ctx, requestId, {
           params.delete("id_token");
         }
         const response = Object.fromEntries(params);
-        storeToken(ctx, requestId, response).then((token2) => resolve(token2.response.access_token), reject);
+        try {
+          resolve(await storeToken(ctx, requestId, response));
+        } catch (err) {
+          reject(err);
+        }
       }
     });
   });
 }
 
+// src/grants/resourceOwner.ts
+async function getResourceOwner(ctx, requestId, {
+  accessTokenUrl,
+  clientId,
+  clientSecret,
+  username,
+  password,
+  credentialsInBody,
+  scope
+}) {
+  const token = await getToken(ctx, requestId);
+  if (token) {
+  }
+  const response = await getAccessToken(ctx, {
+    accessTokenUrl,
+    clientId,
+    clientSecret,
+    scope,
+    grantType: "password",
+    credentialsInBody,
+    params: [
+      { name: "username", value: username },
+      { name: "password", value: password }
+    ]
+  });
+  return storeToken(ctx, requestId, response);
+}
+
 // src/index.ts
 var grantTypes = [
-  { name: "Authorization Code", value: "authorization_code" },
-  { name: "Implicit", value: "implicit" },
-  { name: "Resource Owner Password Credential", value: "resource_owner" },
-  { name: "Client Credentials", value: "client_credential" }
+  { label: "Authorization Code", value: "authorization_code" },
+  { label: "Implicit", value: "implicit" },
+  { label: "Resource Owner Password Credential", value: "password" },
+  { label: "Client Credentials", value: "client_credentials" }
 ];
 var defaultGrantType = grantTypes[0].value;
 function hiddenIfNot(grantTypes2, ...other) {
@@ -248,7 +351,7 @@ var plugin = {
         name: "clientSecret",
         label: "Client Secret",
         password: true,
-        dynamic: hiddenIfNot(["authorization_code", "resource_owner", "client_credential"])
+        dynamic: hiddenIfNot(["authorization_code", "password", "client_credentials"])
       },
       {
         type: "text",
@@ -263,13 +366,20 @@ var plugin = {
         name: "accessTokenUrl",
         label: "Access Token URL",
         placeholder: accessTokenUrls[0],
-        dynamic: hiddenIfNot(["authorization_code", "resource_owner", "client_credential"]),
+        dynamic: hiddenIfNot(["authorization_code", "password", "client_credentials"]),
         completionOptions: accessTokenUrls.map((url) => ({ label: url, value: url }))
       },
       {
         type: "text",
         name: "redirectUri",
         label: "Redirect URI",
+        optional: true,
+        dynamic: hiddenIfNot(["authorization_code", "implicit"])
+      },
+      {
+        type: "text",
+        name: "state",
+        label: "State",
         optional: true,
         dynamic: hiddenIfNot(["authorization_code", "implicit"])
       },
@@ -283,7 +393,7 @@ var plugin = {
         type: "select",
         name: "pkceChallengeMethod",
         label: "Code Challenge Method",
-        options: [{ name: "SHA-256", value: PKCE_SHA256 }, { name: "Plain", value: PKCE_PLAIN }],
+        options: [{ label: "SHA-256", value: PKCE_SHA256 }, { label: "Plain", value: PKCE_PLAIN }],
         defaultValue: DEFAULT_PKCE_METHOD,
         dynamic: hiddenIfNot(["authorization_code"], ({ usePkce }) => !!usePkce)
       },
@@ -300,7 +410,7 @@ var plugin = {
         name: "username",
         label: "Username",
         optional: true,
-        dynamic: hiddenIfNot(["resource_owner"])
+        dynamic: hiddenIfNot(["password"])
       },
       {
         type: "text",
@@ -308,7 +418,7 @@ var plugin = {
         label: "Password",
         password: true,
         optional: true,
-        dynamic: hiddenIfNot(["resource_owner"])
+        dynamic: hiddenIfNot(["password"])
       },
       {
         type: "select",
@@ -316,9 +426,9 @@ var plugin = {
         label: "Response Type",
         defaultValue: "token",
         options: [
-          { name: "Access Token", value: "token" },
-          { name: "ID Token", value: "id_token" },
-          { name: "ID and Access Token", value: "id_token token" }
+          { label: "Access Token", value: "token" },
+          { label: "ID Token", value: "id_token" },
+          { label: "ID and Access Token", value: "id_token token" }
         ],
         dynamic: hiddenIfNot(["implicit"])
       },
@@ -327,23 +437,35 @@ var plugin = {
         label: "Advanced",
         inputs: [
           { type: "text", name: "scope", label: "Scope", optional: true },
-          { type: "text", name: "state", label: "State", optional: true },
-          { type: "text", name: "headerPrefix", label: "Header Prefix", optional: true, defaultValue: "Bearer" }
+          { type: "text", name: "headerPrefix", label: "Header Prefix", optional: true, defaultValue: "Bearer" },
+          {
+            type: "select",
+            name: "credentials",
+            label: "Send Credentials",
+            defaultValue: "body",
+            options: [
+              { label: "In Request Body", value: "body" },
+              { label: "As Basic Authentication", value: "basic" }
+            ]
+          }
         ]
       },
       {
-        type: "banner",
-        content: { type: "markdown", content: "Hello" },
-        async dynamic(ctx, args) {
-          const token = await getToken(ctx, args.requestId);
+        type: "accordion",
+        label: "Token State",
+        inputs: [],
+        async dynamic(ctx, { requestId }) {
+          const token = await getToken(ctx, requestId);
           if (token == null) {
             return { hidden: true };
           }
           return {
-            content: {
-              type: "markdown",
-              content: token ? "token: `" + token.response.access_token + "`" : "No token"
-            }
+            inputs: [
+              {
+                type: "markdown",
+                content: "token: `" + token.response.access_token + "`"
+              }
+            ]
           };
         }
       }
@@ -351,6 +473,7 @@ var plugin = {
     async onApply(ctx, { values, requestId }) {
       const headerPrefix = optionalString(values, "headerPrefix") ?? "";
       const grantType = requiredString(values, "grantType");
+      const credentialsInBody = values.credentials === "body";
       let token;
       console.log("Performing OAuth", values);
       if (grantType === "authorization_code") {
@@ -364,6 +487,7 @@ var plugin = {
           redirectUri: optionalString(values, "redirectUri"),
           scope: optionalString(values, "scope"),
           state: optionalString(values, "state"),
+          credentialsInBody,
           pkce: values.usePkce ? {
             challengeMethod: requiredString(values, "pkceChallengeMethod"),
             codeVerifier: optionalString(values, "pkceCodeVerifier")
@@ -372,15 +496,37 @@ var plugin = {
       } else if (grantType === "implicit") {
         const authorizationUrl = requiredString(values, "authorizationUrl");
         token = await getImplicit(ctx, requestId, {
-          responseType: requiredString(values, "responseType"),
           authorizationUrl: authorizationUrl.match(/^https?:\/\//) ? authorizationUrl : `https://${authorizationUrl}`,
           clientId: requiredString(values, "clientId"),
           redirectUri: optionalString(values, "redirectUri"),
+          responseType: requiredString(values, "responseType"),
           scope: optionalString(values, "scope"),
           state: optionalString(values, "state")
         });
+      } else if (grantType === "client_credentials") {
+        const accessTokenUrl = requiredString(values, "accessTokenUrl");
+        token = await getClientCredentials(ctx, requestId, {
+          accessTokenUrl: accessTokenUrl.match(/^https?:\/\//) ? accessTokenUrl : `https://${accessTokenUrl}`,
+          clientId: requiredString(values, "clientId"),
+          clientSecret: requiredString(values, "clientSecret"),
+          scope: optionalString(values, "scope"),
+          credentialsInBody
+        });
+      } else if (grantType === "password") {
+        const accessTokenUrl = requiredString(values, "accessTokenUrl");
+        token = await getResourceOwner(ctx, requestId, {
+          accessTokenUrl: accessTokenUrl.match(/^https?:\/\//) ? accessTokenUrl : `https://${accessTokenUrl}`,
+          clientId: requiredString(values, "clientId"),
+          clientSecret: requiredString(values, "clientSecret"),
+          username: requiredString(values, "username"),
+          password: requiredString(values, "password"),
+          scope: optionalString(values, "scope"),
+          credentialsInBody
+        });
+      } else {
+        throw new Error("Invalid grant type " + grantType);
       }
-      const headerValue = `${headerPrefix} ${token}`.trim();
+      const headerValue = `${headerPrefix} ${token.response.access_token}`.trim();
       return {
         setHeaders: [{
           name: "Authorization",

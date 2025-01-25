@@ -20,9 +20,8 @@ export interface ToastProps {
   color?: ShowToastRequest['color'];
 }
 
-const ICONS: Record<NonNullable<ToastProps['color']>, IconProps['icon'] | null> = {
+const ICONS: Record<NonNullable<ToastProps['color'] | 'custom'>, IconProps['icon'] | null> = {
   custom: null,
-  default: 'info',
   danger: 'alert_triangle',
   info: 'info',
   notice: 'alert_triangle',
@@ -42,9 +41,8 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
     {},
     [open],
   );
-  color = color ?? 'default';
 
-  const toastIcon = icon ?? (color in ICONS && ICONS[color]);
+  const toastIcon = icon ?? (color && color in ICONS && ICONS[color]);
 
   return (
     <motion.div

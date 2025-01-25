@@ -1,4 +1,5 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import type {GenericCompletionOption} from "@yaakapp-internal/plugins";
 import classNames from 'classnames';
 import { atom, useAtom, useAtomValue } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
@@ -36,10 +37,7 @@ import { showToast } from '../lib/toast';
 import { BinaryFileEditor } from './BinaryFileEditor';
 import { CountBadge } from './core/CountBadge';
 import { Editor } from './core/Editor/Editor';
-import type {
-  GenericCompletionConfig,
-  GenericCompletionOption,
-} from './core/Editor/genericCompletion';
+import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import { InlineCode } from './core/InlineCode';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';

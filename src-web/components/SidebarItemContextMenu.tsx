@@ -92,7 +92,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
                 onSelect: () => sendRequest.mutate(child.id),
               },
               ...httpRequestActions.map((a) => ({
-                key: a.key,
+                key: a.name,
                 label: a.label,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,

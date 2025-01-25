@@ -1,4 +1,5 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import { charsets } from '../lib/data/charsets';
 import { connections } from '../lib/data/connections';
 import { encodings } from '../lib/data/encodings';
@@ -44,7 +45,7 @@ const headerOptionsMap: Record<string, string[]> = {
 
 const valueAutocomplete = (headerName: string): GenericCompletionConfig | undefined => {
   const name = headerName.toLowerCase().trim();
-  const options: GenericCompletionConfig['options'] =
+  const options: GenericCompletionOption[] =
     headerOptionsMap[name]?.map((o) => ({
       label: o,
       type: 'constant',

@@ -5,6 +5,7 @@
     @apply w-full block text-base;
 
     /* Regular cursor */
+
     .cm-cursor {
       @apply border-text !important;
       /* Widen the cursor a bit */
@@ -12,6 +13,7 @@
     }
 
     /* Vim-mode cursor */
+
     .cm-fat-cursor {
       @apply outline-0 bg-text !important;
       @apply text-surface !important;
@@ -181,7 +183,7 @@
     @apply hidden !important;
   }
 
-  &.cm-singleline .cm-line {
+  &.cm-singleline * {
     @apply cursor-default;
   }
 }

@@ -16,6 +16,7 @@ export type InputProps = Pick<
   | 'useTemplating'
   | 'autocomplete'
   | 'forceUpdateKey'
+  | 'disabled'
   | 'autoFocus'
   | 'autoSelect'
   | 'autocompleteVariables'
@@ -75,6 +76,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
     readOnly,
     stateKey,
     multiLine,
+    disabled,
     ...props
   }: InputProps,
   ref,
@@ -167,7 +169,8 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
           'x-theme-input',
           'relative w-full rounded-md text',
           'border',
-          focused ? 'border-border-focus' : 'border-border',
+          focused && !disabled ? 'border-border-focus' : 'border-border',
+          disabled && 'border-dotted',
           !isValid && hasChanged && '!border-danger',
           size === 'md' && 'min-h-md',
           size === 'sm' && 'min-h-sm',
@@ -199,6 +202,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
             onChange={handleChange}
             onPaste={onPaste}
             onPasteOverwrite={onPasteOverwrite}
+            disabled={disabled}
             className={classNames(
               editorClassName,
               multiLine && size === 'md' && 'py-1.5',
@@ -214,7 +218,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
           <IconButton
             title={obscured ? `Show ${label}` : `Obscure ${label}`}
             size="xs"
-            className="mr-0.5 group/obscure !h-auto my-0.5"
+            className={classNames("mr-0.5 group/obscure !h-auto my-0.5", disabled && 'opacity-disabled')}
             iconClassName="text-text-subtle group-hover/obscure:text"
             iconSize="sm"
             icon={obscured ? 'eye' : 'eye_closed'}

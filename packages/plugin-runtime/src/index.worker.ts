@@ -28,6 +28,7 @@ import * as util from 'node:util';
 import { parentPort as nullableParentPort, workerData } from 'node:worker_threads';
 import Promise from '../../../../../Library/Caches/deno/npm/registry.npmjs.org/any-promise/1.3.0';
 import { interceptStdout } from './interceptStdout';
+import { migrateHttpRequestActionKey, migrateTemplateFunctionSelectOptions } from './migrations';
 
 if (nullableParentPort == null) {
   throw new Error('Worker does not have access to parentPort');
@@ -351,7 +352,7 @@ function initialize(workerData: PluginWorkerData) {
         Array.isArray(plug?.httpRequestActions)
       ) {
         const reply: HttpRequestAction[] = plug.httpRequestActions.map((a) => ({
-          ...a,
+          ...migrateHttpRequestActionKey(a),
           // Add everything except onSelect
           onSelect: undefined,
         }));
@@ -368,11 +369,13 @@ function initialize(workerData: PluginWorkerData) {
         payload.type === 'get_template_functions_request' &&
         Array.isArray(plug?.templateFunctions)
       ) {
-        const reply: TemplateFunction[] = plug.templateFunctions.map((a) => ({
-          ...a,
-          // Add everything except render
-          onRender: undefined,
-        }));
+        const reply: TemplateFunction[] = plug.templateFunctions.map((templateFunction) => {
+          return {
+            ...migrateTemplateFunctionSelectOptions(templateFunction),
+            // Add everything except render
+            onRender: undefined,
+          };
+        });
         const replyPayload: InternalEventPayload = {
           type: 'get_template_functions_response',
           pluginRefId,
@@ -438,7 +441,9 @@ function initialize(workerData: PluginWorkerData) {
         payload.type === 'call_http_request_action_request' &&
         Array.isArray(plug?.httpRequestActions)
       ) {
-        const action = plug.httpRequestActions.find((a) => a.key === payload.key);
+        const action = plug.httpRequestActions.find(
+          (a) => migrateHttpRequestActionKey(a).name === payload.name,
+        );
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
           sendEmpty(windowContext, replyId);

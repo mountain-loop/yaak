@@ -155,7 +155,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       });
       for (const a of httpRequestActions) {
         commands.push({
-          key: a.key,
+          key: a.name,
           label: a.label,
           onSelect: () => a.call(activeRequest),
         });

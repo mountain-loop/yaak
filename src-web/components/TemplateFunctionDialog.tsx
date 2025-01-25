@@ -25,6 +25,10 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
         ? initialTokens.tokens[0]?.val.args
         : [];
     for (const arg of templateFunction.args) {
+      if (!('name' in arg)) {
+        // Skip visual-only args
+        continue;
+      }
       const initialArg = initialArgs.find((a) => a.name === arg.name);
       const initialArgValue =
         initialArg?.value.type === 'str'

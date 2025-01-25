@@ -17,10 +17,10 @@ use yaak_models::queries::{
     upsert_plugin, UpdateSource,
 };
 use yaak_plugins::events::{
-    Color, DeleteKeyValueResponse, FindHttpResponsesResponse, GetHttpRequestByIdResponse,
-    GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload, RenderHttpRequestResponse,
-    SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse,
-    WindowContext, WindowNavigateEvent,
+    Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
+    GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
+    RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest,
+    TemplateRenderResponse, WindowContext, WindowNavigateEvent,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -38,7 +38,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 .clipboard()
                 .write_text(req.text.as_str())
                 .expect("Failed to write text to clipboard");
-            None
+            Some(InternalEventPayload::CopyTextResponse(EmptyPayload {}))
         }
         InternalEventPayload::ShowToastRequest(req) => {
             match window_context {
@@ -47,7 +47,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     .expect("Failed to emit show_toast to window"),
                 _ => app_handle.emit("show_toast", req).expect("Failed to emit show_toast"),
             };
-            None
+            Some(InternalEventPayload::ShowToastResponse(EmptyPayload {}))
         }
         InternalEventPayload::PromptTextRequest(_) => {
             let window = get_window_from_window_context(app_handle, &window_context)

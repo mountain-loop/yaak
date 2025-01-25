@@ -3,8 +3,12 @@ import React, { useCallback } from 'react';
 import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
+import { Checkbox } from './core/Checkbox';
+import { IconButton } from './core/IconButton';
+import { HStack, VStack } from './core/Stacks';
 import { DynamicForm } from './DynamicForm';
 import { EmptyStateText } from './EmptyStateText';
+import { Dropdown } from './core/Dropdown';
 
 interface Props {
   request: HttpRequest | GrpcRequest;
@@ -21,6 +25,7 @@ export function HttpAuthenticationEditor({ request }: Props) {
 
   const handleChange = useCallback(
     (authentication: Record<string, boolean>) => {
+      console.log('UPDATE', authentication);
       if (request.model === 'http_request') {
         updateHttpRequest.mutate({
           id: request.id,
@@ -41,13 +46,37 @@ export function HttpAuthenticationEditor({ request }: Props) {
   }
 
   return (
-    <DynamicForm
-      autocompleteVariables
-      useTemplating
-      stateKey={`auth.${request.id}.${request.authenticationType}`}
-      inputs={auth.data.args}
-      data={request.authentication}
-      onChange={handleChange}
-    />
+    <VStack space={2}>
+      <HStack space={2} className="mb-1" alignItems="center">
+        <Checkbox
+          className="w-full"
+          checked={!request.authentication.disabled}
+          onChange={(disabled) => handleChange({ ...request.authentication, disabled: !disabled })}
+          title="Enabled"
+        />
+        <Dropdown
+          items={[
+            {
+              key: '',
+              label: 'hello',
+              onSelect: () => {},
+            },
+          ]}
+        >
+          <IconButton title="Authentication Actions" icon="settings" size="xs">
+            Action
+          </IconButton>
+        </Dropdown>
+      </HStack>
+      <DynamicForm
+        disabled={request.authentication.disabled}
+        autocompleteVariables
+        useTemplating
+        stateKey={`auth.${request.id}.${request.authenticationType}`}
+        inputs={auth.data.args}
+        data={request.authentication}
+        onChange={handleChange}
+      />
+    </VStack>
   );
 }

@@ -1,4 +1,4 @@
-import type { GenericCompletionOption } from '../../components/core/Editor/genericCompletion';
+import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 
 export const headerNames: (GenericCompletionOption | string)[] = [
   {

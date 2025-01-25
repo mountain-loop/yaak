@@ -93,6 +93,7 @@ pub enum InternalEventPayload {
     CallHttpAuthenticationResponse(CallHttpAuthenticationResponse),
 
     CopyTextRequest(CopyTextRequest),
+    CopyTextResponse(EmptyPayload),
 
     RenderHttpRequestRequest(RenderHttpRequestRequest),
     RenderHttpRequestResponse(RenderHttpRequestResponse),
@@ -112,6 +113,7 @@ pub enum InternalEventPayload {
     TemplateRenderResponse(TemplateRenderResponse),
 
     ShowToastRequest(ShowToastRequest),
+    ShowToastResponse(EmptyPayload),
 
     PromptTextRequest(PromptTextRequest),
     PromptTextResponse(PromptTextResponse),
@@ -338,8 +340,6 @@ pub struct PromptTextResponse {
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_events.ts")]
 pub enum Color {
-    Custom,
-    Default,
     Primary,
     Secondary,
     Info,
@@ -351,7 +351,7 @@ pub enum Color {
 
 impl Default for Color {
     fn default() -> Self {
-        Color::Default
+        Color::Secondary
     }
 }
 
@@ -376,6 +376,20 @@ pub struct GetHttpAuthenticationSummaryResponse {
     pub name: String,
     pub label: String,
     pub short_label: String,
+
+    #[ts(optional)]
+    pub actions: Option<Vec<HttpAuthenticationAction>>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct HttpAuthenticationAction {
+    pub name: String,
+    pub label: String,
+
+    #[ts(optional)]
+    pub icon: Option<Icon>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -466,6 +480,7 @@ pub enum FormInput {
     HttpRequest(FormInputHttpRequest),
     Accordion(FormInputAccordion),
     Banner(FormInputBanner),
+    Markdown(FormInputMarkdown),
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -495,6 +510,9 @@ pub struct FormInputBase {
     /// The default value
     #[ts(optional)]
     pub default_value: Option<String>,
+
+    #[ts(optional)]
+    pub disabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -579,7 +597,7 @@ pub struct GenericCompletionOption {
     pub type_: Option<CompletionOptionType>,
 
     #[ts(optional)]
-    pub boost: Option<i64>,
+    pub boost: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -657,7 +675,7 @@ pub struct FormInputCheckbox {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct FormInputSelectOption {
-    pub name: String,
+    pub label: String,
     pub value: String,
 }
 
@@ -676,7 +694,20 @@ pub struct FormInputAccordion {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct FormInputBanner {
-    pub content: Content,
+    pub inputs: Vec<FormInput>,
+
+    #[ts(optional)]
+    pub hidden: Option<bool>,
+
+    #[ts(optional)]
+    pub color: Option<Color>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct FormInputMarkdown {
+    pub content: String,
 
     #[ts(optional)]
     pub hidden: Option<bool>,
@@ -752,7 +783,7 @@ pub struct GetHttpRequestActionsResponse {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct HttpRequestAction {
-    pub key: String,
+    pub name: String,
     pub label: String,
     #[ts(optional)]
     pub icon: Option<Icon>,
@@ -762,7 +793,7 @@ pub struct HttpRequestAction {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct CallHttpRequestActionRequest {
-    pub key: String,
+    pub name: String,
     pub plugin_ref_id: String,
     pub args: CallHttpRequestActionArgs,
 }

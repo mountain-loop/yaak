@@ -9,7 +9,7 @@ import { invokeCmd } from '../lib/tauri';
 import { usePluginsKey } from './usePlugins';
 import { useMemo } from 'react';
 
-export type CallableHttpRequestAction = Pick<HttpRequestAction, 'key' | 'label' | 'icon'> & {
+export type CallableHttpRequestAction = Pick<HttpRequestAction, 'name' | 'label' | 'icon'> & {
   call: (httpRequest: HttpRequest) => Promise<void>;
 };
 
@@ -25,12 +25,12 @@ export function useHttpRequestActions() {
 
       return responses.flatMap((r) =>
         r.actions.map((a) => ({
-          key: a.key,
+          name: a.name,
           label: a.label,
           icon: a.icon,
           call: async (httpRequest: HttpRequest) => {
             const payload: CallHttpRequestActionRequest = {
-              key: a.key,
+              name: a.name,
               pluginRefId: r.pluginRefId,
               args: { httpRequest },
             };

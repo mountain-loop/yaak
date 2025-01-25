@@ -110,6 +110,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     onBlur,
     onKeyDown,
     className,
+    disabled,
     singleLine,
     format,
     autocomplete,
@@ -130,6 +131,10 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   if (settings && wrapLines === undefined) {
     wrapLines = settings.editorSoftWrap;
+  }
+
+  if (disabled) {
+      readOnly = true;
   }
 
   if (
@@ -515,6 +520,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       className={classNames(
         className,
         'cm-wrapper text-base',
+        disabled && 'opacity-disabled',
         type === 'password' && 'cm-obscure-text',
         heightMode === 'auto' ? 'cm-auto-height' : 'cm-full-height',
         singleLine ? 'cm-singleline' : 'cm-multiline',

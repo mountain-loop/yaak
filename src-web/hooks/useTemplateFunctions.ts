@@ -3,7 +3,7 @@ import type { GetTemplateFunctionsResponse, TemplateFunction } from '@yaakapp-in
 import { atom, useAtomValue } from 'jotai';
 import { useSetAtom } from 'jotai/index';
 import { useMemo, useState } from 'react';
-import type {TwigCompletionOption} from "../components/core/Editor/twig/completion";
+import type { TwigCompletionOption } from '../components/core/Editor/twig/completion';
 import { invokeCmd } from '../lib/tauri';
 import { usePluginsKey } from './usePlugins';
 
@@ -17,8 +17,9 @@ export function useTemplateFunctionCompletionOptions(
     return (
       templateFunctions.map((fn) => {
         const NUM_ARGS = 2;
+        const argsWithName = fn.args.filter((a) => 'name' in a);
         const shortArgs =
-          fn.args
+          argsWithName
             .slice(0, NUM_ARGS)
             .map((a) => a.name)
             .join(', ') + (fn.args.length > NUM_ARGS ? ', …' : '');
@@ -27,7 +28,7 @@ export function useTemplateFunctionCompletionOptions(
           aliases: fn.aliases,
           type: 'function',
           description: fn.description,
-          args: fn.args.map((a) => ({ name: a.name })),
+          args: argsWithName.map((a) => ({ name: a.name })),
           value: null,
           label: `${fn.name}(${shortArgs})`,
           onClick: (rawTag: string, startPos: number) => onClick(fn, rawTag, startPos),

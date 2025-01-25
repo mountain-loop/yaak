@@ -1,4 +1,5 @@
 import type { Environment } from '@yaakapp-internal/models';
+import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -11,10 +12,7 @@ import { showPrompt } from '../lib/prompt';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { ContextMenu } from './core/Dropdown';
-import type {
-  GenericCompletionConfig,
-  GenericCompletionOption,
-} from './core/Editor/genericCompletion';
+import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import { Heading } from './core/Heading';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';

@@ -31,10 +31,12 @@ var plugin = {
     label: "Copy as Curl",
     icon: "copy",
     async onSelect(ctx, args) {
+      console.log("CURL", 1);
       const rendered_request = await ctx.httpRequest.render({ httpRequest: args.httpRequest, purpose: "preview" });
+      console.log("CURL", 2);
       const data = await convertToCurl(rendered_request);
-      ctx.clipboard.copyText(data);
-      ctx.toast.show({ message: "Curl copied to clipboard", icon: "copy" });
+      await ctx.clipboard.copyText(data);
+      await ctx.toast.show({ message: "Curl copied to clipboard", icon: "copy" });
     }
   }]
 };
