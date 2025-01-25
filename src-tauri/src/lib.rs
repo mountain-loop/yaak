@@ -13,7 +13,6 @@ use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
 use rand::random;
 use regex::Regex;
-use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{create_dir_all, File};
@@ -44,23 +43,22 @@ use yaak_models::queries::{
     delete_all_http_responses_for_workspace, delete_cookie_jar, delete_environment, delete_folder,
     delete_grpc_connection, delete_grpc_request, delete_http_request, delete_http_response,
     delete_plugin, delete_workspace, duplicate_folder, duplicate_grpc_request,
-    duplicate_http_request, ensure_base_environment, generate_id, generate_model_id,
-    get_base_environment, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
-    get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
-    get_or_create_settings, get_or_create_workspace_meta, get_plugin, get_workspace,
-    get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
-    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
-    list_http_responses_for_workspace, list_key_values_raw, list_plugins, list_workspaces,
-    set_key_value_raw, update_response_if_id, update_settings, upsert_cookie_jar,
-    upsert_environment, upsert_folder, upsert_grpc_connection, upsert_grpc_event,
-    upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
+    duplicate_http_request, ensure_base_environment, generate_model_id, get_base_environment,
+    get_cookie_jar, get_environment, get_folder, get_grpc_connection, get_grpc_request,
+    get_http_request, get_http_response, get_key_value_raw, get_or_create_settings,
+    get_or_create_workspace_meta, get_plugin, get_workspace, get_workspace_export_resources,
+    list_cookie_jars, list_environments, list_folders, list_grpc_connections_for_workspace,
+    list_grpc_events, list_grpc_requests, list_http_requests, list_http_responses_for_workspace,
+    list_key_values_raw, list_plugins, list_workspaces, set_key_value_raw, update_response_if_id,
+    update_settings, upsert_cookie_jar, upsert_environment, upsert_folder, upsert_grpc_connection,
+    upsert_grpc_event, upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
     upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, HttpHeader, JsonPrimitive,
-    PromptTextResponse, RenderPurpose, WindowContext,
+    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, HttpHeader, InternalEvent,
+    InternalEventPayload, JsonPrimitive, RenderPurpose, WindowContext,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_sse::sse::ServerSentEvent;
@@ -2067,29 +2065,17 @@ fn monitor_plugin_events<R: Runtime>(app_handle: &AppHandle<R>) {
     });
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct FrontendCall<T: Serialize + Clone> {
-    args: T,
-    reply_id: String,
-}
-
-async fn call_frontend<T: Serialize + Clone, R: Runtime>(
+async fn call_frontend<R: Runtime>(
     window: WebviewWindow<R>,
-    event_name: &str,
-    args: T,
-) -> PromptTextResponse {
-    let reply_id = format!("{event_name}_reply_{}", generate_id());
-    let payload = FrontendCall {
-        args,
-        reply_id: reply_id.clone(),
-    };
-    window.emit_to(window.label(), event_name, payload).unwrap();
-    let (tx, mut rx) = tokio::sync::watch::channel(PromptTextResponse::default());
+    event: &InternalEvent,
+) -> Option<InternalEventPayload> {
+    window.emit_to(window.label(), "plugin_event", event.clone()).unwrap();
+    let (tx, mut rx) = tokio::sync::watch::channel(None);
 
+    let reply_id = event.id.clone();
     let event_id = window.clone().listen(reply_id, move |ev| {
-        let resp: PromptTextResponse = serde_json::from_str(ev.payload()).unwrap();
-        if let Err(e) = tx.send(resp) {
+        let resp: InternalEvent = serde_json::from_str(ev.payload()).unwrap();
+        if let Err(e) = tx.send(Some(resp.payload)) {
             warn!("Failed to prompt for text {e:?}");
         }
     });
@@ -2101,7 +2087,7 @@ async fn call_frontend<T: Serialize + Clone, R: Runtime>(
     window.unlisten(event_id);
 
     let v = rx.borrow();
-    v.clone()
+    v.to_owned()
 }
 
 fn get_window_from_window_context<R: Runtime>(

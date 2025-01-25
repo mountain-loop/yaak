@@ -1,6 +1,6 @@
 import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 import React, { useCallback } from 'react';
-import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthentication';
+import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { DynamicForm } from './DynamicForm';
@@ -13,7 +13,11 @@ interface Props {
 export function HttpAuthenticationEditor({ request }: Props) {
   const updateHttpRequest = useUpdateAnyHttpRequest();
   const updateGrpcRequest = useUpdateAnyGrpcRequest();
-  const auth = useHttpAuthenticationConfig(request.authenticationType, request.authentication, request.id);
+  const auth = useHttpAuthenticationConfig(
+    request.authenticationType,
+    request.authentication,
+    request.id,
+  );
 
   const handleChange = useCallback(
     (authentication: Record<string, boolean>) => {
