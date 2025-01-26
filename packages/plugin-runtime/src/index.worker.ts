@@ -8,6 +8,7 @@ import type {
   FormInput,
   GetHttpRequestByIdResponse,
   GetKeyValueResponse,
+  HttpAuthenticationAction,
   HttpRequestAction,
   InternalEvent,
   InternalEventPayload,
@@ -399,7 +400,7 @@ function initialize(workerData: PluginWorkerData) {
       }
 
       if (payload.type === 'get_http_authentication_config_request' && plug?.authentication) {
-        const { args } = plug.authentication;
+        const { args, actions } = plug.authentication;
         const resolvedArgs: FormInput[] = [];
         for (let i = 0; i < args.length; i++) {
           let v = args[i];
@@ -411,9 +412,16 @@ function initialize(workerData: PluginWorkerData) {
             resolvedArgs.push(v);
           }
         }
+        const resolvedActions: HttpAuthenticationAction[] = [];
+        for (const { onSelect, ...action } of actions ?? []) {
+          resolvedActions.push(action);
+        }
+
         const replyPayload: InternalEventPayload = {
           type: 'get_http_authentication_config_response',
           args: resolvedArgs,
+          actions: resolvedActions,
+          pluginRefId,
         };
 
         sendPayload(windowContext, replyPayload, replyId);
@@ -433,6 +441,18 @@ function initialize(workerData: PluginWorkerData) {
             },
             replyId,
           );
+          return;
+        }
+      }
+
+      if (
+        payload.type === 'call_http_authentication_action_request' &&
+        plug?.authentication != null
+      ) {
+        const action = plug.authentication.actions?.find((a) => a.name === payload.name);
+        if (typeof action?.onSelect === 'function') {
+          await action.onSelect(ctx, payload.args);
+          sendEmpty(windowContext, replyId);
           return;
         }
       }
@@ -543,7 +563,7 @@ function applyFormInputDefaults(
 ) {
   for (const input of inputs) {
     if ('inputs' in input) {
-      applyFormInputDefaults(input.inputs, values);
+      applyFormInputDefaults(input.inputs ?? [], values);
     } else if ('defaultValue' in input && values[input.name] === undefined) {
       values[input.name] = input.defaultValue;
     }

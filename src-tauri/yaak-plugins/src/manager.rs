@@ -3,13 +3,13 @@ use crate::error::Error::{
 };
 use crate::error::Result;
 use crate::events::{
-    BootRequest, CallHttpAuthenticationRequest, CallHttpAuthenticationResponse,
-    CallHttpRequestActionRequest, CallTemplateFunctionArgs, CallTemplateFunctionRequest,
-    CallTemplateFunctionResponse, EmptyPayload, FilterRequest, FilterResponse,
-    GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
-    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
-    GetTemplateFunctionsResponse, ImportRequest, ImportResponse, InternalEvent,
-    InternalEventPayload, JsonPrimitive, RenderPurpose, WindowContext,
+    BootRequest, CallHttpAuthenticationActionArgs, CallHttpAuthenticationActionRequest,
+    CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
+    CallTemplateFunctionArgs, CallTemplateFunctionRequest, CallTemplateFunctionResponse,
+    EmptyPayload, FilterRequest, FilterResponse, GetHttpAuthenticationConfigRequest,
+    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
+    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, ImportRequest, ImportResponse,
+    InternalEvent, InternalEventPayload, JsonPrimitive, RenderPurpose, WindowContext,
 };
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
@@ -500,15 +500,13 @@ impl PluginManager {
             .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
             .ok_or(PluginNotFoundErr(auth_name.into()))?;
 
+        let context_id = format!("{:x}", md5::compute(request_id.to_string()));
         let event = self
             .send_to_plugin_and_wait(
                 &WindowContext::from_window(window),
                 &plugin,
                 &InternalEventPayload::GetHttpAuthenticationConfigRequest(
-                    GetHttpAuthenticationConfigRequest {
-                        values,
-                        request_id: request_id.to_string(),
-                    },
+                    GetHttpAuthenticationConfigRequest { values, context_id },
                 ),
             )
             .await?;
@@ -519,6 +517,37 @@ impl PluginManager {
             }
             e => Err(PluginErr(format!("Auth plugin returned invalid event {:?}", e))),
         }
+    }
+
+    pub async fn call_http_authentication_action<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+        auth_name: &str,
+        action_name: &str,
+        values: HashMap<String, JsonPrimitive>,
+        request_id: &str,
+    ) -> Result<()> {
+        let results = self.get_http_authentication_summaries(window).await?;
+        let plugin = results
+            .iter()
+            .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
+            .ok_or(PluginNotFoundErr(auth_name.into()))?;
+
+        let context_id = format!("{:x}", md5::compute(request_id.to_string()));
+        self
+            .send_to_plugin_and_wait(
+                &WindowContext::from_window(window),
+                &plugin,
+                &InternalEventPayload::CallHttpAuthenticationActionRequest(
+                    CallHttpAuthenticationActionRequest {
+                        name: action_name.to_string(),
+                        plugin_ref_id: plugin.clone().ref_id,
+                        args: CallHttpAuthenticationActionArgs { context_id, values },
+                    },
+                ),
+            )
+            .await?;
+        Ok(())
     }
 
     pub async fn call_http_authentication<R: Runtime>(

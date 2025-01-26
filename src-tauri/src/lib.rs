@@ -232,7 +232,7 @@ async fn cmd_grpc_go<R: Runtime>(
     if let Some(auth_name) = request.authentication_type.clone() {
         let auth = request.authentication.clone();
         let plugin_req = CallHttpAuthenticationRequest {
-            request_id: request.id.clone(),
+            context_id: format!("{:x}", md5::compute(request_id.to_string())),
             values: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
             method: "POST".to_string(),
             url: request.url.clone(),
@@ -976,11 +976,11 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
     auth_name: &str,
-    config: HashMap<String, JsonPrimitive>,
+    values: HashMap<String, JsonPrimitive>,
     request_id: &str,
 ) -> Result<GetHttpAuthenticationConfigResponse, String> {
     plugin_manager
-        .get_http_authentication_config(&window, auth_name, config, request_id)
+        .get_http_authentication_config(&window, auth_name, values, request_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -992,6 +992,21 @@ async fn cmd_call_http_request_action<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<(), String> {
     plugin_manager.call_http_request_action(&window, req).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_call_http_authentication_action<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+    auth_name: &str,
+    action_name: &str,
+    values: HashMap<String, JsonPrimitive>,
+    request_id: &str,
+) -> Result<(), String> {
+    plugin_manager
+        .call_http_authentication_action(&window, auth_name, action_name, values, request_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1839,6 +1854,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            cmd_call_http_authentication_action,
             cmd_call_http_request_action,
             cmd_check_for_updates,
             cmd_create_cookie_jar,

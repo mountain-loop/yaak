@@ -88,9 +88,10 @@ pub enum InternalEventPayload {
     GetHttpAuthenticationSummaryResponse(GetHttpAuthenticationSummaryResponse),
     GetHttpAuthenticationConfigRequest(GetHttpAuthenticationConfigRequest),
     GetHttpAuthenticationConfigResponse(GetHttpAuthenticationConfigResponse),
-
     CallHttpAuthenticationRequest(CallHttpAuthenticationRequest),
     CallHttpAuthenticationResponse(CallHttpAuthenticationResponse),
+    CallHttpAuthenticationActionRequest(CallHttpAuthenticationActionRequest),
+    CallHttpAuthenticationActionResponse(EmptyPayload),
 
     CopyTextRequest(CopyTextRequest),
     CopyTextResponse(EmptyPayload),
@@ -359,10 +360,15 @@ impl Default for Color {
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_events.ts")]
 pub enum Icon {
+    AlertTriangle,
+    Check,
+    CheckCircle,
+    ChevronDown,
     Copy,
     Info,
-    CheckCircle,
-    AlertTriangle,
+    Pin,
+    Search,
+    Trash,
 
     #[serde(untagged)]
     #[ts(type = "\"_unknown\"")]
@@ -376,9 +382,6 @@ pub struct GetHttpAuthenticationSummaryResponse {
     pub name: String,
     pub label: String,
     pub short_label: String,
-
-    #[ts(optional)]
-    pub actions: Option<Vec<HttpAuthenticationAction>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -396,7 +399,7 @@ pub struct HttpAuthenticationAction {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct GetHttpAuthenticationConfigRequest {
-    pub request_id: String,
+    pub context_id: String,
     pub values: HashMap<String, JsonPrimitive>,
 }
 
@@ -405,6 +408,10 @@ pub struct GetHttpAuthenticationConfigRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct GetHttpAuthenticationConfigResponse {
     pub args: Vec<FormInput>,
+    pub plugin_ref_id: String,
+
+    #[ts(optional)]
+    pub actions: Option<Vec<HttpAuthenticationAction>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -419,11 +426,28 @@ pub struct HttpHeader {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct CallHttpAuthenticationRequest {
-    pub request_id: String,
+    pub context_id: String,
     pub values: HashMap<String, JsonPrimitive>,
     pub method: String,
     pub url: String,
     pub headers: Vec<HttpHeader>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct CallHttpAuthenticationActionRequest {
+    pub name: String,
+    pub plugin_ref_id: String,
+    pub args: CallHttpAuthenticationActionArgs,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct CallHttpAuthenticationActionArgs {
+    pub context_id: String,
+    pub values: HashMap<String, JsonPrimitive>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -577,6 +601,9 @@ pub struct FormInputEditor {
     pub language: Option<EditorLanguage>,
 
     #[ts(optional)]
+    pub read_only: Option<bool>,
+
+    #[ts(optional)]
     pub completion_options: Option<Vec<GenericCompletionOption>>,
 }
 
@@ -684,7 +711,9 @@ pub struct FormInputSelectOption {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct FormInputAccordion {
     pub label: String,
-    pub inputs: Vec<FormInput>,
+
+    #[ts(optional)]
+    pub inputs: Option<Vec<FormInput>>,
 
     #[ts(optional)]
     pub hidden: Option<bool>,
@@ -694,7 +723,8 @@ pub struct FormInputAccordion {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct FormInputBanner {
-    pub inputs: Vec<FormInput>,
+    #[ts(optional)]
+    pub inputs: Option<Vec<FormInput>>,
 
     #[ts(optional)]
     pub hidden: Option<bool>,

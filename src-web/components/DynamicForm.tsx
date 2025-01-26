@@ -31,7 +31,7 @@ export const DYNAMIC_FORM_NULL_ARG = '__NULL__';
 const INPUT_SIZE = 'sm';
 
 interface Props<T> {
-  inputs: FormInput[];
+  inputs: FormInput[] | undefined | null;
   onChange: (value: T) => void;
   data: T;
   useTemplating?: boolean;
@@ -83,7 +83,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
 }) {
   return (
     <VStack space={3} className="h-full overflow-auto">
-      {inputs.map((input, i) => {
+      {inputs?.map((input, i) => {
         if ('hidden' in input && input.hidden) {
           return null;
         }
@@ -272,6 +272,10 @@ function EditorArg({
 
   const id = `input-${arg.name}`;
 
+  // Read-only editor force refresh for every defaultValue change
+  // Should this be built into the <Editor/> component?
+  const forceUpdateKey = arg.readOnly ? arg.defaultValue + stateKey : stateKey;
+
   return (
     <div className=" w-full grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)]">
       <Label
@@ -299,7 +303,7 @@ function EditorArg({
         useTemplating={useTemplating}
         autocompleteVariables={autocompleteVariables}
         stateKey={stateKey}
-        forceUpdateKey={stateKey}
+        forceUpdateKey={forceUpdateKey}
         hideGutter
       />
     </div>

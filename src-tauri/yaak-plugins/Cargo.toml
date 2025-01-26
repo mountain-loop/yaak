@@ -6,17 +6,18 @@ publish = false
 
 [dependencies]
 dunce = "1.0.4"
+futures-util = "0.3.30"
 log = "0.4.21"
+md5 = "0.7.0"
+path-slash = "0.2.1"
 rand = "0.8.5"
+regex = "1.10.6"
 serde = { version = "1.0.198", features = ["derive"] }
 serde_json = "1.0.113"
 tauri = { workspace = true }
 tauri-plugin-shell = { workspace = true }
-tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread", "process"] }
-ts-rs = { workspace = true, features = ["import-esm"] }
 thiserror = "2.0.7"
-yaak-models = { workspace = true }
-regex = "1.10.6"
-path-slash = "0.2.1"
+tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread", "process"] }
 tokio-tungstenite = "0.26.1"
-futures-util = "0.3.30"
+ts-rs = { workspace = true, features = ["import-esm"] }
+yaak-models = { workspace = true }

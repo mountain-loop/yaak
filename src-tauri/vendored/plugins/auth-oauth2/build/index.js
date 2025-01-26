@@ -65,10 +65,10 @@ async function getAccessToken(ctx, {
   }
   console.log("SENDING REQUEST", JSON.stringify(httpRequest, null, 2));
   const resp = await ctx.httpRequest.send({ httpRequest });
-  const body = (0, import_node_fs.readFileSync)(resp.bodyPath ?? "", "utf8");
   if (resp.status < 200 || resp.status >= 300) {
     throw new Error("Failed to fetch access token with status=" + resp.status);
   }
+  const body = (0, import_node_fs.readFileSync)(resp.bodyPath ?? "", "utf8");
   let response;
   try {
     response = JSON.parse(body);
@@ -82,8 +82,11 @@ async function getAccessToken(ctx, {
   return response;
 }
 
+// src/getOrRefreshAccessToken.ts
+var import_node_fs2 = require("node:fs");
+
 // src/store.ts
-async function storeToken(ctx, requestId, response) {
+async function storeToken(ctx, contextId, response) {
   if (!response.access_token) {
     throw new Error(`Token not found in response`);
   }
@@ -92,21 +95,98 @@ async function storeToken(ctx, requestId, response) {
     response,
     expiresAt
   };
-  await ctx.store.set(tokenStoreKey(requestId), token);
+  await ctx.store.set(tokenStoreKey(contextId), token);
   return token;
 }
-async function getToken(ctx, requestId) {
-  return ctx.store.get(tokenStoreKey(requestId));
+async function getToken(ctx, contextId) {
+  return ctx.store.get(tokenStoreKey(contextId));
 }
-function tokenStoreKey(requestId) {
-  return ["token", requestId].join("_");
+async function deleteToken(ctx, contextId) {
+  return ctx.store.delete(tokenStoreKey(contextId));
+}
+function tokenStoreKey(context_id) {
+  return ["token", context_id].join("::");
+}
+
+// src/getOrRefreshAccessToken.ts
+async function getOrRefreshAccessToken(ctx, contextId, {
+  scope,
+  accessTokenUrl,
+  credentialsInBody,
+  clientId,
+  clientSecret,
+  forceRefresh
+}) {
+  const token = await getToken(ctx, contextId);
+  if (token == null) {
+    return null;
+  }
+  const now = Date.now() / 1e3;
+  const isExpired = token.expiresAt && now > token.expiresAt;
+  if (!isExpired && !forceRefresh) {
+    return token;
+  }
+  if (!token.response.refresh_token) {
+    return null;
+  }
+  const httpRequest = {
+    method: "POST",
+    url: accessTokenUrl,
+    bodyType: "application/x-www-form-urlencoded",
+    body: {
+      form: [
+        { name: "grant_type", value: "refresh_token" },
+        { name: "refresh_token", value: token.response.refresh_token }
+      ]
+    },
+    headers: [
+      { name: "User-Agent", value: "yaak" },
+      { name: "Accept", value: "application/x-www-form-urlencoded, application/json" },
+      { name: "Content-Type", value: "application/x-www-form-urlencoded" }
+    ]
+  };
+  if (scope) httpRequest.body.form.push({ name: "scope", value: scope });
+  if (credentialsInBody) {
+    httpRequest.body.form.push({ name: "client_id", value: clientId });
+    httpRequest.body.form.push({ name: "client_secret", value: clientSecret });
+  } else {
+    const value = "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    httpRequest.headers.push({ name: "Authorization", value });
+  }
+  console.log("SENDING REFRESH TOKEN REQUEST", JSON.stringify(httpRequest, null, 2));
+  const resp = await ctx.httpRequest.send({ httpRequest });
+  if (resp.status === 401) {
+    console.log("Unauthorized refresh_token request");
+    await deleteToken(ctx, contextId);
+    return null;
+  }
+  if (resp.status < 200 || resp.status >= 300) {
+    throw new Error("Failed to fetch access token with status=" + resp.status);
+  }
+  const body = (0, import_node_fs2.readFileSync)(resp.bodyPath ?? "", "utf8");
+  let response;
+  try {
+    response = JSON.parse(body);
+  } catch {
+    response = Object.fromEntries(new URLSearchParams(body));
+  }
+  if (response.error) {
+    throw new Error(`Failed to fetch access token with ${response.error} -> ${response.error_description}`);
+  }
+  console.log("REFRESH TOKEN RESPONSE", response);
+  const newResponse = {
+    ...response,
+    // Assign a new one or keep the old one,
+    refresh_token: response.refresh_token ?? token.response.refresh_token
+  };
+  return storeToken(ctx, contextId, newResponse);
 }
 
 // src/grants/authorizationCode.ts
 var PKCE_SHA256 = "S256";
 var PKCE_PLAIN = "plain";
 var DEFAULT_PKCE_METHOD = PKCE_SHA256;
-function getAuthorizationCode(ctx, requestId, {
+async function getAuthorizationCode(ctx, contextId, {
   authorizationUrl: authorizationUrlRaw,
   accessTokenUrl,
   clientId,
@@ -117,22 +197,30 @@ function getAuthorizationCode(ctx, requestId, {
   credentialsInBody,
   pkce
 }) {
+  const token = await getOrRefreshAccessToken(ctx, contextId, {
+    accessTokenUrl,
+    scope,
+    clientId,
+    clientSecret,
+    credentialsInBody,
+    forceRefresh: true
+  });
+  if (token != null) {
+    return token;
+  }
+  const authorizationUrl = new URL(`${authorizationUrlRaw ?? ""}`);
+  authorizationUrl.searchParams.set("response_type", "code");
+  authorizationUrl.searchParams.set("client_id", clientId);
+  if (redirectUri) authorizationUrl.searchParams.set("redirect_uri", redirectUri);
+  if (scope) authorizationUrl.searchParams.set("scope", scope);
+  if (state) authorizationUrl.searchParams.set("state", state);
+  if (pkce) {
+    const verifier = pkce.codeVerifier || createPkceCodeVerifier();
+    const challengeMethod = pkce.challengeMethod || DEFAULT_PKCE_METHOD;
+    authorizationUrl.searchParams.set("code_challenge", createPkceCodeChallenge(verifier, challengeMethod));
+    authorizationUrl.searchParams.set("code_challenge_method", challengeMethod);
+  }
   return new Promise(async (resolve, reject) => {
-    const token = await getToken(ctx, requestId);
-    if (token) {
-    }
-    const authorizationUrl = new URL(`${authorizationUrlRaw ?? ""}`);
-    authorizationUrl.searchParams.set("response_type", "code");
-    authorizationUrl.searchParams.set("client_id", clientId);
-    if (redirectUri) authorizationUrl.searchParams.set("redirect_uri", redirectUri);
-    if (scope) authorizationUrl.searchParams.set("scope", scope);
-    if (state) authorizationUrl.searchParams.set("state", state);
-    if (pkce) {
-      const verifier = pkce.codeVerifier || createPkceCodeVerifier();
-      const challengeMethod = pkce.challengeMethod || DEFAULT_PKCE_METHOD;
-      authorizationUrl.searchParams.set("code_challenge", createPkceCodeChallenge(verifier, challengeMethod));
-      authorizationUrl.searchParams.set("code_challenge_method", challengeMethod);
-    }
     const authorizationUrlStr = authorizationUrl.toString();
     console.log("Authorizing", authorizationUrlStr);
     let { close } = await ctx.window.openUrl({
@@ -161,7 +249,7 @@ function getAuthorizationCode(ctx, requestId, {
           ]
         });
         try {
-          resolve(await storeToken(ctx, requestId, response));
+          resolve(await storeToken(ctx, contextId, response));
         } catch (err) {
           reject(err);
         }
@@ -184,14 +272,14 @@ function encodeForPkce(bytes) {
 }
 
 // src/grants/clientCredentials.ts
-async function getClientCredentials(ctx, requestId, {
+async function getClientCredentials(ctx, contextId, {
   accessTokenUrl,
   clientId,
   clientSecret,
   scope,
   credentialsInBody
 }) {
-  const token = await getToken(ctx, requestId);
+  const token = await getToken(ctx, contextId);
   if (token) {
   }
   const response = await getAccessToken(ctx, {
@@ -203,11 +291,11 @@ async function getClientCredentials(ctx, requestId, {
     credentialsInBody,
     params: []
   });
-  return storeToken(ctx, requestId, response);
+  return storeToken(ctx, contextId, response);
 }
 
 // src/grants/implicit.ts
-function getImplicit(ctx, requestId, {
+function getImplicit(ctx, contextId, {
   authorizationUrl: authorizationUrlRaw,
   responseType,
   clientId,
@@ -216,7 +304,7 @@ function getImplicit(ctx, requestId, {
   state
 }) {
   return new Promise(async (resolve, reject) => {
-    const token = await getToken(ctx, requestId);
+    const token = await getToken(ctx, contextId);
     if (token) {
     }
     const authorizationUrl = new URL(`${authorizationUrlRaw ?? ""}`);
@@ -247,7 +335,7 @@ function getImplicit(ctx, requestId, {
         }
         const response = Object.fromEntries(params);
         try {
-          resolve(await storeToken(ctx, requestId, response));
+          resolve(await storeToken(ctx, contextId, response));
         } catch (err) {
           reject(err);
         }
@@ -256,8 +344,8 @@ function getImplicit(ctx, requestId, {
   });
 }
 
-// src/grants/resourceOwner.ts
-async function getResourceOwner(ctx, requestId, {
+// src/grants/password.ts
+async function getPassword(ctx, contextId, {
   accessTokenUrl,
   clientId,
   clientSecret,
@@ -266,8 +354,15 @@ async function getResourceOwner(ctx, requestId, {
   credentialsInBody,
   scope
 }) {
-  const token = await getToken(ctx, requestId);
-  if (token) {
+  const token = await getOrRefreshAccessToken(ctx, contextId, {
+    accessTokenUrl,
+    scope,
+    clientId,
+    clientSecret,
+    credentialsInBody
+  });
+  if (token != null) {
+    return token;
   }
   const response = await getAccessToken(ctx, {
     accessTokenUrl,
@@ -281,7 +376,7 @@ async function getResourceOwner(ctx, requestId, {
       { name: "password", value: password }
     ]
   });
-  return storeToken(ctx, requestId, response);
+  return storeToken(ctx, contextId, response);
 }
 
 // src/index.ts
@@ -335,6 +430,34 @@ var plugin = {
     name: "oauth2",
     label: "OAuth 2.0",
     shortLabel: "OAuth 2",
+    actions: [
+      {
+        label: "Copy Current Token",
+        name: "copyCurrentToken",
+        icon: "copy",
+        async onSelect(ctx, { contextId }) {
+          const token = await getToken(ctx, contextId);
+          if (token == null) {
+            await ctx.toast.show({ message: "No token to copy", color: "warning" });
+          } else {
+            await ctx.clipboard.copyText(token.response.access_token);
+            await ctx.toast.show({ message: "Token copied to clipboard", icon: "copy", color: "success" });
+          }
+        }
+      },
+      {
+        label: "Delete Token",
+        name: "clearToken",
+        icon: "trash",
+        async onSelect(ctx, { contextId }) {
+          if (await deleteToken(ctx, contextId)) {
+            await ctx.toast.show({ message: "Token deleted", color: "success" });
+          } else {
+            await ctx.toast.show({ message: "No token to delete", color: "warning" });
+          }
+        }
+      }
+    ],
     args: [
       {
         type: "select",
@@ -452,34 +575,37 @@ var plugin = {
       },
       {
         type: "accordion",
-        label: "Token State",
-        inputs: [],
-        async dynamic(ctx, { requestId }) {
-          const token = await getToken(ctx, requestId);
+        label: "Access Token Response",
+        async dynamic(ctx, { contextId }) {
+          const token = await getToken(ctx, contextId);
           if (token == null) {
             return { hidden: true };
           }
           return {
+            label: "Access Token Response",
             inputs: [
               {
-                type: "markdown",
-                content: "token: `" + token.response.access_token + "`"
+                type: "editor",
+                defaultValue: JSON.stringify(token.response, null, 2),
+                hideLabel: true,
+                readOnly: true,
+                language: "json"
               }
             ]
           };
         }
       }
     ],
-    async onApply(ctx, { values, requestId }) {
+    async onApply(ctx, { values, contextId }) {
       const headerPrefix = optionalString(values, "headerPrefix") ?? "";
       const grantType = requiredString(values, "grantType");
       const credentialsInBody = values.credentials === "body";
-      let token;
       console.log("Performing OAuth", values);
+      let token;
       if (grantType === "authorization_code") {
         const authorizationUrl = requiredString(values, "authorizationUrl");
         const accessTokenUrl = requiredString(values, "accessTokenUrl");
-        token = await getAuthorizationCode(ctx, requestId, {
+        token = await getAuthorizationCode(ctx, contextId, {
           accessTokenUrl: accessTokenUrl.match(/^https?:\/\//) ? accessTokenUrl : `https://${accessTokenUrl}`,
           authorizationUrl: authorizationUrl.match(/^https?:\/\//) ? authorizationUrl : `https://${authorizationUrl}`,
           clientId: requiredString(values, "clientId"),
@@ -495,7 +621,7 @@ var plugin = {
         });
       } else if (grantType === "implicit") {
         const authorizationUrl = requiredString(values, "authorizationUrl");
-        token = await getImplicit(ctx, requestId, {
+        token = await getImplicit(ctx, contextId, {
           authorizationUrl: authorizationUrl.match(/^https?:\/\//) ? authorizationUrl : `https://${authorizationUrl}`,
           clientId: requiredString(values, "clientId"),
           redirectUri: optionalString(values, "redirectUri"),
@@ -505,7 +631,7 @@ var plugin = {
         });
       } else if (grantType === "client_credentials") {
         const accessTokenUrl = requiredString(values, "accessTokenUrl");
-        token = await getClientCredentials(ctx, requestId, {
+        token = await getClientCredentials(ctx, contextId, {
           accessTokenUrl: accessTokenUrl.match(/^https?:\/\//) ? accessTokenUrl : `https://${accessTokenUrl}`,
           clientId: requiredString(values, "clientId"),
           clientSecret: requiredString(values, "clientSecret"),
@@ -514,7 +640,7 @@ var plugin = {
         });
       } else if (grantType === "password") {
         const accessTokenUrl = requiredString(values, "accessTokenUrl");
-        token = await getResourceOwner(ctx, requestId, {
+        token = await getPassword(ctx, contextId, {
           accessTokenUrl: accessTokenUrl.match(/^https?:\/\//) ? accessTokenUrl : `https://${accessTokenUrl}`,
           clientId: requiredString(values, "clientId"),
           clientSecret: requiredString(values, "clientSecret"),
@@ -526,6 +652,7 @@ var plugin = {
       } else {
         throw new Error("Invalid grant type " + grantType);
       }
+      console.log("GOT THE STUFF", token);
       const headerValue = `${headerPrefix} ${token.response.access_token}`.trim();
       return {
         setHeaders: [{

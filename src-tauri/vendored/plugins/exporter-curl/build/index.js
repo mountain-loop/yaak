@@ -27,16 +27,14 @@ module.exports = __toCommonJS(src_exports);
 var NEWLINE = "\\\n ";
 var plugin = {
   httpRequestActions: [{
-    key: "export-curl",
+    name: "export-curl",
     label: "Copy as Curl",
     icon: "copy",
     async onSelect(ctx, args) {
-      console.log("CURL", 1);
       const rendered_request = await ctx.httpRequest.render({ httpRequest: args.httpRequest, purpose: "preview" });
-      console.log("CURL", 2);
       const data = await convertToCurl(rendered_request);
       await ctx.clipboard.copyText(data);
-      await ctx.toast.show({ message: "Curl copied to clipboard", icon: "copy" });
+      await ctx.toast.show({ message: "Curl copied to clipboard", icon: "copy", color: "success" });
     }
   }]
 };

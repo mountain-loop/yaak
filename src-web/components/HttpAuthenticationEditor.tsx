@@ -4,11 +4,13 @@ import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfi
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { Checkbox } from './core/Checkbox';
+import type { DropdownItem } from './core/Dropdown';
+import { Dropdown } from './core/Dropdown';
+import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
-import { HStack, VStack } from './core/Stacks';
+import { HStack } from './core/Stacks';
 import { DynamicForm } from './DynamicForm';
 import { EmptyStateText } from './EmptyStateText';
-import { Dropdown } from './core/Dropdown';
 
 interface Props {
   request: HttpRequest | GrpcRequest;
@@ -46,7 +48,7 @@ export function HttpAuthenticationEditor({ request }: Props) {
   }
 
   return (
-    <VStack space={2}>
+    <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
       <HStack space={2} className="mb-1" alignItems="center">
         <Checkbox
           className="w-full"
@@ -54,19 +56,20 @@ export function HttpAuthenticationEditor({ request }: Props) {
           onChange={(disabled) => handleChange({ ...request.authentication, disabled: !disabled })}
           title="Enabled"
         />
-        <Dropdown
-          items={[
-            {
-              key: '',
-              label: 'hello',
-              onSelect: () => {},
-            },
-          ]}
-        >
-          <IconButton title="Authentication Actions" icon="settings" size="xs">
-            Action
-          </IconButton>
-        </Dropdown>
+        {auth.data.actions && (
+          <Dropdown
+            items={auth.data.actions.map(
+              (a): DropdownItem => ({
+                key: a.name,
+                label: a.label,
+                leftSlot: a.icon ? <Icon icon={a.icon} /> : null,
+                onSelect: () => a.call(request),
+              }),
+            )}
+          >
+            <IconButton title="Authentication Actions" icon="settings" size="xs" />
+          </Dropdown>
+        )}
       </HStack>
       <DynamicForm
         disabled={request.authentication.disabled}
@@ -77,6 +80,6 @@ export function HttpAuthenticationEditor({ request }: Props) {
         data={request.authentication}
         onChange={handleChange}
       />
-    </VStack>
+    </div>
   );
 }

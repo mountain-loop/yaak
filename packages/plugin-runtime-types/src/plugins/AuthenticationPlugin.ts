@@ -1,9 +1,11 @@
 import {
+  CallHttpAuthenticationActionArgs,
   CallHttpAuthenticationRequest,
   CallHttpAuthenticationResponse,
   FormInput,
   GetHttpAuthenticationConfigRequest,
   GetHttpAuthenticationSummaryResponse,
+  HttpAuthenticationAction,
 } from '../bindings/gen_events';
 import { MaybePromise } from '../helpers';
 import { Context } from './Context';
@@ -21,4 +23,7 @@ export type AuthenticationPlugin = GetHttpAuthenticationSummaryResponse & {
     ctx: Context,
     args: CallHttpAuthenticationRequest,
   ): MaybePromise<CallHttpAuthenticationResponse>;
+  actions?: (HttpAuthenticationAction & {
+    onSelect(ctx: Context, args: CallHttpAuthenticationActionArgs): Promise<void> | void;
+  })[];
 };

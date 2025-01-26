@@ -376,7 +376,7 @@ pub async fn send_http_request<R: Runtime>(
 
     if let Some(auth_name) = request.authentication_type.to_owned() {
         let req = CallHttpAuthenticationRequest {
-            request_id: request.id.clone(),
+            context_id: format!("{:x}", md5::compute(request.id)),
             values: serde_json::from_value(serde_json::to_value(&request.authentication).unwrap())
                 .unwrap(),
             url: sendable_req.url().to_string(),
