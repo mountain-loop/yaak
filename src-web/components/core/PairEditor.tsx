@@ -168,7 +168,8 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   );
 
   const handleChange = useCallback(
-    (pair: PairWithId) => setPairsAndSave((pairs) => pairs.map((p) => (pair.id !== p.id ? p : pair))),
+    (pair: PairWithId) =>
+      setPairsAndSave((pairs) => pairs.map((p) => (pair.id !== p.id ? p : pair))),
     [setPairsAndSave],
   );
 
@@ -344,7 +345,6 @@ function PairEditorRow({
   const deleteItems = useMemo(
     (): DropdownItem[] => [
       {
-        key: 'delete',
         label: 'Delete',
         onSelect: handleDelete,
         color: 'danger',
@@ -570,7 +570,6 @@ function FileActionsDropdown({
   const extraItems = useMemo<DropdownItem[]>(
     () => [
       {
-        key: 'mime',
         label: 'Set Content-Type',
         leftSlot: <Icon icon="pencil" />,
         hidden: !pair.isFile,
@@ -589,7 +588,6 @@ function FileActionsDropdown({
         },
       },
       {
-        key: 'clear-file',
         label: 'Unset File',
         leftSlot: <Icon icon="x" />,
         hidden: pair.isFile,
@@ -598,7 +596,6 @@ function FileActionsDropdown({
         },
       },
       {
-        key: 'delete',
         label: 'Delete',
         onSelect: onDelete,
         variant: 'danger',

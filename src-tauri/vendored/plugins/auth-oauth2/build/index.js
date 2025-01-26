@@ -63,7 +63,6 @@ async function getAccessToken(ctx, {
     const value = "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
     httpRequest.headers.push({ name: "Authorization", value });
   }
-  console.log("SENDING REQUEST", JSON.stringify(httpRequest, null, 2));
   const resp = await ctx.httpRequest.send({ httpRequest });
   if (resp.status < 200 || resp.status >= 300) {
     throw new Error("Failed to fetch access token with status=" + resp.status);
@@ -78,7 +77,6 @@ async function getAccessToken(ctx, {
   if (response.error) {
     throw new Error("Failed to fetch access token with " + response.error);
   }
-  console.log("ACCESS TOKEN RESPONSE", response);
   return response;
 }
 
@@ -153,7 +151,6 @@ async function getOrRefreshAccessToken(ctx, contextId, {
     const value = "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
     httpRequest.headers.push({ name: "Authorization", value });
   }
-  console.log("SENDING REFRESH TOKEN REQUEST", JSON.stringify(httpRequest, null, 2));
   const resp = await ctx.httpRequest.send({ httpRequest });
   if (resp.status === 401) {
     console.log("Unauthorized refresh_token request");
@@ -173,7 +170,6 @@ async function getOrRefreshAccessToken(ctx, contextId, {
   if (response.error) {
     throw new Error(`Failed to fetch access token with ${response.error} -> ${response.error_description}`);
   }
-  console.log("REFRESH TOKEN RESPONSE", response);
   const newResponse = {
     ...response,
     // Assign a new one or keep the old one,
@@ -202,8 +198,7 @@ async function getAuthorizationCode(ctx, contextId, {
     scope,
     clientId,
     clientSecret,
-    credentialsInBody,
-    forceRefresh: true
+    credentialsInBody
   });
   if (token != null) {
     return token;
@@ -652,7 +647,6 @@ var plugin = {
       } else {
         throw new Error("Invalid grant type " + grantType);
       }
-      console.log("GOT THE STUFF", token);
       const headerValue = `${headerPrefix} ${token.response.access_token}`.trim();
       return {
         setHeaders: [{

@@ -44,7 +44,6 @@ export type DropdownItemSeparator = {
 };
 
 export type DropdownItemDefault = {
-  key: string;
   type?: 'default';
   label: ReactNode;
   keepOpen?: boolean;
@@ -465,11 +464,12 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     return (
       <>
         {items.map(
-          (item) =>
+          (item, i) =>
             item.type !== 'separator' &&
-            !item.hotKeyLabelOnly && (
+            !item.hotKeyLabelOnly &&
+            item.hotKeyAction && (
               <MenuItemHotKey
-                key={item.key}
+                key={`${item.hotKeyAction}::${i}`}
                 onSelect={handleSelect}
                 item={item}
                 action={item.hotKeyAction}
@@ -542,7 +542,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                       focused={i === selectedIndex}
                       onFocus={handleFocus}
                       onSelect={handleSelect}
-                      key={item.key}
+                      key={`item_${i}`}
                       item={item}
                     />
                   );

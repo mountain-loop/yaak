@@ -388,7 +388,6 @@ pub struct GetHttpAuthenticationSummaryResponse {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct HttpAuthenticationAction {
-    pub name: String,
     pub label: String,
 
     #[ts(optional)]
@@ -437,7 +436,7 @@ pub struct CallHttpAuthenticationRequest {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct CallHttpAuthenticationActionRequest {
-    pub name: String,
+    pub index: i32,
     pub plugin_ref_id: String,
     pub args: CallHttpAuthenticationActionArgs,
 }
@@ -482,6 +481,7 @@ pub struct GetTemplateFunctionsResponse {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct TemplateFunction {
     pub name: String,
+
     #[ts(optional)]
     pub description: Option<String>,
 
@@ -813,7 +813,6 @@ pub struct GetHttpRequestActionsResponse {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct HttpRequestAction {
-    pub name: String,
     pub label: String,
     #[ts(optional)]
     pub icon: Option<Icon>,
@@ -823,7 +822,7 @@ pub struct HttpRequestAction {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct CallHttpRequestActionRequest {
-    pub name: String,
+    pub index: i32,
     pub plugin_ref_id: String,
     pub args: CallHttpRequestActionArgs,
 }

@@ -13,7 +13,7 @@ export type BootResponse = { name: string, version: string, };
 
 export type CallHttpAuthenticationActionArgs = { contextId: string, values: { [key in string]?: JsonPrimitive }, };
 
-export type CallHttpAuthenticationActionRequest = { name: string, pluginRefId: string, args: CallHttpAuthenticationActionArgs, };
+export type CallHttpAuthenticationActionRequest = { index: number, pluginRefId: string, args: CallHttpAuthenticationActionArgs, };
 
 export type CallHttpAuthenticationRequest = { contextId: string, values: { [key in string]?: JsonPrimitive }, method: string, url: string, headers: Array<HttpHeader>, };
 
@@ -26,7 +26,7 @@ setHeaders: Array<HttpHeader>, };
 
 export type CallHttpRequestActionArgs = { httpRequest: HttpRequest, };
 
-export type CallHttpRequestActionRequest = { name: string, pluginRefId: string, args: CallHttpRequestActionArgs, };
+export type CallHttpRequestActionRequest = { index: number, pluginRefId: string, args: CallHttpRequestActionArgs, };
 
 export type CallTemplateFunctionArgs = { purpose: RenderPurpose, values: { [key in string]?: string }, };
 
@@ -329,11 +329,11 @@ export type GetKeyValueResponse = { value?: string, };
 
 export type GetTemplateFunctionsResponse = { functions: Array<TemplateFunction>, pluginRefId: string, };
 
-export type HttpAuthenticationAction = { name: string, label: string, icon?: Icon, };
+export type HttpAuthenticationAction = { label: string, icon?: Icon, };
 
 export type HttpHeader = { name: string, value: string, };
 
-export type HttpRequestAction = { name: string, label: string, icon?: Icon, };
+export type HttpRequestAction = { label: string, icon?: Icon, };
 
 export type Icon = "alert_triangle" | "check" | "check_circle" | "chevron_down" | "copy" | "info" | "pin" | "search" | "trash" | "_unknown";
 

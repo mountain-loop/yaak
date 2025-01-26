@@ -253,7 +253,6 @@ function SidebarButton({
           onClose={() => setShowContextMenu(null)}
           items={[
             {
-              key: 'rename',
               label: 'Rename',
               leftSlot: <Icon icon="pencil" size="sm" />,
               onSelect: async () => {
@@ -275,7 +274,6 @@ function SidebarButton({
               },
             },
             {
-              key: 'delete-environment',
               color: 'danger',
               label: 'Delete',
               leftSlot: <Icon icon="trash" size="sm" />,

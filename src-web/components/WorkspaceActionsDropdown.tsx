@@ -46,7 +46,6 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
 
     const extraItems: DropdownItem[] = [
       {
-        key: 'workspace-settings',
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
         hotKeyAction: 'workspace_settings.show',
@@ -62,7 +61,6 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         },
       },
       {
-        key: 'reveal-workspace-sync-dir',
         label: revealInFinderText,
         hidden: workspaceMeta == null || workspaceMeta.settingSyncDir == null,
         leftSlot: <Icon icon="folder_open" />,
@@ -72,7 +70,6 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         },
       },
       {
-        key: 'delete-responses',
         label: 'Clear Send History',
         color: 'warning',
         leftSlot: <Icon icon="history" />,
@@ -80,13 +77,11 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       },
       { type: 'separator' },
       {
-        key: 'create-workspace',
         label: 'New Workspace',
         leftSlot: <Icon icon="plus" />,
         onSelect: createWorkspace,
       },
       {
-        key: 'open-workspace',
         label: 'Open Workspace',
         leftSlot: <Icon icon="folder" />,
         onSelect: openWorkspaceFromSyncDir.mutate,

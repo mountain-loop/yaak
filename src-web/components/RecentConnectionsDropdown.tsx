@@ -27,13 +27,11 @@ export function RecentConnectionsDropdown({
     <Dropdown
       items={[
         {
-          key: 'clear-single',
           label: 'Clear Connection',
           onSelect: deleteConnection.mutate,
           disabled: connections.length === 0,
         },
         {
-          key: 'clear-all',
           label: `Clear ${pluralizeCount('Connection', connections.length)}`,
           onSelect: deleteAllConnections.mutate,
           hidden: connections.length <= 1,
@@ -41,7 +39,6 @@ export function RecentConnectionsDropdown({
         },
         { type: 'separator', label: 'History' },
         ...connections.slice(0, 20).map((c) => ({
-          key: c.id,
           label: (
             <HStack space={2}>
               {formatDistanceToNowStrict(c.createdAt + 'Z')} ago &bull;{' '}

@@ -999,12 +999,12 @@ async fn cmd_call_http_authentication_action<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
     auth_name: &str,
-    action_name: &str,
+    action_index: i32,
     values: HashMap<String, JsonPrimitive>,
     request_id: &str,
 ) -> Result<(), String> {
     plugin_manager
-        .call_http_authentication_action(&window, auth_name, action_name, values, request_id)
+        .call_http_authentication_action(&window, auth_name, action_index, values, request_id)
         .await
         .map_err(|e| e.to_string())
 }

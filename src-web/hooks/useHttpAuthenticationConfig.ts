@@ -38,12 +38,12 @@ export function useHttpAuthenticationConfig(
 
       return {
         ...config,
-        actions: config.actions?.map((a) => ({
+        actions: config.actions?.map((a, i) => ({
           ...a,
           call: async ({ id: requestId }: HttpRequest | GrpcRequest) => {
             await invokeCmd('cmd_call_http_authentication_action', {
               pluginRefId: config.pluginRefId,
-              actionName: a.name,
+              actionIndex: i,
               authName,
               values,
               requestId,

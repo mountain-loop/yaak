@@ -26,7 +26,6 @@ export function useCreateDropdownItems({
 
     return [
       {
-        key: 'create-http-request',
         label: 'HTTP Request',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
         onSelect: () => {
@@ -34,7 +33,6 @@ export function useCreateDropdownItems({
         },
       },
       {
-        key: 'create-graphql-request',
         label: 'GraphQL Query',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
         onSelect: () =>
@@ -46,7 +44,6 @@ export function useCreateDropdownItems({
           }),
       },
       {
-        key: 'create-grpc-request',
         label: 'gRPC Call',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
         onSelect: () => createGrpcRequest({ folderId }),
@@ -54,11 +51,8 @@ export function useCreateDropdownItems({
       ...((hideFolder
         ? []
         : [
+            { type: 'separator' },
             {
-              type: 'separator',
-            },
-            {
-              key: 'create-folder',
               label: 'Folder',
               leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
               onSelect: () => createFolder.mutate({ folderId }),

@@ -237,7 +237,6 @@ export function GrpcConnectionSetupPane({
               {
                 label: 'Refresh',
                 type: 'default',
-                key: 'custom',
                 leftSlot: <Icon className="text-text-subtlest" size="sm" icon="refresh" />,
               },
             ]}

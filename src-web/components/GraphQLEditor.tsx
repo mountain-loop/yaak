@@ -69,13 +69,11 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
           <Dropdown
             items={[
               {
-                key: 'refresh',
                 label: 'Refetch',
                 leftSlot: <Icon icon="refresh" />,
                 onSelect: refetch,
               },
               {
-                key: 'clear',
                 label: 'Clear',
                 onSelect: clear,
                 hidden: !schema,
@@ -84,7 +82,6 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
               },
               { type: 'separator', label: 'Setting' },
               {
-                key: 'auto_fetch',
                 label: 'Automatic Introspection',
                 onSelect: () => {
                   setAutoIntrospectDisabled({

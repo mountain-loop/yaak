@@ -60,7 +60,6 @@ export function HttpAuthenticationEditor({ request }: Props) {
           <Dropdown
             items={auth.data.actions.map(
               (a): DropdownItem => ({
-                key: a.name,
                 label: a.label,
                 leftSlot: a.icon ? <Icon icon={a.icon} /> : null,
                 onSelect: () => a.call(request),

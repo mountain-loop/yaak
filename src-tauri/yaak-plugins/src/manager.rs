@@ -523,7 +523,7 @@ impl PluginManager {
         &self,
         window: &WebviewWindow<R>,
         auth_name: &str,
-        action_name: &str,
+        action_index: i32,
         values: HashMap<String, JsonPrimitive>,
         request_id: &str,
     ) -> Result<()> {
@@ -540,7 +540,7 @@ impl PluginManager {
                 &plugin,
                 &InternalEventPayload::CallHttpAuthenticationActionRequest(
                     CallHttpAuthenticationActionRequest {
-                        name: action_name.to_string(),
+                        index: action_index,
                         plugin_ref_id: plugin.clone().ref_id,
                         args: CallHttpAuthenticationActionArgs { context_id, values },
                     },

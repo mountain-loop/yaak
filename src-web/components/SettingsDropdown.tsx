@@ -28,14 +28,12 @@ export function SettingsDropdown() {
       ref={dropdownRef}
       items={[
         {
-          key: 'settings',
           label: 'Settings',
           hotKeyAction: 'settings.show',
           leftSlot: <Icon icon="settings" />,
           onSelect: openSettings.mutate,
         },
         {
-          key: 'hotkeys',
           label: 'Keyboard shortcuts',
           hotKeyAction: 'hotkeys.showHelp',
           leftSlot: <Icon icon="keyboard" />,
@@ -49,33 +47,28 @@ export function SettingsDropdown() {
           },
         },
         {
-          key: 'import-data',
           label: 'Import Data',
           leftSlot: <Icon icon="folder_input" />,
           onSelect: () => importData.mutate(),
         },
         {
-          key: 'export-data',
           label: 'Export Data',
           leftSlot: <Icon icon="folder_output" />,
           onSelect: () => exportData.mutate(),
         },
         { type: 'separator', label: `Yaak v${appInfo.version}` },
         {
-          key: 'update-check',
           label: 'Check for Updates',
           leftSlot: <Icon icon="update" />,
           onSelect: () => checkForUpdates.mutate(),
         },
         {
-          key: 'feedback',
           label: 'Feedback',
           leftSlot: <Icon icon="chat" />,
           rightSlot: <Icon icon="external_link" />,
           onSelect: () => openUrl('https://yaak.app/roadmap'),
         },
         {
-          key: 'changelog',
           label: 'Changelog',
           leftSlot: <Icon icon="cake" />,
           rightSlot: <Icon icon="external_link" />,

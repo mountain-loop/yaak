@@ -46,13 +46,11 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
     if (child.model === 'folder') {
       return [
         {
-          key: 'send-all',
           label: 'Send All',
           leftSlot: <Icon icon="send_horizontal" />,
           onSelect: () => sendManyRequests.mutate(child.children.map((c) => c.id)),
         },
         {
-          key: 'folder-settings',
           label: 'Settings',
           leftSlot: <Icon icon="settings" />,
           onSelect: () =>
@@ -64,13 +62,11 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
             }),
         },
         {
-          key: 'duplicateFolder',
           label: 'Duplicate',
           leftSlot: <Icon icon="copy" />,
           onSelect: () => duplicateFolder.mutate(),
         },
         {
-          key: 'delete-folder',
           label: 'Delete',
           color: 'danger',
           leftSlot: <Icon icon="trash" />,
@@ -84,7 +80,6 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         child.model === 'http_request'
           ? [
               {
-                key: 'send-request',
                 label: 'Send',
                 hotKeyAction: 'http_request.send',
                 hotKeyLabelOnly: true, // Already bound in URL bar
@@ -92,7 +87,6 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
                 onSelect: () => sendRequest.mutate(child.id),
               },
               ...httpRequestActions.map((a) => ({
-                key: a.name,
                 label: a.label,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
@@ -107,13 +101,11 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
       return [
         ...requestItems,
         {
-          key: 'rename-request',
           label: 'Rename',
           leftSlot: <Icon icon="pencil" />,
           onSelect: renameRequest.mutate,
         },
         {
-          key: 'duplicate-request',
           label: 'Duplicate',
           hotKeyAction: 'http_request.duplicate',
           hotKeyLabelOnly: true, // Would trigger for every request (bad)
@@ -124,14 +116,12 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
               : duplicateGrpcRequest.mutate(),
         },
         {
-          key: 'move-workspace',
           label: 'Move',
           leftSlot: <Icon icon="arrow_right_circle" />,
           hidden: workspaces.length <= 1,
           onSelect: moveToWorkspace.mutate,
         },
         {
-          key: 'delete-request',
           color: 'danger',
           label: 'Delete',
           hotKeyAction: 'http_request.delete',

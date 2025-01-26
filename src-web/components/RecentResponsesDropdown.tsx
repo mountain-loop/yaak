@@ -32,7 +32,6 @@ export const RecentResponsesDropdown = function ResponsePane({
     <Dropdown
       items={[
         {
-          key: 'save',
           label: 'Save to File',
           onSelect: saveResponse.mutate,
           leftSlot: <Icon icon="save" />,
@@ -40,7 +39,6 @@ export const RecentResponsesDropdown = function ResponsePane({
           disabled: activeResponse.state !== 'closed' && activeResponse.status >= 100,
         },
         {
-          key: 'copy',
           label: 'Copy Body',
           onSelect: copyResponse.mutate,
           leftSlot: <Icon icon="copy" />,
@@ -48,13 +46,11 @@ export const RecentResponsesDropdown = function ResponsePane({
           disabled: activeResponse.state !== 'closed' && activeResponse.status >= 100,
         },
         {
-          key: 'clear-single',
           label: 'Delete',
           leftSlot: <Icon icon="trash" />,
           onSelect: deleteResponse.mutate,
         },
         {
-          key: 'unpin',
           label: 'Unpin Response',
           onSelect: () => onPinnedResponseId(activeResponse.id),
           leftSlot: <Icon icon="unpin" />,
@@ -63,7 +59,6 @@ export const RecentResponsesDropdown = function ResponsePane({
         },
         { type: 'separator', label: 'History' },
         {
-          key: 'clear-all',
           label: `Delete ${responses.length} ${pluralize('Response', responses.length)}`,
           onSelect: deleteAllResponses.mutate,
           hidden: responses.length === 0,
@@ -71,7 +66,6 @@ export const RecentResponsesDropdown = function ResponsePane({
         },
         { type: 'separator' },
         ...responses.slice(0, 20).map((r: HttpResponse) => ({
-          key: r.id,
           label: (
             <HStack space={2}>
               <StatusTag className="text-sm" response={r} />
