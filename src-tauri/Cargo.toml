@@ -7,6 +7,7 @@ members = [
     "yaak-sse",
     "yaak-sync",
     "yaak-templates",
+    "yaak-ws",
 ]
 
 [package]
@@ -45,7 +46,7 @@ hex_color = "3.0.0"
 http = { version = "1.2.0", default-features = false }
 log = "0.4.21"
 md5 = "0.7.0"
-rand = "0.8.5"
+rand = "0.9.0"
 regex = "1.10.2"
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider"] }
 reqwest_cookie_store = "0.8.0"
@@ -54,22 +55,22 @@ rustls-platform-verifier = "0.5.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
-tauri-plugin-clipboard-manager = "2.2.0"
+tauri-plugin-clipboard-manager = "2.2.1"
 tauri-plugin-dialog = "2.2.0"
 tauri-plugin-fs = "2.2.0"
-tauri-plugin-log = { version = "2.2.0", features = ["colored"] }
-tauri-plugin-opener = "2.2.4"
+tauri-plugin-log = { version = "2.2.1", features = ["colored"] }
+tauri-plugin-opener = "2.2.5"
 tauri-plugin-os = "2.2.0"
 tauri-plugin-shell = { workspace = true }
 tauri-plugin-single-instance = "2.2.1"
-tauri-plugin-updater = "2.3.1"
-tauri-plugin-window-state = "2.2.0"
-tokio = { version = "1.36.0", features = ["sync"] }
-tokio-stream = "0.1.15"
+tauri-plugin-updater = "2.4.0"
+tauri-plugin-window-state = "2.2.1"
+tokio = { version = "1.43.0", features = ["sync"] }
+tokio-stream = "0.1.17"
 ts-rs = { workspace = true }
 mime_guess = "2.0.5"
 urlencoding = "2.1.3"
-uuid = "1.7.0"
+uuid = "1.12.1"
 yaak-grpc = { path = "yaak-grpc" }
 yaak-license = { path = "yaak-license" }
 yaak-models = { workspace = true }
@@ -86,7 +87,7 @@ yaak-plugins = { path = "yaak-plugins" }
 serde = "1.0.215"
 serde_json = "1.0.132"
 tauri-plugin-shell = "2.2.0"
-tauri = "2.2.3"
+tauri = "2.2.5"
 thiserror = "2.0.3"
 ts-rs = "10.0.0"
 reqwest = "0.12.12"
