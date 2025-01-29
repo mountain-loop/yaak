@@ -1,0 +1,8 @@
+[default]
+description = "Default permissions for the plugin"
+permissions = [
+    "allow-connect",
+    "allow-list-connections",
+    "allow-list-requests",
+    "allow-upsert-request",
+]

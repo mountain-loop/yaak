@@ -6,7 +6,9 @@ use sha1::{Digest, Sha1};
 use std::path::Path;
 use tokio::fs;
 use ts_rs::TS;
-use yaak_models::models::{AnyModel, Environment, Folder, GrpcRequest, HttpRequest, Workspace};
+use yaak_models::models::{
+    AnyModel, Environment, Folder, GrpcRequest, HttpRequest, WebsocketRequest, Workspace,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -17,6 +19,7 @@ pub enum SyncModel {
     Folder(Folder),
     HttpRequest(HttpRequest),
     GrpcRequest(GrpcRequest),
+    WebsocketRequest(WebsocketRequest),
 }
 
 impl SyncModel {
@@ -62,6 +65,7 @@ impl SyncModel {
             SyncModel::Folder(m) => m.id,
             SyncModel::HttpRequest(m) => m.id,
             SyncModel::GrpcRequest(m) => m.id,
+            SyncModel::WebsocketRequest(m) => m.id,
         }
     }
 
@@ -72,6 +76,7 @@ impl SyncModel {
             SyncModel::Folder(m) => m.workspace_id,
             SyncModel::HttpRequest(m) => m.workspace_id,
             SyncModel::GrpcRequest(m) => m.workspace_id,
+            SyncModel::WebsocketRequest(m) => m.workspace_id,
         }
     }
 
@@ -82,6 +87,7 @@ impl SyncModel {
             SyncModel::Folder(m) => m.updated_at,
             SyncModel::HttpRequest(m) => m.updated_at,
             SyncModel::GrpcRequest(m) => m.updated_at,
+            SyncModel::WebsocketRequest(m) => m.updated_at,
         }
     }
 }
@@ -95,15 +101,20 @@ impl TryFrom<AnyModel> for SyncModel {
             AnyModel::Folder(m) => SyncModel::Folder(m),
             AnyModel::GrpcRequest(m) => SyncModel::GrpcRequest(m),
             AnyModel::HttpRequest(m) => SyncModel::HttpRequest(m),
+            AnyModel::WebsocketRequest(m) => SyncModel::WebsocketRequest(m),
             AnyModel::Workspace(m) => SyncModel::Workspace(m),
-            AnyModel::WorkspaceMeta(m) => return Err(UnknownModel(m.model)),
+
+            // Non-sync models
             AnyModel::CookieJar(m) => return Err(UnknownModel(m.model)),
             AnyModel::GrpcConnection(m) => return Err(UnknownModel(m.model)),
             AnyModel::GrpcEvent(m) => return Err(UnknownModel(m.model)),
             AnyModel::HttpResponse(m) => return Err(UnknownModel(m.model)),
+            AnyModel::KeyValue(m) => return Err(UnknownModel(m.model)),
             AnyModel::Plugin(m) => return Err(UnknownModel(m.model)),
             AnyModel::Settings(m) => return Err(UnknownModel(m.model)),
-            AnyModel::KeyValue(m) => return Err(UnknownModel(m.model)),
+            AnyModel::WebsocketConnection(m) => return Err(UnknownModel(m.model)),
+            AnyModel::WebsocketEvent(m) => return Err(UnknownModel(m.model)),
+            AnyModel::WorkspaceMeta(m) => return Err(UnknownModel(m.model)),
         };
         Ok(m)
     }

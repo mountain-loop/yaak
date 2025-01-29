@@ -1,24 +1,24 @@
 import React, { useMemo } from 'react';
-import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
-import { useDeleteFolder } from '../hooks/useDeleteFolder';
-import { useDeleteAnyRequest } from '../hooks/useDeleteAnyRequest';
-import { useDuplicateFolder } from '../hooks/useDuplicateFolder';
-import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
-import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
-import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
-import { useMoveToWorkspace } from '../hooks/useMoveToWorkspace';
-import { useRenameRequest } from '../hooks/useRenameRequest';
-import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
-import { useSendManyRequests } from '../hooks/useSendManyRequests';
-import { useWorkspaces } from '../hooks/useWorkspaces';
+import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
+import { useDeleteFolder } from '../../hooks/useDeleteFolder';
+import { useDeleteAnyRequest } from '../../hooks/useDeleteAnyRequest';
+import { useDuplicateFolder } from '../../hooks/useDuplicateFolder';
+import { useDuplicateGrpcRequest } from '../../hooks/useDuplicateGrpcRequest';
+import { useDuplicateHttpRequest } from '../../hooks/useDuplicateHttpRequest';
+import { useHttpRequestActions } from '../../hooks/useHttpRequestActions';
+import { useMoveToWorkspace } from '../../hooks/useMoveToWorkspace';
+import { useRenameRequest } from '../../hooks/useRenameRequest';
+import { useSendAnyHttpRequest } from '../../hooks/useSendAnyHttpRequest';
+import { useSendManyRequests } from '../../hooks/useSendManyRequests';
+import { useWorkspaces } from '../../hooks/useWorkspaces';
 
-import { showDialog } from '../lib/dialog';
-import type { DropdownItem } from './core/Dropdown';
-import { ContextMenu } from './core/Dropdown';
-import { Icon } from './core/Icon';
-import { FolderSettingsDialog } from './FolderSettingsDialog';
+import { showDialog } from '../../lib/dialog';
+import type { DropdownItem } from '../core/Dropdown';
+import { ContextMenu } from '../core/Dropdown';
+import { Icon } from '../core/Icon';
+import { FolderSettingsDialog } from '../FolderSettingsDialog';
 import type { SidebarTreeNode } from './Sidebar';
-import { getHttpRequest } from '../hooks/useHttpRequests';
+import { getHttpRequest } from '../../hooks/useHttpRequests';
 
 interface Props {
   child: SidebarTreeNode;

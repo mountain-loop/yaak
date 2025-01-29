@@ -1,8 +1,8 @@
 import type { GrpcConnection, HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import React, { Fragment, memo } from 'react';
-import { VStack } from './core/Stacks';
-import { DropMarker } from './DropMarker';
+import { VStack } from '../core/Stacks';
+import { DropMarker } from '../DropMarker';
 import type { SidebarTreeNode } from './Sidebar';
 import { SidebarItem } from './SidebarItem';
 

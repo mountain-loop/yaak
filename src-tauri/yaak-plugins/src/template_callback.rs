@@ -1,7 +1,7 @@
+use crate::events::{FormInput, RenderPurpose, WindowContext};
+use crate::manager::PluginManager;
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager, Runtime};
-use yaak_plugins::events::{FormInput, RenderPurpose, WindowContext};
-use yaak_plugins::manager::PluginManager;
 use yaak_templates::TemplateCallback;
 
 #[derive(Clone)]

@@ -1,14 +1,14 @@
 import { atom, useAtomValue } from 'jotai';
-import {jotaiStore} from "../lib/jotai";
 import { grpcRequestsAtom } from './useGrpcRequests';
 import { httpRequestsAtom } from './useHttpRequests';
+import { websocketRequestsAtom } from './useWebsocketRequests';
 
-const requestsAtom = atom((get) => [...get(httpRequestsAtom), ...get(grpcRequestsAtom)]);
+export const requestsAtom = atom((get) => [
+  ...get(httpRequestsAtom),
+  ...get(grpcRequestsAtom),
+  ...get(websocketRequestsAtom),
+]);
 
 export function useRequests() {
   return useAtomValue(requestsAtom);
-}
-
-export function getRequests() {
-  return jotaiStore.get(requestsAtom);
 }

@@ -7,7 +7,6 @@ use crate::grpc::metadata_to_map;
 use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
-use crate::template_callback::PluginTemplateCallback;
 use crate::updates::{UpdateMode, YaakUpdater};
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
@@ -61,6 +60,7 @@ use yaak_plugins::events::{
     InternalEventPayload, JsonPrimitive, RenderPurpose, WindowContext,
 };
 use yaak_plugins::manager::PluginManager;
+use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
 use yaak_templates::{Parser, Tokens};
@@ -74,7 +74,6 @@ mod plugin_events;
 mod render;
 #[cfg(target_os = "macos")]
 mod tauri_plugin_mac_window;
-mod template_callback;
 mod updates;
 mod window;
 mod window_menu;
@@ -1825,6 +1824,7 @@ pub fn run() {
         .plugin(yaak_license::init())
         .plugin(yaak_models::plugin::Builder::default().build())
         .plugin(yaak_plugins::init())
+        .plugin(yaak_ws::init())
         .plugin(yaak_sync::init());
 
     #[cfg(target_os = "macos")]

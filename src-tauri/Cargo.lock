@@ -4858,9 +4858,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.215"
+version = "1.0.217"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6513c1ad0b11a9376da888e3e0baa0077f1aed55c17f50e7b2397136129fb88f"
+checksum = "02fc4265df13d6fa1d00ecff087228cc0a2b5f3c0e87e258d8b94a156e984c70"
 dependencies = [
  "serde_derive",
 ]
@@ -4888,9 +4888,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.215"
+version = "1.0.217"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad1e866f866923f252f05c889987993144fb74e722403468a4ebd70c3cd756c0"
+checksum = "5a9bf7cf98d04a2b28aead066b7496853d4779c9cc183c440dbac457641e19a0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5742,9 +5742,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin"
-version = "2.0.3"
+version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e753f2a30933a9bbf0a202fa47d7cc4a3401f06e8d6dcc53b79aa62954828c79"
+checksum = "5841b9a0200e954ef7457f8d327091424328891e267a97b641dc246cc54d0dec"
 dependencies = [
  "anyhow",
  "glob",
@@ -7629,6 +7629,7 @@ dependencies = [
  "yaak-sse",
  "yaak-sync",
  "yaak-templates",
+ "yaak-ws",
 ]
 
 [[package]]
@@ -7713,6 +7714,7 @@ dependencies = [
  "tokio-tungstenite",
  "ts-rs",
  "yaak-models",
+ "yaak-templates",
 ]
 
 [[package]]
@@ -7749,6 +7751,7 @@ version = "0.1.0"
 dependencies = [
  "log",
  "serde",
+ "serde_json",
  "tokio",
  "ts-rs",
 ]
@@ -7759,11 +7762,19 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "log",
+ "md5",
  "rustls",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
  "thiserror 2.0.11",
  "tokio",
  "tokio-tungstenite",
+ "yaak-models",
+ "yaak-plugins",
+ "yaak-templates",
 ]
 
 [[package]]

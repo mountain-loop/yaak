@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
-import { useShouldFloatSidebar } from '../hooks/useShouldFloatSidebar';
-import { useSidebarHidden } from '../hooks/useSidebarHidden';
-import { trackEvent } from '../lib/analytics';
-import { IconButton } from './core/IconButton';
-import { HStack } from './core/Stacks';
-import { CreateDropdown } from './CreateDropdown';
+import { useFloatingSidebarHidden } from '../../hooks/useFloatingSidebarHidden';
+import { useShouldFloatSidebar } from '../../hooks/useShouldFloatSidebar';
+import { useSidebarHidden } from '../../hooks/useSidebarHidden';
+import { trackEvent } from '../../lib/analytics';
+import { IconButton } from '../core/IconButton';
+import { HStack } from '../core/Stacks';
+import { CreateDropdown } from '../CreateDropdown';
 
 export function SidebarActions() {
   const floating = useShouldFloatSidebar();

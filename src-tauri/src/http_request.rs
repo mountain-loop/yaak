@@ -1,6 +1,5 @@
 use crate::render::render_http_request;
 use crate::response_err;
-use crate::template_callback::PluginTemplateCallback;
 use http::header::{ACCEPT, USER_AGENT};
 use http::{HeaderMap, HeaderName, HeaderValue, Uri};
 use log::{debug, error, warn};
@@ -34,6 +33,7 @@ use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
 use yaak_plugins::manager::PluginManager;
+use yaak_plugins::template_callback::PluginTemplateCallback;
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -220,14 +220,14 @@ pub async fn send_http_request<R: Runtime>(
             continue;
         }
 
-        let header_name = match HeaderName::from_bytes(h.name.as_bytes()) {
+        let header_name = match HeaderName::from_str(&h.name) {
             Ok(n) => n,
             Err(e) => {
                 error!("Failed to create header name: {}", e);
                 continue;
             }
         };
-        let header_value = match HeaderValue::from_str(h.value.as_str()) {
+        let header_value = match HeaderValue::from_str(&h.value) {
             Ok(n) => n,
             Err(e) => {
                 error!("Failed to create header value: {}", e);

@@ -15,8 +15,9 @@ use ts_rs::TS;
 use yaak_models::models::{SyncState, WorkspaceMeta};
 use yaak_models::queries::{
     batch_upsert, delete_environment, delete_folder, delete_grpc_request, delete_http_request,
-    delete_sync_state, delete_workspace, get_workspace_export_resources, get_workspace_meta,
-    list_sync_states_for_workspace, upsert_sync_state, upsert_workspace_meta, UpdateSource,
+    delete_sync_state, delete_websocket_request, delete_workspace, get_workspace_export_resources,
+    get_workspace_meta, list_sync_states_for_workspace, upsert_sync_state, upsert_workspace_meta,
+    UpdateSource,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -320,6 +321,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
     let mut folders_to_upsert = Vec::new();
     let mut http_requests_to_upsert = Vec::new();
     let mut grpc_requests_to_upsert = Vec::new();
+    let mut websocket_requests_to_upsert = Vec::new();
 
     for op in sync_ops {
         // Only apply things if workspace ID matches
@@ -381,6 +383,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                     SyncModel::Folder(m) => folders_to_upsert.push(m),
                     SyncModel::HttpRequest(m) => http_requests_to_upsert.push(m),
                     SyncModel::GrpcRequest(m) => grpc_requests_to_upsert.push(m),
+                    SyncModel::WebsocketRequest(m) => websocket_requests_to_upsert.push(m),
                 };
                 SyncStateOp::Create {
                     model_id,
@@ -397,6 +400,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                     SyncModel::Folder(m) => folders_to_upsert.push(m),
                     SyncModel::HttpRequest(m) => http_requests_to_upsert.push(m),
                     SyncModel::GrpcRequest(m) => grpc_requests_to_upsert.push(m),
+                    SyncModel::WebsocketRequest(m) => websocket_requests_to_upsert.push(m),
                 }
                 SyncStateOp::Update {
                     state: state.to_owned(),
@@ -542,6 +546,9 @@ async fn delete_model<R: Runtime>(window: &WebviewWindow<R>, model: &SyncModel) 
         }
         SyncModel::GrpcRequest(m) => {
             delete_grpc_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
+        }
+        SyncModel::WebsocketRequest(m) => {
+            delete_websocket_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
         }
     };
     Ok(())

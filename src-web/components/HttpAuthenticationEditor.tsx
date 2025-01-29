@@ -1,5 +1,6 @@
-import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
+import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
 import React, { useCallback } from 'react';
+import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
 import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
@@ -13,7 +14,7 @@ import { DynamicForm } from './DynamicForm';
 import { EmptyStateText } from './EmptyStateText';
 
 interface Props {
-  request: HttpRequest | GrpcRequest;
+  request: HttpRequest | GrpcRequest | WebsocketRequest;
 }
 
 export function HttpAuthenticationEditor({ request }: Props) {
@@ -32,6 +33,8 @@ export function HttpAuthenticationEditor({ request }: Props) {
           id: request.id,
           update: (r) => ({ ...r, authentication }),
         });
+      } else if (request.model === 'websocket_request') {
+        upsertWebsocketRequest.mutate({ ...request, authentication });
       } else {
         updateGrpcRequest.mutate({
           id: request.id,
@@ -39,7 +42,7 @@ export function HttpAuthenticationEditor({ request }: Props) {
         });
       }
     },
-    [request.id, request.model, updateGrpcRequest, updateHttpRequest],
+    [request, updateGrpcRequest, updateHttpRequest],
   );
 
   if (authConfig.data == null) {

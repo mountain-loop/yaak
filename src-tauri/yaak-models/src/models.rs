@@ -125,7 +125,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let proxy: Option<String> = r.get("proxy")?;
         let editor_keymap: String = r.get("editor_keymap")?;
-        Ok(Settings {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             created_at: r.get("created_at")?,
@@ -187,7 +187,7 @@ impl<'s> TryFrom<&Row<'s>> for Workspace {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(Workspace {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             created_at: r.get("created_at")?,
@@ -243,7 +243,7 @@ impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(WorkspaceMeta {
+        Ok(Self {
             id: r.get("id")?,
             workspace_id: r.get("workspace_id")?,
             model: r.get("model")?,
@@ -313,7 +313,7 @@ impl<'s> TryFrom<&Row<'s>> for CookieJar {
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let cookies: String = r.get("cookies")?;
-        Ok(CookieJar {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -361,7 +361,7 @@ impl<'s> TryFrom<&Row<'s>> for Environment {
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let variables: String = r.get("variables")?;
-        Ok(Environment {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -424,7 +424,7 @@ impl<'s> TryFrom<&Row<'s>> for Folder {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(Folder {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             sort_priority: r.get("sort_priority")?,
@@ -484,7 +484,7 @@ pub struct HttpRequest {
     pub body_type: Option<String>,
     pub description: String,
     pub headers: Vec<HttpRequestHeader>,
-    #[serde(default = "default_http_request_method")]
+    #[serde(default = "default_http_method")]
     pub method: String,
     pub name: String,
     pub sort_priority: f32,
@@ -524,7 +524,7 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
         let body: String = r.get("body")?;
         let authentication: String = r.get("authentication")?;
         let headers: String = r.get("headers")?;
-        Ok(HttpRequest {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             sort_priority: r.get("sort_priority")?,
@@ -542,6 +542,219 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
             folder_id: r.get("folder_id")?,
             name: r.get("name")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct WebsocketConnection {
+    #[ts(type = "\"websocket_connection\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+    pub request_id: String,
+
+    pub elapsed: i32,
+    pub error: Option<String>,
+    pub headers: Vec<HttpResponseHeader>,
+    pub status: i32,
+    pub url: String,
+}
+
+#[derive(Iden)]
+pub enum WebsocketConnectionIden {
+    #[iden = "websocket_connections"]
+    Table,
+    Id,
+    Model,
+    CreatedAt,
+    UpdatedAt,
+    WorkspaceId,
+    RequestId,
+
+    Elapsed,
+    Error,
+    Headers,
+    Status,
+    Url,
+}
+
+impl<'s> TryFrom<&Row<'s>> for WebsocketConnection {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        let headers: String = r.get("headers")?;
+        Ok(Self {
+            id: r.get("id")?,
+            model: r.get("model")?,
+            workspace_id: r.get("workspace_id")?,
+            request_id: r.get("request_id")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            url: r.get("url")?,
+            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            elapsed: r.get("elapsed")?,
+            error: r.get("error")?,
+            status: r.get("status")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum WebsocketMessageType {
+    Binary,
+    Text,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct WebsocketRequest {
+    #[ts(type = "\"websocket_request\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+    pub folder_id: Option<String>,
+
+    #[ts(type = "Record<string, any>")]
+    pub authentication: BTreeMap<String, Value>,
+    pub authentication_type: Option<String>,
+    pub description: String,
+    pub headers: Vec<HttpRequestHeader>,
+    pub message: Vec<u8>,
+    pub message_type: Option<WebsocketMessageType>,
+    pub name: String,
+    pub sort_priority: f32,
+    pub url: String,
+    pub url_parameters: Vec<HttpUrlParameter>,
+}
+
+#[derive(Iden)]
+pub enum WebsocketRequestIden {
+    #[iden = "websocket_requests"]
+    Table,
+    Id,
+    Model,
+    CreatedAt,
+    UpdatedAt,
+    WorkspaceId,
+    FolderId,
+
+    Authentication,
+    AuthenticationType,
+    Message,
+    MessageType,
+    Description,
+    Headers,
+    Name,
+    SortPriority,
+    Url,
+    UrlParameters,
+}
+
+impl<'s> TryFrom<&Row<'s>> for WebsocketRequest {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        let url_parameters: String = r.get("url_parameters")?;
+        let authentication: String = r.get("authentication")?;
+        let headers: String = r.get("headers")?;
+        let message_type: String = r.get("message_type")?;
+        Ok(Self {
+            id: r.get("id")?,
+            model: r.get("model")?,
+            sort_priority: r.get("sort_priority")?,
+            workspace_id: r.get("workspace_id")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            url: r.get("url")?,
+            url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
+            message: r.get("message")?,
+            message_type: serde_json::from_str(message_type.as_str()).unwrap_or_default(),
+            description: r.get("description")?,
+            authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
+            authentication_type: r.get("authentication_type")?,
+            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            folder_id: r.get("folder_id")?,
+            name: r.get("name")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum WebsocketEventType {
+    Binary,
+    Close,
+    Frame,
+    Ping,
+    Pong,
+    Text,
+}
+
+impl Default for WebsocketEventType {
+    fn default() -> Self {
+        Self::Text
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct WebsocketEvent {
+    #[ts(type = "\"websocket_event\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+    pub request_id: String,
+    pub connection_id: String,
+
+    pub content: Vec<u8>,
+    pub message_type: GrpcEventType,
+}
+
+#[derive(Iden)]
+pub enum WebsocketEventIden {
+    #[iden = "websocket_events"]
+    Table,
+    Model,
+    Id,
+    CreatedAt,
+    UpdatedAt,
+    WorkspaceId,
+    RequestId,
+    ConnectionId,
+
+    MessageType,
+    Content,
+}
+
+impl<'s> TryFrom<&Row<'s>> for WebsocketEvent {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        let message_type: String = r.get("message_type")?;
+        Ok(Self {
+            id: r.get("id")?,
+            model: r.get("model")?,
+            workspace_id: r.get("workspace_id")?,
+            request_id: r.get("request_id")?,
+            connection_id: r.get("connection_id")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            content: r.get("content")?,
+            message_type: serde_json::from_str(message_type.as_str()).unwrap_or_default(),
         })
     }
 }
@@ -626,7 +839,7 @@ impl<'s> TryFrom<&Row<'s>> for HttpResponse {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let headers: String = r.get("headers")?;
         let state: String = r.get("state")?;
-        Ok(HttpResponse {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -725,7 +938,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcRequest {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let authentication: String = r.get("authentication")?;
         let metadata: String = r.get("metadata")?;
-        Ok(GrpcRequest {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -810,7 +1023,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcConnection {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let trailers: String = r.get("trailers")?;
         let state: String = r.get("state")?;
-        Ok(GrpcConnection {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -892,7 +1105,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcEvent {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let event_type: String = r.get("event_type")?;
         let metadata: String = r.get("metadata")?;
-        Ok(GrpcEvent {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -944,7 +1157,7 @@ impl<'s> TryFrom<&Row<'s>> for Plugin {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(Plugin {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             created_at: r.get("created_at")?,
@@ -1012,7 +1225,7 @@ impl<'s> TryFrom<&Row<'s>> for SyncState {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(SyncState {
+        Ok(Self {
             id: r.get("id")?,
             workspace_id: r.get("workspace_id")?,
             model: r.get("model")?,
@@ -1058,7 +1271,7 @@ impl<'s> TryFrom<&Row<'s>> for KeyValue {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(KeyValue {
+        Ok(Self {
             model: r.get("model")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
@@ -1100,7 +1313,7 @@ impl<'s> TryFrom<&Row<'s>> for PluginKeyValue {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(PluginKeyValue {
+        Ok(Self {
             model: r.get("model")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
@@ -1115,7 +1328,7 @@ fn default_true() -> bool {
     true
 }
 
-fn default_http_request_method() -> String {
+fn default_http_method() -> String {
     "GET".to_string()
 }
 
@@ -1129,9 +1342,12 @@ pub enum ModelType {
     TypeHttpRequest,
     TypeHttpResponse,
     TypePlugin,
+    TypeSyncState,
+    TypeWebSocketConnection,
+    TypeWebSocketEvent,
+    TypeWebsocketRequest,
     TypeWorkspace,
     TypeWorkspaceMeta,
-    TypeSyncState,
 }
 
 impl ModelType {
@@ -1149,6 +1365,9 @@ impl ModelType {
             ModelType::TypeWorkspace => "wk",
             ModelType::TypeWorkspaceMeta => "wm",
             ModelType::TypeSyncState => "ss",
+            ModelType::TypeWebSocketConnection => "wc",
+            ModelType::TypeWebSocketEvent => "we",
+            ModelType::TypeWebsocketRequest => "wr",
         }
         .to_string()
     }
@@ -1171,6 +1390,9 @@ pub enum AnyModel {
     KeyValue(KeyValue),
     Workspace(Workspace),
     WorkspaceMeta(WorkspaceMeta),
+    WebsocketConnection(WebsocketConnection),
+    WebsocketEvent(WebsocketEvent),
+    WebsocketRequest(WebsocketRequest),
 }
 
 impl<'de> Deserialize<'de> for AnyModel {

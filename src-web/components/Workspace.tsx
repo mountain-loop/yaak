@@ -2,25 +2,28 @@ import classNames from 'classnames';
 import { motion } from 'framer-motion';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import {useEnsureActiveCookieJar, useSubscribeActiveCookieJarId} from "../hooks/useActiveCookieJar";
-import {useSubscribeActiveEnvironmentId} from "../hooks/useActiveEnvironment";
-import {getActiveRequest, useActiveRequest} from '../hooks/useActiveRequest';
-import {useSubscribeActiveRequestId} from "../hooks/useActiveRequestId";
+import {
+  useEnsureActiveCookieJar,
+  useSubscribeActiveCookieJarId,
+} from '../hooks/useActiveCookieJar';
+import { useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
+import { getActiveRequest, useActiveRequest } from '../hooks/useActiveRequest';
+import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
-import {useDuplicateGrpcRequest} from "../hooks/useDuplicateGrpcRequest";
-import {useDuplicateHttpRequest} from "../hooks/useDuplicateHttpRequest";
+import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
+import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
 import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
-import {useHotKey} from "../hooks/useHotKey";
+import { useHotKey } from '../hooks/useHotKey';
 import { useImportData } from '../hooks/useImportData';
-import {useSubscribeRecentCookieJars} from "../hooks/useRecentCookieJars";
-import {useSubscribeRecentEnvironments} from "../hooks/useRecentEnvironments";
-import {useSubscribeRecentRequests} from "../hooks/useRecentRequests";
-import {useSubscribeRecentWorkspaces} from "../hooks/useRecentWorkspaces";
+import { useSubscribeRecentCookieJars } from '../hooks/useRecentCookieJars';
+import { useSubscribeRecentEnvironments } from '../hooks/useRecentEnvironments';
+import { useSubscribeRecentRequests } from '../hooks/useRecentRequests';
+import { useSubscribeRecentWorkspaces } from '../hooks/useRecentWorkspaces';
 import { useShouldFloatSidebar } from '../hooks/useShouldFloatSidebar';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
-import {useSyncWorkspaceRequestTitle} from "../hooks/useSyncWorkspaceRequestTitle";
-import {useToggleCommandPalette} from "../hooks/useToggleCommandPalette";
+import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
+import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { useWorkspaces } from '../hooks/useWorkspaces';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -33,8 +36,9 @@ import { HeaderSize } from './HeaderSize';
 import { HttpRequestLayout } from './HttpRequestLayout';
 import { Overlay } from './Overlay';
 import { ResizeHandle } from './ResizeHandle';
-import { Sidebar } from './Sidebar';
-import { SidebarActions } from './SidebarActions';
+import { Sidebar } from './sidebar/Sidebar';
+import { SidebarActions } from './sidebar/SidebarActions';
+import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
 
 const side = { gridArea: 'side' };
@@ -213,9 +217,11 @@ function WorkspaceBody() {
 
   if (activeRequest.model === 'grpc_request') {
     return <GrpcConnectionLayout style={body} />;
+  } else if (activeRequest.model === 'websocket_request') {
+    return <WebsocketRequestLayout style={body} activeRequest={activeRequest} />;
+  } else {
+    return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
   }
-
-  return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
 }
 
 function useGlobalWorkspaceHooks() {

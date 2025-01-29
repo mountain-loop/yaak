@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
+import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
 import type { GetHttpAuthenticationConfigResponse, JsonPrimitive } from '@yaakapp-internal/plugins';
 import { md5 } from 'js-md5';
 import { useState } from 'react';
@@ -48,7 +48,7 @@ export function useHttpAuthenticationConfig(
         ...config,
         actions: config.actions?.map((a, i) => ({
           ...a,
-          call: async ({ id: requestId }: HttpRequest | GrpcRequest) => {
+          call: async ({ id: requestId }: HttpRequest | GrpcRequest | WebsocketRequest) => {
             await invokeCmd('cmd_call_http_authentication_action', {
               pluginRefId: config.pluginRefId,
               actionIndex: i,

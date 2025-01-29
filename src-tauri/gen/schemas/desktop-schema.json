@@ -5481,6 +5481,81 @@
           "description": "Denies the watch command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-sync:deny-watch"
+        },
+        {
+          "description": "Default permissions for the plugin",
+          "type": "string",
+          "const": "yaak-ws:default"
+        },
+        {
+          "description": "Enables the connect command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:allow-connect"
+        },
+        {
+          "description": "Enables the list_connections command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:allow-list-connections"
+        },
+        {
+          "description": "Enables the list_requests command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:allow-list-requests"
+        },
+        {
+          "description": "Enables the list_websocket_connections command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:allow-list-websocket-connections"
+        },
+        {
+          "description": "Enables the list_websocket_requests command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:allow-list-websocket-requests"
+        },
+        {
+          "description": "Enables the upsert_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:allow-upsert-request"
+        },
+        {
+          "description": "Enables the upsert_websocket_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:allow-upsert-websocket-request"
+        },
+        {
+          "description": "Denies the connect command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:deny-connect"
+        },
+        {
+          "description": "Denies the list_connections command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:deny-list-connections"
+        },
+        {
+          "description": "Denies the list_requests command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:deny-list-requests"
+        },
+        {
+          "description": "Denies the list_websocket_connections command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:deny-list-websocket-connections"
+        },
+        {
+          "description": "Denies the list_websocket_requests command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:deny-list-websocket-requests"
+        },
+        {
+          "description": "Denies the upsert_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:deny-upsert-request"
+        },
+        {
+          "description": "Denies the upsert_websocket_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:deny-upsert-websocket-request"
         }
       ]
     },

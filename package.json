@@ -16,6 +16,7 @@
     "src-tauri/yaak-sse",
     "src-tauri/yaak-sync",
     "src-tauri/yaak-templates",
+    "src-tauri/yaak-ws",
     "src-web"
   ],
   "scripts": {

@@ -1,5 +1,6 @@
-import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
+import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
 import React, { useState } from 'react';
+import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { useWorkspaces } from '../hooks/useWorkspaces';
@@ -13,7 +14,7 @@ import { VStack } from './core/Stacks';
 
 interface Props {
   activeWorkspaceId: string;
-  request: HttpRequest | GrpcRequest;
+  request: HttpRequest | GrpcRequest | WebsocketRequest;
   onDone: () => void;
 }
 
@@ -39,15 +40,17 @@ export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Pr
         color="primary"
         disabled={selectedWorkspaceId === activeWorkspaceId}
         onClick={async () => {
-          const args = {
-            id: request.id,
-            update: { workspaceId: selectedWorkspaceId, folderId: null },
+          const update = {
+            workspaceId: selectedWorkspaceId,
+            folderId: null,
           };
 
           if (request.model === 'http_request') {
-            await updateHttpRequest.mutateAsync(args);
+            await updateHttpRequest.mutateAsync({ id: request.id, update });
           } else if (request.model === 'grpc_request') {
-            await updateGrpcRequest.mutateAsync(args);
+            await updateGrpcRequest.mutateAsync({ id: request.id, update });
+          } else if (request.model === 'websocket_request') {
+            await upsertWebsocketRequest.mutateAsync({ ...request, ...update });
           }
 
           // Hide after a moment, to give time for request to disappear

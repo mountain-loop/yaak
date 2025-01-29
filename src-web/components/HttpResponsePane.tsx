@@ -1,7 +1,7 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties, ReactNode } from 'react';
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useLocalStorage } from 'react-use';
 import { useContentTypeFromHeaders } from '../hooks/useContentTypeFromHeaders';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
@@ -40,11 +40,7 @@ const TAB_BODY = 'body';
 const TAB_HEADERS = 'headers';
 const TAB_INFO = 'info';
 
-export const ResponsePane = memo(function ResponsePane({
-  style,
-  className,
-  activeRequestId,
-}: Props) {
+export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
   const [viewMode, setViewMode] = useResponseViewMode(activeResponse?.requestId);
   const [activeTabs, setActiveTabs] = useLocalStorage<Record<string, string>>(
@@ -206,7 +202,7 @@ export const ResponsePane = memo(function ResponsePane({
       )}
     </div>
   );
-});
+}
 
 function EnsureCompleteResponse({
   response,

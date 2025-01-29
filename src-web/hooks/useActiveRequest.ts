@@ -1,18 +1,18 @@
-import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
+import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import { jotaiStore } from '../lib/jotai';
 import { activeRequestIdAtom } from './useActiveRequestId';
-import { grpcRequestsAtom } from './useGrpcRequests';
-import { httpRequestsAtom } from './useHttpRequests';
+import { requestsAtom } from './useRequests';
 
 interface TypeMap {
   http_request: HttpRequest;
   grpc_request: GrpcRequest;
+  websocket_request: WebsocketRequest;
 }
 
-export const activeRequestAtom = atom<HttpRequest | GrpcRequest | null>((get) => {
+export const activeRequestAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
-  const requests = [...get(httpRequestsAtom), ...get(grpcRequestsAtom)];
+  const requests = get(requestsAtom);
   return requests.find((r) => r.id === activeRequestId) ?? null;
 });
 

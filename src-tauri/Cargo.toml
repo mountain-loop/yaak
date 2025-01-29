@@ -41,11 +41,13 @@ openssl-sys = { version = "0.9", features = ["vendored"] } # For Ubuntu installa
 [dependencies]
 chrono = { version = "0.4.31", features = ["serde"] }
 datetime = "0.5.2"
+encoding_rs = "0.8.35"
 eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.14.0" }
 hex_color = "3.0.0"
 http = { version = "1.2.0", default-features = false }
 log = "0.4.21"
 md5 = "0.7.0"
+mime_guess = "2.0.5"
 rand = "0.9.0"
 regex = "1.10.2"
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider"] }
@@ -68,7 +70,6 @@ tauri-plugin-window-state = "2.2.1"
 tokio = { version = "1.43.0", features = ["sync"] }
 tokio-stream = "0.1.17"
 ts-rs = { workspace = true }
-mime_guess = "2.0.5"
 urlencoding = "2.1.3"
 uuid = "1.12.1"
 yaak-grpc = { path = "yaak-grpc" }
@@ -77,17 +78,19 @@ yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }
 yaak-sync = { path = "yaak-sync" }
-yaak-templates = { path = "yaak-templates" }
-encoding_rs = "0.8.35"
+yaak-templates = { workspace = true }
+yaak-ws = { path = "yaak-ws" }
 
 [workspace.dependencies]
-yaak-models = { path = "yaak-models" }
-yaak-sse = { path = "yaak-sse" }
-yaak-plugins = { path = "yaak-plugins" }
+reqwest = "0.12.12"
 serde = "1.0.215"
 serde_json = "1.0.132"
-tauri-plugin-shell = "2.2.0"
 tauri = "2.2.5"
+tauri-plugin = "2.0.4"
+tauri-plugin-shell = "2.2.0"
 thiserror = "2.0.3"
 ts-rs = "10.0.0"
-reqwest = "0.12.12"
+yaak-models = { path = "yaak-models" }
+yaak-plugins = { path = "yaak-plugins" }
+yaak-sse = { path = "yaak-sse" }
+yaak-templates = { path = "yaak-templates" }

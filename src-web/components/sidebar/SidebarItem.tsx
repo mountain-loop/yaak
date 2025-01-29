@@ -5,18 +5,19 @@ import type { ReactElement } from 'react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
-import { activeRequestAtom } from '../hooks/useActiveRequest';
-import { foldersAtom } from '../hooks/useFolders';
-import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
-import { httpRequestsAtom } from '../hooks/useHttpRequests';
-import { useScrollIntoView } from '../hooks/useScrollIntoView';
-import { useSidebarItemCollapsed } from '../hooks/useSidebarItemCollapsed';
-import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
-import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
-import { jotaiStore } from '../lib/jotai';
-import { HttpMethodTag } from './core/HttpMethodTag';
-import { Icon } from './core/Icon';
-import { StatusTag } from './core/StatusTag';
+import { upsertWebsocketRequest } from '../../commands/upsertWebsocketRequest';
+import { activeRequestAtom } from '../../hooks/useActiveRequest';
+import { foldersAtom } from '../../hooks/useFolders';
+import { requestsAtom } from '../../hooks/useRequests';
+import { useScrollIntoView } from '../../hooks/useScrollIntoView';
+import { useSidebarItemCollapsed } from '../../hooks/useSidebarItemCollapsed';
+import { useUpdateAnyGrpcRequest } from '../../hooks/useUpdateAnyGrpcRequest';
+import { useUpdateAnyHttpRequest } from '../../hooks/useUpdateAnyHttpRequest';
+import { getWebsocketRequest } from '../../hooks/useWebsocketRequests';
+import { jotaiStore } from '../../lib/jotai';
+import { HttpMethodTag } from '../core/HttpMethodTag';
+import { Icon } from '../core/Icon';
+import { StatusTag } from '../core/StatusTag';
 import type { SidebarTreeNode } from './Sidebar';
 import { sidebarSelectedIdAtom } from './SidebarAtoms';
 import { SidebarItemContextMenu } from './SidebarItemContextMenu';
@@ -138,6 +139,10 @@ export const SidebarItem = memo(function SidebarItem({
           id: itemId,
           update: (r) => ({ ...r, name: el.value }),
         });
+      } else if (itemModel === 'websocket_request') {
+        const request = getWebsocketRequest(itemId);
+        if (request == null) return;
+        await upsertWebsocketRequest.mutateAsync({ ...request, name: el.value });
       }
       setEditing(false);
     },
@@ -167,7 +172,12 @@ export const SidebarItem = memo(function SidebarItem({
   );
 
   const handleStartEditing = useCallback(() => {
-    if (itemModel !== 'http_request' && itemModel !== 'grpc_request') return;
+    if (
+      itemModel !== 'http_request' &&
+      itemModel !== 'grpc_request' &&
+      itemModel !== 'websocket_request'
+    )
+      return;
     setEditing(true);
   }, [setEditing, itemModel]);
 
@@ -197,14 +207,10 @@ export const SidebarItem = memo(function SidebarItem({
 
   const itemAtom = useMemo(() => {
     return atom((get) => {
-      if (itemModel === 'http_request') {
-        return get(httpRequestsAtom).find((v) => v.id === itemId);
-      } else if (itemModel === 'grpc_request') {
-        return get(grpcRequestsAtom).find((v) => v.id === itemId);
-      } else if (itemModel === 'folder') {
+      if (itemModel === 'folder') {
         return get(foldersAtom).find((v) => v.id === itemId);
       } else {
-        return null;
+        return get(requestsAtom).find((v) => v.id === itemId);
       }
     });
   }, [itemId, itemModel]);
@@ -215,7 +221,7 @@ export const SidebarItem = memo(function SidebarItem({
     return null;
   }
 
-  const itemPrefix = (item.model === 'http_request' || item.model === 'grpc_request') && (
+  const itemPrefix = item.model !== 'folder' && (
     <HttpMethodTag
       request={item}
       className={classNames(!(active || selected) && 'text-text-subtlest')}

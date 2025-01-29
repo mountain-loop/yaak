@@ -39,10 +39,4 @@ pub enum Error {
     UnknownEventErr,
 }
 
-impl Into<String> for Error {
-    fn into(self) -> String {
-        todo!()
-    }
-}
-
 pub type Result<T> = std::result::Result<T, Error>;

@@ -69,7 +69,7 @@ export const UrlBar = memo(function UrlBar({
         ref={inputRef}
         autocompleteVariables
         stateKey={stateKey}
-        size="md"
+        size="sm"
         wrapLines={isFocused}
         hideLabel
         useTemplating

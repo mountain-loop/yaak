@@ -21,4 +21,4 @@ tokio = { version = "1.42.0", features = ["fs", "sync", "macros"] }
 notify = "7.0.0"
 
 [build-dependencies]
-tauri-plugin = { version = "2.0.3", features = ["build"] }
+tauri-plugin = { workspace = true, features = ["build"] }

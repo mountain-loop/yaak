@@ -2,11 +2,10 @@ import classNames from 'classnames';
 import { useMemo, useRef } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { getActiveWorkspaceId } from '../hooks/useActiveWorkspace';
-import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
 import { useHotKey } from '../hooks/useHotKey';
-import { httpRequestsAtom } from '../hooks/useHttpRequests';
 import { useKeyboardEvent } from '../hooks/useKeyboardEvent';
 import { useRecentRequests } from '../hooks/useRecentRequests';
+import { requestsAtom } from '../hooks/useRequests';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { jotaiStore } from '../lib/jotai';
 import { router } from '../lib/router';
@@ -51,7 +50,7 @@ export function RecentRequestsDropdown({ className }: Props) {
     const activeWorkspaceId = getActiveWorkspaceId();
     if (activeWorkspaceId === null) return [];
 
-    const requests = [...jotaiStore.get(httpRequestsAtom), ...jotaiStore.get(grpcRequestsAtom)];
+    const requests = jotaiStore.get(requestsAtom);
     const recentRequestItems: DropdownItem[] = [];
     for (const id of recentRequestIds) {
       const request = requests.find((r) => r.id === id);

@@ -1,6 +1,5 @@
 use crate::http_request::send_http_request;
 use crate::render::{render_http_request, render_json_value};
-use crate::template_callback::PluginTemplateCallback;
 use crate::window::{create_window, CreateWindowConfig};
 use crate::{
     call_frontend, cookie_jar_from_window, environment_from_window, get_window_from_window_context,
@@ -24,6 +23,7 @@ use yaak_plugins::events::{
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
+use yaak_plugins::template_callback::PluginTemplateCallback;
 
 pub(crate) async fn handle_plugin_event<R: Runtime>(
     app_handle: &AppHandle<R>,

@@ -4,7 +4,7 @@ import classNames from 'classnames';
 import { atom, useAtom, useAtomValue } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import type { CSSProperties } from 'react';
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useContentTypeFromHeaders } from '../hooks/useContentTypeFromHeaders';
@@ -77,12 +77,7 @@ const nonActiveRequestUrlsAtom = atom((get) => {
 
 const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
 
-export const RequestPane = memo(function RequestPane({
-  style,
-  fullHeight,
-  className,
-  activeRequest,
-}: Props) {
+export function HttpRequestPane({ style, fullHeight, className, activeRequest }: Props) {
   const activeRequestId = activeRequest.id;
   const { mutateAsync: updateRequestAsync, mutate: updateRequest } = useUpdateAnyHttpRequest();
   const [activeTabs, setActiveTabs] = useAtom(tabsAtom);
@@ -94,7 +89,7 @@ export const RequestPane = memo(function RequestPane({
 
   const handleContentTypeChange = useCallback(
     async (contentType: string | null) => {
-      if (activeRequest == null || activeRequest.model !== 'http_request') {
+      if (activeRequest == null) {
         console.error('Failed to get active request to update', activeRequest);
         return;
       }
@@ -381,7 +376,8 @@ export const RequestPane = memo(function RequestPane({
             <TabContent value={TAB_HEADERS}>
               <HeadersEditor
                 forceUpdateKey={`${forceUpdateHeaderEditorKey}::${forceUpdateKey}`}
-                request={activeRequest}
+                headers={activeRequest.headers}
+                stateKey={`headers.${activeRequest.id}`}
                 onChange={(headers) => updateRequest({ id: activeRequestId, update: { headers } })}
               />
             </TabContent>
@@ -492,4 +488,4 @@ export const RequestPane = memo(function RequestPane({
       )}
     </div>
   );
-});
+}

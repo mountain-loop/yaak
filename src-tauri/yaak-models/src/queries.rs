@@ -1,6 +1,14 @@
 use crate::error::Error::ModelNotFound;
 use crate::error::Result;
-use crate::models::{AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden, GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader, HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden, PluginKeyValue, PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden, Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden};
+use crate::models::{
+    AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
+    GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
+    GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader,
+    HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden,
+    PluginKeyValue, PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden,
+    WebsocketConnection, WebsocketConnectionIden, WebsocketRequest, WebsocketRequestIden,
+    Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden,
+};
 use crate::plugin::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
 use log::{debug, error, info, warn};
@@ -659,7 +667,7 @@ pub async fn upsert_grpc_connection<R: Runtime>(
     update_source: &UpdateSource,
 ) -> Result<GrpcConnection> {
     let connections =
-        list_http_responses_for_request(window, connection.request_id.as_str(), None).await?;
+        list_grpc_connections_for_request(window, connection.request_id.as_str()).await?;
     for c in connections.iter().skip(MAX_GRPC_CONNECTIONS_PER_REQUEST - 1) {
         debug!("Deleting old grpc connection {}", c.id);
         delete_grpc_connection(window, c.id.as_str(), update_source).await?;
@@ -905,6 +913,276 @@ pub async fn list_grpc_events<R: Runtime>(
         .cond_where(Expr::col(GrpcEventIden::ConnectionId).eq(connection_id))
         .column(Asterisk)
         .order_by(GrpcEventIden::CreatedAt, Order::Asc)
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+    Ok(items.map(|v| v.unwrap()).collect())
+}
+
+pub async fn delete_websocket_request<R: Runtime>(
+    window: &WebviewWindow<R>,
+    id: &str,
+    update_source: &UpdateSource,
+) -> Result<WebsocketRequest> {
+    let request = match get_websocket_request(window, id).await? {
+        Some(r) => r,
+        None => {
+            return Err(ModelNotFound(id.to_string()));
+        }
+    };
+
+    let dbm = &*window.app_handle().state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::delete()
+        .from_table(WebsocketRequestIden::Table)
+        .cond_where(Expr::col(WebsocketRequestIden::Id).eq(id))
+        .build_rusqlite(SqliteQueryBuilder);
+    db.execute(sql.as_str(), &*params.as_params())?;
+
+    emit_deleted_model(window, &AnyModel::WebsocketRequest(request.to_owned()), update_source);
+    Ok(request)
+}
+
+pub async fn delete_websocket_connection<R: Runtime>(
+    window: &WebviewWindow<R>,
+    id: &str,
+    update_source: &UpdateSource,
+) -> Result<WebsocketConnection> {
+    let m = get_websocket_connection(window, id).await?;
+
+    let dbm = &*window.app_handle().state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::delete()
+        .from_table(WebsocketConnectionIden::Table)
+        .cond_where(Expr::col(WebsocketConnectionIden::Id).eq(id))
+        .build_rusqlite(SqliteQueryBuilder);
+    db.execute(sql.as_str(), &*params.as_params())?;
+
+    emit_deleted_model(window, &AnyModel::WebsocketConnection(m.to_owned()), update_source);
+    Ok(m)
+}
+
+pub async fn get_websocket_connection<R: Runtime>(
+    mgr: &impl Manager<R>,
+    id: &str,
+) -> Result<WebsocketConnection> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::select()
+        .from(WebsocketConnectionIden::Table)
+        .column(Asterisk)
+        .cond_where(Expr::col(WebsocketConnectionIden::Id).eq(id))
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
+}
+
+
+pub async fn upsert_websocket_request<R: Runtime>(
+    window: &WebviewWindow<R>,
+    request: WebsocketRequest,
+    update_source: &UpdateSource,
+) -> Result<WebsocketRequest> {
+    let id = match request.id.as_str() {
+        "" => generate_model_id(ModelType::TypeWebsocketRequest),
+        _ => request.id.to_string(),
+    };
+    let trimmed_name = request.name.trim();
+
+    let dbm = &*window.app_handle().state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::insert()
+        .into_table(WebsocketRequestIden::Table)
+        .columns([
+            WebsocketRequestIden::Id,
+            WebsocketRequestIden::CreatedAt,
+            WebsocketRequestIden::UpdatedAt,
+            WebsocketRequestIden::WorkspaceId,
+            WebsocketRequestIden::FolderId,
+            WebsocketRequestIden::Authentication,
+            WebsocketRequestIden::AuthenticationType,
+            WebsocketRequestIden::Description,
+            WebsocketRequestIden::Headers,
+            WebsocketRequestIden::Message,
+            WebsocketRequestIden::MessageType,
+            WebsocketRequestIden::Name,
+            WebsocketRequestIden::SortPriority,
+            WebsocketRequestIden::Url,
+            WebsocketRequestIden::UrlParameters,
+        ])
+        .values_panic([
+            id.into(),
+            timestamp_for_upsert(update_source, request.created_at).into(),
+            timestamp_for_upsert(update_source, request.updated_at).into(),
+            request.workspace_id.into(),
+            request.folder_id.as_ref().map(|s| s.as_str()).into(),
+            serde_json::to_string(&request.authentication)?.into(),
+            request.authentication_type.as_ref().map(|s| s.as_str()).into(),
+            request.description.into(),
+            serde_json::to_string(&request.headers)?.into(),
+            request.message.into(),
+            serde_json::to_string(&request.message_type)?.into(),
+            trimmed_name.into(),
+            request.sort_priority.into(),
+            request.url.into(),
+            serde_json::to_string(&request.url_parameters)?.into(),
+        ])
+        .on_conflict(
+            OnConflict::column(WebsocketRequestIden::Id)
+                .update_columns([
+                    WebsocketRequestIden::UpdatedAt,
+                    WebsocketRequestIden::WorkspaceId,
+                    WebsocketRequestIden::FolderId,
+                    WebsocketRequestIden::Authentication,
+                    WebsocketRequestIden::AuthenticationType,
+                    WebsocketRequestIden::Description,
+                    WebsocketRequestIden::Headers,
+                    WebsocketRequestIden::Message,
+                    WebsocketRequestIden::MessageType,
+                    WebsocketRequestIden::Name,
+                    WebsocketRequestIden::SortPriority,
+                    WebsocketRequestIden::Url,
+                    WebsocketRequestIden::UrlParameters,
+                ])
+                .to_owned(),
+        )
+        .returning_all()
+        .build_rusqlite(SqliteQueryBuilder);
+
+    let mut stmt = db.prepare(sql.as_str())?;
+    let m: WebsocketRequest = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::WebsocketRequest(m.to_owned()), update_source);
+    Ok(m)
+}
+
+pub async fn list_websocket_connections_for_workspace<R: Runtime>(
+    mgr: &impl Manager<R>,
+    workspace_id: &str,
+) -> Result<Vec<WebsocketConnection>> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+
+    let (sql, params) = Query::select()
+        .from(WebsocketConnectionIden::Table)
+        .cond_where(Expr::col(WebsocketConnectionIden::WorkspaceId).eq(workspace_id))
+        .column(Asterisk)
+        .order_by(WebsocketConnectionIden::CreatedAt, Order::Desc)
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+    Ok(items.map(|v| v.unwrap()).collect())
+}
+
+pub async fn list_websocket_connections_for_request<R: Runtime>(
+    mgr: &impl Manager<R>,
+    request_id: &str,
+) -> Result<Vec<WebsocketConnection>> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+
+    let (sql, params) = Query::select()
+        .from(WebsocketConnectionIden::Table)
+        .cond_where(Expr::col(WebsocketConnectionIden::RequestId).eq(request_id))
+        .column(Asterisk)
+        .order_by(WebsocketConnectionIden::CreatedAt, Order::Desc)
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+    Ok(items.map(|v| v.unwrap()).collect())
+}
+
+pub async fn upsert_websocket_connection<R: Runtime>(
+    window: &WebviewWindow<R>,
+    connection: &WebsocketConnection,
+    update_source: &UpdateSource,
+) -> Result<WebsocketConnection> {
+    let connections =
+        list_websocket_connections_for_request(window, connection.request_id.as_str()).await?;
+    for c in connections.iter().skip(MAX_GRPC_CONNECTIONS_PER_REQUEST - 1) {
+        debug!("Deleting old websocket connection {}", c.id);
+        delete_websocket_request(window, c.id.as_str(), update_source).await?;
+    }
+
+    let id = match connection.id.as_str() {
+        "" => generate_model_id(ModelType::TypeWebSocketConnection),
+        _ => connection.id.to_string(),
+    };
+    let dbm = &*window.app_handle().state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::insert()
+        .into_table(WebsocketConnectionIden::Table)
+        .columns([
+            WebsocketConnectionIden::Id,
+            WebsocketConnectionIden::CreatedAt,
+            WebsocketConnectionIden::UpdatedAt,
+            WebsocketConnectionIden::WorkspaceId,
+            WebsocketConnectionIden::RequestId,
+            WebsocketConnectionIden::Elapsed,
+            WebsocketConnectionIden::Error,
+            WebsocketConnectionIden::Headers,
+            WebsocketConnectionIden::Status,
+            WebsocketConnectionIden::Url,
+        ])
+        .values_panic([
+            id.as_str().into(),
+            timestamp_for_upsert(update_source, connection.created_at).into(),
+            timestamp_for_upsert(update_source, connection.updated_at).into(),
+            connection.workspace_id.as_str().into(),
+            connection.request_id.as_str().into(),
+            connection.elapsed.into(),
+            connection.error.as_ref().map(|s| s.as_str()).into(),
+            serde_json::to_string(&connection.headers)?.into(),
+            connection.status.into(),
+            connection.url.as_str().into(),
+        ])
+        .on_conflict(
+            OnConflict::column(WebsocketConnectionIden::Id)
+                .update_columns([
+                    WebsocketConnectionIden::UpdatedAt,
+                    WebsocketConnectionIden::Elapsed,
+                    WebsocketConnectionIden::Error,
+                    WebsocketConnectionIden::Headers,
+                    WebsocketConnectionIden::Status,
+                    WebsocketConnectionIden::Url,
+                ])
+                .to_owned(),
+        )
+        .returning_all()
+        .build_rusqlite(SqliteQueryBuilder);
+
+    let mut stmt = db.prepare(sql.as_str())?;
+    let m: WebsocketConnection = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::WebsocketConnection(m.to_owned()), update_source);
+    Ok(m)
+}
+
+
+pub async fn get_websocket_request<R: Runtime>(
+    mgr: &impl Manager<R>,
+    id: &str,
+) -> Result<Option<WebsocketRequest>> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+
+    let (sql, params) = Query::select()
+        .from(WebsocketRequestIden::Table)
+        .column(Asterisk)
+        .cond_where(Expr::col(WebsocketRequestIden::Id).eq(id))
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into()).optional()?)
+}
+
+pub async fn list_websocket_requests<R: Runtime>(
+    mgr: &impl Manager<R>,
+    workspace_id: &str,
+) -> Result<Vec<WebsocketRequest>> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::select()
+        .from(WebsocketRequestIden::Table)
+        .cond_where(Expr::col(WebsocketRequestIden::WorkspaceId).eq(workspace_id))
+        .column(Asterisk)
         .build_rusqlite(SqliteQueryBuilder);
     let mut stmt = db.prepare(sql.as_str())?;
     let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;

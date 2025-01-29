@@ -1,22 +1,20 @@
-import type { Folder, GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
+import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
 
 // This is an atom so we can use it in the child items to avoid re-rendering the entire list
 import { atom } from 'jotai';
-import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
-import { foldersAtom } from '../hooks/useFolders';
-import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
-import { httpRequestsAtom } from '../hooks/useHttpRequests';
-import { deepEqualAtom } from '../lib/atoms';
-import { fallbackRequestName } from '../lib/fallbackRequestName';
+import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
+import { foldersAtom } from '../../hooks/useFolders';
+import { requestsAtom } from '../../hooks/useRequests';
+import { deepEqualAtom } from '../../lib/atoms';
+import { fallbackRequestName } from '../../lib/fallbackRequestName';
 import type { SidebarTreeNode } from './Sidebar';
 
 export const sidebarSelectedIdAtom = atom<string | null>(null);
 
 const allPotentialChildrenAtom = atom((get) => {
-  const httpRequests = get(httpRequestsAtom);
-  const grpcRequests = get(grpcRequestsAtom);
+  const requests = get(requestsAtom);
   const folders = get(foldersAtom);
-  return [...httpRequests, ...folders, ...grpcRequests].map((v) => ({
+  return [...requests, ...folders].map((v) => ({
     id: v.id,
     model: v.model,
     folderId: v.folderId,
@@ -62,7 +60,7 @@ export const sidebarTreeAtom = atom<{
     return { tree: null, treeParentMap, selectableRequests };
   }
 
-  const selectedRequest: HttpRequest | GrpcRequest | null = null;
+  const selectedRequest: HttpRequest | GrpcRequest | WebsocketRequest | null = null;
   let selectableRequestIndex = 0;
 
   // Put requests and folders into a tree structure
@@ -102,7 +100,7 @@ export const sidebarTreeAtom = atom<{
 
 function itemFromModel(
   item: Pick<
-    Folder | HttpRequest | GrpcRequest,
+    Folder | HttpRequest | GrpcRequest | WebsocketRequest,
     'folderId' | 'model' | 'workspaceId' | 'id' | 'name' | 'sortPriority'
   >,
   depth = 0,

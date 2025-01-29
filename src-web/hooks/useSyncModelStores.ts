@@ -19,6 +19,7 @@ import { useListenToTauriEvent } from './useListenToTauriEvent';
 import { pluginsAtom } from './usePlugins';
 import { useRequestUpdateKey } from './useRequestUpdateKey';
 import { settingsAtom } from './useSettings';
+import {websocketRequestsAtom} from "./useWebsocketRequests";
 import { workspaceMetaAtom } from './useWorkspaceMeta';
 import { workspacesAtom } from './useWorkspaces';
 
@@ -64,6 +65,8 @@ export function useSyncModelStores() {
       jotaiStore.set(httpResponsesAtom, updateModelList(payload.model));
     } else if (payload.model.model === 'grpc_request') {
       jotaiStore.set(grpcRequestsAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'websocket_request') {
+      jotaiStore.set(websocketRequestsAtom, updateModelList(payload.model));
     } else if (payload.model.model === 'grpc_connection') {
       jotaiStore.set(grpcConnectionsAtom, updateModelList(payload.model));
     } else if (payload.model.model === 'environment') {
@@ -103,6 +106,8 @@ export function useSyncModelStores() {
       jotaiStore.set(environmentsAtom, removeModelById(payload.model));
     } else if (payload.model.model === 'grpc_request') {
       jotaiStore.set(grpcRequestsAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'websocket_request') {
+      jotaiStore.set(websocketRequestsAtom, removeModelById(payload.model));
     } else if (payload.model.model === 'grpc_connection') {
       jotaiStore.set(grpcConnectionsAtom, removeModelById(payload.model));
     } else if (payload.model.model === 'grpc_event') {

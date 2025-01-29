@@ -51,6 +51,7 @@
     "opener:allow-reveal-item-in-dir",
     "shell:allow-open",
     "yaak-license:default",
-    "yaak-sync:default"
+    "yaak-sync:default",
+    "yaak-ws:default"
   ]
 }

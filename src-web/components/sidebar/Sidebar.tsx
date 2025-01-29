@@ -1,23 +1,31 @@
-import type { Folder, GrpcRequest, HttpRequest, Workspace } from '@yaakapp-internal/models';
+import type {
+  Folder,
+  GrpcRequest,
+  HttpRequest,
+  WebsocketRequest,
+  Workspace,
+} from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
 import React, { useCallback, useRef, useState } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
-import { getActiveRequest } from '../hooks/useActiveRequest';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
-import { useCreateDropdownItems } from '../hooks/useCreateDropdownItems';
-import { useDeleteAnyRequest } from '../hooks/useDeleteAnyRequest';
-import { useGrpcConnections } from '../hooks/useGrpcConnections';
-import { useHotKey } from '../hooks/useHotKey';
-import { useHttpResponses } from '../hooks/useHttpResponses';
-import { useSidebarHidden } from '../hooks/useSidebarHidden';
-import { getSidebarCollapsedMap } from '../hooks/useSidebarItemCollapsed';
-import { useUpdateAnyFolder } from '../hooks/useUpdateAnyFolder';
-import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
-import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
-import { router } from '../lib/router';
-import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
-import { ContextMenu } from './core/Dropdown';
+import { upsertWebsocketRequest } from '../../commands/upsertWebsocketRequest';
+import { getActiveRequest } from '../../hooks/useActiveRequest';
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
+import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
+import { useDeleteAnyRequest } from '../../hooks/useDeleteAnyRequest';
+import { useGrpcConnections } from '../../hooks/useGrpcConnections';
+import { useHotKey } from '../../hooks/useHotKey';
+import { useHttpResponses } from '../../hooks/useHttpResponses';
+import { useSidebarHidden } from '../../hooks/useSidebarHidden';
+import { getSidebarCollapsedMap } from '../../hooks/useSidebarItemCollapsed';
+import { useUpdateAnyFolder } from '../../hooks/useUpdateAnyFolder';
+import { useUpdateAnyGrpcRequest } from '../../hooks/useUpdateAnyGrpcRequest';
+import { useUpdateAnyHttpRequest } from '../../hooks/useUpdateAnyHttpRequest';
+import { getWebsocketRequest } from '../../hooks/useWebsocketRequests';
+import { router } from '../../lib/router';
+import { setWorkspaceSearchParams } from '../../lib/setWorkspaceSearchParams';
+import { ContextMenu } from '../core/Dropdown';
 import { sidebarSelectedIdAtom, sidebarTreeAtom } from './SidebarAtoms';
 import type { SidebarItemProps } from './SidebarItem';
 import { SidebarItems } from './SidebarItems';
@@ -26,7 +34,7 @@ interface Props {
   className?: string;
 }
 
-export type SidebarModel = Folder | GrpcRequest | HttpRequest | Workspace;
+export type SidebarModel = Folder | GrpcRequest | HttpRequest | WebsocketRequest | Workspace;
 
 export interface SidebarTreeNode {
   id: string;
@@ -97,7 +105,7 @@ export function Sidebar({ className }: Props) {
       }
 
       // NOTE: I'm not sure why, but TS thinks workspaceId is (string | undefined) here
-      if ((node.model === 'http_request' || node.model === 'grpc_request') && node.workspaceId) {
+      if (node.model !== 'folder' && node.workspaceId) {
         const workspaceId = node.workspaceId;
         await router.navigate({
           to: '/workspaces/$workspaceId',
@@ -281,6 +289,11 @@ export function Sidebar({ className }: Props) {
             } else if (child.model === 'http_request') {
               const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
               return updateAnyHttpRequest({ id: child.id, update: updateRequest });
+            } else if (child.model === 'websocket_request') {
+              const request = getWebsocketRequest(child.id);
+              return upsertWebsocketRequest.mutateAsync({ ...request, sortPriority, folderId });
+            } else {
+              throw new Error('Invalid model to update: ' + child.model);
             }
           }),
         );
@@ -295,6 +308,11 @@ export function Sidebar({ className }: Props) {
         } else if (child.model === 'http_request') {
           const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
           await updateAnyHttpRequest({ id: child.id, update: updateRequest });
+        } else if (child.model === 'websocket_request') {
+          const request = getWebsocketRequest(child.id);
+          return upsertWebsocketRequest.mutateAsync({ ...request, sortPriority, folderId });
+        } else {
+          throw new Error('Invalid model to update: ' + child.model);
         }
       }
       setDraggingId(null);

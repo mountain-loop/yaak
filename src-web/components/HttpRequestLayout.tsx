@@ -2,8 +2,8 @@ import type { CSSProperties } from 'react';
 import React from 'react';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { SplitLayout } from './core/SplitLayout';
-import { RequestPane } from './RequestPane';
-import { ResponsePane } from './ResponsePane';
+import { HttpRequestPane } from './HttpRequestPane';
+import { HttpResponsePane } from './HttpResponsePane';
 
 interface Props {
   activeRequest: HttpRequest;
@@ -17,13 +17,13 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
       className="p-3 gap-1.5"
       style={style}
       firstSlot={({ orientation, style }) => (
-        <RequestPane
+        <HttpRequestPane
           style={style}
           activeRequest={activeRequest}
           fullHeight={orientation === 'horizontal'}
         />
       )}
-      secondSlot={({ style }) => <ResponsePane activeRequestId={activeRequest.id} style={style} />}
+      secondSlot={({ style }) => <HttpResponsePane activeRequestId={activeRequest.id} style={style} />}
     />
   );
 }
