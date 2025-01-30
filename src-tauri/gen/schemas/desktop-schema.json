@@ -5488,9 +5488,19 @@
           "const": "yaak-ws:default"
         },
         {
+          "description": "Enables the cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:allow-cancel"
+        },
+        {
           "description": "Enables the connect command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-ws:allow-connect"
+        },
+        {
+          "description": "Enables the delete_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:allow-delete-request"
         },
         {
           "description": "Enables the list_connections command without any pre-configured scope.",
@@ -5523,9 +5533,19 @@
           "const": "yaak-ws:allow-upsert-websocket-request"
         },
         {
+          "description": "Denies the cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:deny-cancel"
+        },
+        {
           "description": "Denies the connect command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-ws:deny-connect"
+        },
+        {
+          "description": "Denies the delete_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-ws:deny-delete-request"
         },
         {
           "description": "Denies the list_connections command without any pre-configured scope.",

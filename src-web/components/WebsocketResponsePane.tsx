@@ -1,34 +1,11 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import type { CSSProperties, ReactNode } from 'react';
-import React, { useCallback, useMemo } from 'react';
-import { useLocalStorage } from 'react-use';
-import { useContentTypeFromHeaders } from '../hooks/useContentTypeFromHeaders';
-import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
-import { useResponseViewMode } from '../hooks/useResponseViewMode';
-import { ConfirmLargeResponse } from './ConfirmLargeResponse';
+import type { CSSProperties } from 'react';
+import React from 'react';
+import { useLatestWebsocketConnection } from '../hooks/useWebsocketConnections';
 import { Banner } from './core/Banner';
-import { CountBadge } from './core/CountBadge';
-import { DurationTag } from './core/DurationTag';
 import { HotKeyList } from './core/HotKeyList';
 import { Icon } from './core/Icon';
-import { SizeTag } from './core/SizeTag';
 import { HStack } from './core/Stacks';
-import { StatusTag } from './core/StatusTag';
-import type { TabItem } from './core/Tabs/Tabs';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { EmptyStateText } from './EmptyStateText';
-import { RecentResponsesDropdown } from './RecentResponsesDropdown';
-import { ResponseHeaders } from './ResponseHeaders';
-import { ResponseInfo } from './ResponseInfo';
-import { AudioViewer } from './responseViewers/AudioViewer';
-import { CsvViewer } from './responseViewers/CsvViewer';
-import { EventStreamViewer } from './responseViewers/EventStreamViewer';
-import { HTMLOrTextViewer } from './responseViewers/HTMLOrTextViewer';
-import { ImageViewer } from './responseViewers/ImageViewer';
-import { PdfViewer } from './responseViewers/PdfViewer';
-import { SvgViewer } from './responseViewers/SvgViewer';
-import { VideoViewer } from './responseViewers/VideoViewer';
 
 interface Props {
   style?: CSSProperties;
@@ -36,56 +13,9 @@ interface Props {
   activeRequestId: string;
 }
 
-const TAB_BODY = 'body';
-const TAB_HEADERS = 'headers';
-const TAB_INFO = 'info';
-
 export function WebsocketResponsePane({ style, className, activeRequestId }: Props) {
-  const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
-  const [viewMode, setViewMode] = useResponseViewMode(activeResponse?.requestId);
-  const [activeTabs, setActiveTabs] = useLocalStorage<Record<string, string>>(
-    'responsePaneActiveTabs',
-    {},
-  );
-  const contentType = useContentTypeFromHeaders(activeResponse?.headers ?? null);
-
-  const tabs = useMemo<TabItem[]>(
-    () => [
-      {
-        value: TAB_BODY,
-        label: 'Preview Mode',
-        options: {
-          value: viewMode,
-          onChange: setViewMode,
-          items: [
-            { label: 'Pretty', value: 'pretty' },
-            ...(contentType?.startsWith('image') ? [] : [{ label: 'Raw', value: 'raw' }]),
-          ],
-        },
-      },
-      {
-        value: TAB_HEADERS,
-        label: 'Headers',
-        rightSlot: (
-          <CountBadge
-            count={activeResponse?.headers.filter((h) => h.name && h.value).length ?? 0}
-          />
-        ),
-      },
-      {
-        value: TAB_INFO,
-        label: 'Info',
-      },
-    ],
-    [activeResponse?.headers, contentType, setViewMode, viewMode],
-  );
-  const activeTab = activeTabs?.[activeRequestId];
-  const setActiveTab = useCallback(
-    (tab: string) => {
-      setActiveTabs((r) => ({ ...r, [activeRequestId]: tab }));
-    },
-    [activeRequestId, setActiveTabs],
-  );
+  const connection = useLatestWebsocketConnection(activeRequestId);
+  const isLoading = connection !== null && connection.state !== 'closed';
 
   return (
     <div
@@ -98,7 +28,7 @@ export function WebsocketResponsePane({ style, className, activeRequestId }: Pro
         'relative',
       )}
     >
-      {activeResponse == null ? (
+      {connection == null ? (
         <HotKeyList
           hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'url_bar.focus']}
         />
@@ -111,7 +41,7 @@ export function WebsocketResponsePane({ style, className, activeRequestId }: Pro
               '-mb-1.5',
             )}
           >
-            {activeResponse && (
+            {connection && (
               <HStack
                 space={2}
                 alignItems="center"
@@ -120,109 +50,30 @@ export function WebsocketResponsePane({ style, className, activeRequestId }: Pro
                   'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm',
                 )}
               >
-                {activeResponse.state !== 'closed' && <Icon size="sm" icon="refresh" spin />}
-                <StatusTag showReason response={activeResponse} />
-                <span>&bull;</span>
-                <DurationTag
-                  headers={activeResponse.elapsedHeaders}
-                  total={activeResponse.elapsed}
-                />
-                <span>&bull;</span>
-                <SizeTag contentLength={activeResponse.contentLength ?? 0} />
+                {isLoading && <Icon size="sm" icon="refresh" spin />}
+                {/*<span>&bull;</span>*/}
+                {/*<DurationTag headers={0} total={connection.elapsed} />*/}
 
                 <div className="ml-auto">
-                  <RecentResponsesDropdown
-                    responses={responses}
-                    activeResponse={activeResponse}
-                    onPinnedResponseId={setPinnedResponseId}
-                  />
+                  {/*<RecentResponsesDropdown*/}
+                  {/*  responses={responses}*/}
+                  {/*  activeResponse={activeResponse}*/}
+                  {/*  onPinnedResponseId={setPinnedResponseId}*/}
+                  {/*/>*/}
                 </div>
               </HStack>
             )}
           </HStack>
 
-          {activeResponse?.error ? (
+          {connection?.error ? (
             <Banner color="danger" className="m-2">
-              {activeResponse.error}
+              {connection.error}
             </Banner>
           ) : (
-            <Tabs
-              key={activeRequestId} // Freshen tabs on request change
-              value={activeTab}
-              onChangeValue={setActiveTab}
-              tabs={tabs}
-              label="Response"
-              className="ml-3 mr-3 mb-3"
-              tabListClassName="mt-1.5"
-            >
-              <TabContent value={TAB_BODY}>
-                <ConfirmLargeResponse response={activeResponse}>
-                  {activeResponse.state === 'initialized' ? (
-                    <EmptyStateText>
-                      <Icon size="xl" spin icon="refresh" className="text-text-subtlest" />
-                    </EmptyStateText>
-                  ) : activeResponse.state === 'closed' && activeResponse.contentLength === 0 ? (
-                    <div className="pb-2 h-full">
-                      <EmptyStateText>Empty Body</EmptyStateText>
-                    </div>
-                  ) : contentType?.match(/^text\/event-stream$/i) && viewMode === 'pretty' ? (
-                    <EventStreamViewer response={activeResponse} />
-                  ) : contentType?.match(/^image\/svg/) ? (
-                    <SvgViewer response={activeResponse} />
-                  ) : contentType?.match(/^image/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={ImageViewer} />
-                  ) : contentType?.match(/^audio/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={AudioViewer} />
-                  ) : contentType?.match(/^video/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={VideoViewer} />
-                  ) : contentType?.match(/pdf/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={PdfViewer} />
-                  ) : contentType?.match(/csv|tab-separated/i) ? (
-                    <CsvViewer className="pb-2" response={activeResponse} />
-                  ) : (
-                    // ) : viewMode === 'pretty' && contentType?.includes('json') ? (
-                    //   <JsonAttributeTree attrValue={activeResponse} />
-                    <HTMLOrTextViewer
-                      textViewerClassName="-mr-2 bg-surface" // Pull to the right
-                      response={activeResponse}
-                      pretty={viewMode === 'pretty'}
-                    />
-                  )}
-                </ConfirmLargeResponse>
-              </TabContent>
-              <TabContent value={TAB_HEADERS}>
-                <ResponseHeaders response={activeResponse} />
-              </TabContent>
-              <TabContent value={TAB_INFO}>
-                <ResponseInfo response={activeResponse} />
-              </TabContent>
-            </Tabs>
+            <div>Hello</div>
           )}
         </div>
       )}
     </div>
   );
-}
-
-function EnsureCompleteResponse({
-  response,
-  render,
-}: {
-  response: HttpResponse;
-  render: (v: { bodyPath: string }) => ReactNode;
-}) {
-  if (response.bodyPath === null) {
-    return <div>Empty response body</div>;
-  }
-
-  // Wait until the response has been fully-downloaded
-  if (response.state !== 'closed') {
-    return (
-      <EmptyStateText>
-        <Icon icon="refresh" spin />
-      </EmptyStateText>
-    );
-  }
-
-  return render({ bodyPath: response.bodyPath });
 }

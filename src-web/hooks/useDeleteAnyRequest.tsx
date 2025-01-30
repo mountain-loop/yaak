@@ -1,3 +1,4 @@
+import {deleteWebsocketRequest} from "../commands/deleteWebsocketRequest";
 import { useDeleteAnyGrpcRequest } from './useDeleteAnyGrpcRequest';
 import { useDeleteAnyHttpRequest } from './useDeleteAnyHttpRequest';
 import { useFastMutation } from './useFastMutation';
@@ -13,6 +14,7 @@ export function useDeleteAnyRequest() {
       // We don't know what type it is based on the ID, so just try deleting both
       deleteAnyHttpRequest.mutate(id);
       deleteAnyGrpcRequest.mutate(id);
+      deleteWebsocketRequest.mutate(id);
     },
   });
 }

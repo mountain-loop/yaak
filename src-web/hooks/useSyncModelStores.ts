@@ -19,7 +19,8 @@ import { useListenToTauriEvent } from './useListenToTauriEvent';
 import { pluginsAtom } from './usePlugins';
 import { useRequestUpdateKey } from './useRequestUpdateKey';
 import { settingsAtom } from './useSettings';
-import {websocketRequestsAtom} from "./useWebsocketRequests";
+import { websocketConnectionsAtom } from './useWebsocketConnections';
+import { websocketRequestsAtom } from './useWebsocketRequests';
 import { workspaceMetaAtom } from './useWorkspaceMeta';
 import { workspacesAtom } from './useWorkspaces';
 
@@ -67,6 +68,8 @@ export function useSyncModelStores() {
       jotaiStore.set(grpcRequestsAtom, updateModelList(payload.model));
     } else if (payload.model.model === 'websocket_request') {
       jotaiStore.set(websocketRequestsAtom, updateModelList(payload.model));
+    } else if (payload.model.model === 'websocket_connection') {
+      jotaiStore.set(websocketConnectionsAtom, updateModelList(payload.model));
     } else if (payload.model.model === 'grpc_connection') {
       jotaiStore.set(grpcConnectionsAtom, updateModelList(payload.model));
     } else if (payload.model.model === 'environment') {
@@ -108,6 +111,8 @@ export function useSyncModelStores() {
       jotaiStore.set(grpcRequestsAtom, removeModelById(payload.model));
     } else if (payload.model.model === 'websocket_request') {
       jotaiStore.set(websocketRequestsAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'websocket_connection') {
+      jotaiStore.set(websocketConnectionsAtom, removeModelById(payload.model));
     } else if (payload.model.model === 'grpc_connection') {
       jotaiStore.set(grpcConnectionsAtom, removeModelById(payload.model));
     } else if (payload.model.model === 'grpc_event') {
@@ -122,7 +127,10 @@ export function useSyncModelStores() {
 
 export function updateModelList<T extends AnyModel>(model: T) {
   // Mark these models as DESC instead of ASC
-  const pushToFront = model.model === 'http_response' || model.model === 'grpc_connection';
+  const pushToFront =
+    model.model === 'http_response' ||
+    model.model === 'grpc_connection' ||
+    model.model === 'websocket_connection';
 
   return (current: T[] | undefined | null): T[] => {
     const index = current?.findIndex((v) => modelsEq(v, model)) ?? -1;

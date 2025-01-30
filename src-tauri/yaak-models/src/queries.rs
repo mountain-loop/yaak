@@ -1120,6 +1120,7 @@ pub async fn upsert_websocket_connection<R: Runtime>(
             WebsocketConnectionIden::Elapsed,
             WebsocketConnectionIden::Error,
             WebsocketConnectionIden::Headers,
+            WebsocketConnectionIden::State,
             WebsocketConnectionIden::Status,
             WebsocketConnectionIden::Url,
         ])
@@ -1132,6 +1133,7 @@ pub async fn upsert_websocket_connection<R: Runtime>(
             connection.elapsed.into(),
             connection.error.as_ref().map(|s| s.as_str()).into(),
             serde_json::to_string(&connection.headers)?.into(),
+            serde_json::to_value(&connection.state)?.as_str().into(),
             connection.status.into(),
             connection.url.as_str().into(),
         ])
@@ -1142,6 +1144,7 @@ pub async fn upsert_websocket_connection<R: Runtime>(
                     WebsocketConnectionIden::Elapsed,
                     WebsocketConnectionIden::Error,
                     WebsocketConnectionIden::Headers,
+                    WebsocketConnectionIden::State,
                     WebsocketConnectionIden::Status,
                     WebsocketConnectionIden::Url,
                 ])

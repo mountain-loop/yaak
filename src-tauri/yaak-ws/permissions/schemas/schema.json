@@ -295,6 +295,16 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cancel"
+        },
+        {
+          "description": "Denies the cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cancel"
+        },
+        {
           "description": "Enables the connect command without any pre-configured scope.",
           "type": "string",
           "const": "allow-connect"
@@ -303,6 +313,16 @@
           "description": "Denies the connect command without any pre-configured scope.",
           "type": "string",
           "const": "deny-connect"
+        },
+        {
+          "description": "Enables the delete_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-delete-request"
+        },
+        {
+          "description": "Denies the delete_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-delete-request"
         },
         {
           "description": "Enables the list_connections command without any pre-configured scope.",

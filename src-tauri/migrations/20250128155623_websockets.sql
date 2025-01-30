@@ -38,6 +38,7 @@ CREATE TABLE websocket_connections
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP      NOT NULL,
     updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP      NOT NULL,
     url          TEXT                                    NOT NULL,
+    state        TEXT                                    NOT NULL,
     status       INTEGER  DEFAULT -1                     NOT NULL,
     error        TEXT                                    NULL,
     elapsed      INTEGER  DEFAULT 0                      NOT NULL,

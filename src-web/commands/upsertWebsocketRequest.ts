@@ -8,12 +8,12 @@ export const upsertWebsocketRequest = createFastMutation<
   void,
   Parameters<typeof cmdUpsertWebsocketRequest>[0]
 >({
-  mutationKey: ['upsert_workspace'],
+  mutationKey: ['upsert_websocket_request'],
   mutationFn: (request) => cmdUpsertWebsocketRequest(request),
   onSuccess: async (request) => {
     const isNew = request.createdAt == request.updatedAt;
 
-    if (isNew) trackEvent('workspace', 'create');
-    else trackEvent('workspace', 'update');
+    if (isNew) trackEvent('websocket_request', 'create');
+    else trackEvent('websocket_request', 'update');
   },
 });

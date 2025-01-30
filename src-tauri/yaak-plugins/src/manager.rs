@@ -53,8 +53,8 @@ impl PluginManager {
             PluginRuntimeServerWebsocket::new(events_tx, client_disconnect_tx, client_connect_tx);
 
         let plugin_manager = PluginManager {
-            plugins: Arc::new(Mutex::new(Vec::new())),
-            subscribers: Arc::new(Mutex::new(HashMap::new())),
+            plugins: Default::default(),
+            subscribers: Default::default(),
             ws_service: Arc::new(ws_service.clone()),
             kill_tx: kill_server_tx,
         };

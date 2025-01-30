@@ -42,6 +42,9 @@ pub enum AnalyticsResource {
     Sidebar,
     Tab,
     Theme,
+    WebsocketConnection,
+    WebsocketEvent,
+    WebsocketRequest,
     Workspace,
 }
 

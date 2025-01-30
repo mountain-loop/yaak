@@ -1,7 +1,9 @@
 [default]
 description = "Default permissions for the plugin"
 permissions = [
+    "allow-cancel",
     "allow-connect",
+    "allow-delete-request",
     "allow-list-connections",
     "allow-list-requests",
     "allow-upsert-request",

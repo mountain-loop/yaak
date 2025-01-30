@@ -1,16 +1,19 @@
-use crate::connect::ws_connect;
 use crate::error::Error::GenericError;
 use crate::error::Result;
+use crate::manager::WebsocketManager;
 use crate::render::render_request;
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
 use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
+use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
-use yaak_models::models::{HttpResponseHeader, WebsocketConnection, WebsocketRequest};
+use yaak_models::models::{
+    HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketRequest,
+};
 use yaak_models::queries;
 use yaak_models::queries::{
-    get_base_environment, get_cookie_jar, get_environment, get_websocket_request,
-    upsert_websocket_connection, UpdateSource,
+    get_base_environment, get_cookie_jar, get_environment, get_websocket_connection,
+    get_websocket_request, upsert_websocket_connection, UpdateSource,
 };
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
@@ -24,6 +27,14 @@ pub(crate) async fn upsert_request<R: Runtime>(
     w: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
     Ok(queries::upsert_websocket_request(&w, request, &UpdateSource::Window).await?)
+}
+
+#[tauri::command]
+pub(crate) async fn delete_request<R: Runtime>(
+    request_id: &str,
+    w: WebviewWindow<R>,
+) -> Result<WebsocketRequest> {
+    Ok(queries::delete_websocket_request(&w, request_id, &UpdateSource::Window).await?)
 }
 
 #[tauri::command]
@@ -43,12 +54,35 @@ pub(crate) async fn list_connections<R: Runtime>(
 }
 
 #[tauri::command]
+pub(crate) async fn cancel<R: Runtime>(
+    connection_id: &str,
+    window: WebviewWindow<R>,
+    ws_manager: State<'_, Mutex<WebsocketManager<R>>>,
+) -> Result<WebsocketConnection> {
+    let connection = get_websocket_connection(&window, connection_id).await?;
+    let mut ws_manager = ws_manager.lock().await;
+    ws_manager.cancel(&connection.id).await?;
+    upsert_websocket_connection(
+        &window,
+        &WebsocketConnection {
+            state: WebsocketConnectionState::Closed,
+            ..connection.clone()
+        },
+        &UpdateSource::Window,
+    )
+    .await?;
+
+    Ok(connection)
+}
+
+#[tauri::command]
 pub(crate) async fn connect<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
+    ws_manager: State<'_, Mutex<WebsocketManager<R>>>,
 ) -> Result<WebsocketConnection> {
     let unrendered_request = get_websocket_request(&window, request_id)
         .await?
@@ -104,7 +138,19 @@ pub(crate) async fn connect<R: Runtime>(
         None => None,
     };
 
-    let (_, response) = ws_connect(&request.url, headers).await?;
+    let connection = upsert_websocket_connection(
+        &window,
+        &WebsocketConnection {
+            workspace_id: request.workspace_id.clone(),
+            request_id: request.id,
+            ..Default::default()
+        },
+        &UpdateSource::Window,
+    )
+    .await?;
+
+    let mut ws_manager = ws_manager.lock().await;
+    let response = ws_manager.connect(&connection.id, &request.url, headers).await?;
 
     let response_headers = response
         .headers()
@@ -118,10 +164,9 @@ pub(crate) async fn connect<R: Runtime>(
     let connection = upsert_websocket_connection(
         &window,
         &WebsocketConnection {
-            workspace_id: request.workspace_id.clone(),
-            request_id: request.id,
+            state: WebsocketConnectionState::Connected,
             headers: response_headers,
-            ..Default::default()
+            ..connection
         },
         &UpdateSource::Window,
     )

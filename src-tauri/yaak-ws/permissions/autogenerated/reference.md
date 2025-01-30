@@ -2,7 +2,9 @@
 
 Default permissions for the plugin
 
+- `allow-cancel`
 - `allow-connect`
+- `allow-delete-request`
 - `allow-list-connections`
 - `allow-list-requests`
 - `allow-upsert-request`
@@ -15,6 +17,32 @@ Default permissions for the plugin
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`yaak-ws:allow-cancel`
+
+</td>
+<td>
+
+Enables the cancel command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:deny-cancel`
+
+</td>
+<td>
+
+Denies the cancel command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>
@@ -38,6 +66,32 @@ Enables the connect command without any pre-configured scope.
 <td>
 
 Denies the connect command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:allow-delete-request`
+
+</td>
+<td>
+
+Enables the delete_request command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:deny-delete-request`
+
+</td>
+<td>
+
+Denies the delete_request command without any pre-configured scope.
 
 </td>
 </tr>

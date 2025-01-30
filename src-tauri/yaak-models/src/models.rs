@@ -546,6 +546,21 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum WebsocketConnectionState {
+    Initialized,
+    Connected,
+    Closed,
+}
+
+impl Default for WebsocketConnectionState {
+    fn default() -> Self {
+        Self::Initialized
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
@@ -561,6 +576,7 @@ pub struct WebsocketConnection {
     pub elapsed: i32,
     pub error: Option<String>,
     pub headers: Vec<HttpResponseHeader>,
+    pub state: WebsocketConnectionState,
     pub status: i32,
     pub url: String,
 }
@@ -579,6 +595,7 @@ pub enum WebsocketConnectionIden {
     Elapsed,
     Error,
     Headers,
+    State,
     Status,
     Url,
 }
@@ -588,6 +605,7 @@ impl<'s> TryFrom<&Row<'s>> for WebsocketConnection {
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let headers: String = r.get("headers")?;
+        let state: String = r.get("state")?;
         Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
@@ -599,6 +617,7 @@ impl<'s> TryFrom<&Row<'s>> for WebsocketConnection {
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
             elapsed: r.get("elapsed")?,
             error: r.get("error")?,
+            state: serde_json::from_str(format!(r#""{state}""#).as_str()).unwrap(),
             status: r.get("status")?,
         })
     }
@@ -608,8 +627,14 @@ impl<'s> TryFrom<&Row<'s>> for WebsocketConnection {
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum WebsocketMessageType {
-    Binary,
     Text,
+    Binary,
+}
+
+impl Default for WebsocketMessageType {
+    fn default() -> Self {
+        Self::Text
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -630,7 +655,7 @@ pub struct WebsocketRequest {
     pub description: String,
     pub headers: Vec<HttpRequestHeader>,
     pub message: Vec<u8>,
-    pub message_type: Option<WebsocketMessageType>,
+    pub message_type: WebsocketMessageType,
     pub name: String,
     pub sort_priority: f32,
     pub url: String,

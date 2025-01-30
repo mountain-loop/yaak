@@ -1,6 +1,6 @@
 import type { HttpRequest, WebsocketMessageType, WebsocketRequest } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import { connectWebsocket } from '@yaakapp-internal/ws';
+import { cancelWebsocket, connectWebsocket } from '@yaakapp-internal/ws';
 import classNames from 'classnames';
 import { atom, useAtom, useAtomValue } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
@@ -17,12 +17,14 @@ import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
 import { requestsAtom } from '../hooks/useRequests';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
+import { useLatestWebsocketConnection } from '../hooks/useWebsocketConnections';
 import { deepEqualAtom } from '../lib/atoms';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { generateId } from '../lib/generateId';
 import { CountBadge } from './core/CountBadge';
 import { Editor } from './core/Editor/Editor';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
+import { IconButton } from './core/IconButton';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
 import type { RadioDropdownProps } from './core/RadioDropdown';
@@ -150,6 +152,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
   const { updateKey } = useRequestUpdateKey(activeRequestId);
   const { mutate: importQuerystring } = useImportQuerystring(activeRequestId);
+  const connection = useLatestWebsocketConnection(activeRequestId);
 
   const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(
@@ -180,18 +183,26 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   );
 
   const handleSend = useCallback(async () => {
-    const connection = await connectWebsocket({
+    await connectWebsocket({
       requestId: activeRequest.id,
       environmentId: getActiveEnvironment()?.id ?? null,
       cookieJarId: getActiveCookieJar()?.id ?? null,
     });
-    console.log('CONNECTION', connection);
   }, [activeRequest.id]);
+
+  const handleCancel = useCallback(async () => {
+    if (connection == null) return;
+    await cancelWebsocket({
+      connectionId: connection?.id,
+    });
+  }, [connection]);
 
   const handleUrlChange = useCallback(
     (url: string) => upsertWebsocketRequest.mutate({ ...activeRequest, url }),
     [activeRequest],
   );
+
+  const isLoading = connection !== null && connection.state !== 'closed';
 
   return (
     <div
@@ -200,20 +211,33 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
     >
       {activeRequest && (
         <>
-          <UrlBar
-            stateKey={`url.${activeRequest.id}`}
-            key={forceUpdateKey + urlKey}
-            url={activeRequest.url}
-            placeholder="wss://example.com"
-            onPasteOverwrite={importQuerystring}
-            autocomplete={autocomplete}
-            onSend={handleSend}
-            onCancel={cancelResponse}
-            onUrlChange={handleUrlChange}
-            forceUpdateKey={updateKey}
-            isLoading={activeResponse != null && activeResponse.state !== 'closed'}
-            method={null}
-          />
+          <div className="grid grid-cols-[minmax(0,1fr)_auto]">
+            <UrlBar
+              stateKey={`url.${activeRequest.id}`}
+              key={forceUpdateKey + urlKey}
+              url={activeRequest.url}
+              submitIcon={isLoading ? 'x' : 'arrow_up_down'}
+              rightSlot={
+                isLoading && (
+                  <IconButton
+                    size="xs"
+                    title="Send message"
+                    icon="send_horizontal"
+                    className="w-8 mr-0.5 !h-full"
+                  />
+                )
+              }
+              placeholder="wss://example.com"
+              onPasteOverwrite={importQuerystring}
+              autocomplete={autocomplete}
+              onSend={isLoading ? handleCancel : handleSend}
+              onCancel={cancelResponse}
+              onUrlChange={handleUrlChange}
+              forceUpdateKey={updateKey}
+              isLoading={activeResponse != null && activeResponse.state !== 'closed'}
+              method={null}
+            />
+          </div>
           <Tabs
             key={activeRequest.id} // Freshen tabs on request change
             value={activeTab}

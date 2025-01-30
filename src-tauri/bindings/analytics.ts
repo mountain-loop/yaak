@@ -2,4 +2,4 @@
 
 export type AnalyticsAction = "cancel" | "click" | "commit" | "create" | "delete" | "delete_many" | "duplicate" | "error" | "export" | "hide" | "import" | "launch" | "launch_first" | "launch_update" | "send" | "show" | "toggle" | "update" | "upsert";
 
-export type AnalyticsResource = "app" | "appearance" | "button" | "checkbox" | "cookie_jar" | "dialog" | "environment" | "folder" | "grpc_connection" | "grpc_event" | "grpc_request" | "http_request" | "http_response" | "key_value" | "link" | "mutation" | "plugin" | "select" | "setting" | "sidebar" | "tab" | "theme" | "workspace";
+export type AnalyticsResource = "app" | "appearance" | "button" | "checkbox" | "cookie_jar" | "dialog" | "environment" | "folder" | "grpc_connection" | "grpc_event" | "grpc_request" | "http_request" | "http_response" | "key_value" | "link" | "mutation" | "plugin" | "select" | "setting" | "sidebar" | "tab" | "theme" | "websocket_connection" | "websocket_event" | "websocket_request" | "workspace";
