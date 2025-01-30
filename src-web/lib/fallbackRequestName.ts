@@ -15,7 +15,11 @@ export function fallbackRequestName(r: AnyModel | null): string {
   // Replace variable syntax with variable name
   const withoutVariables = r.url.replace(/\$\{\[\s*([^\]\s]+)\s*]}/g, '$1');
   if (withoutVariables.trim() === '') {
-    return r.model === 'http_request' ? 'New HTTP Request' : 'new gRPC Request';
+    return r.model === 'http_request'
+      ? 'HTTP Request'
+      : r.model === 'websocket_request'
+        ? 'WebSocket Request'
+        : 'gRPC Request';
   }
 
   // GRPC gets nice short names

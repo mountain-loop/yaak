@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use tauri::{Runtime, WebviewWindow};
 use ts_rs::TS;
 
-use yaak_models::models::{Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, Workspace};
+use yaak_models::models::{Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest, Workspace};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -873,6 +873,7 @@ pub struct ImportResources {
     pub folders: Vec<Folder>,
     pub http_requests: Vec<HttpRequest>,
     pub grpc_requests: Vec<GrpcRequest>,
+    pub websocket_requests: Vec<WebsocketRequest>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

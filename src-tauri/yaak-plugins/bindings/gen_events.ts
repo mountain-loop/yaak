@@ -5,6 +5,7 @@ import type { GrpcRequest } from "./gen_models.js";
 import type { HttpRequest } from "./gen_models.js";
 import type { HttpResponse } from "./gen_models.js";
 import type { JsonValue } from "./serde_json/JsonValue.js";
+import type { WebsocketRequest } from "./gen_models.js";
 import type { Workspace } from "./gen_models.js";
 
 export type BootRequest = { dir: string, watch: boolean, };
@@ -339,7 +340,7 @@ export type Icon = "alert_triangle" | "check" | "check_circle" | "chevron_down" 
 
 export type ImportRequest = { content: string, };
 
-export type ImportResources = { workspaces: Array<Workspace>, environments: Array<Environment>, folders: Array<Folder>, httpRequests: Array<HttpRequest>, grpcRequests: Array<GrpcRequest>, };
+export type ImportResources = { workspaces: Array<Workspace>, environments: Array<Environment>, folders: Array<Folder>, httpRequests: Array<HttpRequest>, grpcRequests: Array<GrpcRequest>, websocketRequests: Array<WebsocketRequest>, };
 
 export type ImportResponse = { resources: ImportResources, };
 

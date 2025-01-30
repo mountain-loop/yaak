@@ -297,6 +297,9 @@ async fn workspace_models<R: Runtime>(
     for m in resources.grpc_requests {
         sync_models.push(SyncModel::GrpcRequest(m));
     }
+    for m in resources.websocket_requests {
+        sync_models.push(SyncModel::WebsocketRequest(m));
+    }
 
     Ok(sync_models)
 }
@@ -424,6 +427,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
         folders_to_upsert,
         http_requests_to_upsert,
         grpc_requests_to_upsert,
+        websocket_requests_to_upsert,
         &UpdateSource::Sync,
     )
     .await?;

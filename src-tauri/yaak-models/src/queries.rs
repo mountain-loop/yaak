@@ -2542,6 +2542,7 @@ pub struct BatchUpsertResult {
     pub folders: Vec<Folder>,
     pub http_requests: Vec<HttpRequest>,
     pub grpc_requests: Vec<GrpcRequest>,
+    pub websocket_requests: Vec<WebsocketRequest>,
 }
 
 pub async fn batch_upsert<R: Runtime>(
@@ -2551,6 +2552,7 @@ pub async fn batch_upsert<R: Runtime>(
     folders: Vec<Folder>,
     http_requests: Vec<HttpRequest>,
     grpc_requests: Vec<GrpcRequest>,
+    websocket_requests: Vec<WebsocketRequest>,
     update_source: &UpdateSource,
 ) -> Result<BatchUpsertResult> {
     let mut imported_resources = BatchUpsertResult::default();
@@ -2618,6 +2620,14 @@ pub async fn batch_upsert<R: Runtime>(
         info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
     }
 
+    if websocket_requests.len() > 0 {
+        for v in websocket_requests {
+            let x = upsert_websocket_request(&window, v, update_source).await?;
+            imported_resources.websocket_requests.push(x.clone());
+        }
+        info!("Imported {} websocket_requests", imported_resources.websocket_requests.len());
+    }
+
     Ok(imported_resources)
 }
 
@@ -2636,6 +2646,7 @@ pub async fn get_workspace_export_resources<R: Runtime>(
             folders: Vec::new(),
             http_requests: Vec::new(),
             grpc_requests: Vec::new(),
+            websocket_requests: Vec::new(),
         },
     };
 
@@ -2645,6 +2656,7 @@ pub async fn get_workspace_export_resources<R: Runtime>(
         data.resources.folders.append(&mut list_folders(mgr, workspace_id).await?);
         data.resources.http_requests.append(&mut list_http_requests(mgr, workspace_id).await?);
         data.resources.grpc_requests.append(&mut list_grpc_requests(mgr, workspace_id).await?);
+        data.resources.websocket_requests.append(&mut list_websocket_requests(mgr, workspace_id).await?);
     }
 
     // Nuke environments if we don't want them
