@@ -305,6 +305,16 @@
           "const": "deny-cancel"
         },
         {
+          "description": "Enables the close command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-close"
+        },
+        {
+          "description": "Denies the close command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-close"
+        },
+        {
           "description": "Enables the connect command without any pre-configured scope.",
           "type": "string",
           "const": "allow-connect"
@@ -313,6 +323,26 @@
           "description": "Denies the connect command without any pre-configured scope.",
           "type": "string",
           "const": "deny-connect"
+        },
+        {
+          "description": "Enables the delete_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-delete-connection"
+        },
+        {
+          "description": "Denies the delete_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-delete-connection"
+        },
+        {
+          "description": "Enables the delete_connections command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-delete-connections"
+        },
+        {
+          "description": "Denies the delete_connections command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-delete-connections"
         },
         {
           "description": "Enables the delete_request command without any pre-configured scope.",

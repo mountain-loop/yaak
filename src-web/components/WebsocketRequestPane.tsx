@@ -1,6 +1,6 @@
 import type { HttpRequest, WebsocketMessageType, WebsocketRequest } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import { cancelWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
+import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
 import classNames from 'classnames';
 import { atom, useAtom, useAtomValue } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
@@ -197,7 +197,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
 
   const handleCancel = useCallback(async () => {
     if (connection == null) return;
-    await cancelWebsocket({ connectionId: connection?.id });
+    await closeWebsocket({ connectionId: connection?.id });
   }, [connection]);
 
   const handleUrlChange = useCallback(
@@ -219,22 +219,22 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
               stateKey={`url.${activeRequest.id}`}
               key={forceUpdateKey + urlKey}
               url={activeRequest.url}
-              submitIcon={isLoading ? 'x' : 'arrow_up_down'}
+              submitIcon={isLoading ? 'send_horizontal' : 'arrow_up_down'}
               rightSlot={
                 isLoading && (
                   <IconButton
                     size="xs"
-                    title="Send message"
-                    icon="send_horizontal"
+                    title="Close connection"
+                    icon="x"
                     className="w-8 mr-0.5 !h-full"
-                    onClick={handleSend}
+                    onClick={handleCancel}
                   />
                 )
               }
               placeholder="wss://example.com"
               onPasteOverwrite={importQuerystring}
               autocomplete={autocomplete}
-              onSend={isLoading ? handleCancel : handleConnect}
+              onSend={isLoading ? handleSend : handleConnect}
               onCancel={cancelResponse}
               onUrlChange={handleUrlChange}
               forceUpdateKey={updateKey}

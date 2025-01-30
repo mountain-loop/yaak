@@ -15,7 +15,7 @@ import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
 import { EmptyStateText } from './EmptyStateText';
-import { RecentConnectionsDropdown } from './RecentConnectionsDropdown';
+import { RecentGrpcConnectionsDropdown } from './RecentGrpcConnectionsDropdown';
 
 interface Props {
   style?: CSSProperties;
@@ -69,7 +69,7 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
                   <Icon icon="refresh" size="sm" spin className="text-text-subtlest" />
                 )}
               </HStack>
-              <RecentConnectionsDropdown
+              <RecentGrpcConnectionsDropdown
                 connections={connections}
                 activeConnection={activeConnection}
                 onPinnedConnectionId={setPinnedConnectionId}

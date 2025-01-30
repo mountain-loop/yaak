@@ -1,7 +1,9 @@
 use tauri_plugin;
 const COMMANDS: &[&str] = &[
-    "cancel",
+    "close",
     "connect",
+    "delete_connection",
+    "delete_connections",
     "delete_request",
     "list_connections",
     "list_events",

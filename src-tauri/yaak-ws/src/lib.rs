@@ -4,7 +4,10 @@ mod error;
 mod manager;
 mod render;
 
-use crate::cmd::{cancel, connect, delete_request, list_connections, list_events, list_requests, send, upsert_request};
+use crate::cmd::{
+    close, connect, delete_connection, delete_connections, delete_request, list_connections,
+    list_events, list_requests, send, upsert_request,
+};
 use crate::manager::WebsocketManager;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{generate_handler, Manager, Runtime};
@@ -13,8 +16,10 @@ use tokio::sync::Mutex;
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-ws")
         .invoke_handler(generate_handler![
-            cancel,
+            close,
             connect,
+            delete_connection,
+            delete_connections,
             delete_request,
             list_connections,
             list_events,

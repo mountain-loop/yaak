@@ -18,7 +18,7 @@ import { StatusTag } from './core/StatusTag';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
-import { RecentResponsesDropdown } from './RecentResponsesDropdown';
+import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
 import { ResponseHeaders } from './ResponseHeaders';
 import { ResponseInfo } from './ResponseInfo';
 import { AudioViewer } from './responseViewers/AudioViewer';
@@ -131,7 +131,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 <SizeTag contentLength={activeResponse.contentLength ?? 0} />
 
                 <div className="ml-auto">
-                  <RecentResponsesDropdown
+                  <RecentHttpResponsesDropdown
                     responses={responses}
                     activeResponse={activeResponse}
                     onPinnedResponseId={setPinnedResponseId}

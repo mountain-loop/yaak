@@ -62,5 +62,6 @@ CREATE TABLE websocket_events
     created_at    DATETIME DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')) NOT NULL,
     updated_at    DATETIME DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')) NOT NULL,
     message_type  TEXT                                                    NOT NULL,
+    is_server     BOOLEAN                                                 NOT NULL,
     content       BLOB                                                    NOT NULL
 );

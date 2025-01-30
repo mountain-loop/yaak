@@ -5,15 +5,11 @@ import { showConfirm } from '../lib/confirm';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { invokeCmd } from '../lib/tauri';
 import { useFastMutation } from './useFastMutation';
-import { getHttpRequest } from './useHttpRequests';
 
 export function useDeleteAnyHttpRequest() {
-  return useFastMutation<HttpRequest | null, string, string>({
+  return useFastMutation<HttpRequest | null, string, HttpRequest>({
     mutationKey: ['delete_any_http_request'],
-    mutationFn: async (id) => {
-      const request = getHttpRequest(id);
-      if (request == null) return null;
-
+    mutationFn: async (request) => {
       const confirmed = await showConfirm({
         id: 'delete-request',
         title: 'Delete Request',
@@ -24,9 +20,11 @@ export function useDeleteAnyHttpRequest() {
           </>
         ),
       });
-      if (!confirmed) return null;
-      return invokeCmd<HttpRequest>('cmd_delete_http_request', { requestId: id });
+      if (!confirmed) {
+        return null;
+      }
+      return invokeCmd<HttpRequest>('cmd_delete_http_request', { requestId: request.id });
     },
-    onSettled: () => trackEvent('http_request', 'delete'),
+    onSuccess: () => trackEvent('http_request', 'delete'),
   });
 }

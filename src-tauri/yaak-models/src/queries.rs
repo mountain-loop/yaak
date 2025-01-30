@@ -1,6 +1,15 @@
 use crate::error::Error::ModelNotFound;
 use crate::error::Result;
-use crate::models::{AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden, GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader, HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden, PluginKeyValue, PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden, WebsocketConnection, WebsocketConnectionIden, WebsocketEvent, WebsocketEventIden, WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden};
+use crate::models::{
+    AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
+    GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
+    GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader,
+    HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden,
+    PluginKeyValue, PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden,
+    WebsocketConnection, WebsocketConnectionIden, WebsocketEvent, WebsocketEventIden,
+    WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta,
+    WorkspaceMetaIden,
+};
 use crate::plugin::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
 use log::{debug, error, info, warn};
@@ -953,6 +962,28 @@ pub async fn delete_websocket_connection<R: Runtime>(
     Ok(m)
 }
 
+pub async fn delete_all_websocket_connections<R: Runtime>(
+    window: &WebviewWindow<R>,
+    request_id: &str,
+    update_source: &UpdateSource,
+) -> Result<()> {
+    for c in list_websocket_connections_for_request(window, request_id).await? {
+        delete_websocket_connection(window, &c.id, update_source).await?;
+    }
+    Ok(())
+}
+
+pub async fn delete_all_websocket_connections_for_workspace<R: Runtime>(
+    window: &WebviewWindow<R>,
+    workspace_id: &str,
+    update_source: &UpdateSource,
+) -> Result<()> {
+    for c in list_websocket_connections_for_workspace(window, workspace_id).await? {
+        delete_websocket_connection(window, &c.id, update_source).await?;
+    }
+    Ok(())
+}
+
 pub async fn get_websocket_connection<R: Runtime>(
     mgr: &impl Manager<R>,
     id: &str,
@@ -990,6 +1021,7 @@ pub async fn upsert_websocket_event<R: Runtime>(
             WebsocketEventIden::ConnectionId,
             WebsocketEventIden::RequestId,
             WebsocketEventIden::MessageType,
+            WebsocketEventIden::IsServer,
             WebsocketEventIden::Content,
         ])
         .values_panic([
@@ -1000,6 +1032,7 @@ pub async fn upsert_websocket_event<R: Runtime>(
             event.connection_id.into(),
             event.request_id.into(),
             serde_json::to_string(&event.message_type)?.into(),
+            event.is_server.into(),
             event.content.into(),
         ])
         .on_conflict(
@@ -1007,6 +1040,7 @@ pub async fn upsert_websocket_event<R: Runtime>(
                 .update_columns([
                     WebsocketEventIden::UpdatedAt,
                     WebsocketEventIden::MessageType,
+                    WebsocketEventIden::IsServer,
                     WebsocketEventIden::Content,
                 ])
                 .to_owned(),
@@ -1200,7 +1234,6 @@ pub async fn upsert_websocket_connection<R: Runtime>(
     emit_upserted_model(window, &AnyModel::WebsocketConnection(m.to_owned()), update_source);
     Ok(m)
 }
-
 
 pub async fn get_websocket_request<R: Runtime>(
     mgr: &impl Manager<R>,

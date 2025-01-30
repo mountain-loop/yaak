@@ -2,8 +2,10 @@
 
 Default permissions for the plugin
 
-- `allow-cancel`
+- `allow-close`
 - `allow-connect`
+- `allow-delete-connection`
+- `allow-delete-connections`
 - `allow-delete-request`
 - `allow-list-connections`
 - `allow-list-events`
@@ -49,6 +51,32 @@ Denies the cancel command without any pre-configured scope.
 <tr>
 <td>
 
+`yaak-ws:allow-close`
+
+</td>
+<td>
+
+Enables the close command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:deny-close`
+
+</td>
+<td>
+
+Denies the close command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `yaak-ws:allow-connect`
 
 </td>
@@ -68,6 +96,58 @@ Enables the connect command without any pre-configured scope.
 <td>
 
 Denies the connect command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:allow-delete-connection`
+
+</td>
+<td>
+
+Enables the delete_connection command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:deny-delete-connection`
+
+</td>
+<td>
+
+Denies the delete_connection command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:allow-delete-connections`
+
+</td>
+<td>
+
+Enables the delete_connections command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:deny-delete-connections`
+
+</td>
+<td>
+
+Denies the delete_connections command without any pre-configured scope.
 
 </td>
 </tr>

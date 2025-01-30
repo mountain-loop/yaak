@@ -17,7 +17,7 @@ interface Props {
   className?: string;
 }
 
-export const RecentResponsesDropdown = function ResponsePane({
+export const RecentHttpResponsesDropdown = function ResponsePane({
   activeResponse,
   responses,
   onPinnedResponseId,
@@ -65,7 +65,7 @@ export const RecentResponsesDropdown = function ResponsePane({
           disabled: responses.length === 0,
         },
         { type: 'separator' },
-        ...responses.slice(0, 20).map((r: HttpResponse) => ({
+        ...responses.map((r: HttpResponse) => ({
           label: (
             <HStack space={2}>
               <StatusTag className="text-sm" response={r} />

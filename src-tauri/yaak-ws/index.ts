@@ -15,6 +15,18 @@ export function deleteWebsocketRequest(requestId: string) {
   });
 }
 
+export function deleteWebsocketConnection(connectionId: string) {
+  return invoke('plugin:yaak-ws|delete_connection', {
+    connectionId,
+  });
+}
+
+export function deleteWebsocketConnections(requestId: string) {
+  return invoke('plugin:yaak-ws|delete_connections', {
+    requestId,
+  });
+}
+
 export function listWebsocketRequests({ workspaceId }: { workspaceId: string }) {
   return invoke('plugin:yaak-ws|list_requests', { workspaceId }) as Promise<WebsocketRequest[]>;
 }
@@ -45,8 +57,8 @@ export function connectWebsocket({
   }) as Promise<WebsocketConnection>;
 }
 
-export function cancelWebsocket({ connectionId }: { connectionId: string }) {
-  return invoke('plugin:yaak-ws|cancel', {
+export function closeWebsocket({ connectionId }: { connectionId: string }) {
+  return invoke('plugin:yaak-ws|close', {
     connectionId,
   });
 }

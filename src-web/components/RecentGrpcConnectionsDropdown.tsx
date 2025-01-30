@@ -14,7 +14,7 @@ interface Props {
   onPinnedConnectionId: (id: string) => void;
 }
 
-export function RecentConnectionsDropdown({
+export function RecentGrpcConnectionsDropdown({
   activeConnection,
   connections,
   onPinnedConnectionId,
@@ -38,7 +38,7 @@ export function RecentConnectionsDropdown({
           disabled: connections.length === 0,
         },
         { type: 'separator', label: 'History' },
-        ...connections.slice(0, 20).map((c) => ({
+        ...connections.map((c) => ({
           label: (
             <HStack space={2}>
               {formatDistanceToNowStrict(c.createdAt + 'Z')} ago &bull;{' '}

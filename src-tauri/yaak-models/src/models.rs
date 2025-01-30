@@ -744,6 +744,7 @@ pub struct WebsocketEvent {
     pub workspace_id: String,
     pub request_id: String,
     pub connection_id: String,
+    pub is_server: bool,
 
     pub content: Vec<u8>,
     pub message_type: WebsocketEventType,
@@ -760,6 +761,7 @@ pub enum WebsocketEventIden {
     WorkspaceId,
     RequestId,
     ConnectionId,
+    IsServer,
 
     MessageType,
     Content,
@@ -779,6 +781,7 @@ impl<'s> TryFrom<&Row<'s>> for WebsocketEvent {
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
             content: r.get("content")?,
+            is_server: r.get("is_server")?,
             message_type: serde_json::from_str(message_type.as_str()).unwrap_or_default(),
         })
     }

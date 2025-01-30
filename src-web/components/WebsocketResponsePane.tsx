@@ -2,8 +2,8 @@ import type { WebsocketEvent, WebsocketRequest } from '@yaakapp-internal/models'
 import classNames from 'classnames';
 import { format } from 'date-fns';
 import React, { useMemo, useState } from 'react';
+import { usePinnedWebsocketConnection } from '../hooks/usePinnedWebsocketConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
-import { useLatestWebsocketConnection } from '../hooks/useWebsocketConnections';
 import { useWebsocketEvents } from '../hooks/useWebsocketEvents';
 import { languageFromContentType } from '../lib/contentType';
 import { Banner } from './core/Banner';
@@ -14,21 +14,22 @@ import { JsonAttributeTree } from './core/JsonAttributeTree';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
+import { RecentWebsocketConnectionsDropdown } from './RecentWebsocketConnectionsDropdown';
 
 interface Props {
   activeRequest: WebsocketRequest;
 }
 
 export function WebsocketResponsePane({ activeRequest }: Props) {
-  const activeConnection = useLatestWebsocketConnection(activeRequest.id);
-  // const isLoading = activeConnection !== null && activeConnection.state !== 'closed';
-  const events = useWebsocketEvents(activeConnection?.id ?? null);
-
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [showLarge, setShowLarge] = useStateWithDeps<boolean>(false, [activeRequest.id]);
   const [showingLarge, setShowingLarge] = useState<boolean>(false);
-  // const { activeConnection, connections, setPinnedConnectionId } =
-  //   usePinnedGrpcConnection(activeRequest);
+
+  const { activeConnection, connections, setPinnedConnectionId } =
+    usePinnedWebsocketConnection(activeRequest);
+
+  // const isLoading = activeConnection !== null && activeConnection.state !== 'closed';
+  const events = useWebsocketEvents(activeConnection?.id ?? null);
 
   const activeEvent = useMemo(
     () => events.find((m) => m.id === activeEventId) ?? null,
@@ -38,7 +39,6 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
   const content = activeEvent
     ? new TextDecoder('utf-8').decode(Uint8Array.from(activeEvent.content))
     : '';
-
   const language = languageFromContentType(null, content);
 
   return (
@@ -57,11 +57,11 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                   <Icon icon="refresh" size="sm" spin className="text-text-subtlest" />
                 )}
               </HStack>
-              {/*<RecentConnectionsDropdown*/}
-              {/*  connections={connections}*/}
-              {/*  activeConnection={activeConnection}*/}
-              {/*  onPinnedConnectionId={setPinnedConnectionId}*/}
-              {/*/>*/}
+              <RecentWebsocketConnectionsDropdown
+                connections={connections}
+                activeConnection={activeConnection}
+                onPinnedConnectionId={setPinnedConnectionId}
+              />
             </HStack>
             <div className="overflow-y-auto h-full">
               {activeConnection.error && (
@@ -136,7 +136,7 @@ function EventRow({
   isActive?: boolean;
   event: WebsocketEvent;
 }) {
-  const { createdAt, content: contentBytes } = event;
+  const { createdAt, content: contentBytes, isServer, messageType } = event;
   const content = contentBytes
     ? new TextDecoder('utf-8').decode(Uint8Array.from(contentBytes))
     : '';
@@ -151,9 +151,22 @@ function EventRow({
           'text-text-subtle hover:text',
         )}
       >
-        <Icon className="text-text-subtle" icon="info" />
+        <Icon
+          className={classNames(
+            messageType === 'close' ? 'text-secondary' : isServer ? 'text-info' : 'text-primary',
+          )}
+          icon={
+            messageType === 'close'
+              ? 'info'
+              : isServer
+                ? 'arrow_big_down_dash'
+                : 'arrow_big_up_dash'
+          }
+        />
         <div className={classNames('w-full truncate text-xs')}>
-          {content.slice(0, 1000)}
+          {messageType === 'close'
+            ? 'Connection closed by ' + (isServer ? 'server' : 'client')
+            : content.slice(0, 1000)}
           {/*{error && <span className="text-warning"> ({error})</span>}*/}
         </div>
         <div className={classNames('opacity-50 text-xs')}>

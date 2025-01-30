@@ -59,15 +59,4 @@ impl WebsocketManager {
         connection.send(msg).await?;
         Ok(())
     }
-
-    pub async fn cancel(&mut self, id: &str) -> Result<()> {
-        debug!("Close websocket");
-        let mut connections = self.connections.lock().await;
-        let connection = match connections.get_mut(id) {
-            None => return Ok(()),
-            Some(c) => c,
-        };
-        connection.close().await?;
-        Ok(())
-    }
 }

@@ -5,15 +5,11 @@ import { showConfirm } from '../lib/confirm';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { invokeCmd } from '../lib/tauri';
 import { useFastMutation } from './useFastMutation';
-import { getGrpcRequest } from './useGrpcRequests';
 
 export function useDeleteAnyGrpcRequest() {
-  return useFastMutation<GrpcRequest | null, string, string>({
+  return useFastMutation<GrpcRequest | null, string, GrpcRequest>({
     mutationKey: ['delete_any_grpc_request'],
-    mutationFn: async (id) => {
-      const request = getGrpcRequest(id);
-      if (request == null) return null;
-
+    mutationFn: async (request) => {
       const confirmed = await showConfirm({
         id: 'delete-grpc-request',
         title: 'Delete Request',
@@ -24,9 +20,11 @@ export function useDeleteAnyGrpcRequest() {
           </>
         ),
       });
-      if (!confirmed) return null;
-      return invokeCmd('cmd_delete_grpc_request', { requestId: id });
+      if (!confirmed) {
+        return null;
+      }
+      return invokeCmd('cmd_delete_grpc_request', { requestId: request.id });
     },
-    onSettled: () => trackEvent('grpc_request', 'delete'),
+    onSuccess: () => trackEvent('grpc_request', 'delete'),
   });
 }
