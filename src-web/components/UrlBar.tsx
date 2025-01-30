@@ -101,6 +101,7 @@ export const UrlBar = memo(function UrlBar({
         }
         rightSlot={
           <HStack space={0.5}>
+            {rightSlot && <div className="py-0.5 h-full">{rightSlot}</div>}
             {submitIcon !== null && (
               <div className="py-0.5 h-full">
                 <IconButton
@@ -114,7 +115,6 @@ export const UrlBar = memo(function UrlBar({
                 />
               </div>
             )}
-            {rightSlot && <div className="py-0.5 h-full">{rightSlot}</div>}
           </HStack>
         }
       />

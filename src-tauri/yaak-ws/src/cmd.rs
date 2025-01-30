@@ -5,16 +5,12 @@ use crate::render::render_request;
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
 use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::http::HeaderValue;
-use yaak_models::models::{
-    HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketRequest,
-};
+use tokio_tungstenite::tungstenite::Message;
+use yaak_models::models::{HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent, WebsocketEventType, WebsocketMessageType, WebsocketRequest};
 use yaak_models::queries;
-use yaak_models::queries::{
-    get_base_environment, get_cookie_jar, get_environment, get_websocket_connection,
-    get_websocket_request, upsert_websocket_connection, UpdateSource,
-};
+use yaak_models::queries::{get_base_environment, get_cookie_jar, get_environment, get_websocket_connection, get_websocket_request, upsert_websocket_connection, upsert_websocket_event, UpdateSource};
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
@@ -38,6 +34,14 @@ pub(crate) async fn delete_request<R: Runtime>(
 }
 
 #[tauri::command]
+pub(crate) async fn list_events<R: Runtime>(
+    connection_id: &str,
+    app_handle: AppHandle<R>,
+) -> Result<Vec<WebsocketEvent>> {
+    Ok(queries::list_websocket_events(&app_handle, connection_id).await?)
+}
+
+#[tauri::command]
 pub(crate) async fn list_requests<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
@@ -54,10 +58,35 @@ pub(crate) async fn list_connections<R: Runtime>(
 }
 
 #[tauri::command]
+pub(crate) async fn send<R: Runtime>(
+    connection_id: &str,
+    window: WebviewWindow<R>,
+    ws_manager: State<'_, Mutex<WebsocketManager>>,
+) -> Result<WebsocketConnection> {
+    let connection = get_websocket_connection(&window, connection_id).await?;
+    let request = get_websocket_request(&window, &connection.request_id)
+        .await?
+        .ok_or(GenericError("WebSocket Request not found".to_string()))?;
+
+    let mut ws_manager = ws_manager.lock().await;
+    match request.message_type {
+        WebsocketMessageType::Text => {
+            let msg = String::from_utf8(request.message).unwrap_or_default();
+            ws_manager.send(&connection.id, Message::Text(msg.into())).await
+        }
+        WebsocketMessageType::Binary => {
+            ws_manager.send(&connection.id, Message::Binary(request.message.into())).await
+        }
+    }?;
+
+    Ok(connection)
+}
+
+#[tauri::command]
 pub(crate) async fn cancel<R: Runtime>(
     connection_id: &str,
     window: WebviewWindow<R>,
-    ws_manager: State<'_, Mutex<WebsocketManager<R>>>,
+    ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
     let connection = get_websocket_connection(&window, connection_id).await?;
     let mut ws_manager = ws_manager.lock().await;
@@ -82,7 +111,7 @@ pub(crate) async fn connect<R: Runtime>(
     cookie_jar_id: Option<&str>,
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-    ws_manager: State<'_, Mutex<WebsocketManager<R>>>,
+    ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
     let unrendered_request = get_websocket_request(&window, request_id)
         .await?
@@ -142,15 +171,48 @@ pub(crate) async fn connect<R: Runtime>(
         &window,
         &WebsocketConnection {
             workspace_id: request.workspace_id.clone(),
-            request_id: request.id,
+            request_id: request_id.to_string(),
             ..Default::default()
         },
         &UpdateSource::Window,
     )
     .await?;
 
+    let (receive_tx, mut receive_rx) = mpsc::channel::<Message>(128);
     let mut ws_manager = ws_manager.lock().await;
-    let response = ws_manager.connect(&connection.id, &request.url, headers).await?;
+
+    {
+        let connection_id = connection.id.clone();
+        let request_id = request.id.to_string();
+        let workspace_id = request.workspace_id.clone();
+        let window = window.clone();
+        tokio::spawn(async move {
+            while let Some(message) = receive_rx.recv().await {
+                upsert_websocket_event(
+                    &window,
+                    WebsocketEvent {
+                        connection_id: connection_id.clone(),
+                        request_id: request_id.clone(),
+                        workspace_id: workspace_id.clone(),
+                        message_type: match message {
+                            Message::Text(_) => WebsocketEventType::Text,
+                            Message::Binary(_) => WebsocketEventType::Binary,
+                            Message::Ping(_) => WebsocketEventType::Ping,
+                            Message::Pong(_) => WebsocketEventType::Pong,
+                            Message::Close(_) => WebsocketEventType::Close,
+                            Message::Frame(_) => WebsocketEventType::Frame,
+                        },
+                        content: message.into_data().into(),
+                        ..Default::default()
+                    },
+                    &UpdateSource::Window,
+                ).await.unwrap();
+            }
+            panic!("Didn't receive text message");
+        });
+    }
+
+    let response = ws_manager.connect(&connection.id, &request.url, headers, receive_tx).await?;
 
     let response_headers = response
         .headers()

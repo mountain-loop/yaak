@@ -703,7 +703,7 @@ impl<'s> TryFrom<&Row<'s>> for WebsocketRequest {
             url: r.get("url")?,
             url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
             message: r.get("message")?,
-            message_type: serde_json::from_str(message_type.as_str()).unwrap_or_default(),
+            message_type: serde_json::from_str(format!(r#""{message_type}""#).as_str()).unwrap(),
             description: r.get("description")?,
             authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
             authentication_type: r.get("authentication_type")?,
@@ -746,7 +746,7 @@ pub struct WebsocketEvent {
     pub connection_id: String,
 
     pub content: Vec<u8>,
-    pub message_type: GrpcEventType,
+    pub message_type: WebsocketEventType,
 }
 
 #[derive(Iden)]

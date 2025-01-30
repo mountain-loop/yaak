@@ -1,5 +1,6 @@
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::Alphanumeric;
+use rand::Rng;
 
 pub fn gen_id() -> String {
-    Alphanumeric.sample_string(&mut rand::thread_rng(), 5)
+    rand::rng().sample_iter(&Alphanumeric).take(5).map(char::from).collect()
 }

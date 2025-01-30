@@ -1,6 +1,6 @@
 import type { HttpRequest, WebsocketMessageType, WebsocketRequest } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import { cancelWebsocket, connectWebsocket } from '@yaakapp-internal/ws';
+import { cancelWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
 import classNames from 'classnames';
 import { atom, useAtom, useAtomValue } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
@@ -182,7 +182,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
     [autocompleteUrls],
   );
 
-  const handleSend = useCallback(async () => {
+  const handleConnect = useCallback(async () => {
     await connectWebsocket({
       requestId: activeRequest.id,
       environmentId: getActiveEnvironment()?.id ?? null,
@@ -190,11 +190,14 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
     });
   }, [activeRequest.id]);
 
+  const handleSend = useCallback(async () => {
+    if (connection == null) return;
+    await sendWebsocket({ connectionId: connection?.id });
+  }, [connection]);
+
   const handleCancel = useCallback(async () => {
     if (connection == null) return;
-    await cancelWebsocket({
-      connectionId: connection?.id,
-    });
+    await cancelWebsocket({ connectionId: connection?.id });
   }, [connection]);
 
   const handleUrlChange = useCallback(
@@ -224,13 +227,14 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                     title="Send message"
                     icon="send_horizontal"
                     className="w-8 mr-0.5 !h-full"
+                    onClick={handleSend}
                   />
                 )
               }
               placeholder="wss://example.com"
               onPasteOverwrite={importQuerystring}
               autocomplete={autocomplete}
-              onSend={isLoading ? handleCancel : handleSend}
+              onSend={isLoading ? handleCancel : handleConnect}
               onCancel={cancelResponse}
               onUrlChange={handleUrlChange}
               forceUpdateKey={updateKey}

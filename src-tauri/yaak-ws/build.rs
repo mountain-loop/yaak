@@ -4,7 +4,9 @@ const COMMANDS: &[&str] = &[
     "connect",
     "delete_request",
     "list_connections",
+    "list_events",
     "list_requests",
+    "send",
     "upsert_request",
 ];
 

@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { WebsocketConnection, WebsocketRequest } from '@yaakapp-internal/models';
+import { WebsocketConnection, WebsocketEvent, WebsocketRequest } from '@yaakapp-internal/models';
 
 export function upsertWebsocketRequest(
   request: WebsocketRequest | Partial<Omit<WebsocketRequest, 'id'>>,
@@ -17,6 +17,10 @@ export function deleteWebsocketRequest(requestId: string) {
 
 export function listWebsocketRequests({ workspaceId }: { workspaceId: string }) {
   return invoke('plugin:yaak-ws|list_requests', { workspaceId }) as Promise<WebsocketRequest[]>;
+}
+
+export function listWebsocketEvents({ connectionId }: { connectionId: string }) {
+  return invoke('plugin:yaak-ws|list_events', { connectionId }) as Promise<WebsocketEvent[]>;
 }
 
 export function listWebsocketConnections({ workspaceId }: { workspaceId: string }) {
@@ -43,6 +47,12 @@ export function connectWebsocket({
 
 export function cancelWebsocket({ connectionId }: { connectionId: string }) {
   return invoke('plugin:yaak-ws|cancel', {
+    connectionId,
+  });
+}
+
+export function sendWebsocket({ connectionId }: { connectionId: string }) {
+  return invoke('plugin:yaak-ws|send', {
     connectionId,
   });
 }

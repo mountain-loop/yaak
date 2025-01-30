@@ -1,24 +1,26 @@
 use crate::connect::ws_connect;
 use crate::error::Result;
+use futures_util::stream::SplitSink;
+use futures_util::{SinkExt, StreamExt};
+use log::debug;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{AppHandle, Runtime};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::handshake::client::Response;
 use tokio_tungstenite::tungstenite::http::{HeaderMap, HeaderValue};
+use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 #[derive(Clone)]
-pub struct WebsocketManager<R: Runtime> {
-    app_handle: AppHandle<R>,
-    connections: Arc<Mutex<HashMap<String, WebSocketStream<MaybeTlsStream<TcpStream>>>>>,
+pub struct WebsocketManager {
+    connections:
+        Arc<Mutex<HashMap<String, SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
 }
 
-impl<R: Runtime> WebsocketManager<R> {
-    pub fn new(app_handle: &AppHandle<R>) -> Self {
+impl WebsocketManager {
+    pub fn new() -> Self {
         WebsocketManager {
-            app_handle: app_handle.clone(),
             connections: Default::default(),
         }
     }
@@ -28,19 +30,44 @@ impl<R: Runtime> WebsocketManager<R> {
         id: &str,
         url: &str,
         headers: HeaderMap<HeaderValue>,
+        receive_tx: mpsc::Sender<Message>,
     ) -> Result<Response> {
         let (stream, response) = ws_connect(url, headers).await?;
-        self.connections.lock().await.insert(id.to_string(), stream);
+        let (write, mut read) = stream.split();
+        self.connections.lock().await.insert(id.to_string(), write);
+
+        let tx = receive_tx.clone();
+        tauri::async_runtime::spawn(async move {
+            while let Some(Ok(message)) = read.next().await {
+                debug!("Received websocket message {message:?}");
+                if message.is_close() {
+                    return;
+                }
+                tx.send(message).await.unwrap();
+            }
+        });
         Ok(response)
     }
 
-    pub async fn cancel(&mut self, id: &str) -> Result<()> {
+    pub async fn send(&mut self, id: &str, msg: Message) -> Result<()> {
+        debug!("Send websocket message {msg:?}");
         let mut connections = self.connections.lock().await;
         let connection = match connections.get_mut(id) {
             None => return Ok(()),
-            Some(c) => c
+            Some(c) => c,
         };
-        connection.close(None).await?;
+        connection.send(msg).await?;
+        Ok(())
+    }
+
+    pub async fn cancel(&mut self, id: &str) -> Result<()> {
+        debug!("Close websocket");
+        let mut connections = self.connections.lock().await;
+        let connection = match connections.get_mut(id) {
+            None => return Ok(()),
+            Some(c) => c,
+        };
+        connection.close().await?;
         Ok(())
     }
 }

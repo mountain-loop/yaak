@@ -20,6 +20,7 @@ import { pluginsAtom } from './usePlugins';
 import { useRequestUpdateKey } from './useRequestUpdateKey';
 import { settingsAtom } from './useSettings';
 import { websocketConnectionsAtom } from './useWebsocketConnections';
+import { websocketEventsQueryKey } from './useWebsocketEvents';
 import { websocketRequestsAtom } from './useWebsocketRequests';
 import { workspaceMetaAtom } from './useWorkspaceMeta';
 import { workspacesAtom } from './useWorkspaces';
@@ -33,9 +34,11 @@ export function useSyncModelStores() {
     const queryKey =
       payload.model.model === 'grpc_event'
         ? grpcEventsQueryKey(payload.model)
-        : payload.model.model === 'key_value'
-          ? keyValueQueryKey(payload.model)
-          : null;
+        : payload.model.model === 'websocket_event'
+          ? websocketEventsQueryKey(payload.model)
+          : payload.model.model === 'key_value'
+            ? keyValueQueryKey(payload.model)
+            : null;
 
     // TODO: Move this logic to useRequestEditor() hook
     if (
@@ -113,6 +116,11 @@ export function useSyncModelStores() {
       jotaiStore.set(websocketRequestsAtom, removeModelById(payload.model));
     } else if (payload.model.model === 'websocket_connection') {
       jotaiStore.set(websocketConnectionsAtom, removeModelById(payload.model));
+    } else if (payload.model.model === 'websocket_event') {
+      queryClient.setQueryData(
+        websocketEventsQueryKey(payload.model),
+        removeModelById(payload.model),
+      );
     } else if (payload.model.model === 'grpc_connection') {
       jotaiStore.set(grpcConnectionsAtom, removeModelById(payload.model));
     } else if (payload.model.model === 'grpc_event') {

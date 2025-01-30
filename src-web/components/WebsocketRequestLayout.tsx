@@ -1,4 +1,5 @@
 import type { WebsocketRequest } from '@yaakapp-internal/models';
+import classNames from 'classnames';
 import type { CSSProperties } from 'react';
 import React from 'react';
 import { SplitLayout } from './core/SplitLayout';
@@ -24,7 +25,17 @@ export function WebsocketRequestLayout({ activeRequest, style }: Props) {
         />
       )}
       secondSlot={({ style }) => (
-        <WebsocketResponsePane activeRequestId={activeRequest.id} style={style} />
+        <div
+          style={style}
+          className={classNames(
+            'x-theme-responsePane',
+            'max-h-full h-full grid grid-rows-[minmax(0,1fr)] grid-cols-1',
+            'bg-surface rounded-md border border-border-subtle',
+            'shadow relative',
+          )}
+        >
+          <WebsocketResponsePane activeRequest={activeRequest} />
+        </div>
       )}
     />
   );

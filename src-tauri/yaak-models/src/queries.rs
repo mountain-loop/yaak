@@ -1,14 +1,6 @@
 use crate::error::Error::ModelNotFound;
 use crate::error::Result;
-use crate::models::{
-    AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
-    GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
-    GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader,
-    HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden,
-    PluginKeyValue, PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden,
-    WebsocketConnection, WebsocketConnectionIden, WebsocketRequest, WebsocketRequestIden,
-    Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden,
-};
+use crate::models::{AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden, GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader, HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden, PluginKeyValue, PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden, WebsocketConnection, WebsocketConnectionIden, WebsocketEvent, WebsocketEventIden, WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden};
 use crate::plugin::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
 use log::{debug, error, info, warn};
@@ -24,8 +16,7 @@ use std::path::Path;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 
-const MAX_GRPC_CONNECTIONS_PER_REQUEST: usize = 20;
-const MAX_HTTP_RESPONSES_PER_REQUEST: usize = MAX_GRPC_CONNECTIONS_PER_REQUEST;
+const MAX_HISTORY_ITEMS: usize = 20;
 
 pub async fn set_key_value_string<R: Runtime>(
     mgr: &WebviewWindow<R>,
@@ -668,7 +659,7 @@ pub async fn upsert_grpc_connection<R: Runtime>(
 ) -> Result<GrpcConnection> {
     let connections =
         list_grpc_connections_for_request(window, connection.request_id.as_str()).await?;
-    for c in connections.iter().skip(MAX_GRPC_CONNECTIONS_PER_REQUEST - 1) {
+    for c in connections.iter().skip(MAX_HISTORY_ITEMS - 1) {
         debug!("Deleting old grpc connection {}", c.id);
         delete_grpc_connection(window, c.id.as_str(), update_source).await?;
     }
@@ -977,6 +968,57 @@ pub async fn get_websocket_connection<R: Runtime>(
     Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
 }
 
+pub async fn upsert_websocket_event<R: Runtime>(
+    window: &WebviewWindow<R>,
+    event: WebsocketEvent,
+    update_source: &UpdateSource,
+) -> Result<WebsocketEvent> {
+    let id = match event.id.as_str() {
+        "" => generate_model_id(ModelType::TypeWebSocketEvent),
+        _ => event.id.to_string(),
+    };
+
+    let dbm = &*window.app_handle().state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::insert()
+        .into_table(WebsocketEventIden::Table)
+        .columns([
+            WebsocketEventIden::Id,
+            WebsocketEventIden::CreatedAt,
+            WebsocketEventIden::UpdatedAt,
+            WebsocketEventIden::WorkspaceId,
+            WebsocketEventIden::ConnectionId,
+            WebsocketEventIden::RequestId,
+            WebsocketEventIden::MessageType,
+            WebsocketEventIden::Content,
+        ])
+        .values_panic([
+            id.into(),
+            timestamp_for_upsert(update_source, event.created_at).into(),
+            timestamp_for_upsert(update_source, event.updated_at).into(),
+            event.workspace_id.into(),
+            event.connection_id.into(),
+            event.request_id.into(),
+            serde_json::to_string(&event.message_type)?.into(),
+            event.content.into(),
+        ])
+        .on_conflict(
+            OnConflict::column(WebsocketEventIden::Id)
+                .update_columns([
+                    WebsocketEventIden::UpdatedAt,
+                    WebsocketEventIden::MessageType,
+                    WebsocketEventIden::Content,
+                ])
+                .to_owned(),
+        )
+        .returning_all()
+        .build_rusqlite(SqliteQueryBuilder);
+
+    let mut stmt = db.prepare(sql.as_str())?;
+    let m: WebsocketEvent = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+    emit_upserted_model(window, &AnyModel::WebsocketEvent(m.to_owned()), update_source);
+    Ok(m)
+}
 
 pub async fn upsert_websocket_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -1021,7 +1063,7 @@ pub async fn upsert_websocket_request<R: Runtime>(
             request.description.into(),
             serde_json::to_string(&request.headers)?.into(),
             request.message.into(),
-            serde_json::to_string(&request.message_type)?.into(),
+            serde_json::to_value(&request.message_type)?.as_str().into(),
             trimmed_name.into(),
             request.sort_priority.into(),
             request.url.into(),
@@ -1098,9 +1140,9 @@ pub async fn upsert_websocket_connection<R: Runtime>(
 ) -> Result<WebsocketConnection> {
     let connections =
         list_websocket_connections_for_request(window, connection.request_id.as_str()).await?;
-    for c in connections.iter().skip(MAX_GRPC_CONNECTIONS_PER_REQUEST - 1) {
+    for c in connections.iter().skip(MAX_HISTORY_ITEMS - 1) {
         debug!("Deleting old websocket connection {}", c.id);
-        delete_websocket_request(window, c.id.as_str(), update_source).await?;
+        delete_websocket_connection(window, c.id.as_str(), update_source).await?;
     }
 
     let id = match connection.id.as_str() {
@@ -1185,6 +1227,22 @@ pub async fn list_websocket_requests<R: Runtime>(
     let (sql, params) = Query::select()
         .from(WebsocketRequestIden::Table)
         .cond_where(Expr::col(WebsocketRequestIden::WorkspaceId).eq(workspace_id))
+        .column(Asterisk)
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+    Ok(items.map(|v| v.unwrap()).collect())
+}
+
+pub async fn list_websocket_events<R: Runtime>(
+    mgr: &impl Manager<R>,
+    connection_id: &str,
+) -> Result<Vec<WebsocketEvent>> {
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::select()
+        .from(WebsocketEventIden::Table)
+        .cond_where(Expr::col(WebsocketEventIden::ConnectionId).eq(connection_id))
         .column(Asterisk)
         .build_rusqlite(SqliteQueryBuilder);
     let mut stmt = db.prepare(sql.as_str())?;
@@ -1957,7 +2015,7 @@ pub async fn create_http_response<R: Runtime>(
     update_source: &UpdateSource,
 ) -> Result<HttpResponse> {
     let responses = list_http_responses_for_request(window, request_id, None).await?;
-    for response in responses.iter().skip(MAX_HTTP_RESPONSES_PER_REQUEST - 1) {
+    for response in responses.iter().skip(MAX_HISTORY_ITEMS - 1) {
         debug!("Deleting old response {}", response.id);
         delete_http_response(window, response.id.as_str(), update_source).await?;
     }

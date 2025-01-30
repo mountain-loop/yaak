@@ -4,9 +4,7 @@ mod error;
 mod manager;
 mod render;
 
-use crate::cmd::{
-    cancel, connect, delete_request, list_connections, list_requests, upsert_request,
-};
+use crate::cmd::{cancel, connect, delete_request, list_connections, list_events, list_requests, send, upsert_request};
 use crate::manager::WebsocketManager;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{generate_handler, Manager, Runtime};
@@ -19,12 +17,15 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             connect,
             delete_request,
             list_connections,
+            list_events,
             list_requests,
+            send,
             upsert_request,
         ])
         .setup(|app, _api| {
-            let manager = WebsocketManager::new(app);
+            let manager = WebsocketManager::new();
             app.manage(Mutex::new(manager));
+
             Ok(())
         })
         .build()

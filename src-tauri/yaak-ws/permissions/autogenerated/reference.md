@@ -6,7 +6,9 @@ Default permissions for the plugin
 - `allow-connect`
 - `allow-delete-request`
 - `allow-list-connections`
+- `allow-list-events`
 - `allow-list-requests`
+- `allow-send`
 - `allow-upsert-request`
 
 ## Permission Table
@@ -125,6 +127,32 @@ Denies the list_connections command without any pre-configured scope.
 <tr>
 <td>
 
+`yaak-ws:allow-list-events`
+
+</td>
+<td>
+
+Enables the list_events command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:deny-list-events`
+
+</td>
+<td>
+
+Denies the list_events command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `yaak-ws:allow-list-requests`
 
 </td>
@@ -196,6 +224,32 @@ Enables the list_websocket_requests command without any pre-configured scope.
 <td>
 
 Denies the list_websocket_requests command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:allow-send`
+
+</td>
+<td>
+
+Enables the send command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-ws:deny-send`
+
+</td>
+<td>
+
+Denies the send command without any pre-configured scope.
 
 </td>
 </tr>

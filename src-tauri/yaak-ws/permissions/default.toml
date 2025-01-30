@@ -5,6 +5,8 @@ permissions = [
     "allow-connect",
     "allow-delete-request",
     "allow-list-connections",
+    "allow-list-events",
     "allow-list-requests",
+    "allow-send",
     "allow-upsert-request",
 ]

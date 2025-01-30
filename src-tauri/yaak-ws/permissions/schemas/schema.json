@@ -335,6 +335,16 @@
           "const": "deny-list-connections"
         },
         {
+          "description": "Enables the list_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-events"
+        },
+        {
+          "description": "Denies the list_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-events"
+        },
+        {
           "description": "Enables the list_requests command without any pre-configured scope.",
           "type": "string",
           "const": "allow-list-requests"
@@ -363,6 +373,16 @@
           "description": "Denies the list_websocket_requests command without any pre-configured scope.",
           "type": "string",
           "const": "deny-list-websocket-requests"
+        },
+        {
+          "description": "Enables the send command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-send"
+        },
+        {
+          "description": "Denies the send command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-send"
         },
         {
           "description": "Enables the upsert_request command without any pre-configured scope.",
