@@ -7,8 +7,9 @@ use mime_guess::Mime;
 use reqwest::redirect::Policy;
 use reqwest::{multipart, Proxy, Url};
 use reqwest::{Method, Response};
+use rustls::crypto::ring;
 use rustls::ClientConfig;
-use rustls_platform_verifier::ConfigVerifierExt;
+use rustls_platform_verifier::BuilderVerifierExt;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -86,11 +87,15 @@ pub async fn send_http_request<R: Runtime>(
 
     if workspace.setting_validate_certificates {
         // Use platform-native verifier to validate certificates
-        client_builder =
-            client_builder.use_preconfigured_tls(ClientConfig::with_platform_verifier())
+        let arc_crypto_provider = Arc::new(ring::default_provider());
+        let config = ClientConfig::builder_with_provider(arc_crypto_provider)
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_platform_verifier()
+            .with_no_client_auth();
+        client_builder = client_builder.use_preconfigured_tls(config)
     } else {
-        // Use rustls to skip validation because rustls_platform_verifier does not have this
-        // ability
+        // Use rustls to skip validation because rustls_platform_verifier does not have this ability
         client_builder = client_builder
             .use_rustls_tls()
             .danger_accept_invalid_hostnames(true)

@@ -14,6 +14,7 @@ import { JsonAttributeTree } from './core/JsonAttributeTree';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
+import { StatusTag } from './core/StatusTag';
 import { RecentWebsocketConnectionsDropdown } from './RecentWebsocketConnectionsDropdown';
 
 interface Props {
@@ -52,10 +53,12 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
           <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] items-center">
             <HStack className="pl-3 mb-1 font-mono text-sm">
               <HStack space={2}>
-                <span>{events.length} Messages</span>
                 {activeConnection.state !== 'closed' && (
                   <Icon icon="refresh" size="sm" spin className="text-text-subtlest" />
                 )}
+                <StatusTag showReason response={activeConnection} />
+                <span>&bull;</span>
+                <span>{events.length} Messages</span>
               </HStack>
               <RecentWebsocketConnectionsDropdown
                 connections={connections}

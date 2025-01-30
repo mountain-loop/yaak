@@ -149,8 +149,8 @@ pub(crate) async fn close<R: Runtime>(
         },
         &UpdateSource::Window,
     )
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
     let connection = upsert_websocket_connection(
         &window,
@@ -277,7 +277,21 @@ pub(crate) async fn connect<R: Runtime>(
         });
     }
 
-    let response = ws_manager.connect(&connection.id, &request.url, headers, receive_tx).await?;
+    let response = match ws_manager.connect(&connection.id, &request.url, headers, receive_tx).await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(upsert_websocket_connection(
+                &window,
+                &WebsocketConnection {
+                    error: Some(format!("{e:?}")),
+                    ..connection
+                },
+                &UpdateSource::Window,
+            )
+            .await?);
+        }
+    };
 
     let response_headers = response
         .headers()
@@ -293,6 +307,8 @@ pub(crate) async fn connect<R: Runtime>(
         &WebsocketConnection {
             state: WebsocketConnectionState::Connected,
             headers: response_headers,
+            status: response.status().as_u16() as i32,
+            url: request.url.clone(),
             ..connection
         },
         &UpdateSource::Window,
