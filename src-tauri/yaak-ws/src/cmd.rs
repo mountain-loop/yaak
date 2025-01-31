@@ -2,6 +2,7 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::manager::WebsocketManager;
 use crate::render::render_request;
+use chrono::Utc;
 use log::info;
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
@@ -91,7 +92,6 @@ pub(crate) async fn send<R: Runtime>(
     let unrendered_request = get_websocket_request(&window, &connection.request_id)
         .await?
         .ok_or(GenericError("WebSocket Request not found".to_string()))?;
-    println!("ENVIRONMENT {:?}", environment_id);
     let environment = match environment_id {
         Some(id) => Some(get_environment(&window, id).await?),
         None => None,
@@ -107,7 +107,7 @@ pub(crate) async fn send<R: Runtime>(
             RenderPurpose::Send,
         ),
     )
-        .await;
+    .await;
 
     let mut ws_manager = ws_manager.lock().await;
     match request.message_type {
@@ -174,6 +174,10 @@ pub(crate) async fn close<R: Runtime>(
         &window,
         &WebsocketConnection {
             state: WebsocketConnectionState::Closed,
+            elapsed: Utc::now()
+                .naive_utc()
+                .signed_duration_since(connection.created_at)
+                .num_milliseconds() as i32,
             ..connection.clone()
         },
         &UpdateSource::Window,

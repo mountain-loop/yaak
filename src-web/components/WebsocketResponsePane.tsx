@@ -18,6 +18,7 @@ import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
 import { StatusTag } from './core/StatusTag';
+import { EmptyStateText } from './EmptyStateText';
 import { RecentWebsocketConnectionsDropdown } from './RecentWebsocketConnectionsDropdown';
 
 interface Props {
@@ -75,11 +76,13 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                 <span>&bull;</span>
                 <span>{events.length} Messages</span>
               </HStack>
-              <RecentWebsocketConnectionsDropdown
-                connections={connections}
-                activeConnection={activeConnection}
-                onPinnedConnectionId={setPinnedConnectionId}
-              />
+              <div className="ml-auto">
+                <RecentWebsocketConnectionsDropdown
+                  connections={connections}
+                  activeConnection={activeConnection}
+                  onPinnedConnectionId={setPinnedConnectionId}
+                />
+              </div>
             </HStack>
             <div className="overflow-y-auto h-full">
               {activeConnection.error && (
@@ -111,7 +114,11 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
             </div>
             <div className="mx-2 overflow-y-auto grid grid-rows-[auto_minmax(0,1fr)]">
               <div className="mb-2 select-text cursor-text grid grid-cols-[minmax(0,1fr)_auto] items-center">
-                <div className="font-semibold">Message</div>
+                <div className="font-semibold">
+                  {activeEvent.messageType === 'close'
+                    ? 'Connection Closed'
+                    : `Message ${activeEvent.isServer ? 'Received' : 'Sent'}`}
+                </div>
                 <HStack space={1}>
                   <Button
                     variant="border"
@@ -123,7 +130,12 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                   >
                     {hexDump ? 'Show Message' : 'Show Hexdump'}
                   </Button>
-                  <IconButton title="Copy message" icon="copy" size="xs" onClick={() => copy(content)} />
+                  <IconButton
+                    title="Copy message"
+                    icon="copy"
+                    size="xs"
+                    onClick={() => copy(content)}
+                  />
                 </HStack>
               </div>
               {!showLarge && activeEvent.content.length > 1000 * 1000 ? (
@@ -147,6 +159,8 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                     </Button>
                   </div>
                 </VStack>
+              ) : activeEvent.content.length === 0 ? (
+                <EmptyStateText>No Content</EmptyStateText>
               ) : (
                 <Editor
                   language={language}

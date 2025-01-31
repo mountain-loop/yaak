@@ -3,12 +3,14 @@ import classNames from 'classnames';
 import { format } from 'date-fns';
 import type { CSSProperties } from 'react';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useCopy } from '../hooks/useCopy';
 import { useGrpcEvents } from '../hooks/useGrpcEvents';
 import { usePinnedGrpcConnection } from '../hooks/usePinnedGrpcConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Icon } from './core/Icon';
+import { IconButton } from './core/IconButton';
 import { JsonAttributeTree } from './core/JsonAttributeTree';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
 import { Separator } from './core/Separator';
@@ -37,6 +39,7 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
   const { activeConnection, connections, setPinnedConnectionId } =
     usePinnedGrpcConnection(activeRequest);
   const events = useGrpcEvents(activeConnection?.id ?? null);
+  const copy = useCopy();
 
   const activeEvent = useMemo(
     () => events.find((m) => m.id === activeEventId) ?? null,
@@ -69,11 +72,13 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
                   <Icon icon="refresh" size="sm" spin className="text-text-subtlest" />
                 )}
               </HStack>
-              <RecentGrpcConnectionsDropdown
-                connections={connections}
-                activeConnection={activeConnection}
-                onPinnedConnectionId={setPinnedConnectionId}
-              />
+              <div className="ml-auto">
+                <RecentGrpcConnectionsDropdown
+                  connections={connections}
+                  activeConnection={activeConnection}
+                  onPinnedConnectionId={setPinnedConnectionId}
+                />
+              </div>
             </HStack>
             <div className="overflow-y-auto h-full">
               {activeConnection.error && (
@@ -107,8 +112,16 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
               {activeEvent.eventType === 'client_message' ||
               activeEvent.eventType === 'server_message' ? (
                 <>
-                  <div className="mb-2 select-text cursor-text font-semibold">
-                    Message {activeEvent.eventType === 'client_message' ? 'Sent' : 'Received'}
+                  <div className="mb-2 select-text cursor-text grid grid-cols-[minmax(0,1fr)_auto] items-center">
+                    <div className="font-semibold">
+                      Message {activeEvent.eventType === 'client_message' ? 'Sent' : 'Received'}
+                    </div>
+                    <IconButton
+                      title="Copy message"
+                      icon="copy"
+                      size="xs"
+                      onClick={() => copy(activeEvent.content)}
+                    />
                   </div>
                   {!showLarge && activeEvent.content.length > 1000 * 1000 ? (
                     <VStack space={2} className="italic text-text-subtlest">

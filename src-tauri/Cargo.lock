@@ -7761,6 +7761,7 @@ dependencies = [
 name = "yaak-ws"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "futures-util",
  "log",
  "md5",
