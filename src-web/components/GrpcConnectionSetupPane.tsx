@@ -312,6 +312,7 @@ export function GrpcConnectionSetupPane({
         <TabContent value="message">
           <GrpcEditor
             onChange={handleChangeMessage}
+            forceUpdateKey={forceUpdateKey}
             services={services}
             reflectionError={reflectionError}
             reflectionLoading={reflectionLoading}

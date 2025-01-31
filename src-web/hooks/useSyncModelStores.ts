@@ -42,7 +42,9 @@ export function useSyncModelStores() {
 
     // TODO: Move this logic to useRequestEditor() hook
     if (
-      payload.model.model === 'http_request' &&
+      (payload.model.model === 'http_request' ||
+        payload.model.model === 'grpc_request' ||
+        payload.model.model === 'websocket_request') &&
       (payload.windowLabel !== getCurrentWebviewWindow().label || payload.updateSource !== 'window')
     ) {
       wasUpdatedExternally(payload.model.id);

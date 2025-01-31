@@ -23,7 +23,7 @@ import { InlineCode } from './core/InlineCode';
 import { VStack } from './core/Stacks';
 import { GrpcProtoSelection } from './GrpcProtoSelection';
 
-type Props = Pick<EditorProps, 'heightMode' | 'onChange' | 'className'> & {
+type Props = Pick<EditorProps, 'heightMode' | 'onChange' | 'className' | 'forceUpdateKey'> & {
   services: ReflectResponseService[] | null;
   reflectionError?: string;
   reflectionLoading?: boolean;
