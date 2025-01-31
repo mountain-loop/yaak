@@ -13,7 +13,7 @@ export function useCopy({ disableToast }: { disableToast?: boolean } = {}) {
       if (text != '' && !disableToast) {
         showToast({
           id: 'copied',
-          color: 'secondary',
+          color: 'success',
           icon: 'copy',
           message: 'Copied to clipboard',
         });

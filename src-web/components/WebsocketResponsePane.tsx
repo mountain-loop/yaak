@@ -1,7 +1,10 @@
 import type { WebsocketEvent, WebsocketRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { format } from 'date-fns';
+import { hexy } from 'hexy';
 import React, { useMemo, useState } from 'react';
+import { useCopy } from '../hooks/useCopy';
+import { useFormatText } from '../hooks/useFormatText';
 import { usePinnedWebsocketConnection } from '../hooks/usePinnedWebsocketConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { useWebsocketEvents } from '../hooks/useWebsocketEvents';
@@ -10,7 +13,7 @@ import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Editor } from './core/Editor/Editor';
 import { Icon } from './core/Icon';
-import { JsonAttributeTree } from './core/JsonAttributeTree';
+import { IconButton } from './core/IconButton';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
@@ -25,6 +28,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [showLarge, setShowLarge] = useStateWithDeps<boolean>(false, [activeRequest.id]);
   const [showingLarge, setShowingLarge] = useState<boolean>(false);
+  const [hexDumps, setHexDumps] = useState<Record<string, boolean>>({});
 
   const { activeConnection, connections, setPinnedConnectionId } =
     usePinnedWebsocketConnection(activeRequest);
@@ -37,10 +41,21 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
     [activeEventId, events],
   );
 
-  const content = activeEvent
-    ? new TextDecoder('utf-8').decode(Uint8Array.from(activeEvent.content))
-    : '';
+  const hexDump = hexDumps[activeEventId ?? 'n/a'] ?? activeEvent?.messageType === 'binary';
+
+  const content = useMemo(() => {
+    if (hexDump) {
+      return activeEvent?.content ? hexy(activeEvent?.content) : '';
+    }
+    const text = activeEvent?.content
+      ? new TextDecoder('utf-8').decode(Uint8Array.from(activeEvent.content))
+      : '';
+    return text;
+  }, [activeEvent?.content, hexDump]);
+
   const language = languageFromContentType(null, content);
+  const formattedContent = useFormatText({ language, text: content, pretty: true });
+  const copy = useCopy();
 
   return (
     <SplitLayout
@@ -94,8 +109,23 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
             <div className="pb-3 px-2">
               <Separator />
             </div>
-            <div className="pl-2 overflow-y-auto">
-              <div className="mb-2 select-text cursor-text font-semibold">Message</div>
+            <div className="mx-2 overflow-y-auto grid grid-rows-[auto_minmax(0,1fr)]">
+              <div className="mb-2 select-text cursor-text grid grid-cols-[minmax(0,1fr)_auto] items-center">
+                <div className="font-semibold">Message</div>
+                <HStack space={1}>
+                  <Button
+                    variant="border"
+                    size="xs"
+                    onClick={() => {
+                      if (activeEventId == null) return;
+                      setHexDumps({ ...hexDumps, [activeEventId]: !hexDump });
+                    }}
+                  >
+                    {hexDump ? 'Show Message' : 'Show Hexdump'}
+                  </Button>
+                  <IconButton title="Copy message" icon="copy" size="xs" onClick={() => copy(content)} />
+                </HStack>
+              </div>
               {!showLarge && activeEvent.content.length > 1000 * 1000 ? (
                 <VStack space={2} className="italic text-text-subtlest">
                   Message previews larger than 1MB are hidden
@@ -117,10 +147,14 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                     </Button>
                   </div>
                 </VStack>
-              ) : language === 'json' ? (
-                <JsonAttributeTree attrValue={JSON.parse(content ?? '{}')} />
               ) : (
-                <Editor defaultValue={content} readOnly={true} stateKey={null} />
+                <Editor
+                  language={language}
+                  defaultValue={formattedContent.data ?? ''}
+                  wrapLines={false}
+                  readOnly={true}
+                  stateKey={null}
+                />
               )}
             </div>
           </div>
