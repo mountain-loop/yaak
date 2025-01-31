@@ -47,7 +47,7 @@ export function LicenseBadge() {
       className="!rounded-full mx-1"
       onClick={async () => {
         if (checkType === 'beta') {
-          await openUrl('https://feedback.yaak.app/p/yaak-20-feedback');
+          await openUrl('https://feedback.yaak.app');
         } else {
           openSettings.mutate();
         }
