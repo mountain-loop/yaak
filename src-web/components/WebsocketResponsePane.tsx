@@ -44,18 +44,18 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
 
   const hexDump = hexDumps[activeEventId ?? 'n/a'] ?? activeEvent?.messageType === 'binary';
 
-  const content = useMemo(() => {
+  const message = useMemo(() => {
     if (hexDump) {
-      return activeEvent?.content ? hexy(activeEvent?.content) : '';
+      return activeEvent?.message ? hexy(activeEvent?.message) : '';
     }
-    const text = activeEvent?.content
-      ? new TextDecoder('utf-8').decode(Uint8Array.from(activeEvent.content))
+    const text = activeEvent?.message
+      ? new TextDecoder('utf-8').decode(Uint8Array.from(activeEvent.message))
       : '';
     return text;
-  }, [activeEvent?.content, hexDump]);
+  }, [activeEvent?.message, hexDump]);
 
-  const language = languageFromContentType(null, content);
-  const formattedContent = useFormatText({ language, text: content, pretty: true });
+  const language = languageFromContentType(null, message);
+  const formattedContent = useFormatText({ language, text: message, pretty: true });
   const copy = useCopy();
 
   return (
@@ -134,11 +134,11 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                     title="Copy message"
                     icon="copy"
                     size="xs"
-                    onClick={() => copy(content)}
+                    onClick={() => copy(message)}
                   />
                 </HStack>
               </div>
-              {!showLarge && activeEvent.content.length > 1000 * 1000 ? (
+              {!showLarge && activeEvent.message.length > 1000 * 1000 ? (
                 <VStack space={2} className="italic text-text-subtlest">
                   Message previews larger than 1MB are hidden
                   <div>
@@ -159,7 +159,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                     </Button>
                   </div>
                 </VStack>
-              ) : activeEvent.content.length === 0 ? (
+              ) : activeEvent.message.length === 0 ? (
                 <EmptyStateText>No Content</EmptyStateText>
               ) : (
                 <Editor
@@ -187,9 +187,9 @@ function EventRow({
   isActive?: boolean;
   event: WebsocketEvent;
 }) {
-  const { createdAt, content: contentBytes, isServer, messageType } = event;
-  const content = contentBytes
-    ? new TextDecoder('utf-8').decode(Uint8Array.from(contentBytes))
+  const { createdAt, message: messageBytes, isServer, messageType } = event;
+  const message = messageBytes
+    ? new TextDecoder('utf-8').decode(Uint8Array.from(messageBytes))
     : '';
   return (
     <div className="px-1">
@@ -217,7 +217,7 @@ function EventRow({
         <div className={classNames('w-full truncate text-xs')}>
           {messageType === 'close'
             ? 'Connection closed by ' + (isServer ? 'server' : 'client')
-            : content.slice(0, 1000)}
+            : message.slice(0, 1000)}
           {/*{error && <span className="text-warning"> ({error})</span>}*/}
         </div>
         <div className={classNames('opacity-50 text-xs')}>

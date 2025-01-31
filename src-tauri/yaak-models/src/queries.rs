@@ -1022,7 +1022,7 @@ pub async fn upsert_websocket_event<R: Runtime>(
             WebsocketEventIden::RequestId,
             WebsocketEventIden::MessageType,
             WebsocketEventIden::IsServer,
-            WebsocketEventIden::Content,
+            WebsocketEventIden::Message,
         ])
         .values_panic([
             id.into(),
@@ -1033,7 +1033,7 @@ pub async fn upsert_websocket_event<R: Runtime>(
             event.request_id.into(),
             serde_json::to_string(&event.message_type)?.into(),
             event.is_server.into(),
-            event.content.into(),
+            event.message.into(),
         ])
         .on_conflict(
             OnConflict::column(WebsocketEventIden::Id)
@@ -1041,7 +1041,7 @@ pub async fn upsert_websocket_event<R: Runtime>(
                     WebsocketEventIden::UpdatedAt,
                     WebsocketEventIden::MessageType,
                     WebsocketEventIden::IsServer,
-                    WebsocketEventIden::Content,
+                    WebsocketEventIden::Message,
                 ])
                 .to_owned(),
         )
@@ -1080,7 +1080,6 @@ pub async fn upsert_websocket_request<R: Runtime>(
             WebsocketRequestIden::Description,
             WebsocketRequestIden::Headers,
             WebsocketRequestIden::Message,
-            WebsocketRequestIden::MessageType,
             WebsocketRequestIden::Name,
             WebsocketRequestIden::SortPriority,
             WebsocketRequestIden::Url,
@@ -1097,7 +1096,6 @@ pub async fn upsert_websocket_request<R: Runtime>(
             request.description.into(),
             serde_json::to_string(&request.headers)?.into(),
             request.message.into(),
-            serde_json::to_value(&request.message_type)?.as_str().into(),
             trimmed_name.into(),
             request.sort_priority.into(),
             request.url.into(),
@@ -1114,7 +1112,6 @@ pub async fn upsert_websocket_request<R: Runtime>(
                     WebsocketRequestIden::Description,
                     WebsocketRequestIden::Headers,
                     WebsocketRequestIden::Message,
-                    WebsocketRequestIden::MessageType,
                     WebsocketRequestIden::Name,
                     WebsocketRequestIden::SortPriority,
                     WebsocketRequestIden::Url,

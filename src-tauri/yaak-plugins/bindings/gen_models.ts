@@ -22,8 +22,6 @@ export type HttpResponseState = "initialized" | "connected" | "closed";
 
 export type HttpUrlParameter = { enabled?: boolean, name: string, value: string, id?: string, };
 
-export type WebsocketMessageType = "text" | "binary";
-
-export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: Array<number>, messageType: WebsocketMessageType, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
+export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
 export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };

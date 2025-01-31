@@ -654,8 +654,7 @@ pub struct WebsocketRequest {
     pub authentication_type: Option<String>,
     pub description: String,
     pub headers: Vec<HttpRequestHeader>,
-    pub message: Vec<u8>,
-    pub message_type: WebsocketMessageType,
+    pub message: String,
     pub name: String,
     pub sort_priority: f32,
     pub url: String,
@@ -676,7 +675,6 @@ pub enum WebsocketRequestIden {
     Authentication,
     AuthenticationType,
     Message,
-    MessageType,
     Description,
     Headers,
     Name,
@@ -692,7 +690,6 @@ impl<'s> TryFrom<&Row<'s>> for WebsocketRequest {
         let url_parameters: String = r.get("url_parameters")?;
         let authentication: String = r.get("authentication")?;
         let headers: String = r.get("headers")?;
-        let message_type: String = r.get("message_type")?;
         Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
@@ -703,7 +700,6 @@ impl<'s> TryFrom<&Row<'s>> for WebsocketRequest {
             url: r.get("url")?,
             url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
             message: r.get("message")?,
-            message_type: serde_json::from_str(format!(r#""{message_type}""#).as_str()).unwrap(),
             description: r.get("description")?,
             authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
             authentication_type: r.get("authentication_type")?,
@@ -746,7 +742,7 @@ pub struct WebsocketEvent {
     pub connection_id: String,
     pub is_server: bool,
 
-    pub content: Vec<u8>,
+    pub message: Vec<u8>,
     pub message_type: WebsocketEventType,
 }
 
@@ -764,7 +760,7 @@ pub enum WebsocketEventIden {
     IsServer,
 
     MessageType,
-    Content,
+    Message,
 }
 
 impl<'s> TryFrom<&Row<'s>> for WebsocketEvent {
@@ -780,7 +776,7 @@ impl<'s> TryFrom<&Row<'s>> for WebsocketEvent {
             connection_id: r.get("connection_id")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
-            content: r.get("content")?,
+            message: r.get("message")?,
             is_server: r.get("is_server")?,
             message_type: serde_json::from_str(message_type.as_str()).unwrap_or_default(),
         })

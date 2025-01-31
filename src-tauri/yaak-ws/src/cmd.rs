@@ -12,7 +12,7 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
 use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
-    WebsocketEventType, WebsocketMessageType, WebsocketRequest,
+    WebsocketEventType, WebsocketRequest,
 };
 use yaak_models::queries;
 use yaak_models::queries::{
@@ -110,15 +110,7 @@ pub(crate) async fn send<R: Runtime>(
     .await;
 
     let mut ws_manager = ws_manager.lock().await;
-    match request.message_type {
-        WebsocketMessageType::Text => {
-            let msg = String::from_utf8(request.message.clone()).unwrap_or_default();
-            ws_manager.send(&connection.id, Message::Text(msg.into())).await
-        }
-        WebsocketMessageType::Binary => {
-            ws_manager.send(&connection.id, Message::Binary(request.message.clone().into())).await
-        }
-    }?;
+    ws_manager.send(&connection.id, Message::Text(request.message.clone().into())).await?;
 
     upsert_websocket_event(
         &window,
@@ -127,11 +119,8 @@ pub(crate) async fn send<R: Runtime>(
             request_id: request.id.clone(),
             workspace_id: connection.workspace_id.clone(),
             is_server: false,
-            message_type: match request.message_type {
-                WebsocketMessageType::Text => WebsocketEventType::Text,
-                WebsocketMessageType::Binary => WebsocketEventType::Binary,
-            },
-            content: request.message.into(),
+            message_type: WebsocketEventType::Text,
+            message: request.message.into(),
             ..Default::default()
         },
         &UpdateSource::Window,
@@ -287,7 +276,7 @@ pub(crate) async fn connect<R: Runtime>(
                             // Raw frame will never happen during a read
                             Message::Frame(_) => WebsocketEventType::Frame,
                         },
-                        content: message.into_data().into(),
+                        message: message.into_data().into(),
                         ..Default::default()
                     },
                     &UpdateSource::Window,

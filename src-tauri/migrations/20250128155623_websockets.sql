@@ -18,8 +18,7 @@ CREATE TABLE websocket_requests
     name                TEXT                                 NOT NULL,
     url                 TEXT                                 NOT NULL,
     headers             TEXT                                 NOT NULL,
-    message             BLOB                                 NOT NULL,
-    message_type        TEXT                                 NOT NULL,
+    message             TEXT                                 NOT NULL,
     sort_priority       REAL                                 NOT NULL,
     url_parameters      TEXT     DEFAULT '[]'                NOT NULL
 );
@@ -61,7 +60,7 @@ CREATE TABLE websocket_events
             ON DELETE CASCADE,
     created_at    DATETIME DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')) NOT NULL,
     updated_at    DATETIME DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')) NOT NULL,
-    message_type  TEXT                                                    NOT NULL,
     is_server     BOOLEAN                                                 NOT NULL,
-    content       BLOB                                                    NOT NULL
+    message_type  TEXT                                                    NOT NULL,
+    message       BLOB                                                    NOT NULL
 );

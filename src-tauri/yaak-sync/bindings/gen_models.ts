@@ -20,8 +20,6 @@ export type SyncModel = { "type": "workspace" } & Workspace | { "type": "environ
 
 export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, relPath: string, syncDir: string, };
 
-export type WebsocketMessageType = "text" | "binary";
-
-export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: Array<number>, messageType: WebsocketMessageType, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
+export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
 export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
