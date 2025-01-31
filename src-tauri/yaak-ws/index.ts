@@ -63,8 +63,15 @@ export function closeWebsocket({ connectionId }: { connectionId: string }) {
   });
 }
 
-export function sendWebsocket({ connectionId }: { connectionId: string }) {
+export function sendWebsocket({
+  connectionId,
+  environmentId,
+}: {
+  connectionId: string;
+  environmentId: string | null;
+}) {
   return invoke('plugin:yaak-ws|send', {
     connectionId,
+    environmentId,
   });
 }

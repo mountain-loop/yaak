@@ -83,13 +83,31 @@ pub(crate) async fn list_connections<R: Runtime>(
 #[tauri::command]
 pub(crate) async fn send<R: Runtime>(
     connection_id: &str,
+    environment_id: Option<&str>,
     window: WebviewWindow<R>,
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
     let connection = get_websocket_connection(&window, connection_id).await?;
-    let request = get_websocket_request(&window, &connection.request_id)
+    let unrendered_request = get_websocket_request(&window, &connection.request_id)
         .await?
         .ok_or(GenericError("WebSocket Request not found".to_string()))?;
+    println!("ENVIRONMENT {:?}", environment_id);
+    let environment = match environment_id {
+        Some(id) => Some(get_environment(&window, id).await?),
+        None => None,
+    };
+    let base_environment = get_base_environment(&window, &unrendered_request.workspace_id).await?;
+    let request = render_request(
+        &unrendered_request,
+        &base_environment,
+        environment.as_ref(),
+        &PluginTemplateCallback::new(
+            window.app_handle(),
+            &WindowContext::from_window(&window),
+            RenderPurpose::Send,
+        ),
+    )
+        .await;
 
     let mut ws_manager = ws_manager.lock().await;
     match request.message_type {

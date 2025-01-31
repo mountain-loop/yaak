@@ -32,6 +32,8 @@ function detectFromContent(
     content.toLowerCase().startsWith('<html')
   ) {
     return 'html';
+  } else if (content.startsWith('<')) {
+    return 'xml';
   }
 
   return fallback;
