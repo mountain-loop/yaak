@@ -8,6 +8,7 @@ import type { IconProps } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import type { InputProps } from './core/Input';
 import { Input } from './core/Input';
+import {HStack} from "./core/Stacks";
 import { RequestMethodDropdown } from './RequestMethodDropdown';
 
 type Props = Pick<HttpRequest, 'url'> & {
@@ -69,7 +70,7 @@ export const UrlBar = memo(function UrlBar({
         ref={inputRef}
         autocompleteVariables
         stateKey={stateKey}
-        size="md"
+        size="sm"
         wrapLines={isFocused}
         hideLabel
         useTemplating
@@ -99,10 +100,10 @@ export const UrlBar = memo(function UrlBar({
           )
         }
         rightSlot={
-          <>
-            {rightSlot}
+          <HStack space={0.5}>
+            {rightSlot && <div className="py-0.5 h-full">{rightSlot}</div>}
             {submitIcon !== null && (
-              <div className="py-0.5">
+              <div className="py-0.5 h-full">
                 <IconButton
                   size="xs"
                   iconSize="md"
@@ -114,7 +115,7 @@ export const UrlBar = memo(function UrlBar({
                 />
               </div>
             )}
-          </>
+          </HStack>
         }
       />
     </form>

@@ -1,68 +1,72 @@
+// OAuth 2.0 spec -> https://datatracker.ietf.org/doc/html/rfc6749
+
 import type {
   BootRequest,
+  Context,
+  DeleteKeyValueResponse,
   FindHttpResponsesResponse,
+  FormInput,
   GetHttpRequestByIdResponse,
+  GetKeyValueResponse,
+  HttpAuthenticationAction,
   HttpRequestAction,
-  ImportResponse,
   InternalEvent,
   InternalEventPayload,
+  JsonPrimitive,
+  PluginDefinition,
   PromptTextResponse,
   RenderHttpRequestResponse,
   SendHttpRequestResponse,
   TemplateFunction,
   TemplateRenderResponse,
   WindowContext,
-} from '@yaakapp-internal/plugins';
-import type { Context } from '@yaakapp/api';
-import type { HttpRequestActionPlugin } from '@yaakapp/api/lib/plugins/HttpRequestActionPlugin';
-import type { TemplateFunctionPlugin } from '@yaakapp/api/lib/plugins/TemplateFunctionPlugin';
-import interceptStdout from 'intercept-stdout';
+} from '@yaakapp/api';
 import * as console from 'node:console';
-import type { Stats} from 'node:fs';
+import type { Stats } from 'node:fs';
 import { readFileSync, statSync, watch } from 'node:fs';
 import path from 'node:path';
 import * as util from 'node:util';
-import { parentPort, workerData } from 'node:worker_threads';
+import { parentPort as nullableParentPort, workerData } from 'node:worker_threads';
+import { interceptStdout } from './interceptStdout';
+import { migrateTemplateFunctionSelectOptions } from './migrations';
+
+if (nullableParentPort == null) {
+  throw new Error('Worker does not have access to parentPort');
+}
+
+const parentPort = nullableParentPort;
 
 export interface PluginWorkerData {
   bootRequest: BootRequest;
   pluginRefId: string;
 }
 
-async function initialize() {
+function initialize(workerData: PluginWorkerData) {
   const {
     bootRequest: { dir: pluginDir, watch: enableWatch },
     pluginRefId,
   }: PluginWorkerData = workerData;
+
   const pathPkg = path.join(pluginDir, 'package.json');
-
   const pathMod = path.posix.join(pluginDir, 'build', 'index.js');
-
-  async function importModule() {
-    const id = require.resolve(pathMod);
-    delete require.cache[id];
-    return require(id);
-  }
 
   const pkg = JSON.parse(readFileSync(pathPkg, 'utf8'));
 
   prefixStdout(`[plugin][${pkg.name}] %s`);
-
-  let mod = await importModule();
-
-  const capabilities: string[] = [];
-  if (typeof mod.pluginHookExport === 'function') capabilities.push('export');
-  if (typeof mod.pluginHookImport === 'function') capabilities.push('import');
-  if (typeof mod.pluginHookResponseFilter === 'function') capabilities.push('filter');
-
-  console.log('Plugin initialized', pkg.name, { capabilities, enableWatch });
 
   function buildEventToSend(
     windowContext: WindowContext,
     payload: InternalEventPayload,
     replyId: string | null = null,
   ): InternalEvent {
-    return { pluginRefId, id: genId(), replyId, payload, windowContext };
+    return {
+      pluginRefId,
+      pluginName: path.basename(pluginDir),
+      id: genId(),
+      replyId,
+      payload,
+      windowContext,
+    };
   }
 
   function sendEmpty(windowContext: WindowContext, replyId: string | null = null): string {
@@ -83,10 +87,10 @@ async function initialize() {
     if (event.payload.type !== 'empty_response') {
       console.log('Sending event to app', event.id, event.payload.type);
     }
-    parentPort!.postMessage(event);
+    parentPort.postMessage(event);
   }
 
-  async function sendAndWaitForReply<T extends Omit<InternalEventPayload, 'type'>>(
+  function sendAndWaitForReply<T extends Omit<InternalEventPayload, 'type'>>(
     windowContext: WindowContext,
     payload: InternalEventPayload,
   ): Promise<T> {
@@ -94,14 +98,15 @@ async function initialize() {
     const eventToSend = buildEventToSend(windowContext, payload, null);
 
     // 2. Spawn listener in background
-    const promise = new Promise<InternalEventPayload>(async (resolve) => {
+    const promise = new Promise<T>((resolve) => {
       const cb = (event: InternalEvent) => {
         if (event.replyId === eventToSend.id) {
-          parentPort!.off('message', cb); // Unlisten, now that we're done
-          resolve(event.payload); // Not type-safe but oh well
+          parentPort.off('message', cb); // Unlisten, now that we're done
+          const { type: _, ...payload } = event.payload;
+          resolve(payload as T);
         }
       };
-      parentPort!.on('message', cb);
+      parentPort.on('message', cb);
     });
 
     // 3. Send the event after we start listening (to prevent race)
@@ -111,31 +116,73 @@ async function initialize() {
     return promise as unknown as Promise<T>;
   }
 
-  async function reloadModule() {
-    mod = await importModule();
+  function sendAndListenForEvents(
+    windowContext: WindowContext,
+    payload: InternalEventPayload,
+    onEvent: (event: InternalEventPayload) => void,
+  ): void {
+    // 1. Build event to send
+    const eventToSend = buildEventToSend(windowContext, payload, null);
+
+    // 2. Listen for replies in the background
+    parentPort.on('message', (event: InternalEvent) => {
+      if (event.replyId === eventToSend.id) {
+        onEvent(event.payload);
+      }
+    });
+
+    // 3. Send the event after we start listening (to prevent race)
+    sendEvent(eventToSend);
   }
 
-  // Reload plugin if JS or package.json changes
+  // Reload plugin if the JS or package.json changes
   const windowContextNone: WindowContext = { type: 'none' };
-  const cb = async () => {
-    await reloadModule();
+  const fileChangeCallback = async () => {
+    importModule();
     return sendPayload(windowContextNone, { type: 'reload_response' }, null);
   };
 
   if (enableWatch) {
-    watchFile(pathMod, cb);
-    watchFile(pathPkg, cb);
+    watchFile(pathMod, fileChangeCallback);
+    watchFile(pathPkg, fileChangeCallback);
   }
 
   const newCtx = (event: InternalEvent): Context => ({
     clipboard: {
       async copyText(text) {
-        await sendAndWaitForReply(event.windowContext, { type: 'copy_text_request', text });
+        await sendAndWaitForReply(event.windowContext, {
+          type: 'copy_text_request',
+          text,
+        });
       },
     },
     toast: {
       async show(args) {
-        await sendAndWaitForReply(event.windowContext, { type: 'show_toast_request', ...args });
+        await sendAndWaitForReply(event.windowContext, {
+          type: 'show_toast_request',
+          ...args,
+        });
+      },
+    },
+    window: {
+      async openUrl({ onNavigate, ...args }) {
+        args.label = args.label || `${Math.random()}`;
+        const payload: InternalEventPayload = { type: 'open_window_request', ...args };
+        const onEvent = (event: InternalEventPayload) => {
+          if (event.type === 'window_navigate_event') {
+            onNavigate?.(event);
+          }
+        };
+        sendAndListenForEvents(event.windowContext, payload, onEvent);
+        return {
+          close: () => {
+            const closePayload: InternalEventPayload = {
+              type: 'close_window_request',
+              label: args.label,
+            };
+            sendPayload(event.windowContext, closePayload, null);
+          },
+        };
       },
     },
     prompt: {
@@ -149,7 +196,10 @@ async function initialize() {
     },
     httpResponse: {
       async find(args) {
-        const payload = { type: 'find_http_responses_request', ...args } as const;
+        const payload = {
+          type: 'find_http_responses_request',
+          ...args,
+        } as const;
         const { httpResponses } = await sendAndWaitForReply<FindHttpResponsesResponse>(
           event.windowContext,
           payload,
@@ -159,7 +209,10 @@ async function initialize() {
     },
     httpRequest: {
       async getById(args) {
-        const payload = { type: 'get_http_request_by_id_request', ...args } as const;
+        const payload = {
+          type: 'get_http_request_by_id_request',
+          ...args,
+        } as const;
         const { httpRequest } = await sendAndWaitForReply<GetHttpRequestByIdResponse>(
           event.windowContext,
           payload,
@@ -167,7 +220,10 @@ async function initialize() {
         return httpRequest;
       },
       async send(args) {
-        const payload = { type: 'send_http_request_request', ...args } as const;
+        const payload = {
+          type: 'send_http_request_request',
+          ...args,
+        } as const;
         const { httpResponse } = await sendAndWaitForReply<SendHttpRequestResponse>(
           event.windowContext,
           payload,
@@ -175,7 +231,10 @@ async function initialize() {
         return httpResponse;
       },
       async render(args) {
-        const payload = { type: 'render_http_request_request', ...args } as const;
+        const payload = {
+          type: 'render_http_request_request',
+          ...args,
+        } as const;
         const { httpRequest } = await sendAndWaitForReply<RenderHttpRequestResponse>(
           event.windowContext,
           payload,
@@ -187,7 +246,7 @@ async function initialize() {
       /**
        * Invoke Yaak's template engine to render a value. If the value is a nested type
        * (eg. object), it will be recursively rendered.
-       * */
+       */
       async render(args) {
         const payload = { type: 'template_render_request', ...args } as const;
         const result = await sendAndWaitForReply<TemplateRenderResponse>(
@@ -197,19 +256,53 @@ async function initialize() {
         return result.data;
       },
     },
+    store: {
+      async get<T>(key: string) {
+        const payload = { type: 'get_key_value_request', key } as const;
+        const result = await sendAndWaitForReply<GetKeyValueResponse>(event.windowContext, payload);
+        return result.value ? (JSON.parse(result.value) as T) : undefined;
+      },
+      async set<T>(key: string, value: T) {
+        const valueStr = JSON.stringify(value);
+        const payload: InternalEventPayload = {
+          type: 'set_key_value_request',
+          key,
+          value: valueStr,
+        };
+        await sendAndWaitForReply<GetKeyValueResponse>(event.windowContext, payload);
+      },
+      async delete(key: string) {
+        const payload = { type: 'delete_key_value_request', key } as const;
+        const result = await sendAndWaitForReply<DeleteKeyValueResponse>(
+          event.windowContext,
+          payload,
+        );
+        return result.deleted;
+      },
+    },
   });
 
+  let plug: PluginDefinition | null = null;
+
+  function importModule() {
+    const id = require.resolve(pathMod);
+    delete require.cache[id];
+    plug = require(id).plugin;
+  }
+
+  importModule();
+
   // Message comes into the plugin to be processed
-  parentPort!.on('message', async (event: InternalEvent) => {
-    const { windowContext, payload, id: replyId } = event;
+  parentPort.on('message', async (event: InternalEvent) => {
     const ctx = newCtx(event);
+    const { windowContext, payload, id: replyId } = event;
     try {
       if (payload.type === 'boot_request') {
+        // console.log('Plugin initialized', pkg.name, { capabilities, enableWatch });
         const payload: InternalEventPayload = {
           type: 'boot_response',
           name: pkg.name,
           version: pkg.version,
-          capabilities,
         };
         sendPayload(windowContext, payload, replyId);
         return;
@@ -223,12 +316,15 @@ async function initialize() {
         return;
       }
 
-      if (payload.type === 'import_request' && typeof mod.pluginHookImport === 'function') {
-        const reply: ImportResponse | null = await mod.pluginHookImport(ctx, payload.content);
+      if (payload.type === 'import_request' && typeof plug?.importer?.onImport === 'function') {
+        const reply = await plug.importer.onImport(ctx, {
+          text: payload.content,
+        });
         if (reply != null) {
           const replyPayload: InternalEventPayload = {
             type: 'import_response',
-            resources: reply?.resources,
+            // deno-lint-ignore no-explicit-any
+            resources: reply.resources as any,
           };
           sendPayload(windowContext, replyPayload, replyId);
           return;
@@ -237,27 +333,15 @@ async function initialize() {
         }
       }
 
-      if (
-        payload.type === 'export_http_request_request' &&
-        typeof mod.pluginHookExport === 'function'
-      ) {
-        const reply: string = await mod.pluginHookExport(ctx, payload.httpRequest);
-        const replyPayload: InternalEventPayload = {
-          type: 'export_http_request_response',
-          content: reply,
-        };
-        sendPayload(windowContext, replyPayload, replyId);
-        return;
-      }
-
-      if (payload.type === 'filter_request' && typeof mod.pluginHookResponseFilter === 'function') {
-        const reply: string = await mod.pluginHookResponseFilter(ctx, {
+      if (payload.type === 'filter_request' && typeof plug?.filter?.onFilter === 'function') {
+        const reply = await plug.filter.onFilter(ctx, {
           filter: payload.filter,
-          body: payload.content,
+          payload: payload.content,
+          mimeType: payload.type,
         });
         const replyPayload: InternalEventPayload = {
           type: 'filter_response',
-          content: reply,
+          content: reply.filtered,
         };
         sendPayload(windowContext, replyPayload, replyId);
         return;
@@ -265,15 +349,13 @@ async function initialize() {
 
       if (
         payload.type === 'get_http_request_actions_request' &&
-        Array.isArray(mod.plugin?.httpRequestActions)
+        Array.isArray(plug?.httpRequestActions)
       ) {
-        const reply: HttpRequestAction[] = mod.plugin.httpRequestActions.map(
-          (a: HttpRequestActionPlugin) => ({
-            ...a,
-            // Add everything except onSelect
-            onSelect: undefined,
-          }),
-        );
+        const reply: HttpRequestAction[] = plug.httpRequestActions.map((a) => ({
+          ...a,
+          // Add everything except onSelect
+          onSelect: undefined,
+        }));
         const replyPayload: InternalEventPayload = {
           type: 'get_http_request_actions_response',
           pluginRefId,
@@ -285,15 +367,15 @@ async function initialize() {
 
       if (
         payload.type === 'get_template_functions_request' &&
-        Array.isArray(mod.plugin?.templateFunctions)
+        Array.isArray(plug?.templateFunctions)
       ) {
-        const reply: TemplateFunction[] = mod.plugin.templateFunctions.map(
-          (a: TemplateFunctionPlugin) => ({
-            ...a,
+        const reply: TemplateFunction[] = plug.templateFunctions.map((templateFunction) => {
+          return {
+            ...migrateTemplateFunctionSelectOptions(templateFunction),
             // Add everything except render
             onRender: undefined,
-          }),
-        );
+          };
+        });
         const replyPayload: InternalEventPayload = {
           type: 'get_template_functions_response',
           pluginRefId,
@@ -303,13 +385,82 @@ async function initialize() {
         return;
       }
 
+      if (payload.type === 'get_http_authentication_summary_request' && plug?.authentication) {
+        const { name, shortLabel, label } = plug.authentication;
+        const replyPayload: InternalEventPayload = {
+          type: 'get_http_authentication_summary_response',
+          name,
+          label,
+          shortLabel,
+        };
+
+        sendPayload(windowContext, replyPayload, replyId);
+        return;
+      }
+
+      if (payload.type === 'get_http_authentication_config_request' && plug?.authentication) {
+        const { args, actions } = plug.authentication;
+        const resolvedArgs: FormInput[] = [];
+        for (let i = 0; i < args.length; i++) {
+          let v = args[i];
+          if ('dynamic' in v) {
+            const dynamicAttrs = await v.dynamic(ctx, payload);
+            const { dynamic, ...other } = v;
+            resolvedArgs.push({ ...other, ...dynamicAttrs } as FormInput);
+          } else {
+            resolvedArgs.push(v);
+          }
+        }
+        const resolvedActions: HttpAuthenticationAction[] = [];
+        for (const { onSelect, ...action } of actions ?? []) {
+          resolvedActions.push(action);
+        }
+
+        const replyPayload: InternalEventPayload = {
+          type: 'get_http_authentication_config_response',
+          args: resolvedArgs,
+          actions: resolvedActions,
+          pluginRefId,
+        };
+
+        sendPayload(windowContext, replyPayload, replyId);
+        return;
+      }
+
+      if (payload.type === 'call_http_authentication_request' && plug?.authentication) {
+        const auth = plug.authentication;
+        if (typeof auth?.onApply === 'function') {
+          applyFormInputDefaults(auth.args, payload.values);
+          const result = await auth.onApply(ctx, payload);
+          sendPayload(
+            windowContext,
+            {
+              type: 'call_http_authentication_response',
+              setHeaders: result.setHeaders,
+            },
+            replyId,
+          );
+          return;
+        }
+      }
+
+      if (
+        payload.type === 'call_http_authentication_action_request' &&
+        plug?.authentication != null
+      ) {
+        const action = plug.authentication.actions?.[payload.index];
+        if (typeof action?.onSelect === 'function') {
+          await action.onSelect(ctx, payload.args);
+          sendEmpty(windowContext, replyId);
+          return;
+        }
+      }
+
       if (
         payload.type === 'call_http_request_action_request' &&
-        Array.isArray(mod.plugin?.httpRequestActions)
+        Array.isArray(plug?.httpRequestActions)
       ) {
-        const action = mod.plugin.httpRequestActions.find(
-          (a: HttpRequestActionPlugin) => a.key === payload.key,
-        );
+        const action = plug.httpRequestActions[payload.index];
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
           sendEmpty(windowContext, replyId);
@@ -319,12 +470,11 @@ async function initialize() {
 
       if (
         payload.type === 'call_template_function_request' &&
-        Array.isArray(mod.plugin?.templateFunctions)
+        Array.isArray(plug?.templateFunctions)
       ) {
-        const action = mod.plugin.templateFunctions.find(
-          (a: TemplateFunctionPlugin) => a.name === payload.name,
-        );
+        const action = plug.templateFunctions.find((a) => a.name === payload.name);
         if (typeof action?.onRender === 'function') {
+          applyFormInputDefaults(action.args, payload.args.values);
           const result = await action.onRender(ctx, payload.args);
           sendPayload(
             windowContext,
@@ -339,11 +489,19 @@ async function initialize() {
       }
 
       if (payload.type === 'reload_request') {
-        await reloadModule();
+        importModule();
       }
     } catch (err) {
       console.log('Plugin call threw exception', payload.type, err);
-      // TODO: Return errors to server
+      sendPayload(
+        windowContext,
+        {
+          type: 'error_response',
+          error: `${err}`,
+        },
+        replyId,
+      );
+      return;
     }
 
     // No matches, so send back an empty response so the caller doesn't block forever
@@ -351,9 +509,7 @@ async function initialize() {
   });
 }
 
-initialize().catch((err) => {
-  console.log('failed to boot plugin', err);
-});
+initialize(workerData);
 
 function genId(len = 5): string {
   const alphabet = '01234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -368,7 +524,7 @@ function prefixStdout(s: string) {
   if (!s.includes('%s')) {
     throw new Error('Console prefix must contain a "%s" replacer');
   }
-  interceptStdout((text) => {
+  interceptStdout((text: string) => {
     const lines = text.split(/\n/);
     let newText = '';
     for (let i = 0; i < lines.length; i++) {
@@ -384,15 +540,29 @@ const watchedFiles: Record<string, Stats> = {};
 /**
  * Watch a file and trigger callback on change.
  *
- * We also track the stat for each file because fs.watch will
+ * We also track the stat for each file because fs.watch() will
  * trigger a "change" event when the access date changes
  */
 function watchFile(filepath: string, cb: (filepath: string) => void) {
-  watch(filepath, (_event, _name) => {
+  watch(filepath, () => {
     const stat = statSync(filepath);
     if (stat.mtimeMs !== watchedFiles[filepath]?.mtimeMs) {
       cb(filepath);
     }
     watchedFiles[filepath] = stat;
   });
+}
+
+/** Recursively apply form input defaults to a set of values */
+function applyFormInputDefaults(
+  inputs: FormInput[],
+  values: { [p: string]: JsonPrimitive | undefined },
+) {
+  for (const input of inputs) {
+    if ('inputs' in input) {
+      applyFormInputDefaults(input.inputs ?? [], values);
+    } else if ('defaultValue' in input && values[input.name] === undefined) {
+      values[input.name] = input.defaultValue;
+    }
+  }
 }

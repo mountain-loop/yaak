@@ -1,54 +1,44 @@
+import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
 
 interface Props {
-  request: HttpRequest | GrpcRequest;
+  request: HttpRequest | GrpcRequest | WebsocketRequest;
   className?: string;
   shortNames?: boolean;
 }
 
-const longMethodMap = {
-  get: 'GET',
-  put: 'PUT',
-  post: 'POST',
-  patch: 'PATCH',
-  delete: 'DELETE',
-  options: 'OPTIONS',
-  head: 'HEAD',
-  grpc: 'GRPC',
-} as const;
-
-const shortMethodMap: Record<keyof typeof longMethodMap, string> = {
+const methodNames: Record<string, string> = {
   get: 'GET',
   put: 'PUT',
   post: 'POST',
   patch: 'PTCH',
-  delete: 'DEL',
-  options: 'OPTS',
+  delete: 'DELE',
+  options: 'OPTN',
   head: 'HEAD',
-  grpc: 'GRPC',
+  query: 'QURY',
 };
 
-export function HttpMethodTag({ shortNames, request, className }: Props) {
+export function HttpMethodTag({ request, className }: Props) {
   const method =
     request.model === 'http_request' && request.bodyType === 'graphql'
       ? 'GQL'
       : request.model === 'grpc_request'
         ? 'GRPC'
-        : request.method;
+        : request.model === 'websocket_request'
+          ? 'WS'
+          : (methodNames[request.method.toLowerCase()] ?? request.method.slice(0, 4));
 
-  const m = method.toLowerCase();
-  const methodMap: Record<string, string> = shortNames ? shortMethodMap : longMethodMap;
+  const paddedMethod = method.padStart(4, ' ').toUpperCase();
+
   return (
     <span
       className={classNames(
         className,
-        'text-xs font-mono text-text-subtle',
+        'text-xs font-mono text-text-subtle flex-shrink-0 whitespace-pre',
         'pt-[0.25em]', // Fix for monospace font not vertically centering
-        shortNames && 'w-[2.5em]',
       )}
     >
-      {methodMap[m] ?? m.slice(0, 4).toUpperCase()}
+      {paddedMethod}
     </span>
   );
 }

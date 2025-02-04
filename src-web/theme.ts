@@ -1,7 +1,7 @@
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import type { ModelPayload } from '@yaakapp-internal/models';
-import { getSettings } from './lib/store';
+import type { ModelPayload, Settings } from '@yaakapp-internal/models';
+import { invokeCmd } from './lib/tauri';
 import type { Appearance } from './lib/theme/appearance';
 import { getCSSAppearance, subscribeToPreferredAppearance } from './lib/theme/appearance';
 import { getResolvedTheme } from './lib/theme/themes';
@@ -32,7 +32,7 @@ listen<ModelPayload>('upserted_model', async (event) => {
 }).catch(console.error);
 
 async function configureTheme() {
-  const settings = await getSettings();
+  const settings = await invokeCmd<Settings>('cmd_get_settings');
   const theme = getResolvedTheme(
     preferredAppearance,
     settings.appearance,

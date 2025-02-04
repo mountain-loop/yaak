@@ -1,8 +1,9 @@
+import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import { useState } from 'react';
 import { upsertWorkspace } from '../commands/upsertWorkspace';
 import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
 import { router } from '../lib/router';
-import { getWorkspaceMeta } from '../lib/store';
+import { invokeCmd } from '../lib/tauri';
 import { Button } from './core/Button';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
@@ -29,7 +30,9 @@ export function CreateWorkspaceDialog({ hide }: Props) {
 
         // Do getWorkspaceMeta instead of naively creating one because it might have
         // been created already when the store refreshes the workspace meta after
-        const workspaceMeta = await getWorkspaceMeta(workspace.id);
+        const workspaceMeta = await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', {
+          workspaceId: workspace.id,
+        });
         upsertWorkspaceMeta.mutate({ ...workspaceMeta, settingSyncDir });
 
         // Navigate to workspace
@@ -41,7 +44,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         hide();
       }}
     >
-      <PlainInput require label="Name" defaultValue={name} onChange={setName} />
+      <PlainInput required label="Name" defaultValue={name} onChange={setName} />
 
       <SyncToFilesystemSetting
         onChange={setSettingSyncDir}

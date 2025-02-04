@@ -10,7 +10,7 @@ use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "watch.ts")]
+#[ts(export, export_to = "gen_watch.ts")]
 pub(crate) struct WatchEvent {
     paths: Vec<PathBuf>,
     kind: String,

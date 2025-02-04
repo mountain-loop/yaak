@@ -4,10 +4,10 @@ import mime from 'mime';
 import slugify from 'slugify';
 import { InlineCode } from '../components/core/InlineCode';
 import { getContentTypeHeader } from '../lib/model_util';
-import { getHttpRequest } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
-import { useFastMutation } from './useFastMutation';
 import { showToast } from '../lib/toast';
+import { useFastMutation } from './useFastMutation';
+import { getHttpRequest } from './useHttpRequests';
 
 export function useSaveResponse(response: HttpResponse) {
   return useFastMutation({

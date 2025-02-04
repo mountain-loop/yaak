@@ -2,7 +2,6 @@ import {useMutation} from "@tanstack/react-query";
 import type { Plugin } from '@yaakapp-internal/models';
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
-import { listPlugins } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
 
 const plugins = await listPlugins();
@@ -35,4 +34,9 @@ export function useRefreshPlugins() {
       setPlugins(plugins);
     },
   });
+}
+
+async function listPlugins(): Promise<Plugin[]> {
+  const plugins: Plugin[] = (await invokeCmd('cmd_list_plugins')) ?? [];
+  return plugins;
 }

@@ -1,0 +1,410 @@
+import type { Folder, HttpRequest } from '@yaakapp-internal/models';
+import type {
+  FormInput,
+  FormInputCheckbox,
+  FormInputEditor,
+  FormInputFile,
+  FormInputHttpRequest,
+  FormInputSelect,
+  FormInputText,
+  JsonPrimitive,
+} from '@yaakapp-internal/plugins';
+import classNames from 'classnames';
+import { useCallback } from 'react';
+import { useActiveRequest } from '../hooks/useActiveRequest';
+import { useFolders } from '../hooks/useFolders';
+import { useHttpRequests } from '../hooks/useHttpRequests';
+import { capitalize } from '../lib/capitalize';
+import { fallbackRequestName } from '../lib/fallbackRequestName';
+import { Banner } from './core/Banner';
+import { Checkbox } from './core/Checkbox';
+import { Editor } from './core/Editor/Editor';
+import { Input } from './core/Input';
+import { Label } from './core/Label';
+import { Select } from './core/Select';
+import { VStack } from './core/Stacks';
+import { Markdown } from './Markdown';
+import { SelectFile } from './SelectFile';
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const DYNAMIC_FORM_NULL_ARG = '__NULL__';
+const INPUT_SIZE = 'sm';
+
+interface Props<T> {
+  inputs: FormInput[] | undefined | null;
+  onChange: (value: T) => void;
+  data: T;
+  useTemplating?: boolean;
+  autocompleteVariables?: boolean;
+  stateKey: string;
+  disabled?: boolean;
+}
+
+export function DynamicForm<T extends Record<string, JsonPrimitive>>({
+  inputs,
+  data,
+  onChange,
+  useTemplating,
+  autocompleteVariables,
+  stateKey,
+  disabled,
+}: Props<T>) {
+  const setDataAttr = useCallback(
+    (name: string, value: JsonPrimitive) => {
+      onChange({ ...data, [name]: value == DYNAMIC_FORM_NULL_ARG ? undefined : value });
+    },
+    [data, onChange],
+  );
+
+  return (
+    <FormInputs
+      disabled={disabled}
+      inputs={inputs}
+      setDataAttr={setDataAttr}
+      stateKey={stateKey}
+      useTemplating={useTemplating}
+      autocompleteVariables={autocompleteVariables}
+      data={data}
+    />
+  );
+}
+
+function FormInputs<T extends Record<string, JsonPrimitive>>({
+  inputs,
+  autocompleteVariables,
+  stateKey,
+  useTemplating,
+  setDataAttr,
+  data,
+  disabled,
+}: Pick<Props<T>, 'inputs' | 'useTemplating' | 'autocompleteVariables' | 'stateKey' | 'data'> & {
+  setDataAttr: (name: string, value: JsonPrimitive) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <VStack space={3} className="h-full overflow-auto">
+      {inputs?.map((input, i) => {
+        if ('hidden' in input && input.hidden) {
+          return null;
+        }
+
+        if ('disabled' in input && disabled != null) {
+          input.disabled = disabled;
+        }
+
+        switch (input.type) {
+          case 'select':
+            return (
+              <SelectArg
+                key={i + stateKey}
+                arg={input}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={
+                  data[input.name]
+                    ? String(data[input.name])
+                    : (input.defaultValue ?? DYNAMIC_FORM_NULL_ARG)
+                }
+              />
+            );
+          case 'text':
+            return (
+              <TextArg
+                key={i}
+                stateKey={stateKey}
+                arg={input}
+                useTemplating={useTemplating || false}
+                autocompleteVariables={autocompleteVariables || false}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={
+                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')
+                }
+              />
+            );
+          case 'editor':
+            return (
+              <EditorArg
+                key={i}
+                stateKey={stateKey}
+                arg={input}
+                useTemplating={useTemplating || false}
+                autocompleteVariables={autocompleteVariables || false}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={
+                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')
+                }
+              />
+            );
+          case 'checkbox':
+            return (
+              <CheckboxArg
+                key={i + stateKey}
+                arg={input}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={data[input.name] != null ? data[input.name] === true : false}
+              />
+            );
+          case 'http_request':
+            return (
+              <HttpRequestArg
+                key={i + stateKey}
+                arg={input}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={data[input.name] != null ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG}
+              />
+            );
+          case 'file':
+            return (
+              <FileArg
+                key={i + stateKey}
+                arg={input}
+                onChange={(v) => setDataAttr(input.name, v)}
+                filePath={
+                  data[input.name] != null ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG
+                }
+              />
+            );
+          case 'accordion':
+            return (
+              <Banner key={i} className={classNames('!p-0', disabled && 'opacity-disabled')}>
+                <details>
+                  <summary className="px-3 py-1.5 text-text-subtle">{input.label}</summary>
+                  <div className="mb-3 px-3">
+                    <FormInputs
+                      data={data}
+                      disabled={disabled}
+                      inputs={input.inputs}
+                      setDataAttr={setDataAttr}
+                      stateKey={stateKey}
+                    />
+                  </div>
+                </details>
+              </Banner>
+            );
+          case 'banner':
+            return (
+              <Banner
+                key={i}
+                color={input.color}
+                className={classNames(disabled && 'opacity-disabled')}
+              >
+                <FormInputs
+                  data={data}
+                  disabled={disabled}
+                  inputs={input.inputs}
+                  setDataAttr={setDataAttr}
+                  stateKey={stateKey}
+                />
+              </Banner>
+            );
+          case 'markdown':
+            return <Markdown>{input.content}</Markdown>;
+        }
+      })}
+    </VStack>
+  );
+}
+
+function TextArg({
+  arg,
+  onChange,
+  value,
+  useTemplating,
+  autocompleteVariables,
+  stateKey,
+}: {
+  arg: FormInputText;
+  value: string;
+  onChange: (v: string) => void;
+  useTemplating: boolean;
+  autocompleteVariables: boolean;
+  stateKey: string;
+}) {
+  return (
+    <Input
+      name={arg.name}
+      multiLine={arg.multiLine}
+      onChange={onChange}
+      defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
+      required={!arg.optional}
+      disabled={arg.disabled}
+      type={arg.password ? 'password' : 'text'}
+      label={arg.label ?? arg.name}
+      size={INPUT_SIZE}
+      hideLabel={arg.label == null}
+      placeholder={arg.placeholder ?? undefined}
+      autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
+      useTemplating={useTemplating}
+      autocompleteVariables={autocompleteVariables}
+      stateKey={stateKey}
+      forceUpdateKey={stateKey}
+    />
+  );
+}
+
+function EditorArg({
+  arg,
+  onChange,
+  value,
+  useTemplating,
+  autocompleteVariables,
+  stateKey,
+}: {
+  arg: FormInputEditor;
+  value: string;
+  onChange: (v: string) => void;
+  useTemplating: boolean;
+  autocompleteVariables: boolean;
+  stateKey: string;
+}) {
+  const id = `input-${arg.name}`;
+
+  // Read-only editor force refresh for every defaultValue change
+  // Should this be built into the <Editor/> component?
+  const forceUpdateKey = arg.readOnly ? arg.defaultValue + stateKey : stateKey;
+
+  return (
+    <div className=" w-full grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)]">
+      <Label
+        htmlFor={id}
+        required={!arg.optional}
+        visuallyHidden={arg.hideLabel}
+        tags={arg.language ? [capitalize(arg.language)] : undefined}
+      >
+        {arg.label}
+      </Label>
+      <Editor
+        id={id}
+        className={classNames(
+          'border border-border rounded-md overflow-hidden px-2 py-1',
+          'focus-within:border-border-focus',
+          'max-h-[15rem]', // So it doesn't take up too much space
+        )}
+        autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
+        disabled={arg.disabled}
+        language={arg.language}
+        onChange={onChange}
+        heightMode="auto"
+        defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
+        placeholder={arg.placeholder ?? undefined}
+        useTemplating={useTemplating}
+        autocompleteVariables={autocompleteVariables}
+        stateKey={stateKey}
+        forceUpdateKey={forceUpdateKey}
+        hideGutter
+      />
+    </div>
+  );
+}
+
+function SelectArg({
+  arg,
+  value,
+  onChange,
+}: {
+  arg: FormInputSelect;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Select
+      label={arg.label ?? arg.name}
+      name={arg.name}
+      onChange={onChange}
+      hideLabel={arg.hideLabel}
+      value={value}
+      size={INPUT_SIZE}
+      disabled={arg.disabled}
+      options={arg.options}
+    />
+  );
+}
+
+function FileArg({
+  arg,
+  filePath,
+  onChange,
+}: {
+  arg: FormInputFile;
+  filePath: string;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <SelectFile
+      disabled={arg.disabled}
+      onChange={({ filePath }) => onChange(filePath)}
+      filePath={filePath === '__NULL__' ? null : filePath}
+      directory={!!arg.directory}
+    />
+  );
+}
+
+function HttpRequestArg({
+  arg,
+  value,
+  onChange,
+}: {
+  arg: FormInputHttpRequest;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const folders = useFolders();
+  const httpRequests = useHttpRequests();
+  const activeRequest = useActiveRequest();
+  return (
+    <Select
+      label={arg.label ?? arg.name}
+      name={arg.name}
+      onChange={onChange}
+      value={value}
+      disabled={arg.disabled}
+      options={[
+        ...httpRequests.map((r) => {
+          return {
+            label:
+              buildRequestBreadcrumbs(r, folders).join(' / ') +
+              (r.id == activeRequest?.id ? ' (current)' : ''),
+            value: r.id,
+          };
+        }),
+      ]}
+    />
+  );
+}
+
+function buildRequestBreadcrumbs(request: HttpRequest, folders: Folder[]): string[] {
+  const ancestors: (HttpRequest | Folder)[] = [request];
+
+  const next = () => {
+    const latest = ancestors[0];
+    if (latest == null) return [];
+
+    const parent = folders.find((f) => f.id === latest.folderId);
+    if (parent == null) return;
+
+    ancestors.unshift(parent);
+    next();
+  };
+  next();
+
+  return ancestors.map((a) => (a.model === 'folder' ? a.name : fallbackRequestName(a)));
+}
+
+function CheckboxArg({
+  arg,
+  onChange,
+  value,
+}: {
+  arg: FormInputCheckbox;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <Checkbox
+      onChange={onChange}
+      checked={value}
+      disabled={arg.disabled}
+      title={arg.label ?? arg.name}
+      hideLabel={arg.label == null}
+    />
+  );
+}

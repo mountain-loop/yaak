@@ -25,7 +25,7 @@ function initForWorkspace(workspaceId: string, syncDir: string | null) {
   const debouncedSync = debounce(() => {
     if (syncDir == null) return;
     syncWorkspace.mutate({ workspaceId, syncDir });
-  });
+  }, 1000);
 
   // Sync on model upsert
   const unsubUpsertedModels = listenToTauriEvent<ModelPayload>('upserted_model', (p) => {
@@ -62,7 +62,8 @@ function isModelRelevant(workspaceId: string, m: AnyModel) {
     m.model !== 'folder' &&
     m.model !== 'environment' &&
     m.model !== 'http_request' &&
-    m.model !== 'grpc_request'
+    m.model !== 'grpc_request' &&
+    m.model !== 'websocket_request'
   ) {
     return false;
   } else if (m.model === 'workspace') {

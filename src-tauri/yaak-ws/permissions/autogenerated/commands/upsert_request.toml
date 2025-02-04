@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-upsert-request"
+description = "Enables the upsert_request command without any pre-configured scope."
+commands.allow = ["upsert_request"]
+
+[[permission]]
+identifier = "deny-upsert-request"
+description = "Denies the upsert_request command without any pre-configured scope."
+commands.deny = ["upsert_request"]

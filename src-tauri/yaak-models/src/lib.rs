@@ -3,3 +3,4 @@ pub mod models;
 pub mod queries;
 
 pub mod plugin;
+pub mod render;

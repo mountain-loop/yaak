@@ -114,7 +114,7 @@ export function Tabs({
                     }
                     className={btnClassName}
                   >
-                    {option && 'shortLabel' in option
+                    {option && 'shortLabel' in option && option.shortLabel
                       ? option.shortLabel
                       : (option?.label ?? 'Unknown')}
                     {t.rightSlot}

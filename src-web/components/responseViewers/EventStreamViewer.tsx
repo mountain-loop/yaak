@@ -1,12 +1,12 @@
-import { useVirtualizer } from '@tanstack/react-virtual';
 import type { HttpResponse } from '@yaakapp-internal/models';
 import type { ServerSentEvent } from '@yaakapp-internal/sse';
 import classNames from 'classnames';
-import { motion } from 'framer-motion';
-import React, { Fragment, useMemo, useRef, useState } from 'react';
+import React, { Fragment, useMemo, useState } from 'react';
 import { useFormatText } from '../../hooks/useFormatText';
 import { useResponseBodyEventSource } from '../../hooks/useResponseBodyEventSource';
 import { isJSON } from '../../lib/contentType';
+import { AutoScroller } from '../core/AutoScroller';
+import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import type { EditorProps } from '../core/Editor/Editor';
 import { Editor } from '../core/Editor/Editor';
@@ -52,10 +52,26 @@ function ActualEventStreamViewer({ response }: Props) {
       defaultRatio={0.4}
       minHeightPx={20}
       firstSlot={() => (
-        <EventStreamEventsVirtual
-          events={events.data ?? []}
-          activeEventIndex={activeEventIndex}
-          setActiveEventIndex={setActiveEventIndex}
+        <AutoScroller
+          data={events.data ?? []}
+          header={
+            events.error && (
+              <Banner color="danger" className="m-3">
+                {String(events.error)}
+              </Banner>
+            )
+          }
+          render={(event, i) => (
+            <EventRow
+              event={event}
+              isActive={i === activeEventIndex}
+              index={i}
+              onClick={() => {
+                if (i === activeEventIndex) setActiveEventIndex(null);
+                else setActiveEventIndex(i);
+              }}
+            />
+          )}
         />
       )}
       secondSlot={
@@ -66,7 +82,7 @@ function ActualEventStreamViewer({ response }: Props) {
                   <Separator />
                 </div>
                 <div className="pl-2 overflow-y-auto">
-                  <HStack space={1.5} className="mb-2 select-text cursor-text font-semibold">
+                  <HStack space={1.5} className="mb-2 font-semibold">
                     <EventLabels
                       className="text-sm"
                       event={activeEvent}
@@ -113,66 +129,7 @@ function FormattedEditor({ text, language }: { text: string; language: EditorPro
   return <Editor readOnly defaultValue={formatted.data} language={language} stateKey={null} />;
 }
 
-function EventStreamEventsVirtual({
-  events,
-  activeEventIndex,
-  setActiveEventIndex,
-}: {
-  events: ServerSentEvent[];
-  activeEventIndex: number | null;
-  setActiveEventIndex: (eventId: number | null) => void;
-}) {
-  // The scrollable element for your list
-  const parentRef = useRef<HTMLDivElement>(null);
-
-  // The virtualizer
-  const rowVirtualizer = useVirtualizer({
-    count: events.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 28, // react-virtual requires a height, so we'll give it one
-  });
-
-  return (
-    <div ref={parentRef} className="overflow-y-auto">
-      <div
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
-      >
-        {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-          const event = events[virtualItem.index]!;
-          return (
-            <div
-              key={virtualItem.key}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: `${virtualItem.size}px`,
-                transform: `translateY(${virtualItem.start}px)`,
-              }}
-            >
-              <EventStreamEvent
-                event={event}
-                isActive={virtualItem.index === activeEventIndex}
-                index={virtualItem.index}
-                onClick={() => {
-                  if (virtualItem.index === activeEventIndex) setActiveEventIndex(null);
-                  else setActiveEventIndex(virtualItem.index);
-                }}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function EventStreamEvent({
+function EventRow({
   onClick,
   isActive,
   event,
@@ -186,22 +143,20 @@ function EventStreamEvent({
   index: number;
 }) {
   return (
-    <motion.button
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+    <button
       onClick={onClick}
       className={classNames(
         className,
         'w-full grid grid-cols-[auto_auto_minmax(0,3fr)] gap-2 items-center text-left',
-        'px-1.5 py-1 font-mono cursor-default group focus:outline-none rounded',
-        isActive && '!bg-surface-highlight !text-text',
+        '-mx-1.5 px-1.5 h-xs font-mono group focus:outline-none focus:text-text rounded',
+        isActive && '!bg-surface-active !text-text',
         'text-text-subtle hover:text',
       )}
     >
       <Icon className={classNames('text-info')} title="Server Message" icon="arrow_big_down_dash" />
       <EventLabels className="text-sm" event={event} isActive={isActive} index={index} />
       <div className={classNames('w-full truncate text-xs')}>{event.data.slice(0, 1000)}</div>
-    </motion.button>
+    </button>
   );
 }
 

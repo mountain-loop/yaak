@@ -1,22 +1,25 @@
+import type { GrpcEvent, GrpcRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { format } from 'date-fns';
 import type { CSSProperties } from 'react';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCopy } from '../hooks/useCopy';
 import { useGrpcEvents } from '../hooks/useGrpcEvents';
 import { usePinnedGrpcConnection } from '../hooks/usePinnedGrpcConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
-import type { GrpcEvent, GrpcRequest } from '@yaakapp-internal/models';
-import { isResponseLoading } from '../lib/model_util';
+import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Icon } from './core/Icon';
+import { IconButton } from './core/IconButton';
 import { JsonAttributeTree } from './core/JsonAttributeTree';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
+import { LoadingIcon } from './core/LoadingIcon';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
 import { EmptyStateText } from './EmptyStateText';
-import { RecentConnectionsDropdown } from './RecentConnectionsDropdown';
+import { RecentGrpcConnectionsDropdown } from './RecentGrpcConnectionsDropdown';
 
 interface Props {
   style?: CSSProperties;
@@ -38,6 +41,7 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
   const { activeConnection, connections, setPinnedConnectionId } =
     usePinnedGrpcConnection(activeRequest);
   const events = useGrpcEvents(activeConnection?.id ?? null);
+  const copy = useCopy();
 
   const activeEvent = useMemo(
     () => events.find((m) => m.id === activeEventId) ?? null,
@@ -66,34 +70,39 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
             <HStack className="pl-3 mb-1 font-mono text-sm">
               <HStack space={2}>
                 <span>{events.length} Messages</span>
-                {isResponseLoading(activeConnection) && (
-                  <Icon icon="refresh" size="sm" spin className="text-text-subtlest" />
+                {activeConnection.state !== 'closed' && (
+                  <LoadingIcon size="sm" className="text-text-subtlest" />
                 )}
               </HStack>
-              <RecentConnectionsDropdown
-                connections={connections}
-                activeConnection={activeConnection}
-                onPinnedConnectionId={setPinnedConnectionId}
-              />
+              <div className="ml-auto">
+                <RecentGrpcConnectionsDropdown
+                  connections={connections}
+                  activeConnection={activeConnection}
+                  onPinnedConnectionId={setPinnedConnectionId}
+                />
+              </div>
             </HStack>
-            <div className="overflow-y-auto h-full">
-              {activeConnection.error && (
-                <Banner color="danger" className="m-3">
-                  {activeConnection.error}
-                </Banner>
-              )}
-              {...events.map((e) => (
+            <AutoScroller
+              data={events}
+              header={
+                activeConnection.error && (
+                  <Banner color="danger" className="m-3">
+                    {activeConnection.error}
+                  </Banner>
+                )
+              }
+              render={(event) => (
                 <EventRow
-                  key={e.id}
-                  event={e}
-                  isActive={e.id === activeEventId}
+                  key={event.id}
+                  event={event}
+                  isActive={event.id === activeEventId}
                   onClick={() => {
-                    if (e.id === activeEventId) setActiveEventId(null);
-                    else setActiveEventId(e.id);
+                    if (event.id === activeEventId) setActiveEventId(null);
+                    else setActiveEventId(event.id);
                   }}
                 />
-              ))}
-            </div>
+              )}
+            />
           </div>
         )
       }
@@ -108,8 +117,16 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
               {activeEvent.eventType === 'client_message' ||
               activeEvent.eventType === 'server_message' ? (
                 <>
-                  <div className="mb-2 select-text cursor-text font-semibold">
-                    Message {activeEvent.eventType === 'client_message' ? 'Sent' : 'Received'}
+                  <div className="mb-2 select-text cursor-text grid grid-cols-[minmax(0,1fr)_auto] items-center">
+                    <div className="font-semibold">
+                      Message {activeEvent.eventType === 'client_message' ? 'Sent' : 'Received'}
+                    </div>
+                    <IconButton
+                      title="Copy message"
+                      icon="copy"
+                      size="xs"
+                      onClick={() => copy(activeEvent.content)}
+                    />
                   </div>
                   {!showLarge && activeEvent.content.length > 1000 * 1000 ? (
                     <VStack space={2} className="italic text-text-subtlest">
@@ -183,14 +200,16 @@ function EventRow({
   event: GrpcEvent;
 }) {
   const { eventType, status, createdAt, content, error } = event;
+  const ref = useRef<HTMLDivElement>(null);
+
   return (
-    <div className="px-1">
+    <div className="px-1" ref={ref}>
       <button
         onClick={onClick}
         className={classNames(
           'w-full grid grid-cols-[auto_minmax(0,3fr)_auto] gap-2 items-center text-left',
-          'px-1.5 py-1 font-mono cursor-default group focus:outline-none rounded',
-          isActive && '!bg-surface-highlight !text-text',
+          'px-1.5 h-xs font-mono cursor-default group focus:outline-none focus:text-text rounded',
+          isActive && '!bg-surface-active !text-text',
           'text-text-subtle hover:text',
         )}
       >

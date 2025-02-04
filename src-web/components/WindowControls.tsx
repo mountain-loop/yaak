@@ -52,7 +52,6 @@ export function WindowControls({ className, onlyX }: Props) {
                 await w.maximize();
                 setMaximized(true);
               }
-              console.log("TOGGLE", isMaximized);
             }}
           >
             {maximized ? (

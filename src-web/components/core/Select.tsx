@@ -5,6 +5,7 @@ import { useOsInfo } from '../../hooks/useOsInfo';
 import { trackEvent } from '../../lib/analytics';
 import type { ButtonProps } from './Button';
 import { Button } from './Button';
+import { Label } from './Label';
 import type { RadioDropdownItem } from './RadioDropdown';
 import { RadioDropdown } from './RadioDropdown';
 import { HStack } from './Stacks';
@@ -22,12 +23,14 @@ export interface SelectProps<T extends string> {
   size?: ButtonProps['size'];
   className?: string;
   event?: string;
+  disabled?: boolean;
 }
 
 export function Select<T extends string>({
   labelPosition = 'top',
   name,
   labelClassName,
+  disabled,
   hideLabel,
   label,
   value,
@@ -61,16 +64,9 @@ export function Select<T extends string>({
         labelPosition === 'top' && 'flex-row gap-0.5',
       )}
     >
-      <label
-        htmlFor={id}
-        className={classNames(
-          labelClassName,
-          'text-text-subtle whitespace-nowrap',
-          hideLabel && 'sr-only',
-        )}
-      >
+      <Label htmlFor={id} visuallyHidden={hideLabel} className={labelClassName}>
         {label}
-      </label>
+      </Label>
       {osInfo?.osType === 'macos' ? (
         <HStack
           space={2}
@@ -78,7 +74,8 @@ export function Select<T extends string>({
             'w-full rounded-md text text-sm font-mono',
             'pl-2',
             'border',
-            focused ? 'border-border-focus' : 'border-border',
+            focused && !disabled ? 'border-border-focus' : 'border-border',
+            disabled && 'border-dotted',
             isInvalidSelection && 'border-danger',
             size === 'xs' && 'h-xs',
             size === 'sm' && 'h-sm',
@@ -92,7 +89,8 @@ export function Select<T extends string>({
             onChange={(e) => handleChange(e.target.value as T)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            className={classNames('pr-7 w-full outline-none bg-transparent')}
+            className={classNames('pr-7 w-full outline-none bg-transparent disabled:opacity-disabled')}
+            disabled={disabled}
           >
             {isInvalidSelection && <option value={'__NONE__'}>-- Select an Option --</option>}
             {options.map((o) => {
@@ -115,6 +113,7 @@ export function Select<T extends string>({
             variant="border"
             size={size}
             leftSlot={leftSlot}
+            disabled={disabled}
             forDropdown
           >
             {options.find((o) => o.type !== 'separator' && o.value === value)?.label ?? '--'}

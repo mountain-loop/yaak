@@ -1,7 +1,7 @@
 // Listen for settings changes, the re-compute theme
 import { listen } from '@tauri-apps/api/event';
-import type { ModelPayload } from '@yaakapp-internal/models';
-import { getSettings } from './lib/store';
+import type { ModelPayload, Settings } from '@yaakapp-internal/models';
+import { invokeCmd } from './lib/tauri';
 
 function setFontSizeOnDocument(fontSize: number) {
   document.documentElement.style.fontSize = `${fontSize}px`;
@@ -12,4 +12,6 @@ listen<ModelPayload>('upserted_model', async (event) => {
   setFontSizeOnDocument(event.payload.model.interfaceFontSize);
 }).catch(console.error);
 
-getSettings().then((settings) => setFontSizeOnDocument(settings.interfaceFontSize));
+invokeCmd<Settings>('cmd_get_settings').then((settings) =>
+  setFontSizeOnDocument(settings.interfaceFontSize),
+);

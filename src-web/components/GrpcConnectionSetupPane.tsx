@@ -6,12 +6,10 @@ import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useRef } from 'react';
 import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
+import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
-import { AUTH_TYPE_BASIC, AUTH_TYPE_BEARER, AUTH_TYPE_NONE } from '../lib/model_util';
-import { BasicAuth } from './BasicAuth';
-import { BearerAuth } from './BearerAuth';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
 import { Icon } from './core/Icon';
@@ -22,8 +20,8 @@ import { RadioDropdown } from './core/RadioDropdown';
 import { HStack, VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { EmptyStateText } from './EmptyStateText';
 import { GrpcEditor } from './GrpcEditor';
+import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { UrlBar } from './UrlBar';
 
@@ -71,6 +69,7 @@ export function GrpcConnectionSetupPane({
   onSend,
 }: Props) {
   const updateRequest = useUpdateAnyGrpcRequest();
+  const authentication = useHttpAuthenticationSummaries();
   const [activeTabs, setActiveTabs] = useAtom(tabsAtom);
   const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
 
@@ -136,11 +135,6 @@ export function GrpcConnectionSetupPane({
 
   const tabs: TabItem[] = useMemo(
     () => [
-      {
-        value: TAB_DESCRIPTION,
-        label: 'Info',
-        rightSlot: activeRequest.description && <CountBadge count={true} />,
-      },
       { value: TAB_MESSAGE, label: 'Message' },
       {
         value: TAB_AUTH,
@@ -148,24 +142,22 @@ export function GrpcConnectionSetupPane({
         options: {
           value: activeRequest.authenticationType,
           items: [
-            { label: 'Basic Auth', shortLabel: 'Basic', value: AUTH_TYPE_BASIC },
-            { label: 'Bearer Token', shortLabel: 'Bearer', value: AUTH_TYPE_BEARER },
+            ...authentication.map((a) => ({
+              label: a.label || 'UNKNOWN',
+              shortLabel: a.shortLabel,
+              value: a.name,
+            })),
             { type: 'separator' },
-            { label: 'No Authentication', shortLabel: 'Auth', value: AUTH_TYPE_NONE },
+            { label: 'No Authentication', shortLabel: 'Auth', value: null },
           ],
-          onChange: async (authenticationType) => {
+          onChange: (authenticationType) => {
             let authentication: GrpcRequest['authentication'] = activeRequest.authentication;
-            if (authenticationType === AUTH_TYPE_BASIC) {
+            if (activeRequest.authenticationType !== authenticationType) {
               authentication = {
-                username: authentication.username ?? '',
-                password: authentication.password ?? '',
-              };
-            } else if (authenticationType === AUTH_TYPE_BEARER) {
-              authentication = {
-                token: authentication.token ?? '',
+                // Reset auth if changing types
               };
             }
-            await updateRequest.mutateAsync({
+            updateRequest.mutate({
               id: activeRequest.id,
               update: { authenticationType, authentication },
             });
@@ -173,12 +165,18 @@ export function GrpcConnectionSetupPane({
         },
       },
       { value: TAB_METADATA, label: 'Metadata' },
+      {
+        value: TAB_DESCRIPTION,
+        label: 'Info',
+        rightSlot: activeRequest.description && <CountBadge count={true} />,
+      },
     ],
     [
       activeRequest.authentication,
       activeRequest.authenticationType,
       activeRequest.description,
       activeRequest.id,
+      authentication,
       updateRequest,
     ],
   );
@@ -213,6 +211,7 @@ export function GrpcConnectionSetupPane({
         )}
       >
         <UrlBar
+          key={forceUpdateKey}
           url={activeRequest.url ?? ''}
           method={null}
           submitIcon={null}
@@ -238,7 +237,6 @@ export function GrpcConnectionSetupPane({
               {
                 label: 'Refresh',
                 type: 'default',
-                key: 'custom',
                 leftSlot: <Icon className="text-text-subtlest" size="sm" icon="refresh" />,
               },
             ]}
@@ -314,6 +312,7 @@ export function GrpcConnectionSetupPane({
         <TabContent value="message">
           <GrpcEditor
             onChange={handleChangeMessage}
+            forceUpdateKey={forceUpdateKey}
             services={services}
             reflectionError={reflectionError}
             reflectionLoading={reflectionLoading}
@@ -321,16 +320,10 @@ export function GrpcConnectionSetupPane({
             protoFiles={protoFiles}
           />
         </TabContent>
-        <TabContent value="auth">
-          {activeRequest.authenticationType === AUTH_TYPE_BASIC ? (
-            <BasicAuth key={forceUpdateKey} request={activeRequest} />
-          ) : activeRequest.authenticationType === AUTH_TYPE_BEARER ? (
-            <BearerAuth key={forceUpdateKey} request={activeRequest} />
-          ) : (
-            <EmptyStateText>No Authentication {activeRequest.authenticationType}</EmptyStateText>
-          )}
+        <TabContent value={TAB_AUTH}>
+          <HttpAuthenticationEditor request={activeRequest} />
         </TabContent>
-        <TabContent value="metadata">
+        <TabContent value={TAB_METADATA}>
           <PairOrBulkEditor
             preferenceName="grpc_metadata"
             valueAutocompleteVariables

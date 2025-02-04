@@ -1,10 +1,9 @@
-import { useFastMutation } from './useFastMutation';
 import type { HttpRequest } from '@yaakapp-internal/models';
-import {useSetAtom} from "jotai/index";
-import { getHttpRequest } from '../lib/store';
+import { useSetAtom } from 'jotai/index';
 import { invokeCmd } from '../lib/tauri';
-import {httpRequestsAtom} from "./useHttpRequests";
-import {updateModelList} from "./useSyncModelStores";
+import { useFastMutation } from './useFastMutation';
+import { getHttpRequest, httpRequestsAtom } from './useHttpRequests';
+import { updateModelList } from './useSyncModelStores';
 
 export function useUpdateAnyHttpRequest() {
   const setHttpRequests = useSetAtom(httpRequestsAtom);
@@ -15,7 +14,7 @@ export function useUpdateAnyHttpRequest() {
   >({
     mutationKey: ['update_any_http_request'],
     mutationFn: async ({ id, update }) => {
-      const request = await getHttpRequest(id);
+      const request = getHttpRequest(id);
       if (request === null) {
         throw new Error("Can't update a null request");
       }
@@ -26,6 +25,6 @@ export function useUpdateAnyHttpRequest() {
     },
     onSuccess: async (request) => {
       setHttpRequests(updateModelList(request));
-    }
+    },
   });
 }

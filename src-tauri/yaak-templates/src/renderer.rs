@@ -1,5 +1,6 @@
 use crate::{FnArg, Parser, Token, Tokens, Val};
 use log::warn;
+use serde_json::json;
 use std::collections::HashMap;
 use std::future::Future;
 
@@ -9,6 +10,33 @@ pub trait TemplateCallback {
         fn_name: &str,
         args: HashMap<String, String>,
     ) -> impl Future<Output = Result<String, String>> + Send;
+}
+
+pub async fn render_json_value_raw<T: TemplateCallback>(
+    v: serde_json::Value,
+    vars: &HashMap<String, String>,
+    cb: &T,
+) -> serde_json::Value {
+    match v {
+        serde_json::Value::String(s) => json!(parse_and_render(&s, vars, cb).await),
+        serde_json::Value::Array(a) => {
+            let mut new_a = Vec::new();
+            for v in a {
+                new_a.push(Box::pin(render_json_value_raw(v, vars, cb)).await)
+            }
+            json!(new_a)
+        }
+        serde_json::Value::Object(o) => {
+            let mut new_o = serde_json::Map::new();
+            for (k, v) in o {
+                let key = Box::pin(parse_and_render(&k, vars, cb)).await;
+                let value = Box::pin(render_json_value_raw(v, vars, cb)).await;
+                new_o.insert(key, value);
+            }
+            json!(new_o)
+        }
+        v => v,
+    }
 }
 
 pub async fn parse_and_render<T: TemplateCallback>(
@@ -90,7 +118,7 @@ async fn render_tag<T: TemplateCallback>(
 }
 
 #[cfg(test)]
-mod tests {
+mod parse_and_render_tests {
     use crate::renderer::TemplateCallback;
     use crate::*;
     use std::collections::HashMap;
@@ -216,5 +244,81 @@ mod tests {
         }
 
         assert_eq!(parse_and_render(template, &vars, &CB {}).await, result.to_string());
+    }
+}
+
+#[cfg(test)]
+mod render_json_value_raw_tests {
+    use serde_json::json;
+    use std::collections::HashMap;
+    use crate::{render_json_value_raw, TemplateCallback};
+
+    struct EmptyCB {}
+
+    impl TemplateCallback for EmptyCB {
+        async fn run(
+            &self,
+            _fn_name: &str,
+            _args: HashMap<String, String>,
+        ) -> Result<String, String> {
+            todo!()
+        }
+    }
+
+    #[tokio::test]
+    async fn render_json_value_string() {
+        let v = json!("${[a]}");
+        let mut vars = HashMap::new();
+        vars.insert("a".to_string(), "aaa".to_string());
+
+        let result = render_json_value_raw(v, &vars, &EmptyCB {}).await;
+        assert_eq!(result, json!("aaa"))
+    }
+
+    #[tokio::test]
+    async fn render_json_value_array() {
+        let v = json!(["${[a]}", "${[a]}"]);
+        let mut vars = HashMap::new();
+        vars.insert("a".to_string(), "aaa".to_string());
+
+        let result = render_json_value_raw(v, &vars, &EmptyCB {}).await;
+        assert_eq!(result, json!(["aaa", "aaa"]))
+    }
+
+    #[tokio::test]
+    async fn render_json_value_object() {
+        let v = json!({"${[a]}": "${[a]}"});
+        let mut vars = HashMap::new();
+        vars.insert("a".to_string(), "aaa".to_string());
+
+        let result = render_json_value_raw(v, &vars, &EmptyCB {}).await;
+        assert_eq!(result, json!({"aaa": "aaa"}))
+    }
+
+    #[tokio::test]
+    async fn render_json_value_nested() {
+        let v = json!([
+            123,
+            {"${[a]}": "${[a]}"},
+            null,
+            "${[a]}",
+            false,
+            {"x": ["${[a]}"]}
+        ]);
+        let mut vars = HashMap::new();
+        vars.insert("a".to_string(), "aaa".to_string());
+
+        let result = render_json_value_raw(v, &vars, &EmptyCB {}).await;
+        assert_eq!(
+            result,
+            json!([
+                123,
+                {"aaa": "aaa"},
+                null,
+                "aaa",
+                false,
+                {"x": ["aaa"]}
+            ])
+        )
     }
 }

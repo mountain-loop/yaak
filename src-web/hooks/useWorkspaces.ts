@@ -1,9 +1,11 @@
 import type { Workspace } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
-import { listWorkspaces } from '../lib/store';
+import { jotaiStore } from '../lib/jotai';
+import { invokeCmd } from '../lib/tauri';
 
-const workspaces = await listWorkspaces();
-export const workspacesAtom = atom<Workspace[]>(workspaces);
+export const workspacesAtom = atom<Workspace[]>(
+  await invokeCmd<Workspace[]>('cmd_list_workspaces'),
+);
 
 export const sortedWorkspacesAtom = atom((get) =>
   get(workspacesAtom).sort((a, b) => a.name.localeCompare(b.name)),
@@ -11,4 +13,8 @@ export const sortedWorkspacesAtom = atom((get) =>
 
 export function useWorkspaces() {
   return useAtomValue(sortedWorkspacesAtom);
+}
+
+export function getWorkspace(id: string | null) {
+  return jotaiStore.get(workspacesAtom).find((v) => v.id === id) ?? null;
 }

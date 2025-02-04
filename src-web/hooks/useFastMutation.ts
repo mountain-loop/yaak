@@ -1,5 +1,7 @@
 import type { MutationKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { showToast } from '../lib/toast';
+import { trackEvent } from '../lib/analytics';
 
 interface MutationOptions<TData, TError, TVariables> {
   mutationKey: MutationKey;
@@ -7,6 +9,7 @@ interface MutationOptions<TData, TError, TVariables> {
   onSettled?: () => void;
   onError?: (err: TError) => void;
   onSuccess?: (data: TData) => void;
+  disableToastError?: boolean;
 }
 
 type CallbackMutationOptions<TData, TError, TVariables> = Omit<
@@ -21,7 +24,7 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
     variables: TVariables,
     args?: CallbackMutationOptions<TData, TError, TVariables>,
   ) => {
-    const { mutationKey, mutationFn, onSuccess, onError, onSettled } = {
+    const { mutationKey, mutationFn, onSuccess, onError, onSettled, disableToastError } = {
       ...defaultArgs,
       ...args,
     };
@@ -30,8 +33,18 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
       onSuccess?.(data);
       return data;
     } catch (err: unknown) {
+      const stringKey = mutationKey.join('.');
       const e = err as TError;
-      console.log('Fast mutation error', mutationKey, e);
+      console.log('mutation error', stringKey, e);
+      trackEvent('mutation', 'error', { key: stringKey });
+      if (!disableToastError) {
+        showToast({
+          id: stringKey,
+          message: `${err}`,
+          color: 'danger',
+          timeout: 5000,
+        });
+      }
       onError?.(e);
     } finally {
       onSettled?.();

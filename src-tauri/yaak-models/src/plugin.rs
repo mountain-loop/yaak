@@ -4,14 +4,15 @@ use r2d2_sqlite::SqliteConnectionManager;
 use serde::Deserialize;
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{ConnectOptions, SqlitePool};
+use sqlx::SqlitePool;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 use tauri::async_runtime::Mutex;
 use tauri::path::BaseDirectory;
 use tauri::plugin::TauriPlugin;
-use tauri::{plugin, AppHandle, Manager, Runtime, Url};
+use tauri::{plugin, AppHandle, Manager, Runtime};
 
 pub struct SqliteConnection(pub Mutex<Pool<SqliteConnectionManager>>);
 
@@ -61,16 +62,10 @@ impl Builder {
     }
 }
 
-fn db_connection_url(sqlite_file_path: &PathBuf) -> Url {
-    let p_string = sqlite_file_path.to_string_lossy().replace(' ', "%20");
-    let url = format!("sqlite://{}?mode=rwc", p_string);
-    Url::parse(&url).unwrap()
-}
-
 async fn must_migrate_db<R: Runtime>(app_handle: &AppHandle<R>, sqlite_file_path: &PathBuf) {
-    let url = db_connection_url(sqlite_file_path);
-    info!("Connecting to database at {}", url);
-    let opts = SqliteConnectOptions::from_url(&url).unwrap();
+    info!("Connecting to database at {sqlite_file_path:?}");
+    let sqlite_file_path = sqlite_file_path.to_str().unwrap().to_string();
+    let opts = SqliteConnectOptions::from_str(&sqlite_file_path).unwrap().create_if_missing(true);
     let pool = SqlitePool::connect_with(opts).await.expect("Failed to connect to database");
     let p = app_handle
         .path()

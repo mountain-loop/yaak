@@ -4,7 +4,7 @@ import {
   closeBracketsKeymap,
   completionKeymap,
 } from '@codemirror/autocomplete';
-import { history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { history, historyKeymap } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
@@ -142,6 +142,11 @@ export const baseExtensions = [
   keymap.of([...historyKeymap, ...completionKeymap]),
 ];
 
+export const readonlyExtensions = [
+  EditorState.readOnly.of(true),
+  EditorView.contentAttributes.of({ tabindex: '-1' }),
+];
+
 export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) => [
   hideGutter
     ? []
@@ -208,5 +213,5 @@ export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) =>
   rectangularSelection(),
   crosshairCursor(),
   highlightActiveLineGutter(),
-  keymap.of([indentWithTab, ...closeBracketsKeymap, ...searchKeymap, ...foldKeymap, ...lintKeymap]),
+  keymap.of([...closeBracketsKeymap, ...searchKeymap, ...foldKeymap, ...lintKeymap]),
 ];

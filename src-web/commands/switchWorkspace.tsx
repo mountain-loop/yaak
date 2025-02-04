@@ -5,15 +5,16 @@ import { getRecentRequests } from '../hooks/useRecentRequests';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
 
-export const switchWorkspace = createFastMutation({
-  mutationKey: ['open_workspace'],
-  mutationFn: async ({
-    workspaceId,
-    inNewWindow,
-  }: {
+export const switchWorkspace = createFastMutation<
+  void,
+  unknown,
+  {
     workspaceId: string;
     inNewWindow: boolean;
-  }) => {
+  }
+>({
+  mutationKey: ['open_workspace'],
+  mutationFn: async ({ workspaceId, inNewWindow }) => {
     const environmentId = (await getRecentEnvironments(workspaceId))[0] ?? undefined;
     const requestId = (await getRecentRequests(workspaceId))[0] ?? undefined;
     const cookieJarId = (await getRecentCookieJars(workspaceId))[0] ?? undefined;

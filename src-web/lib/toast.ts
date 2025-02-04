@@ -34,3 +34,12 @@ export function hideToast(id: string) {
     return all.filter((t) => t.id !== id);
   });
 }
+
+export function showErrorToast<T>(id: string, message: T) {
+  return showToast({
+    id,
+    message: String(message),
+    timeout: 8000,
+    color: 'danger',
+  });
+}

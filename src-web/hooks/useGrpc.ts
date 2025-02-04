@@ -3,7 +3,6 @@ import { emit } from '@tauri-apps/api/event';
 import type { GrpcConnection, GrpcRequest } from '@yaakapp-internal/models';
 import { trackEvent } from '../lib/analytics';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
-import { isResponseLoading } from '../lib/model_util';
 import { invokeCmd } from '../lib/tauri';
 import { useActiveEnvironment } from './useActiveEnvironment';
 import { useDebouncedValue } from './useDebouncedValue';
@@ -64,7 +63,7 @@ export function useGrpc(
     reflect,
     cancel,
     commit,
-    isStreaming: isResponseLoading(conn),
+    isStreaming: conn != null && conn.state !== 'closed',
     send,
   };
 }

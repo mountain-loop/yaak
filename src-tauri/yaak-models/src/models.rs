@@ -10,7 +10,7 @@ use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum ProxySetting {
     Enabled {
         http: String,
@@ -22,7 +22,7 @@ pub enum ProxySetting {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct ProxySettingAuth {
     pub user: String,
     pub password: String,
@@ -30,7 +30,7 @@ pub struct ProxySettingAuth {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum EditorKeymap {
     Default,
     Vim,
@@ -72,7 +72,7 @@ impl Default for EditorKeymap {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Settings {
     #[ts(type = "\"settings\"")]
     pub model: String,
@@ -125,7 +125,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let proxy: Option<String> = r.get("proxy")?;
         let editor_keymap: String = r.get("editor_keymap")?;
-        Ok(Settings {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             created_at: r.get("created_at")?,
@@ -149,7 +149,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Workspace {
     #[ts(type = "\"workspace\"")]
     pub model: String,
@@ -187,7 +187,7 @@ impl<'s> TryFrom<&Row<'s>> for Workspace {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(Workspace {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             created_at: r.get("created_at")?,
@@ -215,7 +215,7 @@ impl Workspace {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct WorkspaceMeta {
     #[ts(type = "\"workspace_meta\"")]
     pub model: String,
@@ -243,7 +243,7 @@ impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(WorkspaceMeta {
+        Ok(Self {
             id: r.get("id")?,
             workspace_id: r.get("workspace_id")?,
             model: r.get("model")?,
@@ -255,7 +255,7 @@ impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 enum CookieDomain {
     HostOnly(String),
     Suffix(String),
@@ -264,14 +264,14 @@ enum CookieDomain {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 enum CookieExpires {
     AtUtc(String),
     SessionEnd,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Cookie {
     raw_cookie: String,
     domain: CookieDomain,
@@ -281,7 +281,7 @@ pub struct Cookie {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct CookieJar {
     #[ts(type = "\"cookie_jar\"")]
     pub model: String,
@@ -313,7 +313,7 @@ impl<'s> TryFrom<&Row<'s>> for CookieJar {
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let cookies: String = r.get("cookies")?;
-        Ok(CookieJar {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -327,7 +327,7 @@ impl<'s> TryFrom<&Row<'s>> for CookieJar {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Environment {
     #[ts(type = "\"environment\"")]
     pub model: String,
@@ -361,7 +361,7 @@ impl<'s> TryFrom<&Row<'s>> for Environment {
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let variables: String = r.get("variables")?;
-        Ok(Environment {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -376,19 +376,20 @@ impl<'s> TryFrom<&Row<'s>> for Environment {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct EnvironmentVariable {
     #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
     pub name: String,
     pub value: String,
-    pub id: String,
+    #[ts(optional, as = "Option<String>")]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Folder {
     #[ts(type = "\"folder\"")]
     pub model: String,
@@ -423,7 +424,7 @@ impl<'s> TryFrom<&Row<'s>> for Folder {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(Folder {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             sort_priority: r.get("sort_priority")?,
@@ -439,31 +440,33 @@ impl<'s> TryFrom<&Row<'s>> for Folder {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpRequestHeader {
     #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
     pub name: String,
     pub value: String,
-    pub id: String,
+    #[ts(optional, as = "Option<String>")]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpUrlParameter {
     #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
     pub name: String,
     pub value: String,
-    pub id: String,
+    #[ts(optional, as = "Option<String>")]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpRequest {
     #[ts(type = "\"http_request\"")]
     pub model: String,
@@ -481,7 +484,7 @@ pub struct HttpRequest {
     pub body_type: Option<String>,
     pub description: String,
     pub headers: Vec<HttpRequestHeader>,
-    #[serde(default = "default_http_request_method")]
+    #[serde(default = "default_http_method")]
     pub method: String,
     pub name: String,
     pub sort_priority: f32,
@@ -521,7 +524,7 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
         let body: String = r.get("body")?;
         let authentication: String = r.get("authentication")?;
         let headers: String = r.get("headers")?;
-        Ok(HttpRequest {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             sort_priority: r.get("sort_priority")?,
@@ -543,9 +546,246 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum WebsocketConnectionState {
+    Initialized,
+    Connected,
+    Closed,
+}
+
+impl Default for WebsocketConnectionState {
+    fn default() -> Self {
+        Self::Initialized
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct WebsocketConnection {
+    #[ts(type = "\"websocket_connection\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+    pub request_id: String,
+
+    pub elapsed: i32,
+    pub error: Option<String>,
+    pub headers: Vec<HttpResponseHeader>,
+    pub state: WebsocketConnectionState,
+    pub status: i32,
+    pub url: String,
+}
+
+#[derive(Iden)]
+pub enum WebsocketConnectionIden {
+    #[iden = "websocket_connections"]
+    Table,
+    Id,
+    Model,
+    CreatedAt,
+    UpdatedAt,
+    WorkspaceId,
+    RequestId,
+
+    Elapsed,
+    Error,
+    Headers,
+    State,
+    Status,
+    Url,
+}
+
+impl<'s> TryFrom<&Row<'s>> for WebsocketConnection {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        let headers: String = r.get("headers")?;
+        let state: String = r.get("state")?;
+        Ok(Self {
+            id: r.get("id")?,
+            model: r.get("model")?,
+            workspace_id: r.get("workspace_id")?,
+            request_id: r.get("request_id")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            url: r.get("url")?,
+            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            elapsed: r.get("elapsed")?,
+            error: r.get("error")?,
+            state: serde_json::from_str(format!(r#""{state}""#).as_str()).unwrap(),
+            status: r.get("status")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum WebsocketMessageType {
+    Text,
+    Binary,
+}
+
+impl Default for WebsocketMessageType {
+    fn default() -> Self {
+        Self::Text
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct WebsocketRequest {
+    #[ts(type = "\"websocket_request\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+    pub folder_id: Option<String>,
+
+    #[ts(type = "Record<string, any>")]
+    pub authentication: BTreeMap<String, Value>,
+    pub authentication_type: Option<String>,
+    pub description: String,
+    pub headers: Vec<HttpRequestHeader>,
+    pub message: String,
+    pub name: String,
+    pub sort_priority: f32,
+    pub url: String,
+    pub url_parameters: Vec<HttpUrlParameter>,
+}
+
+#[derive(Iden)]
+pub enum WebsocketRequestIden {
+    #[iden = "websocket_requests"]
+    Table,
+    Id,
+    Model,
+    CreatedAt,
+    UpdatedAt,
+    WorkspaceId,
+    FolderId,
+
+    Authentication,
+    AuthenticationType,
+    Message,
+    Description,
+    Headers,
+    Name,
+    SortPriority,
+    Url,
+    UrlParameters,
+}
+
+impl<'s> TryFrom<&Row<'s>> for WebsocketRequest {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        let url_parameters: String = r.get("url_parameters")?;
+        let authentication: String = r.get("authentication")?;
+        let headers: String = r.get("headers")?;
+        Ok(Self {
+            id: r.get("id")?,
+            model: r.get("model")?,
+            sort_priority: r.get("sort_priority")?,
+            workspace_id: r.get("workspace_id")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            url: r.get("url")?,
+            url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
+            message: r.get("message")?,
+            description: r.get("description")?,
+            authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
+            authentication_type: r.get("authentication_type")?,
+            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            folder_id: r.get("folder_id")?,
+            name: r.get("name")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum WebsocketEventType {
+    Binary,
+    Close,
+    Frame,
+    Ping,
+    Pong,
+    Text,
+}
+
+impl Default for WebsocketEventType {
+    fn default() -> Self {
+        Self::Text
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct WebsocketEvent {
+    #[ts(type = "\"websocket_event\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+    pub request_id: String,
+    pub connection_id: String,
+    pub is_server: bool,
+
+    pub message: Vec<u8>,
+    pub message_type: WebsocketEventType,
+}
+
+#[derive(Iden)]
+pub enum WebsocketEventIden {
+    #[iden = "websocket_events"]
+    Table,
+    Model,
+    Id,
+    CreatedAt,
+    UpdatedAt,
+    WorkspaceId,
+    RequestId,
+    ConnectionId,
+    IsServer,
+
+    MessageType,
+    Message,
+}
+
+impl<'s> TryFrom<&Row<'s>> for WebsocketEvent {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        let message_type: String = r.get("message_type")?;
+        Ok(Self {
+            id: r.get("id")?,
+            model: r.get("model")?,
+            workspace_id: r.get("workspace_id")?,
+            request_id: r.get("request_id")?,
+            connection_id: r.get("connection_id")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            message: r.get("message")?,
+            is_server: r.get("is_server")?,
+            message_type: serde_json::from_str(message_type.as_str()).unwrap_or_default(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpResponseHeader {
     pub name: String,
     pub value: String,
@@ -553,7 +793,7 @@ pub struct HttpResponseHeader {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum HttpResponseState {
     Initialized,
     Connected,
@@ -568,7 +808,7 @@ impl Default for HttpResponseState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct HttpResponse {
     #[ts(type = "\"http_response\"")]
     pub model: String,
@@ -623,7 +863,7 @@ impl<'s> TryFrom<&Row<'s>> for HttpResponse {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let headers: String = r.get("headers")?;
         let state: String = r.get("state")?;
-        Ok(HttpResponse {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -657,19 +897,20 @@ impl HttpResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcMetadataEntry {
     #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
     pub name: String,
     pub value: String,
-    pub id: String,
+    #[ts(optional, as = "Option<String>")]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcRequest {
     #[ts(type = "\"grpc_request\"")]
     pub model: String,
@@ -721,7 +962,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcRequest {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let authentication: String = r.get("authentication")?;
         let metadata: String = r.get("metadata")?;
-        Ok(GrpcRequest {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -744,7 +985,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum GrpcConnectionState {
     Initialized,
     Connected,
@@ -759,7 +1000,7 @@ impl Default for GrpcConnectionState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcConnection {
     #[ts(type = "\"grpc_connection\"")]
     pub model: String,
@@ -806,7 +1047,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcConnection {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let trailers: String = r.get("trailers")?;
         let state: String = r.get("state")?;
-        Ok(GrpcConnection {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -827,7 +1068,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcConnection {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, TS)]
 #[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum GrpcEventType {
     Info,
     Error,
@@ -845,7 +1086,7 @@ impl Default for GrpcEventType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcEvent {
     #[ts(type = "\"grpc_event\"")]
     pub model: String,
@@ -888,7 +1129,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcEvent {
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
         let event_type: String = r.get("event_type")?;
         let metadata: String = r.get("metadata")?;
-        Ok(GrpcEvent {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
@@ -907,7 +1148,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Plugin {
     #[ts(type = "\"plugin\"")]
     pub model: String,
@@ -940,7 +1181,7 @@ impl<'s> TryFrom<&Row<'s>> for Plugin {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(Plugin {
+        Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
             created_at: r.get("created_at")?,
@@ -955,7 +1196,7 @@ impl<'s> TryFrom<&Row<'s>> for Plugin {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct SyncState {
     #[ts(type = "\"sync_state\"")]
     pub model: String,
@@ -973,7 +1214,7 @@ pub struct SyncState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct SyncHistory {
     #[ts(type = "\"sync_history\"")]
     pub model: String,
@@ -1008,7 +1249,7 @@ impl<'s> TryFrom<&Row<'s>> for SyncState {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(SyncState {
+        Ok(Self {
             id: r.get("id")?,
             workspace_id: r.get("workspace_id")?,
             model: r.get("model")?,
@@ -1025,7 +1266,7 @@ impl<'s> TryFrom<&Row<'s>> for SyncState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct KeyValue {
     #[ts(type = "\"key_value\"")]
     pub model: String,
@@ -1054,7 +1295,7 @@ impl<'s> TryFrom<&Row<'s>> for KeyValue {
     type Error = rusqlite::Error;
 
     fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        Ok(KeyValue {
+        Ok(Self {
             model: r.get("model")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
@@ -1065,11 +1306,53 @@ impl<'s> TryFrom<&Row<'s>> for KeyValue {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct PluginKeyValue {
+    #[ts(type = "\"plugin_key_value\"")]
+    pub model: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+
+    pub plugin_name: String,
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Iden)]
+pub enum PluginKeyValueIden {
+    #[iden = "plugin_key_values"]
+    Table,
+    Model,
+    CreatedAt,
+    UpdatedAt,
+
+    PluginName,
+    Key,
+    Value,
+}
+
+impl<'s> TryFrom<&Row<'s>> for PluginKeyValue {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            model: r.get("model")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            plugin_name: r.get("plugin_name")?,
+            key: r.get("key")?,
+            value: r.get("value")?,
+        })
+    }
+}
+
 fn default_true() -> bool {
     true
 }
 
-fn default_http_request_method() -> String {
+fn default_http_method() -> String {
     "GET".to_string()
 }
 
@@ -1083,9 +1366,12 @@ pub enum ModelType {
     TypeHttpRequest,
     TypeHttpResponse,
     TypePlugin,
+    TypeSyncState,
+    TypeWebSocketConnection,
+    TypeWebSocketEvent,
+    TypeWebsocketRequest,
     TypeWorkspace,
     TypeWorkspaceMeta,
-    TypeSyncState,
 }
 
 impl ModelType {
@@ -1103,6 +1389,9 @@ impl ModelType {
             ModelType::TypeWorkspace => "wk",
             ModelType::TypeWorkspaceMeta => "wm",
             ModelType::TypeSyncState => "ss",
+            ModelType::TypeWebSocketConnection => "wc",
+            ModelType::TypeWebSocketEvent => "we",
+            ModelType::TypeWebsocketRequest => "wr",
         }
         .to_string()
     }
@@ -1110,7 +1399,7 @@ impl ModelType {
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase", untagged)]
-#[ts(export, export_to = "models.ts")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum AnyModel {
     CookieJar(CookieJar),
     Environment(Environment),
@@ -1125,6 +1414,9 @@ pub enum AnyModel {
     KeyValue(KeyValue),
     Workspace(Workspace),
     WorkspaceMeta(WorkspaceMeta),
+    WebsocketConnection(WebsocketConnection),
+    WebsocketEvent(WebsocketEvent),
+    WebsocketRequest(WebsocketRequest),
 }
 
 impl<'de> Deserialize<'de> for AnyModel {

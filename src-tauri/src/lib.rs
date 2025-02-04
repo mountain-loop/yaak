@@ -2,90 +2,59 @@ extern crate core;
 #[cfg(target_os = "macos")]
 extern crate objc;
 use crate::analytics::{AnalyticsAction, AnalyticsResource};
+use crate::encoding::read_response_body;
 use crate::grpc::metadata_to_map;
 use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
-use crate::render::{render_grpc_request, render_http_request, render_json_value, render_template};
-use crate::template_callback::PluginTemplateCallback;
+use crate::render::{render_grpc_request, render_template};
 use crate::updates::{UpdateMode, YaakUpdater};
-use crate::window_menu::app_menu;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use chrono::Utc;
 use eventsource_client::{EventParser, SSE};
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use rand::random;
 use regex::Regex;
-use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
-use std::process::exit;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{fs, panic};
-#[cfg(target_os = "macos")]
-use tauri::TitleBarStyle;
-use tauri::{AppHandle, Emitter, LogicalSize, RunEvent, State, WebviewUrl, WebviewWindow};
+use tauri::{AppHandle, Emitter, RunEvent, State, WebviewWindow};
 use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
-use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind};
-use tauri_plugin_opener::OpenerExt;
-use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::fs::read_to_string;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
-use yaak_models::models::{
-    CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState,
-    GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
-    ModelType, Plugin, Settings, Workspace, WorkspaceMeta,
-};
-use yaak_models::queries::{
-    batch_upsert, cancel_pending_grpc_connections, cancel_pending_responses,
-    create_default_http_response, delete_all_grpc_connections,
-    delete_all_grpc_connections_for_workspace, delete_all_http_responses_for_request,
-    delete_all_http_responses_for_workspace, delete_cookie_jar, delete_environment, delete_folder,
-    delete_grpc_connection, delete_grpc_request, delete_http_request, delete_http_response,
-    delete_plugin, delete_workspace, duplicate_folder, duplicate_grpc_request,
-    duplicate_http_request, ensure_base_environment, generate_id, generate_model_id,
-    get_base_environment, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
-    get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
-    get_or_create_settings, get_or_create_workspace_meta, get_plugin, get_workspace,
-    get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
-    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
-    list_http_responses_for_request, list_http_responses_for_workspace, list_key_values_raw,
-    list_plugins, list_workspaces, set_key_value_raw, update_response_if_id, update_settings,
-    upsert_cookie_jar, upsert_environment, upsert_folder, upsert_grpc_connection,
-    upsert_grpc_event, upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
-    upsert_workspace_meta, BatchUpsertResult, UpdateSource,
-};
+use yaak_models::models::{CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState, GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue, ModelType, Plugin, Settings, WebsocketRequest, Workspace, WorkspaceMeta};
+use yaak_models::queries::{batch_upsert, cancel_pending_grpc_connections, cancel_pending_responses, create_default_http_response, delete_all_grpc_connections, delete_all_grpc_connections_for_workspace, delete_all_http_responses_for_request, delete_all_http_responses_for_workspace, delete_all_websocket_connections_for_workspace, delete_cookie_jar, delete_environment, delete_folder, delete_grpc_connection, delete_grpc_request, delete_http_request, delete_http_response, delete_plugin, delete_workspace, duplicate_folder, duplicate_grpc_request, duplicate_http_request, ensure_base_environment, generate_model_id, get_base_environment, get_cookie_jar, get_environment, get_folder, get_grpc_connection, get_grpc_request, get_http_request, get_http_response, get_key_value_raw, get_or_create_settings, get_or_create_workspace_meta, get_plugin, get_workspace, get_workspace_export_resources, list_cookie_jars, list_environments, list_folders, list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests, list_http_responses_for_workspace, list_key_values_raw, list_plugins, list_workspaces, set_key_value_raw, update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder, upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace, upsert_workspace_meta, BatchUpsertResult, UpdateSource};
 use yaak_plugins::events::{
-    BootResponse, CallHttpRequestActionRequest, FilterResponse, FindHttpResponsesResponse,
-    GetHttpRequestActionsResponse, GetHttpRequestByIdResponse, GetTemplateFunctionsResponse, Icon,
-    InternalEvent, InternalEventPayload, PromptTextResponse, RenderHttpRequestResponse,
-    RenderPurpose, SendHttpRequestResponse, ShowToastRequest, TemplateRenderResponse,
-    WindowContext,
+    BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
+    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
+    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, HttpHeader, InternalEvent,
+    InternalEventPayload, JsonPrimitive, RenderPurpose, WindowContext,
 };
 use yaak_plugins::manager::PluginManager;
-use yaak_plugins::plugin_handle::PluginHandle;
+use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
 use yaak_templates::{Parser, Tokens};
 
 mod analytics;
+mod encoding;
 mod grpc;
 mod http_request;
 mod notifications;
+mod plugin_events;
 mod render;
 #[cfg(target_os = "macos")]
 mod tauri_plugin_mac_window;
-mod template_callback;
 mod updates;
+mod window;
 mod window_menu;
 
 const DEFAULT_WINDOW_WIDTH: f64 = 1100.0;
@@ -154,7 +123,7 @@ async fn cmd_render_template<R: Runtime>(
             RenderPurpose::Preview,
         ),
     )
-        .await;
+    .await;
     Ok(rendered)
 }
 
@@ -198,20 +167,22 @@ async fn cmd_grpc_go<R: Runtime>(
     environment_id: Option<&str>,
     proto_files: Vec<String>,
     window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> Result<String, String> {
     let environment = match environment_id {
         Some(id) => Some(get_environment(&window, id).await.map_err(|e| e.to_string())?),
         None => None,
     };
-    let req = get_grpc_request(&window, request_id)
+    let unrendered_request = get_grpc_request(&window, request_id)
         .await
         .map_err(|e| e.to_string())?
         .ok_or("Failed to find GRPC request")?;
-    let base_environment =
-        get_base_environment(&window, &req.workspace_id).await.map_err(|e| e.to_string())?;
-    let req = render_grpc_request(
-        &req,
+    let base_environment = get_base_environment(&window, &unrendered_request.workspace_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let request = render_grpc_request(
+        &unrendered_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
@@ -220,11 +191,11 @@ async fn cmd_grpc_go<R: Runtime>(
             RenderPurpose::Send,
         ),
     )
-        .await;
+    .await;
     let mut metadata = BTreeMap::new();
 
     // Add the rest of metadata
-    for h in req.clone().metadata {
+    for h in request.clone().metadata {
         if h.name.is_empty() && h.value.is_empty() {
             continue;
         }
@@ -236,26 +207,32 @@ async fn cmd_grpc_go<R: Runtime>(
         metadata.insert(h.name, h.value);
     }
 
-    if let Some(b) = &req.authentication_type {
-        let req = req.clone();
-        let empty_value = &serde_json::to_value("").unwrap();
-        let a = req.authentication;
-
-        if b == "basic" {
-            let username = a.get("username").unwrap_or(empty_value).as_str().unwrap_or("");
-            let password = a.get("password").unwrap_or(empty_value).as_str().unwrap_or("");
-
-            let auth = format!("{username}:{password}");
-            let encoded = BASE64_STANDARD.encode(auth);
-            metadata.insert("Authorization".to_string(), format!("Basic {}", encoded));
-        } else if b == "bearer" {
-            let token = a.get("token").unwrap_or(empty_value).as_str().unwrap_or("");
-            metadata.insert("Authorization".to_string(), format!("Bearer {token}"));
+    if let Some(auth_name) = request.authentication_type.clone() {
+        let auth = request.authentication.clone();
+        let plugin_req = CallHttpAuthenticationRequest {
+            context_id: format!("{:x}", md5::compute(request_id.to_string())),
+            values: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
+            method: "POST".to_string(),
+            url: request.url.clone(),
+            headers: metadata
+                .iter()
+                .map(|(name, value)| HttpHeader {
+                    name: name.to_string(),
+                    value: value.to_string(),
+                })
+                .collect(),
+        };
+        let plugin_result = plugin_manager
+            .call_http_authentication(&window, &auth_name, plugin_req)
+            .await
+            .map_err(|e| e.to_string())?;
+        for header in plugin_result.set_headers {
+            metadata.insert(header.name, header.value);
         }
     }
 
     let conn = {
-        let req = req.clone();
+        let req = request.clone();
         upsert_grpc_connection(
             &window,
             &GrpcConnection {
@@ -269,15 +246,15 @@ async fn cmd_grpc_go<R: Runtime>(
             },
             &UpdateSource::Window,
         )
-            .await
-            .map_err(|e| e.to_string())?
+        .await
+        .map_err(|e| e.to_string())?
     };
 
     let conn_id = conn.id.clone();
 
     let base_msg = GrpcEvent {
-        workspace_id: req.clone().workspace_id,
-        request_id: req.clone().id,
+        workspace_id: request.clone().workspace_id,
+        request_id: request.clone().id,
         connection_id: conn.clone().id,
         ..Default::default()
     };
@@ -286,12 +263,12 @@ async fn cmd_grpc_go<R: Runtime>(
     let maybe_in_msg_tx = std::sync::Mutex::new(Some(in_msg_tx.clone()));
     let (cancelled_tx, mut cancelled_rx) = tokio::sync::watch::channel(false);
 
-    let uri = safe_uri(&req.url);
+    let uri = safe_uri(&request.url);
 
     let in_msg_stream = tokio_stream::wrappers::ReceiverStream::new(in_msg_rx);
 
     let (service, method) = {
-        let req = req.clone();
+        let req = request.clone();
         match (req.service, req.method) {
             (Some(service), Some(method)) => (service, method),
             _ => return Err("Service and method are required".to_string()),
@@ -303,7 +280,7 @@ async fn cmd_grpc_go<R: Runtime>(
         .lock()
         .await
         .connect(
-            &req.clone().id,
+            &request.clone().id,
             uri.as_str(),
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
         )
@@ -322,8 +299,8 @@ async fn cmd_grpc_go<R: Runtime>(
                 },
                 &UpdateSource::Window,
             )
-                .await
-                .map_err(|e| e.to_string())?;
+            .await
+            .map_err(|e| e.to_string())?;
             return Ok(conn_id);
         }
     };
@@ -378,7 +355,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                         RenderPurpose::Send,
                                     ),
                                 )
-                                    .await
+                                .await
                             })
                         })
                     };
@@ -396,8 +373,8 @@ async fn cmd_grpc_go<R: Runtime>(
                                     },
                                     &UpdateSource::Window,
                                 )
-                                    .await
-                                    .unwrap();
+                                .await
+                                .unwrap();
                             });
                             return;
                         }
@@ -413,8 +390,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::Window,
                         )
-                            .await
-                            .unwrap();
+                        .await
+                        .unwrap();
                     });
                 }
                 Ok(IncomingMsg::Commit) => {
@@ -434,7 +411,7 @@ async fn cmd_grpc_go<R: Runtime>(
     let grpc_listen = {
         let window = window.clone();
         let base_event = base_msg.clone();
-        let req = req.clone();
+        let req = request.clone();
         let msg = if req.message.is_empty() { "{}".to_string() } else { req.message };
         let msg = render_template(
             msg.as_str(),
@@ -446,7 +423,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 RenderPurpose::Send,
             ),
         )
-            .await;
+        .await;
 
         upsert_grpc_event(
             &window,
@@ -458,8 +435,8 @@ async fn cmd_grpc_go<R: Runtime>(
             },
             &UpdateSource::Window,
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         async move {
             let (maybe_stream, maybe_msg) =
@@ -497,8 +474,8 @@ async fn cmd_grpc_go<R: Runtime>(
                     },
                     &UpdateSource::Window,
                 )
-                    .await
-                    .unwrap();
+                .await
+                .unwrap();
             }
 
             match maybe_msg {
@@ -512,14 +489,14 @@ async fn cmd_grpc_go<R: Runtime>(
                             } else {
                                 "Received response with metadata"
                             }
-                                .to_string(),
+                            .to_string(),
                             event_type: GrpcEventType::Info,
                             ..base_event.clone()
                         },
                         &UpdateSource::Window,
                     )
-                        .await
-                        .unwrap();
+                    .await
+                    .unwrap();
                     upsert_grpc_event(
                         &window,
                         &GrpcEvent {
@@ -529,8 +506,8 @@ async fn cmd_grpc_go<R: Runtime>(
                         },
                         &UpdateSource::Window,
                     )
-                        .await
-                        .unwrap();
+                    .await
+                    .unwrap();
                     upsert_grpc_event(
                         &window,
                         &GrpcEvent {
@@ -541,8 +518,8 @@ async fn cmd_grpc_go<R: Runtime>(
                         },
                         &UpdateSource::Window,
                     )
-                        .await
-                        .unwrap();
+                    .await
+                    .unwrap();
                 }
                 Some(Err(e)) => {
                     upsert_grpc_event(
@@ -566,8 +543,8 @@ async fn cmd_grpc_go<R: Runtime>(
                         }),
                         &UpdateSource::Window,
                     )
-                        .await
-                        .unwrap();
+                    .await
+                    .unwrap();
                 }
                 None => {
                     // Server streaming doesn't return the initial message
@@ -585,14 +562,14 @@ async fn cmd_grpc_go<R: Runtime>(
                             } else {
                                 "Received response with metadata"
                             }
-                                .to_string(),
+                            .to_string(),
                             event_type: GrpcEventType::Info,
                             ..base_event.clone()
                         },
                         &UpdateSource::Window,
                     )
-                        .await
-                        .unwrap();
+                    .await
+                    .unwrap();
                     stream.into_inner()
                 }
                 Some(Err(e)) => {
@@ -618,8 +595,8 @@ async fn cmd_grpc_go<R: Runtime>(
                         }),
                         &UpdateSource::Window,
                     )
-                        .await
-                        .unwrap();
+                    .await
+                    .unwrap();
                     return;
                 }
                 None => return,
@@ -638,8 +615,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::Window,
                         )
-                            .await
-                            .unwrap();
+                        .await
+                        .unwrap();
                     }
                     Ok(None) => {
                         let trailers =
@@ -655,8 +632,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::Window,
                         )
-                            .await
-                            .unwrap();
+                        .await
+                        .unwrap();
                         break;
                     }
                     Err(status) => {
@@ -671,8 +648,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::Window,
                         )
-                            .await
-                            .unwrap();
+                        .await
+                        .unwrap();
                     }
                 }
             }
@@ -790,7 +767,7 @@ async fn cmd_filter_response<R: Runtime>(
         }
     }
 
-    let body = read_to_string(response.body_path.unwrap()).await.unwrap();
+    let body = read_response_body(response).await.unwrap();
 
     // TODO: Have plugins register their own content type (regex?)
     plugin_manager
@@ -802,11 +779,11 @@ async fn cmd_filter_response<R: Runtime>(
 #[tauri::command]
 async fn cmd_get_sse_events(file_path: &str) -> Result<Vec<ServerSentEvent>, String> {
     let body = fs::read(file_path).map_err(|e| e.to_string())?;
-    let mut p = EventParser::new();
-    p.process_bytes(body.into()).map_err(|e| e.to_string())?;
+    let mut event_parser = EventParser::new();
+    event_parser.process_bytes(body.into()).map_err(|e| e.to_string())?;
 
     let mut events = Vec::new();
-    while let Some(e) = p.get_event() {
+    while let Some(e) = event_parser.get_event() {
         if let SSE::Event(e) = e {
             events.push(ServerSentEvent {
                 event_type: e.event_type,
@@ -921,6 +898,18 @@ async fn cmd_import_data<R: Runtime>(
         })
         .collect();
 
+    let websocket_requests: Vec<WebsocketRequest> = resources
+        .websocket_requests
+        .into_iter()
+        .map(|mut v| {
+            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeWebsocketRequest, &mut id_map);
+            v.workspace_id =
+                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
+            v
+        })
+        .collect();
+
     let upserted = batch_upsert(
         &window,
         workspaces,
@@ -928,10 +917,11 @@ async fn cmd_import_data<R: Runtime>(
         folders,
         http_requests,
         grpc_requests,
+        websocket_requests,
         &UpdateSource::Import,
     )
-        .await
-        .map_err(|e| e.to_string())?;
+    .await
+    .map_err(|e| e.to_string())?;
 
     analytics::track_event(
         &window,
@@ -939,7 +929,7 @@ async fn cmd_import_data<R: Runtime>(
         AnalyticsAction::Import,
         Some(json!({ "plugin": plugin_name })),
     )
-        .await;
+    .await;
 
     Ok(upserted)
 }
@@ -961,12 +951,53 @@ async fn cmd_template_functions<R: Runtime>(
 }
 
 #[tauri::command]
+async fn cmd_get_http_authentication_summaries<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+) -> Result<Vec<GetHttpAuthenticationSummaryResponse>, String> {
+    let results = plugin_manager
+        .get_http_authentication_summaries(&window)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(results.into_iter().map(|(_, a)| a).collect())
+}
+
+#[tauri::command]
+async fn cmd_get_http_authentication_config<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+    auth_name: &str,
+    values: HashMap<String, JsonPrimitive>,
+    request_id: &str,
+) -> Result<GetHttpAuthenticationConfigResponse, String> {
+    plugin_manager
+        .get_http_authentication_config(&window, auth_name, values, request_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn cmd_call_http_request_action<R: Runtime>(
     window: WebviewWindow<R>,
     req: CallHttpRequestActionRequest,
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<(), String> {
     plugin_manager.call_http_request_action(&window, req).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_call_http_authentication_action<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+    auth_name: &str,
+    action_index: i32,
+    values: HashMap<String, JsonPrimitive>,
+    request_id: &str,
+) -> Result<(), String> {
+    plugin_manager
+        .call_http_authentication_action(&window, auth_name, action_index, values, request_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -985,7 +1016,7 @@ async fn cmd_curl_to_request<R: Runtime>(
         AnalyticsAction::Import,
         Some(json!({ "plugin": plugin_name })),
     )
-        .await;
+    .await;
 
     import_result.resources.http_requests.get(0).ok_or("No curl command found".to_string()).map(
         |r| {
@@ -1157,7 +1188,7 @@ async fn cmd_install_plugin<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> Result<Plugin, String> {
     plugin_manager
-        .add_plugin_by_dir(WindowContext::from_window(&window), &directory, true)
+        .add_plugin_by_dir(&WindowContext::from_window(&window), &directory, true)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1170,8 +1201,8 @@ async fn cmd_install_plugin<R: Runtime>(
         },
         &UpdateSource::Window,
     )
-        .await
-        .map_err(|e| e.to_string())?;
+    .await
+    .map_err(|e| e.to_string())?;
 
     Ok(plugin)
 }
@@ -1187,7 +1218,7 @@ async fn cmd_uninstall_plugin<R: Runtime>(
         .map_err(|e| e.to_string())?;
 
     plugin_manager
-        .uninstall(WindowContext::from_window(&window), plugin.directory.as_str())
+        .uninstall(&WindowContext::from_window(&window), plugin.directory.as_str())
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1222,8 +1253,8 @@ async fn cmd_create_cookie_jar(
         },
         &UpdateSource::Window,
     )
-        .await
-        .map_err(|e| e.to_string())
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1245,8 +1276,8 @@ async fn cmd_create_environment(
         },
         &UpdateSource::Window,
     )
-        .await
-        .map_err(|e| e.to_string())
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1268,8 +1299,8 @@ async fn cmd_create_grpc_request(
         },
         &UpdateSource::Window,
     )
-        .await
-        .map_err(|e| e.to_string())
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1440,7 +1471,7 @@ async fn cmd_reload_plugins<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<(), String> {
     plugin_manager
-        .initialize_all_plugins(window.app_handle(), WindowContext::from_window(&window))
+        .initialize_all_plugins(window.app_handle(), &WindowContext::from_window(&window))
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -1508,8 +1539,8 @@ async fn cmd_list_cookie_jars(
             },
             &UpdateSource::Window,
         )
-            .await
-            .expect("Failed to create CookieJar");
+        .await
+        .expect("Failed to create CookieJar");
         Ok(vec![cookie_jar])
     } else {
         Ok(cookie_jars)
@@ -1571,6 +1602,9 @@ async fn cmd_delete_send_history(workspace_id: &str, window: WebviewWindow) -> R
     delete_all_grpc_connections_for_workspace(&window, workspace_id, &UpdateSource::Window)
         .await
         .map_err(|e| e.to_string())?;
+    delete_all_websocket_connections_for_workspace(&window, workspace_id, &UpdateSource::Window)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1598,8 +1632,8 @@ async fn cmd_list_workspaces(window: WebviewWindow) -> Result<Vec<Workspace>, St
             },
             &UpdateSource::Window,
         )
-            .await
-            .expect("Failed to create Workspace");
+        .await
+        .expect("Failed to create Workspace");
         Ok(vec![workspace])
     } else {
         Ok(workspaces)
@@ -1638,15 +1672,17 @@ async fn cmd_new_child_window(
         current_pos.y + current_size.height / 2.0 - inner_size.1 / 2.0,
     );
 
-    let config = CreateWindowConfig {
+    let config = window::CreateWindowConfig {
         label: label.as_str(),
         title,
         url,
-        inner_size,
-        position,
+        inner_size: Some(inner_size),
+        position: Some(position),
+        navigation_tx: None,
+        hide_titlebar: true,
     };
 
-    let child_window = create_window(&app_handle, config);
+    let child_window = window::create_window(&app_handle, config);
 
     // NOTE: These listeners will remain active even when the windows close. Unfortunately,
     //   there's no way to unlisten to events for now, so we just have to be defensive.
@@ -1709,94 +1745,83 @@ async fn cmd_check_for_updates(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
-    let mut builder =
-        tauri::Builder::default()
-            .plugin(
-                Builder::default()
-                    .targets([
-                        Target::new(TargetKind::Stdout),
-                        Target::new(TargetKind::LogDir { file_name: None }),
-                        Target::new(TargetKind::Webview),
-                    ])
-                    .level_for("plugin_runtime", log::LevelFilter::Info)
-                    .level_for("cookie_store", log::LevelFilter::Info)
-                    .level_for("eventsource_client::event_parser", log::LevelFilter::Info)
-                    .level_for("h2", log::LevelFilter::Info)
-                    .level_for("hyper", log::LevelFilter::Info)
-                    .level_for("hyper_util", log::LevelFilter::Info)
-                    .level_for("hyper_rustls", log::LevelFilter::Info)
-                    .level_for("reqwest", log::LevelFilter::Info)
-                    .level_for("sqlx", log::LevelFilter::Warn)
-                    .level_for("tao", log::LevelFilter::Info)
-                    .level_for("tokio_util", log::LevelFilter::Info)
-                    .level_for("tonic", log::LevelFilter::Info)
-                    .level_for("tower", log::LevelFilter::Info)
-                    .level_for("tracing", log::LevelFilter::Warn)
-                    .level_for("swc_ecma_codegen", log::LevelFilter::Off)
-                    .level_for("swc_ecma_transforms_base", log::LevelFilter::Off)
-                    .with_colors(ColoredLevelConfig::default())
-                    .level(if is_dev() { log::LevelFilter::Debug } else { log::LevelFilter::Info })
-                    .build(),
-            )
-            .plugin(
-                Builder::default()
-                    .targets([
-                        Target::new(TargetKind::Stdout),
-                        Target::new(TargetKind::LogDir { file_name: None }),
-                        Target::new(TargetKind::Webview),
-                    ])
-                    .level_for("plugin_runtime", log::LevelFilter::Info)
-                    .level_for("cookie_store", log::LevelFilter::Info)
-                    .level_for("eventsource_client::event_parser", log::LevelFilter::Info)
-                    .level_for("h2", log::LevelFilter::Info)
-                    .level_for("hyper", log::LevelFilter::Info)
-                    .level_for("hyper_util", log::LevelFilter::Info)
-                    .level_for("hyper_rustls", log::LevelFilter::Info)
-                    .level_for("reqwest", log::LevelFilter::Info)
-                    .level_for("sqlx", log::LevelFilter::Warn)
-                    .level_for("tao", log::LevelFilter::Info)
-                    .level_for("tokio_util", log::LevelFilter::Info)
-                    .level_for("tonic", log::LevelFilter::Info)
-                    .level_for("tower", log::LevelFilter::Info)
-                    .level_for("tracing", log::LevelFilter::Warn)
-                    .level_for("swc_ecma_codegen", log::LevelFilter::Off)
-                    .level_for("swc_ecma_transforms_base", log::LevelFilter::Off)
-                    .with_colors(ColoredLevelConfig::default())
-                    .level(if is_dev() { log::LevelFilter::Debug } else { log::LevelFilter::Info })
-                    .build(),
-            )
-            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-                // When trying to open a new app instance (common operation on Linux),
-                // focus the first existing window we find instead of opening a new one
-                // TODO: Keep track of the last focused window and always focus that one
-                if let Some(window) = app.webview_windows().values().next() {
-                    let _ = window.set_focus();
-                }
-            }))
-            .plugin(tauri_plugin_clipboard_manager::init())
-            .plugin(tauri_plugin_opener::init())
-            .plugin(
-                tauri_plugin_window_state::Builder::default()
-                    .with_denylist(&["ignored"])
-                    .map_label(|label| {
-                        if label.starts_with(OTHER_WINDOW_PREFIX) {
-                            "ignored"
-                        } else {
-                            label
-                        }
-                    })
-                    .build(),
-            )
-            .plugin(tauri_plugin_shell::init())
-            .plugin(tauri_plugin_updater::Builder::default().build())
-            .plugin(tauri_plugin_dialog::init())
-            .plugin(tauri_plugin_os::init())
-            .plugin(tauri_plugin_fs::init())
-            .plugin(yaak_license::init())
-            .plugin(yaak_models::plugin::Builder::default().build())
-            .plugin(yaak_plugins::init())
-            .plugin(yaak_git::init())
-            .plugin(yaak_sync::init());
+    let mut builder = tauri::Builder::default()
+        .plugin(
+            Builder::default()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir { file_name: None }),
+                    Target::new(TargetKind::Webview),
+                ])
+                .level_for("plugin_runtime", log::LevelFilter::Info)
+                .level_for("cookie_store", log::LevelFilter::Info)
+                .level_for("eventsource_client::event_parser", log::LevelFilter::Info)
+                .level_for("h2", log::LevelFilter::Info)
+                .level_for("hyper", log::LevelFilter::Info)
+                .level_for("hyper_util", log::LevelFilter::Info)
+                .level_for("hyper_rustls", log::LevelFilter::Info)
+                .level_for("reqwest", log::LevelFilter::Info)
+                .level_for("sqlx", log::LevelFilter::Warn)
+                .level_for("tao", log::LevelFilter::Info)
+                .level_for("tokio_util", log::LevelFilter::Info)
+                .level_for("tonic", log::LevelFilter::Info)
+                .level_for("tower", log::LevelFilter::Info)
+                .level_for("tracing", log::LevelFilter::Warn)
+                .level_for("swc_ecma_codegen", log::LevelFilter::Off)
+                .level_for("swc_ecma_transforms_base", log::LevelFilter::Off)
+                .with_colors(ColoredLevelConfig::default())
+                .level(if is_dev() { log::LevelFilter::Debug } else { log::LevelFilter::Info })
+                .build(),
+        )
+        .plugin(
+            Builder::default()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir { file_name: None }),
+                    Target::new(TargetKind::Webview),
+                ])
+                .level_for("plugin_runtime", log::LevelFilter::Info)
+                .level_for("cookie_store", log::LevelFilter::Info)
+                .level_for("eventsource_client::event_parser", log::LevelFilter::Info)
+                .level_for("h2", log::LevelFilter::Info)
+                .level_for("hyper", log::LevelFilter::Info)
+                .level_for("hyper_util", log::LevelFilter::Info)
+                .level_for("hyper_rustls", log::LevelFilter::Info)
+                .level_for("reqwest", log::LevelFilter::Info)
+                .level_for("sqlx", log::LevelFilter::Warn)
+                .level_for("tao", log::LevelFilter::Info)
+                .level_for("tokio_util", log::LevelFilter::Info)
+                .level_for("tonic", log::LevelFilter::Info)
+                .level_for("tower", log::LevelFilter::Info)
+                .level_for("tracing", log::LevelFilter::Warn)
+                .level_for("swc_ecma_codegen", log::LevelFilter::Off)
+                .level_for("swc_ecma_transforms_base", log::LevelFilter::Off)
+                .with_colors(ColoredLevelConfig::default())
+                .level(if is_dev() { log::LevelFilter::Debug } else { log::LevelFilter::Info })
+                .build(),
+        )
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // When trying to open a new app instance (common operation on Linux),
+            // focus the first existing window we find instead of opening a new one
+            // TODO: Keep track of the last focused window and always focus that one
+            if let Some(window) = app.webview_windows().values().next() {
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(yaak_license::init())
+        .plugin(yaak_models::plugin::Builder::default().build())
+        .plugin(yaak_plugins::init())
+        .plugin(yaak_git::init())
+        .plugin(yaak_ws::init())
+        .plugin(yaak_sync::init());
 
     #[cfg(target_os = "macos")]
     {
@@ -1825,6 +1850,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            cmd_call_http_authentication_action,
             cmd_call_http_request_action,
             cmd_check_for_updates,
             cmd_create_cookie_jar,
@@ -1854,6 +1880,8 @@ pub fn run() {
             cmd_get_environment,
             cmd_get_folder,
             cmd_get_grpc_request,
+            cmd_get_http_authentication_summaries,
+            cmd_get_http_authentication_config,
             cmd_get_http_request,
             cmd_get_key_value,
             cmd_get_settings,
@@ -1990,126 +2018,23 @@ fn create_main_window(handle: &AppHandle, url: &str) -> WebviewWindow {
             Some(_) => counter += 1,
         }
     }
-        .expect("Failed to generate label for new window");
+    .expect("Failed to generate label for new window");
 
-    let config = CreateWindowConfig {
+    let config = window::CreateWindowConfig {
         url,
         label: label.as_str(),
         title: "Yaak",
-        inner_size: (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
-        position: (
+        inner_size: Some((DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)),
+        position: Some((
             // Offset by random amount so it's easier to differentiate
             100.0 + random::<f64>() * 20.0,
             100.0 + random::<f64>() * 20.0,
-        ),
+        )),
+        navigation_tx: None,
+        hide_titlebar: true,
     };
 
-    let window = create_window(handle, config);
-
-    // Restore window state if it's a main window
-    if !label.starts_with(OTHER_WINDOW_PREFIX) {
-        if let Err(e) = window.restore_state(StateFlags::all()) {
-            warn!("Failed to restore window state {e:?}");
-        } else {
-            debug!("Restored window state");
-        }
-    }
-
-    window
-}
-
-struct CreateWindowConfig<'s> {
-    url: &'s str,
-    label: &'s str,
-    title: &'s str,
-    inner_size: (f64, f64),
-    position: (f64, f64),
-}
-
-fn create_window(handle: &AppHandle, config: CreateWindowConfig) -> WebviewWindow {
-    #[allow(unused_variables)]
-    let menu = app_menu(handle).unwrap();
-
-    // This causes the window to not be clickable (in AppImage), so disable on Linux
-    #[cfg(not(target_os = "linux"))]
-    handle.set_menu(menu).expect("Failed to set app menu");
-
-    info!("Create new window label={}", config.label);
-
-    let mut win_builder =
-        tauri::WebviewWindowBuilder::new(handle, config.label, WebviewUrl::App(config.url.into()))
-            .title(config.title)
-            .resizable(true)
-            .visible(false) // To prevent theme flashing, the frontend code calls show() immediately after configuring the theme
-            .fullscreen(false)
-            .disable_drag_drop_handler() // Required for frontend Dnd on windows
-            .inner_size(config.inner_size.0, config.inner_size.1)
-            .position(config.position.0, config.position.1)
-            .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
-
-    // Add macOS-only things
-    #[cfg(target_os = "macos")]
-    {
-        win_builder = win_builder.hidden_title(true).title_bar_style(TitleBarStyle::Overlay);
-    }
-
-    // Add non-MacOS things
-    #[cfg(not(target_os = "macos"))]
-    {
-        // Doesn't seem to work from Rust, here, so we do it in main.tsx
-        win_builder = win_builder.decorations(false);
-    }
-
-    if let Some(w) = handle.webview_windows().get(config.label) {
-        info!("Webview with label {} already exists. Focusing existing", config.label);
-        w.set_focus().unwrap();
-        return w.to_owned();
-    }
-
-    let win = win_builder.build().unwrap();
-
-    let webview_window = win.clone();
-    win.on_menu_event(move |w, event| {
-        if !w.is_focused().unwrap() {
-            return;
-        }
-
-        let event_id = event.id().0.as_str();
-        match event_id {
-            "quit" => exit(0),
-            "close" => w.close().unwrap(),
-            "zoom_reset" => w.emit("zoom_reset", true).unwrap(),
-            "zoom_in" => w.emit("zoom_in", true).unwrap(),
-            "zoom_out" => w.emit("zoom_out", true).unwrap(),
-            "settings" => w.emit("settings", true).unwrap(),
-            "open_feedback" => {
-                if let Err(e) =
-                    w.app_handle().opener().open_url("https://yaak.app/feedback", None::<&str>)
-                {
-                    warn!("Failed to open feedback {e:?}")
-                }
-            }
-
-            // Commands for development
-            "dev.reset_size" => webview_window
-                .set_size(LogicalSize::new(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT))
-                .unwrap(),
-            "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
-            "dev.generate_theme_css" => {
-                w.emit("generate_theme_css", true).unwrap();
-            }
-            "dev.toggle_devtools" => {
-                if webview_window.is_devtools_open() {
-                    webview_window.close_devtools();
-                } else {
-                    webview_window.open_devtools();
-                }
-            }
-            _ => {}
-        }
-    });
-
-    win
+    window::create_window(handle, config)
 }
 
 async fn get_update_mode(h: &AppHandle) -> UpdateMode {
@@ -2145,36 +2070,24 @@ fn monitor_plugin_events<R: Runtime>(app_handle: &AppHandle<R>) {
             // We might have recursive back-and-forth calls between app and plugin, so we don't
             // want to block here
             tauri::async_runtime::spawn(async move {
-                handle_plugin_event(&app_handle, &event, &plugin).await;
+                crate::plugin_events::handle_plugin_event(&app_handle, &event, &plugin).await;
             });
         }
         plugin_manager.unsubscribe(rx_id.as_str()).await;
     });
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct FrontendCall<T: Serialize + Clone> {
-    args: T,
-    reply_id: String,
-}
-
-async fn call_frontend<T: Serialize + Clone, R: Runtime>(
+async fn call_frontend<R: Runtime>(
     window: WebviewWindow<R>,
-    event_name: &str,
-    args: T,
-) -> PromptTextResponse {
-    let reply_id = format!("{event_name}_reply_{}", generate_id());
-    let payload = FrontendCall {
-        args,
-        reply_id: reply_id.clone(),
-    };
-    window.emit_to(window.label(), event_name, payload).unwrap();
-    let (tx, mut rx) = tokio::sync::watch::channel(PromptTextResponse::default());
+    event: &InternalEvent,
+) -> Option<InternalEventPayload> {
+    window.emit_to(window.label(), "plugin_event", event.clone()).unwrap();
+    let (tx, mut rx) = tokio::sync::watch::channel(None);
 
+    let reply_id = event.id.clone();
     let event_id = window.clone().listen(reply_id, move |ev| {
-        let resp: PromptTextResponse = serde_json::from_str(ev.payload()).unwrap();
-        if let Err(e) = tx.send(resp) {
+        let resp: InternalEvent = serde_json::from_str(ev.payload()).unwrap();
+        if let Err(e) = tx.send(Some(resp.payload)) {
             warn!("Failed to prompt for text {e:?}");
         }
     });
@@ -2185,166 +2098,8 @@ async fn call_frontend<T: Serialize + Clone, R: Runtime>(
     }
     window.unlisten(event_id);
 
-    let foo = rx.borrow();
-    foo.clone()
-}
-
-async fn handle_plugin_event<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    event: &InternalEvent,
-    plugin_handle: &PluginHandle,
-) {
-    // info!("Got event to app {}", event.id);
-    let window_context = event.window_context.to_owned();
-    let response_event: Option<InternalEventPayload> = match event.clone().payload {
-        InternalEventPayload::CopyTextRequest(req) => {
-            app_handle
-                .clipboard()
-                .write_text(req.text.as_str())
-                .expect("Failed to write text to clipboard");
-            None
-        }
-        InternalEventPayload::ShowToastRequest(req) => {
-            match window_context {
-                WindowContext::Label { label } => app_handle
-                    .emit_to(label, "show_toast", req)
-                    .expect("Failed to emit show_toast to window"),
-                _ => app_handle.emit("show_toast", req).expect("Failed to emit show_toast"),
-            };
-            None
-        }
-        InternalEventPayload::PromptTextRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render");
-            let resp = call_frontend(window, "show_prompt", req).await;
-            Some(InternalEventPayload::PromptTextResponse(resp))
-        }
-        InternalEventPayload::FindHttpResponsesRequest(req) => {
-            let http_responses = list_http_responses_for_request(
-                app_handle,
-                req.request_id.as_str(),
-                req.limit.map(|l| l as i64),
-            )
-                .await
-                .unwrap_or_default();
-            Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
-                http_responses,
-            }))
-        }
-        InternalEventPayload::GetHttpRequestByIdRequest(req) => {
-            let http_request = get_http_request(app_handle, req.id.as_str()).await.unwrap();
-            Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
-                http_request,
-            }))
-        }
-        InternalEventPayload::RenderHttpRequestRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render http request");
-
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
-            let environment = environment_from_window(&window).await;
-            let base_environment = get_base_environment(&window, workspace.id.as_str())
-                .await
-                .expect("Failed to get base environment");
-            let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let http_request = render_http_request(
-                &req.http_request,
-                &base_environment,
-                environment.as_ref(),
-                &cb,
-            )
-                .await;
-            Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
-                http_request,
-            }))
-        }
-        InternalEventPayload::TemplateRenderRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render");
-
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
-            let environment = environment_from_window(&window).await;
-            let base_environment = get_base_environment(&window, workspace.id.as_str())
-                .await
-                .expect("Failed to get base environment");
-            let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let data =
-                render_json_value(req.data, &base_environment, environment.as_ref(), &cb).await;
-            Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))
-        }
-        InternalEventPayload::ReloadResponse => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for plugin reload");
-            let plugins = list_plugins(app_handle).await.unwrap();
-            for plugin in plugins {
-                if plugin.directory != plugin_handle.dir {
-                    continue;
-                }
-
-                let new_plugin = Plugin {
-                    updated_at: Utc::now().naive_utc(), // TODO: Add reloaded_at field to use instead
-                    ..plugin
-                };
-                upsert_plugin(&window, new_plugin, &UpdateSource::Plugin).await.unwrap();
-            }
-            let toast_event = plugin_handle.build_event_to_send(
-                WindowContext::from_window(&window),
-                &InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                    message: format!("Reloaded plugin {}", plugin_handle.dir),
-                    icon: Some(Icon::Info),
-                    ..Default::default()
-                }),
-                None,
-            );
-            Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await;
-            None
-        }
-        InternalEventPayload::SendHttpRequestRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for sending HTTP request");
-            let cookie_jar = cookie_jar_from_window(&window).await;
-            let environment = environment_from_window(&window).await;
-
-            let resp = create_default_http_response(
-                &window,
-                req.http_request.id.as_str(),
-                &UpdateSource::Plugin,
-            )
-                .await
-                .unwrap();
-
-            let result = send_http_request(
-                &window,
-                &req.http_request,
-                &resp,
-                environment,
-                cookie_jar,
-                &mut tokio::sync::watch::channel(false).1, // No-op cancel channel
-            )
-                .await;
-
-            let http_response = match result {
-                Ok(r) => r,
-                Err(_e) => return,
-            };
-
-            Some(InternalEventPayload::SendHttpRequestResponse(SendHttpRequestResponse {
-                http_response,
-            }))
-        }
-        _ => None,
-    };
-
-    if let Some(e) = response_event {
-        let plugin_manager: State<'_, PluginManager> = app_handle.state();
-        if let Err(e) = plugin_manager.reply(&event, &e).await {
-            warn!("Failed to reply to plugin manager: {:?}", e)
-        }
-    }
+    let v = rx.borrow();
+    v.to_owned()
 }
 
 fn get_window_from_window_context<R: Runtime>(

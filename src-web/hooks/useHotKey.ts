@@ -116,6 +116,16 @@ export function useHotKey(
       if (e.shiftKey) currentKeysWithModifiers.add('Shift');
 
       for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
+        if (
+          (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
+          currentKeysWithModifiers.size === 1 &&
+          currentKeysWithModifiers.has('Backspace')
+        ) {
+          // Don't support Backspace-only modifiers within input fields. This is fairly brittle, so maybe there's a
+          // better way to do stuff like this in the future.
+          continue;
+        }
+
         for (const hkKey of hkKeys) {
           if (hkAction !== action) {
             continue;

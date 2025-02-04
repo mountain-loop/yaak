@@ -13,9 +13,8 @@
     font-variant-ligatures: none;
   }
 
-  ::selection,
-  .cm-selectionBackground {
-    @apply bg-selection !important;
+  ::selection {
+    @apply bg-selection;
   }
 
   /* Disable user selection to make it more "app-like" */
@@ -26,7 +25,7 @@
     @apply select-none cursor-default;
   }
 
-    input,
+  input,
   textarea {
     &::placeholder {
       @apply text-placeholder;

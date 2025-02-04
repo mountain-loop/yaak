@@ -1,17 +1,16 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
-import { showAlert } from '../lib/alert';
 import { trackEvent } from '../lib/analytics';
-import { getHttpRequest } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
 import { getActiveCookieJar } from './useActiveCookieJar';
 import { getActiveEnvironment } from './useActiveEnvironment';
 import { useFastMutation } from './useFastMutation';
+import { getHttpRequest } from './useHttpRequests';
 
 export function useSendAnyHttpRequest() {
   return useFastMutation<HttpResponse | null, string, string | null>({
     mutationKey: ['send_any_request'],
     mutationFn: async (id) => {
-      const request = await getHttpRequest(id);
+      const request = getHttpRequest(id ?? 'n/a');
       if (request == null) {
         return null;
       }
@@ -23,6 +22,5 @@ export function useSendAnyHttpRequest() {
       });
     },
     onSettled: () => trackEvent('http_request', 'send'),
-    onError: (err) => showAlert({ id: 'send-failed', title: 'Send Failed', body: err }),
   });
 }

@@ -5,11 +5,11 @@ import type {
   GetHttpRequestActionsResponse,
   HttpRequestAction,
 } from '@yaakapp-internal/plugins';
+import { useMemo } from 'react';
 import { invokeCmd } from '../lib/tauri';
 import { usePluginsKey } from './usePlugins';
-import { useMemo } from 'react';
 
-export type CallableHttpRequestAction = Pick<HttpRequestAction, 'key' | 'label' | 'icon'> & {
+export type CallableHttpRequestAction = Pick<HttpRequestAction, 'label' | 'icon'> & {
   call: (httpRequest: HttpRequest) => Promise<void>;
 };
 
@@ -24,13 +24,12 @@ export function useHttpRequestActions() {
       );
 
       return responses.flatMap((r) =>
-        r.actions.map((a) => ({
-          key: a.key,
+        r.actions.map((a, i) => ({
           label: a.label,
           icon: a.icon,
           call: async (httpRequest: HttpRequest) => {
             const payload: CallHttpRequestActionRequest = {
-              key: a.key,
+              index: i,
               pluginRefId: r.pluginRefId,
               args: { httpRequest },
             };

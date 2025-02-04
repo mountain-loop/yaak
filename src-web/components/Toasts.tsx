@@ -16,7 +16,7 @@ export const Toasts = () => {
   const toasts = useAtomValue(toastsAtom);
   return (
     <Portal name="toasts">
-      <div className="absolute right-0 bottom-0 z-20">
+      <div className="absolute right-0 bottom-0 z-50">
         <AnimatePresence>
           {toasts.map(({ message, ...props }: ToastInstance) => (
             <Toast

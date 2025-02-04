@@ -1,32 +1,14 @@
-import type { Folder, HttpRequest } from '@yaakapp-internal/models';
-import type {
-  TemplateFunction,
-  TemplateFunctionArg,
-  TemplateFunctionCheckboxArg,
-  TemplateFunctionFileArg,
-  TemplateFunctionHttpRequestArg,
-  TemplateFunctionSelectArg,
-  TemplateFunctionTextArg,
-} from '@yaakapp-internal/plugins';
+import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
-import { useCallback, useMemo, useState } from 'react';
-import { useActiveRequest } from '../hooks/useActiveRequest';
+import { useMemo, useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFolders } from '../hooks/useFolders';
-import { useHttpRequests } from '../hooks/useHttpRequests';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateTokensToString } from '../hooks/useTemplateTokensToString';
-import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { Button } from './core/Button';
-import { Checkbox } from './core/Checkbox';
 import { InlineCode } from './core/InlineCode';
-import { PlainInput } from './core/PlainInput';
-import { Select } from './core/Select';
 import { VStack } from './core/Stacks';
-import { SelectFile } from './SelectFile';
-
-const NULL_ARG = '__NULL__';
+import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 
 interface Props {
   templateFunction: TemplateFunction;
@@ -43,27 +25,27 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
         ? initialTokens.tokens[0]?.val.args
         : [];
     for (const arg of templateFunction.args) {
+      if (!('name' in arg)) {
+        // Skip visual-only args
+        continue;
+      }
       const initialArg = initialArgs.find((a) => a.name === arg.name);
       const initialArgValue =
         initialArg?.value.type === 'str'
           ? initialArg?.value.text
           : // TODO: Implement variable-based args
-            '__NULL__';
-      initial[arg.name] = initialArgValue ?? NULL_ARG;
+            undefined;
+      initial[arg.name] = initialArgValue ?? arg.defaultValue ?? DYNAMIC_FORM_NULL_ARG;
     }
 
     return initial;
   });
 
-  const setArgValue = useCallback((name: string, value: string | boolean | null) => {
-    setArgValues((v) => ({ ...v, [name]: value == null ? '__NULL__' : value }));
-  }, []);
-
   const tokens: Tokens = useMemo(() => {
     const argTokens: FnArg[] = Object.keys(argValues).map((name) => ({
       name,
       value:
-        argValues[name] === NULL_ARG
+        argValues[name] === DYNAMIC_FORM_NULL_ARG
           ? { type: 'null' }
           : typeof argValues[name] === 'boolean'
             ? { type: 'bool', value: argValues[name] === true }
@@ -100,57 +82,12 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
   return (
     <VStack className="pb-3" space={4}>
       <h1 className="font-mono !text-base">{templateFunction.name}(…)</h1>
-      <VStack space={2}>
-        {templateFunction.args.map((a: TemplateFunctionArg, i: number) => {
-          switch (a.type) {
-            case 'select':
-              return (
-                <SelectArg
-                  key={i}
-                  arg={a}
-                  onChange={(v) => setArgValue(a.name, v)}
-                  value={argValues[a.name] ? String(argValues[a.name]) : '__ERROR__'}
-                />
-              );
-            case 'text':
-              return (
-                <TextArg
-                  key={i}
-                  arg={a}
-                  onChange={(v) => setArgValue(a.name, v)}
-                  value={argValues[a.name] ? String(argValues[a.name]) : '__ERROR__'}
-                />
-              );
-            case 'checkbox':
-              return (
-                <CheckboxArg
-                  key={i}
-                  arg={a}
-                  onChange={(v) => setArgValue(a.name, v)}
-                  value={argValues[a.name] !== undefined ? argValues[a.name] === true : false}
-                />
-              );
-            case 'http_request':
-              return (
-                <HttpRequestArg
-                  key={i}
-                  arg={a}
-                  onChange={(v) => setArgValue(a.name, v)}
-                  value={argValues[a.name] ? String(argValues[a.name]) : '__ERROR__'}
-                />
-              );
-            case 'file':
-              return (
-                <FileArg
-                  key={i}
-                  arg={a}
-                  onChange={(v) => setArgValue(a.name, v)}
-                  filePath={argValues[a.name] ? String(argValues[a.name]) : '__ERROR__'}
-                />
-              );
-          }
-        })}
-      </VStack>
+      <DynamicForm
+        inputs={templateFunction.args}
+        data={argValues}
+        onChange={setArgValues}
+        stateKey={`template_function.${templateFunction.name}`}
+      />
       <VStack className="w-full">
         <div className="text-sm text-text-subtle">Preview</div>
         <InlineCode
@@ -166,149 +103,5 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
         Done
       </Button>
     </VStack>
-  );
-}
-
-function TextArg({
-  arg,
-  onChange,
-  value,
-}: {
-  arg: TemplateFunctionTextArg;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const handleChange = useCallback(
-    (value: string) => {
-      onChange(value === '' ? NULL_ARG : value);
-    },
-    [onChange],
-  );
-
-  return (
-    <PlainInput
-      name={arg.name}
-      onChange={handleChange}
-      defaultValue={value === NULL_ARG ? '' : value}
-      require={!arg.optional}
-      label={
-        <>
-          {arg.label ?? arg.name}
-          {arg.optional && <span> (optional)</span>}
-        </>
-      }
-      hideLabel={arg.label == null}
-      placeholder={arg.placeholder ?? arg.defaultValue ?? ''}
-    />
-  );
-}
-
-function SelectArg({
-  arg,
-  value,
-  onChange,
-}: {
-  arg: TemplateFunctionSelectArg;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <Select
-      label={arg.label ?? arg.name}
-      name={arg.name}
-      onChange={onChange}
-      value={value}
-      options={[
-        ...arg.options.map((a) => ({
-          label: a.label + (arg.defaultValue === a.value ? ' (default)' : ''),
-          value: a.value === arg.defaultValue ? NULL_ARG : a.value,
-        })),
-      ]}
-    />
-  );
-}
-
-function FileArg({
-  arg,
-  filePath,
-  onChange,
-}: {
-  arg: TemplateFunctionFileArg;
-  filePath: string;
-  onChange: (v: string | null) => void;
-}) {
-  return (
-    <SelectFile
-      onChange={({ filePath }) => onChange(filePath)}
-      filePath={filePath === '__NULL__' ? null : filePath}
-      directory={!!arg.directory}
-    />
-  );
-}
-
-function HttpRequestArg({
-  arg,
-  value,
-  onChange,
-}: {
-  arg: TemplateFunctionHttpRequestArg;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const folders = useFolders();
-  const httpRequests = useHttpRequests();
-  const activeRequest = useActiveRequest();
-  return (
-    <Select
-      label={arg.label ?? arg.name}
-      name={arg.name}
-      onChange={onChange}
-      value={value}
-      options={[
-        ...httpRequests.map((r) => {
-          return {
-            label: buildRequestBreadcrumbs(r, folders).join(' / ') + (r.id == activeRequest?.id ? ' (current)' : ''),
-            value: r.id,
-          };
-        }),
-      ]}
-    />
-  );
-}
-
-function buildRequestBreadcrumbs(request: HttpRequest, folders: Folder[]): string[] {
-  const ancestors: (HttpRequest | Folder)[] = [request];
-
-  const next = () => {
-    const latest = ancestors[0];
-    if (latest == null) return [];
-
-    const parent = folders.find((f) => f.id === latest.folderId);
-    if (parent == null) return;
-
-    ancestors.unshift(parent);
-    next();
-  };
-  next();
-
-  return ancestors.map((a) => (a.model === 'folder' ? a.name : fallbackRequestName(a)));
-}
-
-function CheckboxArg({
-  arg,
-  onChange,
-  value,
-}: {
-  arg: TemplateFunctionCheckboxArg;
-  value: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <Checkbox
-      onChange={onChange}
-      checked={value}
-      title={arg.label ?? arg.name}
-      hideLabel={arg.label == null}
-    />
   );
 }

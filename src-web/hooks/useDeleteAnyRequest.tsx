@@ -1,6 +1,9 @@
+import { deleteWebsocketRequest } from '../commands/deleteWebsocketRequest';
+import { jotaiStore } from '../lib/jotai';
 import { useDeleteAnyGrpcRequest } from './useDeleteAnyGrpcRequest';
 import { useDeleteAnyHttpRequest } from './useDeleteAnyHttpRequest';
 import { useFastMutation } from './useFastMutation';
+import { requestsAtom } from './useRequests';
 
 export function useDeleteAnyRequest() {
   const deleteAnyHttpRequest = useDeleteAnyHttpRequest();
@@ -10,9 +13,17 @@ export function useDeleteAnyRequest() {
     mutationKey: ['delete_request'],
     mutationFn: async (id) => {
       if (id == null) return;
-      // We don't know what type it is based on the ID, so just try deleting both
-      deleteAnyHttpRequest.mutate(id);
-      deleteAnyGrpcRequest.mutate(id);
+      const request = jotaiStore.get(requestsAtom).find((r) => r.id === id);
+
+      if (request?.model === 'websocket_request') {
+        deleteWebsocketRequest.mutate(request);
+      } else if (request?.model === 'http_request') {
+        deleteAnyHttpRequest.mutate(request);
+      } else if (request?.model === 'grpc_request') {
+        deleteAnyGrpcRequest.mutate(request);
+      } else {
+        console.log('Failed to delete request', id, request);
+      }
     },
   });
 }

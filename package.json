@@ -17,6 +17,7 @@
     "src-tauri/yaak-sse",
     "src-tauri/yaak-sync",
     "src-tauri/yaak-templates",
+    "src-tauri/yaak-ws",
     "src-web"
   ],
   "scripts": {
@@ -35,7 +36,7 @@
     "tauri-before-dev": "npm run --workspaces --if-present dev"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.2.2",
+    "@tauri-apps/cli": "^2.2.7",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",
     "eslint": "^8",

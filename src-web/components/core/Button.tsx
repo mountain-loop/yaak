@@ -5,6 +5,7 @@ import type { HotkeyAction } from '../../hooks/useHotKey';
 import { useFormattedHotkey, useHotKey } from '../../hooks/useHotKey';
 import { trackEvent } from '../../lib/analytics';
 import { Icon } from './Icon';
+import { LoadingIcon } from './LoadingIcon';
 
 export type ButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, 'color' | 'onChange'> & {
   innerClassName?: string;
@@ -125,7 +126,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...props}
     >
       {isLoading ? (
-        <Icon icon="refresh" size={size} className="animate-spin mr-1" />
+        <LoadingIcon size={size} className="mr-1" />
       ) : leftSlot ? (
         <div className="mr-2">{leftSlot}</div>
       ) : null}

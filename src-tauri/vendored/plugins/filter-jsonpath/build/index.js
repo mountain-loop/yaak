@@ -30,7 +30,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
-  pluginHookResponseFilter: () => pluginHookResponseFilter
+  plugin: () => plugin
 });
 module.exports = __toCommonJS(src_exports);
 
@@ -499,12 +499,18 @@ JSONPath.prototype.safeVm = import_vm.default;
 var SafeScript = import_vm.default.Script;
 
 // src/index.ts
-function pluginHookResponseFilter(_ctx, args) {
-  const parsed = JSON.parse(args.body);
-  const filtered = JSONPath({ path: args.filter, json: parsed });
-  return JSON.stringify(filtered, null, 2);
-}
+var plugin = {
+  filter: {
+    name: "JSONPath",
+    description: "Filter JSONPath",
+    onFilter(_ctx, args) {
+      const parsed = JSON.parse(args.payload);
+      const filtered = JSONPath({ path: args.filter, json: parsed });
+      return { filtered: JSON.stringify(filtered, null, 2) };
+    }
+  }
+};
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  pluginHookResponseFilter
+  plugin
 });

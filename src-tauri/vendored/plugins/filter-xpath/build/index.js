@@ -8346,21 +8346,27 @@ var require_xpath = __commonJS({
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
-  pluginHookResponseFilter: () => pluginHookResponseFilter
+  plugin: () => plugin
 });
 module.exports = __toCommonJS(src_exports);
 var import_xmldom = __toESM(require_lib());
 var import_xpath = __toESM(require_xpath());
-function pluginHookResponseFilter(_ctx, { filter, body }) {
-  const doc = new import_xmldom.DOMParser().parseFromString(body, "text/xml");
-  const result = import_xpath.default.select(filter, doc, false);
-  if (Array.isArray(result)) {
-    return result.map((r) => String(r)).join("\n");
-  } else {
-    return String(result);
+var plugin = {
+  filter: {
+    name: "XPath",
+    description: "Filter XPath",
+    onFilter(_ctx, args) {
+      const doc = new import_xmldom.DOMParser().parseFromString(args.payload, "text/xml");
+      const result = import_xpath.default.select(args.filter, doc, false);
+      if (Array.isArray(result)) {
+        return { filtered: result.map((r) => String(r)).join("\n") };
+      } else {
+        return { filtered: String(result) };
+      }
+    }
   }
-}
+};
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  pluginHookResponseFilter
+  plugin
 });

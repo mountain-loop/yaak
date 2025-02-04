@@ -51,7 +51,7 @@ pub async fn apply<R: Runtime>(
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "watch.ts")]
+#[ts(export, export_to = "gen_watch.ts")]
 pub(crate) struct WatchResult {
     unlisten_event: String,
 }

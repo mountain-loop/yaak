@@ -1,16 +1,19 @@
-use crate::error::Error::{ClientNotInitializedErr, PluginErr, PluginNotFoundErr, UnknownEventErr};
+use crate::error::Error::{
+    AuthPluginNotFound, ClientNotInitializedErr, PluginErr, PluginNotFoundErr, UnknownEventErr,
+};
 use crate::error::Result;
 use crate::events::{
-    BootRequest, CallHttpRequestActionRequest, CallTemplateFunctionArgs,
-    CallTemplateFunctionRequest, CallTemplateFunctionResponse, FilterRequest, FilterResponse,
-    GetHttpRequestActionsRequest, GetHttpRequestActionsResponse, GetTemplateFunctionsResponse,
-    ImportRequest, ImportResponse, InternalEvent, InternalEventPayload, RenderPurpose,
-    WindowContext,
+    BootRequest, CallHttpAuthenticationActionArgs, CallHttpAuthenticationActionRequest,
+    CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
+    CallTemplateFunctionArgs, CallTemplateFunctionRequest, CallTemplateFunctionResponse,
+    EmptyPayload, FilterRequest, FilterResponse, GetHttpAuthenticationConfigRequest,
+    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
+    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, ImportRequest, ImportResponse,
+    InternalEvent, InternalEventPayload, JsonPrimitive, RenderPurpose, WindowContext,
 };
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
-use crate::server::plugin_runtime::plugin_runtime_server::PluginRuntimeServer;
-use crate::server::PluginRuntimeServerImpl;
+use crate::server_ws::PluginRuntimeServerWebsocket;
 use log::{info, warn};
 use std::collections::HashMap;
 use std::env;
@@ -22,8 +25,7 @@ use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::read_dir;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex};
-use tonic::codegen::tokio_stream;
-use tonic::transport::Server;
+use tokio::time::timeout;
 use yaak_models::queries::{generate_id, list_plugins};
 
 #[derive(Clone)]
@@ -31,7 +33,7 @@ pub struct PluginManager {
     subscribers: Arc<Mutex<HashMap<String, mpsc::Sender<InternalEvent>>>>,
     plugins: Arc<Mutex<Vec<PluginHandle>>>,
     kill_tx: tokio::sync::watch::Sender<bool>,
-    grpc_service: Arc<PluginRuntimeServerImpl>,
+    ws_service: Arc<PluginRuntimeServerWebsocket>,
 }
 
 #[derive(Clone)]
@@ -47,13 +49,13 @@ impl PluginManager {
 
         let (client_disconnect_tx, mut client_disconnect_rx) = mpsc::channel(128);
         let (client_connect_tx, mut client_connect_rx) = tokio::sync::watch::channel(false);
-        let grpc_service =
-            PluginRuntimeServerImpl::new(events_tx, client_disconnect_tx, client_connect_tx);
+        let ws_service =
+            PluginRuntimeServerWebsocket::new(events_tx, client_disconnect_tx, client_connect_tx);
 
         let plugin_manager = PluginManager {
-            plugins: Arc::new(Mutex::new(Vec::new())),
-            subscribers: Arc::new(Mutex::new(HashMap::new())),
-            grpc_service: Arc::new(grpc_service.clone()),
+            plugins: Default::default(),
+            subscribers: Default::default(),
+            ws_service: Arc::new(ws_service.clone()),
             kill_tx: kill_server_tx,
         };
 
@@ -76,14 +78,9 @@ impl PluginManager {
             }
         });
 
-        info!("Starting plugin server");
-
-        let svc = PluginRuntimeServer::new(grpc_service.to_owned())
-            .max_encoding_message_size(usize::MAX)
-            .max_decoding_message_size(usize::MAX);
-        let listen_addr = match option_env!("PORT") {
-            None => "localhost:0".to_string(),
+        let listen_addr = match option_env!("YAAK_PLUGIN_SERVER_PORT") {
             Some(port) => format!("localhost:{port}"),
+            None => "localhost:0".to_string(),
         };
         let listener = tauri::async_runtime::block_on(async move {
             TcpListener::bind(listen_addr).await.expect("Failed to bind TCP listener")
@@ -91,7 +88,7 @@ impl PluginManager {
         let addr = listener.local_addr().expect("Failed to get local address");
 
         // 1. Reload all plugins when the Node.js runtime connects
-        {
+        let init_plugins_task = {
             let plugin_manager = plugin_manager.clone();
             let app_handle = app_handle.clone();
             tauri::async_runtime::spawn(async move {
@@ -99,7 +96,7 @@ impl PluginManager {
                     Ok(_) => {
                         info!("Plugin runtime client connected!");
                         plugin_manager
-                            .initialize_all_plugins(&app_handle, WindowContext::None)
+                            .initialize_all_plugins(&app_handle, &WindowContext::None)
                             .await
                             .expect("Failed to reload plugins");
                     }
@@ -107,24 +104,24 @@ impl PluginManager {
                         warn!("Failed to receive from client connection rx {e:?}");
                     }
                 }
-            });
+            })
         };
 
         // 1. Spawn server in the background
-        info!("Starting gRPC plugin server on {addr}");
+        info!("Starting plugin server on {addr}");
         tauri::async_runtime::spawn(async move {
-            Server::builder()
-                .timeout(Duration::from_secs(10))
-                .add_service(svc)
-                .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
-                .await
-                .expect("grpc plugin runtime server failed to start");
+            ws_service.listen(listener).await;
         });
 
         // 2. Start Node.js runtime and initialize plugins
         tauri::async_runtime::block_on(async move {
             start_nodejs_plugin_runtime(&app_handle, addr, &kill_server_rx).await.unwrap();
+            info!("Waiting for plugins to initialize");
+            init_plugins_task.await.unwrap();
         });
+
+        // 3. Block waiting for plugins to initialize
+        tauri::async_runtime::block_on(async move {});
 
         plugin_manager
     }
@@ -170,14 +167,14 @@ impl PluginManager {
         [bundled_plugin_dirs, installed_plugin_dirs].concat()
     }
 
-    pub async fn uninstall(&self, window_context: WindowContext, dir: &str) -> Result<()> {
+    pub async fn uninstall(&self, window_context: &WindowContext, dir: &str) -> Result<()> {
         let plugin = self.get_plugin_by_dir(dir).await.ok_or(PluginNotFoundErr(dir.to_string()))?;
         self.remove_plugin(window_context, &plugin).await
     }
 
     async fn remove_plugin(
         &self,
-        window_context: WindowContext,
+        window_context: &WindowContext,
         plugin: &PluginHandle,
     ) -> Result<()> {
         // Terminate the plugin
@@ -195,32 +192,34 @@ impl PluginManager {
 
     pub async fn add_plugin_by_dir(
         &self,
-        window_context: WindowContext,
+        window_context: &WindowContext,
         dir: &str,
         watch: bool,
     ) -> Result<()> {
         info!("Adding plugin by dir {dir}");
-        let maybe_tx = self.grpc_service.app_to_plugin_events_tx.lock().await;
+        let maybe_tx = self.ws_service.app_to_plugin_events_tx.lock().await;
         let tx = match &*maybe_tx {
             None => return Err(ClientNotInitializedErr),
             Some(tx) => tx,
         };
         let plugin_handle = PluginHandle::new(dir, tx.clone());
 
-        // Add the new plugin
-        self.plugins.lock().await.push(plugin_handle.clone());
-
         // Boot the plugin
-        let event = self
-            .send_to_plugin_and_wait(
+        let event = timeout(
+            Duration::from_secs(1),
+            self.send_to_plugin_and_wait(
                 window_context,
                 &plugin_handle,
                 &InternalEventPayload::BootRequest(BootRequest {
                     dir: dir.to_string(),
                     watch,
                 }),
-            )
-            .await?;
+            ),
+        )
+        .await??;
+
+        // Add the new plugin
+        self.plugins.lock().await.push(plugin_handle.clone());
 
         let resp = match event.payload {
             InternalEventPayload::BootResponse(resp) => resp,
@@ -236,20 +235,21 @@ impl PluginManager {
     pub async fn initialize_all_plugins<R: Runtime>(
         &self,
         app_handle: &AppHandle<R>,
-        window_context: WindowContext,
+        window_context: &WindowContext,
     ) -> Result<()> {
-        let dirs = self.list_plugin_dirs(app_handle).await;
-        for d in dirs.clone() {
+        let candidates = self.list_plugin_dirs(app_handle).await;
+        for candidate in candidates.clone() {
             // First remove the plugin if it exists
-            if let Some(plugin) = self.get_plugin_by_dir(d.dir.as_str()).await {
-                if let Err(e) = self.remove_plugin(window_context.to_owned(), &plugin).await {
-                    warn!("Failed to remove plugin {} {e:?}", d.dir);
+            if let Some(plugin) = self.get_plugin_by_dir(candidate.dir.as_str()).await {
+                if let Err(e) = self.remove_plugin(window_context, &plugin).await {
+                    warn!("Failed to remove plugin {} {e:?}", candidate.dir);
                 }
             }
-            if let Err(e) =
-                self.add_plugin_by_dir(window_context.to_owned(), d.dir.as_str(), d.watch).await
+            if let Err(e) = self
+                .add_plugin_by_dir(window_context, candidate.dir.as_str(), candidate.watch)
+                .await
             {
-                warn!("Failed to add plugin {} {e:?}", d.dir);
+                warn!("Failed to add plugin {} {e:?}", candidate.dir);
             }
         }
 
@@ -290,13 +290,13 @@ impl PluginManager {
         source_event: &InternalEvent,
         payload: &InternalEventPayload,
     ) -> Result<()> {
-        let window_label = source_event.to_owned().window_context;
+        let window_context = source_event.to_owned().window_context;
         let reply_id = Some(source_event.to_owned().id);
         let plugin = self
             .get_plugin_by_ref_id(source_event.plugin_ref_id.as_str())
             .await
             .ok_or(PluginNotFoundErr(source_event.plugin_ref_id.to_string()))?;
-        let event = plugin.build_event_to_send_raw(window_label, &payload, reply_id);
+        let event = plugin.build_event_to_send_raw(&window_context, &payload, reply_id);
         plugin.send(&event).await
     }
 
@@ -320,7 +320,7 @@ impl PluginManager {
 
     async fn send_to_plugin_and_wait(
         &self,
-        window_context: WindowContext,
+        window_context: &WindowContext,
         plugin: &PluginHandle,
         payload: &InternalEventPayload,
     ) -> Result<InternalEvent> {
@@ -331,7 +331,7 @@ impl PluginManager {
 
     async fn send_and_wait(
         &self,
-        window_context: WindowContext,
+        window_context: &WindowContext,
         payload: &InternalEventPayload,
     ) -> Result<Vec<InternalEvent>> {
         let plugins = { self.plugins.lock().await.clone() };
@@ -340,7 +340,7 @@ impl PluginManager {
 
     async fn send_to_plugins_and_wait(
         &self,
-        window_context: WindowContext,
+        window_context: &WindowContext,
         payload: &InternalEventPayload,
         plugins: Vec<PluginHandle>,
     ) -> Result<Vec<InternalEvent>> {
@@ -350,25 +350,27 @@ impl PluginManager {
         // 1. Build the events with IDs and everything
         let events_to_send = plugins
             .iter()
-            .map(|p| p.build_event_to_send(window_context.to_owned(), payload, None))
+            .map(|p| p.build_event_to_send(window_context, payload, None))
             .collect::<Vec<InternalEvent>>();
 
         // 2. Spawn thread to subscribe to incoming events and check reply ids
-        let send_events_fut = {
+        let sub_events_fut = {
             let events_to_send = events_to_send.clone();
 
             tokio::spawn(async move {
                 let mut found_events = Vec::new();
 
                 while let Some(event) = rx.recv().await {
-                    if events_to_send
+                    let matched_sent_event = events_to_send
                         .iter()
                         .find(|e| Some(e.id.to_owned()) == event.reply_id)
-                        .is_some()
-                    {
+                        .is_some();
+                    if matched_sent_event {
                         found_events.push(event.clone());
                     };
-                    if found_events.len() == events_to_send.len() {
+
+                    let found_them_all = found_events.len() == events_to_send.len();
+                    if found_them_all {
                         break;
                     }
                 }
@@ -387,7 +389,7 @@ impl PluginManager {
         }
 
         // 4. Join on the spawned thread
-        let events = send_events_fut.await.expect("Thread didn't succeed");
+        let events = sub_events_fut.await.expect("Thread didn't succeed");
 
         // 5. Unsubscribe
         self.unsubscribe(rx_id.as_str()).await;
@@ -401,10 +403,8 @@ impl PluginManager {
     ) -> Result<Vec<GetHttpRequestActionsResponse>> {
         let reply_events = self
             .send_and_wait(
-                WindowContext::from_window(window),
-                &InternalEventPayload::GetHttpRequestActionsRequest(
-                    GetHttpRequestActionsRequest {},
-                ),
+                &WindowContext::from_window(window),
+                &InternalEventPayload::GetHttpRequestActionsRequest(EmptyPayload {}),
             )
             .await?;
 
@@ -422,12 +422,12 @@ impl PluginManager {
         &self,
         window: &WebviewWindow<R>,
     ) -> Result<Vec<GetTemplateFunctionsResponse>> {
-        self.get_template_functions_with_context(WindowContext::from_window(window)).await
+        self.get_template_functions_with_context(&WindowContext::from_window(window)).await
     }
 
     pub async fn get_template_functions_with_context(
         &self,
-        window_context: WindowContext,
+        window_context: &WindowContext,
     ) -> Result<Vec<GetTemplateFunctionsResponse>> {
         let reply_events = self
             .send_and_wait(window_context, &InternalEventPayload::GetTemplateFunctionsRequest)
@@ -452,7 +452,7 @@ impl PluginManager {
         let plugin =
             self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
         let event = plugin.build_event_to_send(
-            WindowContext::from_window(window),
+            &WindowContext::from_window(window),
             &InternalEventPayload::CallHttpRequestActionRequest(req),
             None,
         );
@@ -460,9 +460,139 @@ impl PluginManager {
         Ok(())
     }
 
+    pub async fn get_http_authentication_summaries<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+    ) -> Result<Vec<(PluginHandle, GetHttpAuthenticationSummaryResponse)>> {
+        let window_context = WindowContext::from_window(window);
+        let reply_events = self
+            .send_and_wait(
+                &window_context,
+                &InternalEventPayload::GetHttpAuthenticationSummaryRequest(EmptyPayload {}),
+            )
+            .await?;
+
+        let mut results = Vec::new();
+        for event in reply_events {
+            if let InternalEventPayload::GetHttpAuthenticationSummaryResponse(resp) = event.payload
+            {
+                let plugin = self
+                    .get_plugin_by_ref_id(&event.plugin_ref_id)
+                    .await
+                    .ok_or(PluginNotFoundErr(event.plugin_ref_id))?;
+                results.push((plugin, resp.clone()));
+            }
+        }
+
+        Ok(results)
+    }
+
+    pub async fn get_http_authentication_config<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+        auth_name: &str,
+        values: HashMap<String, JsonPrimitive>,
+        request_id: &str,
+    ) -> Result<GetHttpAuthenticationConfigResponse> {
+        let results = self.get_http_authentication_summaries(window).await?;
+        let plugin = results
+            .iter()
+            .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
+            .ok_or(PluginNotFoundErr(auth_name.into()))?;
+
+        let context_id = format!("{:x}", md5::compute(request_id.to_string()));
+        let event = self
+            .send_to_plugin_and_wait(
+                &WindowContext::from_window(window),
+                &plugin,
+                &InternalEventPayload::GetHttpAuthenticationConfigRequest(
+                    GetHttpAuthenticationConfigRequest { values, context_id },
+                ),
+            )
+            .await?;
+        match event.payload {
+            InternalEventPayload::GetHttpAuthenticationConfigResponse(resp) => Ok(resp),
+            InternalEventPayload::EmptyResponse(_) => {
+                Err(PluginErr("Auth plugin returned empty".to_string()))
+            }
+            e => Err(PluginErr(format!("Auth plugin returned invalid event {:?}", e))),
+        }
+    }
+
+    pub async fn call_http_authentication_action<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+        auth_name: &str,
+        action_index: i32,
+        values: HashMap<String, JsonPrimitive>,
+        request_id: &str,
+    ) -> Result<()> {
+        let results = self.get_http_authentication_summaries(window).await?;
+        let plugin = results
+            .iter()
+            .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
+            .ok_or(PluginNotFoundErr(auth_name.into()))?;
+
+        let context_id = format!("{:x}", md5::compute(request_id.to_string()));
+        self.send_to_plugin_and_wait(
+            &WindowContext::from_window(window),
+            &plugin,
+            &InternalEventPayload::CallHttpAuthenticationActionRequest(
+                CallHttpAuthenticationActionRequest {
+                    index: action_index,
+                    plugin_ref_id: plugin.clone().ref_id,
+                    args: CallHttpAuthenticationActionArgs { context_id, values },
+                },
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn call_http_authentication<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+        auth_name: &str,
+        req: CallHttpAuthenticationRequest,
+    ) -> Result<CallHttpAuthenticationResponse> {
+        let disabled = match req.values.get("disabled") {
+            Some(JsonPrimitive::Boolean(v)) => v.clone(),
+            _ => false,
+        };
+        
+        // Auth is disabled, so don't do anything
+        if disabled {
+            info!("Not applying disabled auth {:?}", auth_name);
+            return Ok(CallHttpAuthenticationResponse {
+                set_headers: Vec::new(),
+            });
+        }
+
+        let handlers = self.get_http_authentication_summaries(window).await?;
+        let (plugin, _) = handlers
+            .iter()
+            .find(|(_, a)| a.name == auth_name)
+            .ok_or(AuthPluginNotFound(auth_name.to_string()))?;
+
+        let event = self
+            .send_to_plugin_and_wait(
+                &WindowContext::from_window(window),
+                &plugin,
+                &InternalEventPayload::CallHttpAuthenticationRequest(req),
+            )
+            .await?;
+        match event.payload {
+            InternalEventPayload::CallHttpAuthenticationResponse(resp) => Ok(resp),
+            InternalEventPayload::EmptyResponse(_) => {
+                Err(PluginErr("Auth plugin returned empty".to_string()))
+            }
+            e => Err(PluginErr(format!("Auth plugin returned invalid event {:?}", e))),
+        }
+    }
+
     pub async fn call_template_function(
         &self,
-        window_context: WindowContext,
+        window_context: &WindowContext,
         fn_name: &str,
         args: HashMap<String, String>,
         purpose: RenderPurpose,
@@ -496,7 +626,7 @@ impl PluginManager {
     ) -> Result<(ImportResponse, String)> {
         let reply_events = self
             .send_and_wait(
-                WindowContext::from_window(window),
+                &WindowContext::from_window(window),
                 &InternalEventPayload::ImportRequest(ImportRequest {
                     content: content.to_string(),
                 }),
@@ -541,7 +671,7 @@ impl PluginManager {
 
         let event = self
             .send_to_plugin_and_wait(
-                WindowContext::from_window(window),
+                &WindowContext::from_window(window),
                 &plugin,
                 &InternalEventPayload::FilterRequest(FilterRequest {
                     filter: filter.to_string(),
@@ -552,7 +682,7 @@ impl PluginManager {
 
         match event.payload {
             InternalEventPayload::FilterResponse(resp) => Ok(resp),
-            InternalEventPayload::EmptyResponse => {
+            InternalEventPayload::EmptyResponse(_) => {
                 Err(PluginErr("Filter returned empty".to_string()))
             }
             e => Err(PluginErr(format!("Export returned invalid event {:?}", e))),

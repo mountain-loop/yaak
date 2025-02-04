@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { createFolder } from '../commands/commands';
+import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
 import type { DropdownItem } from '../components/core/Dropdown';
 import { Icon } from '../components/core/Icon';
 import { generateId } from '../lib/generateId';
 import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
 import { getActiveRequest } from './useActiveRequest';
+import { getActiveWorkspace } from './useActiveWorkspace';
 import { useCreateGrpcRequest } from './useCreateGrpcRequest';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
 
@@ -19,23 +21,24 @@ export function useCreateDropdownItems({
 } = {}): DropdownItem[] {
   const { mutate: createHttpRequest } = useCreateHttpRequest();
   const { mutate: createGrpcRequest } = useCreateGrpcRequest();
+  const activeWorkspace = getActiveWorkspace();
 
-  return useMemo((): DropdownItem[] => {
+  const items = useMemo((): DropdownItem[] => {
+    const activeRequest = getActiveRequest();
     const folderId =
-      folderIdOption === 'active-folder' ? getActiveRequest()?.folderId : folderIdOption;
+      (folderIdOption === 'active-folder' ? activeRequest?.folderId : folderIdOption) ?? null;
+    if (activeWorkspace == null) return [];
 
     return [
       {
-        key: 'create-http-request',
-        label: 'HTTP Request',
+        label: 'HTTP',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
         onSelect: () => {
           createHttpRequest({ folderId });
         },
       },
       {
-        key: 'create-graphql-request',
-        label: 'GraphQL Query',
+        label: 'GraphQL',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
         onSelect: () =>
           createHttpRequest({
@@ -46,24 +49,35 @@ export function useCreateDropdownItems({
           }),
       },
       {
-        key: 'create-grpc-request',
-        label: 'gRPC Call',
+        label: 'gRPC',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
         onSelect: () => createGrpcRequest({ folderId }),
+      },
+      {
+        label: 'WebSocket',
+        leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
+        onSelect: () =>
+          upsertWebsocketRequest.mutate({ folderId, workspaceId: activeWorkspace.id }),
       },
       ...((hideFolder
         ? []
         : [
+            { type: 'separator' },
             {
-              type: 'separator',
-            },
-            {
-              key: 'create-folder',
               label: 'Folder',
               leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
               onSelect: () => createFolder.mutate({ folderId }),
             },
           ]) as DropdownItem[]),
     ];
-  }, [createGrpcRequest, createHttpRequest, folderIdOption, hideFolder, hideIcons]);
+  }, [
+    activeWorkspace,
+    createGrpcRequest,
+    createHttpRequest,
+    folderIdOption,
+    hideFolder,
+    hideIcons,
+  ]);
+
+  return items;
 }

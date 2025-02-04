@@ -97,6 +97,7 @@ export function SettingsGeneral() {
       </Heading>
       <VStack className="mt-1 w-full" space={3}>
         <PlainInput
+          required
           size="sm"
           name="requestTimeout"
           label="Request Timeout (ms)"

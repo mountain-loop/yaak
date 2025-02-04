@@ -43,7 +43,7 @@ export function useEnsureActiveCookieJar() {
 
     const firstJar = cookieJars[0];
     if (firstJar == null) {
-      console.log("Workspace doesn't have any cookie jars to activate");
+      console.log(`Workspace doesn't have any cookie jars to activate`);
       return;
     }
 

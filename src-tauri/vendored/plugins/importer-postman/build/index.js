@@ -20,13 +20,23 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
-  pluginHookImport: () => pluginHookImport
+  convertPostman: () => convertPostman,
+  plugin: () => plugin
 });
 module.exports = __toCommonJS(src_exports);
 var POSTMAN_2_1_0_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
 var POSTMAN_2_0_0_SCHEMA = "https://schema.getpostman.com/json/collection/v2.0.0/collection.json";
 var VALID_SCHEMAS = [POSTMAN_2_0_0_SCHEMA, POSTMAN_2_1_0_SCHEMA];
-function pluginHookImport(_ctx, contents) {
+var plugin = {
+  importer: {
+    name: "Postman",
+    description: "Import postman collections",
+    onImport(_ctx, args) {
+      return convertPostman(args.text);
+    }
+  }
+};
+function convertPostman(contents) {
   const root = parseJSONToRecord(contents);
   if (root == null) return;
   const info = toRecord(root.info);
@@ -317,5 +327,6 @@ function generateId(model) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  pluginHookImport
+  convertPostman,
+  plugin
 });

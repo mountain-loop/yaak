@@ -1,9 +1,8 @@
 import { useFastMutation } from './useFastMutation';
 import type { CookieJar } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai/index';
-import { getCookieJar } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
-import { cookieJarsAtom } from './useCookieJars';
+import { cookieJarsAtom, getCookieJar } from './useCookieJars';
 import { updateModelList } from './useSyncModelStores';
 
 export function useUpdateCookieJar(id: string | null) {
@@ -11,7 +10,7 @@ export function useUpdateCookieJar(id: string | null) {
   return useFastMutation<CookieJar, unknown, Partial<CookieJar> | ((j: CookieJar) => CookieJar)>({
     mutationKey: ['update_cookie_jar', id],
     mutationFn: async (v) => {
-      const cookieJar = await getCookieJar(id);
+      const cookieJar = getCookieJar(id);
       if (cookieJar == null) {
         throw new Error("Can't update a null workspace");
       }

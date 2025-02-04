@@ -19,7 +19,7 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
     rawTextBody.data ?? '',
   );
 
-  if (rawTextBody.isLoading) {
+  if (rawTextBody.isLoading || response.state === 'initialized') {
     return null;
   }
 

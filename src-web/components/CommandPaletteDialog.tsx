@@ -153,9 +153,10 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         label: 'Send Request',
         onSelect: () => sendRequest(activeRequest.id),
       });
-      for (const a of httpRequestActions) {
+      for (let i = 0; i < httpRequestActions.length; i++) {
+        const a = httpRequestActions[i]!;
         commands.push({
-          key: a.key,
+          key: `http_request_action.${i}`,
           label: a.label,
           onSelect: () => a.call(activeRequest),
         });

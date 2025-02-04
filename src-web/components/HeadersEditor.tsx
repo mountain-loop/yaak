@@ -1,4 +1,5 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
+import type { HttpRequestHeader } from '@yaakapp-internal/models';
+import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import { charsets } from '../lib/data/charsets';
 import { connections } from '../lib/data/connections';
 import { encodings } from '../lib/data/encodings';
@@ -10,18 +11,19 @@ import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 
 type Props = {
   forceUpdateKey: string;
-  request: HttpRequest;
-  onChange: (headers: HttpRequest['headers']) => void;
+  headers: HttpRequestHeader[];
+  stateKey: string;
+  onChange: (headers: HttpRequestHeader[]) => void;
 };
 
-export function HeadersEditor({ request, onChange, forceUpdateKey }: Props) {
+export function HeadersEditor({ stateKey, headers, onChange, forceUpdateKey }: Props) {
   return (
     <PairOrBulkEditor
       preferenceName="headers"
-      stateKey={`headers.${request.id}`}
+      stateKey={stateKey}
       valueAutocompleteVariables
       nameAutocompleteVariables
-      pairs={request.headers}
+      pairs={headers}
       onChange={onChange}
       forceUpdateKey={forceUpdateKey}
       nameValidate={validateHttpHeader}
@@ -44,7 +46,7 @@ const headerOptionsMap: Record<string, string[]> = {
 
 const valueAutocomplete = (headerName: string): GenericCompletionConfig | undefined => {
   const name = headerName.toLowerCase().trim();
-  const options: GenericCompletionConfig['options'] =
+  const options: GenericCompletionOption[] =
     headerOptionsMap[name]?.map((o) => ({
       label: o,
       type: 'constant',

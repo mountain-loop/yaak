@@ -68,7 +68,7 @@ export function SettingsProxy() {
               }}
             />
           </HStack>
-          <Separator className="my-6"/>
+          <Separator className="my-6" />
           <Checkbox
             checked={settings.proxy.auth != null}
             title="Enable authentication"
@@ -83,6 +83,7 @@ export function SettingsProxy() {
           {settings.proxy.auth != null && (
             <HStack space={1.5}>
               <PlainInput
+                required
                 size="sm"
                 label="User"
                 placeholder="myUser"

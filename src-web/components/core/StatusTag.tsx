@@ -1,8 +1,8 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
+import type {HttpResponse, WebsocketConnection} from '@yaakapp-internal/models';
 import classNames from 'classnames';
 
 interface Props {
-  response: HttpResponse;
+  response: HttpResponse | WebsocketConnection;
   className?: string;
   showReason?: boolean;
 }
@@ -28,7 +28,7 @@ export function StatusTag({ response, className, showReason }: Props) {
       )}
     >
       {isInitializing ? 'CONNECTING' : label}{' '}
-      {showReason && response.statusReason && response.statusReason}
+      {showReason && 'statusReason' in response ? response.statusReason : null}
     </span>
   );
 }

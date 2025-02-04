@@ -1,3 +1,4 @@
+import { formatSize } from '@yaakapp-internal/lib/formatSize';
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import {
@@ -13,6 +14,8 @@ import {
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
 import { useToggle } from '../../hooks/useToggle';
+import { languageFromContentType } from '../../lib/contentType';
+import { showDialog } from '../../lib/dialog';
 import { generateId } from '../../lib/generateId';
 import { showPrompt } from '../../lib/prompt';
 import { DropMarker } from '../DropMarker';
@@ -21,6 +24,8 @@ import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import type { DropdownItem } from './Dropdown';
 import { Dropdown } from './Dropdown';
+import type { EditorProps } from './Editor/Editor';
+import { Editor } from './Editor/Editor';
 import type { GenericCompletionConfig } from './Editor/genericCompletion';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -43,7 +48,7 @@ export type PairEditorProps = {
   namePlaceholder?: string;
   nameValidate?: InputProps['validate'];
   noScroll?: boolean;
-  onChange: (pairs: Pair[]) => void;
+  onChange: (pairs: PairWithId[]) => void;
   pairs: Pair[];
   stateKey: InputProps['stateKey'];
   valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
@@ -54,13 +59,17 @@ export type PairEditorProps = {
 };
 
 export type Pair = {
-  id: string;
+  id?: string;
   enabled?: boolean;
   name: string;
   value: string;
   contentType?: string;
   isFile?: boolean;
   readOnlyName?: boolean;
+};
+
+export type PairWithId = Pair & {
+  id: string;
 };
 
 /** Max number of pairs to show before prompting the user to reveal the rest */
@@ -90,7 +99,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   const [forceFocusNamePairId, setForceFocusNamePairId] = useState<string | null>(null);
   const [forceFocusValuePairId, setForceFocusValuePairId] = useState<string | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [pairs, setPairs] = useState<Pair[]>([]);
+  const [pairs, setPairs] = useState<PairWithId[]>([]);
   const [showAll, toggleShowAll] = useToggle(false);
 
   useImperativeHandle(
@@ -105,14 +114,13 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   );
 
   useEffect(() => {
-    // Remove empty headers on initial render and ensure they all have valid ids (pairs didn't used to have IDs)
-    const newPairs = [];
+    // Remove empty headers on initial render and ensure they all have valid ids (pairs didn't use to have IDs)
+    const newPairs: PairWithId[] = [];
     for (let i = 0; i < originalPairs.length; i++) {
       const p = originalPairs[i];
       if (!p) continue; // Make TS happy
       if (isPairEmpty(p)) continue;
-      if (!p.id) p.id = generateId();
-      newPairs.push(p);
+      newPairs.push({ ...p, id: p.id ?? generateId() });
     }
 
     // Add empty last pair if there is none
@@ -127,7 +135,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   }, [forceUpdateKey]);
 
   const setPairsAndSave = useCallback(
-    (fn: (pairs: Pair[]) => Pair[]) => {
+    (fn: (pairs: PairWithId[]) => PairWithId[]) => {
       setPairs((oldPairs) => {
         const pairs = fn(oldPairs);
         onChange(pairs);
@@ -165,7 +173,8 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   );
 
   const handleChange = useCallback(
-    (pair: Pair) => setPairsAndSave((pairs) => pairs.map((p) => (pair.id !== p.id ? p : pair))),
+    (pair: PairWithId) =>
+      setPairsAndSave((pairs) => pairs.map((p) => (pair.id !== p.id ? p : pair))),
     [setPairsAndSave],
   );
 
@@ -267,15 +276,15 @@ enum ItemTypes {
 
 type PairEditorRowProps = {
   className?: string;
-  pair: Pair;
+  pair: PairWithId;
   forceFocusNamePairId?: string | null;
   forceFocusValuePairId?: string | null;
   onMove: (id: string, side: 'above' | 'below') => void;
   onEnd: (id: string) => void;
-  onChange: (pair: Pair) => void;
-  onDelete?: (pair: Pair, focusPrevious: boolean) => void;
-  onFocus?: (pair: Pair) => void;
-  onSubmit?: (pair: Pair) => void;
+  onChange: (pair: PairWithId) => void;
+  onDelete?: (pair: PairWithId, focusPrevious: boolean) => void;
+  onFocus?: (pair: PairWithId) => void;
+  onSubmit?: (pair: PairWithId) => void;
   isLast?: boolean;
   index: number;
 } & Pick<
@@ -322,6 +331,7 @@ function PairEditorRow({
   const ref = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<EditorView>(null);
   const valueInputRef = useRef<EditorView>(null);
+  const valueLanguage = languageFromContentType(pair.contentType ?? null);
 
   useEffect(() => {
     if (forceFocusNamePairId === pair.id) {
@@ -341,7 +351,6 @@ function PairEditorRow({
   const deleteItems = useMemo(
     (): DropdownItem[] => [
       {
-        key: 'delete',
         label: 'Delete',
         onSelect: handleDelete,
         color: 'danger',
@@ -375,6 +384,24 @@ function PairEditorRow({
   const handleChangeValueContentType = useMemo(
     () => (contentType: string) => onChange({ ...pair, contentType }),
     [onChange, pair],
+  );
+
+  const handleEditMultiLineValue = useCallback(
+    () =>
+      showDialog({
+        id: 'pair-edit-multiline',
+        size: 'dynamic',
+        title: <>Edit {pair.name}</>,
+        render: ({ hide }) => (
+          <MultilineEditDialog
+            hide={hide}
+            onChange={handleChangeValueText}
+            defaultValue={pair.value}
+            language={valueLanguage}
+          />
+        ),
+      }),
+    [handleChangeValueText, pair.name, pair.value, valueLanguage],
   );
 
   const [, connectDrop] = useDrop<Pair>(
@@ -463,7 +490,7 @@ function PairEditorRow({
             wrapLines={false}
             readOnly={pair.readOnlyName}
             size="sm"
-            require={!isLast && !!pair.enabled && !!pair.value}
+            required={!isLast && !!pair.enabled && !!pair.value}
             validate={nameValidate}
             forceUpdateKey={forceUpdateKey}
             containerClassName={classNames(isLast && 'border-dashed')}
@@ -492,6 +519,15 @@ function PairEditorRow({
               onFocus={handleFocus}
               placeholder={valuePlaceholder ?? 'value'}
             />
+          ) : pair.value.includes('\n') ? (
+            <Button
+              color="secondary"
+              size="sm"
+              onClick={handleEditMultiLineValue}
+              title={pair.value}
+            >
+              Edit {formatSize(pair.value.length)}
+            </Button>
           ) : (
             <Input
               ref={valueInputRef}
@@ -502,6 +538,7 @@ function PairEditorRow({
               size="sm"
               containerClassName={classNames(isLast && 'border-dashed')}
               validate={valueValidate}
+              language={valueLanguage}
               forceUpdateKey={forceUpdateKey}
               defaultValue={pair.value}
               label="Value"
@@ -523,6 +560,7 @@ function PairEditorRow({
           onChangeText={handleChangeValueText}
           onChangeContentType={handleChangeValueContentType}
           onDelete={handleDelete}
+          editMultiLine={handleEditMultiLineValue}
         />
       ) : (
         <Dropdown items={deleteItems}>
@@ -549,12 +587,14 @@ function FileActionsDropdown({
   onChangeText,
   onChangeContentType,
   onDelete,
+  editMultiLine,
 }: {
   pair: Pair;
   onChangeFile: ({ filePath }: { filePath: string | null }) => void;
   onChangeText: (text: string) => void;
   onChangeContentType: (contentType: string) => void;
   onDelete: () => void;
+  editMultiLine: () => void;
 }) {
   const onChange = useCallback(
     (v: string) => {
@@ -567,14 +607,17 @@ function FileActionsDropdown({
   const extraItems = useMemo<DropdownItem[]>(
     () => [
       {
-        key: 'mime',
+        label: 'Edit Multi-Line',
+        leftSlot: <Icon icon="file_code" />,
+        hidden: pair.isFile,
+        onSelect: editMultiLine,
+      },
+      {
         label: 'Set Content-Type',
         leftSlot: <Icon icon="pencil" />,
-        hidden: !pair.isFile,
         onSelect: async () => {
           const contentType = await showPrompt({
             id: 'content-type',
-            require: false,
             title: 'Override Content-Type',
             label: 'Content-Type',
             placeholder: 'text/plain',
@@ -587,7 +630,6 @@ function FileActionsDropdown({
         },
       },
       {
-        key: 'clear-file',
         label: 'Unset File',
         leftSlot: <Icon icon="x" />,
         hidden: pair.isFile,
@@ -596,14 +638,13 @@ function FileActionsDropdown({
         },
       },
       {
-        key: 'delete',
         label: 'Delete',
         onSelect: onDelete,
         variant: 'danger',
         leftSlot: <Icon icon="trash" />,
       },
     ],
-    [onChangeContentType, onChangeFile, onDelete, pair.contentType, pair.isFile],
+    [editMultiLine, onChangeContentType, onChangeFile, onDelete, pair.contentType, pair.isFile],
   );
 
   return (
@@ -618,7 +659,7 @@ function FileActionsDropdown({
   );
 }
 
-function emptyPair(): Pair {
+function emptyPair(): PairWithId {
   return {
     enabled: true,
     name: '',
@@ -629,4 +670,41 @@ function emptyPair(): Pair {
 
 function isPairEmpty(pair: Pair): boolean {
   return !pair.name && !pair.value;
+}
+
+function MultilineEditDialog({
+  defaultValue,
+  language,
+  onChange,
+  hide,
+}: {
+  defaultValue: string;
+  language: EditorProps['language'];
+  onChange: (value: string) => void;
+  hide: () => void;
+}) {
+  const [value, setValue] = useState<string>(defaultValue);
+  return (
+    <div className="w-[100vw] max-w-[40rem] h-[50vh] max-h-full grid grid-rows-[minmax(0,1fr)_auto]">
+      <Editor
+        heightMode="auto"
+        defaultValue={defaultValue}
+        language={language}
+        onChange={setValue}
+        stateKey={null}
+      />
+      <div>
+        <Button
+          color="primary"
+          className="ml-auto my-2"
+          onClick={() => {
+            onChange(value);
+            hide();
+          }}
+        >
+          Done
+        </Button>
+      </div>
+    </div>
+  );
 }

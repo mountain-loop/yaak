@@ -8,11 +8,10 @@ import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
 import { settingsAtom } from '../hooks/useSettings';
 import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
-import { useWorkspaces } from '../hooks/useWorkspaces';
+import { getWorkspace, useWorkspaces } from '../hooks/useWorkspaces';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { revealInFinderText } from '../lib/reveal';
-import { getWorkspace } from '../lib/store';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
@@ -47,7 +46,6 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
 
     const extraItems: DropdownItem[] = [
       {
-        key: 'workspace-settings',
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
         hotKeyAction: 'workspace_settings.show',
@@ -63,7 +61,6 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         },
       },
       {
-        key: 'reveal-workspace-sync-dir',
         label: revealInFinderText,
         hidden: workspaceMeta == null || workspaceMeta.settingSyncDir == null,
         leftSlot: <Icon icon="folder_open" />,
@@ -73,7 +70,6 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         },
       },
       {
-        key: 'delete-responses',
         label: 'Clear Send History',
         color: 'warning',
         leftSlot: <Icon icon="history" />,
@@ -81,13 +77,11 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       },
       { type: 'separator' },
       {
-        key: 'create-workspace',
         label: 'New Workspace',
         leftSlot: <Icon icon="plus" />,
         onSelect: createWorkspace,
       },
       {
-        key: 'open-workspace',
         label: 'Open Workspace',
         leftSlot: <Icon icon="folder" />,
         onSelect: openWorkspaceFromSyncDir.mutate,
@@ -106,7 +100,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       return;
     }
 
-    const workspace = await getWorkspace(workspaceId);
+    const workspace = getWorkspace(workspaceId);
     if (workspace == null) return;
 
     showDialog({

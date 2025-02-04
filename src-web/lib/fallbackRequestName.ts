@@ -1,9 +1,9 @@
-import type { AnyModel, GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
+import type { AnyModel } from '@yaakapp-internal/models';
 
-export function fallbackRequestName(r: HttpRequest | GrpcRequest | AnyModel | null): string {
+export function fallbackRequestName(r: AnyModel | null): string {
   if (r == null) return '';
 
-  if (r.model !== 'grpc_request' && r.model !== 'http_request') {
+  if (!('url' in r) || r.model === 'plugin') {
     return 'name' in r ? r.name : '';
   }
 
@@ -15,7 +15,11 @@ export function fallbackRequestName(r: HttpRequest | GrpcRequest | AnyModel | nu
   // Replace variable syntax with variable name
   const withoutVariables = r.url.replace(/\$\{\[\s*([^\]\s]+)\s*]}/g, '$1');
   if (withoutVariables.trim() === '') {
-    return r.model === 'http_request' ? 'New HTTP Request' : 'new gRPC Request';
+    return r.model === 'http_request'
+      ? 'HTTP Request'
+      : r.model === 'websocket_request'
+        ? 'WebSocket Request'
+        : 'gRPC Request';
   }
 
   // GRPC gets nice short names

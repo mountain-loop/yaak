@@ -8,6 +8,7 @@
     "lib": ["es2021"],
     "noImplicitAny": false,
     "moduleResolution": "node16",
+    "resolveJsonModule": true,
     "sourceMap": true,
     "outDir": "build",
     "baseUrl": ".",

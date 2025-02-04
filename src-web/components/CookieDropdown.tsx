@@ -73,7 +73,6 @@ export const CookieDropdown = memo(function CookieDropdown() {
             ...(((cookieJars ?? []).length > 1 // Never delete the last one
               ? [
                   {
-                    key: 'delete',
                     label: 'Delete',
                     leftSlot: <Icon icon="trash" />,
                     color: 'danger',

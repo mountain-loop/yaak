@@ -30,6 +30,7 @@ export const createFolder = createFastMutation<
         label: 'Name',
         defaultValue: 'Folder',
         title: 'New Folder',
+        required: true,
         confirmText: 'Create',
         placeholder: 'Name',
       });

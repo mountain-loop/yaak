@@ -1,10 +1,4 @@
-import type {
-  AnyModel,
-  Cookie,
-  GrpcConnection,
-  HttpResponse,
-  HttpResponseHeader,
-} from '@yaakapp-internal/models';
+import type { AnyModel, Cookie, HttpResponseHeader } from '@yaakapp-internal/models';
 import { getMimeTypeFromContentType } from './contentType';
 
 export const BODY_TYPE_NONE = null;
@@ -15,10 +9,6 @@ export const BODY_TYPE_OTHER = 'other';
 export const BODY_TYPE_FORM_URLENCODED = 'application/x-www-form-urlencoded';
 export const BODY_TYPE_FORM_MULTIPART = 'multipart/form-data';
 export const BODY_TYPE_XML = 'text/xml';
-
-export const AUTH_TYPE_NONE = null;
-export const AUTH_TYPE_BASIC = 'basic';
-export const AUTH_TYPE_BEARER = 'bearer';
 
 export function cookieDomain(cookie: Cookie): string {
   if (cookie.domain === 'NotPresent' || cookie.domain === 'Empty') {
@@ -31,13 +21,6 @@ export function cookieDomain(cookie: Cookie): string {
     return cookie.domain.Suffix;
   }
   return 'unknown';
-}
-
-export function isResponseLoading(
-  response: Pick<HttpResponse | GrpcConnection, 'state'> | null,
-): boolean {
-  if (response == null) return false;
-  return response.state !== 'closed';
 }
 
 export function modelsEq(a: AnyModel, b: AnyModel) {

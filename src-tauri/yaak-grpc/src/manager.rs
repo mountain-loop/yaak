@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use hyper::client::HttpConnector;
-use hyper::Client;
 use hyper_rustls::HttpsConnector;
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
 pub use prost_reflect::DynamicMessage;
 use prost_reflect::{DescriptorPool, MethodDescriptor, ServiceDescriptor};
 use serde_json::Deserializer;
@@ -16,9 +16,8 @@ use tonic::transport::Uri;
 use tonic::{IntoRequest, IntoStreamingRequest, Request, Response, Status, Streaming};
 
 use crate::codec::DynamicCodec;
-use crate::proto::{
-    fill_pool_from_files, fill_pool_from_reflection, get_transport, method_desc_to_path,
-};
+use crate::reflection::{fill_pool_from_files, fill_pool_from_reflection, method_desc_to_path};
+use crate::transport::get_transport;
 use crate::{json_schema, MethodDefinition, ServiceDefinition};
 
 #[derive(Clone)]

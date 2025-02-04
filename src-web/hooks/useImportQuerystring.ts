@@ -1,10 +1,10 @@
 import type { HttpUrlParameter } from '@yaakapp-internal/models';
 import { generateId } from '../lib/generateId';
 import { pluralize } from '../lib/pluralize';
-import { getHttpRequest } from '../lib/store';
-import { useFastMutation } from './useFastMutation';
-import { useRequestEditor } from './useRequestEditor';
 import { showToast } from '../lib/toast';
+import { useFastMutation } from './useFastMutation';
+import { getHttpRequest } from './useHttpRequests';
+import { useRequestEditor } from './useRequestEditor';
 import { useUpdateAnyHttpRequest } from './useUpdateAnyHttpRequest';
 
 export function useImportQuerystring(requestId: string) {
@@ -19,7 +19,7 @@ export function useImportQuerystring(requestId: string) {
       const querystring = split[1] ?? '';
       if (!querystring) return;
 
-      const request = await getHttpRequest(requestId);
+      const request = getHttpRequest(requestId);
       if (request == null) return;
 
       const parsedParams = Array.from(new URLSearchParams(querystring).entries());

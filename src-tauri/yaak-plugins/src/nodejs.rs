@@ -33,7 +33,7 @@ pub async fn start_nodejs_plugin_runtime<R: Runtime>(
         .shell()
         .sidecar("yaaknode")?
         .env("PORT", addr.port().to_string())
-        .args(&[plugin_runtime_main]);
+        .args(&[&plugin_runtime_main]);
 
     let (mut child_rx, child) = cmd.spawn()?;
     info!("Spawned plugin runtime");

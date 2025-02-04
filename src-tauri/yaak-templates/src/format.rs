@@ -142,7 +142,7 @@ pub fn format_json(text: &str, tab: &str) -> String {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::format::format_json;
 
     #[test]

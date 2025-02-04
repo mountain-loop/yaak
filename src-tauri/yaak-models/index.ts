@@ -1,1 +1,1 @@
-export * from './bindings/models';
+export * from './bindings/gen_models';

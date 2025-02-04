@@ -1,6 +1,7 @@
 import type { Environment } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { atom } from 'jotai/index';
+import { jotaiStore } from '../lib/jotai';
 
 export const environmentsAtom = atom<Environment[]>([]);
 
@@ -22,4 +23,8 @@ export const environmentsBreakdownAtom = atom<{
 
 export function useEnvironments() {
   return useAtomValue(environmentsBreakdownAtom);
+}
+
+export function getEnvironment(id: string | null) {
+  return jotaiStore.get(environmentsAtom).find((e) => e.id === id) ?? null;
 }

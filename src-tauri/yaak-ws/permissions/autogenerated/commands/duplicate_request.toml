@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-duplicate-request"
+description = "Enables the duplicate_request command without any pre-configured scope."
+commands.allow = ["duplicate_request"]
+
+[[permission]]
+identifier = "deny-duplicate-request"
+description = "Denies the duplicate_request command without any pre-configured scope."
+commands.deny = ["duplicate_request"]

@@ -1,8 +1,9 @@
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import type { ReactNode } from 'react';
-import { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
+import { generateId } from '../../lib/generateId';
 import type { EditorProps } from './Editor/Editor';
 import { Editor } from './Editor/Editor';
 import { IconButton } from './IconButton';
@@ -15,6 +16,7 @@ export type InputProps = Pick<
   | 'useTemplating'
   | 'autocomplete'
   | 'forceUpdateKey'
+  | 'disabled'
   | 'autoFocus'
   | 'autoSelect'
   | 'autocompleteVariables'
@@ -41,12 +43,13 @@ export type InputProps = Pick<
   className?: string;
   placeholder?: string;
   validate?: boolean | ((v: string) => boolean);
-  require?: boolean;
+  required?: boolean;
   wrapLines?: boolean;
+  multiLine?: boolean;
   stateKey: EditorProps['stateKey'];
 };
 
-export const Input = forwardRef<EditorView | undefined, InputProps>(function Input(
+export const Input = forwardRef<EditorView, InputProps>(function Input(
   {
     className,
     containerClassName,
@@ -64,7 +67,7 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
     onPaste,
     onPasteOverwrite,
     placeholder,
-    require,
+    required,
     rightSlot,
     wrapLines,
     size = 'md',
@@ -72,6 +75,8 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
     validate,
     readOnly,
     stateKey,
+    multiLine,
+    disabled,
     ...props
   }: InputProps,
   ref,
@@ -79,42 +84,54 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
   const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
   const [currentValue, setCurrentValue] = useState(defaultValue ?? '');
   const [focused, setFocused] = useState(false);
+  const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [stateKey, forceUpdateKey]);
+  const editorRef = useRef<EditorView | null>(null);
+  useImperativeHandle<EditorView | null, EditorView | null>(ref, () => editorRef.current);
 
   const handleFocus = useCallback(() => {
     if (readOnly) return;
     setFocused(true);
+    // Select all text on focus
+    editorRef.current?.dispatch({
+      selection: { anchor: 0, head: editorRef.current.state.doc.length },
+    });
     onFocus?.();
   }, [onFocus, readOnly]);
 
   const handleBlur = useCallback(() => {
     setFocused(false);
+    // Move selection to the end on blur
+    editorRef.current?.dispatch({
+      selection: { anchor: editorRef.current.state.doc.length },
+    });
     onBlur?.();
   }, [onBlur]);
 
-  const id = `input-${label}`;
+  const id = useRef(`input-${generateId()}`);
   const editorClassName = classNames(
     className,
     '!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder',
   );
 
   const isValid = useMemo(() => {
-    if (require && !validateRequire(currentValue)) return false;
+    if (required && !validateRequire(currentValue)) return false;
     if (typeof validate === 'boolean') return validate;
     if (typeof validate === 'function' && !validate(currentValue)) return false;
     return true;
-  }, [require, currentValue, validate]);
+  }, [required, currentValue, validate]);
 
   const handleChange = useCallback(
     (value: string) => {
       setCurrentValue(value);
       onChange?.(value);
+      setHasChanged(true);
     },
-    [onChange],
+    [onChange, setHasChanged],
   );
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Submit nearest form on Enter key press
+  // Submit the nearest form on Enter key press
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key !== 'Enter') return;
@@ -137,7 +154,12 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
         labelPosition === 'top' && 'flex-row gap-0.5',
       )}
     >
-      <Label htmlFor={id} className={classNames(labelClassName, hideLabel && 'sr-only')}>
+      <Label
+        htmlFor={id.current}
+        required={required}
+        visuallyHidden={hideLabel}
+        className={classNames(labelClassName)}
+      >
         {label}
       </Label>
       <HStack
@@ -147,8 +169,9 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
           'x-theme-input',
           'relative w-full rounded-md text',
           'border',
-          focused ? 'border-border-focus' : 'border-border',
-          !isValid && '!border-danger',
+          focused && !disabled ? 'border-border-focus' : 'border-border',
+          disabled && 'border-dotted',
+          !isValid && hasChanged && '!border-danger',
           size === 'md' && 'min-h-md',
           size === 'sm' && 'min-h-sm',
           size === 'xs' && 'min-h-xs',
@@ -164,11 +187,13 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
           )}
         >
           <Editor
-            ref={ref}
-            id={id}
-            singleLine
+            ref={editorRef}
+            id={id.current}
+            hideGutter
+            singleLine={!multiLine}
             stateKey={stateKey}
             wrapLines={wrapLines}
+            heightMode="auto"
             onKeyDown={handleKeyDown}
             type={type === 'password' && !obscured ? 'text' : type}
             defaultValue={defaultValue}
@@ -177,7 +202,12 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
             onChange={handleChange}
             onPaste={onPaste}
             onPasteOverwrite={onPasteOverwrite}
-            className={editorClassName}
+            disabled={disabled}
+            className={classNames(
+              editorClassName,
+              multiLine && size === 'md' && 'py-1.5',
+              multiLine && size === 'sm' && 'py-1',
+            )}
             onFocus={handleFocus}
             onBlur={handleBlur}
             readOnly={readOnly}
@@ -188,7 +218,7 @@ export const Input = forwardRef<EditorView | undefined, InputProps>(function Inp
           <IconButton
             title={obscured ? `Show ${label}` : `Obscure ${label}`}
             size="xs"
-            className="mr-0.5 group/obscure !h-auto my-0.5"
+            className={classNames("mr-0.5 group/obscure !h-auto my-0.5", disabled && 'opacity-disabled')}
             iconClassName="text-text-subtle group-hover/obscure:text"
             iconSize="sm"
             icon={obscured ? 'eye' : 'eye_closed'}

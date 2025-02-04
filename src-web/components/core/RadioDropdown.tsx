@@ -38,7 +38,6 @@ export function RadioDropdown<T = string | null>({
           return {
             key: item.value,
             label: item.label,
-            shortLabel: item.shortLabel,
             rightSlot: item.rightSlot,
             onSelect: () => onChange(item.value),
             leftSlot: <Icon icon={value === item.value ? 'check' : 'empty'} />,

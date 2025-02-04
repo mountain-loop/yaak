@@ -41,6 +41,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
   return (
     <VStack space={3} alignItems="start" className="pb-3 h-full">
       <Input
+        required
         label="Name"
         defaultValue={workspace.name}
         onChange={(name) => upsertWorkspace.mutate({ ...workspace, name })}

@@ -5,6 +5,10 @@
     @apply mt-0;
   }
 
+  & > :last-child {
+    @apply mb-0;
+  }
+
   img,
   video,
   p,
@@ -107,6 +111,7 @@
   ul code {
     @apply text-xs bg-surface-active text-info font-normal whitespace-nowrap;
     @apply px-1.5 py-0.5 rounded not-italic;
+    @apply select-text;
   }
 
   pre {

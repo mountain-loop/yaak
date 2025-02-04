@@ -33,7 +33,7 @@ export function ConfirmLargeResponse({ children, response }: Props) {
   const isLarge = contentLength > tooLargeBytes;
   if (!showLargeResponse && isLarge) {
     return (
-      <Banner color="primary" className="h-full flex flex-col gap-3">
+      <Banner color="primary" className="flex flex-col gap-3">
         <p>
           Showing responses over{' '}
           <InlineCode>

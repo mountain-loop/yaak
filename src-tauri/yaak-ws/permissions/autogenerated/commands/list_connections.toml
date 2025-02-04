@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-list-connections"
+description = "Enables the list_connections command without any pre-configured scope."
+commands.allow = ["list_connections"]
+
+[[permission]]
+identifier = "deny-list-connections"
+description = "Denies the list_connections command without any pre-configured scope."
+commands.deny = ["list_connections"]

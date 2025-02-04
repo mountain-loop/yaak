@@ -1,16 +1,15 @@
-import { useFastMutation } from './useFastMutation';
 import type { Settings } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
-import { getSettings } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
-import { settingsAtom } from './useSettings';
+import { useFastMutation } from './useFastMutation';
+import { getSettings, settingsAtom } from './useSettings';
 
 export function useUpdateSettings() {
   const setSettings = useSetAtom(settingsAtom);
   return useFastMutation<Settings, unknown, Partial<Settings>>({
     mutationKey: ['update_settings'],
     mutationFn: async (patch) => {
-      const settings = await getSettings();
+      const settings = getSettings();
       const newSettings: Settings = { ...settings, ...patch };
       return invokeCmd<Settings>('cmd_update_settings', { settings: newSettings });
     },

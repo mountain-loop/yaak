@@ -3,10 +3,9 @@ import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
 import { showConfirm } from '../lib/confirm';
-import { getFolder } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
 import { useFastMutation } from './useFastMutation';
-import { foldersAtom } from './useFolders';
+import {foldersAtom, getFolder} from './useFolders';
 import { removeModelById } from './useSyncModelStores';
 
 export function useDeleteFolder(id: string | null) {
@@ -15,7 +14,7 @@ export function useDeleteFolder(id: string | null) {
   return useFastMutation<Folder | null, string>({
     mutationKey: ['delete_folder', id],
     mutationFn: async () => {
-      const folder = await getFolder(id);
+      const folder = getFolder(id);
       const confirmed = await showConfirm({
         id: 'delete-folder',
         title: 'Delete Folder',

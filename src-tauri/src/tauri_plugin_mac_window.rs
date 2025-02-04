@@ -2,7 +2,8 @@ use crate::MAIN_WINDOW_PREFIX;
 use hex_color::HexColor;
 use log::warn;
 use objc::{msg_send, sel, sel_impl};
-use rand::{distributions::Alphanumeric, Rng};
+use rand::distr::Alphanumeric;
+use rand::Rng;
 use tauri::{
     plugin::{Builder, TauriPlugin},
     Emitter, Listener, Manager, Runtime, Window, WindowEvent,
@@ -420,7 +421,7 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
         };
         let app_box = Box::into_raw(Box::new(app_state)) as *mut c_void;
         let random_str: String =
-            rand::thread_rng().sample_iter(&Alphanumeric).take(20).map(char::from).collect();
+            rand::rng().sample_iter(&Alphanumeric).take(20).map(char::from).collect();
 
         // We need to ensure we have a unique delegate name, otherwise we will panic while trying to create a duplicate
         // delegate with the same name.

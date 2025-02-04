@@ -6,7 +6,7 @@ export function InlineCode({ className, ...props }: HTMLAttributes<HTMLSpanEleme
     <code
       className={classNames(
         className,
-        'font-mono text-shrink bg-surface-highlight border border-border-subtle',
+        'font-mono text-shrink bg-surface-highlight border border-border-subtle flex-grow-0',
         'px-1.5 py-0.5 rounded text shadow-inner break-words',
       )}
       {...props}

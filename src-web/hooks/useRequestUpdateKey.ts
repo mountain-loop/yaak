@@ -1,15 +1,16 @@
-import { createGlobalState } from 'react-use';
+import { atom, useAtomValue } from 'jotai';
 import { generateId } from '../lib/generateId';
+import { jotaiStore } from '../lib/jotai';
 
-const useGlobalState = createGlobalState<Record<string, string>>({});
+const keyAtom = atom<Record<string, string>>({});
 
 export function useRequestUpdateKey(requestId: string | null) {
-  const [keys, setKeys] = useGlobalState();
+  const keys = useAtomValue(keyAtom);
   const key = keys[requestId ?? 'n/a'];
   return {
     updateKey: `${requestId}::${key ?? 'default'}`,
     wasUpdatedExternally: (changedRequestId: string) => {
-      setKeys((m) => ({ ...m, [changedRequestId]: generateId() }));
+      jotaiStore.set(keyAtom, (m) => ({ ...m, [changedRequestId]: generateId() }));
     },
   };
 }

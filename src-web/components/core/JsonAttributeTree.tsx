@@ -84,7 +84,7 @@ export const JsonAttributeTree = ({
   }, [attrValue, attrKeyJsonPath, isExpanded, depth]);
 
   const labelEl = (
-    <span className={classNames(labelClassName, 'select-text group-hover:text-text-subtle')}>
+    <span className={classNames(labelClassName, 'cursor-text select-text group-hover:text-text-subtle')}>
       {label}
     </span>
   );
@@ -115,7 +115,7 @@ export const JsonAttributeTree = ({
           </button>
         ) : (
           <>
-            <span className="text-primary mr-1.5 pl-4 whitespace-nowrap select-text">
+            <span className="text-primary mr-1.5 pl-4 whitespace-nowrap cursor-text select-text">
               {attrKey}:
             </span>
             {labelEl}

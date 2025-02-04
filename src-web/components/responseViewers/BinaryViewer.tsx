@@ -1,10 +1,10 @@
-import { useSaveResponse } from '../../hooks/useSaveResponse';
 import type { HttpResponse } from '@yaakapp-internal/models';
+import { useSaveResponse } from '../../hooks/useSaveResponse';
 import { getContentTypeHeader } from '../../lib/model_util';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
-import { Icon } from '../core/Icon';
 import { InlineCode } from '../core/InlineCode';
+import { LoadingIcon } from '../core/LoadingIcon';
 import { EmptyStateText } from '../EmptyStateText';
 
 interface Props {
@@ -16,10 +16,10 @@ export function BinaryViewer({ response }: Props) {
   const contentType = getContentTypeHeader(response.headers) ?? 'unknown';
 
   // Wait until the response has been fully-downloaded
-  if (response.state !== 'closed') {
+  if (response.state === 'closed') {
     return (
       <EmptyStateText>
-        <Icon icon="refresh" spin />
+        <LoadingIcon size="sm" />
       </EmptyStateText>
     );
   }

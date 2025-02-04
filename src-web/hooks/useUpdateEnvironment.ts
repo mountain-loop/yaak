@@ -1,10 +1,9 @@
-import { useFastMutation } from './useFastMutation';
 import type { Environment } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai/index';
-import { getEnvironment } from '../lib/store';
 import { invokeCmd } from '../lib/tauri';
-import { environmentsAtom } from './useEnvironments';
-import {updateModelList} from "./useSyncModelStores";
+import { environmentsAtom, getEnvironment } from './useEnvironments';
+import { useFastMutation } from './useFastMutation';
+import { updateModelList } from './useSyncModelStores';
 
 export function useUpdateEnvironment(id: string | null) {
   const setEnvironments = useSetAtom(environmentsAtom);
@@ -15,7 +14,7 @@ export function useUpdateEnvironment(id: string | null) {
   >({
     mutationKey: ['update_environment', id],
     mutationFn: async (v) => {
-      const environment = await getEnvironment(id);
+      const environment = getEnvironment(id);
       if (environment == null) {
         throw new Error("Can't update a null environment");
       }
