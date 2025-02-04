@@ -45,9 +45,19 @@ pub(crate) async fn watch_directory(
                 Some(event_res) = async_rx.recv() => {
                     match event_res {
                         Ok(event) => {
+                            // Filter out any ignored directories and see if we still get a result
+                            let paths = event.paths.into_iter()
+                                .map(|p| p.strip_prefix(&dir).unwrap().to_path_buf())
+                                .filter(|p| !p.starts_with(".git") && !p.starts_with("node_modules"))
+                                .collect::<Vec<PathBuf>>();
+
+                            if paths.is_empty() {
+                                continue;
+                            }
+
                             channel
                                 .send(WatchEvent {
-                                    paths: event.paths,
+                                    paths,
                                     kind: format!("{:?}", event.kind),
                                 })
                                 .expect("Failed to send watch event");

@@ -6,8 +6,8 @@ use tauri::{
 };
 
 mod commands;
-mod error;
-mod models;
+pub mod error;
+pub mod models;
 mod sync;
 mod watch;
 

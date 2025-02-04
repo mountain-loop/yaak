@@ -107,7 +107,6 @@ function PluginInfo({ plugin }: { plugin: Plugin }) {
           size="sm"
           icon="trash"
           title="Uninstall plugin"
-          className="text-text-subtlest"
           event="plugin.delete"
           onClick={() => deletePlugin.mutate()}
         />

@@ -17,6 +17,9 @@ pub enum Error {
     #[error("Yaml error: {0}")]
     ModelError(#[from] yaak_models::error::Error),
 
+    #[error("Sync error: {0}")]
+    SyncError(#[from] yaak_sync::error::Error),
+
     #[error("I/o error: {0}")]
     IoError(#[from] io::Error),
 

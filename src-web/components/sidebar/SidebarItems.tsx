@@ -44,7 +44,7 @@ export const SidebarItems = memo(function SidebarItems({
       aria-orientation="vertical"
       dir="ltr"
       className={classNames(
-        tree.depth > 0 && 'border-l border-border-subtle',
+        tree.depth > 0 && 'border-l border-border',
         tree.depth === 0 && 'ml-0',
         tree.depth >= 1 && 'ml-[1.2rem]',
       )}

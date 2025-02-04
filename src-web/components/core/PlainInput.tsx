@@ -148,7 +148,7 @@ export function PlainInput({
             title={obscured ? `Show ${label}` : `Obscure ${label}`}
             size="xs"
             className="mr-0.5 group/obscure !h-auto my-0.5"
-            iconClassName="text-text-subtle group-hover/obscure:text"
+            iconClassName="group-hover/obscure:text"
             iconSize="sm"
             icon={obscured ? 'eye' : 'eye_closed'}
             onClick={() => setObscured((o) => !o)}

@@ -1,3 +1,4 @@
+import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { forwardRef, useImperativeHandle, useRef } from 'react';
@@ -9,16 +10,7 @@ import { LoadingIcon } from './LoadingIcon';
 
 export type ButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, 'color' | 'onChange'> & {
   innerClassName?: string;
-  color?:
-    | 'custom'
-    | 'default'
-    | 'secondary'
-    | 'primary'
-    | 'info'
-    | 'success'
-    | 'notice'
-    | 'warning'
-    | 'danger';
+  color?: Color | 'custom' | 'default';
   variant?: 'border' | 'solid';
   isLoading?: boolean;
   size?: '2xs' | 'xs' | 'sm' | 'md';

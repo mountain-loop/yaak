@@ -3,14 +3,14 @@ use crate::error::Result;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
+use std::fs;
 use std::path::Path;
-use tokio::fs;
 use ts_rs::TS;
 use yaak_models::models::{
     AnyModel, Environment, Folder, GrpcRequest, HttpRequest, WebsocketRequest, Workspace,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum SyncModel {
@@ -23,24 +23,28 @@ pub enum SyncModel {
 }
 
 impl SyncModel {
-    pub async fn from_file(file_path: &Path) -> Result<Option<(SyncModel, Vec<u8>, String)>> {
-        let content = match fs::read(file_path).await {
-            Ok(c) => c,
-            Err(_) => return Ok(None),
-        };
-
+    pub fn from_bytes(content: Vec<u8>, file_path: &Path) -> Result<(SyncModel, Vec<u8>, String)> {
         let mut hasher = Sha1::new();
         hasher.update(&content);
         let checksum = hex::encode(hasher.finalize());
 
         let ext = file_path.extension().unwrap_or_default();
         if ext == "yml" || ext == "yaml" {
-            Ok(Some((serde_yaml::from_slice(content.as_slice())?, content, checksum)))
+            Ok((serde_yaml::from_slice(content.as_slice())?, content, checksum))
         } else if ext == "json" {
-            Ok(Some((serde_json::from_reader(content.as_slice())?, content, checksum)))
+            Ok((serde_json::from_reader(content.as_slice())?, content, checksum))
         } else {
             Err(InvalidSyncFile(file_path.to_str().unwrap().to_string()))
         }
+    }
+
+    pub fn from_file(file_path: &Path) -> Result<(SyncModel, Vec<u8>, String)> {
+        let content = match fs::read(file_path) {
+            Ok(c) => c,
+            Err(_) => return Err(InvalidSyncFile(file_path.to_str().unwrap_or_default().to_string())),
+        };
+
+        Self::from_bytes(content, file_path)
     }
 
     pub fn to_file_contents(&self, rel_path: &Path) -> Result<(Vec<u8>, String)> {

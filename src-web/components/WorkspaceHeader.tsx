@@ -32,7 +32,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         <CookieDropdown />
         <HStack className="min-w-0">
           <WorkspaceActionsDropdown />
-          <Icon icon="chevron_right" className="text-text-subtle" />
+          <Icon icon="chevron_right" color="secondary" />
           <EnvironmentActionsDropdown className="w-auto pointer-events-auto" />
         </HStack>
       </HStack>
@@ -47,6 +47,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
           title="Search or execute a command"
           size="sm"
           event="search"
+          iconColor="secondary"
           onClick={togglePalette}
         />
         <SettingsDropdown />

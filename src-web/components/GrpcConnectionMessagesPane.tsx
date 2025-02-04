@@ -214,16 +214,16 @@ function EventRow({
         )}
       >
         <Icon
-          className={
+          color={
             eventType === 'server_message'
-              ? 'text-info'
+              ? 'info'
               : eventType === 'client_message'
-                ? 'text-primary'
+                ? 'primary'
                 : eventType === 'error' || (status != null && status > 0)
-                  ? 'text-danger'
+                  ? 'danger'
                   : eventType === 'connection_end'
-                    ? 'text-success'
-                    : 'text-text-subtle'
+                    ? 'success'
+                    : undefined
           }
           title={
             eventType === 'server_message'

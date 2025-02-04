@@ -30,7 +30,7 @@ export const PairOrBulkEditor = forwardRef<PairEditorRef, Props>(function PairOr
           title={useBulk ? 'Enable form edit' : 'Enable bulk edit'}
           className={classNames(
             'transition-opacity opacity-0 group-hover:opacity-80 hover:!opacity-100 shadow',
-            'bg-surface text-text-subtle hover:text group-hover/wrapper:opacity-100',
+            'bg-surface hover:text group-hover/wrapper:opacity-100',
           )}
           onClick={() => setUseBulk((b) => !b)}
           icon={useBulk ? 'table' : 'file_code'}

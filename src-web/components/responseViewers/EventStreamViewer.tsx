@@ -153,7 +153,7 @@ function EventRow({
         'text-text-subtle hover:text',
       )}
     >
-      <Icon className={classNames('text-info')} title="Server Message" icon="arrow_big_down_dash" />
+      <Icon color="info" title="Server Message" icon="arrow_big_down_dash" />
       <EventLabels className="text-sm" event={event} isActive={isActive} index={index} />
       <div className={classNames('w-full truncate text-xs')}>{event.data.slice(0, 1000)}</div>
     </button>

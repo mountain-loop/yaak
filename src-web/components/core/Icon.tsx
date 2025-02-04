@@ -1,3 +1,4 @@
+import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import * as lucide from 'lucide-react';
 import type { HTMLAttributes } from 'react';
@@ -86,6 +87,7 @@ const icons = {
   unpin: lucide.PinOffIcon,
   update: lucide.RefreshCcwIcon,
   upload: lucide.UploadIcon,
+  variable: lucide.VariableIcon,
   x: lucide.XIcon,
   _unknown: lucide.ShieldAlertIcon,
 
@@ -98,22 +100,38 @@ export interface IconProps {
   size?: '2xs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   spin?: boolean;
   title?: string;
+  color?: Color | 'custom' | 'default';
 }
 
-export const Icon = memo(function Icon({ icon, spin, size = 'md', className, title }: IconProps) {
+export const Icon = memo(function Icon({
+  icon,
+  color = 'default',
+  spin,
+  size = 'md',
+  className,
+  title,
+}: IconProps) {
   const Component = icons[icon] ?? icons._unknown;
   return (
     <Component
       title={title}
       className={classNames(
         className,
-        'text-inherit flex-shrink-0',
+        'flex-shrink-0',
         size === 'xl' && 'h-6 w-6',
         size === 'lg' && 'h-5 w-5',
         size === 'md' && 'h-4 w-4',
         size === 'sm' && 'h-3.5 w-3.5',
         size === 'xs' && 'h-3 w-3',
         size === '2xs' && 'h-2.5 w-2.5',
+        color === 'default' && 'inherit',
+        color === 'danger' && 'text-danger',
+        color === 'warning' && 'text-warning',
+        color === 'notice' && 'text-notice',
+        color === 'info' && 'text-info',
+        color === 'success' && 'text-success',
+        color === 'primary' && 'text-primary',
+        color === 'secondary' && 'text-secondary',
         spin && 'animate-spin',
       )}
     />

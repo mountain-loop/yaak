@@ -267,8 +267,8 @@ export const SidebarItem = memo(function SidebarItem({
             <Icon
               size="sm"
               icon="chevron_right"
+              color="secondary"
               className={classNames(
-                'text-text-subtlest',
                 'transition-transform',
                 !collapsed && 'transform rotate-90',
               )}

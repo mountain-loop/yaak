@@ -76,7 +76,7 @@ export function SettingsDropdown() {
         },
       ]}
     >
-      <IconButton size="sm" title="Main Menu" icon="settings" className="pointer-events-auto" />
+      <IconButton size="sm" title="Main Menu" icon="settings" iconColor="secondary" className="pointer-events-auto" />
     </Dropdown>
   );
 }

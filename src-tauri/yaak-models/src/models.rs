@@ -147,7 +147,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct Workspace {
@@ -325,7 +325,7 @@ impl<'s> TryFrom<&Row<'s>> for CookieJar {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct Environment {
@@ -374,7 +374,7 @@ impl<'s> TryFrom<&Row<'s>> for Environment {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct EnvironmentVariable {
@@ -387,7 +387,7 @@ pub struct EnvironmentVariable {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct Folder {
@@ -438,7 +438,7 @@ impl<'s> TryFrom<&Row<'s>> for Folder {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct HttpRequestHeader {
@@ -451,7 +451,7 @@ pub struct HttpRequestHeader {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct HttpUrlParameter {
@@ -464,7 +464,7 @@ pub struct HttpUrlParameter {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct HttpRequest {
@@ -637,7 +637,7 @@ impl Default for WebsocketMessageType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct WebsocketRequest {
@@ -895,7 +895,7 @@ impl HttpResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcMetadataEntry {
@@ -908,7 +908,7 @@ pub struct GrpcMetadataEntry {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct GrpcRequest {

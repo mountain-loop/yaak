@@ -62,7 +62,7 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
         )}
       >
         <div className="px-3 py-3 flex items-start gap-2 w-full">
-          {toastIcon && <Icon icon={toastIcon} className="mt-1 text-text-subtle" />}
+          {toastIcon && <Icon icon={toastIcon} className="mt-1" />}
           <VStack space={2} className="w-full">
             <div>{children}</div>
             {action?.({ hide: onClose })}

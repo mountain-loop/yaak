@@ -177,7 +177,7 @@ export function SettingsAppearance() {
         className="mt-3 w-full bg-surface p-3 border border-dashed border-border-subtle rounded overflow-x-auto"
       >
         <HStack className="text" space={1.5}>
-          <Icon icon={appearance === 'dark' ? 'moon' : 'sun'} className="text-text-subtle" />
+          <Icon icon={appearance === 'dark' ? 'moon' : 'sun'} />
           <strong>{activeTheme.active.name}</strong>
           <em>(preview)</em>
         </HStack>

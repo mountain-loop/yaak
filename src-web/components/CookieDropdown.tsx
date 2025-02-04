@@ -94,7 +94,7 @@ export const CookieDropdown = memo(function CookieDropdown() {
 
   return (
     <Dropdown items={items}>
-      <IconButton size="sm" icon="cookie" title="Cookie Jar" />
+      <IconButton size="sm" icon="cookie" iconColor="secondary" title="Cookie Jar" />
     </Dropdown>
   );
 });

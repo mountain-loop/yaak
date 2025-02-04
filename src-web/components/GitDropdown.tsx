@@ -5,8 +5,9 @@ import { showDialog } from '../lib/dialog';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { GitCommitDialog } from './GitCommitDialog';
+import { InlineCode } from './core/InlineCode';
 
-export function SyncDropdown() {
+export function GitDropdown() {
   const workspaceMeta = useWorkspaceMeta();
 
   if (workspaceMeta?.settingSyncDir == null) {
@@ -54,8 +55,8 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   return (
     <Dropdown fullWidth items={items}>
       <button className="px-3 h-md border-t border-border flex items-center justify-between text-text-subtle">
-        {noRepo ? 'Configure Git' : 'Git'}
-        <Icon icon="git_branch" size="sm" className="text-text-subtle" />
+        {noRepo ? 'Configure Git' : <InlineCode>{status.data?.headShorthand}</InlineCode>}
+        <Icon icon="git_branch" size="sm" />
       </button>
     </Dropdown>
   );

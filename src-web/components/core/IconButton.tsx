@@ -12,6 +12,7 @@ export type IconButtonProps = IconProps &
     showConfirm?: boolean;
     iconClassName?: string;
     iconSize?: IconProps['size'];
+    iconColor?: IconProps['color'];
     title: string;
     showBadge?: boolean;
   };
@@ -29,6 +30,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     size = 'md',
     iconSize,
     showBadge,
+    iconColor,
     ...props
   }: IconButtonProps,
   ref,
@@ -47,7 +49,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       ref={ref}
       aria-hidden={icon === 'empty'}
       disabled={icon === 'empty'}
-      tabIndex={tabIndex ?? icon === 'empty' ? -1 : undefined}
+      tabIndex={(tabIndex ?? icon === 'empty') ? -1 : undefined}
       onClick={handleClick}
       innerClassName="flex items-center justify-center"
       size={size}
@@ -56,8 +58,6 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         className,
         'group/button relative flex-shrink-0',
         '!px-0',
-        color === 'custom' && 'text-text-subtle',
-        color === 'default' && 'text-text-subtle',
         size === 'md' && 'w-md',
         size === 'sm' && 'w-sm',
         size === 'xs' && 'w-xs',
@@ -74,11 +74,11 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         size={iconSize}
         icon={confirmed ? 'check' : icon}
         spin={spin}
+        color={confirmed ? 'success' : iconColor}
         className={classNames(
           iconClassName,
           'group-hover/button:text',
           props.disabled && 'opacity-70',
-          confirmed && 'text-green-600',
         )}
       />
     </Button>

@@ -519,7 +519,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                     space={2}
                     className="pb-0.5 px-1.5 mb-2 text-sm border border-border-subtle mx-2 rounded font-mono h-xs"
                   >
-                    <Icon icon="search" size="xs" className="text-text-subtle" />
+                    <Icon icon="search" size="xs" />
                     <div className="text">{filter}</div>
                   </HStack>
                 )}

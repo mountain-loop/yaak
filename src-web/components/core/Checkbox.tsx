@@ -12,6 +12,7 @@ export interface CheckboxProps {
   disabled?: boolean;
   inputWrapperClassName?: string;
   hideLabel?: boolean;
+  fullWidth?: boolean;
   event?: string;
 }
 
@@ -23,6 +24,7 @@ export function Checkbox({
   disabled,
   title,
   hideLabel,
+  fullWidth,
   event,
 }: CheckboxProps) {
   return (
@@ -52,7 +54,9 @@ export function Checkbox({
           />
         </div>
       </div>
-      <span className={classNames(disabled && 'opacity-disabled')}>{!hideLabel && title}</span>
+      <div className={classNames(fullWidth && 'w-full', disabled && 'opacity-disabled')}>
+        {!hideLabel && title}
+      </div>
     </HStack>
   );
 }

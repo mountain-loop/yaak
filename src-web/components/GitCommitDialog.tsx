@@ -1,26 +1,27 @@
+import type { GitStatusEntry } from '@yaakapp-internal/git';
 import { useGit } from '@yaakapp-internal/git';
-import type { GitStatusEntry } from '@yaakapp-internal/git/bindings/git';
 import type {
   Environment,
   Folder,
   GrpcRequest,
   HttpRequest,
+  WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 
 import { useMemo, useState } from 'react';
-import YAML from 'yaml';
 import { fallbackRequestName } from '../lib/fallbackRequestName';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import type { CheckboxProps } from './core/Checkbox';
 import { Checkbox } from './core/Checkbox';
+import { Editor } from './core/Editor/Editor';
+import { Icon } from './core/Icon';
 import { InlineCode } from './core/InlineCode';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack } from './core/Stacks';
 import { EmptyStateText } from './EmptyStateText';
-import { Editor } from './core/Editor/Editor';
 
 interface Props {
   syncDir: string;
@@ -29,7 +30,7 @@ interface Props {
 }
 
 interface TreeNode {
-  model: HttpRequest | GrpcRequest | Folder | Environment | Workspace;
+  model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Environment | Workspace;
   status: GitStatusEntry;
   children: TreeNode[];
   ancestors: TreeNode[];
@@ -44,15 +45,18 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     onDone();
   };
 
-  const hasAddedAnything = status.data?.find((s) => s.staged) != null;
+  const entries = status.data?.entries ?? null;
+
+  const hasAddedAnything = entries?.find((s) => s.staged) != null;
+  const hasAnythingToAdd = entries?.find((s) => s.status !== 'current') != null;
 
   const tree: TreeNode | null = useMemo(() => {
-    if (status.data == null) {
+    if (entries == null) {
       return null;
     }
 
     const next = (model: TreeNode['model'], ancestors: TreeNode[]): TreeNode | null => {
-      const statusEntry = status.data?.find((s) => s.relaPath.includes(model.id));
+      const statusEntry = entries?.find((s) => s.relaPath.includes(model.id));
       if (statusEntry == null) {
         return null;
       }
@@ -64,11 +68,10 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         ancestors,
       };
 
-      for (const s of status.data) {
-        const data = s.next ?? s.prev;
-        if (data == null) return null; // TODO: Is this right?
+      for (const entry of entries) {
+        const childModel = entry.next ?? entry.prev;
+        if (childModel == null) return null; // TODO: Is this right?
 
-        const childModel: TreeNode['model'] = YAML.parse(data);
         // TODO: Figure out why not all of these show up
         if ('folderId' in childModel && childModel.folderId != null) {
           if (childModel.folderId === model.id) {
@@ -86,18 +89,16 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
       return node;
     };
     return next(workspace, []);
-  }, [status.data, workspace]);
+  }, [entries, workspace]);
 
   if (tree == null) {
     return null;
   }
 
-  if (status.data != null && status.data.length === 0) {
+  if (!hasAnythingToAdd) {
     return (
       <EmptyStateText>
-        No changes to commit.
-        <br />
-        Please check back once you have made changes.
+        No changes since last commit
       </EmptyStateText>
     );
   }
@@ -172,11 +173,28 @@ function TreeNodeChildren({
     >
       <div className="flex gap-3 w-full h-xs">
         <Checkbox
+          fullWidth
           className="w-full hover:bg-surface-highlight rounded px-1 group"
           checked={checked}
           onChange={(checked) => onCheck(node, checked)}
           title={
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1 w-full">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-1 w-full items-center">
+              {node.model.model !== 'http_request' &&
+              node.model.model !== 'grpc_request' &&
+              node.model.model !== 'websocket_request' ? (
+                <Icon
+                  color="secondary"
+                  icon={
+                    node.model.model === 'folder'
+                      ? 'folder'
+                      : node.model.model === 'environment'
+                        ? 'variable'
+                        : 'house'
+                  }
+                />
+              ) : (
+                <span aria-hidden />
+              )}
               <div className="truncate">
                 {fallbackRequestName(node.model)}
                 {/*({node.model.model})*/}
@@ -185,7 +203,7 @@ function TreeNodeChildren({
               {node.status.status !== 'current' && (
                 <InlineCode
                   className={classNames(
-                    'py-0 ml-auto !bg-surface w-[6rem] text-center',
+                    'py-0 ml-auto bg-transparent w-[6rem] text-center',
                     node.status.status === 'modified' && 'text-info',
                     node.status.status === 'added' && 'text-success',
                     node.status.status === 'removed' && 'text-danger',
@@ -214,18 +232,16 @@ function TreeNodeChildren({
 }
 
 function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
-  let leavesVisited = 0;
-  let leavesChecked = 0;
-  let leavesCurrent = 0;
+  let numVisited = 0;
+  let numChecked = 0;
+  let numCurrent = 0;
 
   const visitChildren = (n: TreeNode) => {
-    if (n.children.length === 0) {
-      leavesVisited += 1;
-      if (n.status.status === 'current') {
-        leavesCurrent += 1;
-      } else if (n.status.staged) {
-        leavesChecked += 1;
-      }
+    numVisited += 1;
+    if (n.status.status === 'current') {
+      numCurrent += 1;
+    } else if (n.status.staged) {
+      numChecked += 1;
     }
     for (const child of n.children) {
       visitChildren(child);
@@ -234,9 +250,9 @@ function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
 
   visitChildren(root);
 
-  if (leavesVisited === leavesChecked + leavesCurrent) {
+  if (numVisited === numChecked + numCurrent) {
     return true;
-  } else if (leavesChecked === 0) {
+  } else if (numChecked === 0) {
     return false;
   } else {
     return 'indeterminate';
@@ -246,28 +262,30 @@ function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
 function setCheckedAndChildren(
   node: TreeNode,
   checked: boolean,
-  unstage: (args: { relaPath: string }) => void,
-  add: (args: { relaPath: string }) => void,
+  unstage: (args: { relaPaths: string[] }) => void,
+  add: (args: { relaPaths: string[] }) => void,
 ) {
-  for (const child of node.children) {
-    setCheckedAndChildren(child, checked, unstage, add);
-  }
-  setChecked(node, checked, unstage, add);
-}
+  const toAdd: string[] = [];
+  const toUnstage: string[] = [];
 
-function setChecked(
-  node: TreeNode,
-  checked: boolean,
-  unstage: (args: { relaPath: string }) => void,
-  add: (args: { relaPath: string }) => void,
-) {
-  if (node.status.status === 'current') {
-    // Nothing required
-  } else if (checked) {
-    add({ relaPath: node.status.relaPath });
-  } else {
-    unstage({ relaPath: node.status.relaPath });
-  }
+  const next = (node: TreeNode) => {
+    for (const child of node.children) {
+      next(child);
+    }
+
+    if (node.status.status === 'current') {
+      // Nothing required
+    } else if (checked && !node.status.staged) {
+      toAdd.push(node.status.relaPath);
+    } else if (!checked && node.status.staged) {
+      toUnstage.push(node.status.relaPath);
+    }
+  };
+
+  next(node);
+
+  if (toAdd.length > 0) add({ relaPaths: toAdd });
+  if (toUnstage.length > 0) unstage({ relaPaths: toUnstage });
 }
 
 function isNodeRelevant(node: TreeNode): boolean {

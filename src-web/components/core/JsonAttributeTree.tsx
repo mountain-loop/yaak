@@ -104,7 +104,7 @@ export const JsonAttributeTree = ({
               icon="chevron_right"
               className={classNames(
                 'left-0 absolute transition-transform flex items-center',
-                'text-text-subtlest group-hover:text-text-subtle',
+                'group-hover:text-text-subtle',
                 isExpanded ? 'rotate-90' : '',
               )}
             />

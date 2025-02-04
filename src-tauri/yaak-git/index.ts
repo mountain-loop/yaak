@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
-import { GitCommit, GitStatusEntry } from './bindings/git';
+import { GitCommit, GitStatusSummary } from './bindings/gen_git';
+export * from './bindings/gen_git';
 
 export function useGit(dir: string) {
   const queryClient = useQueryClient();
@@ -12,14 +13,14 @@ export function useGit(dir: string) {
         queryKey: ['git', 'log', dir],
         queryFn: () => invoke('plugin:yaak-git|log', { dir }),
       }),
-      status: useQuery<void, string, GitStatusEntry[]>({
+      status: useQuery<void, string, GitStatusSummary>({
         refetchOnMount: true,
         queryKey: ['git', 'status', dir],
         queryFn: () => invoke('plugin:yaak-git|status', { dir }),
       }),
     },
     {
-      add: useMutation<void, string, { relaPath: string }>({
+      add: useMutation<void, string, { relaPaths: string[] }>({
         mutationKey: ['git', 'add', dir],
         mutationFn: (args) => invoke('plugin:yaak-git|add', { dir, ...args }),
         onSuccess,
@@ -39,7 +40,7 @@ export function useGit(dir: string) {
         mutationFn: () => invoke('plugin:yaak-git|initialize', { dir }),
         onSuccess,
       }),
-      unstage: useMutation<void, string, { relaPath: string }>({
+      unstage: useMutation<void, string, { relaPaths: string[] }>({
         mutationKey: ['git', 'unstage', dir],
         mutationFn: (args) => invoke('plugin:yaak-git|unstage', { dir, ...args }),
         onSuccess,

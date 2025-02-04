@@ -164,9 +164,8 @@ pub(crate) async fn get_fs_candidates(dir: &Path) -> Result<Vec<FsCandidate>> {
         };
 
         let path = dir_entry.path();
-        let (model, _, checksum) = match SyncModel::from_file(&path).await {
-            Ok(Some(m)) => m,
-            Ok(None) => continue,
+        let (model, _, checksum) = match SyncModel::from_file(&path) {
+            Ok(m) => m,
             Err(InvalidSyncFile(_)) => continue,
             Err(e) => {
                 warn!("Failed to read sync file {e}");

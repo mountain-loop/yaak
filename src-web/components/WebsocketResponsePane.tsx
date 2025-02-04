@@ -212,9 +212,7 @@ function EventRow({
         )}
       >
         <Icon
-          className={classNames(
-            messageType === 'close' ? 'text-secondary' : isServer ? 'text-info' : 'text-primary',
-          )}
+          color={messageType === 'close' ? 'secondary' : isServer ? 'info' : 'primary'}
           icon={
             messageType === 'close'
               ? 'info'

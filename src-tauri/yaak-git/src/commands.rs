@@ -1,8 +1,8 @@
 use crate::error::Result;
 use crate::git::{
-    git_add, git_commit, git_init, git_log, git_status, git_unstage, GitCommit, GitStatusEntry,
+    git_add, git_commit, git_init, git_log, git_status, git_unstage, GitCommit, GitStatusSummary,
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::command;
 
 #[command]
@@ -11,7 +11,7 @@ pub fn checkout() -> Result<()> {
 }
 
 #[command]
-pub fn status(dir: &Path) -> Result<Vec<GitStatusEntry>> {
+pub fn status(dir: &Path) -> Result<GitStatusSummary> {
     git_status(dir)
 }
 
@@ -31,11 +31,17 @@ pub fn commit(dir: &Path, message: &str) -> Result<()> {
 }
 
 #[command]
-pub fn add(dir: &Path, rela_path: &Path) -> Result<()> {
-    git_add(dir, rela_path)
+pub fn add(dir: &Path, rela_paths: Vec<PathBuf>) -> Result<()> {
+    for path in rela_paths {
+        git_add(dir, &path)?;
+    }
+    Ok(())
 }
 
 #[command]
-pub fn unstage(dir: &Path, rela_path: &Path) -> Result<()> {
-    git_unstage(dir, rela_path)
+pub fn unstage(dir: &Path, rela_paths: Vec<PathBuf>) -> Result<()> {
+    for path in rela_paths {
+        git_unstage(dir, &path)?;
+    }
+    Ok(())
 }

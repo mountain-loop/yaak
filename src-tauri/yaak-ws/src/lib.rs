@@ -1,10 +1,10 @@
-mod cmd;
+mod commands;
 mod connect;
 mod error;
 mod manager;
 mod render;
 
-use crate::cmd::{
+use crate::commands::{
     connect, close, delete_connection, delete_connections, delete_request, duplicate_request,
     list_connections, list_events, list_requests, send, upsert_request,
 };

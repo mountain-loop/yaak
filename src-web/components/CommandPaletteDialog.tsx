@@ -406,7 +406,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
           hideLabel
           leftSlot={
             <div className="h-md w-10 flex justify-center items-center">
-              <Icon icon="search" className="text-text-subtle" />
+              <Icon icon="search" color="secondary" />
             </div>
           }
           name="command"

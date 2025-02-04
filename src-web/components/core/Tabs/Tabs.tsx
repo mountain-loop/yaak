@@ -121,7 +121,7 @@ export function Tabs({
                     <Icon
                       size="sm"
                       icon="chevron_down"
-                      className={classNames('ml-1', isActive ? 'text-text-subtle' : 'opacity-50')}
+                      className={classNames('ml-1', !isActive && 'opacity-50')}
                     />
                   </button>
                 </RadioDropdown>

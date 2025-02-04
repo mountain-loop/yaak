@@ -6,7 +6,7 @@ import { appInfo } from '../hooks/useAppInfo';
 import { useOpenSettings } from '../hooks/useOpenSettings';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
-import {HStack} from "./core/Stacks";
+import { HStack } from './core/Stacks';
 import { SettingsTab } from './Settings/SettingsTab';
 import { Icon } from './core/Icon';
 
@@ -14,7 +14,15 @@ const details: Record<
   LicenseCheckStatus['type'] | 'dev' | 'beta',
   { label: ReactNode; color: ButtonProps['color'] } | null
 > = {
-  beta: { label: <HStack space={1}><span>Beta Feedback</span><Icon size="xs" icon='external_link'/></HStack>, color: 'info' },
+  beta: {
+    label: (
+      <HStack space={1}>
+        <span>Beta Feedback</span>
+        <Icon size="xs" icon="external_link" />
+      </HStack>
+    ),
+    color: 'info',
+  },
   dev: { label: 'Develop', color: 'secondary' },
   commercial_use: null,
   invalid_license: { label: 'License Error', color: 'danger' },
