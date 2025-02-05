@@ -1,6 +1,6 @@
 import { useGit } from '@yaakapp-internal/git';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
-import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
+import { getActiveWorkspaceId, useActiveWorkspace } from '../hooks/useActiveWorkspace';
+import { getWorkspaceMeta, useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
 import { showDialog } from '../lib/dialog';
 import { showToast } from '../lib/toast';
 import type { DropdownItem } from './core/Dropdown';
@@ -18,6 +18,7 @@ import {
   TruncatedWideTableCell,
 } from './core/Table';
 import { formatDistanceToNowStrict } from 'date-fns';
+import { syncWorkspace } from '../commands/commands';
 
 export function GitDropdown() {
   const workspaceMeta = useWorkspaceMeta();
@@ -62,7 +63,17 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           label: branch,
           leftSlot: <Icon icon="git_branch" />,
           onSelect: async () => {
+            const workspaceId = getActiveWorkspaceId();
+            const workspaceMeta = getWorkspaceMeta();
+            if (
+              workspaceId == null ||
+              workspaceMeta == null ||
+              workspaceMeta.settingSyncDir == null
+            )
+              return;
+
             await checkout.mutateAsync({ branch });
+            await syncWorkspace.mutateAsync({ workspaceId, syncDir: workspaceMeta.settingSyncDir, force: true });
           },
         })),
         {
