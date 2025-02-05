@@ -15,6 +15,7 @@ const icons = {
   arrow_big_up_dash: lucide.ArrowBigUpDashIcon,
   arrow_down: lucide.ArrowDownIcon,
   arrow_down_to_dot: lucide.ArrowDownToDotIcon,
+  arrow_down_to_line: lucide.ArrowDownToLineIcon,
   arrow_up: lucide.ArrowUpIcon,
   arrow_up_down: lucide.ArrowUpDownIcon,
   arrow_up_from_dot: lucide.ArrowUpFromDotIcon,

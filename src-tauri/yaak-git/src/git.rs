@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::repository::open_repo;
 use crate::util::{get_branch_by_name, list_branch_names};
 use chrono::{DateTime, Utc};
-use git2::{BranchType, IndexAddOption};
+use git2::IndexAddOption;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs;

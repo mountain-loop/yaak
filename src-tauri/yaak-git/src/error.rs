@@ -32,9 +32,12 @@ pub enum Error {
 
     #[error("Git error: {0}")]
     GenericError(String),
-    
+
     #[error("No default remote found")]
     NoDefaultRemoteFound,
+
+    #[error("No active branch")]
+    NoActiveBranch,
 }
 
 impl Serialize for Error {

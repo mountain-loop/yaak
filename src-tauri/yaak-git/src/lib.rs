@@ -1,4 +1,4 @@
-use crate::commands::{add, checkout, commit, initialize, log, push, status, unstage};
+use crate::commands::{add, checkout, commit, initialize, log, pull, push, status, unstage};
 use tauri::{
     generate_handler,
     plugin::{Builder, TauriPlugin},
@@ -12,11 +12,13 @@ mod push;
 mod repository;
 mod util;
 mod branch;
+mod pull;
+mod callbacks;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-git")
         .invoke_handler(generate_handler![
-            add, checkout, commit, initialize, log, push, status, unstage
+            add, checkout, commit, initialize, log, pull, push, status, unstage
         ])
         .build()
 }

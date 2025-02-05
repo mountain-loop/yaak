@@ -40,7 +40,7 @@ import { LoadingIcon } from './LoadingIcon';
 
 export type DropdownItemSeparator = {
   type: 'separator';
-  label?: string;
+  label?: ReactNode;
   hidden?: boolean;
 };
 

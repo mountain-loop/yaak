@@ -6,7 +6,7 @@ use crate::git::{
 use crate::push::{git_push, PushResult};
 use std::path::{Path, PathBuf};
 use tauri::command;
-
+use crate::pull::{git_pull, PullResult};
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
 
 #[command]
@@ -37,6 +37,11 @@ pub async fn commit(dir: &Path, message: &str) -> Result<()> {
 #[command]
 pub async fn push(dir: &Path) -> Result<PushResult> {
     git_push(dir)
+}
+
+#[command]
+pub async fn pull(dir: &Path) -> Result<PullResult> {
+    git_pull(dir)
 }
 
 #[command]

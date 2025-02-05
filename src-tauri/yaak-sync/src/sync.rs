@@ -313,7 +313,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
     }
 
     debug!(
-        "Sync ops {}",
+        "Applying sync ops {}",
         sync_ops.iter().map(|op| op.to_string()).collect::<Vec<String>>().join(", ")
     );
     let mut sync_state_ops = Vec::new();

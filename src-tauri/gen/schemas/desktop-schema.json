@@ -5443,6 +5443,11 @@
           "const": "yaak-git:allow-log"
         },
         {
+          "description": "Enables the pull command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-pull"
+        },
+        {
           "description": "Enables the push command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:allow-push"
@@ -5481,6 +5486,11 @@
           "description": "Denies the log command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:deny-log"
+        },
+        {
+          "description": "Denies the pull command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-pull"
         },
         {
           "description": "Denies the push command without any pre-configured scope.",

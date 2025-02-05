@@ -11,6 +11,8 @@ export type GitStatusEntry = { relaPath: string, status: GitStatus, staged: bool
 
 export type GitStatusSummary = { path: string, headRef: string | null, headRefShorthand: string | null, entries: Array<GitStatusEntry>, origins: Array<string>, branches: Array<string>, };
 
+export type PullResult = { receivedBytes: number, receivedObjects: number, };
+
 export type PushResult = "success" | "nothing_to_push";
 
 export type PushType = "branch" | "tag";

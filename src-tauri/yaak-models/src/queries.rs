@@ -2569,20 +2569,22 @@ pub async fn batch_upsert<R: Runtime>(
     let mut imported_resources = BatchUpsertResult::default();
 
     if workspaces.len() > 0 {
+        info!("Batch inserting {} workspaces", workspaces.len());
         for v in workspaces {
             let x = upsert_workspace(&window, v, update_source).await?;
             imported_resources.workspaces.push(x.clone());
         }
-        info!("Imported {} workspaces", imported_resources.workspaces.len());
     }
 
     if environments.len() > 0 {
         while imported_resources.environments.len() < environments.len() {
             for v in environments.clone() {
-                if let Some(fid) = v.environment_id.clone() {
+                if let Some(id) = v.environment_id.clone() {
+                    let has_parent_to_import = environments.iter().find(|m| m.id == id).is_some();
                     let imported_parent =
-                        imported_resources.environments.iter().find(|f| f.id == fid);
-                    if imported_parent.is_none() {
+                        imported_resources.environments.iter().find(|m| m.id == id);
+                    // If there's also a parent to upsert, wait for that one
+                    if imported_parent.is_none() && has_parent_to_import {
                         continue;
                     }
                 }
@@ -2599,9 +2601,11 @@ pub async fn batch_upsert<R: Runtime>(
     if folders.len() > 0 {
         while imported_resources.folders.len() < folders.len() {
             for v in folders.clone() {
-                if let Some(fid) = v.folder_id.clone() {
-                    let imported_parent = imported_resources.folders.iter().find(|f| f.id == fid);
-                    if imported_parent.is_none() {
+                if let Some(id) = v.folder_id.clone() {
+                    let has_parent_to_import = folders.iter().find(|m| m.id == id).is_some();
+                    let imported_parent = imported_resources.folders.iter().find(|m| m.id == id);
+                    // If there's also a parent to upsert, wait for that one
+                    if imported_parent.is_none() && has_parent_to_import {
                         continue;
                     }
                 }

@@ -32,7 +32,7 @@ export function GitDropdown() {
 
 function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const workspace = useActiveWorkspace();
-  const [{ status, log }, { init, push, checkout }] = useGit(syncDir);
+  const [{ status, log }, { init, push, pull, checkout }] = useGit(syncDir);
 
   if (workspace == null) return null;
 
@@ -47,6 +47,14 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       ]
     : [
         {
+          type: 'separator',
+          label: (
+            <InlineCode className="text-text">
+              {status.data?.headRefShorthand ?? 'No Branch'}
+            </InlineCode>
+          ),
+        },
+        {
           label: 'Push',
           hidden: (status.data?.origins ?? []).length === 0,
           leftSlot: <Icon icon="arrow_up_from_line" />,
@@ -59,23 +67,15 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             }
           },
         },
-        ...(status.data?.branches ?? []).map((branch) => ({
-          label: branch,
-          leftSlot: <Icon icon="git_branch" />,
+        {
+          label: 'Pull',
+          hidden: (status.data?.origins ?? []).length === 0,
+          leftSlot: <Icon icon="arrow_down_to_line" />,
           onSelect: async () => {
-            const workspaceId = getActiveWorkspaceId();
-            const workspaceMeta = getWorkspaceMeta();
-            if (
-              workspaceId == null ||
-              workspaceMeta == null ||
-              workspaceMeta.settingSyncDir == null
-            )
-              return;
-
-            await checkout.mutateAsync({ branch });
-            await syncWorkspace.mutateAsync({ workspaceId, syncDir: workspaceMeta.settingSyncDir, force: true });
+            await pull.mutateAsync();
+            await forceSync();
           },
-        })),
+        },
         {
           label: 'History',
           hidden: (log.data ?? []).length === 0,
@@ -127,6 +127,15 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             });
           },
         },
+        { type: 'separator', label: 'Branches' },
+        ...(status.data?.branches ?? []).map((branch) => ({
+          label: branch,
+          leftSlot: <Icon icon="git_branch" />,
+          onSelect: async () => {
+            await checkout.mutateAsync({ branch });
+            await forceSync();
+          },
+        })),
       ];
 
   return (
@@ -137,4 +146,21 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       </button>
     </Dropdown>
   );
+}
+
+async function forceSync() {
+  const workspaceId = getActiveWorkspaceId();
+  const workspaceMeta = getWorkspaceMeta();
+  if (
+      workspaceId == null ||
+      workspaceMeta == null ||
+      workspaceMeta.settingSyncDir == null
+  )
+    return;
+
+  await syncWorkspace.mutateAsync({
+    workspaceId,
+    syncDir: workspaceMeta.settingSyncDir,
+    force: true,
+  });
 }
