@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
-import { GitCommit, GitStatusSummary } from './bindings/gen_git';
+import { GitCommit, GitStatusSummary, PushResult } from './bindings/gen_git';
+
 export * from './bindings/gen_git';
 
 export function useGit(dir: string) {
@@ -25,14 +26,19 @@ export function useGit(dir: string) {
         mutationFn: (args) => invoke('plugin:yaak-git|add', { dir, ...args }),
         onSuccess,
       }),
-      checkout: useMutation<void, string, void>({
+      checkout: useMutation<void, string, { branch: string }>({
         mutationKey: ['git', 'checkout', dir],
-        mutationFn: () => invoke('plugin:yaak-git|checkout', { dir }),
+        mutationFn: (args) => invoke('plugin:yaak-git|checkout', { dir, ...args }),
         onSuccess,
       }),
       commit: useMutation<void, string, { message: string }>({
         mutationKey: ['git', 'commit', dir],
         mutationFn: (args) => invoke('plugin:yaak-git|commit', { dir, ...args }),
+        onSuccess,
+      }),
+      push: useMutation<PushResult, string, void>({
+        mutationKey: ['git', 'push', dir],
+        mutationFn: () => invoke('plugin:yaak-git|push', { dir }),
         onSuccess,
       }),
       init: useMutation<void, string, void>({

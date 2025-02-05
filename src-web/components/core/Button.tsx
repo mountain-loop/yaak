@@ -51,6 +51,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   const hotkeyTrigger = useFormattedHotkey(hotkeyAction ?? null)?.join('');
   const fullTitle = hotkeyTrigger ? `${title ?? ''} ${hotkeyTrigger}`.trim() : title;
 
+  if (isLoading) {
+    disabled = true;
+  }
+
   const classes = classNames(
     className,
     'x-theme-button',
@@ -102,7 +106,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={buttonRef}
       type={type}
       className={classes}
-      disabled={disabled || isLoading}
+      disabled={disabled}
       onClick={(e) => {
         onClick?.(e);
         if (event != null) {

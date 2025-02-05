@@ -37,11 +37,17 @@ interface TreeNode {
 }
 
 export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
-  const [{ status }, { commit, add, unstage }] = useGit(syncDir);
+  const [{ status }, { commit, add, unstage, push }] = useGit(syncDir);
   const [message, setMessage] = useState<string>('');
 
   const handleCreateCommit = async () => {
     await commit.mutateAsync({ message });
+    onDone();
+  };
+
+  const handleCreateCommitAndPush = async () => {
+    await handleCreateCommit();
+    await push.mutateAsync();
     onDone();
   };
 
@@ -96,11 +102,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   }
 
   if (!hasAnythingToAdd) {
-    return (
-      <EmptyStateText>
-        No changes since last commit
-      </EmptyStateText>
-    );
+    return <EmptyStateText>No changes since last commit</EmptyStateText>;
   }
 
   const checkNode = (treeNode: TreeNode) => {
@@ -132,18 +134,28 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
               />
             </div>
             {commit.error && <Banner color="danger">{commit.error}</Banner>}
-            <HStack justifyContent="end" space={2}>
-              <Button
-                color="secondary"
-                size="sm"
-                onClick={handleCreateCommit}
-                disabled={!hasAddedAnything}
-              >
-                Commit
-              </Button>
-              {/*<Button color="secondary" size="sm" disabled={!hasAddedAnything}>*/}
-              {/*  Commit and Push*/}
-              {/*</Button>*/}
+            <HStack alignItems="center">
+              <InlineCode>{status.data?.headRefShorthand}</InlineCode>
+              <HStack space={2} className="ml-auto">
+                <Button
+                  color="secondary"
+                  size="sm"
+                  onClick={handleCreateCommit}
+                  disabled={!hasAddedAnything}
+                  isLoading={push.isPending || commit.isPending}
+                >
+                  Commit
+                </Button>
+                <Button
+                  color="primary"
+                  size="sm"
+                  disabled={!hasAddedAnything}
+                  onClick={handleCreateCommitAndPush}
+                  isLoading={push.isPending || commit.isPending}
+                >
+                  Commit and Push
+                </Button>
+              </HStack>
             </HStack>
           </div>
         )}

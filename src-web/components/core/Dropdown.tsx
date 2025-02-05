@@ -36,6 +36,7 @@ import { HotKey } from './HotKey';
 import { Icon } from './Icon';
 import { Separator } from './Separator';
 import { HStack, VStack } from './Stacks';
+import { LoadingIcon } from './LoadingIcon';
 
 export type DropdownItemSeparator = {
   type: 'separator';
@@ -46,7 +47,6 @@ export type DropdownItemSeparator = {
 export type DropdownItemDefault = {
   type?: 'default';
   label: ReactNode;
-  keepOpen?: boolean;
   hotKeyAction?: HotkeyAction;
   hotKeyLabelOnly?: boolean;
   color?: 'default' | 'danger' | 'info' | 'warning' | 'notice';
@@ -54,7 +54,7 @@ export type DropdownItemDefault = {
   hidden?: boolean;
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
-  onSelect?: () => void;
+  onSelect?: () => void | Promise<void>;
 };
 
 export type DropdownItem = DropdownItemDefault | DropdownItemSeparator;
@@ -374,14 +374,14 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     );
 
     const handleSelect = useCallback(
-      (i: DropdownItem) => {
-        if (i.type !== 'separator' && !i.keepOpen) {
-          handleClose();
-        }
+      async (item: DropdownItem) => {
         setSelectedIndex(null);
-        if (i.type !== 'separator' && typeof i.onSelect === 'function') {
-          i.onSelect();
+
+        if (item.type !== 'separator' && typeof item.onSelect === 'function') {
+          await item.onSelect();
         }
+
+        handleClose();
       },
       [handleClose, setSelectedIndex],
     );
@@ -391,10 +391,10 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
         close: handleClose,
         prev: handlePrev,
         next: handleNext,
-        select() {
+        async select() {
           const item = items[selectedIndexRef.current ?? -1] ?? null;
           if (!item) return;
-          handleSelect(item);
+          await handleSelect(item);
         },
       };
     }, [handleClose, handleNext, handlePrev, handleSelect, items]);
@@ -559,13 +559,22 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
 interface MenuItemProps {
   className?: string;
   item: DropdownItemDefault;
-  onSelect: (item: DropdownItemDefault) => void;
+  onSelect: (item: DropdownItemDefault) => Promise<void>;
   onFocus: (item: DropdownItemDefault) => void;
   focused: boolean;
 }
 
 function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: MenuItemProps) {
-  const handleClick = useCallback(() => onSelect?.(item), [item, onSelect]);
+  const [isLoading, setIsLoading] = useState(false);
+  const handleClick = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await onSelect?.(item);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [item, onSelect]);
+
   const handleFocus = useCallback(
     (e: ReactFocusEvent<HTMLButtonElement>) => {
       e.stopPropagation(); // Don't trigger focus on any parents
@@ -598,7 +607,15 @@ function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: Men
       onClick={handleClick}
       justify="start"
       leftSlot={
-        item.leftSlot && <div className="pr-2 flex justify-start opacity-70">{item.leftSlot}</div>
+        isLoading ? (
+          <div className="pr-2 flex justify-start text-text-subtle">
+            <LoadingIcon />
+          </div>
+        ) : (
+          item.leftSlot && (
+            <div className="pr-2 flex justify-start text-text-subtle">{item.leftSlot}</div>
+          )
+        )
       }
       rightSlot={rightSlot && <div className="ml-auto pl-3">{rightSlot}</div>}
       innerClassName="!text-left"

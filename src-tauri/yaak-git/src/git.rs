@@ -1,9 +1,11 @@
-use crate::error::Error::{GitRepoNotFound, GitUnknown};
 use crate::error::Result;
-use chrono::{DateTime, NaiveDateTime};
-use git2::IndexAddOption;
+use crate::repository::open_repo;
+use crate::util::{get_branch_by_name, list_branch_names};
+use chrono::{DateTime, Utc};
+use git2::{BranchType, IndexAddOption};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::Path;
 use ts_rs::TS;
 use yaak_sync::models::SyncModel;
@@ -13,9 +15,11 @@ use yaak_sync::models::SyncModel;
 #[ts(export, export_to = "gen_git.ts")]
 pub struct GitStatusSummary {
     pub path: String,
-    pub head_shorthand: Option<String>,
     pub head_ref: Option<String>,
+    pub head_ref_shorthand: Option<String>,
     pub entries: Vec<GitStatusEntry>,
+    pub origins: Vec<String>,
+    pub branches: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -46,9 +50,17 @@ pub enum GitStatus {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_git.ts")]
 pub struct GitCommit {
-    author: String,
-    when: NaiveDateTime,
+    author: GitAuthor,
+    when: DateTime<Utc>,
     message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_git.ts")]
+pub struct GitAuthor {
+    name: Option<String>,
+    email: Option<String>,
 }
 
 pub fn git_init(dir: &Path) -> Result<()> {
@@ -145,7 +157,10 @@ pub fn git_log(dir: &Path) -> Result<Vec<GitCommit>> {
             let commit = filter_try!(repo.find_commit(oid));
             let author = commit.author();
             Some(GitCommit {
-                author: author.to_string(),
+                author: GitAuthor {
+                    name: author.name().map(|s| s.to_string()),
+                    email: author.email().map(|s| s.to_string()),
+                },
                 when: convert_git_time_to_date(author.when()),
                 message: commit.message().map(|m| m.to_string()),
             })
@@ -155,16 +170,42 @@ pub fn git_log(dir: &Path) -> Result<Vec<GitCommit>> {
     Ok(log)
 }
 
+pub fn git_checkout_branch(dir: &Path, branch: &str) -> Result<()> {
+    let repo = open_repo(dir)?;
+    let branch = get_branch_by_name(&repo, branch)?;
+    let branch_ref = branch.into_reference();
+    let tree = branch_ref.peel_to_tree()?;
+
+    repo.checkout_tree(tree.as_object(), None)?;
+    repo.set_head(branch_ref.name().unwrap())?;
+
+    Ok(())
+}
+
 pub fn git_status(dir: &Path) -> Result<GitStatusSummary> {
     let repo = open_repo(dir)?;
-    let (head_tree, head_shorthand, head_ref) = match repo.head() {
+    let (head_tree, head_ref, head_ref_shorthand) = match repo.head() {
         Ok(head) => {
             let tree = head.peel_to_tree().ok();
-            let shorthand = head.shorthand().map(|s| s.to_string());
-            let name = head.shorthand().map(|s| s.to_string());
-            (tree, shorthand, name)
+            let head_ref_shorthand = head.shorthand().map(|s| s.to_string());
+            let head_ref = head.name().map(|s| s.to_string());
+
+            (tree, head_ref, head_ref_shorthand)
         }
-        Err(_) => (None, None, None),
+        Err(_) => {
+            // For "unborn" repos, reading from HEAD is the only way to get the branch name
+            // See https://github.com/starship/starship/pull/1336
+            let head_path = repo.path().join("HEAD");
+            let head_ref = fs::read_to_string(&head_path)
+                .ok()
+                .unwrap_or_default()
+                .lines()
+                .next()
+                .map(|s| s.trim_start_matches("ref:").trim().to_string());
+            let head_ref_shorthand =
+                head_ref.clone().map(|r| r.split('/').last().unwrap_or("unknown").to_string());
+            (None, head_ref, head_ref_shorthand)
+        }
     };
 
     let mut opts = git2::StatusOptions::new();
@@ -233,8 +274,7 @@ pub fn git_status(dir: &Path) -> Result<GitStatusSummary> {
                     let obj = entry.to_object(&repo).unwrap();
                     let content = obj.as_blob().unwrap().content();
                     let name = Path::new(entry.name().unwrap_or_default());
-                    let m: SyncModel = SyncModel::from_bytes(content.into(), name)?.0;
-                    Some(m)
+                    SyncModel::from_bytes(content.into(), name)?.map(|m| m.0)
                 }
                 Err(_) => None,
             },
@@ -242,7 +282,7 @@ pub fn git_status(dir: &Path) -> Result<GitStatusSummary> {
 
         let next = {
             let full_path = repo.workdir().unwrap().join(rela_path.clone());
-            Some(SyncModel::from_file(full_path.as_path())?.0)
+            SyncModel::from_file(full_path.as_path())?.map(|m| m.0)
         };
 
         entries.push(GitStatusEntry {
@@ -254,31 +294,28 @@ pub fn git_status(dir: &Path) -> Result<GitStatusSummary> {
         })
     }
 
+    let origins = repo.remotes()?.into_iter().filter_map(|o| Some(o?.to_string())).collect();
+    let branches = list_branch_names(&repo)?;
+
     Ok(GitStatusSummary {
         entries,
+        origins,
         path: dir.to_string_lossy().to_string(),
         head_ref,
-        head_shorthand,
+        head_ref_shorthand,
+        branches,
     })
 }
 
-fn open_repo(dir: &Path) -> Result<git2::Repository> {
-    match git2::Repository::discover(dir) {
-        Ok(r) => Ok(r),
-        Err(e) if e.code() == git2::ErrorCode::NotFound => Err(GitRepoNotFound(dir.to_path_buf())),
-        Err(e) => Err(GitUnknown(e)),
-    }
-}
-
 #[cfg(test)]
-fn convert_git_time_to_date(_git_time: git2::Time) -> NaiveDateTime {
-    DateTime::from_timestamp(0, 0).unwrap().naive_utc()
+fn convert_git_time_to_date(_git_time: git2::Time) -> DateTime<Utc> {
+    DateTime::from_timestamp(0, 0).unwrap()
 }
 
 #[cfg(not(test))]
-fn convert_git_time_to_date(git_time: git2::Time) -> NaiveDateTime {
+fn convert_git_time_to_date(git_time: git2::Time) -> DateTime<Utc> {
     let timestamp = git_time.seconds();
-    DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc()
+    DateTime::from_timestamp(timestamp, 0).unwrap()
 }
 
 // // Write a test

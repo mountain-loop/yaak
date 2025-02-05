@@ -7,6 +7,7 @@ Default permissions for the plugin
 - `allow-commit`
 - `allow-initialize`
 - `allow-log`
+- `allow-push`
 - `allow-status`
 - `allow-unstage`
 
@@ -145,6 +146,32 @@ Enables the log command without any pre-configured scope.
 <td>
 
 Denies the log command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-git:allow-push`
+
+</td>
+<td>
+
+Enables the push command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-git:deny-push`
+
+</td>
+<td>
+
+Denies the push command without any pre-configured scope.
 
 </td>
 </tr>

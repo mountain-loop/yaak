@@ -6,6 +6,7 @@ permissions = [
     "allow-commit",
     "allow-initialize",
     "allow-log",
+    "allow-push",
     "allow-status",
     "allow-unstage",
 ]

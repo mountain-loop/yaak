@@ -5443,6 +5443,11 @@
           "const": "yaak-git:allow-log"
         },
         {
+          "description": "Enables the push command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-push"
+        },
+        {
           "description": "Enables the status command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:allow-status"
@@ -5476,6 +5481,11 @@
           "description": "Denies the log command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:deny-log"
+        },
+        {
+          "description": "Denies the push command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-push"
         },
         {
           "description": "Denies the status command without any pre-configured scope.",

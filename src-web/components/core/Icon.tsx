@@ -18,6 +18,7 @@ const icons = {
   arrow_up: lucide.ArrowUpIcon,
   arrow_up_down: lucide.ArrowUpDownIcon,
   arrow_up_from_dot: lucide.ArrowUpFromDotIcon,
+  arrow_up_from_line: lucide.ArrowUpFromLineIcon,
   badge_check: lucide.BadgeCheckIcon,
   box: lucide.BoxIcon,
   cake: lucide.CakeIcon,

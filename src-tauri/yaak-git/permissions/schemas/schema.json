@@ -345,6 +345,16 @@
           "const": "deny-log"
         },
         {
+          "description": "Enables the push command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-push"
+        },
+        {
+          "description": "Denies the push command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-push"
+        },
+        {
           "description": "Enables the status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-status"

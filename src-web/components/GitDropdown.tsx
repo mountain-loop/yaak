@@ -2,10 +2,22 @@ import { useGit } from '@yaakapp-internal/git';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
 import { showDialog } from '../lib/dialog';
+import { showToast } from '../lib/toast';
+import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
-import { GitCommitDialog } from './GitCommitDialog';
 import { InlineCode } from './core/InlineCode';
+import { GitCommitDialog } from './GitCommitDialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  TruncatedWideTableCell,
+} from './core/Table';
+import { formatDistanceToNowStrict } from 'date-fns';
 
 export function GitDropdown() {
   const workspaceMeta = useWorkspaceMeta();
@@ -19,15 +31,14 @@ export function GitDropdown() {
 
 function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const workspace = useActiveWorkspace();
-  const [{ status }, { init }] = useGit(syncDir);
+  const [{ status, log }, { init, push, checkout }] = useGit(syncDir);
 
   if (workspace == null) return null;
 
   const noRepo = status.error?.includes('not found');
-  const items = noRepo
+  const items: DropdownItem[] = noRepo
     ? [
         {
-          key: 'init',
           label: 'Initialize',
           leftSlot: <Icon icon="git_branch" />,
           onSelect: init.mutate,
@@ -35,7 +46,62 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       ]
     : [
         {
-          key: 'commit',
+          label: 'Push',
+          hidden: (status.data?.origins ?? []).length === 0,
+          leftSlot: <Icon icon="arrow_up_from_line" />,
+          onSelect: async () => {
+            const message = await push.mutateAsync();
+            if (message === 'nothing_to_push') {
+              showToast({ id: 'push-success', message: 'Nothing to push', color: 'info' });
+            } else {
+              showToast({ id: 'push-success', message: 'Push successful', color: 'success' });
+            }
+          },
+        },
+        ...(status.data?.branches ?? []).map((branch) => ({
+          label: branch,
+          leftSlot: <Icon icon="git_branch" />,
+          onSelect: async () => {
+            await checkout.mutateAsync({ branch });
+          },
+        })),
+        {
+          label: 'History',
+          hidden: (log.data ?? []).length === 0,
+          leftSlot: <Icon icon="history" />,
+          onSelect: async () => {
+            showDialog({
+              id: 'git-history',
+              size: 'md',
+              title: 'Commit History',
+              render: () => {
+                return (
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableHeaderCell>Message</TableHeaderCell>
+                        <TableHeaderCell>Author</TableHeaderCell>
+                        <TableHeaderCell>When</TableHeaderCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(log.data ?? []).map((l, i) => (
+                        <TableRow key={i}>
+                          <TruncatedWideTableCell>{l.message}</TruncatedWideTableCell>
+                          <TableCell className="font-bold">{l.author.name ?? 'Unknown'}</TableCell>
+                          <TableCell className="text-text-subtle">
+                            <span title={l.when}>{formatDistanceToNowStrict(l.when)} ago</span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                );
+              },
+            });
+          },
+        },
+        {
           label: 'Commit',
           leftSlot: <Icon icon="git_branch" />,
           onSelect() {
@@ -55,7 +121,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   return (
     <Dropdown fullWidth items={items}>
       <button className="px-3 h-md border-t border-border flex items-center justify-between text-text-subtle">
-        {noRepo ? 'Configure Git' : <InlineCode>{status.data?.headShorthand}</InlineCode>}
+        {noRepo ? 'Configure Git' : <InlineCode>{status.data?.headRefShorthand}</InlineCode>}
         <Icon icon="git_branch" size="sm" />
       </button>
     </Dropdown>

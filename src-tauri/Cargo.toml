@@ -38,7 +38,7 @@ objc = "0.2.7"
 cocoa = "0.26.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-openssl-sys = { version = "0.9", features = ["vendored"] } # For Ubuntu installation to work
+openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu installation to work
 
 [dependencies]
 chrono = { version = "0.4.31", features = ["serde"] }

@@ -4,6 +4,7 @@ const COMMANDS: &[&str] = &[
     "commit",
     "initialize",
     "log",
+    "push",
     "status",
     "unstage",
 ];

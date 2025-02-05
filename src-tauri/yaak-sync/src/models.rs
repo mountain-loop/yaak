@@ -23,25 +23,29 @@ pub enum SyncModel {
 }
 
 impl SyncModel {
-    pub fn from_bytes(content: Vec<u8>, file_path: &Path) -> Result<(SyncModel, Vec<u8>, String)> {
+    pub fn from_bytes(
+        content: Vec<u8>,
+        file_path: &Path,
+    ) -> Result<Option<(SyncModel, Vec<u8>, String)>> {
         let mut hasher = Sha1::new();
         hasher.update(&content);
         let checksum = hex::encode(hasher.finalize());
 
         let ext = file_path.extension().unwrap_or_default();
         if ext == "yml" || ext == "yaml" {
-            Ok((serde_yaml::from_slice(content.as_slice())?, content, checksum))
+            Ok(Some((serde_yaml::from_slice(content.as_slice())?, content, checksum)))
         } else if ext == "json" {
-            Ok((serde_json::from_reader(content.as_slice())?, content, checksum))
+            Ok(Some((serde_json::from_reader(content.as_slice())?, content, checksum)))
         } else {
-            Err(InvalidSyncFile(file_path.to_str().unwrap().to_string()))
+            let p = file_path.to_str().unwrap().to_string();
+            Err(InvalidSyncFile(format!("Unknown file extension {p}")))
         }
     }
 
-    pub fn from_file(file_path: &Path) -> Result<(SyncModel, Vec<u8>, String)> {
+    pub fn from_file(file_path: &Path) -> Result<Option<(SyncModel, Vec<u8>, String)>> {
         let content = match fs::read(file_path) {
             Ok(c) => c,
-            Err(_) => return Err(InvalidSyncFile(file_path.to_str().unwrap_or_default().to_string())),
+            Err(_) => return Ok(None),
         };
 
         Self::from_bytes(content, file_path)

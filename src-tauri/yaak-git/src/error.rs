@@ -1,6 +1,7 @@
 use serde::{Serialize, Serializer};
 use std::io;
 use std::path::PathBuf;
+use std::string::FromUtf8Error;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -25,6 +26,15 @@ pub enum Error {
 
     #[error("Yaml error: {0}")]
     JsonParseError(#[from] serde_json::Error),
+
+    #[error("Yaml error: {0}")]
+    Utf8ConversionError(#[from] FromUtf8Error),
+
+    #[error("Git error: {0}")]
+    GenericError(String),
+    
+    #[error("No default remote found")]
+    NoDefaultRemoteFound,
 }
 
 impl Serialize for Error {
