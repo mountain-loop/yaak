@@ -7,7 +7,7 @@ import { useDeleteCookieJar } from '../hooks/useDeleteCookieJar';
 import { useUpdateCookieJar } from '../hooks/useUpdateCookieJar';
 import { showDialog } from '../lib/dialog';
 import { showPrompt } from '../lib/prompt';
-import {setWorkspaceSearchParams} from "../lib/setWorkspaceSearchParams";
+import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import { CookieDialog } from './CookieDialog';
 import { Dropdown, type DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
@@ -76,7 +76,7 @@ export const CookieDropdown = memo(function CookieDropdown() {
                     label: 'Delete',
                     leftSlot: <Icon icon="trash" />,
                     color: 'danger',
-                    onSelect: () => deleteCookieJar.mutateAsync(),
+                    onSelect: deleteCookieJar.mutate,
                   },
                 ]
               : []) as DropdownItem[]),
