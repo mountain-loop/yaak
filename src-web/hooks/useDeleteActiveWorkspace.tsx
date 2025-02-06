@@ -1,7 +1,7 @@
 import type { Workspace } from '@yaakapp-internal/models';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
-import { showConfirm } from '../lib/confirm';
+import { showConfirmDelete } from '../lib/confirm';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
 import { getActiveWorkspace } from './useActiveWorkspace';
@@ -12,10 +12,9 @@ export function useDeleteActiveWorkspace() {
     mutationKey: ['delete_workspace'],
     mutationFn: async () => {
       const workspace = getActiveWorkspace();
-      const confirmed = await showConfirm({
+      const confirmed = await showConfirmDelete({
         id: 'delete-workspace',
         title: 'Delete Workspace',
-        variant: 'delete',
         description: (
           <>
             Permanently delete <InlineCode>{workspace?.name}</InlineCode>?

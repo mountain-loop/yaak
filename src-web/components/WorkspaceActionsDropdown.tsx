@@ -63,7 +63,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       {
         label: revealInFinderText,
         hidden: workspaceMeta == null || workspaceMeta.settingSyncDir == null,
-        leftSlot: <Icon icon="folder_open" />,
+        leftSlot: <Icon icon="folder_symlink" />,
         onSelect: async () => {
           if (workspaceMeta?.settingSyncDir == null) return;
           await revealItemInDir(workspaceMeta.settingSyncDir);
@@ -82,8 +82,8 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         onSelect: createWorkspace,
       },
       {
-        label: 'Open Workspace',
-        leftSlot: <Icon icon="folder" />,
+        label: 'Open Existing Workspace',
+        leftSlot: <Icon icon="folder_open" />,
         onSelect: openWorkspaceFromSyncDir.mutate,
       },
     ];

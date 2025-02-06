@@ -1,6 +1,6 @@
 import { useSetAtom } from 'jotai/index';
 import { showAlert } from '../lib/alert';
-import { showConfirm } from '../lib/confirm';
+import { showConfirmDelete } from '../lib/confirm';
 import { pluralizeCount } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
 import { getActiveWorkspaceId } from './useActiveWorkspace';
@@ -34,10 +34,9 @@ export function useDeleteSendHistory() {
         return;
       }
 
-      const confirmed = await showConfirm({
+      const confirmed = await showConfirmDelete({
         id: 'delete-send-history',
         title: 'Clear Send History',
-        variant: 'delete',
         description: <>Delete {labels.join(' and ')}?</>,
       });
       if (!confirmed) return false;

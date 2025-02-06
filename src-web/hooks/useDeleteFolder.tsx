@@ -2,10 +2,10 @@ import type { Folder } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
-import { showConfirm } from '../lib/confirm';
+import { showConfirmDelete } from '../lib/confirm';
 import { invokeCmd } from '../lib/tauri';
 import { useFastMutation } from './useFastMutation';
-import {foldersAtom, getFolder} from './useFolders';
+import { foldersAtom, getFolder } from './useFolders';
 import { removeModelById } from './useSyncModelStores';
 
 export function useDeleteFolder(id: string | null) {
@@ -15,10 +15,9 @@ export function useDeleteFolder(id: string | null) {
     mutationKey: ['delete_folder', id],
     mutationFn: async () => {
       const folder = getFolder(id);
-      const confirmed = await showConfirm({
+      const confirmed = await showConfirmDelete({
         id: 'delete-folder',
         title: 'Delete Folder',
-        variant: 'delete',
         description: (
           <>
             Permanently delete <InlineCode>{folder?.name}</InlineCode> and everything in it?

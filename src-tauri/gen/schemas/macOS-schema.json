@@ -5423,6 +5423,11 @@
           "const": "yaak-git:allow-add"
         },
         {
+          "description": "Enables the branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-branch"
+        },
+        {
           "description": "Enables the checkout command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:allow-checkout"
@@ -5433,6 +5438,11 @@
           "const": "yaak-git:allow-commit"
         },
         {
+          "description": "Enables the delete_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-delete-branch"
+        },
+        {
           "description": "Enables the initialize command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:allow-initialize"
@@ -5441,6 +5451,11 @@
           "description": "Enables the log command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:allow-log"
+        },
+        {
+          "description": "Enables the merge_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:allow-merge-branch"
         },
         {
           "description": "Enables the pull command without any pre-configured scope.",
@@ -5468,6 +5483,11 @@
           "const": "yaak-git:deny-add"
         },
         {
+          "description": "Denies the branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-branch"
+        },
+        {
           "description": "Denies the checkout command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:deny-checkout"
@@ -5478,6 +5498,11 @@
           "const": "yaak-git:deny-commit"
         },
         {
+          "description": "Denies the delete_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-delete-branch"
+        },
+        {
           "description": "Denies the initialize command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:deny-initialize"
@@ -5486,6 +5511,11 @@
           "description": "Denies the log command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-git:deny-log"
+        },
+        {
+          "description": "Denies the merge_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-git:deny-merge-branch"
         },
         {
           "description": "Denies the pull command without any pre-configured scope.",

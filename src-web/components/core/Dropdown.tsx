@@ -54,6 +54,7 @@ export type DropdownItemDefault = {
   hidden?: boolean;
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
+  waitForOnSelect?: boolean;
   onSelect?: () => void | Promise<void>;
 };
 
@@ -375,10 +376,16 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
 
     const handleSelect = useCallback(
       async (item: DropdownItem) => {
+        if (item.type === 'separator' || !item.onSelect) return;
         setSelectedIndex(null);
 
-        if (item.type !== 'separator' && typeof item.onSelect === 'function') {
-          await item.onSelect();
+        const promise = item.onSelect();
+        if (item.waitForOnSelect) {
+          try {
+            await promise;
+          } catch {
+            // Nothing
+          }
         }
 
         handleClose();
@@ -567,12 +574,9 @@ interface MenuItemProps {
 function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: MenuItemProps) {
   const [isLoading, setIsLoading] = useState(false);
   const handleClick = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      await onSelect?.(item);
-    } finally {
-      setIsLoading(false);
-    }
+    if (item.waitForOnSelect) setIsLoading(true);
+    await onSelect?.(item);
+    if (item.waitForOnSelect) setIsLoading(false);
   }, [item, onSelect]);
 
   const handleFocus = useCallback(
@@ -607,14 +611,14 @@ function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: Men
       onClick={handleClick}
       justify="start"
       leftSlot={
-        isLoading ? (
-          <div className="pr-2 flex justify-start text-text-subtle">
-            <LoadingIcon />
+        (isLoading || item.leftSlot) && (
+          <div
+            className={classNames(
+              'pr-2 flex justify-start opacity-70',
+            )}
+          >
+            {isLoading ? <LoadingIcon /> : item.leftSlot}
           </div>
-        ) : (
-          item.leftSlot && (
-            <div className="pr-2 flex justify-start text-text-subtle">{item.leftSlot}</div>
-          )
         )
       }
       rightSlot={rightSlot && <div className="ml-auto pl-3">{rightSlot}</div>}

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-branch"
+description = "Enables the branch command without any pre-configured scope."
+commands.allow = ["branch"]
+
+[[permission]]
+identifier = "deny-branch"
+description = "Denies the branch command without any pre-configured scope."
+commands.deny = ["branch"]

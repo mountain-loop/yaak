@@ -46,6 +46,7 @@ export type InputProps = Pick<
   required?: boolean;
   wrapLines?: boolean;
   multiLine?: boolean;
+  fullHeight?: boolean;
   stateKey: EditorProps['stateKey'];
 };
 
@@ -56,6 +57,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
     inputWrapperClassName,
     defaultValue,
     forceUpdateKey,
+    fullHeight,
     hideLabel,
     label,
     labelClassName,
@@ -148,8 +150,9 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
     <div
       ref={wrapperRef}
       className={classNames(
-        'w-full',
         'pointer-events-auto', // Just in case we're placing in disabled parent
+        'w-full',
+        fullHeight && 'h-full',
         labelPosition === 'left' && 'flex items-center gap-2',
         labelPosition === 'top' && 'flex-row gap-0.5',
       )}
@@ -166,6 +169,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
         alignItems="stretch"
         className={classNames(
           containerClassName,
+          fullHeight && 'h-full',
           'x-theme-input',
           'relative w-full rounded-md text',
           'border',
@@ -182,6 +186,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
           className={classNames(
             inputWrapperClassName,
             'w-full min-w-0 px-2',
+            fullHeight && 'h-full',
             leftSlot && 'pl-0.5 -ml-2',
             rightSlot && 'pr-0.5 -mr-2',
           )}
@@ -218,7 +223,10 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
           <IconButton
             title={obscured ? `Show ${label}` : `Obscure ${label}`}
             size="xs"
-            className={classNames("mr-0.5 group/obscure !h-auto my-0.5", disabled && 'opacity-disabled')}
+            className={classNames(
+              'mr-0.5 group/obscure !h-auto my-0.5',
+              disabled && 'opacity-disabled',
+            )}
             iconClassName="group-hover/obscure:text"
             iconSize="sm"
             icon={obscured ? 'eye' : 'eye_closed'}

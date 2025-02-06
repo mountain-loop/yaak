@@ -1,9 +1,10 @@
-use crate::callbacks::callbacks;
-use crate::error::Error::{GenericError, NoActiveBranch};
+use crate::callbacks::default_callbacks;
+use crate::error::Error::NoActiveBranch;
 use crate::error::Result;
+use crate::merge::do_merge;
 use crate::repository::open_repo;
 use crate::util::{bytes_to_string, get_current_branch};
-use git2::{Branch, FetchOptions, ProxyOptions, Repository};
+use git2::{FetchOptions, ProxyOptions};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -19,6 +20,7 @@ pub(crate) struct PullResult {
 
 pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
     let repo = open_repo(dir)?;
+
     let branch = get_current_branch(&repo)?.ok_or(NoActiveBranch)?;
     let branch_ref = branch.get();
     let branch_ref = bytes_to_string(branch_ref.name_bytes())?;
@@ -30,7 +32,8 @@ pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
     let mut remote = repo.find_remote(&remote_name)?;
 
     let mut options = FetchOptions::new();
-    options.remote_callbacks(callbacks());
+    let callbacks = default_callbacks();
+    options.remote_callbacks(callbacks);
 
     let mut proxy = ProxyOptions::new();
     proxy.auto();
@@ -38,38 +41,14 @@ pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
 
     remote.fetch(&[&branch_ref], Some(&mut options), None)?;
 
-    branch_merge_upstream_fastforward(&repo, &branch)?;
-
     let stats = remote.stats();
+
+    let fetch_head = repo.find_reference("FETCH_HEAD")?;
+    let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
+    do_merge(&repo, &branch, &fetch_commit)?;
 
     Ok(PullResult {
         received_bytes: stats.received_bytes(),
         received_objects: stats.received_objects(),
     })
-}
-
-pub fn branch_merge_upstream_fastforward(repo: &Repository, branch: &Branch) -> Result<()> {
-    let upstream = branch.upstream()?;
-
-    let upstream_commit = upstream.into_reference().peel_to_commit()?;
-    let annotated = repo.find_annotated_commit(upstream_commit.id())?;
-    let (analysis, pref) = repo.merge_analysis(&[&annotated])?;
-
-    if !analysis.is_fast_forward() {
-        return Err(GenericError("fast forward merge not possible".into()));
-    }
-
-    if pref.is_no_fast_forward() {
-        return Err(GenericError("fast forward not wanted".into()));
-    }
-
-    //TODO: support merge on unborn
-    if analysis.is_unborn() {
-        return Err(GenericError("head is unborn".into()));
-    }
-
-    repo.checkout_tree(upstream_commit.as_object(), None)?;
-    repo.head()?.set_target(annotated.id(), "")?;
-
-    Ok(())
 }

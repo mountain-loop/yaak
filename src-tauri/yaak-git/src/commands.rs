@@ -1,17 +1,32 @@
+use crate::branch::{git_checkout_branch, git_create_branch, git_delete_branch, git_merge_branch};
 use crate::error::Result;
 use crate::git::{
-    git_add, git_checkout_branch, git_commit, git_init, git_log, git_status, git_unstage,
-    GitCommit, GitStatusSummary,
+    git_add, git_commit, git_init, git_log, git_status, git_unstage, GitCommit, GitStatusSummary,
 };
+use crate::pull::{git_pull, PullResult};
 use crate::push::{git_push, PushResult};
 use std::path::{Path, PathBuf};
 use tauri::command;
-use crate::pull::{git_pull, PullResult};
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
 
 #[command]
-pub async fn checkout(dir: &Path, branch: &str) -> Result<()> {
-    git_checkout_branch(dir, branch)
+pub async fn checkout(dir: &Path, branch: &str, force: bool) -> Result<()> {
+    git_checkout_branch(dir, branch, force)
+}
+
+#[command]
+pub async fn branch(dir: &Path, branch: &str) -> Result<()> {
+    git_create_branch(dir, branch)
+}
+
+#[command]
+pub async fn delete_branch(dir: &Path, branch: &str) -> Result<()> {
+    git_delete_branch(dir, branch)
+}
+
+#[command]
+pub async fn merge_branch(dir: &Path, branch: &str, force: bool) -> Result<()> {
+    git_merge_branch(dir, branch, force)
 }
 
 #[command]

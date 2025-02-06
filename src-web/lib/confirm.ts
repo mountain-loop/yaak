@@ -6,9 +6,9 @@ import { showDialog } from './dialog';
 type ConfirmArgs = {
   id: string;
 } & Pick<DialogProps, 'title' | 'description'> &
-  Pick<ConfirmProps, 'variant' | 'confirmText'>;
+  Pick<ConfirmProps, 'color' | 'confirmText'>;
 
-export async function showConfirm({ id, title, description, variant, confirmText }: ConfirmArgs) {
+export async function showConfirm({ id, title, description, color, confirmText }: ConfirmArgs) {
   return new Promise((onResult: ConfirmProps['onResult']) => {
     showDialog({
       id,
@@ -17,7 +17,17 @@ export async function showConfirm({ id, title, description, variant, confirmText
       hideX: true,
       size: 'sm',
       disableBackdropClose: true, // Prevent accidental dismisses
-      render: ({ hide }) => Confirm({ onHide: hide, variant, onResult, confirmText }),
+      render: ({ hide }) => Confirm({ onHide: hide, color, onResult, confirmText }),
     });
+  });
+}
+
+export async function showConfirmDelete({ id, title, description }: ConfirmArgs) {
+  return showConfirm({
+    id,
+    title,
+    description,
+    color: 'danger',
+    confirmText: 'Delete',
   });
 }

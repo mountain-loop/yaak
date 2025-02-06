@@ -110,6 +110,7 @@ export const UrlBar = memo(function UrlBar({
                   title="Send Request"
                   type="submit"
                   className="w-8 mr-0.5 !h-full"
+                  iconColor="secondary"
                   icon={isLoading ? 'x' : submitIcon}
                   hotkeyAction="http_request.send"
                 />

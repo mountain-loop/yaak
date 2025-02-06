@@ -3,10 +3,13 @@
 Default permissions for the plugin
 
 - `allow-add`
+- `allow-branch`
 - `allow-checkout`
 - `allow-commit`
+- `allow-delete-branch`
 - `allow-initialize`
 - `allow-log`
+- `allow-merge-branch`
 - `allow-pull`
 - `allow-push`
 - `allow-status`
@@ -43,6 +46,32 @@ Enables the add command without any pre-configured scope.
 <td>
 
 Denies the add command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-git:allow-branch`
+
+</td>
+<td>
+
+Enables the branch command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-git:deny-branch`
+
+</td>
+<td>
+
+Denies the branch command without any pre-configured scope.
 
 </td>
 </tr>
@@ -102,6 +131,32 @@ Denies the commit command without any pre-configured scope.
 <tr>
 <td>
 
+`yaak-git:allow-delete-branch`
+
+</td>
+<td>
+
+Enables the delete_branch command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-git:deny-delete-branch`
+
+</td>
+<td>
+
+Denies the delete_branch command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `yaak-git:allow-initialize`
 
 </td>
@@ -147,6 +202,32 @@ Enables the log command without any pre-configured scope.
 <td>
 
 Denies the log command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-git:allow-merge-branch`
+
+</td>
+<td>
+
+Enables the merge_branch command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-git:deny-merge-branch`
+
+</td>
+<td>
+
+Denies the merge_branch command without any pre-configured scope.
 
 </td>
 </tr>

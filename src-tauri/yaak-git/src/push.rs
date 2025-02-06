@@ -1,5 +1,5 @@
 use crate::branch::branch_set_upstream_after_push;
-use crate::callbacks::callbacks;
+use crate::callbacks::default_callbacks;
 use crate::error::Result;
 use crate::repository::open_repo;
 use git2::{ProxyOptions, PushOptions};
@@ -28,12 +28,20 @@ pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
     let repo = open_repo(dir)?;
     let head = repo.head()?;
     let branch = head.shorthand().unwrap();
-    let push_result = Mutex::new(PushResult::NothingToPush);
     let mut remote = repo.find_remote("origin")?;
 
     let mut options = PushOptions::new();
     options.packbuilder_parallelism(0);
-    options.remote_callbacks(callbacks());
+    
+    let push_result = Mutex::new(PushResult::NothingToPush);
+    
+    let mut callbacks = default_callbacks();
+    callbacks.push_transfer_progress(|_current, _total, _bytes| {
+        let mut push_result = push_result.lock().unwrap();   
+        *push_result = PushResult::Success;
+    });
+    
+    options.remote_callbacks(default_callbacks());
 
     let mut proxy = ProxyOptions::new();
     proxy.auto();

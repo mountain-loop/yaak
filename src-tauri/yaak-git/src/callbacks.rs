@@ -2,7 +2,7 @@ use git2::{Cred, RemoteCallbacks};
 use log::{debug, info};
 use crate::util::find_ssh_key;
 
-pub(crate) fn callbacks<'s>() -> RemoteCallbacks<'s> {
+pub(crate) fn default_callbacks<'s>() -> RemoteCallbacks<'s> {
     let mut callbacks = RemoteCallbacks::new();
 
     let mut fail_next_call = false;

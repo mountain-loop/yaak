@@ -16,9 +16,9 @@ import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import type { CheckboxProps } from './core/Checkbox';
 import { Checkbox } from './core/Checkbox';
-import { Editor } from './core/Editor/Editor';
 import { Icon } from './core/Icon';
 import { InlineCode } from './core/InlineCode';
+import { Input } from './core/Input';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack } from './core/Stacks';
 import { EmptyStateText } from './EmptyStateText';
@@ -125,14 +125,16 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         )}
         secondSlot={({ style }) => (
           <div style={style} className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2">
-            <div className="bg-surface-highlight border border-border rounded-md overflow-hidden">
-              <Editor
-                className="!text-base font-sans h-full rounded-md"
-                placeholder="Commit message..."
-                onChange={setMessage}
-                stateKey={null}
-              />
-            </div>
+            <Input
+              className="!text-base font-sans rounded-md"
+              placeholder="Commit message..."
+              onChange={setMessage}
+              stateKey={null}
+              label="Commit message"
+              fullHeight
+              multiLine
+              hideLabel
+            />
             {commit.error && <Banner color="danger">{commit.error}</Banner>}
             <HStack alignItems="center">
               <InlineCode>{status.data?.headRefShorthand}</InlineCode>

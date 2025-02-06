@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::repository::open_repo;
-use crate::util::{get_branch_by_name, list_branch_names};
+use crate::util::list_branch_names;
 use chrono::{DateTime, Utc};
 use git2::IndexAddOption;
 use log::{info, warn};
@@ -168,18 +168,6 @@ pub fn git_log(dir: &Path) -> Result<Vec<GitCommit>> {
         .collect();
 
     Ok(log)
-}
-
-pub fn git_checkout_branch(dir: &Path, branch: &str) -> Result<()> {
-    let repo = open_repo(dir)?;
-    let branch = get_branch_by_name(&repo, branch)?;
-    let branch_ref = branch.into_reference();
-    let tree = branch_ref.peel_to_tree()?;
-
-    repo.checkout_tree(tree.as_object(), None)?;
-    repo.set_head(branch_ref.name().unwrap())?;
-
-    Ok(())
 }
 
 pub fn git_status(dir: &Path) -> Result<GitStatusSummary> {

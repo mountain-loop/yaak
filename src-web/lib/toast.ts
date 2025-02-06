@@ -9,7 +9,7 @@ export function showToast({
   id,
   timeout = 5000,
   ...props
-}: Omit<ToastInstance, 'id' | 'timeout'> & {
+}: Omit<ToastInstance, 'id' | 'timeout' | 'uniqueKey'> & {
   id?: ToastInstance['id'];
   timeout?: ToastInstance['timeout'];
 }) {
@@ -17,13 +17,23 @@ export function showToast({
   if (timeout != null) {
     setTimeout(() => hideToast(id), timeout);
   }
-  jotaiStore.set(toastsAtom, (a) => {
-    if (a.some((v) => v.id === id)) {
-      // It's already visible with this id
-      return a;
-    }
-    return [...a, { id, timeout, ...props }];
-  });
+  const toasts = jotaiStore.get(toastsAtom);
+  const isVisible = toasts.some((t) => t.id === id);
+
+  let delay = 0;
+  if (isVisible) {
+    console.log('HIDING TOAST', id);
+    hideToast(id);
+    // Allow enough time for old toast to animate out
+    delay = 200;
+  }
+
+  setTimeout(() => {
+    const uniqueKey = generateId();
+    const newToastProps: ToastInstance = { id, uniqueKey, timeout, ...props };
+    jotaiStore.set(toastsAtom, (prev) => [...prev, newToastProps]);
+  }, delay);
+
   return id;
 }
 

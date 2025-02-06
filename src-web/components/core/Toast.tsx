@@ -55,14 +55,14 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
       <div
         className={classNames(
           `x-theme-toast x-theme-toast--${color}`,
-          'pointer-events-auto overflow-hidden break-all',
+          'pointer-events-auto overflow-hidden',
           'relative pointer-events-auto bg-surface text-text rounded-lg',
           'border border-border shadow-lg w-[25rem]',
           'grid grid-cols-[1fr_auto]',
         )}
       >
         <div className="px-3 py-3 flex items-start gap-2 w-full">
-          {toastIcon && <Icon icon={toastIcon} className="mt-1" />}
+          {toastIcon && <Icon icon={toastIcon} color={color} className="mt-1" />}
           <VStack space={2} className="w-full">
             <div>{children}</div>
             {action?.({ hide: onClose })}

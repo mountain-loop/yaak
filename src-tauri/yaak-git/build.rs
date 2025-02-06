@@ -1,11 +1,14 @@
 const COMMANDS: &[&str] = &[
     "add",
+    "branch",
     "checkout",
     "commit",
+    "delete_branch",
     "initialize",
     "log",
-    "push",
+    "merge_branch",
     "pull",
+    "push",
     "status",
     "unstage",
 ];

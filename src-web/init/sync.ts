@@ -2,61 +2,68 @@ import { debounce } from '@yaakapp-internal/lib';
 import type { AnyModel, ModelPayload } from '@yaakapp-internal/models';
 import { watchWorkspaceFiles } from '@yaakapp-internal/sync';
 import { syncWorkspace } from '../commands/commands';
+import { getActiveWorkspaceId } from '../hooks/useActiveWorkspace';
 import { listenToTauriEvent } from '../hooks/useListenToTauriEvent';
-import { workspaceMetaAtom } from '../hooks/useWorkspaceMeta';
+import { getWorkspaceMeta, workspaceMetaAtom } from '../hooks/useWorkspaceMeta';
 import { jotaiStore } from '../lib/jotai';
 
 export function initSync() {
-  let unsub: (() => void) | undefined;
-  jotaiStore.sub(workspaceMetaAtom, () => {
-    unsub?.(); // Unsub from any previous watcher
-    const workspaceMeta = jotaiStore.get(workspaceMetaAtom);
-    if (workspaceMeta == null) return;
-    unsub = initForWorkspace(workspaceMeta.workspaceId, workspaceMeta.settingSyncDir);
-  });
+  initModelListeners();
+  initFileChangeListeners();
 }
 
-function initForWorkspace(workspaceId: string, syncDir: string | null) {
-  // Sync on sync dir changes
-  if (syncDir == null) {
+export async function sync({ force }: { force?: boolean } = {}) {
+  const workspaceMeta = getWorkspaceMeta();
+  if (workspaceMeta == null || workspaceMeta.settingSyncDir == null) {
     return;
   }
 
-  const debouncedSync = debounce(() => {
-    if (syncDir == null) return;
-    syncWorkspace.mutate({ workspaceId, syncDir });
-  }, 1000);
-
-  // Sync on model upsert
-  const unsubUpsertedModels = listenToTauriEvent<ModelPayload>('upserted_model', (p) => {
-    if (isModelRelevant(workspaceId, p.payload.model)) {
-      debouncedSync();
-    }
+  await syncWorkspace.mutateAsync({
+    workspaceId: workspaceMeta.workspaceId,
+    syncDir: workspaceMeta.settingSyncDir,
+    force,
   });
-
-  // Sync on model deletion
-  const unsubDeletedModels = listenToTauriEvent<ModelPayload>('deleted_model', (p) => {
-    if (isModelRelevant(workspaceId, p.payload.model)) {
-      debouncedSync();
-    }
-  });
-
-  // Sync on file changes in sync directory
-  const unsubFileWatch = watchWorkspaceFiles(workspaceId, syncDir, debouncedSync);
-
-  console.log('Initializing directory sync for', workspaceId, syncDir);
-
-  // Perform an initial sync operation
-  debouncedSync();
-
-  return function unsub() {
-    unsubFileWatch();
-    unsubDeletedModels();
-    unsubUpsertedModels();
-  };
 }
 
-function isModelRelevant(workspaceId: string, m: AnyModel) {
+const debouncedSync = debounce(async () => {
+  await sync();
+}, 1000);
+
+/**
+ * Subscribe to model change events. Since we check the workspace ID on sync, we can
+ * simply add long-lived subscribers for the lifetime of the app.
+ */
+function initModelListeners() {
+  listenToTauriEvent<ModelPayload>('upserted_model', (p) => {
+    if (isModelRelevant(p.payload.model)) debouncedSync();
+  });
+  listenToTauriEvent<ModelPayload>('deleted_model', (p) => {
+    if (isModelRelevant(p.payload.model)) debouncedSync();
+  });
+}
+
+/**
+ * Subscribe to relevant files for a workspace. Since the workspace can change, this will
+ * keep track of the active workspace, as well as changes to the sync directory of the
+ * current workspace, and re-subscribe when necessary.
+ */
+function initFileChangeListeners() {
+  let unsub: null | ReturnType<typeof watchWorkspaceFiles> = null;
+  jotaiStore.sub(workspaceMetaAtom, async () => {
+    await unsub?.(); // Unsub to previous
+    const workspaceMeta = jotaiStore.get(workspaceMetaAtom);
+    if (workspaceMeta == null || workspaceMeta.settingSyncDir == null) return;
+    unsub = watchWorkspaceFiles(
+      workspaceMeta.workspaceId,
+      workspaceMeta.settingSyncDir,
+      debouncedSync,
+    );
+  });
+}
+
+function isModelRelevant(m: AnyModel) {
+  const workspaceId = getActiveWorkspaceId();
+
   if (
     m.model !== 'workspace' &&
     m.model !== 'folder' &&

@@ -2,7 +2,7 @@ import type { CookieJar } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
-import { showConfirm } from '../lib/confirm';
+import { showConfirmDelete } from '../lib/confirm';
 import { invokeCmd } from '../lib/tauri';
 import { cookieJarsAtom } from './useCookieJars';
 import { useFastMutation } from './useFastMutation';
@@ -14,10 +14,9 @@ export function useDeleteCookieJar(cookieJar: CookieJar | null) {
   return useFastMutation<CookieJar | null, string>({
     mutationKey: ['delete_cookie_jar', cookieJar?.id],
     mutationFn: async () => {
-      const confirmed = await showConfirm({
+      const confirmed = await showConfirmDelete({
         id: 'delete-cookie-jar',
         title: 'Delete CookieJar',
-        variant: 'delete',
         description: (
           <>
             Permanently delete <InlineCode>{cookieJar?.name}</InlineCode>?

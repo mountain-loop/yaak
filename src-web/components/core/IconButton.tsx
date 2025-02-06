@@ -77,7 +77,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         color={confirmed ? 'success' : iconColor}
         className={classNames(
           iconClassName,
-          'group-hover/button:text',
+          'group-hover/button:text-text',
           props.disabled && 'opacity-70',
         )}
       />

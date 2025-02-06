@@ -1,25 +1,15 @@
-import type { ButtonProps } from './Button';
+import type { Color } from '@yaakapp-internal/plugins';
 import { Button } from './Button';
 import { HStack } from './Stacks';
 
 export interface ConfirmProps {
   onHide: () => void;
   onResult: (result: boolean) => void;
-  variant?: 'delete' | 'confirm';
   confirmText?: string;
+  color?: Color;
 }
 
-const colors: Record<NonNullable<ConfirmProps['variant']>, ButtonProps['color']> = {
-  delete: 'danger',
-  confirm: 'primary',
-};
-
-const confirmButtonTexts: Record<NonNullable<ConfirmProps['variant']>, string> = {
-  delete: 'Delete',
-  confirm: 'Confirm',
-};
-
-export function Confirm({ onHide, onResult, confirmText, variant = 'confirm' }: ConfirmProps) {
+export function Confirm({ onHide, onResult, confirmText, color = 'primary' }: ConfirmProps) {
   const handleHide = () => {
     onResult(false);
     onHide();
@@ -32,8 +22,8 @@ export function Confirm({ onHide, onResult, confirmText, variant = 'confirm' }: 
 
   return (
     <HStack space={2} justifyContent="start" className="mt-2 mb-4 flex-row-reverse">
-      <Button color={colors[variant]} onClick={handleSuccess}>
-        {confirmText ?? confirmButtonTexts[variant]}
+      <Button color={color} onClick={handleSuccess}>
+        {confirmText ?? 'Confirm'}
       </Button>
       <Button onClick={handleHide} variant="border">
         Cancel

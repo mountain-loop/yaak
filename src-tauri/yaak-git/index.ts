@@ -26,7 +26,22 @@ export function useGit(dir: string) {
         mutationFn: (args) => invoke('plugin:yaak-git|add', { dir, ...args }),
         onSuccess,
       }),
-      checkout: useMutation<void, string, { branch: string }>({
+      branch: useMutation<void, string, { branch: string }>({
+        mutationKey: ['git', 'branch', dir],
+        mutationFn: (args) => invoke('plugin:yaak-git|branch', { dir, ...args }),
+        onSuccess,
+      }),
+      mergeBranch: useMutation<void, string, { branch: string; force: boolean }>({
+        mutationKey: ['git', 'merge', dir],
+        mutationFn: (args) => invoke('plugin:yaak-git|merge_branch', { dir, ...args }),
+        onSuccess,
+      }),
+      deleteBranch: useMutation<void, string, { branch: string }>({
+        mutationKey: ['git', 'delete-branch', dir],
+        mutationFn: (args) => invoke('plugin:yaak-git|delete_branch', { dir, ...args }),
+        onSuccess,
+      }),
+      checkout: useMutation<void, string, { branch: string; force: boolean }>({
         mutationKey: ['git', 'checkout', dir],
         mutationFn: (args) => invoke('plugin:yaak-git|checkout', { dir, ...args }),
         onSuccess,

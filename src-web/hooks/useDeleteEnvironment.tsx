@@ -2,7 +2,7 @@ import type { Environment } from '@yaakapp-internal/models';
 import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { trackEvent } from '../lib/analytics';
-import { showConfirm } from '../lib/confirm';
+import { showConfirmDelete } from '../lib/confirm';
 import { invokeCmd } from '../lib/tauri';
 import { environmentsAtom } from './useEnvironments';
 import { useFastMutation } from './useFastMutation';
@@ -14,10 +14,9 @@ export function useDeleteEnvironment(environment: Environment | null) {
   return useFastMutation<Environment | null, string>({
     mutationKey: ['delete_environment', environment?.id],
     mutationFn: async () => {
-      const confirmed = await showConfirm({
+      const confirmed = await showConfirmDelete({
         id: 'delete-environment',
         title: 'Delete Environment',
-        variant: 'delete',
         description: (
           <>
             Permanently delete <InlineCode>{environment?.name}</InlineCode>?

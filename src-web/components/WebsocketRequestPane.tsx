@@ -235,6 +235,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                     size="xs"
                     title="Close connection"
                     icon="x"
+                    iconColor="secondary"
                     className="w-8 mr-0.5 !h-full"
                     onClick={handleCancel}
                   />
