@@ -61,11 +61,6 @@ export function useGit(dir: string) {
         mutationFn: () => invoke('plugin:yaak-git|pull', { dir }),
         onSuccess,
       }),
-      init: useMutation<void, string, void>({
-        mutationKey: ['git', 'initialize', dir],
-        mutationFn: () => invoke('plugin:yaak-git|initialize', { dir }),
-        onSuccess,
-      }),
       unstage: useMutation<void, string, { relaPaths: string[] }>({
         mutationKey: ['git', 'unstage', dir],
         mutationFn: (args) => invoke('plugin:yaak-git|unstage', { dir, ...args }),
@@ -73,4 +68,8 @@ export function useGit(dir: string) {
       }),
     },
   ] as const;
+}
+
+export async function gitInit(dir: string) {
+  await invoke('plugin:yaak-git|initialize', { dir });
 }

@@ -3,12 +3,12 @@ import type { LicenseCheckStatus } from '@yaakapp-internal/license';
 import { useLicense } from '@yaakapp-internal/license';
 import type { ReactNode } from 'react';
 import { appInfo } from '../hooks/useAppInfo';
-import { useOpenSettings } from '../hooks/useOpenSettings';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
-import { HStack } from './core/Stacks';
-import { SettingsTab } from './Settings/SettingsTab';
 import { Icon } from './core/Icon';
+import { HStack } from './core/Stacks';
+import { openSettings } from '../commands/openSettings';
+import {SettingsTab} from "./Settings/SettingsTab";
 
 const details: Record<
   LicenseCheckStatus['type'] | 'dev' | 'beta',
@@ -31,7 +31,6 @@ const details: Record<
 };
 
 export function LicenseBadge() {
-  const openSettings = useOpenSettings(SettingsTab.License);
   const { check } = useLicense();
 
   if (check.data == null) {
@@ -57,7 +56,7 @@ export function LicenseBadge() {
         if (checkType === 'beta') {
           await openUrl('https://feedback.yaak.app');
         } else {
-          openSettings.mutate();
+          openSettings.mutate(SettingsTab.License);
         }
       }}
       color={detail.color}

@@ -1,38 +1,38 @@
 import { readDir } from '@tauri-apps/plugin-fs';
 import { useState } from 'react';
 import { Banner } from './core/Banner';
+import { Checkbox } from './core/Checkbox';
 import { VStack } from './core/Stacks';
 import { SelectFile } from './SelectFile';
 
 export interface SyncToFilesystemSettingProps {
-  onChange: (filePath: string | null) => void;
-  value: string | null;
+  onChange: (args: { filePath: string | null; initGit?: boolean }) => void;
+  value: { filePath: string | null; initGit?: boolean };
   allowNonEmptyDirectory?: boolean;
+  forceOpen?: boolean;
 }
 
 export function SyncToFilesystemSetting({
   onChange,
   value,
   allowNonEmptyDirectory,
+  forceOpen,
 }: SyncToFilesystemSettingProps) {
   const [error, setError] = useState<string | null>(null);
-
   return (
-    <details open={value != null} className="w-full">
-      <summary>Sync to filesystem</summary>
+    <details open={forceOpen || value != null} className="w-full">
+      <summary>Data directory {typeof value.initGit === 'boolean' && ' and Git'}</summary>
       <VStack className="my-2" space={3}>
         <Banner color="info">
-          When enabled, workspace data syncs to the chosen folder as text files, ideal for backup
-          and Git collaboration.
+          Sync workspace data to folder as plain text files, ideal for backup and Git collaboration.
         </Banner>
         {error && <div className="text-danger">{error}</div>}
 
         <SelectFile
           directory
-          color="primary"
           size="xs"
           noun="Directory"
-          filePath={value}
+          filePath={value.filePath}
           onChange={async ({ filePath }) => {
             if (filePath != null) {
               const files = await readDir(filePath);
@@ -42,9 +42,17 @@ export function SyncToFilesystemSetting({
               }
             }
 
-            onChange(filePath);
+            onChange({ ...value, filePath });
           }}
         />
+
+        {value.filePath && typeof value.initGit === 'boolean' && (
+          <Checkbox
+            checked={value.initGit}
+            onChange={(initGit) => onChange({ ...value, initGit })}
+            title="Initialize Git Repo"
+          />
+        )}
       </VStack>
     </details>
   );

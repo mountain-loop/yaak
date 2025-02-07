@@ -15,9 +15,10 @@ import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
 interface Props {
   workspaceId: string | null;
   hide: () => void;
+  openSyncMenu?: boolean;
 }
 
-export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
+export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Props) {
   const workspaces = useWorkspaces();
   const workspace = workspaces.find((w) => w.id === workspaceId);
   const workspaceMeta = useWorkspaceMeta();
@@ -60,10 +61,11 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
 
       <VStack space={6} className="mt-3 w-full" alignItems="start">
         <SyncToFilesystemSetting
-          value={workspaceMeta.settingSyncDir}
-          onChange={(settingSyncDir) =>
-            upsertWorkspaceMeta.mutate({ ...workspaceMeta, settingSyncDir })
-          }
+          value={{ filePath: workspaceMeta.settingSyncDir }}
+          forceOpen={openSyncMenu}
+          onChange={({ filePath }) => {
+            upsertWorkspaceMeta.mutate({ ...workspaceMeta, settingSyncDir: filePath });
+          }}
         />
         <Separator />
         <Button

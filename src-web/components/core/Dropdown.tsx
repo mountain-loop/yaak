@@ -44,6 +44,12 @@ export type DropdownItemSeparator = {
   hidden?: boolean;
 };
 
+export type DropdownItemContent = {
+  type: 'content';
+  label?: ReactNode;
+  hidden?: boolean;
+};
+
 export type DropdownItemDefault = {
   type?: 'default';
   label: ReactNode;
@@ -58,7 +64,7 @@ export type DropdownItemDefault = {
   onSelect?: () => void | Promise<void>;
 };
 
-export type DropdownItem = DropdownItemDefault | DropdownItemSeparator;
+export type DropdownItem = DropdownItemDefault | DropdownItemSeparator | DropdownItemContent;
 
 export interface DropdownProps {
   children: ReactElement<HTMLAttributes<HTMLButtonElement>>;
@@ -376,7 +382,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
 
     const handleSelect = useCallback(
       async (item: DropdownItem) => {
-        if (item.type === 'separator' || !item.onSelect) return;
+        if (!('onSelect' in item) || !item.onSelect) return;
         setSelectedIndex(null);
 
         const promise = item.onSelect();
@@ -473,6 +479,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
         {items.map(
           (item, i) =>
             item.type !== 'separator' &&
+            item.type !== 'content' &&
             !item.hotKeyLabelOnly &&
             item.hotKeyAction && (
               <MenuItemHotKey
@@ -544,6 +551,13 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                       </Separator>
                     );
                   }
+                  if (item.type === 'content') {
+                    return (
+                      <div key={i} className={classNames('my-1.5 mx-2 max-w-xs')}>
+                        {item.label}
+                      </div>
+                    );
+                  }
                   return (
                     <MenuItem
                       focused={i === selectedIndex}
@@ -612,11 +626,7 @@ function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: Men
       justify="start"
       leftSlot={
         (isLoading || item.leftSlot) && (
-          <div
-            className={classNames(
-              'pr-2 flex justify-start opacity-70',
-            )}
-          >
+          <div className={classNames('pr-2 flex justify-start opacity-70')}>
             {isLoading ? <LoadingIcon /> : item.leftSlot}
           </div>
         )

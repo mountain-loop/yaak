@@ -1,9 +1,11 @@
+import { gitInit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import { useState } from 'react';
 import { upsertWorkspace } from '../commands/upsertWorkspace';
 import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
+import { showErrorToast } from '../lib/toast';
 import { Button } from './core/Button';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
@@ -15,7 +17,10 @@ interface Props {
 
 export function CreateWorkspaceDialog({ hide }: Props) {
   const [name, setName] = useState<string>('');
-  const [settingSyncDir, setSettingSyncDir] = useState<string | null>(null);
+  const [syncConfig, setSyncConfig] = useState<{
+    filePath: string | null;
+    initGit?: boolean;
+  }>({ filePath: null, initGit: true });
 
   return (
     <VStack
@@ -33,7 +38,16 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         const workspaceMeta = await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', {
           workspaceId: workspace.id,
         });
-        upsertWorkspaceMeta.mutate({ ...workspaceMeta, settingSyncDir });
+        await upsertWorkspaceMeta.mutateAsync({
+          ...workspaceMeta,
+          settingSyncDir: syncConfig.filePath,
+        });
+
+        if (syncConfig.initGit && syncConfig.filePath) {
+          gitInit(syncConfig.filePath).catch((err) => {
+            showErrorToast('git-init-error', String(err));
+          });
+        }
 
         // Navigate to workspace
         await router.navigate({
@@ -47,8 +61,8 @@ export function CreateWorkspaceDialog({ hide }: Props) {
       <PlainInput required label="Name" defaultValue={name} onChange={setName} />
 
       <SyncToFilesystemSetting
-        onChange={setSettingSyncDir}
-        value={settingSyncDir}
+        onChange={setSyncConfig}
+        value={syncConfig}
         allowNonEmptyDirectory // Will do initial import when the workspace is created
       />
       <Button type="submit" color="primary" className="ml-auto mt-3">

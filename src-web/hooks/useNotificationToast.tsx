@@ -25,7 +25,9 @@ export function useNotificationToast() {
       id: payload.id,
       timeout: null,
       message: payload.message,
-      onClose: () => markRead(payload.id),
+      onClose: () => {
+        markRead(payload.id)
+      },
       action: ({ hide }) =>
         actionLabel && actionUrl ? (
           <Button

@@ -19,18 +19,21 @@ export const Toasts = () => {
     <Portal name="toasts">
       <div className="absolute right-0 bottom-0 z-50">
         <AnimatePresence>
-          {toasts.map(({ message, uniqueKey, ...props }: ToastInstance) => (
-            <Toast
-              key={uniqueKey}
-              open
-              {...props}
-              // We call onClose inside actions.hide instead of passing to toast so that
-              // it gets called from external close calls as well
-              onClose={() => hideToast(uniqueKey)}
-            >
-              {message}
-            </Toast>
-          ))}
+          {toasts.map((toast: ToastInstance) => {
+            const { message, uniqueKey, ...props } = toast;
+            return (
+              <Toast
+                key={uniqueKey}
+                open
+                {...props}
+                // We call onClose inside actions.hide instead of passing to toast so that
+                // it gets called from external close calls as well
+                onClose={() => hideToast(toast)}
+              >
+                {message}
+              </Toast>
+            );
+          })}
         </AnimatePresence>
       </div>
     </Portal>

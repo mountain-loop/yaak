@@ -1,11 +1,11 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useRef } from 'react';
+import { openSettings } from '../commands/openSettings';
 import { useAppInfo } from '../hooks/useAppInfo';
 import { useCheckForUpdates } from '../hooks/useCheckForUpdates';
 import { useExportData } from '../hooks/useExportData';
 import { useImportData } from '../hooks/useImportData';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
-import { useOpenSettings } from '../hooks/useOpenSettings';
 import { showDialog } from '../lib/dialog';
 import type { DropdownRef } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
@@ -19,9 +19,8 @@ export function SettingsDropdown() {
   const appInfo = useAppInfo();
   const dropdownRef = useRef<DropdownRef>(null);
   const checkForUpdates = useCheckForUpdates();
-  const openSettings = useOpenSettings();
 
-  useListenToTauriEvent('settings', () => openSettings.mutate());
+  useListenToTauriEvent('settings', () => openSettings.mutate(null));
 
   return (
     <Dropdown
@@ -31,7 +30,7 @@ export function SettingsDropdown() {
           label: 'Settings',
           hotKeyAction: 'settings.show',
           leftSlot: <Icon icon="settings" />,
-          onSelect: openSettings.mutate,
+          onSelect: () => openSettings.mutate(null),
         },
         {
           label: 'Keyboard shortcuts',
@@ -76,7 +75,13 @@ export function SettingsDropdown() {
         },
       ]}
     >
-      <IconButton size="sm" title="Main Menu" icon="settings" iconColor="secondary" className="pointer-events-auto" />
+      <IconButton
+        size="sm"
+        title="Main Menu"
+        icon="settings"
+        iconColor="secondary"
+        className="pointer-events-auto"
+      />
     </Dropdown>
   );
 }

@@ -45,6 +45,7 @@ const icons = {
   filter: lucide.FilterIcon,
   flask: lucide.FlaskConicalIcon,
   folder: lucide.FolderIcon,
+  folder_git: lucide.FolderGitIcon,
   folder_input: lucide.FolderInputIcon,
   folder_open: lucide.FolderOpenIcon,
   folder_output: lucide.FolderOutputIcon,
@@ -93,6 +94,7 @@ const icons = {
   update: lucide.RefreshCcwIcon,
   upload: lucide.UploadIcon,
   variable: lucide.VariableIcon,
+  wrench: lucide.WrenchIcon,
   x: lucide.XIcon,
   _unknown: lucide.ShieldAlertIcon,
 

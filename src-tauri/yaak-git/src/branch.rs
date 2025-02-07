@@ -41,7 +41,15 @@ pub(crate) fn git_checkout_branch(dir: &Path, branch: &str, force: bool) -> Resu
 
 pub(crate) fn git_create_branch(dir: &Path, name: &str) -> Result<()> {
     let repo = open_repo(dir)?;
-    let head = repo.head()?.peel_to_commit()?;
+    let head = match repo.head() {
+        Ok(h) => h,
+        Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
+            let msg = "Cannot create branch when there are no commits";
+            return Err(GenericError(msg.into()));
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let head = head.peel_to_commit()?;
 
     repo.branch(name, &head, false)?;
 

@@ -1,8 +1,7 @@
 use crate::error::Error::MergeConflicts;
 use crate::util::bytes_to_string;
-use git2::{AnnotatedCommit, Branch, IndexEntry, MergeOptions, Reference, Repository};
+use git2::{AnnotatedCommit, Branch, IndexEntry, Reference, Repository};
 use log::{debug, info};
-
 
 pub(crate) fn do_merge(
     repo: &Repository,
@@ -46,7 +45,6 @@ pub(crate) fn do_merge(
     Ok(())
 }
 
-
 pub(crate) fn merge_fast_forward(
     repo: &Repository,
     local_reference: &mut Reference,
@@ -79,7 +77,7 @@ pub(crate) fn merge_normal(
     let local_tree = repo.find_commit(local.id())?.tree()?;
     let remote_tree = repo.find_commit(remote.id())?.tree()?;
     let ancestor = repo.find_commit(repo.merge_base(local.id(), remote.id())?)?.tree()?;
-    
+
     let mut idx = repo.merge_trees(&ancestor, &local_tree, &remote_tree, None)?;
 
     if idx.has_conflicts() {

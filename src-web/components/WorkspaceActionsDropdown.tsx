@@ -2,6 +2,7 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import classNames from 'classnames';
 import { memo, useCallback, useMemo } from 'react';
 import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
+import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
 import { switchWorkspace } from '../commands/switchWorkspace';
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
@@ -19,7 +20,6 @@ import { Icon } from './core/Icon';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
 import { SwitchWorkspaceDialog } from './SwitchWorkspaceDialog';
-import { WorkspaceSettingsDialog } from './WorkspaceSettingsDialog';
 
 type Props = Pick<ButtonProps, 'className' | 'justify' | 'forDropdown' | 'leftSlot'>;
 
@@ -49,16 +49,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
         hotKeyAction: 'workspace_settings.show',
-        onSelect: async () => {
-          showDialog({
-            id: 'workspace-settings',
-            title: 'Workspace Settings',
-            size: 'md',
-            render: ({ hide }) => (
-              <WorkspaceSettingsDialog workspaceId={workspace?.id ?? null} hide={hide} />
-            ),
-          });
-        },
+        onSelect: () => openWorkspaceSettings.mutate({}),
       },
       {
         label: revealInFinderText,
