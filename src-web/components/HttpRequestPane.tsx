@@ -353,8 +353,14 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   );
 
   const handleUrlChange = useCallback(
-    (url: string) => updateRequest({ id: activeRequestId, update: { url } }),
-    [activeRequestId, updateRequest],
+    (url: string) => {
+      if (url.indexOf("?") > 0){
+        importQuerystring(url);
+      } else {
+        updateRequest({ id: activeRequestId, update: { url } });
+      }
+    },
+    [activeRequestId, updateRequest, importQuerystring],
   );
 
   return (
