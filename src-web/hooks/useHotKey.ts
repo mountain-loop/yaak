@@ -1,8 +1,8 @@
 import { type } from '@tauri-apps/plugin-os';
+import { debounce } from '@yaakapp-internal/lib';
 import { useEffect, useRef } from 'react';
 import { capitalize } from '../lib/capitalize';
 import { useOsInfo } from './useOsInfo';
-import { debounce } from '@yaakapp-internal/lib';
 
 const HOLD_KEYS = ['Shift', 'Control', 'Command', 'Alt', 'Meta'];
 
@@ -31,9 +31,9 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'app.zoom_out': ['CmdCtrl+-'],
   'app.zoom_reset': ['CmdCtrl+0'],
   'command_palette.toggle': ['CmdCtrl+k'],
-  'environmentEditor.toggle': ['CmdCtrl+Shift+e'],
+  'environmentEditor.toggle': ['CmdCtrl+Shift+E', 'CmdCtrl+Shift+e'],
   'grpc_request.send': ['CmdCtrl+Enter', 'CmdCtrl+r'],
-  'hotkeys.showHelp': ['CmdCtrl+Shift+/'],
+  'hotkeys.showHelp': ['CmdCtrl+Shift+/', 'CmdCtrl+Shift+?'], // when shift is pressed, it might be a question mark
   'http_request.create': ['CmdCtrl+n'],
   'http_request.delete': ['Backspace'],
   'http_request.duplicate': ['CmdCtrl+d'],
@@ -115,6 +115,7 @@ export function useHotKey(
       if (e.metaKey) currentKeysWithModifiers.add('Meta');
       if (e.shiftKey) currentKeysWithModifiers.add('Shift');
 
+      console.log('down', currentKeysWithModifiers);
       for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
         if (
           (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
