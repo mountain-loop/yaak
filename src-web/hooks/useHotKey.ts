@@ -115,7 +115,6 @@ export function useHotKey(
       if (e.metaKey) currentKeysWithModifiers.add('Meta');
       if (e.shiftKey) currentKeysWithModifiers.add('Shift');
 
-      console.log('down', currentKeysWithModifiers);
       for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
         if (
           (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
