@@ -8,7 +8,7 @@ import { environmentsAtom } from './useEnvironments';
 import { useFastMutation } from './useFastMutation';
 import { removeModelById } from './useSyncModelStores';
 
-export function useDeleteEnvironment(environment: Environment | null) {
+export function useDeleteEnvironment(environment: Environment | null, onDelete: ()=>void) {
   const setEnvironments = useSetAtom(environmentsAtom);
 
   return useFastMutation<Environment | null, string>({
@@ -31,6 +31,7 @@ export function useDeleteEnvironment(environment: Environment | null) {
       if (environment == null) return;
 
       setEnvironments(removeModelById(environment));
+      onDelete();
     },
   });
 }

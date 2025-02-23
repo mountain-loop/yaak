@@ -35,13 +35,21 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
     initialEnvironment?.id ?? baseEnvironment?.id ?? null,
   );
 
-  const selectedEnvironment = allEnvironments.find((e) => e.id === selectedEnvironmentId);
+  let selectedEnvironment = allEnvironments.find((e) => e.id === selectedEnvironmentId);
 
   const handleCreateEnvironment = async () => {
     if (baseEnvironment == null) return;
     const e = await createEnvironment.mutateAsync(baseEnvironment);
     if (e == null) return;
     setSelectedEnvironmentId(e.id);
+  };
+  const handleDeleteEnvironment = (id:string|undefined) => {
+    if (id === selectedEnvironmentId){
+      // if delete the selected environment
+      // select the base one
+      setSelectedEnvironmentId(baseEnvironment?.id ?? null);
+      selectedEnvironment = baseEnvironment ?? undefined;
+    }
   };
 
   return (
@@ -68,6 +76,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
                   onClick={handleCreateEnvironment}
                 />
               }
+              onDelete={() => handleDeleteEnvironment(baseEnvironment?.id)}
             >
               {baseEnvironment?.name}
             </SidebarButton>
@@ -82,6 +91,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
                 active={selectedEnvironment?.id === e.id}
                 environment={e}
                 onClick={() => setSelectedEnvironmentId(e.id)}
+                onDelete={() => handleDeleteEnvironment(e.id)}
               >
                 {e.name}
               </SidebarButton>
@@ -200,6 +210,7 @@ function SidebarButton({
   onClick,
   rightSlot,
   environment,
+  onDelete,
 }: {
   className?: string;
   children: ReactNode;
@@ -207,9 +218,10 @@ function SidebarButton({
   onClick: () => void;
   rightSlot?: ReactNode;
   environment: Environment | null;
+  onDelete: () => void;
 }) {
   const updateEnvironment = useUpdateEnvironment(environment?.id ?? null);
-  const deleteEnvironment = useDeleteEnvironment(environment);
+  const deleteEnvironment = useDeleteEnvironment(environment, onDelete);
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
     y: number;
