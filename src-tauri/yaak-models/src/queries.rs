@@ -8,7 +8,7 @@ use crate::models::{
     PluginKeyValue, PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden,
     WebsocketConnection, WebsocketConnectionIden, WebsocketEvent, WebsocketEventIden,
     WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta,
-    WorkspaceMetaIden,
+    WorkspaceMetaIden,WebsocketConnectionState,
 };
 use crate::plugin::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
@@ -1176,6 +1176,21 @@ pub async fn list_websocket_connections_for_request<R: Runtime>(
     let mut stmt = db.prepare(sql.as_str())?;
     let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
     Ok(items.map(|v| v.unwrap()).collect())
+}
+
+pub async fn close_all_websocket_connections<R: Runtime>(
+    mgr: &impl Manager<R>,
+) -> Result<()>{
+    let dbm = &*mgr.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+
+    let (sql, params)= Query::update()
+        .table(WebsocketConnectionIden::Table)
+        .value(WebsocketConnectionIden::State, serde_json::to_value(&WebsocketConnectionState::Closed)?.as_str())
+        .build_rusqlite(SqliteQueryBuilder);
+    let mut stmt = db.prepare(sql.as_str())?;
+    stmt.execute(&*params.as_params())?;
+    Ok(())
 }
 
 pub async fn upsert_websocket_connection<R: Runtime>(

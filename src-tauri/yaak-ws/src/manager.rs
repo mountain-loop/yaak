@@ -37,13 +37,25 @@ impl WebsocketManager {
         self.connections.lock().await.insert(id.to_string(), write);
 
         let tx = receive_tx.clone();
-        tauri::async_runtime::spawn(async move {
-            while let Some(Ok(message)) = read.next().await {
-                debug!("Received websocket message {message:?}");
-                if message.is_close() {
-                    return;
+        tauri::async_runtime::spawn({
+            let connections = self.connections.clone();
+            let connection_id = id.to_string();
+            async move {
+                while let Some(msg) = read.next().await {
+                    match msg {
+                        Err(_e) => {
+                            // broken connection
+                            tx.send(Message::Close(None)).await.unwrap();
+                            break;
+                        }
+                        Ok(message) => {
+                            tx.send(message).await.unwrap();
+                        }
+                    }
                 }
-                tx.send(message).await.unwrap();
+                // cleanup
+                connections.lock().await.remove(&connection_id);
+                debug!("Connection {connection_id} closed");
             }
         });
         Ok(response)

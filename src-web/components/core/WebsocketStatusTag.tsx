@@ -1,17 +1,31 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
+import type { WebsocketConnection } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 
 interface Props {
-  response: HttpResponse;
+  response: WebsocketConnection;
   className?: string;
-  showReason?: boolean;
 }
 
-export function StatusTag({ response, className, showReason }: Props) {
+export function WebsocketStatusTag({ response, className }: Props) {
   const { status, state } = response;
-  const label = status < 100 ? 'ERROR' : status;
-  const category = `${status}`[0];
   const isInitializing = state === 'initialized';
+
+  let label = 'CONNECTING';
+  let category = '0';
+  if (state === 'initialized'){
+    label = 'CONNECTING';
+    category = '1';
+  } else if (state === 'connected'){
+    label = 'CONNECTED';
+    category = '2';
+  } else {
+    label = 'CLOSED';
+    category = '4';
+    if (status < 0){
+      label = 'ERROR';
+      category = '5';
+    }
+  }
 
   return (
     <span
@@ -27,8 +41,7 @@ export function StatusTag({ response, className, showReason }: Props) {
         isInitializing && 'text-text-subtle',
       )}
     >
-      {isInitializing ? 'CONNECTING' : label}{' '}
-      {showReason && 'statusReason' in response ? response.statusReason : null}
+      {label}{' '}
     </span>
   );
 }

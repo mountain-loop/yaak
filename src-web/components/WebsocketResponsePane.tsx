@@ -19,7 +19,7 @@ import { LoadingIcon } from './core/LoadingIcon';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
-import { StatusTag } from './core/StatusTag';
+import { WebsocketStatusTag } from './core/WebsocketStatusTag';
 import { EmptyStateText } from './EmptyStateText';
 import { RecentWebsocketConnectionsDropdown } from './RecentWebsocketConnectionsDropdown';
 
@@ -74,7 +74,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                 {activeConnection.state !== 'closed' && (
                   <LoadingIcon size="sm" className="text-text-subtlest" />
                 )}
-                <StatusTag showReason response={activeConnection} />
+                <WebsocketStatusTag response={activeConnection} />
                 <span>&bull;</span>
                 <span>{events.length} Messages</span>
               </HStack>

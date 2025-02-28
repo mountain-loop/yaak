@@ -19,6 +19,7 @@ use yaak_models::queries;
 use yaak_models::queries::{
     get_base_environment, get_cookie_jar, get_environment, get_websocket_connection,
     get_websocket_request, upsert_websocket_connection, upsert_websocket_event, UpdateSource,
+    close_all_websocket_connections,
 };
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
@@ -261,44 +262,10 @@ pub(crate) async fn connect<R: Runtime>(
     )
     .await?;
 
+
+
     let (receive_tx, mut receive_rx) = mpsc::channel::<Message>(128);
     let mut ws_manager = ws_manager.lock().await;
-
-    {
-        let connection_id = connection.id.clone();
-        let request_id = request.id.to_string();
-        let workspace_id = request.workspace_id.clone();
-        let window = window.clone();
-        tokio::spawn(async move {
-            while let Some(message) = receive_rx.recv().await {
-                upsert_websocket_event(
-                    &window,
-                    WebsocketEvent {
-                        connection_id: connection_id.clone(),
-                        request_id: request_id.clone(),
-                        workspace_id: workspace_id.clone(),
-                        is_server: true,
-                        message_type: match message {
-                            Message::Text(_) => WebsocketEventType::Text,
-                            Message::Binary(_) => WebsocketEventType::Binary,
-                            Message::Ping(_) => WebsocketEventType::Ping,
-                            Message::Pong(_) => WebsocketEventType::Pong,
-                            Message::Close(_) => WebsocketEventType::Close,
-                            // Raw frame will never happen during a read
-                            Message::Frame(_) => WebsocketEventType::Frame,
-                        },
-                        message: message.into_data().into(),
-                        ..Default::default()
-                    },
-                    &UpdateSource::Window,
-                )
-                .await
-                .unwrap();
-            }
-            info!("Websocket connection closed");
-        });
-    }
-
 
     let (url, url_parameters) = apply_path_placeholders(&request.url, request.url_parameters);
 
@@ -323,6 +290,7 @@ pub(crate) async fn connect<R: Runtime>(
                 &WebsocketConnection {
                     error: Some(format!("{e:?}")),
                     state: WebsocketConnectionState::Closed,
+                    status: (-1).into(), // for backwards compatibility
                     ..connection
                 },
                 &UpdateSource::Window,
@@ -352,6 +320,60 @@ pub(crate) async fn connect<R: Runtime>(
         &UpdateSource::Window,
     )
     .await?;
+    
+    {
+        let connection_id = connection.id.clone();
+        let request_id = request.id.to_string();
+        let workspace_id = request.workspace_id.clone();
+        let window = window.clone();
+        let connection = connection.clone();
+        tokio::spawn(async move {
+            while let Some(message) = receive_rx.recv().await {
+                upsert_websocket_event(
+                    &window,
+                    WebsocketEvent {
+                        connection_id: connection_id.clone(),
+                        request_id: request_id.clone(),
+                        workspace_id: workspace_id.clone(),
+                        is_server: true,
+                        message_type: match message {
+                            Message::Text(_) => WebsocketEventType::Text,
+                            Message::Binary(_) => WebsocketEventType::Binary,
+                            Message::Ping(_) => WebsocketEventType::Ping,
+                            Message::Pong(_) => WebsocketEventType::Pong,
+                            Message::Close(_) => WebsocketEventType::Close,
+                            // Raw frame will never happen during a read
+                            Message::Frame(_) => WebsocketEventType::Frame,
+                        },
+                        message: message.into_data().into(),
+                        ..Default::default()
+                    },
+                    &UpdateSource::Window,
+                )
+                .await
+                .unwrap();
+            }
+            info!("Websocket connection closed");
+            upsert_websocket_connection(
+                &window,
+                &WebsocketConnection {
+                    workspace_id: request.workspace_id.clone(),
+                    request_id: request_id.to_string(),
+                    state: WebsocketConnectionState::Closed,
+                    ..connection
+                },
+                &UpdateSource::Background,
+            ).await.unwrap();
+            
+        });
+    }
 
     Ok(connection)
+}
+
+pub(crate) async fn cleanup_connections<R: Runtime>(
+    mgr: &impl Manager<R>,
+) -> Result<()> {
+    close_all_websocket_connections(mgr).await
+    .map_err(|e| e.into())
 }
