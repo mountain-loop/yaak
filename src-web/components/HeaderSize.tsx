@@ -37,7 +37,7 @@ export function HeaderSize({
         ...(size === 'lg' ? { height: HEADER_SIZE_LG } : {}),
         ...(osInfo.osType === 'macos' || ignoreControlsSpacing
           ? { paddingRight: '2px' }
-          : { paddingLeft: '4px', paddingRight: settings.hideWindowControls ? '0px' : WINDOW_CONTROLS_WIDTH }),
+          : { paddingLeft: '2px', paddingRight: settings.hideWindowControls ? '0px' : WINDOW_CONTROLS_WIDTH }),
       }}
       className={classNames(
         className,
