@@ -5,7 +5,7 @@ import { useOsInfo } from '../hooks/useOsInfo';
 import {WINDOW_CONTROLS_WIDTH} from "../lib/constants";
 import { Button } from './core/Button';
 import { HStack } from './core/Stacks';
-import {useSettings} from "../hooks/useSettings";
+import { useSettings } from "../hooks/useSettings";
 
 interface Props {
   className?: string;
