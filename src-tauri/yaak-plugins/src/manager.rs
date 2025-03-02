@@ -79,8 +79,8 @@ impl PluginManager {
         });
 
         let listen_addr = match option_env!("YAAK_PLUGIN_SERVER_PORT") {
-            Some(port) => format!("localhost:{port}"),
-            None => "localhost:0".to_string(),
+            Some(port) => format!("127.0.0.1:{port}"),
+            None => "127.0.0.1:0".to_string(),
         };
         let listener = tauri::async_runtime::block_on(async move {
             TcpListener::bind(listen_addr).await.expect("Failed to bind TCP listener")
