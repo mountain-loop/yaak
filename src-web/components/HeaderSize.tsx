@@ -35,7 +35,7 @@ export function HeaderSize({
           stoplightsVisible && !ignoreControlsSpacing ? 72 / settings.interfaceScale : undefined,
         ...(size === 'md' ? { height: HEADER_SIZE_MD } : {}),
         ...(size === 'lg' ? { height: HEADER_SIZE_LG } : {}),
-        ...(osInfo.osType === 'macos' || ignoreControlsSpacing
+        ...(osInfo.osType === 'macos' || ignoreControlsSpacing || settings.hideWindowControls
           ? { paddingRight: '2px' }
           : { paddingLeft: '2px', paddingRight: WINDOW_CONTROLS_WIDTH }),
       }}

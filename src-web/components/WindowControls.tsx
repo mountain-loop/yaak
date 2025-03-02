@@ -5,6 +5,7 @@ import { useOsInfo } from '../hooks/useOsInfo';
 import {WINDOW_CONTROLS_WIDTH} from "../lib/constants";
 import { Button } from './core/Button';
 import { HStack } from './core/Stacks';
+import {useSettings} from "../hooks/useSettings";
 
 interface Props {
   className?: string;
@@ -15,9 +16,9 @@ interface Props {
 export function WindowControls({ className, onlyX }: Props) {
   const [maximized, setMaximized] = useState<boolean>(false);
   const osInfo = useOsInfo();
-
-  // Never show controls on macOS
-  if (osInfo.osType === 'macos') {
+  const settings = useSettings();
+  // Never show controls on macOS or if hideWindowControls is true
+  if (osInfo.osType === 'macos' || settings.hideWindowControls) {
     return null;
   }
 

@@ -123,6 +123,14 @@ export function SettingsAppearance() {
 
       <Separator className="my-4" />
 
+      <Checkbox
+        checked={settings.hideWindowControls}
+        title="Hide Window Controls"
+        onChange={(hideWindowControls) => updateSettings.mutate({ hideWindowControls })}
+      />
+
+      <Separator className="my-4" />
+
       <Select
         name="appearance"
         label="Appearance"
