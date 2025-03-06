@@ -315,6 +315,16 @@
           "const": "deny-check"
         },
         {
+          "description": "Enables the deactivate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-deactivate"
+        },
+        {
+          "description": "Denies the deactivate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-deactivate"
+        },
+        {
           "description": "Default permissions for the plugin",
           "type": "string",
           "const": "default"

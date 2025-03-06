@@ -160,7 +160,7 @@ const EnvironmentEditor = function ({
   const validateName = useCallback((name: string) => {
     // Empty just means the variable doesn't have a name yet, and is unusable
     if (name === '') return true;
-    return name.match(/^[a-z][a-z0-9_-]*$/i) != null;
+    return name.match(/^[a-z_][a-z0-9_-]*$/i) != null;
   }, []);
 
   return (

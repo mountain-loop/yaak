@@ -42,7 +42,6 @@ openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu inst
 
 [dependencies]
 chrono = { version = "0.4.31", features = ["serde"] }
-datetime = "0.5.2"
 encoding_rs = "0.8.35"
 eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.14.0" }
 hex_color = "3.0.0"
@@ -71,7 +70,7 @@ tauri-plugin-updater = "2.5.0"
 tauri-plugin-window-state = "2.2.1"
 tokio = { version = "1.43.0", features = ["sync"] }
 tokio-stream = "0.1.17"
-ts-rs = { workspace = true }
+thiserror = { workspace = true }
 uuid = "1.12.1"
 yaak-git = { path = "yaak-git" }
 yaak-grpc = { path = "yaak-grpc" }

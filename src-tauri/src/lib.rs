@@ -2,11 +2,13 @@ extern crate core;
 #[cfg(target_os = "macos")]
 extern crate objc;
 use crate::encoding::read_response_body;
+use crate::error::Error::GenericError;
 use crate::grpc::metadata_to_map;
 use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
 use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
+use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
 use rand::random;
@@ -65,6 +67,7 @@ use yaak_templates::format::format_json;
 use yaak_templates::{Parser, Tokens};
 
 mod encoding;
+mod error;
 mod grpc;
 mod history;
 mod http_request;
@@ -126,14 +129,13 @@ async fn cmd_render_template<R: Runtime>(
     template: &str,
     workspace_id: &str,
     environment_id: Option<&str>,
-) -> Result<String, String> {
+) -> YaakResult<String> {
     let environment = match environment_id {
-        Some(id) => Some(get_environment(&window, id).await.map_err(|e| e.to_string())?),
+        Some(id) => get_environment(&window, id).await.ok(),
         None => None,
     };
-    let base_environment =
-        get_base_environment(&window, &workspace_id).await.map_err(|e| e.to_string())?;
-    let rendered = render_template(
+    let base_environment = get_base_environment(&window, &workspace_id).await?;
+    let result = render_template(
         template,
         &base_environment,
         environment.as_ref(),
@@ -143,8 +145,8 @@ async fn cmd_render_template<R: Runtime>(
             RenderPurpose::Preview,
         ),
     )
-    .await;
-    Ok(rendered)
+    .await?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -189,18 +191,15 @@ async fn cmd_grpc_go<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
-) -> Result<String, String> {
+) -> YaakResult<String> {
     let environment = match environment_id {
-        Some(id) => Some(get_environment(&window, id).await.map_err(|e| e.to_string())?),
+        Some(id) => get_environment(&window, id).await.ok(),
         None => None,
     };
     let unrendered_request = get_grpc_request(&window, request_id)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or("Failed to find GRPC request")?;
-    let base_environment = get_base_environment(&window, &unrendered_request.workspace_id)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?
+        .ok_or(GenericError("Failed to get GRPC request".to_string()))?;
+    let base_environment = get_base_environment(&window, &unrendered_request.workspace_id).await?;
     let request = render_grpc_request(
         &unrendered_request,
         &base_environment,
@@ -211,7 +210,7 @@ async fn cmd_grpc_go<R: Runtime>(
             RenderPurpose::Send,
         ),
     )
-    .await;
+    .await?;
     let mut metadata = BTreeMap::new();
 
     // Add the rest of metadata
@@ -242,33 +241,27 @@ async fn cmd_grpc_go<R: Runtime>(
                 })
                 .collect(),
         };
-        let plugin_result = plugin_manager
-            .call_http_authentication(&window, &auth_name, plugin_req)
-            .await
-            .map_err(|e| e.to_string())?;
+        let plugin_result =
+            plugin_manager.call_http_authentication(&window, &auth_name, plugin_req).await?;
         for header in plugin_result.set_headers {
             metadata.insert(header.name, header.value);
         }
     }
 
-    let conn = {
-        let req = request.clone();
-        upsert_grpc_connection(
-            &window,
-            &GrpcConnection {
-                workspace_id: req.workspace_id,
-                request_id: req.id,
-                status: -1,
-                elapsed: 0,
-                state: GrpcConnectionState::Initialized,
-                url: req.url.clone(),
-                ..Default::default()
-            },
-            &UpdateSource::Window,
-        )
-        .await
-        .map_err(|e| e.to_string())?
-    };
+    let conn = upsert_grpc_connection(
+        &window,
+        &GrpcConnection {
+            workspace_id: request.workspace_id.clone(),
+            request_id: request.id.clone(),
+            status: -1,
+            elapsed: 0,
+            state: GrpcConnectionState::Initialized,
+            url: request.url.clone(),
+            ..Default::default()
+        },
+        &UpdateSource::Window,
+    )
+    .await?;
 
     let conn_id = conn.id.clone();
 
@@ -291,7 +284,7 @@ async fn cmd_grpc_go<R: Runtime>(
         let req = request.clone();
         match (req.service, req.method) {
             (Some(service), Some(method)) => (service, method),
-            _ => return Err("Service and method are required".to_string()),
+            _ => return Err(GenericError("Service and method are required".to_string())),
         }
     };
 
@@ -319,13 +312,13 @@ async fn cmd_grpc_go<R: Runtime>(
                 },
                 &UpdateSource::Window,
             )
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
             return Ok(conn_id);
         }
     };
 
-    let method_desc = connection.method(&service, &method).map_err(|e| e.to_string())?;
+    let method_desc =
+        connection.method(&service, &method).map_err(|e| GenericError(e.to_string()))?;
 
     #[derive(serde::Deserialize)]
     enum IncomingMsg {
@@ -362,23 +355,21 @@ async fn cmd_grpc_go<R: Runtime>(
                     let window = window.clone();
                     let base_msg = base_msg.clone();
                     let method_desc = method_desc.clone();
-                    let msg = {
-                        block_in_place(|| {
-                            tauri::async_runtime::block_on(async {
-                                render_template(
-                                    msg.as_str(),
-                                    &workspace,
-                                    environment.as_ref(),
-                                    &PluginTemplateCallback::new(
-                                        window.app_handle(),
-                                        &WindowContext::from_window(&window),
-                                        RenderPurpose::Send,
-                                    ),
-                                )
-                                .await
-                            })
+                    let msg = block_in_place(|| {
+                        tauri::async_runtime::block_on(async {
+                            render_template(
+                                msg.as_str(),
+                                &workspace,
+                                environment.as_ref(),
+                                &PluginTemplateCallback::new(
+                                    window.app_handle(),
+                                    &WindowContext::from_window(&window),
+                                    RenderPurpose::Send,
+                                ),
+                            )
+                            .await.expect("Failed to render template")
                         })
-                    };
+                    });
                     let d_msg: DynamicMessage = match deserialize_message(msg.as_str(), method_desc)
                     {
                         Ok(d_msg) => d_msg,
@@ -443,7 +434,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 RenderPurpose::Send,
             ),
         )
-        .await;
+        .await?;
 
         upsert_grpc_event(
             &window,
@@ -455,8 +446,7 @@ async fn cmd_grpc_go<R: Runtime>(
             },
             &UpdateSource::Window,
         )
-        .await
-        .unwrap();
+        .await?;
 
         async move {
             let (maybe_stream, maybe_msg) =
@@ -738,7 +728,7 @@ async fn cmd_send_ephemeral_request(
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
     window: WebviewWindow,
-) -> Result<HttpResponse, String> {
+) -> YaakResult<HttpResponse> {
     let response = HttpResponse::new();
     request.id = "".to_string();
     let environment = match environment_id {
@@ -1087,10 +1077,9 @@ async fn cmd_send_http_request(
     //   condition where the user may have just edited a field before sending
     //   that has not yet been saved in the DB.
     request: HttpRequest,
-) -> Result<HttpResponse, String> {
-    let response = create_default_http_response(&window, &request.id, &UpdateSource::Window)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> YaakResult<HttpResponse> {
+    let response =
+        create_default_http_response(&window, &request.id, &UpdateSource::Window).await?;
 
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
     window.listen_any(format!("cancel_http_response_{}", response.id), move |_event| {

@@ -20,6 +20,8 @@ if (osType !== 'macos') {
   await getCurrentWebviewWindow().setDecorations(false);
 }
 
+document.documentElement.setAttribute('data-platform', osType);
+
 window.addEventListener('keydown', (e) => {
   const rx = /input|select|textarea/i;
 

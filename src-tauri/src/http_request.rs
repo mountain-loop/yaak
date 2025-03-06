@@ -1,3 +1,5 @@
+use crate::error::Error::GenericError;
+use crate::error::Result;
 use crate::render::render_http_request;
 use crate::response_err;
 use http::header::{ACCEPT, USER_AGENT};
@@ -43,14 +45,10 @@ pub async fn send_http_request<R: Runtime>(
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
     cancelled_rx: &mut Receiver<bool>,
-) -> Result<HttpResponse, String> {
+) -> Result<HttpResponse> {
     let plugin_manager = window.state::<PluginManager>();
-    let workspace = get_workspace(window, &unrendered_request.workspace_id)
-        .await
-        .expect("Failed to get Workspace");
-    let base_environment = get_base_environment(window, &unrendered_request.workspace_id)
-        .await
-        .expect("Failed to get base environment");
+    let workspace = get_workspace(window, &unrendered_request.workspace_id).await?;
+    let base_environment = get_base_environment(window, &unrendered_request.workspace_id).await?;
     let settings = get_or_create_settings(window).await;
     let cb = PluginTemplateCallback::new(
         window.app_handle(),
@@ -61,9 +59,17 @@ pub async fn send_http_request<R: Runtime>(
     let response_id = og_response.id.clone();
     let response = Arc::new(Mutex::new(og_response.clone()));
 
-    let request =
-        render_http_request(&unrendered_request, &base_environment, environment.as_ref(), &cb)
-            .await;
+    let request = match render_http_request(
+        &unrendered_request,
+        &base_environment,
+        environment.as_ref(),
+        &cb,
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => return Ok(response_err(&*response.lock().await, e.to_string(), window).await),
+    };
 
     let mut url_string = request.url;
 
@@ -139,10 +145,9 @@ pub async fn send_http_request<R: Runtime>(
                     serde_json::from_value(json_cookie).expect("Failed to deserialize cookie")
                 })
                 .map(|c| Ok(c))
-                .collect::<Vec<Result<_, ()>>>();
+                .collect::<Vec<Result<_>>>();
 
-            let store = reqwest_cookie_store::CookieStore::from_cookies(cookies, true)
-                .expect("Failed to create cookie store");
+            let store = reqwest_cookie_store::CookieStore::from_cookies(cookies, true)?;
             let cookie_store = reqwest_cookie_store::CookieStoreMutex::new(store);
             let cookie_store = Arc::new(cookie_store);
             client_builder = client_builder.cookie_provider(Arc::clone(&cookie_store));
@@ -158,7 +163,7 @@ pub async fn send_http_request<R: Runtime>(
         ));
     }
 
-    let client = client_builder.build().expect("Failed to build client");
+    let client = client_builder.build()?;
 
     // Render query parameters
     let mut query_params = Vec::new();
@@ -193,8 +198,8 @@ pub async fn send_http_request<R: Runtime>(
         }
     };
 
-    let m = Method::from_bytes(request.method.to_uppercase().as_bytes())
-        .expect("Failed to create method");
+    let m = Method::from_str(&request.method.to_uppercase())
+        .map_err(|e| GenericError(e.to_string()))?;
     let mut request_builder = client.request(m, url).query(&query_params);
 
     let mut headers = HeaderMap::new();
@@ -282,7 +287,7 @@ pub async fn send_http_request<R: Runtime>(
         } else if body_type == "binary" && request_body.contains_key("filePath") {
             let file_path = request_body
                 .get("filePath")
-                .ok_or("filePath not set")?
+                .ok_or(GenericError("filePath not set".to_string()))?
                 .as_str()
                 .unwrap_or_default();
 
@@ -431,7 +436,7 @@ pub async fn send_http_request<R: Runtime>(
         }
     }
 
-    let (resp_tx, resp_rx) = oneshot::channel::<Result<Response, reqwest::Error>>();
+    let (resp_tx, resp_rx) = oneshot::channel::<std::result::Result<Response, reqwest::Error>>();
     let (done_tx, done_rx) = oneshot::channel::<HttpResponse>();
 
     let start = std::time::Instant::now();

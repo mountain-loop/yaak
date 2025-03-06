@@ -5,12 +5,14 @@ use tauri::{
 };
 
 mod commands;
-mod errors;
+pub mod error;
 mod license;
 
-use crate::commands::{activate, check};
+use crate::commands::{activate, check, deactivate};
 pub use license::*;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    Builder::new("yaak-license").invoke_handler(generate_handler![check, activate]).build()
+    Builder::new("yaak-license")
+        .invoke_handler(generate_handler![check, activate, deactivate])
+        .build()
 }

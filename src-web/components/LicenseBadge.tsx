@@ -27,12 +27,25 @@ const details: Record<
   commercial_use: null,
   invalid_license: { label: 'License Error', color: 'danger' },
   personal_use: { label: 'Personal Use', color: 'success' },
-  trialing: { label: 'Active Trial', color: 'success' },
+  trialing: { label: 'Personal Use', color: 'success' },
 };
 
 export function LicenseBadge() {
   const { check } = useLicense();
   const [licenseDetails, setLicenseDetails] = useLicenseConfirmation();
+
+  if (check.error) {
+    return (
+      <LicenseBadgeButton
+        color="danger"
+        onClick={() => {
+          openSettings.mutate(SettingsTab.License);
+        }}
+      >
+        License Error
+      </LicenseBadgeButton>
+    );
+  }
 
   // Hasn't loaded yet
   if (licenseDetails == null || check.data == null) {
@@ -56,10 +69,7 @@ export function LicenseBadge() {
   }
 
   return (
-    <Button
-      size="2xs"
-      variant="border"
-      className="!rounded-full mx-1"
+    <LicenseBadgeButton
       color={detail.color}
       onClick={async () => {
         if (check.data.type === 'trialing') {
@@ -72,6 +82,10 @@ export function LicenseBadge() {
       }}
     >
       {detail.label}
-    </Button>
+    </LicenseBadgeButton>
   );
+}
+
+function LicenseBadgeButton({ ...props }: ButtonProps) {
+  return <Button size="2xs" variant="border" className="!rounded-full mx-1" {...props} />;
 }

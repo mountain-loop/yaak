@@ -9,8 +9,18 @@
     @apply w-full h-full overflow-hidden text-text bg-surface;
   }
 
-  * {
+  /* Never show ligatures */
+  :root {
     font-variant-ligatures: none;
+  }
+
+  /* The following fixes weird font rendering issues on Linux */
+  html[data-platform="linux"] {
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
   }
 
   ::selection {

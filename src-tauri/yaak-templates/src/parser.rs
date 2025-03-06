@@ -269,9 +269,9 @@ impl Parser {
         while self.pos < self.chars.len() {
             let ch = self.peek_char();
             let is_valid = if start_pos == self.pos {
-                ch.is_alphabetic() // First char has to be alphabetic
+                ch.is_alphabetic() || ch == '_' // First is more restrictive
             } else {
-                ch.is_alphanumeric() || ch == '-' || ch == '_'
+                ch.is_alphanumeric() || ch == '_' || ch == '-'
             };
             if is_valid {
                 text.push(ch);
@@ -457,13 +457,13 @@ mod tests {
 
     #[test]
     fn var_prefixes() {
-        let mut p = Parser::new("${[ -a ]}${[ _a ]}${[ 0a ]}");
+        let mut p = Parser::new("${[ -a ]}${[ 0a ]}");
         assert_eq!(
             p.parse().tokens,
             vec![
                 Token::Raw {
                     // Shouldn't be parsed, because they're invalid
-                    text: "${[ -a ]}${[ _a ]}${[ 0a ]}".into()
+                    text: "${[ -a ]}${[ 0a ]}".into()
                 },
                 Token::Eof
             ]
@@ -476,8 +476,8 @@ mod tests {
         assert_eq!(
             p.parse().tokens,
             vec![
-                Token::Raw {
-                    text: "${[ _a ]}".into()
+                Token::Tag {
+                    val: Val::Var { name: "_a".into() }
                 },
                 Token::Eof
             ]

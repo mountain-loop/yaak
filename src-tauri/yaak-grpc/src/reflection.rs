@@ -28,7 +28,7 @@ pub async fn fill_pool_from_files(
     let desc_path = temp_dir().join(random_file_name);
     let global_import_dir = app_handle
         .path()
-        .resolve("vendored/protoc/protoc-include", BaseDirectory::Resource)
+        .resolve("vendored/protoc/include", BaseDirectory::Resource)
         .expect("failed to resolve protoc include directory");
 
     // HACK: Remove UNC prefix for Windows paths

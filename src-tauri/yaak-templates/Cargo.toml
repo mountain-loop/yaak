@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 log = "0.4.22"
 serde = { version = "1.0.208", features = ["derive"] }
-ts-rs = { version = "10.0.0" }
-tokio = { version = "1.39.3", features = ["macros", "rt"] }
 serde_json = "1.0.132"
+thiserror = { workspace = true }
+tokio = { version = "1.39.3", features = ["macros", "rt"] }
+ts-rs = { version = "10.0.0" }

@@ -4,6 +4,7 @@ Default permissions for the plugin
 
 - `allow-check`
 - `allow-activate`
+- `allow-deactivate`
 
 ## Permission Table
 
@@ -62,6 +63,32 @@ Enables the check command without any pre-configured scope.
 <td>
 
 Denies the check command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-license:allow-deactivate`
+
+</td>
+<td>
+
+Enables the deactivate command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-license:deny-deactivate`
+
+</td>
+<td>
+
+Denies the deactivate command without any pre-configured scope.
 
 </td>
 </tr>

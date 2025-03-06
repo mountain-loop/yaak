@@ -1,6 +1,6 @@
 mod commands;
 mod connect;
-mod error;
+pub mod error;
 mod manager;
 mod render;
 

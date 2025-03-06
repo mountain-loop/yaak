@@ -90,7 +90,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 environment.as_ref(),
                 &cb,
             )
-            .await;
+            .await
+            .expect("Failed to render http request");
             Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
                 http_request,
             }))
@@ -107,8 +108,9 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 .await
                 .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let data =
-                render_json_value(req.data, &base_environment, environment.as_ref(), &cb).await;
+            let data = render_json_value(req.data, &base_environment, environment.as_ref(), &cb)
+                .await
+                .expect("Failed to render template");
             Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))
         }
         InternalEventPayload::ErrorResponse(resp) => {

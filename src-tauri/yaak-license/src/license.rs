@@ -1,11 +1,11 @@
-use crate::errors::Error::{ClientError, ServerError};
-use crate::errors::Result;
+use crate::error::Error::{ClientError, ServerError};
+use crate::error::Result;
 use chrono::{NaiveDateTime, Utc};
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::ops::Add;
 use std::time::Duration;
-use tauri::{is_dev, AppHandle, Emitter, Runtime, WebviewWindow};
+use tauri::{is_dev, AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 use yaak_models::queries::UpdateSource;
 
@@ -17,7 +17,8 @@ const TRIAL_SECONDS: u64 = 3600 * 24 * 30;
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct CheckActivationRequestPayload {
-    pub activation_id: String,
+    pub app_version: String,
+    pub app_platform: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -32,6 +33,14 @@ pub struct CheckActivationResponsePayload {
 #[ts(export, export_to = "license.ts")]
 pub struct ActivateLicenseRequestPayload {
     pub license_key: String,
+    pub app_version: String,
+    pub app_platform: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "license.ts")]
+pub struct DeactivateLicenseRequestPayload {
     pub app_version: String,
     pub app_platform: String,
 }
@@ -56,7 +65,7 @@ pub async fn activate_license<R: Runtime>(
     p: ActivateLicenseRequestPayload,
 ) -> Result<()> {
     let client = reqwest::Client::new();
-    let response = client.post(build_url("/activate")).json(&p).send().await?;
+    let response = client.post(build_url("/licenses/activate")).json(&p).send().await?;
 
     if response.status().is_client_error() {
         let body: APIErrorResponsePayload = response.json().await?;
@@ -86,6 +95,44 @@ pub async fn activate_license<R: Runtime>(
 
     Ok(())
 }
+
+pub async fn deactivate_license<R: Runtime>(
+    window: &WebviewWindow<R>,
+    p: DeactivateLicenseRequestPayload,
+) -> Result<()> {
+    let activation_id = get_activation_id(window).await;
+
+    let client = reqwest::Client::new();
+    let path = format!("/licenses/activations/{}/deactivate", activation_id);
+    let response = client.post(build_url(&path)).json(&p).send().await?;
+
+    if response.status().is_client_error() {
+        let body: APIErrorResponsePayload = response.json().await?;
+        return Err(ClientError {
+            message: body.message,
+            error: body.error,
+        });
+    }
+
+    if response.status().is_server_error() {
+        return Err(ServerError);
+    }
+
+    yaak_models::queries::delete_key_value(
+        window,
+        KV_ACTIVATION_ID_KEY,
+        KV_NAMESPACE,
+        &UpdateSource::Window,
+    )
+    .await;
+
+    if let Err(e) = window.emit("license-deactivated", true) {
+        warn!("Failed to emit deactivate-license event: {}", e);
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "license.ts")]
@@ -96,15 +143,8 @@ pub enum LicenseCheckStatus {
     Trialing { end: NaiveDateTime },
 }
 
-pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>) -> Result<LicenseCheckStatus> {
-    let activation_id = yaak_models::queries::get_key_value_string(
-        app_handle,
-        KV_ACTIVATION_ID_KEY,
-        KV_NAMESPACE,
-        "",
-    )
-    .await;
-
+pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>, payload: CheckActivationRequestPayload) -> Result<LicenseCheckStatus> {
+    let activation_id = get_activation_id(app_handle).await;
     let settings = yaak_models::queries::get_or_create_settings(app_handle).await;
     let trial_end = settings.created_at.add(Duration::from_secs(TRIAL_SECONDS));
 
@@ -122,10 +162,8 @@ pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Lice
             info!("Checking license activation");
             // A license has been activated, so let's check the license server
             let client = reqwest::Client::new();
-            let payload = CheckActivationRequestPayload {
-                activation_id: activation_id.clone(),
-            };
-            let response = client.post(build_url("/check")).json(&payload).send().await?;
+            let path = format!("/licenses/activations/{activation_id}/check");
+            let response = client.post(build_url(&path)).json(&payload).send().await?;
 
             if response.status().is_client_error() {
                 let body: APIErrorResponsePayload = response.json().await?;
@@ -151,8 +189,13 @@ pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Lice
 
 fn build_url(path: &str) -> String {
     if is_dev() {
-        format!("http://localhost:9444/licenses{path}")
+        format!("http://localhost:9444{path}")
     } else {
-        format!("https://license.yaak.app/licenses{path}")
+        format!("https://license.yaak.app{path}")
     }
+}
+
+pub async fn get_activation_id<R: Runtime>(mgr: &impl Manager<R>) -> String {
+    yaak_models::queries::get_key_value_string(mgr, KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
+        .await
 }

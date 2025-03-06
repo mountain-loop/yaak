@@ -134,6 +134,31 @@ pub async fn set_key_value_raw<R: Runtime>(
     (m, existing.is_none())
 }
 
+pub async fn delete_key_value<R: Runtime>(
+    w: &WebviewWindow<R>,
+    namespace: &str,
+    key: &str,
+    update_source: &UpdateSource,
+) {
+    let kv = match get_key_value_raw(w, namespace, key).await {
+        None => return,
+        Some(m) => m,
+    };
+
+    let dbm = &*w.state::<SqliteConnection>();
+    let db = dbm.0.lock().await.get().unwrap();
+    let (sql, params) = Query::delete()
+        .from_table(KeyValueIden::Table)
+        .cond_where(
+            Cond::all()
+                .add(Expr::col(KeyValueIden::Namespace).eq(namespace))
+                .add(Expr::col(KeyValueIden::Key).eq(key)),
+        )
+        .build_rusqlite(SqliteQueryBuilder);
+    db.execute(sql.as_str(), &*params.as_params()).expect("Failed to delete PluginKeyValue");
+    emit_deleted_model(w, &AnyModel::KeyValue(kv.to_owned()), update_source);
+}
+
 pub async fn list_key_values_raw<R: Runtime>(mgr: &impl Manager<R>) -> Result<Vec<KeyValue>> {
     let dbm = &*mgr.state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();

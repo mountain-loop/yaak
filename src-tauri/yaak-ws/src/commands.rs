@@ -117,7 +117,7 @@ pub(crate) async fn send<R: Runtime>(
             RenderPurpose::Send,
         ),
     )
-    .await;
+    .await?;
 
     let mut ws_manager = ws_manager.lock().await;
     ws_manager.send(&connection.id, Message::Text(request.message.clone().into())).await?;
@@ -215,7 +215,7 @@ pub(crate) async fn connect<R: Runtime>(
             RenderPurpose::Send,
         ),
     )
-    .await;
+    .await?;
 
     let mut headers = HeaderMap::new();
     if let Some(auth_name) = request.authentication_type.clone() {

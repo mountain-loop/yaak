@@ -27,6 +27,7 @@ use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::timeout;
 use yaak_models::queries::{generate_id, list_plugins};
+use yaak_templates::error::Error::RenderError;
 
 #[derive(Clone)]
 pub struct PluginManager {
@@ -596,7 +597,7 @@ impl PluginManager {
         fn_name: &str,
         args: HashMap<String, String>,
         purpose: RenderPurpose,
-    ) -> Result<Option<String>> {
+    ) -> yaak_templates::error::Result<String> {
         let req = CallTemplateFunctionRequest {
             name: fn_name.to_string(),
             args: CallTemplateFunctionArgs {
@@ -607,7 +608,8 @@ impl PluginManager {
 
         let events = self
             .send_and_wait(window_context, &InternalEventPayload::CallTemplateFunctionRequest(req))
-            .await?;
+            .await
+            .map_err(|e| RenderError(format!("Failed to call template function {e:}")))?;
 
         let value = events.into_iter().find_map(|e| match e.payload {
             InternalEventPayload::CallTemplateFunctionResponse(CallTemplateFunctionResponse {
@@ -616,7 +618,10 @@ impl PluginManager {
             _ => None,
         });
 
-        Ok(value)
+        match value {
+            None => Err(RenderError(format!("Template function not found {fn_name}"))),
+            Some(v) => Ok(v),
+        }
     }
 
     pub async fn import_data<R: Runtime>(

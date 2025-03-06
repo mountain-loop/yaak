@@ -14,7 +14,7 @@ import { PlainInput } from '../core/PlainInput';
 import { HStack, VStack } from '../core/Stacks';
 
 export function SettingsLicense() {
-  const { check, activate } = useLicense();
+  const { check, activate, deactivate } = useLicense();
   const [key, setKey] = useState<string>('');
   const [activateFormVisible, toggleActivateFormVisible] = useToggle(false);
   const [licenseDetails, setLicenseDetails] = useLicenseConfirmation();
@@ -37,8 +37,8 @@ export function SettingsLicense() {
             <strong>
               {pluralizeCount('day', differenceInDays(check.data.end, new Date()))} remaining
             </strong>{' '}
-            on your commercial use trial. Once the trial ends, Yaak will be limited to personal use
-            until a license is activated.
+            on your commercial use trial. Once the trial ends you agree to only use Yaak for
+            personal use until a license is activated.
           </p>
         </Banner>
       ) : check.data?.type == 'personal_use' && !licenseDetails?.confirmedPersonalUse ? (
@@ -81,8 +81,10 @@ export function SettingsLicense() {
 
       {check.data?.type === 'commercial_use' ? (
         <HStack space={2}>
-          <Button variant="border" color="secondary" size="sm" onClick={toggleActivateFormVisible}>
-            Activate Another License
+          <Button variant="border" color="secondary" size="sm" onClick={() => {
+            deactivate.mutate();
+          }}>
+            Deactivate License
           </Button>
           <Button
             color="secondary"

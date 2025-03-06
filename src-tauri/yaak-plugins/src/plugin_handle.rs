@@ -74,7 +74,6 @@ impl PluginHandle {
     }
 
     pub async fn set_boot_response(&self, resp: &BootResponse) {
-        info!("BOOTED PLUGIN {:?}", resp);
         let mut boot_resp = self.boot_resp.lock().await;
         *boot_resp = resp.clone();
     }

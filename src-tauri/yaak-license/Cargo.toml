@@ -6,15 +6,15 @@ edition = "2021"
 publish = false
 
 [dependencies]
+chrono = "0.4.38"
+log = "0.4.26"
 reqwest = { workspace = true, features = ["json"] }
 serde = { version = "1.0.208", features = ["derive"] }
-ts-rs = { workspace = true }
-thiserror = { workspace = true }
-tauri = { workspace = true }
-yaak-models = { workspace = true }
-chrono = "0.4.38"
-log = "0.4.22"
 serde_json = "1.0.132"
+tauri = { workspace = true }
+thiserror = { workspace = true }
+ts-rs = { workspace = true }
+yaak-models = { workspace = true }
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }

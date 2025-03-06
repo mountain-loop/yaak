@@ -8,4 +8,6 @@ export type ActivateLicenseResponsePayload = { activationId: string, };
 
 export type CheckActivationResponsePayload = { active: boolean, };
 
+export type DeactivateLicenseRequestPayload = { appVersion: string, appPlatform: string, };
+
 export type LicenseCheckStatus = { "type": "personal_use", trial_ended: string, } | { "type": "commercial_use" } | { "type": "invalid_license" } | { "type": "trialing", end: string, };

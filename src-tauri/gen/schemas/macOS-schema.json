@@ -5573,6 +5573,11 @@
           "const": "yaak-license:allow-check"
         },
         {
+          "description": "Enables the deactivate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-license:allow-deactivate"
+        },
+        {
           "description": "Denies the activate command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-license:deny-activate"
@@ -5581,6 +5586,11 @@
           "description": "Denies the check command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-license:deny-check"
+        },
+        {
+          "description": "Denies the deactivate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-license:deny-deactivate"
         },
         {
           "description": "Default permissions for the plugin",

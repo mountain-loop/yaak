@@ -14,6 +14,12 @@ export function useLicense() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: CHECK_QUERY_KEY }),
   });
 
+  const deactivate = useMutation<void, string, void>({
+    mutationKey: ['license.deactivate'],
+    mutationFn: () => invoke('plugin:yaak-license|deactivate'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CHECK_QUERY_KEY }),
+  });
+
   // Check the license again after a license is activated
   useEffect(() => {
     const unlisten = listen('license-activated', async () => {
@@ -27,12 +33,14 @@ export function useLicense() {
   const CHECK_QUERY_KEY = ['license.check'];
   const check = useQuery<void, string, LicenseCheckStatus>({
     refetchInterval: 1000 * 60 * 60 * 12, // Refetch every 12 hours
+    refetchOnWindowFocus: false,
     queryKey: CHECK_QUERY_KEY,
     queryFn: () => invoke('plugin:yaak-license|check'),
   });
 
   return {
     activate,
+    deactivate,
     check,
   } as const;
 }

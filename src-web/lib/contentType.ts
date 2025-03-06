@@ -25,14 +25,17 @@ function detectFromContent(
 ): EditorProps['language'] {
   if (content == null) return 'text';
 
-  if (content.startsWith('{') || content.startsWith('[')) {
+  const firstBytes = content.slice(0, 20).trim();
+  console.log("FIRST BYTES", firstBytes);
+
+  if (firstBytes.startsWith('{') || firstBytes.startsWith('[')) {
     return 'json';
   } else if (
-    content.toLowerCase().startsWith('<!doctype') ||
-    content.toLowerCase().startsWith('<html')
+    firstBytes.toLowerCase().startsWith('<!doctype') ||
+    firstBytes.toLowerCase().startsWith('<html')
   ) {
     return 'html';
-  } else if (content.startsWith('<')) {
+  } else if (firstBytes.startsWith('<')) {
     return 'xml';
   }
 
