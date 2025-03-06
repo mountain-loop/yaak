@@ -538,22 +538,25 @@ function pairsToDataParameters(keyedPairs) {
       continue;
     }
     for (const p of pairs) {
-      if (typeof p !== "string") continue;
-      const [name, value] = p.split("=");
-      if (p.startsWith("@")) {
-        dataParameters.push({
-          name: name ?? "",
-          value: "",
-          filePath: p.slice(1),
-          enabled: true
-        });
-      } else {
-        dataParameters.push({
-          name: name ?? "",
-          value: flagName === "data-urlencode" ? encodeURIComponent(value ?? "") : value ?? "",
-          enabled: true
-        });
-      }
+      let params = p.split("&");
+      for (const param of params) {
+        if (typeof param !== "string") continue;
+        const [name, value] = param.split("=");
+        if (param.startsWith("@")) {
+            dataParameters.push({
+            name: name ?? "",
+            value: "",
+            filePath: param.slice(1),
+            enabled: true
+            });
+        } else {
+            dataParameters.push({
+            name: name ?? "",
+            value: flagName === "data-urlencode" ? encodeURIComponent(value ?? "") : value ?? "",
+            enabled: true
+            });
+        }
+      } 
     }
   }
   return dataParameters;
