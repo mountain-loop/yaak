@@ -83,6 +83,7 @@ pub struct Settings {
     pub appearance: String,
     pub editor_font_size: i32,
     pub editor_soft_wrap: bool,
+    pub hide_window_controls: bool,
     pub interface_font_size: i32,
     pub interface_scale: f32,
     pub open_workspace_new_window: Option<bool>,
@@ -114,6 +115,7 @@ pub enum SettingsIden {
     Theme,
     ThemeDark,
     ThemeLight,
+    HideWindowControls,
     UpdateChannel,
 }
 
@@ -139,6 +141,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
             theme: r.get("theme")?,
             theme_dark: r.get("theme_dark")?,
             theme_light: r.get("theme_light")?,
+            hide_window_controls: r.get("hide_window_controls")?,
             update_channel: r.get("update_channel")?,
         })
     }
