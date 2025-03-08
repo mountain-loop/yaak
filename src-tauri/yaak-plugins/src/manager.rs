@@ -75,7 +75,8 @@ impl PluginManager {
         // Handle when client plugin runtime disconnects
         tauri::async_runtime::spawn(async move {
             while let Some(_) = client_disconnect_rx.recv().await {
-                info!("Plugin runtime client disconnected! TODO: Handle this case");
+                // Happens when the app is closed
+                info!("Plugin runtime client disconnected");
             }
         });
 

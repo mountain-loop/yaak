@@ -549,6 +549,7 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
 pub enum WebsocketConnectionState {
     Initialized,
     Connected,
+    Closing,
     Closed,
 }
 
@@ -714,6 +715,7 @@ pub enum WebsocketEventType {
     Binary,
     Close,
     Frame,
+    Open,
     Ping,
     Pong,
     Text,

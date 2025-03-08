@@ -2,7 +2,7 @@ use crate::connect::ws_connect;
 use crate::error::Result;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
-use log::debug;
+use log::{debug, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpStream;
@@ -32,31 +32,27 @@ impl WebsocketManager {
         headers: HeaderMap<HeaderValue>,
         receive_tx: mpsc::Sender<Message>,
     ) -> Result<Response> {
+        let connections = self.connections.clone();
+        let connection_id = id.to_string();
+        let tx = receive_tx.clone();
+
         let (stream, response) = ws_connect(url, headers).await?;
         let (write, mut read) = stream.split();
-        self.connections.lock().await.insert(id.to_string(), write);
 
-        let tx = receive_tx.clone();
-        tauri::async_runtime::spawn({
-            let connections = self.connections.clone();
-            let connection_id = id.to_string();
-            async move {
-                while let Some(msg) = read.next().await {
-                    match msg {
-                        Err(_e) => {
-                            // broken connection
-                            tx.send(Message::Close(None)).await.unwrap();
-                            break;
-                        }
-                        Ok(message) => {
-                            tx.send(message).await.unwrap();
-                        }
+        connections.lock().await.insert(id.to_string(), write);
+
+        tauri::async_runtime::spawn(async move {
+            while let Some(msg) = read.next().await {
+                match msg {
+                    Err(e) => {
+                        warn!("Broken websocket connection: {}", e);
+                        break;
                     }
+                    Ok(message) => tx.send(message).await.unwrap(),
                 }
-                // cleanup
-                connections.lock().await.remove(&connection_id);
-                debug!("Connection {connection_id} closed");
             }
+            debug!("Connection {} closed", connection_id);
+            connections.lock().await.remove(&connection_id);
         });
         Ok(response)
     }
@@ -69,6 +65,17 @@ impl WebsocketManager {
             Some(c) => c,
         };
         connection.send(msg).await?;
+        Ok(())
+    }
+
+    pub async fn close(&mut self, id: &str) -> Result<()> {
+        debug!("Closing websocket");
+        let mut connections = self.connections.lock().await;
+        let connection = match connections.get_mut(id) {
+            None => return Ok(()),
+            Some(c) => c,
+        };
+        connection.close().await?;
         Ok(())
     }
 }

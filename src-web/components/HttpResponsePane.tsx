@@ -14,7 +14,7 @@ import { HotKeyList } from './core/HotKeyList';
 import { LoadingIcon } from './core/LoadingIcon';
 import { SizeTag } from './core/SizeTag';
 import { HStack } from './core/Stacks';
-import { StatusTag } from './core/StatusTag';
+import { HttpStatusTag } from './core/HttpStatusTag';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
@@ -121,7 +121,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 )}
               >
                 {activeResponse.state !== 'closed' && <LoadingIcon size="sm" />}
-                <StatusTag showReason response={activeResponse} />
+                <HttpStatusTag showReason response={activeResponse} />
                 <span>&bull;</span>
                 <DurationTag
                   headers={activeResponse.elapsedHeaders}

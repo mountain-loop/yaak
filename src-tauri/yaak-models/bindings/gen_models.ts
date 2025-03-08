@@ -64,11 +64,11 @@ export type UpdateSource = "sync" | "window" | "plugin" | "background" | "import
 
 export type WebsocketConnection = { model: "websocket_connection", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, elapsed: number, error: string | null, headers: Array<HttpResponseHeader>, state: WebsocketConnectionState, status: number, url: string, };
 
-export type WebsocketConnectionState = "initialized" | "connected" | "closed";
+export type WebsocketConnectionState = "initialized" | "connected" | "closing" | "closed";
 
 export type WebsocketEvent = { model: "websocket_event", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, connectionId: string, isServer: boolean, message: Array<number>, messageType: WebsocketEventType, };
 
-export type WebsocketEventType = "binary" | "close" | "frame" | "ping" | "pong" | "text";
+export type WebsocketEventType = "binary" | "close" | "frame" | "open" | "ping" | "pong" | "text";
 
 export type WebsocketMessageType = "text" | "binary";
 

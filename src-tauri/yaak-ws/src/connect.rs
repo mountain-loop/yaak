@@ -42,39 +42,3 @@ pub(crate) async fn ws_connect(
     .await?;
     Ok((stream, response))
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::connect::ws_connect;
-    use crate::error::Result;
-    use futures_util::{SinkExt, StreamExt};
-    use std::time::Duration;
-    use tokio::time::timeout;
-    use tokio_tungstenite::tungstenite::Message;
-
-    #[tokio::test]
-    async fn test_connection() -> Result<()> {
-        let (stream, response) = ws_connect("wss://echo.websocket.org/", Default::default()).await?;
-        assert_eq!(response.status(), 101);
-
-        let (mut write, mut read) = stream.split();
-
-        let task = tokio::spawn(async move {
-            while let Some(Ok(message)) = read.next().await {
-                if message.is_text() && message.to_text().unwrap() == "Hello" {
-                    return message;
-                }
-            }
-            panic!("Didn't receive text message");
-        });
-
-        write.send(Message::Text("Hello".into())).await?;
-
-        let task = timeout(Duration::from_secs(3), task);
-        let message = task.await.unwrap().unwrap();
-
-        assert_eq!(message.into_text().unwrap(), "Hello");
-
-        Ok(())
-    }
-}

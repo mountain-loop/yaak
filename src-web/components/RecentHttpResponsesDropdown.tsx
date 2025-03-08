@@ -8,7 +8,7 @@ import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
-import { StatusTag } from './core/StatusTag';
+import { HttpStatusTag } from './core/HttpStatusTag';
 
 interface Props {
   responses: HttpResponse[];
@@ -68,7 +68,7 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
         ...responses.map((r: HttpResponse) => ({
           label: (
             <HStack space={2}>
-              <StatusTag className="text-sm" response={r} />
+              <HttpStatusTag className="text-sm" response={r} />
               <span className="text-text-subtle">&rarr;</span>{' '}
               <span className="font-mono text-sm">{r.elapsed >= 0 ? `${r.elapsed}ms` : 'n/a'}</span>
             </HStack>

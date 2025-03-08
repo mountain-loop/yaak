@@ -67,7 +67,7 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
       firstSlot={() =>
         activeConnection && (
           <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] items-center">
-            <HStack className="pl-3 mb-1 font-mono text-sm">
+            <HStack className="pl-3 mb-1 font-mono text-sm text-text-subtle">
               <HStack space={2}>
                 <span>{events.length} Messages</span>
                 {activeConnection.state !== 'closed' && (

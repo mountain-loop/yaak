@@ -23,7 +23,7 @@ import { jotaiStore } from '../../lib/jotai';
 import { HttpMethodTag } from '../core/HttpMethodTag';
 import { Icon } from '../core/Icon';
 import { LoadingIcon } from '../core/LoadingIcon';
-import { StatusTag } from '../core/StatusTag';
+import { HttpStatusTag } from '../core/HttpStatusTag';
 import type { SidebarTreeNode } from './Sidebar';
 import { sidebarSelectedIdAtom } from './SidebarAtoms';
 import { SidebarItemContextMenu } from './SidebarItemContextMenu';
@@ -305,7 +305,7 @@ export const SidebarItem = memo(function SidebarItem({
               {latestHttpResponse.state !== 'closed' ? (
                 <LoadingIcon size="sm" className="text-text-subtlest" />
               ) : (
-                <StatusTag className="text-xs" response={latestHttpResponse} />
+                <HttpStatusTag className="text-xs" response={latestHttpResponse} />
               )}
             </div>
           ) : null}
