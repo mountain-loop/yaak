@@ -2,17 +2,17 @@ import type { WebsocketConnection } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 
 interface Props {
-  response: WebsocketConnection;
+  connection: WebsocketConnection;
   className?: string;
 }
 
-export function WebsocketStatusTag({ response, className }: Props) {
-  const { status, state } = response;
+export function WebsocketStatusTag({ connection, className }: Props) {
+  const { state, error } = connection;
 
   let label;
   let colorClass = 'text-text-subtle';
 
-  if (status < 0) {
+  if (error) {
     label = 'ERROR';
     colorClass = 'text-danger';
   } else if (state === 'connected') {
@@ -27,7 +27,5 @@ export function WebsocketStatusTag({ response, className }: Props) {
     label = 'CONNECTING';
   }
 
-  return (
-    <span className={classNames(className, 'font-mono', colorClass)}>{label}</span>
-  );
+  return <span className={classNames(className, 'font-mono', colorClass)}>{label}</span>;
 }

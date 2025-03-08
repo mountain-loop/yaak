@@ -74,7 +74,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                 {activeConnection.state !== 'closed' && (
                   <LoadingIcon size="sm" className="text-text-subtlest" />
                 )}
-                <WebsocketStatusTag response={activeConnection} />
+                <WebsocketStatusTag connection={activeConnection} />
                 <span>&bull;</span>
                 <span>{events.length} Messages</span>
               </HStack>

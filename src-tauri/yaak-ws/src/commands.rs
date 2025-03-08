@@ -265,7 +265,6 @@ pub(crate) async fn connect<R: Runtime>(
                 &WebsocketConnection {
                     error: Some(format!("{e:?}")),
                     state: WebsocketConnectionState::Closed,
-                    status: (-1).into(), // for backwards compatibility
                     ..connection
                 },
                 &UpdateSource::Window,
