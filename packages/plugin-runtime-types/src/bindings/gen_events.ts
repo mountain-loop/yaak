@@ -73,7 +73,7 @@ export type FindHttpResponsesRequest = { requestId: string, limit?: number, };
 
 export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
 
-export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
+export type FormInput = { "type": "text" } & FormInputText | { "type": "secure_text" } & FormInputSecureText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
 
 export type FormInputAccordion = { label: string, inputs?: Array<FormInput>, hidden?: boolean, };
 
@@ -235,6 +235,33 @@ hideLabel?: boolean,
 defaultValue?: string, disabled?: boolean, };
 
 export type FormInputMarkdown = { content: string, hidden?: boolean, };
+
+export type FormInputSecureText = { 
+/**
+ * The name of the input. The value will be stored at this object attribute in the resulting data
+ */
+name: string, 
+/**
+ * Whether this input is visible for the given configuration. Use this to
+ * make branching forms.
+ */
+hidden?: boolean, 
+/**
+ * Whether the user must fill in the argument
+ */
+optional?: boolean, 
+/**
+ * The label of the input
+ */
+label?: string, 
+/**
+ * Visually hide the label of the input
+ */
+hideLabel?: boolean, 
+/**
+ * The default value
+ */
+defaultValue?: string, disabled?: boolean, };
 
 export type FormInputSelect = { 
 /**

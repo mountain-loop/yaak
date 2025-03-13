@@ -505,6 +505,7 @@ pub struct TemplateFunction {
 #[ts(export, export_to = "gen_events.ts")]
 pub enum FormInput {
     Text(FormInputText),
+    SecureText(FormInputSecureText),
     Editor(FormInputEditor),
     Select(FormInputSelect),
     Checkbox(FormInputCheckbox),
@@ -545,6 +546,14 @@ pub struct FormInputBase {
 
     #[ts(optional)]
     pub disabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct FormInputSecureText {
+    #[serde(flatten)]
+    pub base: FormInputBase,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

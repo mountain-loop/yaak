@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "yaak-crypto",
     "yaak-git",
     "yaak-grpc",
     "yaak-http",
@@ -98,3 +99,4 @@ yaak-plugins = { path = "yaak-plugins" }
 yaak-sync = { path = "yaak-sync" }
 yaak-sse = { path = "yaak-sse" }
 yaak-templates = { path = "yaak-templates" }
+yaak-crypto = { path = "yaak-crypto" }
