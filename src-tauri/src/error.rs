@@ -3,25 +3,25 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Render error: {0}")]
+    #[error(transparent)]
     TemplateError(#[from] yaak_templates::error::Error),
 
-    #[error("Model error: {0}")]
+    #[error(transparent)]
     ModelError(#[from] yaak_models::error::Error),
 
-    #[error("Sync error: {0}")]
+    #[error(transparent)]
     SyncError(#[from] yaak_sync::error::Error),
 
-    #[error("Git error: {0}")]
+    #[error(transparent)]
     GitError(#[from] yaak_git::error::Error),
 
-    #[error("Websocket error: {0}")]
+    #[error(transparent)]
     WebsocketError(#[from] yaak_ws::error::Error),
 
-    #[error("License error: {0}")]
+    #[error(transparent)]
     LicenseError(#[from] yaak_license::error::Error),
 
-    #[error("Plugin error: {0}")]
+    #[error(transparent)]
     PluginError(#[from] yaak_plugins::error::Error),
 
     #[error("Request error: {0}")]

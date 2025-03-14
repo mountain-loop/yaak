@@ -165,3 +165,4 @@ fn to_fixed_hash(s: &str) -> [u8; 16] {
     fixed.copy_from_slice(&hash[..16]); // Take the first 16 bytes of the hash
     fixed
 }
+

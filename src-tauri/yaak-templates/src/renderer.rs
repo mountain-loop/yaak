@@ -1,7 +1,6 @@
 use crate::error::Error::{RenderStackExceededError, VariableNotFound};
 use crate::error::Result;
 use crate::{FnArg, Parser, Token, Tokens, Val};
-use log::warn;
 use serde_json::json;
 use std::collections::HashMap;
 use std::future::Future;
@@ -128,10 +127,7 @@ async fn render_tag<T: TemplateCallback>(
             }
             match cb.run(name.as_str(), resolved_args.clone()).await {
                 Ok(s) => s,
-                Err(e) => {
-                    warn!("Failed to run template callback {}({:?}): {}", name, resolved_args, e);
-                    "".to_string()
-                }
+                Err(e) => return Err(e),
             }
         }
         Val::Null => "".into(),

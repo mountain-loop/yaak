@@ -7,13 +7,13 @@ pub enum Error {
     #[error("WebSocket error: {0}")]
     WebSocketErr(#[from] tungstenite::Error),
 
-    #[error("Model error: {0}")]
+    #[error(transparent)]
     ModelError(#[from] yaak_models::error::Error),
 
-    #[error("Plugin error: {0}")]
+    #[error(transparent)]
     PluginError(#[from] yaak_plugins::error::Error),
 
-    #[error("Render error: {0}")]
+    #[error(transparent)]
     TemplateError(#[from] yaak_templates::error::Error),
 
     #[error("WebSocket error: {0}")]
