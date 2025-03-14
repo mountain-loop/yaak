@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager, Runtime, State, Url, WebviewWindow};
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
+use yaak_common::window::WorkspaceWindowTrait;
 use yaak_http::apply_path_placeholders;
 use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
@@ -20,7 +21,7 @@ use yaak_models::queries::{
     get_websocket_request, upsert_websocket_connection, upsert_websocket_event, UpdateSource,
 };
 use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
+    CallHttpAuthenticationRequest, HttpHeader, PluginEventContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -111,7 +112,7 @@ pub(crate) async fn send<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             window.app_handle(),
-            &WindowContext::from_window(&window),
+            &PluginEventContext::new(&window, &unrendered_request.workspace_id),
             RenderPurpose::Send,
         ),
     )
@@ -188,7 +189,7 @@ pub(crate) async fn connect<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             window.app_handle(),
-            &WindowContext::from_window(&window),
+            &PluginEventContext::new(&window, &unrendered_request.workspace_id),
             RenderPurpose::Send,
         ),
     )
@@ -212,8 +213,9 @@ pub(crate) async fn connect<R: Runtime>(
                 })
                 .collect(),
         };
-        let plugin_result =
-            plugin_manager.call_http_authentication(&window, &auth_name, plugin_req).await?;
+        let plugin_result = plugin_manager
+            .call_http_authentication(&window.context(), &auth_name, plugin_req)
+            .await?;
         for header in plugin_result.set_headers {
             headers.insert(
                 HeaderName::from_str(&header.name).unwrap(),

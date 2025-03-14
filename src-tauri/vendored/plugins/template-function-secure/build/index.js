@@ -28,12 +28,11 @@ var plugin = {
     name: "secure",
     args: [{
       name: "text",
-      type: "",
-      label: "Secure Value",
-      password: true
+      type: "secure_text",
+      label: "Secure Value"
     }],
     async onRender(_ctx, args) {
-      return "XXX_" + args.values.text;
+      return `${args.values.text}`;
     }
   }]
 };

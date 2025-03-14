@@ -51,7 +51,7 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
             ? { type: 'bool', value: argValues[name] === true }
             : { type: 'str', text: String(argValues[name] ?? '') },
     }));
-
+    
     return {
       tokens: [
         {

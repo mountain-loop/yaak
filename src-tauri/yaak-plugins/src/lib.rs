@@ -12,6 +12,7 @@ pub mod template_callback;
 mod nodejs;
 mod server_ws;
 mod util;
+mod native_template_functions;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-plugins")

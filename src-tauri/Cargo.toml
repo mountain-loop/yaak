@@ -51,7 +51,6 @@ log = "0.4.21"
 md5 = "0.7.0"
 mime_guess = "2.0.5"
 rand = "0.9.0"
-regex = "1.10.2"
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider"] }
 reqwest_cookie_store = "0.8.0"
 rustls = { version = "0.23.22", default-features = false, features = ["custom-provider", "ring"] }
@@ -73,6 +72,7 @@ tokio = { version = "1.43.0", features = ["sync"] }
 tokio-stream = "0.1.17"
 thiserror = { workspace = true }
 uuid = "1.12.1"
+yaak-common = { workspace = true }
 yaak-git = { path = "yaak-git" }
 yaak-grpc = { path = "yaak-grpc" }
 yaak-http = { workspace = true }
@@ -100,3 +100,4 @@ yaak-sync = { path = "yaak-sync" }
 yaak-sse = { path = "yaak-sse" }
 yaak-templates = { path = "yaak-templates" }
 yaak-crypto = { path = "yaak-crypto" }
+yaak-common = { path = "yaak-common" }

@@ -1,5 +1,6 @@
-use crate::events::{RenderPurpose, WindowContext};
+use crate::events::{PluginEventContext, RenderPurpose};
 use crate::manager::PluginManager;
+use crate::native_template_functions::template_function_encrypt_on_render;
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager, Runtime};
 use yaak_templates::error::Result;
@@ -8,14 +9,15 @@ use yaak_templates::TemplateCallback;
 #[derive(Clone)]
 pub struct PluginTemplateCallback {
     plugin_manager: PluginManager,
-    window_context: WindowContext,
+    window_context: PluginEventContext,
     render_purpose: RenderPurpose,
+    encryption_key: Option<String>,
 }
 
 impl PluginTemplateCallback {
     pub fn new<R: Runtime>(
         app_handle: &AppHandle<R>,
-        window_context: &WindowContext,
+        window_context: &PluginEventContext,
         render_purpose: RenderPurpose,
     ) -> PluginTemplateCallback {
         let plugin_manager = &*app_handle.state::<PluginManager>();
@@ -23,6 +25,7 @@ impl PluginTemplateCallback {
             plugin_manager: plugin_manager.to_owned(),
             window_context: window_context.to_owned(),
             render_purpose,
+            encryption_key: None, // TODO: Fill this in
         }
     }
 }
@@ -32,6 +35,11 @@ impl TemplateCallback for PluginTemplateCallback {
         // The beta named the function `Response` but was changed in stable.
         // Keep this here for a while because there's no easy way to migrate
         let fn_name = if fn_name == "Response" { "response" } else { fn_name };
+
+        if fn_name == "secure" {
+            return template_function_encrypt_on_render(args)
+                .map_err(|e| yaak_templates::error::Error::RenderError(e.to_string()));
+        }
 
         let resp = self
             .plugin_manager

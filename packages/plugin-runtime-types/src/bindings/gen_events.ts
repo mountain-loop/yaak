@@ -73,7 +73,7 @@ export type FindHttpResponsesRequest = { requestId: string, limit?: number, };
 
 export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
 
-export type FormInput = { "type": "text" } & FormInputText | { "type": "secure_text" } & FormInputSecureText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
+export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
 
 export type FormInputAccordion = { label: string, inputs?: Array<FormInput>, hidden?: boolean, };
 
@@ -296,6 +296,8 @@ defaultValue?: string, disabled?: boolean, };
 
 export type FormInputSelectOption = { label: string, value: string, };
 
+export type FormInputTemplateFunction = { "type": "secure_text" } & FormInputSecureText;
+
 export type FormInputText = { 
 /**
  * Placeholder for the text input
@@ -420,7 +422,12 @@ export type TemplateFunction = { name: string, description?: string,
  * Also support alternative names. This is useful for not breaking existing
  * tags when changing the `name` property
  */
-aliases?: Array<string>, args: Array<FormInput>, };
+aliases?: Array<string>, args: Array<TemplateFunctionArg>, };
+
+/**
+ * Similar to FormInput, but contains
+ */
+export type TemplateFunctionArg = FormInput | FormInputTemplateFunction;
 
 export type TemplateRenderRequest = { data: JsonValue, purpose: RenderPurpose, };
 

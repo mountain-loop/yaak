@@ -73,7 +73,7 @@ export type FindHttpResponsesRequest = { requestId: string, limit?: number, };
 
 export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
 
-export type FormInput = { "type": "text" } & FormInputText | { "type": "secure_text" } & FormInputSecureText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
+export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
 
 export type FormInputAccordion = { label: string, inputs?: Array<FormInput>, hidden?: boolean, };
 
@@ -296,6 +296,8 @@ defaultValue?: string, disabled?: boolean, };
 
 export type FormInputSelectOption = { label: string, value: string, };
 
+export type FormInputTemplateFunction = { "type": "secure_text" } & FormInputSecureText;
+
 export type FormInputText = { 
 /**
  * Placeholder for the text input
@@ -371,7 +373,7 @@ export type ImportResources = { workspaces: Array<Workspace>, environments: Arra
 
 export type ImportResponse = { resources: ImportResources, };
 
-export type InternalEvent = { id: string, pluginRefId: string, pluginName: string, replyId: string | null, windowContext: WindowContext, payload: InternalEventPayload, };
+export type InternalEvent = { id: string, pluginRefId: string, pluginName: string, replyId: string | null, windowContext: PluginEventContext, payload: InternalEventPayload, };
 
 export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & EmptyPayload | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_summary_request" } & EmptyPayload | { "type": "get_http_authentication_summary_response" } & GetHttpAuthenticationSummaryResponse | { "type": "get_http_authentication_config_request" } & GetHttpAuthenticationConfigRequest | { "type": "get_http_authentication_config_response" } & GetHttpAuthenticationConfigResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "call_http_authentication_action_request" } & CallHttpAuthenticationActionRequest | { "type": "call_http_authentication_action_response" } & EmptyPayload | { "type": "copy_text_request" } & CopyTextRequest | { "type": "copy_text_response" } & EmptyPayload | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "get_key_value_request" } & GetKeyValueRequest | { "type": "get_key_value_response" } & GetKeyValueResponse | { "type": "set_key_value_request" } & SetKeyValueRequest | { "type": "set_key_value_response" } & SetKeyValueResponse | { "type": "delete_key_value_request" } & DeleteKeyValueRequest | { "type": "delete_key_value_response" } & DeleteKeyValueResponse | { "type": "open_window_request" } & OpenWindowRequest | { "type": "window_navigate_event" } & WindowNavigateEvent | { "type": "window_close_event" } | { "type": "close_window_request" } & CloseWindowRequest | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "show_toast_response" } & EmptyPayload | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "empty_response" } & EmptyPayload | { "type": "error_response" } & ErrorResponse;
 
@@ -382,6 +384,8 @@ export type OpenWindowRequest = { url: string,
  * Label for the window. If not provided, a random one will be generated.
  */
 label: string, title?: string, size?: WindowSize, dataDirKey?: string, };
+
+export type PluginEventContext = { "type": "none" } | { "type": "label", label: string, workspace_id: string | null, };
 
 export type PromptTextRequest = { id: string, title: string, label: string, description?: string, defaultValue?: string, placeholder?: string, 
 /**
@@ -420,13 +424,16 @@ export type TemplateFunction = { name: string, description?: string,
  * Also support alternative names. This is useful for not breaking existing
  * tags when changing the `name` property
  */
-aliases?: Array<string>, args: Array<FormInput>, };
+aliases?: Array<string>, args: Array<TemplateFunctionArg>, };
+
+/**
+ * Similar to FormInput, but contains
+ */
+export type TemplateFunctionArg = FormInput | FormInputTemplateFunction;
 
 export type TemplateRenderRequest = { data: JsonValue, purpose: RenderPurpose, };
 
 export type TemplateRenderResponse = { data: JsonValue, };
-
-export type WindowContext = { "type": "none" } | { "type": "label", label: string, };
 
 export type WindowNavigateEvent = { url: string, };
 

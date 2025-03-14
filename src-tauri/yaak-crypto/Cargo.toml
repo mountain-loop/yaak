@@ -7,3 +7,4 @@ publish = false
 [dependencies]
 thiserror = "2.0.11"
 keyring = { version = "4.0.0-alpha.1", features = ["vendored"] }
+age = "0.11.1"

@@ -22,3 +22,4 @@ tokio-tungstenite = "0.26.1"
 ts-rs = { workspace = true, features = ["import-esm"] }
 yaak-models = { workspace = true }
 yaak-templates = { workspace = true }
+yaak-crypto = { workspace = true }

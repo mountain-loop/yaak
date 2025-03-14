@@ -12,7 +12,6 @@ use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
 use rand::random;
-use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
@@ -28,6 +27,7 @@ use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::fs::read_to_string;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
+use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
 use yaak_models::models::{
@@ -59,7 +59,7 @@ use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
     GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, HttpHeader, InternalEvent,
-    InternalEventPayload, JsonPrimitive, RenderPurpose, WindowContext,
+    InternalEventPayload, JsonPrimitive, PluginEventContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -135,16 +135,12 @@ async fn cmd_render_template<R: Runtime>(
         Some(id) => get_environment(&window, id).await.ok(),
         None => None,
     };
-    let base_environment = get_base_environment(&window, &workspace_id).await?;
+    let base_environment = get_base_environment(&window, workspace_id).await?;
     let result = render_template(
         template,
         &base_environment,
         environment.as_ref(),
-        &PluginTemplateCallback::new(
-            &app_handle,
-            &WindowContext::from_window(&window),
-            RenderPurpose::Preview,
-        ),
+        &PluginTemplateCallback::new(&app_handle, &window.context(), RenderPurpose::Preview),
     )
     .await?;
     Ok(result)
@@ -207,7 +203,7 @@ async fn cmd_grpc_go<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             window.app_handle(),
-            &WindowContext::from_window(&window),
+            &PluginEventContext::new(&window, &unrendered_request.workspace_id),
             RenderPurpose::Send,
         ),
     )
@@ -242,8 +238,9 @@ async fn cmd_grpc_go<R: Runtime>(
                 })
                 .collect(),
         };
-        let plugin_result =
-            plugin_manager.call_http_authentication(&window, &auth_name, plugin_req).await?;
+        let plugin_result = plugin_manager
+            .call_http_authentication(&window.context(), &auth_name, plugin_req)
+            .await?;
         for header in plugin_result.set_headers {
             metadata.insert(header.name, header.value);
         }
@@ -364,7 +361,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 environment.as_ref(),
                                 &PluginTemplateCallback::new(
                                     window.app_handle(),
-                                    &WindowContext::from_window(&window),
+                                    &PluginEventContext::new(&window, &workspace.id),
                                     RenderPurpose::Send,
                                 ),
                             )
@@ -432,7 +429,7 @@ async fn cmd_grpc_go<R: Runtime>(
             environment.as_ref(),
             &PluginTemplateCallback::new(
                 window.app_handle(),
-                &WindowContext::from_window(&window),
+                &PluginEventContext::new(&window, &req.workspace_id),
                 RenderPurpose::Send,
             ),
         )
@@ -783,7 +780,7 @@ async fn cmd_filter_response<R: Runtime>(
 
     // TODO: Have plugins register their own content type (regex?)
     plugin_manager
-        .filter_data(&window, filter, &body, &content_type)
+        .filter_data(&window.context(), filter, &body, &content_type)
         .await
         .map_err(|e| e.to_string())
 }
@@ -819,8 +816,10 @@ async fn cmd_import_data<R: Runtime>(
         .await
         .unwrap_or_else(|_| panic!("Unable to read file {}", file_path));
     let file_contents = file.as_str();
-    let import_result =
-        plugin_manager.import_data(&window, file_contents).await.map_err(|e| e.to_string())?;
+    let import_result = plugin_manager
+        .import_data(&window.context(), file_contents)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut id_map: BTreeMap<String, String> = BTreeMap::new();
 
@@ -943,7 +942,7 @@ async fn cmd_http_request_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<Vec<GetHttpRequestActionsResponse>, String> {
-    plugin_manager.get_http_request_actions(&window).await.map_err(|e| e.to_string())
+    plugin_manager.get_http_request_actions(&window.context()).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -951,7 +950,10 @@ async fn cmd_template_functions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<Vec<GetTemplateFunctionsResponse>, String> {
-    plugin_manager.get_template_functions(&window).await.map_err(|e| e.to_string())
+    plugin_manager
+        .get_template_functions_with_context(&window.context())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -960,7 +962,7 @@ async fn cmd_get_http_authentication_summaries<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<Vec<GetHttpAuthenticationSummaryResponse>, String> {
     let results = plugin_manager
-        .get_http_authentication_summaries(&window)
+        .get_http_authentication_summaries(&window.context())
         .await
         .map_err(|e| e.to_string())?;
     Ok(results.into_iter().map(|(_, a)| a).collect())
@@ -975,7 +977,7 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
     request_id: &str,
 ) -> Result<GetHttpAuthenticationConfigResponse, String> {
     plugin_manager
-        .get_http_authentication_config(&window, auth_name, values, request_id)
+        .get_http_authentication_config(&window.context(), auth_name, values, request_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -986,7 +988,7 @@ async fn cmd_call_http_request_action<R: Runtime>(
     req: CallHttpRequestActionRequest,
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<(), String> {
-    plugin_manager.call_http_request_action(&window, req).await.map_err(|e| e.to_string())
+    plugin_manager.call_http_request_action(&window.context(), req).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -999,7 +1001,13 @@ async fn cmd_call_http_authentication_action<R: Runtime>(
     request_id: &str,
 ) -> Result<(), String> {
     plugin_manager
-        .call_http_authentication_action(&window, auth_name, action_index, values, request_id)
+        .call_http_authentication_action(
+            &window.context(),
+            auth_name,
+            action_index,
+            values,
+            request_id,
+        )
         .await
         .map_err(|e| e.to_string())
 }
@@ -1012,7 +1020,7 @@ async fn cmd_curl_to_request<R: Runtime>(
     workspace_id: &str,
 ) -> Result<HttpRequest, String> {
     let import_result =
-        { plugin_manager.import_data(&window, command).await.map_err(|e| e.to_string())? };
+        plugin_manager.import_data(&window.context(), command).await.map_err(|e| e.to_string())?;
 
     import_result.resources.http_requests.get(0).ok_or("No curl command found".to_string()).map(
         |r| {
@@ -1159,7 +1167,7 @@ async fn cmd_install_plugin<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> Result<Plugin, String> {
     plugin_manager
-        .add_plugin_by_dir(&WindowContext::from_window(&window), &directory, true)
+        .add_plugin_by_dir(&window.context(), &directory, true)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1189,7 +1197,7 @@ async fn cmd_uninstall_plugin<R: Runtime>(
         .map_err(|e| e.to_string())?;
 
     plugin_manager
-        .uninstall(&WindowContext::from_window(&window), plugin.directory.as_str())
+        .uninstall(&window.context(), plugin.directory.as_str())
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1442,7 +1450,7 @@ async fn cmd_reload_plugins<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<(), String> {
     plugin_manager
-        .initialize_all_plugins(window.app_handle(), &WindowContext::from_window(&window))
+        .initialize_all_plugins(window.app_handle(), &window.context())
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -2080,11 +2088,11 @@ async fn call_frontend<R: Runtime>(
 
 fn get_window_from_window_context<R: Runtime>(
     app_handle: &AppHandle<R>,
-    window_context: &WindowContext,
+    window_context: &PluginEventContext,
 ) -> Option<WebviewWindow<R>> {
     let label = match window_context {
-        WindowContext::Label { label } => label,
-        WindowContext::None => {
+        PluginEventContext::Label { label, .. } => label,
+        PluginEventContext::None => {
             return app_handle.webview_windows().iter().next().map(|(_, w)| w.to_owned());
         }
     };
@@ -2104,43 +2112,22 @@ fn get_window_from_window_context<R: Runtime>(
     window
 }
 
-fn workspace_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<String> {
-    let url = window.url().unwrap();
-    let re = Regex::new(r"/workspaces/(?<wid>\w+)").unwrap();
-    match re.captures(url.as_str()) {
-        None => None,
-        Some(captures) => captures.name("wid").map(|c| c.as_str().to_string()),
-    }
-}
-
 async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Workspace> {
-    match workspace_id_from_window(&window) {
+    match window.workspace_id() {
         None => None,
         Some(id) => get_workspace(window, id.as_str()).await.ok(),
     }
 }
 
-fn environment_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<String> {
-    let url = window.url().unwrap();
-    let mut query_pairs = url.query_pairs();
-    query_pairs.find(|(k, _v)| k == "environment_id").map(|(_k, v)| v.to_string())
-}
-
 async fn environment_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Environment> {
-    match environment_id_from_window(&window) {
+    match window.environment_id() {
         None => None,
         Some(id) => get_environment(window, id.as_str()).await.ok(),
     }
 }
 
-fn cookie_jar_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<String> {
-    let url = window.url().unwrap();
-    let mut query_pairs = url.query_pairs();
-    query_pairs.find(|(k, _v)| k == "cookie_jar_id").map(|(_k, v)| v.to_string())
-}
-
 async fn cookie_jar_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<CookieJar> {
-    match cookie_jar_id_from_window(&window) {
+    match window.cookie_jar_id() {
         None => None,
         Some(id) => get_cookie_jar(window, id.as_str()).await.ok(),
     }
