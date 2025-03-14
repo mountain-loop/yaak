@@ -59,7 +59,7 @@ use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
     GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, HttpHeader, InternalEvent,
-    InternalEventPayload, JsonPrimitive, PluginEventContext, RenderPurpose,
+    InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -203,7 +203,7 @@ async fn cmd_grpc_go<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             window.app_handle(),
-            &PluginEventContext::new(&window, &unrendered_request.workspace_id),
+            &PluginWindowContext::new(&window, &unrendered_request.workspace_id),
             RenderPurpose::Send,
         ),
     )
@@ -361,7 +361,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 environment.as_ref(),
                                 &PluginTemplateCallback::new(
                                     window.app_handle(),
-                                    &PluginEventContext::new(&window, &workspace.id),
+                                    &PluginWindowContext::new(&window, &workspace.id),
                                     RenderPurpose::Send,
                                 ),
                             )
@@ -429,7 +429,7 @@ async fn cmd_grpc_go<R: Runtime>(
             environment.as_ref(),
             &PluginTemplateCallback::new(
                 window.app_handle(),
-                &PluginEventContext::new(&window, &req.workspace_id),
+                &PluginWindowContext::new(&window, &req.workspace_id),
                 RenderPurpose::Send,
             ),
         )
@@ -1803,6 +1803,7 @@ pub fn run() {
         .plugin(yaak_license::init())
         .plugin(yaak_models::plugin::Builder::default().build())
         .plugin(yaak_plugins::init())
+        .plugin(yaak_crypto::init())
         .plugin(yaak_git::init())
         .plugin(yaak_ws::init())
         .plugin(yaak_sync::init());
@@ -2088,11 +2089,11 @@ async fn call_frontend<R: Runtime>(
 
 fn get_window_from_window_context<R: Runtime>(
     app_handle: &AppHandle<R>,
-    window_context: &PluginEventContext,
+    window_context: &PluginWindowContext,
 ) -> Option<WebviewWindow<R>> {
     let label = match window_context {
-        PluginEventContext::Label { label, .. } => label,
-        PluginEventContext::None => {
+        PluginWindowContext::Label { label, .. } => label,
+        PluginWindowContext::None => {
             return app_handle.webview_windows().iter().next().map(|(_, w)| w.to_owned());
         }
     };

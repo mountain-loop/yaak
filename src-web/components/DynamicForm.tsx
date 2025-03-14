@@ -7,6 +7,7 @@ import type {
   FormInputHttpRequest,
   FormInputSecureText,
   FormInputSelect,
+  FormInputTemplateFunction,
   FormInputText,
   JsonPrimitive,
 } from '@yaakapp-internal/plugins';
@@ -32,7 +33,7 @@ export const DYNAMIC_FORM_NULL_ARG = '__NULL__';
 const INPUT_SIZE = 'sm';
 
 interface Props<T> {
-  inputs: FormInput[] | undefined | null;
+  inputs: (FormInput | FormInputTemplateFunction)[] | undefined | null;
   onChange: (value: T) => void;
   data: T;
   useTemplating?: boolean;

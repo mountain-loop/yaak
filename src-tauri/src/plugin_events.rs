@@ -19,7 +19,7 @@ use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
     GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
     RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest,
-    TemplateRenderResponse, PluginEventContext, WindowNavigateEvent,
+    TemplateRenderResponse, PluginWindowContext, WindowNavigateEvent,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -42,7 +42,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         }
         InternalEventPayload::ShowToastRequest(req) => {
             match window_context {
-                PluginEventContext::Label { label, .. } => app_handle
+                PluginWindowContext::Label { label, .. } => app_handle
                     .emit_to(label, "show_toast", req)
                     .expect("Failed to emit show_toast to window"),
                 _ => app_handle.emit("show_toast", req).expect("Failed to emit show_toast"),

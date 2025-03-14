@@ -5,6 +5,11 @@ edition = "2021"
 publish = false
 
 [dependencies]
-thiserror = "2.0.11"
-keyring = { version = "4.0.0-alpha.1", features = ["vendored"] }
 age = "0.11.1"
+keyring = { version = "4.0.0-alpha.1", features = ["vendored"] }
+tauri = { workspace = true }
+yaak-models = { workspace = true }
+thiserror = "2.0.12"
+rand = "0.7.3"
+tokio = "1.43.0"
+async-trait = "0.1.87"

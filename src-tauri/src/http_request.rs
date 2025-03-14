@@ -34,7 +34,7 @@ use yaak_models::queries::{
     update_response_if_id, upsert_cookie_jar, UpdateSource,
 };
 use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, PluginEventContext, RenderPurpose,
+    CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -53,7 +53,7 @@ pub async fn send_http_request<R: Runtime>(
     let settings = get_or_create_settings(window).await;
     let cb = PluginTemplateCallback::new(
         window.app_handle(),
-        &PluginEventContext::new(window, &unrendered_request.workspace_id),
+        &PluginWindowContext::new(window, &unrendered_request.workspace_id),
         RenderPurpose::Send,
     );
 

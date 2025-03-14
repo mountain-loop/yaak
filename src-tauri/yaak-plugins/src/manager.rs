@@ -9,7 +9,7 @@ use crate::events::{
     EmptyPayload, FilterRequest, FilterResponse, GetHttpAuthenticationConfigRequest,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
     GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, ImportRequest, ImportResponse,
-    InternalEvent, InternalEventPayload, JsonPrimitive, PluginEventContext, RenderPurpose,
+    InternalEvent, InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
 };
 use crate::native_template_functions::template_function_encrypt;
 use crate::nodejs::start_nodejs_plugin_runtime;
@@ -99,7 +99,7 @@ impl PluginManager {
                     Ok(_) => {
                         info!("Plugin runtime client connected!");
                         plugin_manager
-                            .initialize_all_plugins(&app_handle, &PluginEventContext::None)
+                            .initialize_all_plugins(&app_handle, &PluginWindowContext::None)
                             .await
                             .expect("Failed to reload plugins");
                     }
@@ -170,14 +170,14 @@ impl PluginManager {
         [bundled_plugin_dirs, installed_plugin_dirs].concat()
     }
 
-    pub async fn uninstall(&self, window_context: &PluginEventContext, dir: &str) -> Result<()> {
+    pub async fn uninstall(&self, window_context: &PluginWindowContext, dir: &str) -> Result<()> {
         let plugin = self.get_plugin_by_dir(dir).await.ok_or(PluginNotFoundErr(dir.to_string()))?;
         self.remove_plugin(window_context, &plugin).await
     }
 
     async fn remove_plugin(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         plugin: &PluginHandle,
     ) -> Result<()> {
         // Terminate the plugin
@@ -195,7 +195,7 @@ impl PluginManager {
 
     pub async fn add_plugin_by_dir(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         dir: &str,
         watch: bool,
     ) -> Result<()> {
@@ -238,7 +238,7 @@ impl PluginManager {
     pub async fn initialize_all_plugins<R: Runtime>(
         &self,
         app_handle: &AppHandle<R>,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
     ) -> Result<()> {
         let candidates = self.list_plugin_dirs(app_handle).await;
         for candidate in candidates.clone() {
@@ -323,7 +323,7 @@ impl PluginManager {
 
     async fn send_to_plugin_and_wait(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         plugin: &PluginHandle,
         payload: &InternalEventPayload,
     ) -> Result<InternalEvent> {
@@ -334,7 +334,7 @@ impl PluginManager {
 
     async fn send_and_wait(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         payload: &InternalEventPayload,
     ) -> Result<Vec<InternalEvent>> {
         let plugins = { self.plugins.lock().await.clone() };
@@ -343,7 +343,7 @@ impl PluginManager {
 
     async fn send_to_plugins_and_wait(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         payload: &InternalEventPayload,
         plugins: Vec<PluginHandle>,
     ) -> Result<Vec<InternalEvent>> {
@@ -402,7 +402,7 @@ impl PluginManager {
 
     pub async fn get_http_request_actions(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
     ) -> Result<Vec<GetHttpRequestActionsResponse>> {
         let reply_events = self
             .send_and_wait(
@@ -423,7 +423,7 @@ impl PluginManager {
 
     pub async fn get_template_functions_with_context(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
     ) -> Result<Vec<GetTemplateFunctionsResponse>> {
         let reply_events = self
             .send_and_wait(window_context, &InternalEventPayload::GetTemplateFunctionsRequest)
@@ -447,7 +447,7 @@ impl PluginManager {
 
     pub async fn call_http_request_action(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         req: CallHttpRequestActionRequest,
     ) -> Result<()> {
         let ref_id = req.plugin_ref_id.clone();
@@ -464,7 +464,7 @@ impl PluginManager {
 
     pub async fn get_http_authentication_summaries(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
     ) -> Result<Vec<(PluginHandle, GetHttpAuthenticationSummaryResponse)>> {
         let reply_events = self
             .send_and_wait(
@@ -490,7 +490,7 @@ impl PluginManager {
 
     pub async fn get_http_authentication_config(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         auth_name: &str,
         values: HashMap<String, JsonPrimitive>,
         request_id: &str,
@@ -522,7 +522,7 @@ impl PluginManager {
 
     pub async fn call_http_authentication_action(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         auth_name: &str,
         action_index: i32,
         values: HashMap<String, JsonPrimitive>,
@@ -552,7 +552,7 @@ impl PluginManager {
 
     pub async fn call_http_authentication(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         auth_name: &str,
         req: CallHttpAuthenticationRequest,
     ) -> Result<CallHttpAuthenticationResponse> {
@@ -593,7 +593,7 @@ impl PluginManager {
 
     pub async fn call_template_function(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         fn_name: &str,
         args: HashMap<String, String>,
         purpose: RenderPurpose,
@@ -626,7 +626,7 @@ impl PluginManager {
 
     pub async fn import_data(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         content: &str,
     ) -> Result<ImportResponse> {
         let reply_events = self
@@ -652,7 +652,7 @@ impl PluginManager {
 
     pub async fn filter_data(
         &self,
-        window_context: &PluginEventContext,
+        window_context: &PluginWindowContext,
         filter: &str,
         content: &str,
         content_type: &str,

@@ -1,19 +1,19 @@
 use regex::Regex;
 use tauri::{Runtime, WebviewWindow};
-use yaak_plugins::events::PluginEventContext;
+use yaak_plugins::events::PluginWindowContext;
 
 pub trait WorkspaceWindowTrait {
-    fn context(&self) -> PluginEventContext;
+    fn context(&self) -> PluginWindowContext;
     fn workspace_id(&self) -> Option<String>;
     fn cookie_jar_id(&self) -> Option<String>;
     fn environment_id(&self) -> Option<String>;
 }
 
 impl<R: Runtime> WorkspaceWindowTrait for WebviewWindow<R> {
-    fn context(&self) -> PluginEventContext {
+    fn context(&self) -> PluginWindowContext {
         match self.workspace_id() {
-            None => PluginEventContext::new_no_workspace(self),
-            Some(id) => PluginEventContext::new(self, &id),
+            None => PluginWindowContext::new_no_workspace(self),
+            Some(id) => PluginWindowContext::new(self, &id),
         }
     }
 

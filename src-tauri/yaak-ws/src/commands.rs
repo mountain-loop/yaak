@@ -21,7 +21,7 @@ use yaak_models::queries::{
     get_websocket_request, upsert_websocket_connection, upsert_websocket_event, UpdateSource,
 };
 use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, PluginEventContext, RenderPurpose,
+    CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -112,7 +112,7 @@ pub(crate) async fn send<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             window.app_handle(),
-            &PluginEventContext::new(&window, &unrendered_request.workspace_id),
+            &PluginWindowContext::new(&window, &unrendered_request.workspace_id),
             RenderPurpose::Send,
         ),
     )
@@ -189,7 +189,7 @@ pub(crate) async fn connect<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             window.app_handle(),
-            &PluginEventContext::new(&window, &unrendered_request.workspace_id),
+            &PluginWindowContext::new(&window, &unrendered_request.workspace_id),
             RenderPurpose::Send,
         ),
     )

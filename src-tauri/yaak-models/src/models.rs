@@ -221,6 +221,7 @@ pub struct WorkspaceMeta {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub setting_sync_dir: Option<String>,
+    pub encrypted_key: Option<Vec<u8>>,
 }
 
 #[derive(Iden)]
@@ -234,6 +235,7 @@ pub enum WorkspaceMetaIden {
     UpdatedAt,
 
     SettingSyncDir,
+    EncryptedKey,
 }
 
 impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
@@ -247,6 +249,7 @@ impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
             setting_sync_dir: r.get("setting_sync_dir")?,
+            encrypted_key: r.get("encrypted_key")?,
         })
     }
 }

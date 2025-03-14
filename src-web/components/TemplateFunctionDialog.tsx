@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateTokensToString } from '../hooks/useTemplateTokensToString';
+import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
 import { VStack } from './core/Stacks';
@@ -51,7 +52,7 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
             ? { type: 'bool', value: argValues[name] === true }
             : { type: 'str', text: String(argValues[name] ?? '') },
     }));
-    
+
     return {
       tokens: [
         {
@@ -77,7 +78,7 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
 
   const debouncedTagText = useDebouncedValue(tagText.data ?? '', 200);
   const rendered = useRenderTemplate(debouncedTagText);
-  const tooLarge = (rendered.data ?? '').length > 10000;
+  const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
 
   return (
     <VStack className="pb-3" space={4}>
@@ -88,16 +89,20 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
         onChange={setArgValues}
         stateKey={`template_function.${templateFunction.name}`}
       />
-      <VStack className="w-full">
+      <VStack className="w-full" space={1}>
         <div className="text-sm text-text-subtle">Preview</div>
-        <InlineCode
-          className={classNames(
-            'whitespace-pre select-text cursor-text max-h-[10rem] overflow-y-auto hide-scrollbars',
-            tooLarge && 'italic text-danger',
-          )}
-        >
-          {tooLarge ? 'too large to preview' : rendered.data || <>&nbsp;</>}
-        </InlineCode>
+        {rendered.error ? (
+          <Banner color="danger">{`${rendered.error}`}</Banner>
+        ) : (
+          <InlineCode
+            className={classNames(
+              'whitespace-pre select-text cursor-text max-h-[10rem] overflow-y-auto hide-scrollbars',
+              tooLarge && 'italic text-danger',
+            )}
+          >
+            {tooLarge ? 'too large to preview' : rendered.data || <>&nbsp;</>}
+          </InlineCode>
+        )}
       </VStack>
       <Button color="primary" onClick={handleDone}>
         Done

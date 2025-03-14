@@ -1,9 +1,7 @@
-use crate::error::Result;
 use crate::events::{
     FormInputBase, FormInputSecureText, FormInputTemplateFunction, TemplateFunction,
     TemplateFunctionArg,
 };
-use std::collections::HashMap;
 
 pub(crate) fn template_function_encrypt() -> TemplateFunction {
     TemplateFunction {
@@ -24,14 +22,4 @@ pub(crate) fn template_function_encrypt() -> TemplateFunction {
             }),
         )],
     }
-}
-
-pub(crate) fn template_function_encrypt_on_change(args: HashMap<String, String>) -> Result<String> {
-    let value = args.get("value").map(|v| v.to_owned()).unwrap_or_default();
-    Ok(format!("ENCRYPTED___{value}"))
-}
-
-pub(crate) fn template_function_encrypt_on_render(args: HashMap<String, String>) -> Result<String> {
-    let value = args.get("value").map(|v| v.to_owned()).unwrap_or_default();
-    Ok(value.replace("ENCRYPTED___", ""))
 }

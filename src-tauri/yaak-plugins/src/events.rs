@@ -15,7 +15,7 @@ pub struct InternalEvent {
     pub plugin_ref_id: String,
     pub plugin_name: String,
     pub reply_id: Option<String>,
-    pub window_context: PluginEventContext,
+    pub window_context: PluginWindowContext,
     pub payload: InternalEventPayload,
 }
 
@@ -29,14 +29,14 @@ pub(crate) struct InternalEventRawPayload {
     pub plugin_ref_id: String,
     pub plugin_name: String,
     pub reply_id: Option<String>,
-    pub window_context: PluginEventContext,
+    pub window_context: PluginWindowContext,
     pub payload: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "gen_events.ts")]
-pub enum PluginEventContext {
+pub enum PluginWindowContext {
     None,
     Label {
         label: String,
@@ -44,7 +44,7 @@ pub enum PluginEventContext {
     },
 }
 
-impl PluginEventContext {
+impl PluginWindowContext {
     pub fn new<R: Runtime>(window: &WebviewWindow<R>, workspace_id: &str) -> Self {
         Self::Label {
             label: window.label().to_string(),

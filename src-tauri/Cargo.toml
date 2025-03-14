@@ -73,6 +73,7 @@ tokio-stream = "0.1.17"
 thiserror = { workspace = true }
 uuid = "1.12.1"
 yaak-common = { workspace = true }
+yaak-crypto = { workspace = true }
 yaak-git = { path = "yaak-git" }
 yaak-grpc = { path = "yaak-grpc" }
 yaak-http = { workspace = true }
