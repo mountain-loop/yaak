@@ -47,18 +47,6 @@ pub async fn store_launch_history<R: Runtime>(w: &WebviewWindow<R>) -> LaunchEve
     info
 }
 
-pub fn get_os() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "windows"
-    } else if cfg!(target_os = "macos") {
-        "macos"
-    } else if cfg!(target_os = "linux") {
-        "linux"
-    } else {
-        "unknown"
-    }
-}
-
 pub async fn get_num_launches<R: Runtime>(w: &WebviewWindow<R>) -> i32 {
     get_key_value_int(w, NAMESPACE, NUM_LAUNCHES_KEY, 0).await
 }

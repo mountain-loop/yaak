@@ -3,7 +3,6 @@ members = [
     "yaak-git",
     "yaak-grpc",
     "yaak-http",
-    "yaak-license",
     "yaak-models",
     "yaak-plugins",
     "yaak-sse",
@@ -66,7 +65,6 @@ tauri-plugin-opener = "2.2.5"
 tauri-plugin-os = "2.2.0"
 tauri-plugin-shell = { workspace = true }
 tauri-plugin-single-instance = "2.2.1"
-tauri-plugin-updater = "2.5.0"
 tauri-plugin-window-state = "2.2.1"
 tokio = { version = "1.43.0", features = ["sync"] }
 tokio-stream = "0.1.17"
@@ -75,7 +73,6 @@ uuid = "1.12.1"
 yaak-git = { path = "yaak-git" }
 yaak-grpc = { path = "yaak-grpc" }
 yaak-http = { workspace = true }
-yaak-license = { path = "yaak-license" }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }

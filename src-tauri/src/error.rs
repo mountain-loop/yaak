@@ -18,9 +18,6 @@ pub enum Error {
     #[error("Websocket error: {0}")]
     WebsocketError(#[from] yaak_ws::error::Error),
 
-    #[error("License error: {0}")]
-    LicenseError(#[from] yaak_license::error::Error),
-
     #[error("Plugin error: {0}")]
     PluginError(#[from] yaak_plugins::error::Error),
 

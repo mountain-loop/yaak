@@ -4,7 +4,6 @@ import { invoke } from '@tauri-apps/api/core';
 type TauriCmd =
   | 'cmd_call_http_authentication_action'
   | 'cmd_call_http_request_action'
-  | 'cmd_check_for_updates'
   | 'cmd_create_cookie_jar'
   | 'cmd_create_environment'
   | 'cmd_create_grpc_request'

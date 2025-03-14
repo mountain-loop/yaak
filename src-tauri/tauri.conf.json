@@ -29,19 +29,13 @@
           "yaak"
         ]
       }
-    },
-    "updater": {
-      "endpoints": [
-        "https://update.yaak.app/check/{{target}}/{{arch}}/{{current_version}}"
-      ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMxRDJFREQ1MjExQjdGN0IKUldSN2Z4c2gxZTNTd1FHNCtmYnFXMHVVQzhuNkJOM1cwOFBodmdLall3ckhKenpKUytHSTR1MlkK"
     }
   },
   "bundle": {
     "publisher": "Yaak",
     "license": "MIT",
     "copyright": "Yaak",
-    "homepage": "https://yaak.app",
+    "homepage": "https://github.com/SeriousJul/yaak",
     "active": true,
     "category": "DeveloperTool",
     "externalBin": [
@@ -71,7 +65,6 @@
       "nsis",
       "rpm"
     ],
-    "createUpdaterArtifacts": "v1Compatible",
     "macOS": {
       "minimumSystemVersion": "13.0",
       "exceptionDomain": "",

@@ -10,7 +10,6 @@
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
     "packages/common-lib",
-    "src-tauri/yaak-license",
     "src-tauri/yaak-git",
     "src-tauri/yaak-models",
     "src-tauri/yaak-plugins",
@@ -23,7 +22,7 @@
   "scripts": {
     "start": "npm run app-dev",
     "app-build": "tauri build",
-    "app-dev": "tauri dev --no-watch --config ./src-tauri/tauri-dev.conf.json",
+    "app-dev": "WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri dev --config ./src-tauri/tauri-dev.conf.json",
     "build": "npm run --workspaces --if-present build",
     "bootstrap": "run-p bootstrap:* && npm run --workspaces --if-present bootstrap",
     "bootstrap:vendor-node": "node scripts/vendor-node.cjs",

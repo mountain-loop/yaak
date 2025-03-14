@@ -7,7 +7,6 @@ use crate::grpc::metadata_to_map;
 use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
-use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
 use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
@@ -77,7 +76,6 @@ mod plugin_events;
 mod render;
 #[cfg(target_os = "macos")]
 mod tauri_plugin_mac_window;
-mod updates;
 mod window;
 mod window_menu;
 
@@ -1704,20 +1702,6 @@ async fn cmd_delete_workspace(w: WebviewWindow, workspace_id: &str) -> Result<Wo
     delete_workspace(&w, workspace_id, &UpdateSource::Window).await.map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-async fn cmd_check_for_updates(
-    app_handle: AppHandle,
-    yaak_updater: State<'_, Mutex<YaakUpdater>>,
-) -> Result<bool, String> {
-    let update_mode = get_update_mode(&app_handle).await;
-    yaak_updater
-        .lock()
-        .await
-        .check_now(&app_handle, update_mode, UpdateTrigger::User)
-        .await
-        .map_err(|e| e.to_string())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -1788,11 +1772,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(yaak_license::init())
         .plugin(yaak_models::plugin::Builder::default().build())
         .plugin(yaak_plugins::init())
         .plugin(yaak_git::init())
@@ -1809,10 +1791,6 @@ pub fn run() {
             let app_data_dir = app.path().app_data_dir().unwrap();
             create_dir_all(app_data_dir.clone()).expect("Problem creating App directory!");
 
-            // Add updater
-            let yaak_updater = YaakUpdater::new();
-            app.manage(Mutex::new(yaak_updater));
-
             // Add notifier
             let yaak_notifier = YaakNotifier::new();
             app.manage(Mutex::new(yaak_notifier));
@@ -1828,7 +1806,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             cmd_call_http_authentication_action,
             cmd_call_http_request_action,
-            cmd_check_for_updates,
             cmd_create_cookie_jar,
             cmd_create_environment,
             cmd_create_grpc_request,
@@ -1933,16 +1910,6 @@ pub fn run() {
                     ..
                 } => {
                     let h = app_handle.clone();
-                    // Run update check whenever window is focused
-                    tauri::async_runtime::spawn(async move {
-                        let val: State<'_, Mutex<YaakUpdater>> = h.state();
-                        let update_mode = get_update_mode(&h).await;
-                        if let Err(e) = val.lock().await.maybe_check(&h, update_mode).await {
-                            warn!("Failed to check for updates {e:?}");
-                        };
-                    });
-
-                    let h = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
                         let windows = h.webview_windows();
                         let w = windows.values().next().unwrap();
@@ -2011,11 +1978,6 @@ fn create_main_window(handle: &AppHandle, url: &str) -> WebviewWindow {
     };
 
     window::create_window(handle, config)
-}
-
-async fn get_update_mode(h: &AppHandle) -> UpdateMode {
-    let settings = get_or_create_settings(h).await;
-    UpdateMode::new(settings.update_channel.as_str())
 }
 
 fn safe_uri(endpoint: &str) -> String {

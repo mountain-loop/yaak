@@ -37,10 +37,7 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
         true,
         &[
             #[cfg(not(target_os = "macos"))]
-            &PredefinedMenuItem::about(app_handle, None, Some(about_metadata.clone()))?,
-            #[cfg(target_os = "macos")]
-            &MenuItemBuilder::with_id("open_feedback".to_string(), "Give Feedback")
-                .build(app_handle)?,
+            &PredefinedMenuItem::about(app_handle, None, Some(about_metadata.clone()))?
         ],
     )?;
 

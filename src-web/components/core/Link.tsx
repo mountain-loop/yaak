@@ -36,7 +36,3 @@ export function Link({ href, children, className, ...other }: Props) {
     </RouterLink>
   );
 }
-
-export function FeedbackLink() {
-  return <Link href="https://yaak.app/roadmap">Feedback</Link>;
-}

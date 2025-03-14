@@ -1,16 +1,10 @@
 use std::time::SystemTime;
 
-use crate::history::{get_num_launches, get_os};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use log::debug;
-use reqwest::Method;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use tauri::{Emitter, Manager, Runtime, WebviewWindow};
+use tauri::{Runtime, WebviewWindow};
 use yaak_models::queries::{get_key_value_raw, set_key_value_raw, UpdateSource};
-
-// Check for updates every hour
-const MAX_UPDATE_CHECK_SECONDS: u64 = 60 * 60;
 
 const KV_NAMESPACE: &str = "notifications";
 const KV_KEY: &str = "seen";
@@ -52,55 +46,7 @@ impl YaakNotifier {
         Ok(())
     }
 
-    pub async fn check<R: Runtime>(&mut self, window: &WebviewWindow<R>) -> Result<(), String> {
-        let ignore_check = self.last_check.elapsed().unwrap().as_secs() < MAX_UPDATE_CHECK_SECONDS;
-
-        if ignore_check {
-            return Ok(());
-        }
-
-        self.last_check = SystemTime::now();
-
-        let num_launches = get_num_launches(window).await;
-        let info = window.app_handle().package_info().clone();
-        let req = reqwest::Client::default()
-            .request(Method::GET, "https://notify.yaak.app/notifications")
-            .query(&[
-                ("version", info.version.to_string().as_str()),
-                ("launches", num_launches.to_string().as_str()),
-                ("platform", get_os())
-            ]);
-        let resp = req.send().await.map_err(|e| e.to_string())?;
-        if resp.status() != 200 {
-            debug!("Skipping notification status code {}", resp.status());
-            return Ok(());
-        }
-
-        let result = resp.json::<Value>().await.map_err(|e| e.to_string())?;
-
-        // Support both single and multiple notifications.
-        // TODO: Remove support for single after April 2025
-        let notifications = match result {
-            Value::Array(a) => a
-                .into_iter()
-                .map(|a| serde_json::from_value(a).unwrap())
-                .collect::<Vec<YaakNotification>>(),
-            a @ _ => vec![serde_json::from_value(a).unwrap()],
-        };
-
-        for notification in notifications {
-            let age = notification.timestamp.signed_duration_since(Utc::now());
-            let seen = get_kv(window).await?;
-            if seen.contains(&notification.id) || (age > Duration::days(2)) {
-                debug!("Already seen notification {}", notification.id);
-                continue;
-            }
-            debug!("Got notification {:?}", notification);
-
-            let _ = window.emit_to(window.label(), "notification", notification.clone());
-            break; // Only show one notification
-        }
-
+    pub async fn check<R: Runtime>(&mut self, _window: &WebviewWindow<R>) -> Result<(), String> {
         Ok(())
     }
 }

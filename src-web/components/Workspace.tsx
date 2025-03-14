@@ -29,7 +29,6 @@ import { useWorkspaces } from '../hooks/useWorkspaces';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { HotKeyList } from './core/HotKeyList';
-import { FeedbackLink } from './core/Link';
 import { HStack } from './core/Stacks';
 import { CreateDropdown } from './CreateDropdown';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
@@ -189,8 +188,7 @@ function WorkspaceBody() {
     return (
       <div className="m-auto">
         <Banner color="warning" className="max-w-[30rem]">
-          The active workspace was not found. Select a workspace from the header menu or report this
-          bug to <FeedbackLink />
+          The active workspace was not found. Select a workspace from the header menu
         </Banner>
       </div>
     );

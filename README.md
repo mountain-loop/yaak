@@ -1,3 +1,12 @@
+# Fork
+
+This is a fork of MIT licensed [yaak](https://github.com/mountain-loop/yaak) with handmade updates:
+- MTLS
+- No license (Done)
+- No outgoing request to any cloud server
+
+Original README below
+
 # Yaak API Client
 
 Yaak is a desktop API client for interacting with REST, GraphQL, Server Sent Events (SSE), WebSocket, and gRPC
