@@ -82,7 +82,7 @@ export function SettingsGeneral() {
         checked={false}
         title="Send Usage Statistics (all tracking was removed in 2025.1.2)"
         disabled
-        onChange={() => {}}
+        onChange={() => { }}
       />
 
       <Separator className="my-4" />
@@ -118,6 +118,49 @@ export function SettingsGeneral() {
           }
         />
 
+        <Checkbox
+          checked={workspace.settingRequestClientCertificateEnabled}
+          title="Enable client certificate"
+          onChange={(settingRequestClientCertificateEnabled) =>
+            upsertWorkspace.mutate({ ...workspace, settingRequestClientCertificateEnabled })
+          }
+        />
+
+        {workspace.settingRequestClientCertificateEnabled &&
+
+          <PlainInput
+            required
+            size="sm"
+            name="requestClientCertificateFilepath"
+            label="Client certificate file path (pkcs12)"
+            labelClassName="w-[14rem]"
+            placeholder="0"
+            labelPosition="left"
+            defaultValue={`${workspace.settingRequestClientCertificateFilepath}`}
+            onChange={(settingRequestClientCertificateFilepath) =>
+              upsertWorkspace.mutate({ ...workspace, settingRequestClientCertificateFilepath })
+            }
+            type="text"
+          />
+        }
+
+        {workspace.settingRequestClientCertificateEnabled &&
+
+          <PlainInput
+            required
+            size="sm"
+            name="requestClientCertificatePassword"
+            label="Client certificate password (pkcs12)"
+            labelClassName="w-[14rem]"
+            placeholder="0"
+            labelPosition="left"
+            defaultValue={`${workspace.settingRequestClientCertificatePassword}`}
+            onChange={(settingRequestClientCertificatePassword) =>
+              upsertWorkspace.mutate({ ...workspace, settingRequestClientCertificatePassword })
+            }
+            type="password"
+          />
+        }
         <Checkbox
           checked={workspace.settingFollowRedirects}
           title="Follow Redirects"

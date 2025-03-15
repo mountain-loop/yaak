@@ -1,0 +1,3 @@
+ALTER TABLE workspaces ADD COLUMN setting_request_client_certificate_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE workspaces ADD COLUMN setting_request_client_certificate_filepath TEXT;
+ALTER TABLE workspaces ADD COLUMN setting_request_client_certificate_password TEXT;

@@ -162,6 +162,9 @@ pub struct Workspace {
     #[serde(default = "default_true")]
     pub setting_follow_redirects: bool,
     pub setting_request_timeout: i32,
+    pub setting_request_client_certificate_enabled: bool,
+    pub setting_request_client_certificate_filepath: Option<String>,
+    pub setting_request_client_certificate_password: Option<String>,
 }
 
 #[derive(Iden)]
@@ -178,6 +181,9 @@ pub enum WorkspaceIden {
     SettingFollowRedirects,
     SettingRequestTimeout,
     SettingValidateCertificates,
+    SettingRequestClientCertificateEnabled,
+    SettingRequestClientCertificateFilepath,
+    SettingRequestClientCertificatePassword,
 }
 
 impl<'s> TryFrom<&Row<'s>> for Workspace {
@@ -194,6 +200,9 @@ impl<'s> TryFrom<&Row<'s>> for Workspace {
             setting_follow_redirects: r.get("setting_follow_redirects")?,
             setting_request_timeout: r.get("setting_request_timeout")?,
             setting_validate_certificates: r.get("setting_validate_certificates")?,
+            setting_request_client_certificate_enabled: r.get("setting_request_client_certificate_enabled")?,
+            setting_request_client_certificate_filepath: r.get("setting_request_client_certificate_filepath")?,
+            setting_request_client_certificate_password: r.get("setting_request_client_certificate_password")?,
         })
     }
 }

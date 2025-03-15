@@ -385,6 +385,9 @@ pub async fn upsert_workspace<R: Runtime>(
             WorkspaceIden::SettingFollowRedirects,
             WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingValidateCertificates,
+            WorkspaceIden::SettingRequestClientCertificateEnabled,
+            WorkspaceIden::SettingRequestClientCertificateFilepath,
+            WorkspaceIden::SettingRequestClientCertificatePassword,
         ])
         .values_panic([
             id.as_str().into(),
@@ -395,6 +398,9 @@ pub async fn upsert_workspace<R: Runtime>(
             workspace.setting_follow_redirects.into(),
             workspace.setting_request_timeout.into(),
             workspace.setting_validate_certificates.into(),
+            workspace.setting_request_client_certificate_enabled.into(),
+            workspace.setting_request_client_certificate_filepath.into(),
+            workspace.setting_request_client_certificate_password.into()
         ])
         .on_conflict(
             OnConflict::column(GrpcRequestIden::Id)
@@ -406,6 +412,9 @@ pub async fn upsert_workspace<R: Runtime>(
                     WorkspaceIden::SettingFollowRedirects,
                     WorkspaceIden::SettingRequestTimeout,
                     WorkspaceIden::SettingValidateCertificates,
+                    WorkspaceIden::SettingRequestClientCertificateEnabled,
+                    WorkspaceIden::SettingRequestClientCertificateFilepath,
+                    WorkspaceIden::SettingRequestClientCertificatePassword,
                 ])
                 .values([(WorkspaceIden::UpdatedAt, CurrentTimestamp.into())])
                 .to_owned(),

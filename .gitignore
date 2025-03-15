@@ -31,3 +31,6 @@ dist-ssr
 
 .tmp
 tmp
+cert.pem
+key.pem
+cert.pfx

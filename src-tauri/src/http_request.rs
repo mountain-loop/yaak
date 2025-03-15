@@ -99,7 +99,12 @@ pub async fn send_http_request<R: Runtime>(
             .unwrap()
             .with_platform_verifier()
             .with_no_client_auth();
-        client_builder = client_builder.use_preconfigured_tls(config)
+        client_builder = client_builder.use_preconfigured_tls(config);
+        if workspace.setting_request_client_certificate_enabled {
+            let pkcs12: Vec<u8> = fs::read(workspace.setting_request_client_certificate_filepath.expect("Must specify path")).await.expect("Failed to read certificate file");
+            let identity = reqwest::Identity::from_pkcs12_der(&pkcs12, &workspace.setting_request_client_certificate_password.expect("Must specify password")).expect("Failed to create identity");
+            client_builder = client_builder.identity(identity).use_native_tls();
+        }
     } else {
         // Use rustls to skip validation because rustls_platform_verifier does not have this ability
         client_builder = client_builder

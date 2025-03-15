@@ -50,7 +50,7 @@ md5 = "0.7.0"
 mime_guess = "2.0.5"
 rand = "0.9.0"
 regex = "1.10.2"
-reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider"] }
+reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider", "native-tls"] }
 reqwest_cookie_store = "0.8.0"
 rustls = { version = "0.23.22", default-features = false, features = ["custom-provider", "ring"] }
 rustls-platform-verifier = "0.5.0"
@@ -81,7 +81,7 @@ yaak-templates = { workspace = true }
 yaak-ws = { path = "yaak-ws" }
 
 [workspace.dependencies]
-reqwest = "0.12.12"
+reqwest = "0.12.14"
 serde = "1.0.215"
 serde_json = "1.0.132"
 tauri = "2.2.5"
