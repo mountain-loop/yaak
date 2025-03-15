@@ -2,7 +2,7 @@
 
 This is a fork of MIT licensed [yaak](https://github.com/mountain-loop/yaak) with handmade updates.
 - MTLS
-- No license 
+- No license checks
 - No outgoing request to any cloud server
 
 ## MTLS
