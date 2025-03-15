@@ -88,7 +88,7 @@ tauri = "2.2.5"
 tauri-plugin = "2.0.4"
 tauri-plugin-shell = "2.2.0"
 thiserror = "2.0.3"
-ts-rs = "10.0.0"
+ts-rs = "10.1.0"
 yaak-http = { path = "yaak-http" }
 yaak-models = { path = "yaak-models" }
 yaak-plugins = { path = "yaak-plugins" }

@@ -163,7 +163,9 @@ pub struct Workspace {
     pub setting_follow_redirects: bool,
     pub setting_request_timeout: i32,
     pub setting_request_client_certificate_enabled: bool,
+    #[serde(default)]
     pub setting_request_client_certificate_filepath: Option<String>,
+    #[serde(default)]
     pub setting_request_client_certificate_password: Option<String>,
 }
 
