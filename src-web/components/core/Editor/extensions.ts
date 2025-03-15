@@ -74,7 +74,7 @@ export const syntaxHighlightStyle = HighlightStyle.define([
 
 const syntaxTheme = EditorView.theme({}, { dark: true });
 
-const closeBracketsExts: Extension = [closeBrackets(), keymap.of([...closeBracketsKeymap])];
+const closeBracketsExtensions: Extension = [closeBrackets(), keymap.of([...closeBracketsKeymap])];
 
 const syntaxExtensions: Record<NonNullable<EditorProps['language']>, LanguageSupport | null> = {
   graphql: null,
@@ -88,10 +88,10 @@ const syntaxExtensions: Record<NonNullable<EditorProps['language']>, LanguageSup
   markdown: markdown(),
 };
 
-const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ['json', 'javascript'];
+const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ['json', 'javascript', 'graphql'];
 
 export function getLanguageExtension({
-  language,
+  language = 'text',
   useTemplating = false,
   environmentVariables,
   autocomplete,
@@ -106,21 +106,26 @@ export function getLanguageExtension({
   onClickPathParameter: (name: string) => void;
   completionOptions: TwigCompletionOption[];
 } & Pick<EditorProps, 'language' | 'useTemplating' | 'autocomplete'>) {
-  if (language === 'graphql') {
-    return graphql();
-  }
+  const extraExtensions: Extension[] = [];
 
-  const base = syntaxExtensions[language ?? 'text'] ?? text();
-  if (!useTemplating) {
-    return base;
+  if (language === 'url') {
+    extraExtensions.push(pathParametersPlugin(onClickPathParameter));
   }
-
-  const extraExtensions: Extension[] =
-    language === 'url' ? [pathParametersPlugin(onClickPathParameter)] : [];
 
   // Only close brackets on languages that need it
   if (language && closeBracketsFor.includes(language)) {
-    extraExtensions.push(closeBracketsExts);
+    extraExtensions.push(closeBracketsExtensions);
+  }
+
+  // GraphQL is a special exception
+  if (language === 'graphql') {
+    return [graphql(), extraExtensions];
+  }
+
+  const base = syntaxExtensions[language ?? 'text'] ?? text();
+
+  if (!useTemplating) {
+    return [base, extraExtensions];
   }
 
   return twig({
