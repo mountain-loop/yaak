@@ -1,5 +1,6 @@
 name: Generate Artifacts
 on:
+  workflow_dispatch:
   push:
     tags: [ v* ]
 
