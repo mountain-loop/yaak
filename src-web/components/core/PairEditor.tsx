@@ -1,4 +1,3 @@
-import { formatSize } from '@yaakapp-internal/lib/formatSize';
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import {
@@ -24,7 +23,6 @@ import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import type { DropdownItem } from './Dropdown';
 import { Dropdown } from './Dropdown';
-import type { EditorProps } from './Editor/Editor';
 import { Editor } from './Editor/Editor';
 import type { GenericCompletionConfig } from './Editor/genericCompletion';
 import { Icon } from './Icon';
@@ -41,6 +39,7 @@ export interface PairEditorRef {
 
 export type PairEditorProps = {
   allowFileValues?: boolean;
+  allowMultilineValues?: boolean;
   className?: string;
   forceUpdateKey?: string;
   nameAutocomplete?: GenericCompletionConfig;
@@ -79,6 +78,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   {
     stateKey,
     allowFileValues,
+    allowMultilineValues,
     className,
     forceUpdateKey,
     nameAutocomplete,
@@ -229,6 +229,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
             {hoveredIndex === i && <DropMarker />}
             <PairEditorRow
               allowFileValues={allowFileValues}
+              allowMultilineValues={allowMultilineValues}
               className="py-1"
               forceFocusNamePairId={forceFocusNamePairId}
               forceFocusValuePairId={forceFocusValuePairId}
@@ -256,12 +257,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
         );
       })}
       {!showAll && pairs.length > MAX_INITIAL_PAIRS && (
-        <Button
-          onClick={toggleShowAll}
-          variant="border"
-          className="m-2"
-          size="xs"
-        >
+        <Button onClick={toggleShowAll} variant="border" className="m-2" size="xs">
           Show {pairs.length - MAX_INITIAL_PAIRS} More
         </Button>
       )}
@@ -289,6 +285,7 @@ type PairEditorRowProps = {
 } & Pick<
   PairEditorProps,
   | 'allowFileValues'
+  | 'allowMultilineValues'
   | 'forceUpdateKey'
   | 'nameAutocomplete'
   | 'nameAutocompleteVariables'
@@ -304,6 +301,7 @@ type PairEditorRowProps = {
 
 function PairEditorRow({
   allowFileValues,
+  allowMultilineValues,
   className,
   forceFocusNamePairId,
   forceFocusValuePairId,
@@ -330,7 +328,6 @@ function PairEditorRow({
   const ref = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<EditorView>(null);
   const valueInputRef = useRef<EditorView>(null);
-  const valueLanguage = languageFromContentType(pair.contentType ?? null);
 
   useEffect(() => {
     if (forceFocusNamePairId === pair.id) {
@@ -346,17 +343,6 @@ function PairEditorRow({
 
   const handleFocus = useCallback(() => onFocus?.(pair), [onFocus, pair]);
   const handleDelete = useCallback(() => onDelete?.(pair, false), [onDelete, pair]);
-
-  const deleteItems = useMemo(
-    (): DropdownItem[] => [
-      {
-        label: 'Delete',
-        onSelect: handleDelete,
-        color: 'danger',
-      },
-    ],
-    [handleDelete],
-  );
 
   const handleChangeEnabled = useMemo(
     () => (enabled: boolean) => onChange({ ...pair, enabled }),
@@ -396,11 +382,27 @@ function PairEditorRow({
             hide={hide}
             onChange={handleChangeValueText}
             defaultValue={pair.value}
-            language={valueLanguage}
+            contentType={pair.contentType ?? null}
           />
         ),
       }),
-    [handleChangeValueText, pair.name, pair.value, valueLanguage],
+    [handleChangeValueText, pair.contentType, pair.name, pair.value],
+  );
+
+  const defaultItems = useMemo(
+    (): DropdownItem[] => [
+      {
+        label: 'Edit Multi-line',
+        onSelect: handleEditMultiLineValue,
+        hidden: !allowMultilineValues,
+      },
+      {
+        label: 'Delete',
+        onSelect: handleDelete,
+        color: 'danger',
+      },
+    ],
+    [allowMultilineValues, handleDelete, handleEditMultiLineValue],
   );
 
   const [, connectDrop] = useDrop<Pair>(
@@ -524,8 +526,9 @@ function PairEditorRow({
               size="sm"
               onClick={handleEditMultiLineValue}
               title={pair.value}
+              className="text-xs font-mono"
             >
-              Edit {formatSize(pair.value.length)}
+              {pair.value.split('\n').join(' ')}
             </Button>
           ) : (
             <Input
@@ -537,7 +540,6 @@ function PairEditorRow({
               size="sm"
               containerClassName={classNames(isLast && 'border-dashed')}
               validate={valueValidate}
-              language={valueLanguage}
               forceUpdateKey={forceUpdateKey}
               defaultValue={pair.value}
               label="Value"
@@ -562,7 +564,7 @@ function PairEditorRow({
           editMultiLine={handleEditMultiLineValue}
         />
       ) : (
-        <Dropdown items={deleteItems}>
+        <Dropdown items={defaultItems}>
           <IconButton
             iconSize="sm"
             size="xs"
@@ -641,6 +643,7 @@ function FileActionsDropdown({
         onSelect: onDelete,
         variant: 'danger',
         leftSlot: <Icon icon="trash" />,
+        color: 'danger',
       },
     ],
     [editMultiLine, onChangeContentType, onChangeFile, onDelete, pair.contentType, pair.isFile],
@@ -673,16 +676,17 @@ function isPairEmpty(pair: Pair): boolean {
 
 function MultilineEditDialog({
   defaultValue,
-  language,
+  contentType,
   onChange,
   hide,
 }: {
   defaultValue: string;
-  language: EditorProps['language'];
+  contentType: string | null;
   onChange: (value: string) => void;
   hide: () => void;
 }) {
   const [value, setValue] = useState<string>(defaultValue);
+  const language = languageFromContentType(contentType, value);
   return (
     <div className="w-[100vw] max-w-[40rem] h-[50vh] max-h-full grid grid-rows-[minmax(0,1fr)_auto]">
       <Editor
@@ -691,6 +695,8 @@ function MultilineEditDialog({
         language={language}
         onChange={setValue}
         stateKey={null}
+        useTemplating
+        autocompleteVariables
       />
       <div>
         <Button

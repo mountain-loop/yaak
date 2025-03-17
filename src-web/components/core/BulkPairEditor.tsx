@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { generateId } from '../../lib/generateId';
 import { Editor } from './Editor/Editor';
-import type { PairEditorProps, PairWithId } from './PairEditor';
+import type { Pair, PairEditorProps, PairWithId } from './PairEditor';
 
 type Props = PairEditorProps;
 
@@ -16,7 +16,7 @@ export function BulkPairEditor({
   const pairsText = useMemo(() => {
     return pairs
       .filter((p) => !(p.name.trim() === '' && p.value.trim() === ''))
-      .map((p) => `${p.name}: ${p.value}`)
+      .map(pairToLine)
       .join('\n');
   }, [pairs]);
 
@@ -45,12 +45,17 @@ export function BulkPairEditor({
   );
 }
 
+function pairToLine(pair: Pair) {
+  const value = pair.value.replaceAll('\n', '\\n');
+  return `${pair.name}: ${value}`;
+}
+
 function lineToPair(line: string): PairWithId {
   const [, name, value] = line.match(/^(:?[^:]+):\s+(.*)$/) ?? [];
   return {
     enabled: true,
     name: (name ?? '').trim(),
-    value: (value ?? '').trim(),
+    value: (value ?? '').replaceAll('\\n', '\n').trim(),
     id: generateId(),
   };
 }

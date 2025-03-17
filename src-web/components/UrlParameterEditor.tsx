@@ -33,6 +33,7 @@ export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey 
     <VStack className="h-full">
       <PairOrBulkEditor
         ref={pairEditor}
+        allowMultilineValues
         forceUpdateKey={forceUpdateKey + urlParametersKey}
         nameAutocompleteVariables
         namePlaceholder="param_name"

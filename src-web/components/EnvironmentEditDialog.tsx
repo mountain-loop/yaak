@@ -180,6 +180,7 @@ const EnvironmentEditor = function ({
       </HStack>
       <div className="h-full pr-2 pb-2">
         <PairOrBulkEditor
+          allowMultilineValues
           preferenceName="environment"
           nameAutocomplete={nameAutocomplete}
           nameAutocompleteVariables={false}
