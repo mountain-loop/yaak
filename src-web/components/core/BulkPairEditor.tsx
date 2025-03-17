@@ -33,7 +33,7 @@ export function BulkPairEditor({
 
   return (
     <Editor
-      useTemplating
+      autocompleteFunctions
       autocompleteVariables
       stateKey={`bulk_pair.${stateKey}`}
       forceUpdateKey={forceUpdateKey}

@@ -11,9 +11,13 @@ const templateFunctionsAtom = atom<TemplateFunction[]>([]);
 
 export function useTemplateFunctionCompletionOptions(
   onClick: (fn: TemplateFunction, ragTag: string, pos: number) => void,
+  enabled: boolean,
 ) {
   const templateFunctions = useAtomValue(templateFunctionsAtom);
   return useMemo<TwigCompletionOption[]>(() => {
+    if (!enabled) {
+      return [];
+    }
     return (
       templateFunctions.map((fn) => {
         const NUM_ARGS = 2;
@@ -35,7 +39,7 @@ export function useTemplateFunctionCompletionOptions(
         };
       }) ?? []
     );
-  }, [onClick, templateFunctions]);
+  }, [enabled, onClick, templateFunctions]);
 }
 
 export function useSubscribeTemplateFunctions() {

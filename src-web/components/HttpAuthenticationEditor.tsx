@@ -75,7 +75,7 @@ export function HttpAuthenticationEditor({ request }: Props) {
       <DynamicForm
         disabled={request.authentication.disabled}
         autocompleteVariables
-        useTemplating
+        autocompleteFunctions
         stateKey={`auth.${request.id}.${request.authenticationType}`}
         inputs={authConfig.data.args}
         data={request.authentication}

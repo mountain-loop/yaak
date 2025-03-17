@@ -43,6 +43,7 @@ export type PairEditorProps = {
   className?: string;
   forceUpdateKey?: string;
   nameAutocomplete?: GenericCompletionConfig;
+  nameAutocompleteFunctions?: boolean;
   nameAutocompleteVariables?: boolean;
   namePlaceholder?: string;
   nameValidate?: InputProps['validate'];
@@ -51,6 +52,7 @@ export type PairEditorProps = {
   pairs: Pair[];
   stateKey: InputProps['stateKey'];
   valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
+  valueAutocompleteFunctions?: boolean;
   valueAutocompleteVariables?: boolean;
   valuePlaceholder?: string;
   valueType?: 'text' | 'password';
@@ -82,6 +84,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
     className,
     forceUpdateKey,
     nameAutocomplete,
+    nameAutocompleteFunctions,
     nameAutocompleteVariables,
     namePlaceholder,
     nameValidate,
@@ -89,6 +92,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
     onChange,
     pairs: originalPairs,
     valueAutocomplete,
+    valueAutocompleteFunctions,
     valueAutocompleteVariables,
     valuePlaceholder,
     valueType,
@@ -237,6 +241,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
               index={i}
               isLast={isLast}
               nameAutocomplete={nameAutocomplete}
+              nameAutocompleteFunctions={nameAutocompleteFunctions}
               nameAutocompleteVariables={nameAutocompleteVariables}
               namePlaceholder={namePlaceholder}
               nameValidate={nameValidate}
@@ -248,6 +253,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
               pair={p}
               stateKey={stateKey}
               valueAutocomplete={valueAutocomplete}
+              valueAutocompleteFunctions={valueAutocompleteFunctions}
               valueAutocompleteVariables={valueAutocompleteVariables}
               valuePlaceholder={valuePlaceholder}
               valueType={valueType}
@@ -291,8 +297,10 @@ type PairEditorRowProps = {
   | 'nameAutocompleteVariables'
   | 'namePlaceholder'
   | 'nameValidate'
+  | 'nameAutocompleteFunctions'
   | 'stateKey'
   | 'valueAutocomplete'
+  | 'valueAutocompleteFunctions'
   | 'valueAutocompleteVariables'
   | 'valuePlaceholder'
   | 'valueType'
@@ -309,9 +317,10 @@ function PairEditorRow({
   index,
   isLast,
   nameAutocomplete,
-  nameAutocompleteVariables,
   namePlaceholder,
   nameValidate,
+  nameAutocompleteFunctions,
+  nameAutocompleteVariables,
   onChange,
   onDelete,
   onEnd,
@@ -320,6 +329,7 @@ function PairEditorRow({
   pair,
   stateKey,
   valueAutocomplete,
+  valueAutocompleteFunctions,
   valueAutocompleteVariables,
   valuePlaceholder,
   valueType,
@@ -486,7 +496,6 @@ function PairEditorRow({
           <Input
             ref={nameInputRef}
             hideLabel
-            useTemplating
             stateKey={`name.${pair.id}.${stateKey}`}
             wrapLines={false}
             readOnly={pair.readOnlyName}
@@ -503,6 +512,7 @@ function PairEditorRow({
             placeholder={namePlaceholder ?? 'name'}
             autocomplete={nameAutocomplete}
             autocompleteVariables={nameAutocompleteVariables}
+            autocompleteFunctions={nameAutocompleteFunctions}
           />
         )}
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
@@ -534,7 +544,6 @@ function PairEditorRow({
             <Input
               ref={valueInputRef}
               hideLabel
-              useTemplating
               stateKey={`value.${pair.id}.${stateKey}`}
               wrapLines={false}
               size="sm"
@@ -549,6 +558,7 @@ function PairEditorRow({
               type={isLast ? 'text' : valueType}
               placeholder={valuePlaceholder ?? 'value'}
               autocomplete={valueAutocomplete?.(pair.name)}
+              autocompleteFunctions={valueAutocompleteFunctions}
               autocompleteVariables={valueAutocompleteVariables}
             />
           )}
@@ -695,7 +705,7 @@ function MultilineEditDialog({
         language={language}
         onChange={setValue}
         stateKey={null}
-        useTemplating
+        autocompleteFunctions
         autocompleteVariables
       />
       <div>

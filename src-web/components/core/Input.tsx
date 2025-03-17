@@ -13,13 +13,13 @@ import { HStack } from './Stacks';
 export type InputProps = Pick<
   EditorProps,
   | 'language'
-  | 'useTemplating'
   | 'autocomplete'
   | 'forceUpdateKey'
   | 'disabled'
   | 'autoFocus'
   | 'autoSelect'
   | 'autocompleteVariables'
+  | 'autocompleteFunctions'
   | 'onKeyDown'
   | 'readOnly'
 > & {

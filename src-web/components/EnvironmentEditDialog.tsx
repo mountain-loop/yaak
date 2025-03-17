@@ -127,7 +127,7 @@ const EnvironmentEditor = function ({
     key: 'environmentValueVisibility',
     fallback: true,
   });
-  const { subEnvironments } = useEnvironments();
+  const { subEnvironments, baseEnvironment } = useEnvironments();
   const updateEnvironment = useUpdateEnvironment(environment?.id ?? null);
   const handleChange = useCallback<PairEditorProps['onChange']>(
     (variables) => updateEnvironment.mutate({ variables }),
@@ -135,13 +135,13 @@ const EnvironmentEditor = function ({
   );
 
   // Gather a list of env names from other environments, to help the user get them aligned
+  const isBaseEnvironment = environment.environmentId == null;
   const nameAutocomplete = useMemo<GenericCompletionConfig>(() => {
-    const allVariableNames =
-      environment == null
-        ? [] // Nothing to autocomplete if we're in the base environment
-        : subEnvironments
-            .filter((e) => e.environmentId != null)
-            .flatMap((e) => e.variables.map((v) => v.name));
+    const allVariableNames = isBaseEnvironment
+      ? [] // Nothing to autocomplete if we're in the base environment
+      : [baseEnvironment, ...subEnvironments]
+          .filter((e) => e != null)
+          .flatMap((e) => e.variables.map((v) => v.name));
 
     // Filter out empty strings and variables that already exist
     const variableNames = allVariableNames.filter(
@@ -155,7 +155,7 @@ const EnvironmentEditor = function ({
       }),
     );
     return { options };
-  }, [subEnvironments, environment]);
+  }, [isBaseEnvironment, baseEnvironment, subEnvironments, environment.variables]);
 
   const validateName = useCallback((name: string) => {
     // Empty just means the variable doesn't have a name yet, and is unusable
@@ -183,11 +183,11 @@ const EnvironmentEditor = function ({
           allowMultilineValues
           preferenceName="environment"
           nameAutocomplete={nameAutocomplete}
-          nameAutocompleteVariables={false}
           namePlaceholder="VAR_NAME"
           nameValidate={validateName}
           valueType={valueVisibility.value ? 'text' : 'password'}
-          valueAutocompleteVariables={true}
+          valueAutocompleteVariables
+          valueAutocompleteFunctions
           forceUpdateKey={environment.id}
           pairs={environment.variables}
           onChange={handleChange}

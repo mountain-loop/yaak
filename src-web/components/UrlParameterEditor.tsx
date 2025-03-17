@@ -35,12 +35,14 @@ export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey 
         ref={pairEditor}
         allowMultilineValues
         forceUpdateKey={forceUpdateKey + urlParametersKey}
+        nameAutocompleteFunctions
         nameAutocompleteVariables
         namePlaceholder="param_name"
         onChange={onChange}
         pairs={pairs}
         preferenceName="url_parameters"
         stateKey={stateKey}
+        valueAutocompleteFunctions
         valueAutocompleteVariables
         valuePlaceholder="Value"
       />

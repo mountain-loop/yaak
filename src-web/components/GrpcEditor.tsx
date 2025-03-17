@@ -181,8 +181,8 @@ export function GrpcEditor({
     <div className="h-full w-full grid grid-cols-1 grid-rows-[minmax(0,100%)_auto_auto_minmax(0,auto)]">
       <Editor
         language="json"
+        autocompleteFunctions
         autocompleteVariables
-        useTemplating
         forceUpdateKey={request.id}
         defaultValue={request.message}
         heightMode="auto"

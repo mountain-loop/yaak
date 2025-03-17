@@ -21,7 +21,9 @@ export function HeadersEditor({ stateKey, headers, onChange, forceUpdateKey }: P
     <PairOrBulkEditor
       preferenceName="headers"
       stateKey={stateKey}
+      valueAutocompleteFunctions
       valueAutocompleteVariables
+      nameAutocompleteFunctions
       nameAutocompleteVariables
       pairs={headers}
       onChange={onChange}

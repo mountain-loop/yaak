@@ -183,7 +183,7 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
           onChange={handleChangeVariables}
           placeholder="{}"
           stateKey={'graphql_vars.' + request.id}
-          useTemplating
+          autocompleteFunctions
           autocompleteVariables
           {...extraEditorProps}
         />
