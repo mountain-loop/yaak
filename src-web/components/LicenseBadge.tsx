@@ -2,6 +2,7 @@ import type { LicenseCheckStatus } from '@yaakapp-internal/license';
 import { useLicense } from '@yaakapp-internal/license';
 import type { ReactNode } from 'react';
 import { openSettings } from '../commands/openSettings';
+import {appInfo} from "../hooks/useAppInfo";
 import { useLicenseConfirmation } from '../hooks/useLicenseConfirmation';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
@@ -20,6 +21,10 @@ const details: Record<
 export function LicenseBadge() {
   const { check } = useLicense();
   const [licenseDetails, setLicenseDetails] = useLicenseConfirmation();
+
+  if (appInfo.isDev) {
+    return null;
+  }
 
   if (check.error) {
     return (

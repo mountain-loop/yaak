@@ -13,6 +13,13 @@ pub trait TemplateCallback {
         fn_name: &str,
         args: HashMap<String, String>,
     ) -> impl Future<Output = Result<String>> + Send;
+
+    fn transform_arg(
+        &self,
+        fn_name: &str,
+        arg_name: &str,
+        arg_value: &str,
+    ) -> impl Future<Output = Result<String>> + Send;
 }
 
 pub async fn render_json_value_raw<T: TemplateCallback>(
@@ -150,6 +157,15 @@ mod parse_and_render_tests {
         async fn run(&self, _fn_name: &str, _args: HashMap<String, String>) -> Result<String> {
             todo!()
         }
+
+        async fn transform_arg(
+            &self,
+            _fn_name: &str,
+            _arg_name: &str,
+            arg_value: &str,
+        ) -> Result<String> {
+            Ok(arg_value.to_string())
+        }
     }
 
     #[tokio::test]
@@ -244,6 +260,15 @@ mod parse_and_render_tests {
             async fn run(&self, fn_name: &str, args: HashMap<String, String>) -> Result<String> {
                 Ok(format!("{fn_name}: {}, {:?} {:?}", args.len(), args.get("a"), args.get("b")))
             }
+
+            async fn transform_arg(
+                &self,
+                _fn_name: &str,
+                _arg_name: &str,
+                arg_value: &str,
+            ) -> Result<String> {
+                Ok(arg_value.to_string())
+            }
         }
         assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result);
         Ok(())
@@ -263,6 +288,15 @@ mod parse_and_render_tests {
                     _ => "".to_string(),
                 })
             }
+
+            async fn transform_arg(
+                &self,
+                _fn_name: &str,
+                _arg_name: &str,
+                arg_value: &str,
+            ) -> Result<String> {
+                Ok(arg_value.to_string())
+            }
         }
 
         assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
@@ -279,6 +313,15 @@ mod parse_and_render_tests {
         impl TemplateCallback for CB {
             async fn run(&self, _fn_name: &str, _args: HashMap<String, String>) -> Result<String> {
                 Err(RenderError("Failed to do it!".to_string()))
+            }
+
+            async fn transform_arg(
+                &self,
+                _fn_name: &str,
+                _arg_name: &str,
+                arg_value: &str,
+            ) -> Result<String> {
+                Ok(arg_value.to_string())
             }
         }
 
@@ -299,6 +342,15 @@ mod render_json_value_raw_tests {
     impl TemplateCallback for EmptyCB {
         async fn run(&self, _fn_name: &str, _args: HashMap<String, String>) -> Result<String> {
             todo!()
+        }
+
+        async fn transform_arg(
+            &self,
+            _fn_name: &str,
+            _arg_name: &str,
+            arg_value: &str,
+        ) -> Result<String> {
+            Ok(arg_value.to_string())
         }
     }
 

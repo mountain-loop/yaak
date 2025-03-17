@@ -1,9 +1,10 @@
 use crate::events::{PluginWindowContext, RenderPurpose};
 use crate::manager::PluginManager;
+use crate::native_template_functions::{
+    template_function_secure_run, template_function_secure_transform_arg,
+};
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager, Runtime};
-use tokio::sync::Mutex;
-use yaak_crypto::manager::EncryptionManager;
 use yaak_templates::error::Result;
 use yaak_templates::TemplateCallback;
 
@@ -35,26 +36,8 @@ impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
         let fn_name = if fn_name == "Response" { "response" } else { fn_name };
 
         if fn_name == "secure" {
-            return match self.window_context.clone() {
-                PluginWindowContext::Label {
-                    workspace_id: Some(wid),
-                    ..
-                } => {
-                    let value = args.get("value").map(|v| v.to_owned()).unwrap_or_default();
-                    let crypto_manager = &*self.app_handle.state::<Mutex<EncryptionManager<R>>>();
-                    let crypto_manager = crypto_manager.lock().await;
-                    let r = crypto_manager
-                        .decrypt(&wid, value.into_bytes())
-                        .await
-                        .map_err(|e| yaak_templates::error::Error::RenderError(e.to_string()))?;
-                    let r = String::from_utf8(r)
-                        .map_err(|e| yaak_templates::error::Error::RenderError(e.to_string()))?;
-                    Ok(r)
-                }
-                _ => Err(yaak_templates::error::Error::RenderError(
-                    "workspace_id missing from window context".into(),
-                )),
-            };
+            return template_function_secure_run(&self.app_handle, args, &self.window_context)
+                .await;
         }
 
         let plugin_manager = &*self.app_handle.state::<PluginManager>();
@@ -67,5 +50,24 @@ impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
             )
             .await?;
         Ok(resp)
+    }
+
+    async fn transform_arg(
+        &self,
+        fn_name: &str,
+        arg_name: &str,
+        arg_value: &str,
+    ) -> Result<String> {
+        if fn_name == "secure" {
+            return template_function_secure_transform_arg(
+                &self.app_handle,
+                &self.window_context,
+                arg_name,
+                arg_value,
+            )
+            .await;
+        }
+
+        Ok(arg_value.to_string())
     }
 }

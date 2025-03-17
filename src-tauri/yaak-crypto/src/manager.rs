@@ -1,98 +1,67 @@
-use crate::encryption::{
-    decrypt_data, encrypt_data, generate_passphrase, get_keyring_password, set_keyring_password,
-};
-use crate::error::Error::GenericError;
-use crate::error::{Error, Result};
-use std::collections::HashMap;
+use crate::error::Result;
+use crate::master_key::MasterKey;
+use crate::persisted_key::PersistedKey;
+use crate::workspace_keys::WorkspaceKeys;
+use log::debug;
 use std::sync::Arc;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Mutex;
-use yaak_models::models::WorkspaceMeta;
-use yaak_models::queries::{get_workspace, get_workspace_meta};
 
-const KEY_SERVICE: &str = "app.yaak.desktop.EncryptionKey";
 const KEY_USER: &str = "yaak-encryption-key";
 
 #[derive(Debug, Clone)]
-pub struct EncryptionManager<R: Runtime> {
-    app_handle: AppHandle<R>,
-    cached_master_key: Arc<Mutex<Option<String>>>,
-    cached_workspace_keys: Arc<Mutex<HashMap<String, String>>>,
+pub struct EncryptionManager {
+    cached_master_secret: Arc<Mutex<Option<MasterKey>>>,
+    cached_workspace_secrets: WorkspaceKeys,
 }
 
-impl<R: Runtime> EncryptionManager<R> {
-    pub fn new(app_handle: &AppHandle<R>) -> Self {
+impl EncryptionManager {
+    pub fn new<R: Runtime>(app_handle: &AppHandle<R>) -> Self {
+        let workspace_secrets_path = app_handle.path().app_data_dir().unwrap().join("secrets");
         Self {
-            app_handle: app_handle.clone(),
-            cached_master_key: Arc::new(Default::default()),
-            cached_workspace_keys: Arc::new(Default::default()),
+            cached_master_secret: Arc::new(Default::default()),
+            cached_workspace_secrets: WorkspaceKeys::new(&workspace_secrets_path),
         }
     }
 
     pub async fn encrypt(&self, workspace_id: &str, data: Vec<u8>) -> Result<Vec<u8>> {
-        let wkey = self.get_wkey(workspace_id).await?;
-        encrypt_data(data, &wkey)
+        debug!("Getting secret for encryption");
+        let workspace_secret = self.get_workspace_key(workspace_id).await?;
+        debug!("Encrypting data with {workspace_secret}");
+        workspace_secret.encrypt(data)
     }
 
     pub async fn decrypt(&self, workspace_id: &str, data: Vec<u8>) -> Result<Vec<u8>> {
-        let wkey = self.get_wkey(workspace_id).await?;
-        decrypt_data(data, &wkey)
+        debug!("Getting secret for decryption");
+        let workspace_secret = self.get_workspace_key(workspace_id).await?;
+        debug!("Decrypting data with {workspace_secret}");
+        workspace_secret.decrypt(data)
     }
 
-    async fn get_wkey(&self, workspace_id: &str) -> Result<String> {
-        {
-            let keys = self.cached_workspace_keys.lock().await;
-            if let Some(k) = keys.get(workspace_id) {
-                return Ok(k.clone());
-            }
-        }
-
-        let workspace = get_workspace(&self.app_handle, workspace_id).await?;
-        let workspace_meta = get_workspace_meta(&self.app_handle, &workspace).await?;
-        let encrypted_wkey = match workspace_meta {
-            Some(WorkspaceMeta {
-                encrypted_key: Some(k),
-                ..
-            }) => k,
-            _ => {
-                return Err(Error::MissingWorkspaceKey(workspace_id.to_string()));
-            }
+    async fn get_workspace_key(&self, workspace_id: &str) -> Result<PersistedKey> {
+        debug!("Getting wkey for {workspace_id}");
+        let mkey = self.get_master_key().await?;
+        if let Some(s) = self.cached_workspace_secrets.get(workspace_id, &mkey).await? {
+            debug!("Got cached workspace secret {s}");
+            return Ok(s);
         };
 
-        let mkey = self.get_mkey().await?;
-        let wkey = decrypt_data(encrypted_wkey, &mkey)?;
-        let wkey = String::from_utf8(wkey).map_err(|e| GenericError(e.to_string()))?;
-
-        let mut keys = self.cached_workspace_keys.lock().await;
-        keys.insert(workspace_id.to_string(), wkey.clone());
-
-        Ok(wkey)
+        debug!("Generating new workspace secret");
+        self.cached_workspace_secrets.generate(workspace_id, &mkey).await
     }
 
-    async fn get_mkey(&self) -> Result<String> {
+    async fn get_master_key(&self) -> Result<MasterKey> {
         {
-            let mkey = self.cached_master_key.lock().await;
-            if let Some(k) = mkey.as_ref() {
+            let master_secret = self.cached_master_secret.lock().await;
+            if let Some(k) = master_secret.as_ref() {
+                debug!("Got cached master secret");
                 return Ok(k.to_owned());
             }
         }
 
-        let r = match get_keyring_password(KEY_SERVICE, KEY_USER) {
-            Ok(r) => r,
-            Err(e) => {
-                if let Error::KeyringError(keyring::error::Error::NoEntry) = e {
-                    let master_key = generate_passphrase();
-                    set_keyring_password(KEY_SERVICE, KEY_USER, &master_key)?;
-                    master_key
-                } else {
-                    return Err(e);
-                }
-            }
-        };
-
-        let mut mkey = self.cached_master_key.lock().await;
-        *mkey = Some(r.clone());
-
-        Ok(r)
+        let mkey = MasterKey::get_or_create(KEY_USER)?;
+        let mut master_secret = self.cached_master_secret.lock().await;
+        *master_secret = Some(mkey.clone());
+        Ok(mkey)
     }
 }

@@ -11,7 +11,7 @@ use crate::events::{
     GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, ImportRequest, ImportResponse,
     InternalEvent, InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
 };
-use crate::native_template_functions::template_function_encrypt;
+use crate::native_template_functions::template_function_secure;
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
 use crate::server_ws::PluginRuntimeServerWebsocket;
@@ -439,7 +439,7 @@ impl PluginManager {
         // Add Rust-based functions
         result.push(GetTemplateFunctionsResponse {
             plugin_ref_id: "__NATIVE__".to_string(), // Meh
-            functions: vec![template_function_encrypt()],
+            functions: vec![template_function_secure()],
         });
 
         Ok(result)

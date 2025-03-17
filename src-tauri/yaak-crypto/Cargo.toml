@@ -5,11 +5,12 @@ edition = "2021"
 publish = false
 
 [dependencies]
-age = "0.11.1"
+aes-gcm = { version = "0.10.3", features = ["std"] }
+base85 = "2.0.0"
 keyring = { version = "4.0.0-alpha.1", features = ["vendored"] }
+log = "0.4.26"
 tauri = { workspace = true }
-yaak-models = { workspace = true }
 thiserror = "2.0.12"
-rand = "0.7.3"
-tokio = "1.43.0"
-async-trait = "0.1.87"
+tokio = { version = "1.43.0", default-features = false, features = ["macros", "test-util"] }
+yaak-models = { workspace = true }
+env_logger = "0.11.7"

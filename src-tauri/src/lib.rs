@@ -65,7 +65,7 @@ use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
-use yaak_templates::{Parser, Tokens};
+use yaak_templates::{transform_args, Parser, Tokens};
 
 mod encoding;
 mod error;
@@ -119,8 +119,14 @@ async fn cmd_parse_template(template: &str) -> Result<Tokens, String> {
 }
 
 #[tauri::command]
-async fn cmd_template_tokens_to_string(tokens: Tokens) -> Result<String, String> {
-    Ok(tokens.to_string())
+async fn cmd_template_tokens_to_string<R: Runtime>(
+    window: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
+    tokens: Tokens,
+) -> YaakResult<String> {
+    let cb = PluginTemplateCallback::new(&app_handle, &window.context(), RenderPurpose::Preview);
+    let new_tokens = transform_args(tokens, &cb).await?;
+    Ok(new_tokens.to_string())
 }
 
 #[tauri::command]

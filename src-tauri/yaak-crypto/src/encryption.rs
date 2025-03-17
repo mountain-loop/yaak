@@ -1,60 +1,55 @@
 use crate::error::Result;
-use age::secrecy::SecretString;
-use keyring::Entry;
-use rand::distributions::Alphanumeric;
-use rand::Rng;
-use std::io::{Read, Write};
-use std::iter;
+use aes_gcm::aead::consts::U12;
+use aes_gcm::aead::{Aead, OsRng};
+use aes_gcm::aes::Aes256;
+use aes_gcm::{AeadCore, Aes256Gcm, AesGcm, Key, KeyInit};
 
-pub(crate) fn set_keyring_password(service: &str, user: &str, text: &str) -> Result<()> {
-    let entry = Entry::new(service, user)?;
-    entry.set_password(text)?;
-    Ok(())
+pub(crate) fn encrypt_data(data: Vec<u8>, key: &Key<Aes256Gcm>) -> Result<Vec<u8>> {
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let cipher = Aes256Gcm::new(&key);
+    let ciphered_data = cipher.encrypt(&nonce, data.as_slice())?;
+
+    // Byte:     |    0    | 1-13  | <-      ...     -> |
+    // Contents: | version | Nonce | ... ciphertext ... |
+    let mut data: Vec<u8> = vec![1];
+    data.extend_from_slice(&nonce.as_slice());
+    data.extend_from_slice(&ciphered_data);
+
+    Ok(data)
 }
 
-pub(crate) fn get_keyring_password(service: &str, user: &str) -> Result<String> {
-    let entry = Entry::new(service, user)?;
-    let password = entry.get_password()?;
-    Ok(password)
-}
+pub(crate) fn decrypt_data(
+    cipher_data: Vec<u8>,
+    key: &Key<AesGcm<Aes256, U12>>,
+) -> Result<Vec<u8>> {
+    // Byte:     |    0    | 1-13  | <-      ...     -> |
+    // Contents: | version | Nonce | ... ciphertext ... |
+    let (version, rest) = cipher_data.split_at(1);
+    let version = version[0];
+    if version != 1 {
+        panic!("Cypher text is the wrong version {}", version);
+    }
 
-pub(crate) fn encrypt_data(data: Vec<u8>, passphrase: &str) -> Result<Vec<u8>> {
-    let passphrase = SecretString::from(passphrase);
-    let encryptor = age::Encryptor::with_user_passphrase(passphrase.clone());
+    let (nonce, ciphered_data) = rest.split_at(12);
 
-    let mut encrypted = vec![];
-    let mut writer = encryptor.wrap_output(&mut encrypted)?;
-    writer.write_all(data.as_slice())?;
-    writer.finish()?;
+    let cipher = Aes256Gcm::new(&key);
+    let data = cipher.decrypt(nonce.into(), ciphered_data)?;
 
-    Ok(encrypted)
-}
-
-pub(crate) fn decrypt_data(encrypted: Vec<u8>, passphrase: &str) -> Result<Vec<u8>> {
-    let passphrase = SecretString::from(passphrase);
-    let decryptor = age::Decryptor::new(encrypted.as_slice())?;
-
-    let mut decrypted = vec![];
-    let mut reader = decryptor.decrypt(iter::once(&age::scrypt::Identity::new(passphrase) as _))?;
-    reader.read_to_end(&mut decrypted)?;
-
-    Ok(decrypted)
-}
-
-pub(crate) fn generate_passphrase() -> String {
-    rand::thread_rng().sample_iter(&Alphanumeric).take(32).map(char::from).collect()
+    Ok(data)
 }
 
 #[cfg(test)]
 mod test {
     use crate::encryption::{decrypt_data, encrypt_data};
     use crate::error::Result;
+    use aes_gcm::aead::OsRng;
+    use aes_gcm::{Aes256Gcm, KeyInit};
 
     #[test]
     fn test_encrypt_decrypt() -> Result<()> {
-        let encrypted = encrypt_data("hello world".into(), "passphrase")?;
-        assert_eq!(encrypted.len(), 193);
-        let decrypted = decrypt_data(encrypted, "passphrase")?;
+        let key = Aes256Gcm::generate_key(OsRng);
+        let encrypted = encrypt_data("hello world".into(), &key)?;
+        let decrypted = decrypt_data(encrypted, &key)?;
         assert_eq!(String::from_utf8(decrypted).unwrap(), "hello world");
         Ok(())
     }

@@ -76,7 +76,7 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
     hide();
   };
 
-  const debouncedTagText = useDebouncedValue(tagText.data ?? '', 200);
+  const debouncedTagText = useDebouncedValue(tagText.data ?? '', 500);
   const rendered = useRenderTemplate(debouncedTagText);
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
 
@@ -91,8 +91,8 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
       />
       <VStack className="w-full" space={1}>
         <div className="text-sm text-text-subtle">Preview</div>
-        {rendered.error ? (
-          <Banner color="danger">{`${rendered.error}`}</Banner>
+        {rendered.error || tagText.error ? (
+          <Banner color="danger">{`${rendered.error || tagText.error}`}</Banner>
         ) : (
           <InlineCode
             className={classNames(
