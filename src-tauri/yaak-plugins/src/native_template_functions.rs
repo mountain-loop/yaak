@@ -56,7 +56,7 @@ pub(crate) async fn template_function_secure_run<R: Runtime>(
             let crypto_manager = &*app_handle.state::<Mutex<EncryptionManager>>();
             let crypto_manager = crypto_manager.lock().await;
             let r = crypto_manager
-                .decrypt(&wid, value)
+                .decrypt(&wid, value.as_slice())
                 .await
                 .map_err(|e| RenderError(e.to_string()))?;
             let r = String::from_utf8(r).map_err(|e| RenderError(e.to_string()))?;
@@ -92,7 +92,7 @@ pub(crate) async fn template_function_secure_transform_arg<R: Runtime>(
             let crypto_manager = &*app_handle.state::<Mutex<EncryptionManager>>();
             let crypto_manager = crypto_manager.lock().await;
             let r = crypto_manager
-                .encrypt(&wid, value.as_bytes().to_vec())
+                .encrypt(&wid, value.as_bytes())
                 .await
                 .map_err(|e| RenderError(e.to_string()))?;
             let r = BASE64_STANDARD.encode(r);

@@ -31,7 +31,7 @@ impl PersistedKey {
         fs::create_dir_all(path.parent().unwrap()).await?;
 
         let key = Aes256Gcm::generate_key(OsRng);
-        let encrypted_key = mkey.encrypt(key.to_vec())?;
+        let encrypted_key = mkey.encrypt(key.as_slice())?;
         let encoded_key = base85::encode(encrypted_key.as_slice());
         debug!("Wrote secret to path {:?} {}", path, encoded_key);
         fs::write(&path, encoded_key).await?;
@@ -51,27 +51,22 @@ impl PersistedKey {
             }
         };
 
-        debug!("Found secret at path {:?} {}", path, encoded_key);
-
         let encrypted_key =
             base85::decode(&encoded_key).map_err(|e| GenericError(e.to_string()))?;
 
-        debug!("Decrypting key");
-        let key = mkey.decrypt(encrypted_key)?;
-        debug!("Decrypted key");
+        let key = mkey.decrypt(encrypted_key.as_slice())?;
         let key = Key::<Aes256Gcm>::clone_from_slice(key.as_slice());
-        debug!("Key {key:?}");
         Ok(Some(Self {
             path: path.to_path_buf(),
             key,
         }))
     }
 
-    pub(crate) fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+    pub(crate) fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         encrypt_data(data, &self.key)
     }
 
-    pub(crate) fn decrypt(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+    pub(crate) fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         decrypt_data(data, &self.key)
     }
 }
@@ -81,10 +76,10 @@ mod tests {
     use crate::error::Result;
     use crate::master_key::MasterKey;
     use crate::workspace_keys::WorkspaceKeys;
+    use env_logger;
     use std::env::temp_dir;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
-    use env_logger;
 
     fn init_logger() {
         env_logger::builder()
@@ -98,28 +93,29 @@ mod tests {
     async fn test_persisted_key() -> Result<()> {
         init_logger();
 
-        let dir_name = format!("{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis());
+        let dir_name =
+            format!("{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis());
         let dir = temp_dir().join(dir_name);
         fs::create_dir_all(&dir)?;
 
         // Test out the master key
         let mkey = MasterKey::get_or_create("hello")?;
-        let encrypted = mkey.encrypt("hello".as_bytes().to_vec())?;
-        let decrypted = mkey.decrypt(encrypted)?;
+        let encrypted = mkey.encrypt("hello".as_bytes())?;
+        let decrypted = mkey.decrypt(encrypted.as_slice())?;
         assert_eq!(decrypted, "hello".as_bytes().to_vec());
 
         // Test out the workspace key
         let keys = WorkspaceKeys::new(&dir);
         let key = keys.generate("wrk_1", &mkey).await?;
-        let encrypted = key.encrypt("Some data".as_bytes().to_vec())?;
-        let decrypted = key.decrypt(encrypted)?;
+        let encrypted = key.encrypt("Some data".as_bytes())?;
+        let decrypted = key.decrypt(encrypted.as_slice())?;
         assert_eq!(decrypted, "Some data".as_bytes().to_vec());
 
         keys.clear().await;
         let mkey = MasterKey::get_or_create("hello").unwrap();
         let key = keys.get("wrk_1", &mkey).await.unwrap().unwrap();
-        let encrypted = key.encrypt("Some data".as_bytes().to_vec())?;
-        let decrypted = key.decrypt(encrypted)?;
+        let encrypted = key.encrypt("Some data".as_bytes())?;
+        let decrypted = key.decrypt(encrypted.as_slice())?;
         assert_eq!(decrypted, "Some data".as_bytes().to_vec());
 
         Ok(())

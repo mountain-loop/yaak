@@ -4,7 +4,7 @@ use crate::error::Result;
 use aes_gcm::aead::OsRng;
 use aes_gcm::{Aes256Gcm, Key, KeyInit};
 use keyring::{Entry, Error};
-use log::debug;
+use log::info;
 
 #[derive(Debug, Clone)]
 pub(crate) struct MasterKey {
@@ -17,14 +17,13 @@ impl MasterKey {
 
         let key = match entry.get_password() {
             Ok(encoded) => {
-                debug!("Existing master secret {}", encoded);
                 let key_bytes =
                     base85::decode(&encoded).map_err(|e| GenericError(e.to_string()))?;
-                debug!("Decoded master secret {}", key_bytes.len());
                 let key: Key<Aes256Gcm> = Key::<Aes256Gcm>::clone_from_slice(key_bytes.as_slice());
                 key
             }
             Err(Error::NoEntry) => {
+                info!("Creating new master key");
                 let key = Aes256Gcm::generate_key(OsRng);
                 let encoded = base85::encode(key.as_slice());
                 entry.set_password(&encoded)?;
@@ -36,11 +35,11 @@ impl MasterKey {
         Ok(Self { key })
     }
 
-    pub(crate) fn encrypt(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+    pub(crate) fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         encrypt_data(data, &self.key)
     }
 
-    pub(crate) fn decrypt(&self, data: Vec<u8>) -> Result<Vec<u8>> {
+    pub(crate) fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         decrypt_data(data, &self.key)
     }
 }
@@ -73,12 +72,12 @@ mod tests {
 
         // Test out the master key
         let mkey = MasterKey::get_or_create("hello")?;
-        let encrypted = mkey.encrypt("hello".as_bytes().to_vec())?;
-        let decrypted = mkey.decrypt(encrypted.clone()).unwrap();
+        let encrypted = mkey.encrypt("hello".as_bytes())?;
+        let decrypted = mkey.decrypt(encrypted.as_slice()).unwrap();
         assert_eq!(decrypted, "hello".as_bytes().to_vec());
 
         let mkey = MasterKey::get_or_create("hello")?;
-        let decrypted = mkey.decrypt(encrypted).unwrap();
+        let decrypted = mkey.decrypt(encrypted.as_slice()).unwrap();
         assert_eq!(decrypted, "hello".as_bytes().to_vec());
 
         Ok(())

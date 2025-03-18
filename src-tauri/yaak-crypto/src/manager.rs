@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::master_key::MasterKey;
 use crate::persisted_key::PersistedKey;
 use crate::workspace_keys::WorkspaceKeys;
-use log::debug;
+use log::info;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Mutex;
@@ -24,29 +24,23 @@ impl EncryptionManager {
         }
     }
 
-    pub async fn encrypt(&self, workspace_id: &str, data: Vec<u8>) -> Result<Vec<u8>> {
-        debug!("Getting secret for encryption");
+    pub async fn encrypt(&self, workspace_id: &str, data: &[u8]) -> Result<Vec<u8>> {
         let workspace_secret = self.get_workspace_key(workspace_id).await?;
-        debug!("Encrypting data with {workspace_secret}");
         workspace_secret.encrypt(data)
     }
 
-    pub async fn decrypt(&self, workspace_id: &str, data: Vec<u8>) -> Result<Vec<u8>> {
-        debug!("Getting secret for decryption");
+    pub async fn decrypt(&self, workspace_id: &str, data: &[u8]) -> Result<Vec<u8>> {
         let workspace_secret = self.get_workspace_key(workspace_id).await?;
-        debug!("Decrypting data with {workspace_secret}");
         workspace_secret.decrypt(data)
     }
 
     async fn get_workspace_key(&self, workspace_id: &str) -> Result<PersistedKey> {
-        debug!("Getting wkey for {workspace_id}");
         let mkey = self.get_master_key().await?;
         if let Some(s) = self.cached_workspace_secrets.get(workspace_id, &mkey).await? {
-            debug!("Got cached workspace secret {s}");
             return Ok(s);
         };
 
-        debug!("Generating new workspace secret");
+        info!("Generating new workspace secret");
         self.cached_workspace_secrets.generate(workspace_id, &mkey).await
     }
 
@@ -54,7 +48,6 @@ impl EncryptionManager {
         {
             let master_secret = self.cached_master_secret.lock().await;
             if let Some(k) = master_secret.as_ref() {
-                debug!("Got cached master secret");
                 return Ok(k.to_owned());
             }
         }
