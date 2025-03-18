@@ -127,7 +127,7 @@ const EnvironmentEditor = function ({
     key: 'environmentValueVisibility',
     fallback: true,
   });
-  const { subEnvironments, baseEnvironment } = useEnvironments();
+  const { allEnvironments } = useEnvironments();
   const updateEnvironment = useUpdateEnvironment(activeEnvironment?.id ?? null);
   const handleChange = useCallback<PairEditorProps['onChange']>(
     (variables) => updateEnvironment.mutate({ variables }),
@@ -135,24 +135,29 @@ const EnvironmentEditor = function ({
   );
 
   // Gather a list of env names from other environments, to help the user get them aligned
-  // const isBaseEnvironment = environment.environmentId == null;
   const nameAutocomplete = useMemo<GenericCompletionConfig>(() => {
     const options: GenericCompletionOption[] = [];
-    for (const environment of [...subEnvironments, baseEnvironment]) {
-      if (environment == null) continue;
-      if (environment?.id === activeEnvironment.id) continue;
-      for (const variable of environment.variables) {
-        if (activeEnvironment.variables.find((v) => variable.name === v.name)) continue;
-        if (options.find((o) => o.label === variable.name)) continue;
-        options.push({
-          label: variable?.name ?? '',
-          type: 'constant',
-          detail: `From ${environment.name}`,
-        });
-      }
+    const isBaseEnv = activeEnvironment.environmentId == null;
+    if (isBaseEnv) {
+      return { options };
+    }
+
+    const allVariables = allEnvironments.flatMap((e) => e?.variables);
+    const allVariableNames = new Set(allVariables.map((v) => v?.name));
+    for (const name of allVariableNames) {
+      const containingEnvs = allEnvironments.filter((e) =>
+        e.variables.some((v) => v.name === name),
+      );
+      const isAlreadyInActive = containingEnvs.find((e) => e.id === activeEnvironment.id);
+      if (isAlreadyInActive) continue;
+      options.push({
+        label: name,
+        type: 'constant',
+        detail: containingEnvs.map((e) => e.name).join(', '),
+      });
     }
     return { options };
-  }, [subEnvironments, baseEnvironment, activeEnvironment.id, activeEnvironment.variables]);
+  }, [activeEnvironment.environmentId, activeEnvironment.id, allEnvironments]);
 
   const validateName = useCallback((name: string) => {
     // Empty just means the variable doesn't have a name yet, and is unusable
