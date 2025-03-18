@@ -1,4 +1,4 @@
-use crate::error::Error::{InvalidEncryptedData, InvalidEncryptionVersion};
+use crate::error::Error::InvalidEncryptedData;
 use crate::error::Result;
 use aes_gcm::aead::consts::U12;
 use aes_gcm::aead::{Aead, OsRng};
@@ -24,27 +24,20 @@ pub(crate) fn encrypt_data(data: &[u8], key: &Key<Aes256Gcm>) -> Result<Vec<u8>>
     Ok(data)
 }
 
-pub(crate) fn decrypt_data(
-    cipher_data: &[u8],
-    key: &Key<AesGcm<Aes256, U12>>,
-) -> Result<Vec<u8>> {
-    if cipher_data.len() < 36 {
-        return Err(InvalidEncryptedData);
-    }
-
+pub(crate) fn decrypt_data(cipher_data: &[u8], key: &Key<AesGcm<Aes256, U12>>) -> Result<Vec<u8>> {
     // Yaak Tag + Version + Nonce + ... ciphertext ...
-    let (tag, rest) = cipher_data.split_at(ENCRYPTION_TAG.len());
+    let (tag, rest) =
+        cipher_data.split_at_checked(ENCRYPTION_TAG.len()).ok_or(InvalidEncryptedData)?;
     if tag != ENCRYPTION_TAG.as_bytes() {
         return Err(InvalidEncryptedData);
     }
 
-    let (version, rest) = rest.split_at(1);
-    let version = version[0];
-    if version != ENCRYPTION_VERSION {
-        return Err(InvalidEncryptionVersion(version));
+    let (version, rest) = rest.split_at_checked(1).ok_or(InvalidEncryptedData)?;
+    if version[0] != ENCRYPTION_VERSION {
+        return Err(InvalidEncryptedData);
     }
 
-    let (nonce, ciphered_data) = rest.split_at(NONCE_LENGTH);
+    let (nonce, ciphered_data) = rest.split_at_checked(NONCE_LENGTH).ok_or(InvalidEncryptedData)?;
 
     let cipher = Aes256Gcm::new(&key);
     let data = cipher.decrypt(nonce.into(), ciphered_data)?;
@@ -55,10 +48,10 @@ pub(crate) fn decrypt_data(
 #[cfg(test)]
 mod test {
     use crate::encryption::{decrypt_data, encrypt_data};
+    use crate::error::Error::InvalidEncryptedData;
     use crate::error::Result;
     use aes_gcm::aead::OsRng;
     use aes_gcm::{Aes256Gcm, KeyInit};
-    use crate::error::Error::{InvalidEncryptedData, InvalidEncryptionVersion};
 
     #[test]
     fn test_encrypt_decrypt() -> Result<()> {
@@ -83,9 +76,9 @@ mod test {
     fn test_decrypt_bad_version() -> Result<()> {
         let key = Aes256Gcm::generate_key(OsRng);
         let mut encrypted = encrypt_data("hello world".as_bytes(), &key)?;
-        encrypted[7] = 2;
+        encrypted[7] = 0;
         let decrypted = decrypt_data(encrypted.as_slice(), &key);
-        assert!(matches!(decrypted, Err(InvalidEncryptionVersion(2))));
+        assert!(matches!(decrypted, Err(InvalidEncryptedData)));
         Ok(())
     }
 
@@ -93,14 +86,14 @@ mod test {
     fn test_decrypt_bad_tag() -> Result<()> {
         let key = Aes256Gcm::generate_key(OsRng);
         let mut encrypted = encrypt_data("hello world".as_bytes(), &key)?;
-        encrypted[1] = 0;
+        encrypted[0] = 2;
         let decrypted = decrypt_data(encrypted.as_slice(), &key);
         assert!(matches!(decrypted, Err(InvalidEncryptedData)));
         Ok(())
     }
 
     #[test]
-    fn test_decrypt_short_data() -> Result<()> {
+    fn test_decrypt_unencrypted_data() -> Result<()> {
         let key = Aes256Gcm::generate_key(OsRng);
         let decrypted = decrypt_data("123".as_bytes(), &key);
         assert!(matches!(decrypted, Err(InvalidEncryptedData)));

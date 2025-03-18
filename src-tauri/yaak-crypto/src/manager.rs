@@ -11,16 +11,16 @@ const KEY_USER: &str = "yaak-encryption-key";
 
 #[derive(Debug, Clone)]
 pub struct EncryptionManager {
-    cached_master_secret: Arc<Mutex<Option<MasterKey>>>,
-    cached_workspace_secrets: WorkspaceKeys,
+    cached_master_key: Arc<Mutex<Option<MasterKey>>>,
+    workspace_keys: WorkspaceKeys,
 }
 
 impl EncryptionManager {
     pub fn new<R: Runtime>(app_handle: &AppHandle<R>) -> Self {
-        let workspace_secrets_path = app_handle.path().app_data_dir().unwrap().join("secrets");
+        let workspace_keys_path = app_handle.path().app_data_dir().unwrap().join("workspace-keys");
         Self {
-            cached_master_secret: Arc::new(Default::default()),
-            cached_workspace_secrets: WorkspaceKeys::new(&workspace_secrets_path),
+            cached_master_key: Arc::new(Default::default()),
+            workspace_keys: WorkspaceKeys::new(&workspace_keys_path),
         }
     }
 
@@ -33,27 +33,32 @@ impl EncryptionManager {
         let workspace_secret = self.get_workspace_key(workspace_id).await?;
         workspace_secret.decrypt(data)
     }
+    
+    pub async fn reveal_workspace_key(&self, workspace_id: &str) -> Result<String> {
+        let key = self.get_workspace_key(workspace_id).await?;
+        Ok(key.to_human())
+    }
 
     async fn get_workspace_key(&self, workspace_id: &str) -> Result<PersistedKey> {
         let mkey = self.get_master_key().await?;
-        if let Some(s) = self.cached_workspace_secrets.get(workspace_id, &mkey).await? {
+        if let Some(s) = self.workspace_keys.get(workspace_id, &mkey).await? {
             return Ok(s);
         };
 
         info!("Generating new workspace secret");
-        self.cached_workspace_secrets.generate(workspace_id, &mkey).await
+        self.workspace_keys.generate(workspace_id, &mkey).await
     }
 
     async fn get_master_key(&self) -> Result<MasterKey> {
         {
-            let master_secret = self.cached_master_secret.lock().await;
+            let master_secret = self.cached_master_key.lock().await;
             if let Some(k) = master_secret.as_ref() {
                 return Ok(k.to_owned());
             }
         }
 
         let mkey = MasterKey::get_or_create(KEY_USER)?;
-        let mut master_secret = self.cached_master_secret.lock().await;
+        let mut master_secret = self.cached_master_key.lock().await;
         *master_secret = Some(mkey.clone());
         Ok(mkey)
     }

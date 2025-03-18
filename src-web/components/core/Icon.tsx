@@ -69,6 +69,7 @@ const icons = {
   left_panel_hidden: lucide.PanelLeftOpenIcon,
   left_panel_visible: lucide.PanelLeftCloseIcon,
   lock: lucide.LockIcon,
+  lock_open: lucide.LockOpenIcon,
   magic_wand: lucide.Wand2Icon,
   merge: lucide.MergeIcon,
   minus: lucide.MinusIcon,

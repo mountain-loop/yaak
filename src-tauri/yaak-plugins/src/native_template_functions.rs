@@ -15,7 +15,7 @@ use yaak_templates::error::Result;
 pub(crate) fn template_function_secure() -> TemplateFunction {
     TemplateFunction {
         name: "secure".to_string(),
-        description: Some("Encrypt values".to_string()),
+        description: Some("Securely store encrypted values".to_string()),
         aliases: None,
         args: vec![TemplateFunctionArg::Extra(
             FormInputTemplateFunction::SecureText(FormInputSecureText {
@@ -44,6 +44,10 @@ pub(crate) async fn template_function_secure_run<R: Runtime>(
             ..
         } => {
             let value = args.get("value").map(|v| v.to_owned()).unwrap_or_default();
+            if value.is_empty() {
+                return Ok(value);
+            }
+
             let value = match value.strip_prefix("YENC_") {
                 None => {
                     return Err(RenderError("Could not decrypt non-encrypted value".to_string()))
@@ -83,16 +87,19 @@ pub(crate) async fn template_function_secure_transform_arg<R: Runtime>(
             ..
         } => {
             debug!("Encrypting arg {arg_name}={arg_value}");
-            let value = arg_value;
-            if value.starts_with("YENC_") {
+            if arg_value.is_empty() {
+                return Ok("".to_string())
+            }
+
+            if arg_value.starts_with("YENC_") {
                 // Already encrypted, so do nothing
-                return Ok(value.to_string());
+                return Ok(arg_value.to_string());
             }
 
             let crypto_manager = &*app_handle.state::<Mutex<EncryptionManager>>();
             let crypto_manager = crypto_manager.lock().await;
             let r = crypto_manager
-                .encrypt(&wid, value.as_bytes())
+                .encrypt(&wid, arg_value.as_bytes())
                 .await
                 .map_err(|e| RenderError(e.to_string()))?;
             let r = BASE64_STANDARD.encode(r);

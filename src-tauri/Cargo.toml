@@ -87,8 +87,8 @@ yaak-ws = { path = "yaak-ws" }
 
 [workspace.dependencies]
 reqwest = "0.12.12"
-serde = "1.0.215"
-serde_json = "1.0.132"
+serde = "1.0.219"
+serde_json = "1.0.140"
 tauri = "2.2.5"
 tauri-plugin = "2.0.4"
 tauri-plugin-shell = "2.2.0"

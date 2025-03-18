@@ -42,41 +42,29 @@ impl MasterKey {
     pub(crate) fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         decrypt_data(data, &self.key)
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_key() -> Self {
+        let key: Key<Aes256Gcm> =
+            Key::<Aes256Gcm>::clone_from_slice("00000000000000000000000000000000".as_bytes());
+        Self { key }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::error::Result;
     use crate::master_key::MasterKey;
-    use env_logger;
-    use std::env::temp_dir;
-    use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn init_logger() {
-        env_logger::builder()
-            .is_test(true) // Ensures it works in tests
-            .filter_level(log::LevelFilter::Debug)
-            .try_init()
-            .ok();
-    }
 
     #[tokio::test]
     async fn test_master_key() -> Result<()> {
-        init_logger();
-
-        let dir_name =
-            format!("{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis());
-        let dir = temp_dir().join(dir_name);
-        fs::create_dir_all(&dir)?;
-
         // Test out the master key
-        let mkey = MasterKey::get_or_create("hello")?;
+        let mkey = MasterKey::test_key();
         let encrypted = mkey.encrypt("hello".as_bytes())?;
         let decrypted = mkey.decrypt(encrypted.as_slice()).unwrap();
         assert_eq!(decrypted, "hello".as_bytes().to_vec());
 
-        let mkey = MasterKey::get_or_create("hello")?;
+        let mkey = MasterKey::test_key();
         let decrypted = mkey.decrypt(encrypted.as_slice()).unwrap();
         assert_eq!(decrypted, "hello".as_bytes().to_vec());
 

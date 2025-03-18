@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::master_key::MasterKey;
 use crate::persisted_key::PersistedKey;
 use log::debug;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -40,7 +40,7 @@ impl WorkspaceKeys {
         };
 
         let path = self.key_path(workspace_id);
-        let key = match PersistedKey::open(&path, mkey).await? {
+        let key = match PersistedKey::open(&path, mkey)? {
             None => return Ok(None),
             Some(s) => s,
         };
@@ -58,15 +58,21 @@ impl WorkspaceKeys {
     ) -> Result<PersistedKey> {
         let path = self.key_path(workspace_id);
         debug!("Creating new secret");
-        let cached_secret = PersistedKey::create(&path, &mkey).await?;
+        let key = PersistedKey::create(&mkey)?;
+        let mut metadata = BTreeMap::new();
+        metadata.insert("workspaceId".to_string(), workspace_id.to_string());
+        key.save_to_disk(&path, Some(metadata))?;
 
         debug!("Inserting secret into cache");
         let mut cached_secrets = self.cache.lock().await;
-        cached_secrets.insert(workspace_id.to_string(), cached_secret.clone());
-        Ok(cached_secret)
+        cached_secrets.insert(workspace_id.to_string(), key.clone());
+        Ok(key)
     }
 
     fn key_path(&self, workspace_id: &str) -> PathBuf {
-        self.base_dir.join(format!("key-{}.text", workspace_id))
+        // Hash workspace ID just for consistent naming
+        let digest = md5::compute(workspace_id);
+        let name = format!("{:x}", digest);
+        self.base_dir.join(format!("{}.enc.json", name))
     }
 }

@@ -11,6 +11,9 @@ pub enum Error {
 
     #[error(transparent)]
     SyncError(#[from] yaak_sync::error::Error),
+    
+    #[error(transparent)]
+    CryptoError(#[from] yaak_crypto::error::Error),
 
     #[error(transparent)]
     GitError(#[from] yaak_git::error::Error),

@@ -618,10 +618,7 @@ impl PluginManager {
             _ => None,
         });
 
-        match value {
-            None => Err(RenderError(format!("Template function not found {fn_name}"))),
-            Some(v) => Ok(v),
-        }
+        Ok(value.unwrap_or_default())
     }
 
     pub async fn import_data(

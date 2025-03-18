@@ -17,12 +17,15 @@ pub enum Error {
 
     #[error("No workspace encryption key for {0}")]
     MissingWorkspaceKey(String),
-    
+
     #[error("Invalid encrypted data")]
     InvalidEncryptedData,
     
-    #[error("Invalid encryption version {0}")]
-    InvalidEncryptionVersion(u8),
+    #[error("Invalid encryption key")]
+    InvalidEncryptionKey,
+    
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
 
     #[error("Generic crypto error: {0}")]
     GenericError(String),

@@ -21,6 +21,7 @@ use std::{fs, panic};
 use tauri::{AppHandle, Emitter, RunEvent, State, WebviewWindow};
 use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
@@ -28,6 +29,7 @@ use tokio::fs::read_to_string;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use yaak_common::window::WorkspaceWindowTrait;
+use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
 use yaak_models::models::{
@@ -127,6 +129,22 @@ async fn cmd_template_tokens_to_string<R: Runtime>(
     let cb = PluginTemplateCallback::new(&app_handle, &window.context(), RenderPurpose::Preview);
     let new_tokens = transform_args(tokens, &cb).await?;
     Ok(new_tokens.to_string())
+}
+
+#[tauri::command]
+async fn cmd_show_workspace_key<R: Runtime>(
+    window: WebviewWindow<R>,
+    workspace_id: &str,
+    encryption_manager: State<'_, Mutex<EncryptionManager>>,
+) -> YaakResult<()> {
+    let mgr = &*encryption_manager.lock().await;
+    let key = mgr.reveal_workspace_key(workspace_id).await?;
+    window
+        .dialog()
+        .message(format!("Your workspace key is \n\n{}", key))
+        .kind(MessageDialogKind::Info)
+        .show(|_v| {});
+    Ok(())
 }
 
 #[tauri::command]
@@ -1871,8 +1889,8 @@ pub fn run() {
             cmd_get_environment,
             cmd_get_folder,
             cmd_get_grpc_request,
-            cmd_get_http_authentication_summaries,
             cmd_get_http_authentication_config,
+            cmd_get_http_authentication_summaries,
             cmd_get_http_request,
             cmd_get_key_value,
             cmd_get_settings,
@@ -1890,9 +1908,9 @@ pub fn run() {
             cmd_list_grpc_connections,
             cmd_list_grpc_events,
             cmd_list_grpc_requests,
-            cmd_list_key_values,
             cmd_list_http_requests,
             cmd_list_http_responses,
+            cmd_list_key_values,
             cmd_list_plugins,
             cmd_list_workspaces,
             cmd_metadata,
@@ -1907,6 +1925,7 @@ pub fn run() {
             cmd_send_http_request,
             cmd_set_key_value,
             cmd_set_update_mode,
+            cmd_show_workspace_key,
             cmd_template_functions,
             cmd_template_tokens_to_string,
             cmd_uninstall_plugin,

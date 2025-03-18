@@ -1,6 +1,5 @@
 use crate::error::Result;
 use crate::TemplateCallback;
-use log::debug;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use ts_rs::TS;
@@ -130,8 +129,6 @@ pub async fn transform_args<T: TemplateCallback>(tokens: Tokens, cb: &T) -> Resu
             _ => t.clone(),
         });
     }
-
-    debug!("Transformed tokens {new_tokens:?}");
 
     Ok(new_tokens)
 }

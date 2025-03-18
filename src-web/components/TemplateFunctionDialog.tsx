@@ -5,10 +5,12 @@ import { useMemo, useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateTokensToString } from '../hooks/useTemplateTokensToString';
+import { useToggle } from '../hooks/useToggle';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
+import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
-import { VStack } from './core/Stacks';
+import { HStack, VStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 
 interface Props {
@@ -19,7 +21,12 @@ interface Props {
 }
 
 export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, onChange }: Props) {
+  const [showSecretsInPreview, togglePreviewLocked] = useToggle(false);
   const [argValues, setArgValues] = useState<Record<string, string | boolean>>(() => {
+    if (templateFunction.name === 'secure') {
+      return {};
+    }
+
     const initial: Record<string, string> = {};
     const initialArgs =
       initialTokens.tokens[0]?.type === 'tag' && initialTokens.tokens[0]?.val.type === 'fn'
@@ -76,21 +83,42 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
     hide();
   };
 
-  const debouncedTagText = useDebouncedValue(tagText.data ?? '', 500);
+  const debouncedTagText = useDebouncedValue(tagText.data ?? '', 400);
   const rendered = useRenderTemplate(debouncedTagText);
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
+  const dataContainsSecrets = useMemo(() => {
+    for (const value of Object.values(argValues)) {
+      if (typeof value === 'string' && value && rendered.data?.includes(value)) {
+        return true;
+      }
+    }
+    return false;
+    // Only update this on rendered data change to keep secrets hidden on input change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rendered.data]);
 
   return (
     <VStack className="pb-3" space={4}>
-      <h1 className="font-mono !text-base">{templateFunction.name}(…)</h1>
       <DynamicForm
         inputs={templateFunction.args}
         data={argValues}
         onChange={setArgValues}
         stateKey={`template_function.${templateFunction.name}`}
+        autocompleteVariables
+        autocompleteFunctions
       />
       <VStack className="w-full" space={1}>
-        <div className="text-sm text-text-subtle">Preview</div>
+        <HStack space={0.5}>
+          <div className="text-sm text-text-subtle">Rendered Preview</div>
+          <IconButton
+            size="xs"
+            iconSize="sm"
+            icon={showSecretsInPreview ? 'lock' : 'lock_open'}
+            title={showSecretsInPreview ? 'Show preview' : 'Hide preview'}
+            onClick={togglePreviewLocked}
+            className={classNames('ml-auto text-text-subtlest', !dataContainsSecrets && 'invisible')}
+          />
+        </HStack>
         {rendered.error || tagText.error ? (
           <Banner color="danger">{`${rendered.error || tagText.error}`}</Banner>
         ) : (
@@ -100,12 +128,18 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
               tooLarge && 'italic text-danger',
             )}
           >
-            {tooLarge ? 'too large to preview' : rendered.data || <>&nbsp;</>}
+            {dataContainsSecrets && !showSecretsInPreview ? (
+              <span className="italic text-text-subtle">------ sensitive values hidden ------</span>
+            ) : tooLarge ? (
+              'too large to preview'
+            ) : (
+              rendered.data || <>&nbsp;</>
+            )}
           </InlineCode>
         )}
       </VStack>
       <Button color="primary" onClick={handleDone}>
-        Done
+        Save
       </Button>
     </VStack>
   );

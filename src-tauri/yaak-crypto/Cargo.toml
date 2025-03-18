@@ -6,11 +6,15 @@ publish = false
 
 [dependencies]
 aes-gcm = { version = "0.10.3", features = ["std"] }
+md5 = "0.7.0"
+base64 = "0.22.1"
 base85 = "2.0.0"
+base32 = "0.5.1"
 keyring = { version = "4.0.0-alpha.1", features = ["vendored"] }
 log = "0.4.26"
 tauri = { workspace = true }
 thiserror = "2.0.12"
 tokio = { version = "1.43.0", default-features = false, features = ["macros", "test-util"] }
 yaak-models = { workspace = true }
-env_logger = "0.11.7"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["raw_value"] }

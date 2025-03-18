@@ -33,6 +33,7 @@ import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
+import { InlineCode } from '../InlineCode';
 import { HStack } from '../Stacks';
 import './Editor.css';
 import {
@@ -268,8 +269,8 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       showDialog({
         id: 'template-function',
         size: 'sm',
-        title: 'Configure Function',
-        description: fn.description,
+        title: <InlineCode>{fn.name}(…)</InlineCode>,
+          description: fn.description,
         render: ({ hide }) => (
           <TemplateFunctionDialog
             templateFunction={fn}
