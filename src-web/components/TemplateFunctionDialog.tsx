@@ -88,10 +88,11 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
   const dataContainsSecrets = useMemo(() => {
     for (const [name, value] of Object.entries(argValues)) {
-      const isPassword = templateFunction.args.some(
-        (a) => a.type === 'text' && a.password && a.name === name,
-      );
-      if (isPassword && typeof value === 'string' && value && rendered.data?.includes(value)) {
+      const arg = templateFunction.args.find((a) => 'name' in a && a.name === name);
+      const isTextPassword = arg?.type === 'text' && arg.password;
+      const isSecureText = arg?.type === 'secure_text';
+      const isSecret = isTextPassword || isSecureText;
+      if (isSecret && typeof value === 'string' && value && rendered.data?.includes(value)) {
         return true;
       }
     }

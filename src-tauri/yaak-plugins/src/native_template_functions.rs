@@ -4,7 +4,6 @@ use crate::events::{
 };
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use log::debug;
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Mutex;
@@ -55,7 +54,6 @@ pub(crate) async fn template_function_secure_run<R: Runtime>(
                 Some(v) => v,
             };
 
-            debug!("Decrypting arg value={value}");
             let value = BASE64_STANDARD.decode(&value).unwrap();
             let crypto_manager = &*app_handle.state::<Mutex<EncryptionManager>>();
             let crypto_manager = crypto_manager.lock().await;
@@ -64,7 +62,6 @@ pub(crate) async fn template_function_secure_run<R: Runtime>(
                 .await
                 .map_err(|e| RenderError(e.to_string()))?;
             let r = String::from_utf8(r).map_err(|e| RenderError(e.to_string()))?;
-            debug!("Decrypted arg value={r}");
             Ok(r)
         }
         _ => Err(RenderError("workspace_id missing from window context".to_string())),
@@ -86,7 +83,6 @@ pub(crate) async fn template_function_secure_transform_arg<R: Runtime>(
             workspace_id: Some(wid),
             ..
         } => {
-            debug!("Encrypting arg {arg_name}={arg_value}");
             if arg_value.is_empty() {
                 return Ok("".to_string())
             }
@@ -103,7 +99,6 @@ pub(crate) async fn template_function_secure_transform_arg<R: Runtime>(
                 .await
                 .map_err(|e| RenderError(e.to_string()))?;
             let r = BASE64_STANDARD.encode(r);
-            debug!("Encrypted arg {arg_name}={r}");
             Ok(format!("YENC_{}", r))
         }
         _ => Err(RenderError("workspace_id missing from window context".to_string())),
