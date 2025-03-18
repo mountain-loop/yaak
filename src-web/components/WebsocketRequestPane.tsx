@@ -301,7 +301,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             <TabContent value={TAB_MESSAGE}>
               <Editor
                 forceUpdateKey={forceUpdateKey}
-                useTemplating
+                autocompleteFunctions
                 autocompleteVariables
                 placeholder="..."
                 heightMode={fullHeight ? 'full' : 'auto'}

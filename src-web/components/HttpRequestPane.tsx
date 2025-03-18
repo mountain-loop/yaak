@@ -411,7 +411,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
               {activeRequest.bodyType === BODY_TYPE_JSON ? (
                 <Editor
                   forceUpdateKey={forceUpdateKey}
-                  useTemplating
+                  autocompleteFunctions
                   autocompleteVariables
                   placeholder="..."
                   heightMode={fullHeight ? 'full' : 'auto'}
@@ -423,7 +423,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
               ) : activeRequest.bodyType === BODY_TYPE_XML ? (
                 <Editor
                   forceUpdateKey={forceUpdateKey}
-                  useTemplating
+                  autocompleteFunctions
                   autocompleteVariables
                   placeholder="..."
                   heightMode={fullHeight ? 'full' : 'auto'}
@@ -462,7 +462,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
               ) : typeof activeRequest.bodyType === 'string' ? (
                 <Editor
                   forceUpdateKey={forceUpdateKey}
-                  useTemplating
+                  autocompleteFunctions
                   autocompleteVariables
                   language={languageFromContentType(contentType)}
                   placeholder="..."

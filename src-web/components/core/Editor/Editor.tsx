@@ -55,36 +55,36 @@ const keymapExtensions: Record<EditorKeymap, Extension> = {
 };
 
 export interface EditorProps {
-  id?: string;
-  readOnly?: boolean;
-  disabled?: boolean;
-  type?: 'text' | 'password';
-  className?: string;
-  heightMode?: 'auto' | 'full';
-  language?: EditorLanguage | 'pairs' | 'url';
-  forceUpdateKey?: string | number;
+  actions?: ReactNode;
   autoFocus?: boolean;
   autoSelect?: boolean;
+  autocomplete?: GenericCompletionConfig;
+  autocompleteFunctions?: boolean;
+  autocompleteVariables?: boolean;
+  className?: string;
   defaultValue?: string | null;
-  placeholder?: string;
-  tooltipContainer?: HTMLElement;
-  useTemplating?: boolean;
+  disableTabIndent?: boolean;
+  disabled?: boolean;
+  extraExtensions?: Extension[];
+  forceUpdateKey?: string | number;
+  format?: (v: string) => Promise<string>;
+  heightMode?: 'auto' | 'full';
+  hideGutter?: boolean;
+  id?: string;
+  language?: EditorLanguage | 'pairs' | 'url';
+  onBlur?: () => void;
   onChange?: (value: string) => void;
+  onFocus?: () => void;
+  onKeyDown?: (e: KeyboardEvent) => void;
   onPaste?: (value: string) => void;
   onPasteOverwrite?: (e: ClipboardEvent, value: string) => void;
-  onFocus?: () => void;
-  onBlur?: () => void;
-  onKeyDown?: (e: KeyboardEvent) => void;
+  placeholder?: string;
+  readOnly?: boolean;
   singleLine?: boolean;
-  wrapLines?: boolean;
-  disableTabIndent?: boolean;
-  format?: (v: string) => Promise<string>;
-  autocomplete?: GenericCompletionConfig;
-  autocompleteVariables?: boolean;
-  extraExtensions?: Extension[];
-  actions?: ReactNode;
-  hideGutter?: boolean;
   stateKey: string | null;
+  tooltipContainer?: HTMLElement;
+  type?: 'text' | 'password';
+  wrapLines?: boolean;
 }
 
 const stateFields = { history: historyField, folds: foldState };
@@ -94,34 +94,34 @@ const emptyExtension: Extension = [];
 
 export const Editor = forwardRef<EditorView | undefined, EditorProps>(function Editor(
   {
-    readOnly,
-    type,
-    heightMode,
-    language,
+    actions,
     autoFocus,
     autoSelect,
-    placeholder,
-    useTemplating,
+    autocomplete,
+    autocompleteFunctions,
+    autocompleteVariables,
+    className,
     defaultValue,
+    disableTabIndent,
+    disabled,
+    extraExtensions,
     forceUpdateKey,
+    format,
+    heightMode,
+    hideGutter,
+    language,
+    onBlur,
     onChange,
+    onFocus,
+    onKeyDown,
     onPaste,
     onPasteOverwrite,
-    onFocus,
-    onBlur,
-    onKeyDown,
-    className,
-    disabled,
+    placeholder,
+    readOnly,
     singleLine,
-    format,
-    autocomplete,
-    extraExtensions,
-    autocompleteVariables,
-    actions,
-    wrapLines,
-    disableTabIndent,
-    hideGutter,
     stateKey,
+    type,
+    wrapLines,
   }: EditorProps,
   ref,
 ) {
@@ -129,6 +129,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   const allEnvironmentVariables = useActiveEnvironmentVariables();
   const environmentVariables = autocompleteVariables ? allEnvironmentVariables : emptyVariables;
+  const useTemplating = !!(autocompleteFunctions || autocompleteVariables || autocomplete);
 
   if (settings && wrapLines === undefined) {
     wrapLines = settings.editorSoftWrap;
@@ -340,16 +341,19 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     [focusParamValue],
   );
 
-  const completionOptions = useTemplateFunctionCompletionOptions(onClickFunction);
+  const completionOptions = useTemplateFunctionCompletionOptions(
+    onClickFunction,
+    !!autocompleteFunctions,
+  );
 
   // Update the language extension when the language changes
   useEffect(() => {
     if (cm.current === null) return;
     const { view, languageCompartment } = cm.current;
     const ext = getLanguageExtension({
+      useTemplating,
       language,
       environmentVariables,
-      useTemplating,
       autocomplete,
       completionOptions,
       onClickVariable,
@@ -360,13 +364,13 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   }, [
     language,
     autocomplete,
-    useTemplating,
     environmentVariables,
     onClickFunction,
     onClickVariable,
     onClickMissingVariable,
     onClickPathParameter,
     completionOptions,
+    useTemplating,
   ]);
 
   // Initialize the editor when ref mounts
@@ -381,8 +385,8 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       try {
         const languageCompartment = new Compartment();
         const langExt = getLanguageExtension({
-          language,
           useTemplating,
+          language,
           completionOptions,
           autocomplete,
           environmentVariables,

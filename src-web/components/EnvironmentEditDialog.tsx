@@ -116,7 +116,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
 };
 
 const EnvironmentEditor = function ({
-  environment,
+  environment: activeEnvironment,
   className,
 }: {
   environment: Environment;
@@ -127,8 +127,8 @@ const EnvironmentEditor = function ({
     key: 'environmentValueVisibility',
     fallback: true,
   });
-  const { subEnvironments } = useEnvironments();
-  const updateEnvironment = useUpdateEnvironment(environment?.id ?? null);
+  const { allEnvironments } = useEnvironments();
+  const updateEnvironment = useUpdateEnvironment(activeEnvironment?.id ?? null);
   const handleChange = useCallback<PairEditorProps['onChange']>(
     (variables) => updateEnvironment.mutate({ variables }),
     [updateEnvironment],
@@ -136,26 +136,28 @@ const EnvironmentEditor = function ({
 
   // Gather a list of env names from other environments, to help the user get them aligned
   const nameAutocomplete = useMemo<GenericCompletionConfig>(() => {
-    const allVariableNames =
-      environment == null
-        ? [] // Nothing to autocomplete if we're in the base environment
-        : subEnvironments
-            .filter((e) => e.environmentId != null)
-            .flatMap((e) => e.variables.map((v) => v.name));
+    const options: GenericCompletionOption[] = [];
+    const isBaseEnv = activeEnvironment.environmentId == null;
+    if (isBaseEnv) {
+      return { options };
+    }
 
-    // Filter out empty strings and variables that already exist
-    const variableNames = allVariableNames.filter(
-      (name) => name != '' && !environment.variables.find((v) => v.name === name),
-    );
-    const uniqueVariableNames = [...new Set(variableNames)];
-    const options = uniqueVariableNames.map(
-      (name): GenericCompletionOption => ({
+    const allVariables = allEnvironments.flatMap((e) => e?.variables);
+    const allVariableNames = new Set(allVariables.map((v) => v?.name));
+    for (const name of allVariableNames) {
+      const containingEnvs = allEnvironments.filter((e) =>
+        e.variables.some((v) => v.name === name),
+      );
+      const isAlreadyInActive = containingEnvs.find((e) => e.id === activeEnvironment.id);
+      if (isAlreadyInActive) continue;
+      options.push({
         label: name,
         type: 'constant',
-      }),
-    );
+        detail: containingEnvs.map((e) => e.name).join(', '),
+      });
+    }
     return { options };
-  }, [subEnvironments, environment]);
+  }, [activeEnvironment.environmentId, activeEnvironment.id, allEnvironments]);
 
   const validateName = useCallback((name: string) => {
     // Empty just means the variable doesn't have a name yet, and is unusable
@@ -167,7 +169,7 @@ const EnvironmentEditor = function ({
     <VStack space={4} className={classNames(className, 'pl-4')}>
       <HStack space={2} className="justify-between">
         <Heading className="w-full flex items-center gap-1">
-          <div>{environment?.name}</div>
+          <div>{activeEnvironment?.name}</div>
           <IconButton
             size="sm"
             icon={valueVisibility.value ? 'eye' : 'eye_closed'}
@@ -183,15 +185,15 @@ const EnvironmentEditor = function ({
           allowMultilineValues
           preferenceName="environment"
           nameAutocomplete={nameAutocomplete}
-          nameAutocompleteVariables={false}
           namePlaceholder="VAR_NAME"
           nameValidate={validateName}
           valueType={valueVisibility.value ? 'text' : 'password'}
-          valueAutocompleteVariables={true}
-          forceUpdateKey={environment.id}
-          pairs={environment.variables}
+          valueAutocompleteVariables
+          valueAutocompleteFunctions
+          forceUpdateKey={activeEnvironment.id}
+          pairs={activeEnvironment.variables}
           onChange={handleChange}
-          stateKey={`environment.${environment.id}`}
+          stateKey={`environment.${activeEnvironment.id}`}
         />
       </div>
     </VStack>

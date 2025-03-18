@@ -36,7 +36,7 @@ interface Props<T> {
   inputs: (FormInput | FormInputTemplateFunction)[] | undefined | null;
   onChange: (value: T) => void;
   data: T;
-  useTemplating?: boolean;
+  autocompleteFunctions?: boolean;
   autocompleteVariables?: boolean;
   stateKey: string;
   disabled?: boolean;
@@ -46,8 +46,8 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
   inputs,
   data,
   onChange,
-  useTemplating,
   autocompleteVariables,
+  autocompleteFunctions,
   stateKey,
   disabled,
 }: Props<T>) {
@@ -64,7 +64,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
       inputs={inputs}
       setDataAttr={setDataAttr}
       stateKey={stateKey}
-      useTemplating={useTemplating}
+      autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
       data={data}
     />
@@ -73,13 +73,16 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
 
 function FormInputs<T extends Record<string, JsonPrimitive>>({
   inputs,
+  autocompleteFunctions,
   autocompleteVariables,
   stateKey,
-  useTemplating,
   setDataAttr,
   data,
   disabled,
-}: Pick<Props<T>, 'inputs' | 'useTemplating' | 'autocompleteVariables' | 'stateKey' | 'data'> & {
+}: Pick<
+  Props<T>,
+  'inputs' | 'autocompleteFunctions' | 'autocompleteVariables' | 'stateKey' | 'data'
+> & {
   setDataAttr: (name: string, value: JsonPrimitive) => void;
   disabled?: boolean;
 }) {
@@ -114,7 +117,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 key={i}
                 stateKey={stateKey}
                 arg={input}
-                useTemplating={useTemplating || false}
+                autocompleteFunctions={autocompleteFunctions || false}
                 autocompleteVariables={autocompleteVariables || false}
                 onChange={(v) => setDataAttr(input.name, v)}
                 value={
@@ -140,7 +143,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 key={i}
                 stateKey={stateKey}
                 arg={input}
-                useTemplating={useTemplating || false}
+                autocompleteFunctions={autocompleteFunctions || false}
                 autocompleteVariables={autocompleteVariables || false}
                 onChange={(v) => setDataAttr(input.name, v)}
                 value={
@@ -189,7 +192,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                       inputs={input.inputs}
                       setDataAttr={setDataAttr}
                       stateKey={stateKey}
-                      useTemplating={useTemplating}
+                      autocompleteFunctions={autocompleteFunctions || false}
                       autocompleteVariables={autocompleteVariables}
                     />
                   </div>
@@ -209,7 +212,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                   inputs={input.inputs}
                   setDataAttr={setDataAttr}
                   stateKey={stateKey}
-                  useTemplating={useTemplating}
+                  autocompleteFunctions={autocompleteFunctions || false}
                   autocompleteVariables={autocompleteVariables}
                 />
               </Banner>
@@ -226,14 +229,14 @@ function TextArg({
   arg,
   onChange,
   value,
-  useTemplating,
+  autocompleteFunctions,
   autocompleteVariables,
   stateKey,
 }: {
   arg: FormInputText;
   value: string;
   onChange: (v: string) => void;
-  useTemplating: boolean;
+  autocompleteFunctions: boolean;
   autocompleteVariables: boolean;
   stateKey: string;
 }) {
@@ -251,7 +254,7 @@ function TextArg({
       hideLabel={arg.label == null}
       placeholder={arg.placeholder ?? undefined}
       autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
-      useTemplating={useTemplating}
+      autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
       stateKey={stateKey}
       forceUpdateKey={stateKey}
@@ -291,14 +294,14 @@ function EditorArg({
   arg,
   onChange,
   value,
-  useTemplating,
+  autocompleteFunctions,
   autocompleteVariables,
   stateKey,
 }: {
   arg: FormInputEditor;
   value: string;
   onChange: (v: string) => void;
-  useTemplating: boolean;
+  autocompleteFunctions: boolean;
   autocompleteVariables: boolean;
   stateKey: string;
 }) {
@@ -332,7 +335,7 @@ function EditorArg({
         heightMode="auto"
         defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
         placeholder={arg.placeholder ?? undefined}
-        useTemplating={useTemplating}
+        autocompleteFunctions={autocompleteFunctions}
         autocompleteVariables={autocompleteVariables}
         stateKey={stateKey}
         forceUpdateKey={forceUpdateKey}

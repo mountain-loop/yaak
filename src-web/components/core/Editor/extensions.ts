@@ -91,8 +91,8 @@ const syntaxExtensions: Record<NonNullable<EditorProps['language']>, LanguageSup
 const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ['json', 'javascript', 'graphql'];
 
 export function getLanguageExtension({
+  useTemplating,
   language = 'text',
-  useTemplating = false,
   environmentVariables,
   autocomplete,
   onClickVariable,
@@ -100,12 +100,13 @@ export function getLanguageExtension({
   onClickPathParameter,
   completionOptions,
 }: {
+  useTemplating: boolean;
   environmentVariables: EnvironmentVariable[];
   onClickVariable: (option: EnvironmentVariable, tagValue: string, startPos: number) => void;
   onClickMissingVariable: (name: string, tagValue: string, startPos: number) => void;
   onClickPathParameter: (name: string) => void;
   completionOptions: TwigCompletionOption[];
-} & Pick<EditorProps, 'language' | 'useTemplating' | 'autocomplete'>) {
+} & Pick<EditorProps, 'language' | 'autocomplete'>) {
   const extraExtensions: Extension[] = [];
 
   if (language === 'url') {

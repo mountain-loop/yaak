@@ -68,12 +68,12 @@ export const UrlBar = memo(function UrlBar({
     <form onSubmit={handleSubmit} className={classNames('x-theme-urlBar', className)}>
       <Input
         ref={inputRef}
+        autocompleteFunctions
         autocompleteVariables
         stateKey={stateKey}
         size="sm"
         wrapLines={isFocused}
         hideLabel
-        useTemplating
         language="url"
         className="px-1.5 py-0.5"
         label="Enter URL"
