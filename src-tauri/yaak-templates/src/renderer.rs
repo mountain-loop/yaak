@@ -1,6 +1,6 @@
 use crate::error::Error::{RenderStackExceededError, VariableNotFound};
 use crate::error::Result;
-use crate::{FnArg, Parser, Token, Tokens, Val};
+use crate::{Parser, Token, Tokens, Val};
 use log::warn;
 use serde_json::json;
 use std::collections::HashMap;
@@ -44,14 +44,14 @@ pub async fn render_json_value_raw<T: TemplateCallback>(
     Ok(v)
 }
 
-async fn parse_and_render_with_depth<T: TemplateCallback>(
+async fn parse_and_render_at_depth<T: TemplateCallback>(
     template: &str,
     vars: &HashMap<String, String>,
     cb: &T,
     depth: usize,
 ) -> Result<String> {
     let mut p = Parser::new(template);
-    let tokens = p.parse();
+    let tokens = p.parse()?;
     render(tokens, vars, cb, depth + 1).await
 }
 
@@ -60,7 +60,7 @@ pub async fn parse_and_render<T: TemplateCallback>(
     vars: &HashMap<String, String>,
     cb: &T,
 ) -> Result<String> {
-    parse_and_render_with_depth(template, vars, cb, 1).await
+    parse_and_render_at_depth(template, vars, cb, 1).await
 }
 
 pub async fn render<T: TemplateCallback>(
@@ -79,7 +79,7 @@ pub async fn render<T: TemplateCallback>(
     for t in tokens.tokens {
         match t {
             Token::Raw { text } => doc_str.push(text),
-            Token::Tag { val } => doc_str.push(render_tag(val, &vars, cb, depth).await?),
+            Token::Tag { val } => doc_str.push(render_value(val, &vars, cb, depth).await?),
             Token::Eof => {}
         }
     }
@@ -87,44 +87,31 @@ pub async fn render<T: TemplateCallback>(
     Ok(doc_str.join(""))
 }
 
-async fn render_tag<T: TemplateCallback>(
+async fn render_value<T: TemplateCallback>(
     val: Val,
     vars: &HashMap<String, String>,
     cb: &T,
     depth: usize,
 ) -> Result<String> {
     let v = match val {
-        Val::Str { text } => text.into(),
+        Val::Str { text } => {
+            let r = Box::pin(parse_and_render_at_depth(&text, vars, cb, depth)).await?;
+            r.to_string()
+        }
         Val::Var { name } => match vars.get(name.as_str()) {
             Some(v) => {
-                let r = Box::pin(parse_and_render_with_depth(v, vars, cb, depth)).await?;
+                let r = Box::pin(parse_and_render_at_depth(v, vars, cb, depth)).await?;
                 r.to_string()
             }
             None => return Err(VariableNotFound(name)),
         },
         Val::Bool { value } => value.to_string(),
         Val::Fn { name, args } => {
-            let empty = "".to_string();
+            // let empty = "".to_string();
             let mut resolved_args: HashMap<String, String> = HashMap::new();
             for a in args {
-                let (k, v) = match a {
-                    FnArg {
-                        name,
-                        value: Val::Str { text },
-                    } => (name.to_string(), text.to_string()),
-                    FnArg {
-                        name,
-                        value: Val::Var { name: var_name },
-                    } => (
-                        name.to_string(),
-                        vars.get(var_name.as_str()).unwrap_or(&empty).to_string(),
-                    ),
-                    FnArg { name, value: val } => {
-                        let r = Box::pin(render_tag(val.clone(), vars, cb, depth)).await?;
-                        (name.to_string(), r)
-                    }
-                };
-                resolved_args.insert(k, v);
+                let v = Box::pin(render_value(a.value, vars, cb, depth)).await?;
+                resolved_args.insert(a.name, v);
             }
             match cb.run(name.as_str(), resolved_args.clone()).await {
                 Ok(s) => s,
@@ -254,6 +241,67 @@ mod parse_and_render_tests {
     }
 
     #[tokio::test]
+    async fn render_fn_arg() -> Result<()> {
+        let vars = HashMap::new();
+        let template = r#"${[ upper(foo='bar') ]}"#;
+        let result = r#"BAR"#;
+        struct CB {}
+        impl TemplateCallback for CB {
+            async fn run(&self, fn_name: &str, args: HashMap<String, String>) -> Result<String> {
+                Ok(match fn_name {
+                    "secret" => "abc".to_string(),
+                    "upper" => args["foo"].to_string().to_uppercase(),
+                    _ => "".to_string(),
+                })
+            }
+        }
+
+        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn render_fn_b64_arg_template() -> Result<()> {
+        let mut vars = HashMap::new();
+        vars.insert("foo".to_string(), "bar".to_string());
+        let template = r#"${[ upper(foo=b64'Zm9vICdiYXInIGJheg') ]}"#;
+        let result = r#"FOO 'BAR' BAZ"#;
+        struct CB {}
+        impl TemplateCallback for CB {
+            async fn run(&self, fn_name: &str, args: HashMap<String, String>) -> Result<String> {
+                Ok(match fn_name {
+                    "upper" => args["foo"].to_string().to_uppercase(),
+                    _ => "".to_string(),
+                })
+            }
+        }
+
+        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn render_fn_arg_template() -> Result<()> {
+        let mut vars = HashMap::new();
+        vars.insert("foo".to_string(), "bar".to_string());
+        let template = r#"${[ upper(foo='${[ foo ]}') ]}"#;
+        let result = r#"BAR"#;
+        struct CB {}
+        impl TemplateCallback for CB {
+            async fn run(&self, fn_name: &str, args: HashMap<String, String>) -> Result<String> {
+                Ok(match fn_name {
+                    "secret" => "abc".to_string(),
+                    "upper" => args["foo"].to_string().to_uppercase(),
+                    _ => "".to_string(),
+                })
+            }
+        }
+
+        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn render_nested_fn() -> Result<()> {
         let vars = HashMap::new();
         let template = r#"${[ upper(foo=secret()) ]}"#;
@@ -277,7 +325,6 @@ mod parse_and_render_tests {
     async fn render_fn_err() -> Result<()> {
         let vars = HashMap::new();
         let template = r#"${[ error() ]}"#;
-        let result = r#""#;
 
         struct CB {}
         impl TemplateCallback for CB {
@@ -286,7 +333,10 @@ mod parse_and_render_tests {
             }
         }
 
-        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        assert_eq!(
+            parse_and_render(template, &vars, &CB {}).await,
+            Err(RenderError("Failed to do it!".to_string()))
+        );
         Ok(())
     }
 }

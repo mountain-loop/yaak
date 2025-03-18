@@ -266,7 +266,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
       const initialTokens = await parseTemplate(tagValue);
       showDialog({
-        id: 'template-function',
+        id: 'template-function-'+Math.random(), // Allow multiple at once
         size: 'sm',
         title: 'Configure Function',
         description: fn.description,

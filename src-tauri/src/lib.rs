@@ -114,8 +114,8 @@ async fn cmd_metadata(app_handle: AppHandle) -> Result<AppMetaData, ()> {
 }
 
 #[tauri::command]
-async fn cmd_parse_template(template: &str) -> Result<Tokens, String> {
-    Ok(Parser::new(template).parse())
+async fn cmd_parse_template(template: &str) -> YaakResult<Tokens> {
+    Ok(Parser::new(template).parse()?)
 }
 
 #[tauri::command]
