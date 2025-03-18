@@ -1,5 +1,8 @@
+use crate::error::Error::RenderError;
 use crate::error::Result;
 use crate::TemplateCallback;
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use ts_rs::TS;
@@ -45,7 +48,13 @@ pub enum Val {
 impl Display for Val {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            Val::Str { text } => format!("'{}'", text.to_string().replace("'", "\'")),
+            Val::Str { text } => {
+                if text.chars().all(|c| c.is_alphanumeric() || c == ' ' || c == '_' || c == '_') {
+                    format!("'{}'", text)
+                } else {
+                    format!("b64'{}'", BASE64_URL_SAFE_NO_PAD.encode(text))
+                }
+            }
             Val::Var { name } => name.to_string(),
             Val::Bool { value } => value.to_string(),
             Val::Fn { name, args } => {
@@ -157,13 +166,13 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Tokens {
+    pub fn parse(&mut self) -> Result<Tokens> {
         let start_pos = self.pos;
 
         while self.pos < self.chars.len() {
             if self.match_str("${[") {
                 let start_curr = self.pos;
-                if let Some(t) = self.parse_tag() {
+                if let Some(t) = self.parse_tag()? {
                     self.push_token(t);
                 } else {
                     self.pos = start_curr;
@@ -180,29 +189,29 @@ impl Parser {
         }
 
         self.push_token(Token::Eof);
-        Tokens {
+        Ok(Tokens {
             tokens: self.tokens.clone(),
-        }
+        })
     }
 
-    fn parse_tag(&mut self) -> Option<Token> {
+    fn parse_tag(&mut self) -> Result<Option<Token>> {
         // Parse up to first identifier
         //    ${[ my_var...
         self.skip_whitespace();
 
-        let val = match self.parse_value() {
+        let val = match self.parse_value()? {
             Some(v) => v,
-            None => return None,
+            None => return Ok(None),
         };
 
         // Parse to closing tag
         //    ${[ my_var(a, b, c) ]}
         self.skip_whitespace();
         if !self.match_str("]}") {
-            return None;
+            return Ok(None);
         }
 
-        Some(Token::Tag { val })
+        Ok(Some(Token::Tag { val }))
     }
 
     #[allow(dead_code)]
@@ -216,9 +225,11 @@ impl Parser {
         );
     }
 
-    fn parse_value(&mut self) -> Option<Val> {
-        if let Some((name, args)) = self.parse_fn() {
+    fn parse_value(&mut self) -> Result<Option<Val>> {
+        let v = if let Some((name, args)) = self.parse_fn()? {
             Some(Val::Fn { name, args })
+        } else if let Some(v) = self.parse_string()? {
+            Some(Val::Str { text: v })
         } else if let Some(v) = self.parse_ident() {
             if v == "null" {
                 Some(Val::Null)
@@ -229,38 +240,38 @@ impl Parser {
             } else {
                 Some(Val::Var { name: v })
             }
-        } else if let Some(v) = self.parse_string() {
-            Some(Val::Str { text: v })
         } else {
             None
-        }
+        };
+
+        Ok(v)
     }
 
-    fn parse_fn(&mut self) -> Option<(String, Vec<FnArg>)> {
+    fn parse_fn(&mut self) -> Result<Option<(String, Vec<FnArg>)>> {
         let start_pos = self.pos;
 
         let name = match self.parse_fn_name() {
             Some(v) => v,
             None => {
                 self.pos = start_pos;
-                return None;
+                return Ok(None);
             }
         };
 
-        let args = match self.parse_fn_args() {
+        let args = match self.parse_fn_args()? {
             Some(args) => args,
             None => {
                 self.pos = start_pos;
-                return None;
+                return Ok(None);
             }
         };
 
-        Some((name, args))
+        Ok(Some((name, args)))
     }
 
-    fn parse_fn_args(&mut self) -> Option<Vec<FnArg>> {
+    fn parse_fn_args(&mut self) -> Result<Option<Vec<FnArg>>> {
         if !self.match_str("(") {
-            return None;
+            return Ok(None);
         }
 
         let start_pos = self.pos;
@@ -270,7 +281,7 @@ impl Parser {
         // Fn closed immediately
         self.skip_whitespace();
         if self.match_str(")") {
-            return Some(args);
+            return Ok(Some(args));
         }
 
         while self.pos < self.chars.len() {
@@ -280,7 +291,7 @@ impl Parser {
             self.skip_whitespace();
             self.match_str("=");
             self.skip_whitespace();
-            let value = self.parse_value();
+            let value = self.parse_value()?;
             self.skip_whitespace();
 
             if let (Some(name), Some(value)) = (name.clone(), value.clone()) {
@@ -288,7 +299,7 @@ impl Parser {
             } else {
                 // Didn't find valid thing, so return
                 self.pos = start_pos;
-                return None;
+                return Ok(None);
             }
 
             if self.match_str(")") {
@@ -300,7 +311,7 @@ impl Parser {
             // If we don't find a comma, that's bad
             if !args.is_empty() && !self.match_str(",") {
                 self.pos = start_pos;
-                return None;
+                return Ok(None);
             }
 
             if start_pos == self.pos {
@@ -308,7 +319,7 @@ impl Parser {
             }
         }
 
-        Some(args)
+        Ok(Some(args))
     }
 
     fn parse_ident(&mut self) -> Option<String> {
@@ -368,12 +379,17 @@ impl Parser {
         Some(text)
     }
 
-    fn parse_string(&mut self) -> Option<String> {
+    fn parse_string(&mut self) -> Result<Option<String>> {
         let start_pos = self.pos;
 
         let mut text = String::new();
-        if !self.match_str("'") {
-            return None;
+        let mut is_b64 = false;
+        if self.match_str("b64'") {
+            is_b64 = true;
+        } else if self.match_str("'") {
+            // Nothing
+        } else {
+            return Ok(None);
         }
 
         let mut found_closing = false;
@@ -399,10 +415,21 @@ impl Parser {
 
         if !found_closing {
             self.pos = start_pos;
-            return None;
+            return Ok(None);
         }
 
-        Some(text)
+        let final_text = if is_b64 {
+            let decoded = BASE64_URL_SAFE_NO_PAD
+                .decode(text.clone())
+                .map_err(|_| RenderError(format!("Failed to decode string {text}")))?;
+            let decoded = String::from_utf8(decoded)
+                .map_err(|_| RenderError(format!("Failed to decode utf8 string {text}")))?;
+            decoded
+        } else {
+            text
+        };
+
+        Ok(Some(final_text))
     }
 
     fn skip_whitespace(&mut self) {
@@ -459,14 +486,15 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+    use crate::error::Result;
     use crate::Val::Null;
     use crate::*;
 
     #[test]
-    fn var_simple() {
+    fn var_simple() -> Result<()> {
         let mut p = Parser::new("${[ foo ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Var { name: "foo".into() }
@@ -474,13 +502,14 @@ mod tests {
                 Token::Eof
             ]
         );
+        Ok(())
     }
 
     #[test]
-    fn var_dashes() {
+    fn var_dashes() -> Result<()> {
         let mut p = Parser::new("${[ a-b ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Var { name: "a-b".into() }
@@ -488,13 +517,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn var_underscores() {
+    fn var_underscores() -> Result<()> {
         let mut p = Parser::new("${[ a_b ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Var { name: "a_b".into() }
@@ -502,13 +533,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn var_prefixes() {
+    fn var_prefixes() -> Result<()> {
         let mut p = Parser::new("${[ -a ]}${[ 0a ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Raw {
                     // Shouldn't be parsed, because they're invalid
@@ -517,13 +550,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn var_underscore_prefix() {
+    fn var_underscore_prefix() -> Result<()> {
         let mut p = Parser::new("${[ _a ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Var { name: "_a".into() }
@@ -531,13 +566,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn var_boolean() {
+    fn var_boolean() -> Result<()> {
         let mut p = Parser::new("${[ true ]}${[ false ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Bool { value: true },
@@ -548,13 +585,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn var_multiple_names_invalid() {
+    fn var_multiple_names_invalid() -> Result<()> {
         let mut p = Parser::new("${[ foo bar ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Raw {
                     text: "${[ foo bar ]}".into()
@@ -562,13 +601,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn tag_string() {
+    fn tag_string() -> Result<()> {
         let mut p = Parser::new(r#"${[ 'foo \'bar\' baz' ]}"#);
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Str {
@@ -578,13 +619,33 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn var_surrounded() {
+    fn tag_b64_string() -> Result<()> {
+        let mut p = Parser::new(r#"${[ b64'Zm9vICdiYXInIGJheg' ]}"#);
+        assert_eq!(
+            p.parse()?.tokens,
+            vec![
+                Token::Tag {
+                    val: Val::Str {
+                        text: r#"foo 'bar' baz"#.into()
+                    }
+                },
+                Token::Eof
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn var_surrounded() -> Result<()> {
         let mut p = Parser::new("Hello ${[ foo ]}!");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Raw {
                     text: "Hello ".to_string()
@@ -598,13 +659,15 @@ mod tests {
                 Token::Eof,
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn fn_simple() {
+    fn fn_simple() -> Result<()> {
         let mut p = Parser::new("${[ foo() ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Fn {
@@ -615,13 +678,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn fn_dot_name() {
+    fn fn_dot_name() -> Result<()> {
         let mut p = Parser::new("${[ foo.bar.baz() ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Fn {
@@ -632,13 +697,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn fn_ident_arg() {
+    fn fn_ident_arg() -> Result<()> {
         let mut p = Parser::new("${[ foo(a=bar) ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Fn {
@@ -652,13 +719,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn fn_ident_args() {
+    fn fn_ident_args() -> Result<()> {
         let mut p = Parser::new("${[ foo(a=bar,b = baz, c =qux ) ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Fn {
@@ -682,13 +751,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn fn_mixed_args() {
+    fn fn_mixed_args() -> Result<()> {
         let mut p = Parser::new(r#"${[ foo(aaa=bar,bb='baz \'hi\'', c=qux, z=true ) ]}"#);
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Fn {
@@ -718,13 +789,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn fn_nested() {
+    fn fn_nested() -> Result<()> {
         let mut p = Parser::new("${[ foo(b=bar()) ]}");
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Fn {
@@ -741,13 +814,15 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn fn_nested_args() {
+    fn fn_nested_args() -> Result<()> {
         let mut p = Parser::new(r#"${[ outer(a=inner(a=foo, b='i'), c='o') ]}"#);
         assert_eq!(
-            p.parse().tokens,
+            p.parse()?.tokens,
             vec![
                 Token::Tag {
                     val: Val::Fn {
@@ -779,10 +854,12 @@ mod tests {
                 Token::Eof
             ]
         );
+
+        Ok(())
     }
 
     #[test]
-    fn token_display_var() {
+    fn token_display_var() -> Result<()> {
         assert_eq!(
             Val::Var {
                 name: "foo".to_string()
@@ -790,21 +867,38 @@ mod tests {
             .to_string(),
             "foo"
         );
+
+        Ok(())
     }
 
     #[test]
-    fn token_display_str() {
+    fn token_display_str() -> Result<()> {
+        assert_eq!(
+            Val::Str {
+                text: "Hello You".to_string()
+            }
+            .to_string(),
+            "'Hello You'"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn token_display_complex_str() -> Result<()> {
         assert_eq!(
             Val::Str {
                 text: "Hello 'You'".to_string()
             }
             .to_string(),
-            "'Hello \'You\''"
+            "b64'SGVsbG8gJ1lvdSc'"
         );
+
+        Ok(())
     }
 
     #[test]
-    fn token_null_fn_arg() {
+    fn token_null_fn_arg() -> Result<()> {
         assert_eq!(
             Val::Fn {
                 name: "fn".to_string(),
@@ -824,10 +918,12 @@ mod tests {
             .to_string(),
             r#"fn(a='aaa')"#
         );
+
+        Ok(())
     }
 
     #[test]
-    fn token_display_fn() {
+    fn token_display_fn() -> Result<()> {
         assert_eq!(
             Token::Tag {
                 val: Val::Fn {
@@ -836,7 +932,7 @@ mod tests {
                         FnArg {
                             name: "arg".to_string(),
                             value: Val::Str {
-                                text: "v".to_string()
+                                text: "v 'x'".to_string()
                             }
                         },
                         FnArg {
@@ -849,12 +945,14 @@ mod tests {
                 }
             }
             .to_string(),
-            r#"${[ foo(arg='v', arg2=my_var) ]}"#
+            r#"${[ foo(arg=b64'diAneCc', arg2=my_var) ]}"#
         );
+
+        Ok(())
     }
 
     #[test]
-    fn tokens_display() {
+    fn tokens_display() -> Result<()> {
         assert_eq!(
             Tokens {
                 tokens: vec![
@@ -876,5 +974,7 @@ mod tests {
             .to_string(),
             r#"${[ my_var ]} Some cool text ${[ 'Hello World' ]}"#
         );
+
+        Ok(())
     }
 }

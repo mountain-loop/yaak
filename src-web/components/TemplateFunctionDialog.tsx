@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, onChange }: Props) {
-  const [showSecretsInPreview, togglePreviewLocked] = useToggle(false);
+  const [showSecretsInPreview, toggleShowSecretsInPreview] = useToggle(false);
   const [argValues, setArgValues] = useState<Record<string, string | boolean>>(() => {
     if (templateFunction.name === 'secure') {
       return {};
@@ -87,8 +87,11 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
   const rendered = useRenderTemplate(debouncedTagText);
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
   const dataContainsSecrets = useMemo(() => {
-    for (const value of Object.values(argValues)) {
-      if (typeof value === 'string' && value && rendered.data?.includes(value)) {
+    for (const [name, value] of Object.entries(argValues)) {
+      const isPassword = templateFunction.args.some(
+        (a) => a.type === 'text' && a.password && a.name === name,
+      );
+      if (isPassword && typeof value === 'string' && value && rendered.data?.includes(value)) {
         return true;
       }
     }
@@ -100,12 +103,12 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
   return (
     <VStack className="pb-3" space={4}>
       <DynamicForm
+        autocompleteVariables
+        autocompleteFunctions
         inputs={templateFunction.args}
         data={argValues}
         onChange={setArgValues}
         stateKey={`template_function.${templateFunction.name}`}
-        autocompleteVariables
-        autocompleteFunctions
       />
       <VStack className="w-full" space={1}>
         <HStack space={0.5}>
@@ -115,8 +118,11 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
             iconSize="sm"
             icon={showSecretsInPreview ? 'lock' : 'lock_open'}
             title={showSecretsInPreview ? 'Show preview' : 'Hide preview'}
-            onClick={togglePreviewLocked}
-            className={classNames('ml-auto text-text-subtlest', !dataContainsSecrets && 'invisible')}
+            onClick={toggleShowSecretsInPreview}
+            className={classNames(
+              'ml-auto text-text-subtlest',
+              !dataContainsSecrets && 'invisible',
+            )}
           />
         </HStack>
         {rendered.error || tagText.error ? (
