@@ -439,7 +439,6 @@ pub async fn upsert_workspace_meta<R: Runtime>(
             WorkspaceMetaIden::WorkspaceId,
             WorkspaceMetaIden::CreatedAt,
             WorkspaceMetaIden::UpdatedAt,
-            WorkspaceMetaIden::EncryptedKey,
             WorkspaceMetaIden::SettingSyncDir,
         ])
         .values_panic([
@@ -447,14 +446,12 @@ pub async fn upsert_workspace_meta<R: Runtime>(
             workspace_meta.workspace_id.into(),
             timestamp_for_upsert(update_source, workspace_meta.created_at).into(),
             timestamp_for_upsert(update_source, workspace_meta.updated_at).into(),
-            workspace_meta.encrypted_key.into(),
             workspace_meta.setting_sync_dir.into(),
         ])
         .on_conflict(
             OnConflict::column(GrpcRequestIden::Id)
                 .update_columns([
                     WorkspaceMetaIden::UpdatedAt,
-                    WorkspaceMetaIden::EncryptedKey,
                     WorkspaceMetaIden::SettingSyncDir,
                 ])
                 .to_owned(),
