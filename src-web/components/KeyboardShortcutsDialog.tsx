@@ -3,8 +3,8 @@ import { HotKeyList } from './core/HotKeyList';
 
 export function KeyboardShortcutsDialog() {
   return (
-    <div className="h-full w-full pb-2">
-      <HotKeyList hotkeys={hotkeyActions} />
+    <div className="grid h-full">
+      <HotKeyList hotkeys={hotkeyActions} className="pb-6" />
     </div>
   );
 }

@@ -13,7 +13,7 @@ interface Props {
 export const HotKeyList = ({ hotkeys, bottomSlot, className }: Props) => {
   return (
     <div className={classNames(className, 'h-full flex items-center justify-center')}>
-      <div className="px-4 grid gap-2 grid-cols-[auto_auto]">
+      <div className="grid gap-2 grid-cols-[auto_auto]">
         {hotkeys.map((hotkey) => (
           <Fragment key={hotkey}>
             <HotKeyLabel className="truncate" action={hotkey} />

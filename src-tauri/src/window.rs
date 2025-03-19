@@ -55,7 +55,10 @@ pub(crate) fn create_window<R: Runtime>(
         // macOS doesn't support data dir so must use this fn instead
         #[cfg(target_os = "macos")]
         {
-            win_builder = win_builder.data_store_identifier(to_fixed_hash(&key));
+            let hash = md5::compute(key.as_bytes());
+            let mut id = [0u8; 16];
+            id.copy_from_slice(&hash[..16]); // Take the first 16 bytes of the hash
+            win_builder = win_builder.data_store_identifier(id);
         }
     }
 
@@ -158,11 +161,3 @@ pub(crate) fn create_window<R: Runtime>(
 
     win
 }
-
-fn to_fixed_hash(s: &str) -> [u8; 16] {
-    let hash = md5::compute(s.as_bytes());
-    let mut fixed = [0u8; 16];
-    fixed.copy_from_slice(&hash[..16]); // Take the first 16 bytes of the hash
-    fixed
-}
-

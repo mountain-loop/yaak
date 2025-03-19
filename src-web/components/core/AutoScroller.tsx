@@ -46,7 +46,7 @@ export function AutoScroller<T>({ data, render, header }: Props<T>) {
   }, [autoScroll, data.length]);
 
   return (
-    <div className="h-full w-full relative grid grid-rows-[auto_minmax(0,1fr)]">
+    <div className="h-full w-full relative grid grid-rows-[minmax(0,auto)_minmax(0,1fr)]">
       {!autoScroll && (
         <div className="absolute bottom-0 right-0 m-2">
           <IconButton

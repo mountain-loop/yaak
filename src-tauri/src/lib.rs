@@ -8,6 +8,7 @@ use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
 use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
+use crate::uri_scheme::handle_uri_scheme;
 use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
@@ -80,6 +81,7 @@ mod render;
 #[cfg(target_os = "macos")]
 mod tauri_plugin_mac_window;
 mod updates;
+mod uri_scheme;
 mod window;
 mod window_menu;
 
@@ -1939,10 +1941,7 @@ pub fn run() {
             cmd_update_workspace_meta,
             cmd_write_file_dev,
         ])
-        .register_uri_scheme_protocol("yaak", |_app, _req| {
-            debug!("Testing yaak protocol");
-            tauri::http::Response::builder().body("Success".as_bytes().to_vec()).unwrap()
-        })
+        .register_uri_scheme_protocol("yaak", handle_uri_scheme)
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app_handle, event| {

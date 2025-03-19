@@ -20,7 +20,7 @@ import {
 } from '@codemirror/language';
 import { lintKeymap } from '@codemirror/lint';
 
-import { searchKeymap } from '@codemirror/search';
+import { search, searchKeymap } from '@codemirror/search';
 import type { Extension } from '@codemirror/state';
 import { EditorState } from '@codemirror/state';
 import {
@@ -165,6 +165,7 @@ export const readonlyExtensions = [
 ];
 
 export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) => [
+  search({ top: true }),
   hideGutter
     ? []
     : [

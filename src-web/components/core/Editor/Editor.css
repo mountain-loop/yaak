@@ -37,6 +37,9 @@
       @apply w-full;
       /* Important! Ensure it spans the entire width */
       @apply w-full text-text px-0;
+
+      /* So the search highlight border is not cut off by editor view */
+      @apply pl-[1px];
     }
 
     .cm-placeholder {
@@ -126,6 +129,29 @@
     }
   }
 }
+
+/* Style search matches */
+.cm-searchMatch {
+  @apply bg-transparent !important;
+  @apply rounded-[2px] outline outline-1;
+  &.cm-searchMatch-selected {
+    @apply outline-text;
+    @apply bg-text !important;
+    &, * {
+      @apply text-surface font-semibold !important;
+    }
+  }
+}
+/*.cm-searchMatch {*/
+/*  @apply bg-transparent !important;*/
+/*  @apply outline outline-[1.5px] outline-text-subtlest rounded-sm;*/
+/*  &.cm-searchMatch-selected {*/
+/*    @apply outline-text;*/
+/*    & * {*/
+/*      @apply text-text font-semibold;*/
+/*    }*/
+/*  }*/
+/*}*/
 
 /* Obscure text for password fields */
 .cm-wrapper.cm-obscure-text .cm-line {

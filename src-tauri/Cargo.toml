@@ -32,7 +32,7 @@ strip = true  # Automatically strip symbols from the binary.
 cargo-clippy = []
 
 [build-dependencies]
-tauri-build = { version = "2.0.5", features = [] }
+tauri-build = { version = "2.0.6", features = [] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
@@ -58,15 +58,15 @@ rustls-platform-verifier = "0.5.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
-tauri-plugin-clipboard-manager = "2.2.1"
+tauri-plugin-clipboard-manager = "2.2.2"
 tauri-plugin-dialog = "2.2.0"
 tauri-plugin-fs = "2.2.0"
-tauri-plugin-log = { version = "2.2.1", features = ["colored"] }
-tauri-plugin-opener = "2.2.5"
-tauri-plugin-os = "2.2.0"
+tauri-plugin-log = { version = "2.3.1", features = ["colored"] }
+tauri-plugin-opener = "2.2.6"
+tauri-plugin-os = "2.2.1"
 tauri-plugin-shell = { workspace = true }
-tauri-plugin-single-instance = "2.2.1"
-tauri-plugin-updater = "2.5.0"
+tauri-plugin-single-instance = "2.2.2"
+tauri-plugin-updater = "2.6.1"
 tauri-plugin-window-state = "2.2.1"
 tokio = { version = "1.43.0", features = ["sync"] }
 tokio-stream = "0.1.17"
