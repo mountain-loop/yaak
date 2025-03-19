@@ -15,7 +15,7 @@ interface Props {
   onDone: () => void;
 }
 
-export function GrpcProtoSelection({ requestId }: Props) {
+export function GrpcProtoSelectionDialog({ requestId }: Props) {
   const request = useGrpcRequest(requestId);
   const protoFilesKv = useGrpcProtoFiles(requestId);
   const protoFiles = protoFilesKv.value ?? [];
@@ -34,7 +34,7 @@ export function GrpcProtoSelection({ requestId }: Props) {
   }
 
   return (
-    <VStack className="flex-col-reverse" space={3}>
+    <VStack className="flex-col-reverse pb-2" space={3}>
       {/* Buttons on top so they get focus first */}
       <HStack space={2} justifyContent="start" className="flex-row-reverse">
         <Button
@@ -52,7 +52,7 @@ export function GrpcProtoSelection({ requestId }: Props) {
             await grpc.reflect.refetch();
           }}
         >
-          Add File
+          Add Proto File(s)
         </Button>
         <Button
           isLoading={grpc.reflect.isFetching}
@@ -103,15 +103,15 @@ export function GrpcProtoSelection({ requestId }: Props) {
             <thead>
               <tr>
                 <th className="text-text-subtlest">
-                  <span className="font-mono">*.proto</span> Files
+                  Added Files
                 </th>
-                <th></th>
+                <th/>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-highlight">
               {protoFiles.map((f, i) => (
                 <tr key={f + i} className="group">
-                  <td className="pl-1 font-mono">{f.split('/').pop()}</td>
+                  <td className="pl-1 font-mono text-sm" title={f}>{f.split('/').pop()}</td>
                   <td className="w-0 py-0.5">
                     <IconButton
                       title="Remove file"

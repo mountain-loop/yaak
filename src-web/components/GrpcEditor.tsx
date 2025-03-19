@@ -21,7 +21,7 @@ import { Editor } from './core/Editor/Editor';
 import { FormattedError } from './core/FormattedError';
 import { InlineCode } from './core/InlineCode';
 import { VStack } from './core/Stacks';
-import { GrpcProtoSelection } from './GrpcProtoSelection';
+import { GrpcProtoSelectionDialog } from './GrpcProtoSelectionDialog';
 
 type Props = Pick<EditorProps, 'heightMode' | 'onChange' | 'className' | 'forceUpdateKey'> & {
   services: ReflectResponseService[] | null;
@@ -144,11 +144,7 @@ export function GrpcEditor({
               size: 'md',
               id: 'reflection-failed',
               render: ({ hide }) => {
-                return (
-                  <VStack space={6} className="pb-5">
-                    <GrpcProtoSelection onDone={hide} requestId={request.id} />
-                  </VStack>
-                );
+                return <GrpcProtoSelectionDialog onDone={hide} requestId={request.id} />;
               },
             });
           }}
