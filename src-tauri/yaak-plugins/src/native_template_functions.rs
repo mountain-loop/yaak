@@ -44,7 +44,7 @@ pub(crate) async fn template_function_secure_run<R: Runtime>(
         } => {
             let value = args.get("value").map(|v| v.to_owned()).unwrap_or_default();
             if value.is_empty() {
-                return Ok(value);
+                return Ok("".to_string());
             }
 
             let value = match value.strip_prefix("YENC_") {

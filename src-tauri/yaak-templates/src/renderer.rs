@@ -275,6 +275,15 @@ mod parse_and_render_tests {
                     _ => "".to_string(),
                 })
             }
+
+            async fn transform_arg(
+                &self,
+                _fn_name: &str,
+                _arg_name: &str,
+                _arg_value: &str,
+            ) -> Result<String> {
+                todo!()
+            }
         }
 
         assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
@@ -294,6 +303,15 @@ mod parse_and_render_tests {
                     "upper" => args["foo"].to_string().to_uppercase(),
                     _ => "".to_string(),
                 })
+            }
+
+            async fn transform_arg(
+                &self,
+                _fn_name: &str,
+                _arg_name: &str,
+                _arg_value: &str,
+            ) -> Result<String> {
+                todo!()
             }
         }
 
@@ -315,6 +333,15 @@ mod parse_and_render_tests {
                     "upper" => args["foo"].to_string().to_uppercase(),
                     _ => "".to_string(),
                 })
+            }
+
+            async fn transform_arg(
+                &self,
+                _fn_name: &str,
+                _arg_name: &str,
+                _arg_value: &str,
+            ) -> Result<String> {
+                todo!()
             }
         }
 

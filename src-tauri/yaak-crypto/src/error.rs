@@ -20,14 +20,14 @@ pub enum Error {
 
     #[error("Invalid encrypted data")]
     InvalidEncryptedData,
-    
+
     #[error("Invalid encryption key")]
     InvalidEncryptionKey,
-    
+
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 
-    #[error("Generic crypto error: {0}")]
+    #[error("Encryption error: {0}")]
     GenericError(String),
 }
 
