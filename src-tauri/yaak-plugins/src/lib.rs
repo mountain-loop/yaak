@@ -7,10 +7,10 @@ use tauri::{Manager, RunEvent, Runtime, State};
 pub mod error;
 pub mod events;
 pub mod manager;
-pub mod plugin_handle;
-pub mod template_callback;
 mod nodejs;
+pub mod plugin_handle;
 mod server_ws;
+pub mod template_callback;
 mod util;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {

@@ -53,6 +53,7 @@
     "yaak-license:default",
     "yaak-git:default",
     "yaak-sync:default",
-    "yaak-ws:default"
+    "yaak-ws:default",
+    "deep-link:default"
   ]
 }

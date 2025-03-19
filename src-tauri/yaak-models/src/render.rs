@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::models::{Environment, EnvironmentVariable};
+use std::collections::HashMap;
 
 pub fn make_vars_hashmap(
     base_environment: &Environment,
@@ -31,4 +31,3 @@ fn add_variable_to_map(
 
     map
 }
-

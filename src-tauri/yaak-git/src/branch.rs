@@ -43,7 +43,11 @@ pub(crate) fn git_checkout_branch(dir: &Path, branch_name: &str, force: bool) ->
     Ok(branch_name.to_string())
 }
 
-pub(crate) fn git_checkout_remote_branch(dir: &Path, branch_name: &str, force: bool) -> Result<String> {
+pub(crate) fn git_checkout_remote_branch(
+    dir: &Path,
+    branch_name: &str,
+    force: bool,
+) -> Result<String> {
     let branch_name = branch_name.trim_start_matches("origin/");
     let repo = open_repo(dir)?;
 
@@ -55,7 +59,7 @@ pub(crate) fn git_checkout_remote_branch(dir: &Path, branch_name: &str, force: b
     let upstream_name = format!("origin/{}", branch_name);
     new_branch.set_upstream(Some(&upstream_name))?;
 
-    return git_checkout_branch(dir, branch_name, force)
+    return git_checkout_branch(dir, branch_name, force);
 }
 
 pub(crate) fn git_create_branch(dir: &Path, name: &str) -> Result<()> {

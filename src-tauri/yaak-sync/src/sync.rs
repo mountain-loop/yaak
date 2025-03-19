@@ -223,7 +223,7 @@ pub(crate) fn compute_sync_ops(
                         model: model.to_owned(),
                         state: sync_state.to_owned(),
                     }
-                },
+                }
                 (Some(DbCandidate::Modified(model, sync_state)), None) => SyncOp::FsUpdate {
                     model: model.to_owned(),
                     state: sync_state.to_owned(),

@@ -32,15 +32,15 @@ pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
 
     let mut options = PushOptions::new();
     options.packbuilder_parallelism(0);
-    
+
     let push_result = Mutex::new(PushResult::NothingToPush);
-    
+
     let mut callbacks = default_callbacks();
     callbacks.push_transfer_progress(|_current, _total, _bytes| {
-        let mut push_result = push_result.lock().unwrap();   
+        let mut push_result = push_result.lock().unwrap();
         *push_result = PushResult::Success;
     });
-    
+
     options.remote_callbacks(default_callbacks());
 
     let mut proxy = ProxyOptions::new();
