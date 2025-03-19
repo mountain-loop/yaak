@@ -65,7 +65,7 @@ tauri-plugin-log = { version = "2.3.1", features = ["colored"] }
 tauri-plugin-opener = "2.2.6"
 tauri-plugin-os = "2.2.1"
 tauri-plugin-shell = { workspace = true }
-tauri-plugin-single-instance = "2.2.2"
+tauri-plugin-single-instance = { version = "2.2.2", features = ["deep-link"] }
 tauri-plugin-updater = "2.6.1"
 tauri-plugin-window-state = "2.2.1"
 tokio = { version = "1.43.0", features = ["sync"] }
@@ -82,6 +82,7 @@ yaak-sse = { workspace = true }
 yaak-sync = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-ws = { path = "yaak-ws" }
+tauri-plugin-deep-link = "2"
 
 [workspace.dependencies]
 reqwest = "0.12.12"

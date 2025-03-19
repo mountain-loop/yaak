@@ -143,7 +143,10 @@ pub enum LicenseCheckStatus {
     Trialing { end: NaiveDateTime },
 }
 
-pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>, payload: CheckActivationRequestPayload) -> Result<LicenseCheckStatus> {
+pub async fn check_license<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    payload: CheckActivationRequestPayload,
+) -> Result<LicenseCheckStatus> {
     let activation_id = get_activation_id(app_handle).await;
     let settings = yaak_models::queries::get_or_create_settings(app_handle).await;
     let trial_end = settings.created_at.add(Duration::from_secs(TRIAL_SECONDS));
@@ -196,6 +199,5 @@ fn build_url(path: &str) -> String {
 }
 
 pub async fn get_activation_id<R: Runtime>(mgr: &impl Manager<R>) -> String {
-    yaak_models::queries::get_key_value_string(mgr, KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
-        .await
+    yaak_models::queries::get_key_value_string(mgr, KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "").await
 }

@@ -1,4 +1,7 @@
-use crate::commands::{add, branch, checkout, commit, delete_branch, fetch_all, initialize, log, merge_branch, pull, push, status, unstage};
+use crate::commands::{
+    add, branch, checkout, commit, delete_branch, fetch_all, initialize, log, merge_branch, pull,
+    push, status, unstage,
+};
 use tauri::{
     generate_handler,
     plugin::{Builder, TauriPlugin},
