@@ -46,18 +46,22 @@ pub async fn send_http_request<R: Runtime>(
     cookie_jar: Option<CookieJar>,
     cancelled_rx: &mut Receiver<bool>,
 ) -> Result<HttpResponse> {
-    let plugin_manager = window.state::<PluginManager>();
-    let workspace = get_workspace(window, &unrendered_request.workspace_id).await?;
-    let base_environment = get_base_environment(window, &unrendered_request.workspace_id).await?;
-    let settings = get_or_create_settings(window).await;
+    let app_handle = window.app_handle().clone();
+    let plugin_manager = app_handle.state::<PluginManager>();
+    let workspace = get_workspace(&app_handle, &unrendered_request.workspace_id).await?;
+    let base_environment =
+        get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
+    let settings = get_or_create_settings(&app_handle).await;
+
+    let response_id = og_response.id.clone();
+    let response = Arc::new(Mutex::new(og_response.clone()));
+
     let cb = PluginTemplateCallback::new(
         window.app_handle(),
         &WindowContext::from_window(window),
         RenderPurpose::Send,
     );
-
-    let response_id = og_response.id.clone();
-    let response = Arc::new(Mutex::new(og_response.clone()));
+    let update_source = UpdateSource::from_window(window);
 
     let request = match render_http_request(
         &unrendered_request,
@@ -68,7 +72,15 @@ pub async fn send_http_request<R: Runtime>(
     .await
     {
         Ok(r) => r,
-        Err(e) => return Ok(response_err(&*response.lock().await, e.to_string(), window).await),
+        Err(e) => {
+            return Ok(response_err(
+                &app_handle,
+                &*response.lock().await,
+                e.to_string(),
+                &update_source,
+            )
+            .await)
+        }
     };
 
     let mut url_string = request.url;
@@ -178,9 +190,10 @@ pub async fn send_http_request<R: Runtime>(
         Ok(u) => u,
         Err(e) => {
             return Ok(response_err(
+                &app_handle,
                 &*response.lock().await,
                 format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
-                window,
+                &update_source,
             )
             .await);
         }
@@ -190,9 +203,10 @@ pub async fn send_http_request<R: Runtime>(
         Ok(u) => u,
         Err(e) => {
             return Ok(response_err(
+                &app_handle,
                 &*response.lock().await,
                 format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
-                window,
+                &update_source,
             )
             .await);
         }
@@ -296,7 +310,13 @@ pub async fn send_http_request<R: Runtime>(
                     request_builder = request_builder.body(f);
                 }
                 Err(e) => {
-                    return Ok(response_err(&*response.lock().await, e, window).await);
+                    return Ok(response_err(
+                        &app_handle,
+                        &*response.lock().await,
+                        e,
+                        &update_source,
+                    )
+                    .await);
                 }
             }
         } else if body_type == "multipart/form-data" && request_body.contains_key("form") {
@@ -323,9 +343,10 @@ pub async fn send_http_request<R: Runtime>(
                                     Ok(f) => multipart::Part::bytes(f),
                                     Err(e) => {
                                         return Ok(response_err(
+                                            &app_handle,
                                             &*response.lock().await,
                                             e.to_string(),
-                                            window,
+                                            &update_source,
                                         )
                                         .await);
                                     }
@@ -340,9 +361,10 @@ pub async fn send_http_request<R: Runtime>(
                                     Ok(p) => p,
                                     Err(e) => {
                                         return Ok(response_err(
+                                            &app_handle,
                                             &*response.lock().await,
                                             format!("Invalid mime for multi-part entry {e:?}"),
-                                            window,
+                                            &update_source,
                                         )
                                         .await);
                                     }
@@ -356,9 +378,10 @@ pub async fn send_http_request<R: Runtime>(
                                     Ok(p) => p,
                                     Err(e) => {
                                         return Ok(response_err(
+                                            &app_handle,
                                             &*response.lock().await,
                                             format!("Invalid mime for multi-part entry {e:?}"),
-                                            window,
+                                            &update_source,
                                         )
                                         .await);
                                     }
@@ -397,7 +420,13 @@ pub async fn send_http_request<R: Runtime>(
         Ok(r) => r,
         Err(e) => {
             warn!("Failed to build request builder {e:?}");
-            return Ok(response_err(&*response.lock().await, e.to_string(), window).await);
+            return Ok(response_err(
+                &app_handle,
+                &*response.lock().await,
+                e.to_string(),
+                &update_source,
+            )
+            .await);
         }
     };
 
@@ -423,7 +452,13 @@ pub async fn send_http_request<R: Runtime>(
         let plugin_result = match auth_result {
             Ok(r) => r,
             Err(e) => {
-                return Ok(response_err(&*response.lock().await, e.to_string(), window).await);
+                return Ok(response_err(
+                    &app_handle,
+                    &*response.lock().await,
+                    e.to_string(),
+                    &update_source,
+                )
+                .await);
             }
         };
 
@@ -449,21 +484,23 @@ pub async fn send_http_request<R: Runtime>(
         Ok(r) = resp_rx => r,
         _ = cancelled_rx.changed() => {
             debug!("Request cancelled");
-            return Ok(response_err(&*response.lock().await, "Request was cancelled".to_string(), window).await);
+            return Ok(response_err(&app_handle, &*response.lock().await, "Request was cancelled".to_string(), &update_source).await);
         }
     };
 
     {
+        let app_handle = app_handle.clone();
         let window = window.clone();
         let cancelled_rx = cancelled_rx.clone();
         let response_id = response_id.clone();
         let response = response.clone();
+        let update_source = update_source.clone();
         tokio::spawn(async move {
             match raw_response {
                 Ok(mut v) => {
                     let content_length = v.content_length();
                     let response_headers = v.headers().clone();
-                    let dir = window.app_handle().path().app_data_dir().unwrap();
+                    let dir = app_handle.path().app_data_dir().unwrap();
                     let base_dir = dir.join("responses");
                     create_dir_all(base_dir.clone()).await.expect("Failed to create responses dir");
                     let body_path = if response_id.is_empty() {
@@ -497,7 +534,7 @@ pub async fn send_http_request<R: Runtime>(
                         };
 
                         r.state = HttpResponseState::Connected;
-                        update_response_if_id(&window, &r, &UpdateSource::Window)
+                        update_response_if_id(&app_handle, &r, &update_source)
                             .await
                             .expect("Failed to update response after connected");
                     }
@@ -526,7 +563,7 @@ pub async fn send_http_request<R: Runtime>(
                                 f.flush().await.expect("Failed to flush file");
                                 written_bytes += bytes.len();
                                 r.content_length = Some(written_bytes as i32);
-                                update_response_if_id(&window, &r, &UpdateSource::Window)
+                                update_response_if_id(&app_handle, &r, &update_source)
                                     .await
                                     .expect("Failed to update response");
                             }
@@ -534,7 +571,13 @@ pub async fn send_http_request<R: Runtime>(
                                 break;
                             }
                             Err(e) => {
-                                response_err(&*response.lock().await, e.to_string(), &window).await;
+                                response_err(
+                                    &app_handle,
+                                    &*response.lock().await,
+                                    e.to_string(),
+                                    &update_source,
+                                )
+                                .await;
                                 break;
                             }
                         }
@@ -548,7 +591,7 @@ pub async fn send_http_request<R: Runtime>(
                             None => Some(written_bytes as i32),
                         };
                         r.state = HttpResponseState::Closed;
-                        update_response_if_id(&window, &r, &UpdateSource::Window)
+                        update_response_if_id(&app_handle, &r, &UpdateSource::from_window(&window))
                             .await
                             .expect("Failed to update response");
                     };
@@ -574,8 +617,12 @@ pub async fn send_http_request<R: Runtime>(
                             })
                             .collect::<Vec<_>>();
                         cookie_jar.cookies = json_cookies;
-                        if let Err(e) =
-                            upsert_cookie_jar(&window, &cookie_jar, &UpdateSource::Window).await
+                        if let Err(e) = upsert_cookie_jar(
+                            &app_handle,
+                            &cookie_jar,
+                            &UpdateSource::from_window(&window),
+                        )
+                        .await
                         {
                             error!("Failed to update cookie jar: {}", e);
                         };
@@ -583,7 +630,13 @@ pub async fn send_http_request<R: Runtime>(
                 }
                 Err(e) => {
                     warn!("Failed to execute request {e}");
-                    response_err(&*response.lock().await, format!("{e} → {e:?}"), &window).await;
+                    response_err(
+                        &app_handle,
+                        &*response.lock().await,
+                        format!("{e} → {e:?}"),
+                        &update_source,
+                    )
+                    .await;
                 }
             };
 
@@ -592,16 +645,17 @@ pub async fn send_http_request<R: Runtime>(
         });
     };
 
+    let app_handle = app_handle.clone();
     Ok(tokio::select! {
         Ok(r) = done_rx => r,
         _ = cancelled_rx.changed() => {
-            match get_http_response(window, response_id.as_str()).await {
+            match get_http_response(&app_handle, response_id.as_str()).await {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
-                    update_response_if_id(&window, &r, &UpdateSource::Window).await.expect("Failed to update response")
+                    update_response_if_id(&app_handle, &r, &UpdateSource::from_window(window)).await.expect("Failed to update response")
                 },
                 _ => {
-                    response_err(&*response.lock().await, "Ephemeral request was cancelled".to_string(), &window).await
+                    response_err(&app_handle, &*response.lock().await, "Ephemeral request was cancelled".to_string(), &update_source).await
                 }.clone(),
             }
         }

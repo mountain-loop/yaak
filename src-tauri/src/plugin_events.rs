@@ -18,8 +18,8 @@ use yaak_models::queries::{
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
     GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
-    RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest,
-    TemplateRenderResponse, WindowContext, WindowNavigateEvent,
+    RenderHttpRequestResponse, RenderPurpose, SendHttpRequestResponse, SetKeyValueResponse,
+    ShowToastRequest, TemplateRenderResponse, WindowContext, WindowNavigateEvent,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -80,7 +80,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 .await
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
-            let base_environment = get_base_environment(&window, workspace.id.as_str())
+            let base_environment = get_base_environment(app_handle, workspace.id.as_str())
                 .await
                 .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
@@ -104,7 +104,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 .await
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
-            let base_environment = get_base_environment(&window, workspace.id.as_str())
+            let base_environment = get_base_environment(app_handle, workspace.id.as_str())
                 .await
                 .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
@@ -145,7 +145,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     updated_at: Utc::now().naive_utc(), // TODO: Add reloaded_at field to use instead
                     ..plugin
                 };
-                upsert_plugin(&window, new_plugin, &UpdateSource::Plugin).await.unwrap();
+                upsert_plugin(app_handle, new_plugin, &UpdateSource::Plugin).await.unwrap();
             }
             let toast_event = plugin_handle.build_event_to_send(
                 &WindowContext::from_window(&window),
@@ -177,7 +177,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 HttpResponse::new()
             } else {
                 create_default_http_response(
-                    &window,
+                    app_handle,
                     http_request.id.as_str(),
                     &UpdateSource::Plugin,
                 )

@@ -5,7 +5,7 @@ import type { AnyModel, KeyValue, ModelPayload } from '@yaakapp-internal/models'
 import { jotaiStore } from '../lib/jotai';
 import { buildKeyValueKey } from '../lib/keyValueStore';
 import { modelsEq } from '../lib/model_util';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { getActiveWorkspaceId } from './useActiveWorkspace';
 import { cookieJarsAtom } from './useCookieJars';
 import { environmentsAtom } from './useEnvironments';
 import { foldersAtom } from './useFolders';
@@ -26,7 +26,6 @@ import { workspaceMetaAtom } from './useWorkspaceMeta';
 import { workspacesAtom } from './useWorkspaces';
 
 export function useSyncModelStores() {
-  const activeWorkspace = useActiveWorkspace();
   const queryClient = useQueryClient();
   const { wasUpdatedExternally } = useRequestUpdateKey(null);
 
@@ -45,14 +44,11 @@ export function useSyncModelStores() {
       (payload.model.model === 'http_request' ||
         payload.model.model === 'grpc_request' ||
         payload.model.model === 'websocket_request') &&
-      (payload.windowLabel !== getCurrentWebviewWindow().label || payload.updateSource !== 'window')
+      ((payload.updateSource.type === 'window' &&
+        payload.updateSource.label !== getCurrentWebviewWindow().label) ||
+        payload.updateSource.type !== 'window')
     ) {
       wasUpdatedExternally(payload.model.id);
-    }
-
-    // Only sync models that belong to this workspace, if a workspace ID is present
-    if ('workspaceId' in payload.model && payload.model.workspaceId !== activeWorkspace?.id) {
-      return;
     }
 
     if (shouldIgnoreModel(payload)) return;
@@ -160,7 +156,7 @@ export function removeModelById<T extends { id: string }>(model: T) {
   return (prevEntries: T[] | undefined) => {
     const entries = prevEntries?.filter((e) => e.id !== model.id) ?? [];
 
-    // Don't trigger an update if we didn't actually remove anything
+    // Don't trigger an update if we didn't remove anything
     if (entries.length === (prevEntries ?? []).length) {
       return prevEntries ?? [];
     }
@@ -181,15 +177,22 @@ export function removeModelByKv(model: KeyValue) {
     ) ?? [];
 }
 
-function shouldIgnoreModel({ model, windowLabel, updateSource }: ModelPayload) {
-  // Never ignore same-window updates
-  if (windowLabel === getCurrentWebviewWindow().label) {
+function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
+  console.log('HELLO', updateSource);
+  // Never ignore updates from non-user sources
+  if (updateSource.type !== 'window') {
     return false;
   }
 
-  // Never ignore updates from non-user sources
-  if (updateSource !== 'window') {
+  // Never ignore same-window updates
+  if (updateSource.label === getCurrentWebviewWindow().label) {
     return false;
+  }
+
+  const activeWorkspaceId = getActiveWorkspaceId();
+  // Only sync models that belong to this workspace, if a workspace ID is present
+  if ('workspaceId' in model && model.workspaceId !== activeWorkspaceId) {
+    return;
   }
 
   if (model.model === 'key_value') {

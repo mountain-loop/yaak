@@ -5,7 +5,7 @@ use crate::render::render_request;
 use log::{info, warn};
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
-use tauri::{AppHandle, Manager, Runtime, State, Url, WebviewWindow};
+use tauri::{AppHandle, Runtime, State, Url, WebviewWindow};
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
@@ -28,41 +28,54 @@ use yaak_plugins::template_callback::PluginTemplateCallback;
 #[tauri::command]
 pub(crate) async fn upsert_request<R: Runtime>(
     request: WebsocketRequest,
-    w: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(queries::upsert_websocket_request(&w, request, &UpdateSource::Window).await?)
+    Ok(queries::upsert_websocket_request(&app_handle, request, &UpdateSource::from_window(&window))
+        .await?)
 }
 
 #[tauri::command]
 pub(crate) async fn duplicate_request<R: Runtime>(
     request_id: &str,
-    w: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(queries::duplicate_websocket_request(&w, request_id, &UpdateSource::Window).await?)
+    Ok(queries::duplicate_websocket_request(
+        &app_handle,
+        request_id,
+        &UpdateSource::from_window(&window),
+    )
+    .await?)
 }
 
 #[tauri::command]
 pub(crate) async fn delete_request<R: Runtime>(
     request_id: &str,
-    w: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(queries::delete_websocket_request(&w, request_id, &UpdateSource::Window).await?)
+    Ok(queries::delete_websocket_request(&app_handle, request_id, &UpdateSource::from_window(&window)).await?)
 }
 
 #[tauri::command]
 pub(crate) async fn delete_connection<R: Runtime>(
     connection_id: &str,
-    w: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<WebsocketConnection> {
-    Ok(queries::delete_websocket_connection(&w, connection_id, &UpdateSource::Window).await?)
+    Ok(queries::delete_websocket_connection(&app_handle, connection_id, &UpdateSource::from_window(&window))
+        .await?)
 }
 
 #[tauri::command]
 pub(crate) async fn delete_connections<R: Runtime>(
     request_id: &str,
-    w: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<()> {
-    Ok(queries::delete_all_websocket_connections(&w, request_id, &UpdateSource::Window).await?)
+    Ok(queries::delete_all_websocket_connections(&app_handle, request_id, &UpdateSource::from_window(&window))
+        .await?)
 }
 
 #[tauri::command]
@@ -93,24 +106,26 @@ pub(crate) async fn list_connections<R: Runtime>(
 pub(crate) async fn send<R: Runtime>(
     connection_id: &str,
     environment_id: Option<&str>,
+    app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
-    let connection = get_websocket_connection(&window, connection_id).await?;
-    let unrendered_request = get_websocket_request(&window, &connection.request_id)
+    let connection = get_websocket_connection(&app_handle, connection_id).await?;
+    let unrendered_request = get_websocket_request(&app_handle, &connection.request_id)
         .await?
         .ok_or(GenericError("WebSocket Request not found".to_string()))?;
     let environment = match environment_id {
-        Some(id) => Some(get_environment(&window, id).await?),
+        Some(id) => Some(get_environment(&app_handle, id).await?),
         None => None,
     };
-    let base_environment = get_base_environment(&window, &unrendered_request.workspace_id).await?;
+    let base_environment =
+        get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
     let request = render_request(
         &unrendered_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
-            window.app_handle(),
+            &app_handle,
             &WindowContext::from_window(&window),
             RenderPurpose::Send,
         ),
@@ -121,7 +136,7 @@ pub(crate) async fn send<R: Runtime>(
     ws_manager.send(&connection.id, Message::Text(request.message.clone().into())).await?;
 
     upsert_websocket_event(
-        &window,
+        &app_handle,
         WebsocketEvent {
             connection_id: connection.id.clone(),
             request_id: request.id.clone(),
@@ -131,7 +146,7 @@ pub(crate) async fn send<R: Runtime>(
             message: request.message.into(),
             ..Default::default()
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await
     .unwrap();
@@ -142,17 +157,18 @@ pub(crate) async fn send<R: Runtime>(
 #[tauri::command]
 pub(crate) async fn close<R: Runtime>(
     connection_id: &str,
+    app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
-    let connection = get_websocket_connection(&window, connection_id).await?;
+    let connection = get_websocket_connection(&app_handle, connection_id).await?;
     let connection = upsert_websocket_connection(
-        &window,
+        &app_handle,
         &WebsocketConnection {
             state: WebsocketConnectionState::Closing,
             ..connection
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await
     .unwrap();
@@ -170,24 +186,26 @@ pub(crate) async fn connect<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
+    app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
-    let unrendered_request = get_websocket_request(&window, request_id)
+    let unrendered_request = get_websocket_request(&app_handle, request_id)
         .await?
         .ok_or(GenericError("Failed to find GRPC request".to_string()))?;
     let environment = match environment_id {
-        Some(id) => Some(get_environment(&window, id).await?),
+        Some(id) => Some(get_environment(&app_handle, id).await?),
         None => None,
     };
-    let base_environment = get_base_environment(&window, &unrendered_request.workspace_id).await?;
+    let base_environment =
+        get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
     let request = render_request(
         &unrendered_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
-            window.app_handle(),
+            &app_handle,
             &WindowContext::from_window(&window),
             RenderPurpose::Send,
         ),
@@ -224,18 +242,18 @@ pub(crate) async fn connect<R: Runtime>(
 
     // TODO: Handle cookies
     let _cookie_jar = match cookie_jar_id {
-        Some(id) => Some(get_cookie_jar(&window, id).await?),
+        Some(id) => Some(get_cookie_jar(&app_handle, id).await?),
         None => None,
     };
 
     let connection = upsert_websocket_connection(
-        &window,
+        &app_handle,
         &WebsocketConnection {
             workspace_id: request.workspace_id.clone(),
             request_id: request_id.to_string(),
             ..Default::default()
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await?;
 
@@ -261,20 +279,20 @@ pub(crate) async fn connect<R: Runtime>(
         Ok(r) => r,
         Err(e) => {
             return Ok(upsert_websocket_connection(
-                &window,
+                &app_handle,
                 &WebsocketConnection {
                     error: Some(format!("{e:?}")),
                     state: WebsocketConnectionState::Closed,
                     ..connection
                 },
-                &UpdateSource::Window,
+                &UpdateSource::from_window(&window),
             )
             .await?);
         }
     };
 
     upsert_websocket_event(
-        &window,
+        &app_handle,
         WebsocketEvent {
             connection_id: connection.id.clone(),
             request_id: request.id.clone(),
@@ -283,7 +301,7 @@ pub(crate) async fn connect<R: Runtime>(
             message_type: WebsocketEventType::Open,
             ..Default::default()
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await
     .unwrap();
@@ -298,7 +316,7 @@ pub(crate) async fn connect<R: Runtime>(
         .collect::<Vec<HttpResponseHeader>>();
 
     let connection = upsert_websocket_connection(
-        &window,
+        &app_handle,
         &WebsocketConnection {
             state: WebsocketConnectionState::Connected,
             headers: response_headers,
@@ -306,7 +324,7 @@ pub(crate) async fn connect<R: Runtime>(
             url: request.url.clone(),
             ..connection
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await?;
 
@@ -314,7 +332,6 @@ pub(crate) async fn connect<R: Runtime>(
         let connection_id = connection.id.clone();
         let request_id = request.id.to_string();
         let workspace_id = request.workspace_id.clone();
-        let window = window.clone();
         let connection = connection.clone();
         let mut has_written_close = false;
         tokio::spawn(async move {
@@ -324,7 +341,7 @@ pub(crate) async fn connect<R: Runtime>(
                 }
 
                 upsert_websocket_event(
-                    &window,
+                    &app_handle,
                     WebsocketEvent {
                         connection_id: connection_id.clone(),
                         request_id: request_id.clone(),
@@ -342,7 +359,7 @@ pub(crate) async fn connect<R: Runtime>(
                         message: message.into_data().into(),
                         ..Default::default()
                     },
-                    &UpdateSource::Window,
+                    &UpdateSource::from_window(&window),
                 )
                 .await
                 .unwrap();
@@ -350,7 +367,7 @@ pub(crate) async fn connect<R: Runtime>(
             info!("Websocket connection closed");
             if !has_written_close {
                 upsert_websocket_event(
-                    &window,
+                    &app_handle,
                     WebsocketEvent {
                         connection_id: connection_id.clone(),
                         request_id: request_id.clone(),
@@ -359,20 +376,20 @@ pub(crate) async fn connect<R: Runtime>(
                         message_type: WebsocketEventType::Close,
                         ..Default::default()
                     },
-                    &UpdateSource::Window,
+                    &UpdateSource::from_window(&window),
                 )
                 .await
                 .unwrap();
             }
             upsert_websocket_connection(
-                &window,
+                &app_handle,
                 &WebsocketConnection {
                     workspace_id: request.workspace_id.clone(),
                     request_id: request_id.to_string(),
                     state: WebsocketConnectionState::Closed,
                     ..connection
                 },
-                &UpdateSource::Window,
+                &UpdateSource::from_window(&window),
             )
             .await
             .unwrap();

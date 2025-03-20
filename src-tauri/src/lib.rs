@@ -124,10 +124,10 @@ async fn cmd_render_template<R: Runtime>(
     environment_id: Option<&str>,
 ) -> YaakResult<String> {
     let environment = match environment_id {
-        Some(id) => get_environment(&window, id).await.ok(),
+        Some(id) => get_environment(&app_handle, id).await.ok(),
         None => None,
     };
-    let base_environment = get_base_environment(&window, &workspace_id).await?;
+    let base_environment = get_base_environment(&app_handle, &workspace_id).await?;
     let result = render_template(
         template,
         &base_environment,
@@ -155,10 +155,10 @@ async fn cmd_dismiss_notification<R: Runtime>(
 async fn cmd_grpc_reflect<R: Runtime>(
     request_id: &str,
     proto_files: Vec<String>,
-    window: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> Result<Vec<ServiceDefinition>, String> {
-    let req = get_grpc_request(&window, request_id)
+    let req = get_grpc_request(&app_handle, request_id)
         .await
         .map_err(|e| e.to_string())?
         .ok_or("Failed to find GRPC request")?;
@@ -181,24 +181,26 @@ async fn cmd_grpc_go<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
     proto_files: Vec<String>,
+    app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<String> {
     let environment = match environment_id {
-        Some(id) => get_environment(&window, id).await.ok(),
+        Some(id) => get_environment(&app_handle, id).await.ok(),
         None => None,
     };
-    let unrendered_request = get_grpc_request(&window, request_id)
+    let unrendered_request = get_grpc_request(&app_handle, request_id)
         .await?
         .ok_or(GenericError("Failed to get GRPC request".to_string()))?;
-    let base_environment = get_base_environment(&window, &unrendered_request.workspace_id).await?;
+    let base_environment =
+        get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
     let request = render_grpc_request(
         &unrendered_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
-            window.app_handle(),
+            &app_handle,
             &WindowContext::from_window(&window),
             RenderPurpose::Send,
         ),
@@ -242,7 +244,7 @@ async fn cmd_grpc_go<R: Runtime>(
     }
 
     let conn = upsert_grpc_connection(
-        &window,
+        &app_handle,
         &GrpcConnection {
             workspace_id: request.workspace_id.clone(),
             request_id: request.id.clone(),
@@ -252,7 +254,7 @@ async fn cmd_grpc_go<R: Runtime>(
             url: request.url.clone(),
             ..Default::default()
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await?;
 
@@ -296,14 +298,14 @@ async fn cmd_grpc_go<R: Runtime>(
         Ok(c) => c,
         Err(err) => {
             upsert_grpc_connection(
-                &window,
+                &app_handle,
                 &GrpcConnection {
                     elapsed: start.elapsed().as_millis() as i32,
                     error: Some(err.clone()),
                     state: GrpcConnectionState::Closed,
                     ..conn.clone()
                 },
-                &UpdateSource::Window,
+                &UpdateSource::from_window(&window),
             )
             .await?;
             return Ok(conn_id);
@@ -322,6 +324,7 @@ async fn cmd_grpc_go<R: Runtime>(
 
     let cb = {
         let cancelled_rx = cancelled_rx.clone();
+        let app_handle = app_handle.clone();
         let window = window.clone();
         let workspace = base_environment.clone();
         let environment = environment.clone();
@@ -346,6 +349,7 @@ async fn cmd_grpc_go<R: Runtime>(
             match serde_json::from_str::<IncomingMsg>(ev.payload()) {
                 Ok(IncomingMsg::Message(msg)) => {
                     let window = window.clone();
+                    let app_handle = app_handle.clone();
                     let base_msg = base_msg.clone();
                     let method_desc = method_desc.clone();
                     let msg = block_in_place(|| {
@@ -355,7 +359,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 &workspace,
                                 environment.as_ref(),
                                 &PluginTemplateCallback::new(
-                                    window.app_handle(),
+                                    &app_handle,
                                     &WindowContext::from_window(&window),
                                     RenderPurpose::Send,
                                 ),
@@ -370,13 +374,13 @@ async fn cmd_grpc_go<R: Runtime>(
                         Err(e) => {
                             tauri::async_runtime::spawn(async move {
                                 upsert_grpc_event(
-                                    &window,
+                                    &app_handle,
                                     &GrpcEvent {
                                         event_type: GrpcEventType::Error,
                                         content: e.to_string(),
                                         ..base_msg.clone()
                                     },
-                                    &UpdateSource::Window,
+                                    &UpdateSource::from_window(&window),
                                 )
                                 .await
                                 .unwrap();
@@ -387,13 +391,13 @@ async fn cmd_grpc_go<R: Runtime>(
                     in_msg_tx.try_send(d_msg).unwrap();
                     tauri::async_runtime::spawn(async move {
                         upsert_grpc_event(
-                            &window,
+                            &app_handle,
                             &GrpcEvent {
                                 content: msg,
                                 event_type: GrpcEventType::ClientMessage,
                                 ..base_msg.clone()
                             },
-                            &UpdateSource::Window,
+                            &UpdateSource::from_window(&window),
                         )
                         .await
                         .unwrap();
@@ -411,10 +415,11 @@ async fn cmd_grpc_go<R: Runtime>(
             }
         }
     };
-    let event_handler = window.listen_any(format!("grpc_client_msg_{}", conn.id).as_str(), cb);
+    let event_handler = app_handle.listen_any(format!("grpc_client_msg_{}", conn.id).as_str(), cb);
 
     let grpc_listen = {
         let window = window.clone();
+        let app_handle = app_handle.clone();
         let base_event = base_msg.clone();
         let req = request.clone();
         let msg = if req.message.is_empty() { "{}".to_string() } else { req.message };
@@ -423,7 +428,7 @@ async fn cmd_grpc_go<R: Runtime>(
             &base_environment.clone(),
             environment.as_ref(),
             &PluginTemplateCallback::new(
-                window.app_handle(),
+                &app_handle,
                 &WindowContext::from_window(&window),
                 RenderPurpose::Send,
             ),
@@ -431,14 +436,14 @@ async fn cmd_grpc_go<R: Runtime>(
         .await?;
 
         upsert_grpc_event(
-            &window,
+            &app_handle,
             &GrpcEvent {
                 content: format!("Connecting to {}", req.url),
                 event_type: GrpcEventType::ConnectionStart,
                 metadata: metadata.clone(),
                 ..base_event.clone()
             },
-            &UpdateSource::Window,
+            &UpdateSource::from_window(&window),
         )
         .await?;
 
@@ -470,13 +475,13 @@ async fn cmd_grpc_go<R: Runtime>(
 
             if !method_desc.is_client_streaming() {
                 upsert_grpc_event(
-                    &window,
+                    &app_handle,
                     &GrpcEvent {
                         event_type: GrpcEventType::ClientMessage,
                         content: msg,
                         ..base_event.clone()
                     },
-                    &UpdateSource::Window,
+                    &UpdateSource::from_window(&window),
                 )
                 .await
                 .unwrap();
@@ -485,7 +490,7 @@ async fn cmd_grpc_go<R: Runtime>(
             match maybe_msg {
                 Some(Ok(msg)) => {
                     upsert_grpc_event(
-                        &window,
+                        &app_handle,
                         &GrpcEvent {
                             metadata: metadata_to_map(msg.metadata().clone()),
                             content: if msg.metadata().len() == 0 {
@@ -497,37 +502,37 @@ async fn cmd_grpc_go<R: Runtime>(
                             event_type: GrpcEventType::Info,
                             ..base_event.clone()
                         },
-                        &UpdateSource::Window,
+                        &UpdateSource::from_window(&window),
                     )
                     .await
                     .unwrap();
                     upsert_grpc_event(
-                        &window,
+                        &app_handle,
                         &GrpcEvent {
                             content: serialize_message(&msg.into_inner()).unwrap(),
                             event_type: GrpcEventType::ServerMessage,
                             ..base_event.clone()
                         },
-                        &UpdateSource::Window,
+                        &UpdateSource::from_window(&window),
                     )
                     .await
                     .unwrap();
                     upsert_grpc_event(
-                        &window,
+                        &app_handle,
                         &GrpcEvent {
                             content: "Connection complete".to_string(),
                             event_type: GrpcEventType::ConnectionEnd,
                             status: Some(Code::Ok as i32),
                             ..base_event.clone()
                         },
-                        &UpdateSource::Window,
+                        &UpdateSource::from_window(&window),
                     )
                     .await
                     .unwrap();
                 }
                 Some(Err(e)) => {
                     upsert_grpc_event(
-                        &window,
+                        &app_handle,
                         &(match e.status {
                             Some(s) => GrpcEvent {
                                 error: Some(s.message().to_string()),
@@ -545,7 +550,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 ..base_event.clone()
                             },
                         }),
-                        &UpdateSource::Window,
+                        &UpdateSource::from_window(&window),
                     )
                     .await
                     .unwrap();
@@ -558,7 +563,7 @@ async fn cmd_grpc_go<R: Runtime>(
             let mut stream = match maybe_stream {
                 Some(Ok(stream)) => {
                     upsert_grpc_event(
-                        &window,
+                        &app_handle,
                         &GrpcEvent {
                             metadata: metadata_to_map(stream.metadata().clone()),
                             content: if stream.metadata().len() == 0 {
@@ -570,7 +575,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             event_type: GrpcEventType::Info,
                             ..base_event.clone()
                         },
-                        &UpdateSource::Window,
+                        &UpdateSource::from_window(&window),
                     )
                     .await
                     .unwrap();
@@ -579,7 +584,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 Some(Err(e)) => {
                     warn!("GRPC stream error {e:?}");
                     upsert_grpc_event(
-                        &window,
+                        &app_handle,
                         &(match e.status {
                             Some(s) => GrpcEvent {
                                 error: Some(s.message().to_string()),
@@ -597,7 +602,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 ..base_event.clone()
                             },
                         }),
-                        &UpdateSource::Window,
+                        &UpdateSource::from_window(&window),
                     )
                     .await
                     .unwrap();
@@ -611,13 +616,13 @@ async fn cmd_grpc_go<R: Runtime>(
                     Ok(Some(msg)) => {
                         let message = serialize_message(&msg).unwrap();
                         upsert_grpc_event(
-                            &window,
+                            &app_handle,
                             &GrpcEvent {
                                 content: message,
                                 event_type: GrpcEventType::ServerMessage,
                                 ..base_event.clone()
                             },
-                            &UpdateSource::Window,
+                            &UpdateSource::from_window(&window),
                         )
                         .await
                         .unwrap();
@@ -626,7 +631,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         let trailers =
                             stream.trailers().await.unwrap_or_default().unwrap_or_default();
                         upsert_grpc_event(
-                            &window,
+                            &app_handle,
                             &GrpcEvent {
                                 content: "Connection complete".to_string(),
                                 status: Some(Code::Ok as i32),
@@ -634,7 +639,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 event_type: GrpcEventType::ConnectionEnd,
                                 ..base_event.clone()
                             },
-                            &UpdateSource::Window,
+                            &UpdateSource::from_window(&window),
                         )
                         .await
                         .unwrap();
@@ -642,7 +647,7 @@ async fn cmd_grpc_go<R: Runtime>(
                     }
                     Err(status) => {
                         upsert_grpc_event(
-                            &window,
+                            &app_handle,
                             &GrpcEvent {
                                 content: status.to_string(),
                                 status: Some(status.code() as i32),
@@ -650,7 +655,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 event_type: GrpcEventType::ConnectionEnd,
                                 ..base_event.clone()
                             },
-                            &UpdateSource::Window,
+                            &UpdateSource::from_window(&window),
                         )
                         .await
                         .unwrap();
@@ -663,7 +668,7 @@ async fn cmd_grpc_go<R: Runtime>(
     {
         let conn_id = conn_id.clone();
         tauri::async_runtime::spawn(async move {
-            let w = window.clone();
+            let w = app_handle.clone();
             tokio::select! {
                 _ = grpc_listen => {
                     let events = list_grpc_events(&w, &conn_id)
@@ -681,7 +686,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             state: GrpcConnectionState::Closed,
                             ..get_grpc_connection(&w, &conn_id).await.unwrap().clone()
                         },
-                        &UpdateSource::Window,
+                        &UpdateSource::from_window(&window),
                     ).await.unwrap();
                 },
                 _ = cancelled_rx.changed() => {
@@ -693,7 +698,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             status: Some(Code::Cancelled as i32),
                             ..base_msg.clone()
                         },
-                        &UpdateSource::Window,
+                        &UpdateSource::from_window(&window),
                     ).await.unwrap();
                     upsert_grpc_connection(
                         &w,
@@ -703,7 +708,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             state: GrpcConnectionState::Closed,
                             ..get_grpc_connection(&w, &conn_id).await.unwrap().clone()
                         },
-                        &UpdateSource::Window,
+                        &UpdateSource::from_window(&window),
                     )
                     .await
                     .unwrap();
@@ -717,20 +722,23 @@ async fn cmd_grpc_go<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_send_ephemeral_request(
+async fn cmd_send_ephemeral_request<R: Runtime>(
     mut request: HttpRequest,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
     window: WebviewWindow,
+    app_handle: AppHandle<R>,
 ) -> YaakResult<HttpResponse> {
     let response = HttpResponse::new();
     request.id = "".to_string();
     let environment = match environment_id {
-        Some(id) => Some(get_environment(&window, id).await.expect("Failed to get environment")),
+        Some(id) => {
+            Some(get_environment(&app_handle, id).await.expect("Failed to get environment"))
+        }
         None => None,
     };
     let cookie_jar = match cookie_jar_id {
-        Some(id) => Some(get_cookie_jar(&window, id).await.expect("Failed to get cookie jar")),
+        Some(id) => Some(get_cookie_jar(&app_handle, id).await.expect("Failed to get cookie jar")),
         None => None,
     };
 
@@ -752,12 +760,13 @@ async fn cmd_format_json(text: &str) -> Result<String, String> {
 #[tauri::command]
 async fn cmd_filter_response<R: Runtime>(
     window: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
     response_id: &str,
     plugin_manager: State<'_, PluginManager>,
     filter: &str,
 ) -> Result<FilterResponse, String> {
     let response =
-        get_http_response(&window, response_id).await.expect("Failed to get http response");
+        get_http_response(&app_handle, response_id).await.expect("Failed to get http response");
 
     if let None = response.body_path {
         return Err("Response body path not set".to_string());
@@ -804,6 +813,7 @@ async fn cmd_get_sse_events(file_path: &str) -> Result<Vec<ServerSentEvent>, Str
 #[tauri::command]
 async fn cmd_import_data<R: Runtime>(
     window: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
     plugin_manager: State<'_, PluginManager>,
     file_path: &str,
 ) -> Result<BatchUpsertResult, String> {
@@ -915,7 +925,7 @@ async fn cmd_import_data<R: Runtime>(
         .collect();
 
     let upserted = batch_upsert(
-        &window,
+        &app_handle,
         workspaces,
         environments,
         folders,
@@ -1017,15 +1027,16 @@ async fn cmd_curl_to_request<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_export_data(
-    window: WebviewWindow,
+async fn cmd_export_data<R: Runtime>(
+    app_handle: AppHandle<R>,
     export_path: &str,
     workspace_ids: Vec<&str>,
     include_environments: bool,
 ) -> Result<(), String> {
-    let export_data = get_workspace_export_resources(&window, workspace_ids, include_environments)
-        .await
-        .map_err(|e| e.to_string())?;
+    let export_data =
+        get_workspace_export_resources(&app_handle, workspace_ids, include_environments)
+            .await
+            .map_err(|e| e.to_string())?;
     let f = File::options()
         .create(true)
         .truncate(true)
@@ -1043,12 +1054,12 @@ async fn cmd_export_data(
 }
 
 #[tauri::command]
-async fn cmd_save_response(
-    window: WebviewWindow,
+async fn cmd_save_response<R: Runtime>(
+    app_handle: AppHandle<R>,
     response_id: &str,
     filepath: &str,
 ) -> Result<(), String> {
-    let response = get_http_response(&window, response_id).await.map_err(|e| e.to_string())?;
+    let response = get_http_response(&app_handle, response_id).await.map_err(|e| e.to_string())?;
 
     let body_path = match response.body_path {
         None => {
@@ -1063,8 +1074,9 @@ async fn cmd_save_response(
 }
 
 #[tauri::command]
-async fn cmd_send_http_request(
-    window: WebviewWindow,
+async fn cmd_send_http_request<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
     // NOTE: We receive the entire request because to account for the race
@@ -1073,17 +1085,18 @@ async fn cmd_send_http_request(
     request: HttpRequest,
 ) -> YaakResult<HttpResponse> {
     let response =
-        create_default_http_response(&window, &request.id, &UpdateSource::Window).await?;
+        create_default_http_response(&app_handle, &request.id, &UpdateSource::from_window(&window))
+            .await?;
 
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
-    window.listen_any(format!("cancel_http_response_{}", response.id), move |_event| {
+    app_handle.listen_any(format!("cancel_http_response_{}", response.id), move |_event| {
         if let Err(e) = cancel_tx.send(true) {
             warn!("Failed to send cancel event for request {e:?}");
         }
     });
 
     let environment = match environment_id {
-        Some(id) => match get_environment(&window, id).await {
+        Some(id) => match get_environment(&app_handle, id).await {
             Ok(env) => Some(env),
             Err(e) => {
                 warn!("Failed to find environment by id {id} {}", e);
@@ -1094,7 +1107,7 @@ async fn cmd_send_http_request(
     };
 
     let cookie_jar = match cookie_jar_id {
-        Some(id) => Some(get_cookie_jar(&window, id).await.expect("Failed to get cookie jar")),
+        Some(id) => Some(get_cookie_jar(&app_handle, id).await.expect("Failed to get cookie jar")),
         None => None,
     };
 
@@ -1102,44 +1115,59 @@ async fn cmd_send_http_request(
 }
 
 async fn response_err<R: Runtime>(
+    app_handle: &AppHandle<R>,
     response: &HttpResponse,
     error: String,
-    w: &WebviewWindow<R>,
+    update_source: &UpdateSource,
 ) -> HttpResponse {
     warn!("Failed to send request: {error:?}");
     let mut response = response.clone();
     response.state = HttpResponseState::Closed;
     response.error = Some(error.clone());
-    response = update_response_if_id(w, &response, &UpdateSource::Window)
+    response = update_response_if_id(app_handle, &response, update_source)
         .await
         .expect("Failed to update response");
     response
 }
 
 #[tauri::command]
-async fn cmd_set_update_mode(update_mode: &str, w: WebviewWindow) -> Result<KeyValue, String> {
-    cmd_set_key_value("app", "update_mode", update_mode, w).await.map_err(|e| e.to_string())
+async fn cmd_set_update_mode<R: Runtime>(
+    update_mode: &str,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> YaakResult<KeyValue> {
+    let (key_value, _created) = set_key_value_raw(
+        &app_handle,
+        "app",
+        "update_mode",
+        update_mode,
+        &UpdateSource::from_window(&window),
+    )
+    .await;
+    Ok(key_value)
 }
 
 #[tauri::command]
-async fn cmd_get_key_value(
+async fn cmd_get_key_value<R: Runtime>(
     namespace: &str,
     key: &str,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
 ) -> Result<Option<KeyValue>, ()> {
-    let result = get_key_value_raw(&w, namespace, key).await;
+    let result = get_key_value_raw(&app_handle, namespace, key).await;
     Ok(result)
 }
 
 #[tauri::command]
-async fn cmd_set_key_value(
+async fn cmd_set_key_value<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
     namespace: &str,
     key: &str,
     value: &str,
-    w: WebviewWindow,
 ) -> Result<KeyValue, String> {
     let (key_value, _created) =
-        set_key_value_raw(&w, namespace, key, value, &UpdateSource::Window).await;
+        set_key_value_raw(&app_handle, namespace, key, value, &UpdateSource::from_window(&window))
+            .await;
     Ok(key_value)
 }
 
@@ -1148,6 +1176,7 @@ async fn cmd_install_plugin<R: Runtime>(
     directory: &str,
     url: Option<String>,
     plugin_manager: State<'_, PluginManager>,
+    app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<Plugin, String> {
     plugin_manager
@@ -1156,13 +1185,13 @@ async fn cmd_install_plugin<R: Runtime>(
         .map_err(|e| e.to_string())?;
 
     let plugin = upsert_plugin(
-        &window,
+        &app_handle,
         Plugin {
             directory: directory.into(),
             url,
             ..Default::default()
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await
     .map_err(|e| e.to_string())?;
@@ -1175,8 +1204,9 @@ async fn cmd_uninstall_plugin<R: Runtime>(
     plugin_id: &str,
     plugin_manager: State<'_, PluginManager>,
     window: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
 ) -> Result<Plugin, String> {
-    let plugin = delete_plugin(&window, plugin_id, &UpdateSource::Window)
+    let plugin = delete_plugin(&app_handle, plugin_id, &UpdateSource::from_window(&window))
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1189,47 +1219,58 @@ async fn cmd_uninstall_plugin<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_update_cookie_jar(
+async fn cmd_update_cookie_jar<R: Runtime>(
     cookie_jar: CookieJar,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<CookieJar, String> {
-    upsert_cookie_jar(&w, &cookie_jar, &UpdateSource::Window).await.map_err(|e| e.to_string())
+    upsert_cookie_jar(&app_handle, &cookie_jar, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_cookie_jar(w: WebviewWindow, cookie_jar_id: &str) -> Result<CookieJar, String> {
-    delete_cookie_jar(&w, cookie_jar_id, &UpdateSource::Window).await.map_err(|e| e.to_string())
+async fn cmd_delete_cookie_jar<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+    cookie_jar_id: &str,
+) -> Result<CookieJar, String> {
+    delete_cookie_jar(&app_handle, cookie_jar_id, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_create_cookie_jar(
+async fn cmd_create_cookie_jar<R: Runtime>(
     workspace_id: &str,
     name: &str,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<CookieJar, String> {
     upsert_cookie_jar(
-        &w,
+        &app_handle,
         &CookieJar {
             name: name.to_string(),
             workspace_id: workspace_id.to_string(),
             ..Default::default()
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await
     .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_create_environment(
+async fn cmd_create_environment<R: Runtime>(
     workspace_id: &str,
     environment_id: Option<&str>,
     name: &str,
     variables: Vec<EnvironmentVariable>,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<Environment, String> {
     upsert_environment(
-        &w,
+        &app_handle,
         Environment {
             workspace_id: workspace_id.to_string(),
             environment_id: environment_id.map(|s| s.to_string()),
@@ -1237,22 +1278,23 @@ async fn cmd_create_environment(
             variables,
             ..Default::default()
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await
     .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_create_grpc_request(
+async fn cmd_create_grpc_request<R: Runtime>(
     workspace_id: &str,
     name: &str,
     sort_priority: f32,
     folder_id: Option<&str>,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<GrpcRequest, String> {
     upsert_grpc_request(
-        &w,
+        &app_handle,
         GrpcRequest {
             workspace_id: workspace_id.to_string(),
             name: name.to_string(),
@@ -1260,184 +1302,240 @@ async fn cmd_create_grpc_request(
             sort_priority,
             ..Default::default()
         },
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await
     .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_duplicate_grpc_request(id: &str, w: WebviewWindow) -> Result<GrpcRequest, String> {
-    duplicate_grpc_request(&w, id, &UpdateSource::Window).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_duplicate_folder<R: Runtime>(
-    window: WebviewWindow<R>,
+async fn cmd_duplicate_grpc_request<R: Runtime>(
     id: &str,
-) -> Result<(), String> {
-    let folder = get_folder(&window, id).await.map_err(|e| e.to_string())?;
-    duplicate_folder(&window, &folder).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_create_http_request(
-    request: HttpRequest,
-    w: WebviewWindow,
-) -> Result<HttpRequest, String> {
-    upsert_http_request(&w, request, &UpdateSource::Window).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_duplicate_http_request(id: &str, w: WebviewWindow) -> Result<HttpRequest, String> {
-    duplicate_http_request(&w, id, &UpdateSource::Window).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_update_workspace(workspace: Workspace, w: WebviewWindow) -> Result<Workspace, String> {
-    upsert_workspace(&w, workspace, &UpdateSource::Window).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_update_workspace_meta(
-    workspace_meta: WorkspaceMeta,
-    w: WebviewWindow,
-) -> Result<WorkspaceMeta, String> {
-    upsert_workspace_meta(&w, workspace_meta, &UpdateSource::Window)
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<GrpcRequest, String> {
+    duplicate_grpc_request(&app_handle, id, &UpdateSource::from_window(&window))
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_update_environment(
-    environment: Environment,
-    w: WebviewWindow,
-) -> Result<Environment, String> {
-    upsert_environment(&w, environment, &UpdateSource::Window).await.map_err(|e| e.to_string())
+async fn cmd_duplicate_folder<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+    id: &str,
+) -> YaakResult<()> {
+    let folder = get_folder(&app_handle, id).await?;
+    let new_folder =
+        duplicate_folder(&app_handle, &folder, &UpdateSource::from_window(&window)).await?;
+    Ok(new_folder)
 }
 
 #[tauri::command]
-async fn cmd_update_grpc_request(
-    request: GrpcRequest,
-    w: WebviewWindow,
-) -> Result<GrpcRequest, String> {
-    upsert_grpc_request(&w, request, &UpdateSource::Window).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_update_http_request(
+async fn cmd_create_http_request<R: Runtime>(
     request: HttpRequest,
-    window: WebviewWindow,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<HttpRequest, String> {
-    upsert_http_request(&window, request, &UpdateSource::Window).await.map_err(|e| e.to_string())
+    upsert_http_request(&app_handle, request, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_grpc_request(
-    w: WebviewWindow,
-    request_id: &str,
+async fn cmd_duplicate_http_request<R: Runtime>(
+    id: &str,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<HttpRequest, String> {
+    duplicate_http_request(&app_handle, id, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_update_workspace<R: Runtime>(
+    workspace: Workspace,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<Workspace, String> {
+    upsert_workspace(&app_handle, workspace, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_update_workspace_meta<R: Runtime>(
+    workspace_meta: WorkspaceMeta,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<WorkspaceMeta, String> {
+    upsert_workspace_meta(&app_handle, workspace_meta, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_update_environment<R: Runtime>(
+    environment: Environment,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<Environment, String> {
+    upsert_environment(&app_handle, environment, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_update_grpc_request<R: Runtime>(
+    request: GrpcRequest,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<GrpcRequest, String> {
-    delete_grpc_request(&w, request_id, &UpdateSource::Window).await.map_err(|e| e.to_string())
+    upsert_grpc_request(&app_handle, request, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_http_request(
-    w: WebviewWindow,
-    request_id: &str,
+async fn cmd_update_http_request<R: Runtime>(
+    request: HttpRequest,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<HttpRequest, String> {
-    delete_http_request(&w, request_id, &UpdateSource::Window).await.map_err(|e| e.to_string())
+    upsert_http_request(&app_handle, request, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_folders(workspace_id: &str, w: WebviewWindow) -> Result<Vec<Folder>, String> {
-    list_folders(&w, workspace_id).await.map_err(|e| e.to_string())
+async fn cmd_delete_grpc_request<R: Runtime>(
+    app_handle: AppHandle<R>,
+    request_id: &str,
+    window: WebviewWindow<R>,
+) -> Result<GrpcRequest, String> {
+    delete_grpc_request(&app_handle, request_id, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_update_folder(folder: Folder, w: WebviewWindow) -> Result<Folder, String> {
-    upsert_folder(&w, folder, &UpdateSource::Window).await.map_err(|e| e.to_string())
+async fn cmd_delete_http_request<R: Runtime>(
+    app_handle: AppHandle<R>,
+    request_id: &str,
+    window: WebviewWindow<R>,
+) -> Result<HttpRequest, String> {
+    delete_http_request(&app_handle, request_id, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_folder(w: WebviewWindow, folder_id: &str) -> Result<Folder, String> {
-    delete_folder(&w, folder_id, &UpdateSource::Window).await.map_err(|e| e.to_string())
+async fn cmd_list_folders<R: Runtime>(
+    workspace_id: &str,
+    app_handle: AppHandle<R>,
+) -> Result<Vec<Folder>, String> {
+    list_folders(&app_handle, workspace_id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_environment(
-    w: WebviewWindow,
+async fn cmd_update_folder<R: Runtime>(
+    folder: Folder,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> YaakResult<Folder> {
+    Ok(upsert_folder(&app_handle, folder, &UpdateSource::from_window(&window)).await?)
+}
+
+#[tauri::command]
+async fn cmd_delete_folder<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+    folder_id: &str,
+) -> Result<Folder, String> {
+    delete_folder(&app_handle, folder_id, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_delete_environment<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
     environment_id: &str,
 ) -> Result<Environment, String> {
-    delete_environment(&w, environment_id, &UpdateSource::Window).await.map_err(|e| e.to_string())
+    delete_environment(&app_handle, environment_id, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_grpc_connections(
+async fn cmd_list_grpc_connections<R: Runtime>(
     workspace_id: &str,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
 ) -> Result<Vec<GrpcConnection>, String> {
-    list_grpc_connections_for_workspace(&w, workspace_id).await.map_err(|e| e.to_string())
+    list_grpc_connections_for_workspace(&app_handle, workspace_id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_grpc_events(
+async fn cmd_list_grpc_events<R: Runtime>(
     connection_id: &str,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
 ) -> Result<Vec<GrpcEvent>, String> {
-    list_grpc_events(&w, connection_id).await.map_err(|e| e.to_string())
+    list_grpc_events(&app_handle, connection_id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_grpc_requests(
+async fn cmd_list_grpc_requests<R: Runtime>(
     workspace_id: &str,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
 ) -> Result<Vec<GrpcRequest>, String> {
-    list_grpc_requests(&w, workspace_id).await.map_err(|e| e.to_string())
+    list_grpc_requests(&app_handle, workspace_id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_http_requests(
+async fn cmd_list_http_requests<R: Runtime>(
     workspace_id: &str,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
 ) -> Result<Vec<HttpRequest>, String> {
-    list_http_requests(&w, workspace_id).await.map_err(|e| e.to_string())
+    list_http_requests(&app_handle, workspace_id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_environments(
+async fn cmd_list_environments<R: Runtime>(
     workspace_id: &str,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
 ) -> Result<Vec<Environment>, String> {
     // Not sure of a better place to put this...
-    ensure_base_environment(&w, workspace_id).await.map_err(|e| e.to_string())?;
-
-    list_environments(&w, workspace_id).await.map_err(|e| e.to_string())
+    ensure_base_environment(&app_handle, workspace_id).await.map_err(|e| e.to_string())?;
+    list_environments(&app_handle, workspace_id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_plugins(w: WebviewWindow) -> Result<Vec<Plugin>, String> {
-    list_plugins(&w).await.map_err(|e| e.to_string())
+async fn cmd_list_plugins<R: Runtime>(app_handle: AppHandle<R>) -> Result<Vec<Plugin>, String> {
+    list_plugins(&app_handle).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn cmd_reload_plugins<R: Runtime>(
+    app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<(), String> {
     plugin_manager
-        .initialize_all_plugins(window.app_handle(), &WindowContext::from_window(&window))
+        .initialize_all_plugins(&app_handle, &WindowContext::from_window(&window))
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-async fn cmd_plugin_info(
+async fn cmd_plugin_info<R: Runtime>(
     id: &str,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<BootResponse, String> {
-    let plugin = get_plugin(&w, id).await.map_err(|e| e.to_string())?;
+    let plugin = get_plugin(&app_handle, id).await.map_err(|e| e.to_string())?;
     Ok(plugin_manager
         .get_plugin_by_dir(plugin.directory.as_str())
         .await
@@ -1447,51 +1545,68 @@ async fn cmd_plugin_info(
 }
 
 #[tauri::command]
-async fn cmd_get_settings(w: WebviewWindow) -> Result<Settings, ()> {
-    Ok(get_or_create_settings(&w).await)
+async fn cmd_get_settings<R: Runtime>(app_handle: AppHandle<R>) -> Result<Settings, ()> {
+    Ok(get_or_create_settings(&app_handle).await)
 }
 
 #[tauri::command]
-async fn cmd_update_settings(settings: Settings, w: WebviewWindow) -> Result<Settings, String> {
-    update_settings(&w, settings, &UpdateSource::Window).await.map_err(|e| e.to_string())
+async fn cmd_update_settings<R: Runtime>(
+    settings: Settings,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<Settings, String> {
+    update_settings(&app_handle, settings, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_get_folder(id: &str, w: WebviewWindow) -> Result<Folder, String> {
-    get_folder(&w, id).await.map_err(|e| e.to_string())
+async fn cmd_get_folder<R: Runtime>(id: &str, app_handle: AppHandle<R>) -> Result<Folder, String> {
+    get_folder(&app_handle, id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_get_grpc_request(id: &str, w: WebviewWindow) -> Result<Option<GrpcRequest>, String> {
-    get_grpc_request(&w, id).await.map_err(|e| e.to_string())
+async fn cmd_get_grpc_request<R: Runtime>(
+    id: &str,
+    app_handle: AppHandle<R>,
+) -> Result<Option<GrpcRequest>, String> {
+    get_grpc_request(&app_handle, id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_get_http_request(id: &str, w: WebviewWindow) -> Result<Option<HttpRequest>, String> {
-    get_http_request(&w, id).await.map_err(|e| e.to_string())
+async fn cmd_get_http_request<R: Runtime>(
+    id: &str,
+    app_handle: AppHandle<R>,
+) -> Result<Option<HttpRequest>, String> {
+    get_http_request(&app_handle, id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_get_cookie_jar(id: &str, w: WebviewWindow) -> Result<CookieJar, String> {
-    get_cookie_jar(&w, id).await.map_err(|e| e.to_string())
+async fn cmd_get_cookie_jar<R: Runtime>(
+    id: &str,
+    app_handle: AppHandle<R>,
+) -> Result<CookieJar, String> {
+    get_cookie_jar(&app_handle, id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_cookie_jars(
+async fn cmd_list_cookie_jars<R: Runtime>(
     workspace_id: &str,
-    w: WebviewWindow,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<Vec<CookieJar>, String> {
-    let cookie_jars = list_cookie_jars(&w, workspace_id).await.expect("Failed to find cookie jars");
+    let cookie_jars =
+        list_cookie_jars(&app_handle, workspace_id).await.expect("Failed to find cookie jars");
 
     if cookie_jars.is_empty() {
         let cookie_jar = upsert_cookie_jar(
-            &w,
+            &app_handle,
             &CookieJar {
                 name: "Default".to_string(),
                 workspace_id: workspace_id.to_string(),
                 ..Default::default()
             },
-            &UpdateSource::Window,
+            &UpdateSource::from_window(&window),
         )
         .await
         .expect("Failed to create CookieJar");
@@ -1502,89 +1617,133 @@ async fn cmd_list_cookie_jars(
 }
 
 #[tauri::command]
-async fn cmd_list_key_values(window: WebviewWindow) -> Result<Vec<KeyValue>, String> {
-    list_key_values_raw(&window).await.map_err(|e| e.to_string())
+async fn cmd_list_key_values<R: Runtime>(
+    app_handle: AppHandle<R>,
+) -> Result<Vec<KeyValue>, String> {
+    list_key_values_raw(&app_handle).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_get_environment(id: &str, window: WebviewWindow) -> Result<Environment, String> {
-    get_environment(&window, id).await.map_err(|e| e.to_string())
+async fn cmd_get_environment<R: Runtime>(
+    id: &str,
+    app_handle: AppHandle<R>,
+) -> Result<Environment, String> {
+    get_environment(&app_handle, id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_get_workspace(id: &str, window: WebviewWindow) -> Result<Workspace, String> {
-    get_workspace(&window, id).await.map_err(|e| e.to_string())
+async fn cmd_get_workspace<R: Runtime>(
+    id: &str,
+    app_handle: AppHandle<R>,
+) -> Result<Workspace, String> {
+    get_workspace(&app_handle, id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_http_responses(
+async fn cmd_list_http_responses<R: Runtime>(
     workspace_id: &str,
     limit: Option<i64>,
-    window: WebviewWindow,
+    app_handle: AppHandle<R>,
 ) -> Result<Vec<HttpResponse>, String> {
-    list_http_responses_for_workspace(&window, workspace_id, limit).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_delete_http_response(id: &str, window: WebviewWindow) -> Result<HttpResponse, String> {
-    delete_http_response(&window, id, &UpdateSource::Window).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_delete_grpc_connection(
-    id: &str,
-    window: WebviewWindow,
-) -> Result<GrpcConnection, String> {
-    delete_grpc_connection(&window, id, &UpdateSource::Window).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn cmd_delete_all_grpc_connections(
-    request_id: &str,
-    window: WebviewWindow,
-) -> Result<(), String> {
-    delete_all_grpc_connections(&window, request_id, &UpdateSource::Window)
+    list_http_responses_for_workspace(&app_handle, workspace_id, limit)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_delete_send_history(workspace_id: &str, window: WebviewWindow) -> Result<(), String> {
-    delete_all_http_responses_for_workspace(&window, workspace_id, &UpdateSource::Window)
+async fn cmd_delete_http_response<R: Runtime>(
+    id: &str,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<HttpResponse, String> {
+    delete_http_response(&app_handle, id, &UpdateSource::from_window(&window))
         .await
-        .map_err(|e| e.to_string())?;
-    delete_all_grpc_connections_for_workspace(&window, workspace_id, &UpdateSource::Window)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_delete_grpc_connection<R: Runtime>(
+    id: &str,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<GrpcConnection, String> {
+    delete_grpc_connection(&app_handle, id, &UpdateSource::from_window(&window))
         .await
-        .map_err(|e| e.to_string())?;
-    delete_all_websocket_connections_for_workspace(&window, workspace_id, &UpdateSource::Window)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_delete_all_grpc_connections<R: Runtime>(
+    request_id: &str,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<(), String> {
+    delete_all_grpc_connections(&app_handle, request_id, &UpdateSource::from_window(&window))
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cmd_delete_send_history<R: Runtime>(
+    workspace_id: &str,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<(), String> {
+    delete_all_http_responses_for_workspace(
+        &app_handle,
+        workspace_id,
+        &UpdateSource::from_window(&window),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    delete_all_grpc_connections_for_workspace(
+        &app_handle,
+        workspace_id,
+        &UpdateSource::from_window(&window),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    delete_all_websocket_connections_for_workspace(
+        &app_handle,
+        workspace_id,
+        &UpdateSource::from_window(&window),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-async fn cmd_delete_all_http_responses(
+async fn cmd_delete_all_http_responses<R: Runtime>(
     request_id: &str,
-    window: WebviewWindow,
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
 ) -> Result<(), String> {
-    delete_all_http_responses_for_request(&window, request_id, &UpdateSource::Window)
-        .await
-        .map_err(|e| e.to_string())
+    delete_all_http_responses_for_request(
+        &app_handle,
+        request_id,
+        &UpdateSource::from_window(&window),
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn cmd_list_workspaces(window: WebviewWindow) -> Result<Vec<Workspace>, String> {
-    let workspaces = list_workspaces(&window).await.expect("Failed to find workspaces");
+async fn cmd_list_workspaces<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+) -> Result<Vec<Workspace>, String> {
+    let workspaces = list_workspaces(&app_handle).await.expect("Failed to find workspaces");
     if workspaces.is_empty() {
         let workspace = upsert_workspace(
-            &window,
+            &app_handle,
             Workspace {
                 name: "Yaak".to_string(),
                 setting_follow_redirects: true,
                 setting_validate_certificates: true,
                 ..Default::default()
             },
-            &UpdateSource::Window,
+            &UpdateSource::from_window(&window),
         )
         .await
         .expect("Failed to create Workspace");
@@ -1595,12 +1754,13 @@ async fn cmd_list_workspaces(window: WebviewWindow) -> Result<Vec<Workspace>, St
 }
 
 #[tauri::command]
-async fn cmd_get_workspace_meta(
-    window: WebviewWindow,
+async fn cmd_get_workspace_meta<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
     workspace_id: &str,
 ) -> Result<WorkspaceMeta, String> {
-    let workspace = get_workspace(&window, workspace_id).await.map_err(|e| e.to_string())?;
-    get_or_create_workspace_meta(&window, &workspace, &UpdateSource::Window)
+    let workspace = get_workspace(&app_handle, workspace_id).await.map_err(|e| e.to_string())?;
+    get_or_create_workspace_meta(&app_handle, &workspace, &UpdateSource::from_window(&window))
         .await
         .map_err(|e| e.to_string())
 }
@@ -1624,8 +1784,14 @@ async fn cmd_new_main_window(app_handle: AppHandle, url: &str) -> Result<(), Str
 }
 
 #[tauri::command]
-async fn cmd_delete_workspace(w: WebviewWindow, workspace_id: &str) -> Result<Workspace, String> {
-    delete_workspace(&w, workspace_id, &UpdateSource::Window).await.map_err(|e| e.to_string())
+async fn cmd_delete_workspace<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+    workspace_id: &str,
+) -> Result<Workspace, String> {
+    delete_workspace(&app_handle, workspace_id, &UpdateSource::from_window(&window))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1808,8 +1974,9 @@ pub fn run() {
             match event {
                 RunEvent::Ready => {
                     let w = window::create_main_window(app_handle, "/");
+                    let h = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        let info = history::store_launch_history(&w).await;
+                        let info = history::store_launch_history(&h).await;
                         debug!("Launched Yaak {:?}", info);
                     });
 
@@ -1970,7 +2137,7 @@ fn workspace_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Str
 async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Workspace> {
     match workspace_id_from_window(&window) {
         None => None,
-        Some(id) => get_workspace(window, id.as_str()).await.ok(),
+        Some(id) => get_workspace(window.app_handle(), id.as_str()).await.ok(),
     }
 }
 
@@ -1983,7 +2150,7 @@ fn environment_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<S
 async fn environment_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Environment> {
     match environment_id_from_window(&window) {
         None => None,
-        Some(id) => get_environment(window, id.as_str()).await.ok(),
+        Some(id) => get_environment(window.app_handle(), id.as_str()).await.ok(),
     }
 }
 
@@ -1996,6 +2163,6 @@ fn cookie_jar_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<St
 async fn cookie_jar_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<CookieJar> {
     match cookie_jar_id_from_window(&window) {
         None => None,
-        Some(id) => get_cookie_jar(window, id.as_str()).await.ok(),
+        Some(id) => get_cookie_jar(window.app_handle(), id.as_str()).await.ok(),
     }
 }
