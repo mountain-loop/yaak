@@ -52,7 +52,7 @@ export function useGit(dir: string) {
         onSuccess,
       }),
       commitAndPush: useMutation<PushResult, string, { message: string }>({
-        mutationKey: ['git', 'commitpush', dir],
+        mutationKey: ['git', 'commit_push', dir],
         mutationFn: async (args) => {
           await invoke('plugin:yaak-git|commit', { dir, ...args });
           return invoke('plugin:yaak-git|push', { dir });
@@ -79,10 +79,18 @@ export function useGit(dir: string) {
         mutationFn: (args) => invoke('plugin:yaak-git|unstage', { dir, ...args }),
         onSuccess,
       }),
+      init: useGitInit(),
     },
   ] as const;
 }
 
-export async function gitInit(dir: string) {
-  await invoke('plugin:yaak-git|initialize', { dir });
+export function useGitInit() {
+  const queryClient = useQueryClient();
+  const onSuccess = () => queryClient.invalidateQueries({ queryKey: ['git'] });
+
+  return useMutation<void, string, { dir: string }>({
+    mutationKey: ['git', 'init'],
+    mutationFn: (args) => invoke('plugin:yaak-git|initialize', { ...args }),
+    onSuccess,
+  });
 }

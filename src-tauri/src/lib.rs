@@ -12,14 +12,14 @@ use crate::uri_scheme::handle_uri_scheme;
 use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
-use rand::random;
+use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{fs, panic};
-use tauri::{AppHandle, Emitter, RunEvent, State, WebviewWindow};
+use tauri::{is_dev, AppHandle, Emitter, RunEvent, State, WebviewWindow};
 use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -70,6 +70,7 @@ use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
 use yaak_templates::{transform_args, Parser, Tokens};
 
+mod commands;
 mod encoding;
 mod error;
 mod grpc;
@@ -84,15 +85,6 @@ mod updates;
 mod uri_scheme;
 mod window;
 mod window_menu;
-
-const DEFAULT_WINDOW_WIDTH: f64 = 1100.0;
-const DEFAULT_WINDOW_HEIGHT: f64 = 600.0;
-
-const MIN_WINDOW_WIDTH: f64 = 300.0;
-const MIN_WINDOW_HEIGHT: f64 = 300.0;
-
-const MAIN_WINDOW_PREFIX: &str = "main_";
-const OTHER_WINDOW_PREFIX: &str = "other_";
 
 #[derive(serde::Serialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -1401,15 +1393,6 @@ async fn cmd_update_folder(folder: Folder, w: WebviewWindow) -> Result<Folder, S
 }
 
 #[tauri::command]
-async fn cmd_write_file_dev(pathname: &str, contents: &str) -> Result<(), String> {
-    if !is_dev() {
-        panic!("Cannot write arbitrary files when not in dev mode");
-    }
-
-    fs::write(pathname, contents).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 async fn cmd_delete_folder(w: WebviewWindow, folder_id: &str) -> Result<Folder, String> {
     delete_folder(&w, folder_id, &UpdateSource::Window).await.map_err(|e| e.to_string())
 }
@@ -1664,72 +1647,13 @@ async fn cmd_new_child_window(
     title: &str,
     inner_size: (f64, f64),
 ) -> Result<(), String> {
-    let app_handle = parent_window.app_handle();
-    let label = format!("{OTHER_WINDOW_PREFIX}_{label}");
-    let scale_factor = parent_window.scale_factor().unwrap();
-
-    let current_pos = parent_window.inner_position().unwrap().to_logical::<f64>(scale_factor);
-    let current_size = parent_window.inner_size().unwrap().to_logical::<f64>(scale_factor);
-
-    // Position the new window in the middle of the parent
-    let position = (
-        current_pos.x + current_size.width / 2.0 - inner_size.0 / 2.0,
-        current_pos.y + current_size.height / 2.0 - inner_size.1 / 2.0,
-    );
-
-    let config = window::CreateWindowConfig {
-        label: label.as_str(),
-        title,
-        url,
-        inner_size: Some(inner_size),
-        position: Some(position),
-        hide_titlebar: true,
-        ..Default::default()
-    };
-
-    let child_window = window::create_window(&app_handle, config);
-
-    // NOTE: These listeners will remain active even when the windows close. Unfortunately,
-    //   there's no way to unlisten to events for now, so we just have to be defensive.
-
-    {
-        let parent_window = parent_window.clone();
-        let child_window = child_window.clone();
-        child_window.clone().on_window_event(move |e| match e {
-            // When the new window is destroyed, bring the other up behind it
-            WindowEvent::Destroyed => {
-                if let Some(w) = parent_window.get_webview_window(child_window.label()) {
-                    w.set_focus().unwrap();
-                }
-            }
-            _ => {}
-        });
-    }
-
-    {
-        let parent_window = parent_window.clone();
-        let child_window = child_window.clone();
-        parent_window.clone().on_window_event(move |e| match e {
-            // When the parent window is closed, close the child
-            WindowEvent::CloseRequested { .. } => child_window.destroy().unwrap(),
-            // When the parent window is focused, bring the child above
-            WindowEvent::Focused(focus) => {
-                if *focus {
-                    if let Some(w) = parent_window.get_webview_window(child_window.label()) {
-                        w.set_focus().unwrap();
-                    };
-                }
-            }
-            _ => {}
-        });
-    }
-
+    window::create_child_window(&parent_window, url, label, title, inner_size);
     Ok(())
 }
 
 #[tauri::command]
 async fn cmd_new_main_window(app_handle: AppHandle, url: &str) -> Result<(), String> {
-    create_main_window(&app_handle, url);
+    window::create_main_window(&app_handle, url);
     Ok(())
 }
 
@@ -1756,33 +1680,6 @@ async fn cmd_check_for_updates(
 pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
-        .plugin(
-            Builder::default()
-                .targets([
-                    Target::new(TargetKind::Stdout),
-                    Target::new(TargetKind::LogDir { file_name: None }),
-                    Target::new(TargetKind::Webview),
-                ])
-                .level_for("plugin_runtime", log::LevelFilter::Info)
-                .level_for("cookie_store", log::LevelFilter::Info)
-                .level_for("eventsource_client::event_parser", log::LevelFilter::Info)
-                .level_for("h2", log::LevelFilter::Info)
-                .level_for("hyper", log::LevelFilter::Info)
-                .level_for("hyper_util", log::LevelFilter::Info)
-                .level_for("hyper_rustls", log::LevelFilter::Info)
-                .level_for("reqwest", log::LevelFilter::Info)
-                .level_for("sqlx", log::LevelFilter::Warn)
-                .level_for("tao", log::LevelFilter::Info)
-                .level_for("tokio_util", log::LevelFilter::Info)
-                .level_for("tonic", log::LevelFilter::Info)
-                .level_for("tower", log::LevelFilter::Info)
-                .level_for("tracing", log::LevelFilter::Warn)
-                .level_for("swc_ecma_codegen", log::LevelFilter::Off)
-                .level_for("swc_ecma_transforms_base", log::LevelFilter::Off)
-                .with_colors(ColoredLevelConfig::default())
-                .level(if is_dev() { log::LevelFilter::Debug } else { log::LevelFilter::Info })
-                .build(),
-        )
         .plugin(
             Builder::default()
                 .targets([
@@ -1939,7 +1836,6 @@ pub fn run() {
             cmd_update_settings,
             cmd_update_workspace,
             cmd_update_workspace_meta,
-            cmd_write_file_dev,
         ])
         .register_uri_scheme_protocol("yaak", handle_uri_scheme)
         .build(tauri::generate_context!())
@@ -1947,7 +1843,7 @@ pub fn run() {
         .run(|app_handle, event| {
             match event {
                 RunEvent::Ready => {
-                    let w = create_main_window(app_handle, "/");
+                    let w = window::create_main_window(app_handle, "/");
                     tauri::async_runtime::spawn(async move {
                         let info = history::store_launch_history(&w).await;
                         debug!("Launched Yaak {:?}", info);
@@ -2005,45 +1901,6 @@ pub fn run() {
                 _ => {}
             };
         });
-}
-
-fn is_dev() -> bool {
-    #[cfg(dev)]
-    {
-        return true;
-    }
-    #[cfg(not(dev))]
-    {
-        return false;
-    }
-}
-
-fn create_main_window(handle: &AppHandle, url: &str) -> WebviewWindow {
-    let mut counter = 0;
-    let label = loop {
-        let label = format!("{MAIN_WINDOW_PREFIX}{counter}");
-        match handle.webview_windows().get(label.as_str()) {
-            None => break Some(label),
-            Some(_) => counter += 1,
-        }
-    }
-    .expect("Failed to generate label for new window");
-
-    let config = window::CreateWindowConfig {
-        url,
-        label: label.as_str(),
-        title: "Yaak",
-        inner_size: Some((DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)),
-        position: Some((
-            // Offset by random amount so it's easier to differentiate
-            100.0 + random::<f64>() * 20.0,
-            100.0 + random::<f64>() * 20.0,
-        )),
-        hide_titlebar: true,
-        ..Default::default()
-    };
-
-    window::create_window(handle, config)
 }
 
 async fn get_update_mode(h: &AppHandle) -> UpdateMode {

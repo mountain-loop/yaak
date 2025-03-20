@@ -1,12 +1,21 @@
 use crate::window_menu::app_menu;
-use crate::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
 use log::{info, warn};
+use rand::random;
 use std::process::exit;
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, Runtime, WebviewUrl, WebviewWindow, WindowEvent,
 };
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
+
+const DEFAULT_WINDOW_WIDTH: f64 = 1100.0;
+const DEFAULT_WINDOW_HEIGHT: f64 = 600.0;
+
+const MIN_WINDOW_WIDTH: f64 = 300.0;
+const MIN_WINDOW_HEIGHT: f64 = 300.0;
+
+pub(crate) const MAIN_WINDOW_PREFIX: &str = "main_";
+const OTHER_WINDOW_PREFIX: &str = "other_";
 
 #[derive(Default, Debug)]
 pub(crate) struct CreateWindowConfig<'s> {
@@ -160,4 +169,96 @@ pub(crate) fn create_window<R: Runtime>(
     });
 
     win
+}
+
+pub(crate) fn create_main_window(handle: &AppHandle, url: &str) -> WebviewWindow {
+    let mut counter = 0;
+    let label = loop {
+        let label = format!("{MAIN_WINDOW_PREFIX}{counter}");
+        match handle.webview_windows().get(label.as_str()) {
+            None => break Some(label),
+            Some(_) => counter += 1,
+        }
+    }
+    .expect("Failed to generate label for new window");
+
+    let config = CreateWindowConfig {
+        url,
+        label: label.as_str(),
+        title: "Yaak",
+        inner_size: Some((DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)),
+        position: Some((
+            // Offset by random amount so it's easier to differentiate
+            100.0 + random::<f64>() * 20.0,
+            100.0 + random::<f64>() * 20.0,
+        )),
+        hide_titlebar: true,
+        ..Default::default()
+    };
+
+    create_window(handle, config)
+}
+
+pub(crate) fn create_child_window(parent_window: &WebviewWindow, url: &str, label: &str, title: &str, inner_size: (f64, f64)) -> WebviewWindow {
+    let app_handle = parent_window.app_handle();
+    let label = format!("{OTHER_WINDOW_PREFIX}_{label}");
+    let scale_factor = parent_window.scale_factor().unwrap();
+
+    let current_pos = parent_window.inner_position().unwrap().to_logical::<f64>(scale_factor);
+    let current_size = parent_window.inner_size().unwrap().to_logical::<f64>(scale_factor);
+
+    // Position the new window in the middle of the parent
+    let position = (
+        current_pos.x + current_size.width / 2.0 - inner_size.0 / 2.0,
+        current_pos.y + current_size.height / 2.0 - inner_size.1 / 2.0,
+    );
+
+    let config = CreateWindowConfig {
+        label: label.as_str(),
+        title,
+        url,
+        inner_size: Some(inner_size),
+        position: Some(position),
+        hide_titlebar: true,
+        ..Default::default()
+    };
+
+    let child_window = create_window(&app_handle, config);
+
+    // NOTE: These listeners will remain active even when the windows close. Unfortunately,
+    //   there's no way to unlisten to events for now, so we just have to be defensive.
+
+    {
+        let parent_window = parent_window.clone();
+        let child_window = child_window.clone();
+        child_window.clone().on_window_event(move |e| match e {
+            // When the new window is destroyed, bring the other up behind it
+            WindowEvent::Destroyed => {
+                if let Some(w) = parent_window.get_webview_window(child_window.label()) {
+                    w.set_focus().unwrap();
+                }
+            }
+            _ => {}
+        });
+    }
+
+    {
+        let parent_window = parent_window.clone();
+        let child_window = child_window.clone();
+        parent_window.clone().on_window_event(move |e| match e {
+            // When the parent window is closed, close the child
+            WindowEvent::CloseRequested { .. } => child_window.destroy().unwrap(),
+            // When the parent window is focused, bring the child above
+            WindowEvent::Focused(focus) => {
+                if *focus {
+                    if let Some(w) = parent_window.get_webview_window(child_window.label()) {
+                        w.set_focus().unwrap();
+                    };
+                }
+            }
+            _ => {}
+        });
+    }
+    
+    child_window
 }

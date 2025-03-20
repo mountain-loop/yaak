@@ -1,8 +1,8 @@
-import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 import classNames from 'classnames';
-import { domAnimation, LazyMotion, MotionConfig } from 'motion/react';
 import { Provider as JotaiProvider } from 'jotai';
+import { domAnimation, LazyMotion, MotionConfig } from 'motion/react';
 import React, { Suspense } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -13,23 +13,7 @@ import RouteError from '../components/RouteError';
 import { Toasts } from '../components/Toasts';
 import { useOsInfo } from '../hooks/useOsInfo';
 import { jotaiStore } from '../lib/jotai';
-
-const queryClient = new QueryClient({
-  queryCache: new QueryCache({
-    onError: (err, query) => {
-      console.log('Query client error', { err, query });
-    },
-  }),
-  defaultOptions: {
-    queries: {
-      retry: false,
-      networkMode: 'always',
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: false,
-      refetchOnMount: false, // Don't refetch when a hook mounts
-    },
-  },
-});
+import { queryClient } from '../lib/queryClient';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TanStackRouterDevtools =

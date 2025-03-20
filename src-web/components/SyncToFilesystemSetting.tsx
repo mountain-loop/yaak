@@ -23,7 +23,7 @@ export function SyncToFilesystemSetting({
   const [isNonEmpty, setIsNonEmpty] = useState<string | null>(null);
   return (
     <details open={forceOpen || !!value.filePath} className="w-full">
-      <summary>Data directory {typeof value.initGit === 'boolean' && ' and Git'}</summary>
+      <summary>Data directory</summary>
       <VStack className="my-2" space={3}>
         {isNonEmpty ? (
           <Banner color="notice" className="flex flex-col gap-1.5">
@@ -43,12 +43,11 @@ export function SyncToFilesystemSetting({
               </Button>
             </div>
           </Banner>
-        ) : (
+        ) : !value.filePath ? (
           <Banner color="info">
-            Sync workspace data to folder as plain text files, ideal for backup and Git
-            collaboration. Environments are excluded in order to keep your secrets private.
+            Sync data to a folder for backup and Git integration.
           </Banner>
-        )}
+        ) : null}
 
         <SelectFile
           directory

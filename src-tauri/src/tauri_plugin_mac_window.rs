@@ -1,4 +1,4 @@
-use crate::MAIN_WINDOW_PREFIX;
+use crate::window::MAIN_WINDOW_PREFIX;
 use hex_color::HexColor;
 use log::warn;
 use objc::{msg_send, sel, sel_impl};

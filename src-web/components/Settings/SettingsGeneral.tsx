@@ -77,14 +77,6 @@ export function SettingsGeneral() {
         ]}
       />
 
-      <Checkbox
-        className="mt-3"
-        checked={false}
-        title="Send Usage Statistics (all tracking was removed in 2025.1.2)"
-        disabled
-        onChange={() => {}}
-      />
-
       <Separator className="my-4" />
 
       <Heading level={2}>

@@ -1,4 +1,4 @@
-import { gitInit } from '@yaakapp-internal/git';
+import { useGitInit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import { useState } from 'react';
 import { upsertWorkspace } from '../commands/upsertWorkspace';
@@ -17,6 +17,7 @@ interface Props {
 
 export function CreateWorkspaceDialog({ hide }: Props) {
   const [name, setName] = useState<string>('');
+  const gitInit = useGitInit();
   const [syncConfig, setSyncConfig] = useState<{
     filePath: string | null;
     initGit?: boolean;
@@ -44,7 +45,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         });
 
         if (syncConfig.initGit && syncConfig.filePath) {
-          gitInit(syncConfig.filePath).catch((err) => {
+          gitInit.mutateAsync({ dir: syncConfig.filePath }).catch((err) => {
             showErrorToast('git-init-error', String(err));
           });
         }

@@ -1,4 +1,4 @@
-import { gitInit, useGit } from '@yaakapp-internal/git';
+import { useGit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { HTMLAttributes } from 'react';
@@ -34,8 +34,10 @@ export function GitDropdown() {
 
 function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const workspace = useActiveWorkspace();
-  const [{ status, log }, { branch, deleteBranch, fetchAll, mergeBranch, push, pull, checkout }] =
-    useGit(syncDir);
+  const [
+    { status, log },
+    { branch, deleteBranch, fetchAll, mergeBranch, push, pull, checkout, init },
+  ] = useGit(syncDir);
 
   const localBranches = status.data?.localBranches ?? [];
   const remoteBranches = status.data?.remoteBranches ?? [];
@@ -50,7 +52,9 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
 
   const noRepo = status.error?.includes('not found');
   if (noRepo) {
-    return <SetupGitDropdown workspaceId={workspace.id} initRepo={() => gitInit(syncDir)} />;
+    return (
+      <SetupGitDropdown workspaceId={workspace.id} initRepo={() => init.mutate({ dir: syncDir })} />
+    );
   }
 
   const tryCheckout = (branch: string, force: boolean) => {
