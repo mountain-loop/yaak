@@ -92,7 +92,7 @@ export function GrpcConnectionSetupPane({
     const options =
       services?.flatMap((s) =>
         s.methods.map((m) => ({
-          label: `${s.name.split('.', 2).pop() ?? s.name}/${m.name}`,
+          label: `${s.name.split('.').pop() ?? s.name}/${m.name}`,
           value: `${s.name}/${m.name}`,
         })),
       ) ?? [];
