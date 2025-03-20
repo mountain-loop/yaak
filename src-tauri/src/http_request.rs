@@ -33,9 +33,7 @@ use yaak_models::queries::{
     get_base_environment, get_http_response, get_or_create_settings, get_workspace,
     update_response_if_id, upsert_cookie_jar, UpdateSource,
 };
-use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
-};
+use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, RenderPurpose};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 
