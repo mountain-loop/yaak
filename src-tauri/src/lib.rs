@@ -12,7 +12,6 @@ use crate::uri_scheme::handle_uri_scheme;
 use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
-use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
@@ -22,7 +21,6 @@ use std::{fs, panic};
 use tauri::{is_dev, AppHandle, Emitter, RunEvent, State, WebviewWindow};
 use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
-use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
@@ -30,7 +28,6 @@ use tokio::fs::read_to_string;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use yaak_common::window::WorkspaceWindowTrait;
-use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
 use yaak_models::models::{
@@ -123,22 +120,6 @@ async fn cmd_template_tokens_to_string<R: Runtime>(
     let cb = PluginTemplateCallback::new(&app_handle, &window.context(), RenderPurpose::Preview);
     let new_tokens = transform_args(tokens, &cb).await?;
     Ok(new_tokens.to_string())
-}
-
-#[tauri::command]
-async fn cmd_show_workspace_key<R: Runtime>(
-    window: WebviewWindow<R>,
-    workspace_id: &str,
-    encryption_manager: State<'_, Mutex<EncryptionManager>>,
-) -> YaakResult<()> {
-    let mgr = &*encryption_manager.lock().await;
-    let key = mgr.reveal_workspace_key(workspace_id).await?;
-    window
-        .dialog()
-        .message(format!("Your workspace key is \n\n{}", key))
-        .kind(MessageDialogKind::Info)
-        .show(|_v| {});
-    Ok(())
 }
 
 #[tauri::command]
@@ -796,7 +777,6 @@ async fn cmd_filter_response<R: Runtime>(
 
     let body = read_response_body(response).await.unwrap();
 
-    // TODO: Have plugins register their own content type (regex?)
     plugin_manager
         .filter_data(&window.context(), filter, &body, &content_type)
         .await
@@ -1824,7 +1804,6 @@ pub fn run() {
             cmd_send_http_request,
             cmd_set_key_value,
             cmd_set_update_mode,
-            cmd_show_workspace_key,
             cmd_template_functions,
             cmd_template_tokens_to_string,
             cmd_uninstall_plugin,
@@ -1836,6 +1815,12 @@ pub fn run() {
             cmd_update_settings,
             cmd_update_workspace,
             cmd_update_workspace_meta,
+            //
+            //
+            // Migrated commands
+            crate::commands::cmd_show_workspace_key,
+            crate::commands::cmd_encrypt_input,
+            crate::commands::cmd_decrypt_input,
         ])
         .register_uri_scheme_protocol("yaak", handle_uri_scheme)
         .build(tauri::generate_context!())
