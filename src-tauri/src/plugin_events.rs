@@ -18,10 +18,8 @@ use yaak_models::queries::{
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
     GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
-    PluginWindowContext, RenderHttpRequestResponse, RenderHttpRequestResponse, RenderPurpose,
-    SendHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, SetKeyValueResponse,
-    ShowToastRequest, ShowToastRequest, TemplateRenderResponse, TemplateRenderResponse,
-    WindowContext, WindowNavigateEvent, WindowNavigateEvent,
+    PluginWindowContext, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse,
+    ShowToastRequest, TemplateRenderResponse, WindowNavigateEvent,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -133,8 +131,6 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             None
         }
         InternalEventPayload::ReloadResponse(_) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for plugin reload");
             let plugins = list_plugins(app_handle).await.unwrap();
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {

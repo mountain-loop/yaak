@@ -67,6 +67,7 @@ use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
 use yaak_templates::{transform_args, Parser, Tokens};
 
+mod commands;
 mod encoding;
 mod error;
 mod grpc;
@@ -201,11 +202,7 @@ async fn cmd_grpc_go<R: Runtime>(
         &unrendered_request,
         &base_environment,
         environment.as_ref(),
-        &PluginTemplateCallback::new(
-            &app_handle,
-            &PluginWindowContext::new(&window, &unrendered_request.workspace_id),
-            RenderPurpose::Send,
-        ),
+        &PluginTemplateCallback::new(&app_handle, &window.context(), RenderPurpose::Send),
     )
     .await?;
     let mut metadata = BTreeMap::new();
@@ -363,7 +360,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 environment.as_ref(),
                                 &PluginTemplateCallback::new(
                                     &app_handle,
-                                    &PluginWindowContext::new(&window, &workspace.id),
+                                    &window.context(),
                                     RenderPurpose::Send,
                                 ),
                             )
@@ -430,11 +427,7 @@ async fn cmd_grpc_go<R: Runtime>(
             msg.as_str(),
             &base_environment.clone(),
             environment.as_ref(),
-            &PluginTemplateCallback::new(
-                &app_handle,
-                &PluginWindowContext::new(&window, &req.workspace_id),
-                RenderPurpose::Send,
-            ),
+            &PluginTemplateCallback::new(&app_handle, &window.context(), RenderPurpose::Send),
         )
         .await?;
 
@@ -1993,7 +1986,7 @@ pub fn run() {
         .run(|app_handle, event| {
             match event {
                 RunEvent::Ready => {
-                    let w = window::create_main_window(app_handle, "/");
+                    window::create_main_window(app_handle, "/");
                     let h = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
                         let info = history::store_launch_history(&h).await;
