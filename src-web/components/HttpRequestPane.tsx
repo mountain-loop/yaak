@@ -1,8 +1,7 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
-import { atom, useAtom, useAtomValue } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
+import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
@@ -11,6 +10,7 @@ import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
 import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
 import { httpRequestsAtom } from '../hooks/useHttpRequests';
 import { useImportCurl } from '../hooks/useImportCurl';
+import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
@@ -27,7 +27,8 @@ import {
   BODY_TYPE_JSON,
   BODY_TYPE_NONE,
   BODY_TYPE_OTHER,
-  BODY_TYPE_XML, getContentTypeFromHeaders,
+  BODY_TYPE_XML,
+  getContentTypeFromHeaders,
 } from '../lib/model_util';
 import { prepareImportQuerystring } from '../lib/prepareImportQuerystring';
 import { resolvedModelName } from '../lib/resolvedModelName';
@@ -64,8 +65,6 @@ const TAB_HEADERS = 'headers';
 const TAB_AUTH = 'auth';
 const TAB_DESCRIPTION = 'description';
 
-const tabsAtom = atomWithStorage<Record<string, string>>('requestPaneActiveTabs', {});
-
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
   const requests = [...get(httpRequestsAtom), ...get(grpcRequestsAtom)];
@@ -79,7 +78,11 @@ const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
 export function HttpRequestPane({ style, fullHeight, className, activeRequest }: Props) {
   const activeRequestId = activeRequest.id;
   const { mutateAsync: updateRequestAsync, mutate: updateRequest } = useUpdateAnyHttpRequest();
-  const [activeTabs, setActiveTabs] = useAtom(tabsAtom);
+  const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
+    namespace: 'no_sync',
+    key: 'httpRequestActiveTabs',
+    fallback: {},
+  });
   const [forceUpdateHeaderEditorKey, setForceUpdateHeaderEditorKey] = useState<number>(0);
   const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
@@ -285,14 +288,14 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
 
   const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(
-    (tab: string) => {
-      setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
+    async (tab: string) => {
+      await setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
     },
     [activeRequest.id, setActiveTabs],
   );
 
-  useRequestEditorEvent('request_pane.focus_tab', () => {
-    setActiveTab(TAB_PARAMS);
+  useRequestEditorEvent('request_pane.focus_tab', async () => {
+    await setActiveTab(TAB_PARAMS);
   });
 
   const autocompleteUrls = useAtomValue(memoNotActiveRequestUrlsAtom);

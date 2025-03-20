@@ -1,12 +1,11 @@
 import type { GrpcMetadataEntry, GrpcRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import { useAtom } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useRef } from 'react';
 import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
+import { useKeyValue } from '../hooks/useKeyValue';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { resolvedModelName } from '../lib/resolvedModelName';
@@ -52,8 +51,6 @@ const TAB_METADATA = 'metadata';
 const TAB_AUTH = 'auth';
 const TAB_DESCRIPTION = 'description';
 
-const tabsAtom = atomWithStorage<Record<string, string>>('grpcRequestPaneActiveTabs', {});
-
 export function GrpcConnectionSetupPane({
   style,
   services,
@@ -70,7 +67,11 @@ export function GrpcConnectionSetupPane({
 }: Props) {
   const updateRequest = useUpdateAnyGrpcRequest();
   const authentication = useHttpAuthenticationSummaries();
-  const [activeTabs, setActiveTabs] = useAtom(tabsAtom);
+  const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
+    namespace: 'no_sync',
+    key: 'grpcRequestActiveTabs',
+    fallback: {},
+  });
   const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
 
   const urlContainerEl = useRef<HTMLDivElement>(null);
@@ -183,8 +184,8 @@ export function GrpcConnectionSetupPane({
 
   const activeTab = activeTabs?.[activeRequest.id];
   const setActiveTab = useCallback(
-    (tab: string) => {
-      setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
+    async (tab: string) => {
+      await setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
     },
     [activeRequest.id, setActiveTabs],
   );

@@ -81,11 +81,11 @@ pub async fn activate_license<R: Runtime>(
 
     let body: ActivateLicenseResponsePayload = response.json().await?;
     yaak_models::queries::set_key_value_string(
-        window,
+        window.app_handle(),
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         body.activation_id.as_str(),
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await;
 
@@ -100,7 +100,8 @@ pub async fn deactivate_license<R: Runtime>(
     window: &WebviewWindow<R>,
     p: DeactivateLicenseRequestPayload,
 ) -> Result<()> {
-    let activation_id = get_activation_id(window).await;
+    let app_handle = window.app_handle();
+    let activation_id = get_activation_id(app_handle).await;
 
     let client = reqwest::Client::new();
     let path = format!("/licenses/activations/{}/deactivate", activation_id);
@@ -119,14 +120,14 @@ pub async fn deactivate_license<R: Runtime>(
     }
 
     yaak_models::queries::delete_key_value(
-        window,
+        app_handle,
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
-        &UpdateSource::Window,
+        &UpdateSource::from_window(&window),
     )
     .await;
 
-    if let Err(e) = window.emit("license-deactivated", true) {
+    if let Err(e) = app_handle.emit("license-deactivated", true) {
         warn!("Failed to emit deactivate-license event: {}", e);
     }
 
@@ -143,7 +144,10 @@ pub enum LicenseCheckStatus {
     Trialing { end: NaiveDateTime },
 }
 
-pub async fn check_license<R: Runtime>(app_handle: &AppHandle<R>, payload: CheckActivationRequestPayload) -> Result<LicenseCheckStatus> {
+pub async fn check_license<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    payload: CheckActivationRequestPayload,
+) -> Result<LicenseCheckStatus> {
     let activation_id = get_activation_id(app_handle).await;
     let settings = yaak_models::queries::get_or_create_settings(app_handle).await;
     let trial_end = settings.created_at.add(Duration::from_secs(TRIAL_SECONDS));
@@ -195,7 +199,7 @@ fn build_url(path: &str) -> String {
     }
 }
 
-pub async fn get_activation_id<R: Runtime>(mgr: &impl Manager<R>) -> String {
-    yaak_models::queries::get_key_value_string(mgr, KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
+pub async fn get_activation_id<R: Runtime>(app_handle: &AppHandle<R>) -> String {
+    yaak_models::queries::get_key_value_string(app_handle, KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
         .await
 }

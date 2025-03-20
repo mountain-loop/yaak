@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
-use tauri::{Manager, Runtime, WebviewWindow};
+use tauri::{AppHandle, Runtime};
 use tokio::fs;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -106,17 +106,21 @@ pub(crate) struct FsCandidate {
 }
 
 pub(crate) async fn get_db_candidates<R: Runtime>(
-    mgr: &impl Manager<R>,
+    app_handle: &AppHandle<R>,
     workspace_id: &str,
     sync_dir: &Path,
 ) -> Result<Vec<DbCandidate>> {
-    let models: HashMap<_, _> =
-        workspace_models(mgr, workspace_id).await?.into_iter().map(|m| (m.id(), m)).collect();
-    let sync_states: HashMap<_, _> = list_sync_states_for_workspace(mgr, workspace_id, sync_dir)
+    let models: HashMap<_, _> = workspace_models(app_handle, workspace_id)
         .await?
         .into_iter()
-        .map(|s| (s.model_id.clone(), s))
+        .map(|m| (m.id(), m))
         .collect();
+    let sync_states: HashMap<_, _> =
+        list_sync_states_for_workspace(app_handle, workspace_id, sync_dir)
+            .await?
+            .into_iter()
+            .map(|s| (s.model_id.clone(), s))
+            .collect();
 
     // 1. Add candidates for models (created/modified/unmodified)
     let mut candidates: Vec<DbCandidate> = models
@@ -223,7 +227,7 @@ pub(crate) fn compute_sync_ops(
                         model: model.to_owned(),
                         state: sync_state.to_owned(),
                     }
-                },
+                }
                 (Some(DbCandidate::Modified(model, sync_state)), None) => SyncOp::FsUpdate {
                     model: model.to_owned(),
                     state: sync_state.to_owned(),
@@ -285,10 +289,11 @@ pub(crate) fn compute_sync_ops(
 }
 
 async fn workspace_models<R: Runtime>(
-    mgr: &impl Manager<R>,
+    app_handle: &AppHandle<R>,
     workspace_id: &str,
 ) -> Result<Vec<SyncModel>> {
-    let resources = get_workspace_export_resources(mgr, vec![workspace_id], true).await?.resources;
+    let resources =
+        get_workspace_export_resources(app_handle, vec![workspace_id], true).await?.resources;
     let workspace = resources.workspaces.iter().find(|w| w.id == workspace_id);
 
     let workspace = match workspace {
@@ -318,7 +323,7 @@ async fn workspace_models<R: Runtime>(
 }
 
 pub(crate) async fn apply_sync_ops<R: Runtime>(
-    window: &WebviewWindow<R>,
+    app_handle: &AppHandle<R>,
     workspace_id: &str,
     sync_dir: &Path,
     sync_ops: Vec<SyncOp>,
@@ -429,7 +434,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                 }
             }
             SyncOp::DbDelete { model, state } => {
-                delete_model(window, &model).await?;
+                delete_model(app_handle, &model).await?;
                 SyncStateOp::Delete {
                     state: state.to_owned(),
                 }
@@ -438,7 +443,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
     }
 
     let upserted_models = batch_upsert(
-        window,
+        app_handle,
         workspaces_to_upsert,
         environments_to_upsert,
         folders_to_upsert,
@@ -452,7 +457,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
     // Ensure we creat WorkspaceMeta models for each new workspace, with the appropriate sync dir
     let sync_dir_string = sync_dir.to_string_lossy().to_string();
     for workspace in upserted_models.workspaces {
-        let r = match get_workspace_meta(window, &workspace).await {
+        let r = match get_workspace_meta(app_handle, &workspace).await {
             Ok(Some(m)) => {
                 if m.setting_sync_dir == Some(sync_dir_string.clone()) {
                     // We don't need to update if unchanged
@@ -462,7 +467,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                     setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
                     ..m
                 };
-                upsert_workspace_meta(window, wm, &UpdateSource::Sync).await
+                upsert_workspace_meta(app_handle, wm, &UpdateSource::Sync).await
             }
             Ok(None) => {
                 let wm = WorkspaceMeta {
@@ -470,7 +475,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                     setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
                     ..Default::default()
                 };
-                upsert_workspace_meta(window, wm, &UpdateSource::Sync).await
+                upsert_workspace_meta(app_handle, wm, &UpdateSource::Sync).await
             }
             Err(e) => Err(e),
         };
@@ -501,7 +506,7 @@ pub(crate) enum SyncStateOp {
 }
 
 pub(crate) async fn apply_sync_state_ops<R: Runtime>(
-    window: &WebviewWindow<R>,
+    app_handle: &AppHandle<R>,
     workspace_id: &str,
     sync_dir: &Path,
     ops: Vec<SyncStateOp>,
@@ -522,7 +527,7 @@ pub(crate) async fn apply_sync_state_ops<R: Runtime>(
                     flushed_at: Utc::now().naive_utc(),
                     ..Default::default()
                 };
-                upsert_sync_state(window, sync_state).await?;
+                upsert_sync_state(app_handle, sync_state).await?;
             }
             SyncStateOp::Update {
                 state: sync_state,
@@ -536,10 +541,10 @@ pub(crate) async fn apply_sync_state_ops<R: Runtime>(
                     flushed_at: Utc::now().naive_utc(),
                     ..sync_state
                 };
-                upsert_sync_state(window, sync_state).await?;
+                upsert_sync_state(app_handle, sync_state).await?;
             }
             SyncStateOp::Delete { state } => {
-                delete_sync_state(window, state.id.as_str()).await?;
+                delete_sync_state(app_handle, state.id.as_str()).await?;
             }
         }
     }
@@ -551,25 +556,25 @@ fn derive_model_filename(m: &SyncModel) -> PathBuf {
     Path::new(&rel).to_path_buf()
 }
 
-async fn delete_model<R: Runtime>(window: &WebviewWindow<R>, model: &SyncModel) -> Result<()> {
+async fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) -> Result<()> {
     match model {
         SyncModel::Workspace(m) => {
-            delete_workspace(window, m.id.as_str(), &UpdateSource::Sync).await?;
+            delete_workspace(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
         }
         SyncModel::Environment(m) => {
-            delete_environment(window, m.id.as_str(), &UpdateSource::Sync).await?;
+            delete_environment(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
         }
         SyncModel::Folder(m) => {
-            delete_folder(window, m.id.as_str(), &UpdateSource::Sync).await?;
+            delete_folder(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
         }
         SyncModel::HttpRequest(m) => {
-            delete_http_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
+            delete_http_request(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
         }
         SyncModel::GrpcRequest(m) => {
-            delete_grpc_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
+            delete_grpc_request(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
         }
         SyncModel::WebsocketRequest(m) => {
-            delete_websocket_request(window, m.id.as_str(), &UpdateSource::Sync).await?;
+            delete_websocket_request(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
         }
     };
     Ok(())

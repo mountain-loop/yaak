@@ -2,8 +2,7 @@ import type { HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
 import classNames from 'classnames';
-import { atom, useAtom, useAtomValue } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
+import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo } from 'react';
 import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
@@ -12,6 +11,7 @@ import { getActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
+import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
 import { requestsAtom } from '../hooks/useRequests';
@@ -50,8 +50,6 @@ const TAB_HEADERS = 'headers';
 const TAB_AUTH = 'auth';
 const TAB_DESCRIPTION = 'description';
 
-const tabsAtom = atomWithStorage<Record<string, string>>('requestPaneActiveTabs', {});
-
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
   const requests = get(requestsAtom);
@@ -64,7 +62,11 @@ const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
 
 export function WebsocketRequestPane({ style, fullHeight, className, activeRequest }: Props) {
   const activeRequestId = activeRequest.id;
-  const [activeTabs, setActiveTabs] = useAtom(tabsAtom);
+  const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
+    namespace: 'no_sync',
+    key: 'websocketRequestActiveTabs',
+    fallback: {},
+  });
   const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const authentication = useHttpAuthenticationSummaries();
@@ -157,14 +159,14 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
 
   const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(
-    (tab: string) => {
-      setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
+    async (tab: string) => {
+      await setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
     },
     [activeRequest.id, setActiveTabs],
   );
 
-  useRequestEditorEvent('request_pane.focus_tab', () => {
-    setActiveTab(TAB_PARAMS);
+  useRequestEditorEvent('request_pane.focus_tab', async () => {
+    await setActiveTab(TAB_PARAMS);
   });
 
   const autocompleteUrls = useAtomValue(memoNotActiveRequestUrlsAtom);

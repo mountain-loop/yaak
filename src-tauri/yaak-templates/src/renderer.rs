@@ -119,10 +119,7 @@ async fn render_value<T: TemplateCallback>(
                 let v = Box::pin(render_value(a.value, vars, cb, depth)).await?;
                 resolved_args.insert(a.name, v);
             }
-            match cb.run(name.as_str(), resolved_args.clone()).await {
-                Ok(s) => s,
-                Err(e) => return Err(e),
-            }
+            cb.run(name.as_str(), resolved_args.clone()).await?
         }
         Val::Null => "".into(),
     };
@@ -381,7 +378,7 @@ mod parse_and_render_tests {
     #[tokio::test]
     async fn render_fn_err() -> Result<()> {
         let vars = HashMap::new();
-        let template = r#"${[ error() ]}"#;
+        let template = r#"hello ${[ error() ]}"#;
 
         struct CB {}
         impl TemplateCallback for CB {

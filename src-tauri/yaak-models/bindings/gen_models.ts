@@ -44,7 +44,7 @@ export type HttpUrlParameter = { enabled?: boolean, name: string, value: string,
 
 export type KeyValue = { model: "key_value", createdAt: string, updatedAt: string, key: string, namespace: string, value: string, };
 
-export type ModelPayload = { model: AnyModel, windowLabel: string, updateSource: UpdateSource, };
+export type ModelPayload = { model: AnyModel, updateSource: UpdateSource, };
 
 export type Plugin = { model: "plugin", id: string, createdAt: string, updatedAt: string, checkedAt: string | null, directory: string, enabled: boolean, url: string | null, };
 
@@ -60,7 +60,7 @@ export type SyncHistory = { model: "sync_history", id: string, workspaceId: stri
 
 export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, relPath: string, syncDir: string, };
 
-export type UpdateSource = "sync" | "window" | "plugin" | "background" | "import";
+export type UpdateSource = { "type": "sync" } | { "type": "window", label: string, } | { "type": "plugin" } | { "type": "background" } | { "type": "import" };
 
 export type WebsocketConnection = { model: "websocket_connection", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, elapsed: number, error: string | null, headers: Array<HttpResponseHeader>, state: WebsocketConnectionState, status: number, url: string, };
 
