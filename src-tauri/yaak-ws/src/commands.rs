@@ -9,6 +9,7 @@ use tauri::{AppHandle, Runtime, State, Url, WebviewWindow};
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
+use yaak_common::window::WorkspaceWindowTrait;
 use yaak_http::apply_path_placeholders;
 use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
@@ -19,9 +20,7 @@ use yaak_models::queries::{
     get_base_environment, get_cookie_jar, get_environment, get_websocket_connection,
     get_websocket_request, upsert_websocket_connection, upsert_websocket_event, UpdateSource,
 };
-use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
-};
+use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, RenderPurpose};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 
@@ -55,7 +54,12 @@ pub(crate) async fn delete_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(queries::delete_websocket_request(&app_handle, request_id, &UpdateSource::from_window(&window)).await?)
+    Ok(queries::delete_websocket_request(
+        &app_handle,
+        request_id,
+        &UpdateSource::from_window(&window),
+    )
+    .await?)
 }
 
 #[tauri::command]
@@ -64,8 +68,12 @@ pub(crate) async fn delete_connection<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketConnection> {
-    Ok(queries::delete_websocket_connection(&app_handle, connection_id, &UpdateSource::from_window(&window))
-        .await?)
+    Ok(queries::delete_websocket_connection(
+        &app_handle,
+        connection_id,
+        &UpdateSource::from_window(&window),
+    )
+    .await?)
 }
 
 #[tauri::command]
@@ -74,8 +82,12 @@ pub(crate) async fn delete_connections<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<()> {
-    Ok(queries::delete_all_websocket_connections(&app_handle, request_id, &UpdateSource::from_window(&window))
-        .await?)
+    Ok(queries::delete_all_websocket_connections(
+        &app_handle,
+        request_id,
+        &UpdateSource::from_window(&window),
+    )
+    .await?)
 }
 
 #[tauri::command]
@@ -124,11 +136,7 @@ pub(crate) async fn send<R: Runtime>(
         &unrendered_request,
         &base_environment,
         environment.as_ref(),
-        &PluginTemplateCallback::new(
-            &app_handle,
-            &WindowContext::from_window(&window),
-            RenderPurpose::Send,
-        ),
+        &PluginTemplateCallback::new(&app_handle, &window.context(), RenderPurpose::Send),
     )
     .await?;
 
@@ -204,11 +212,7 @@ pub(crate) async fn connect<R: Runtime>(
         &unrendered_request,
         &base_environment,
         environment.as_ref(),
-        &PluginTemplateCallback::new(
-            &app_handle,
-            &WindowContext::from_window(&window),
-            RenderPurpose::Send,
-        ),
+        &PluginTemplateCallback::new(&app_handle, &window.context(), RenderPurpose::Send),
     )
     .await?;
 
@@ -230,8 +234,9 @@ pub(crate) async fn connect<R: Runtime>(
                 })
                 .collect(),
         };
-        let plugin_result =
-            plugin_manager.call_http_authentication(&window, &auth_name, plugin_req).await?;
+        let plugin_result = plugin_manager
+            .call_http_authentication(&window.context(), &auth_name, plugin_req)
+            .await?;
         for header in plugin_result.set_headers {
             headers.insert(
                 HeaderName::from_str(&header.name).unwrap(),

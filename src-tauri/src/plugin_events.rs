@@ -18,8 +18,8 @@ use yaak_models::queries::{
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
     GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
-    RenderHttpRequestResponse, RenderPurpose, SendHttpRequestResponse, SetKeyValueResponse,
-    ShowToastRequest, TemplateRenderResponse, WindowContext, WindowNavigateEvent,
+    PluginWindowContext, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse,
+    ShowToastRequest, TemplateRenderResponse, WindowNavigateEvent,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -42,7 +42,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         }
         InternalEventPayload::ShowToastRequest(req) => {
             match window_context {
-                WindowContext::Label { label } => app_handle
+                PluginWindowContext::Label { label, .. } => app_handle
                     .emit_to(label, "show_toast", req)
                     .expect("Failed to emit show_toast to window"),
                 _ => app_handle.emit("show_toast", req).expect("Failed to emit show_toast"),
@@ -114,10 +114,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))
         }
         InternalEventPayload::ErrorResponse(resp) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for plugin reload");
             let toast_event = plugin_handle.build_event_to_send(
-                &WindowContext::from_window(&window),
+                &window_context,
                 &InternalEventPayload::ShowToastRequest(ShowToastRequest {
                     message: format!(
                         "Plugin error from {}: {}",
@@ -133,8 +131,6 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             None
         }
         InternalEventPayload::ReloadResponse(_) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for plugin reload");
             let plugins = list_plugins(app_handle).await.unwrap();
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {
@@ -148,7 +144,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 upsert_plugin(app_handle, new_plugin, &UpdateSource::Plugin).await.unwrap();
             }
             let toast_event = plugin_handle.build_event_to_send(
-                &WindowContext::from_window(&window),
+                &window_context,
                 &InternalEventPayload::ShowToastRequest(ShowToastRequest {
                     message: format!("Reloaded plugin {}", plugin_handle.dir),
                     icon: Some(Icon::Info),
@@ -223,13 +219,12 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             {
                 let event_id = event.id.clone();
                 let plugin_handle = plugin_handle.clone();
-                let label = label.clone();
+                let window_context = window_context.clone();
                 tauri::async_runtime::spawn(async move {
                     while let Some(url) = navigation_rx.recv().await {
                         let url = url.to_string();
-                        let label = label.clone();
                         let event_to_send = plugin_handle.build_event_to_send(
-                            &WindowContext::Label { label },
+                            &window_context, // NOTE: Sending existing context on purpose here
                             &InternalEventPayload::WindowNavigateEvent(WindowNavigateEvent { url }),
                             Some(event_id.clone()),
                         );
@@ -241,12 +236,11 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             {
                 let event_id = event.id.clone();
                 let plugin_handle = plugin_handle.clone();
-                let label = label.clone();
+                let window_context = window_context.clone();
                 tauri::async_runtime::spawn(async move {
                     while let Some(_) = close_rx.recv().await {
-                        let label = label.clone();
                         let event_to_send = plugin_handle.build_event_to_send(
-                            &WindowContext::Label { label },
+                            &window_context,
                             &InternalEventPayload::WindowCloseEvent,
                             Some(event_id.clone()),
                         );

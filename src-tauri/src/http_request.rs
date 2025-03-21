@@ -24,6 +24,7 @@ use tokio::fs::{create_dir_all, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
 use tokio::sync::{oneshot, Mutex};
+use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
@@ -32,9 +33,7 @@ use yaak_models::queries::{
     get_base_environment, get_http_response, get_or_create_settings, get_workspace,
     update_response_if_id, upsert_cookie_jar, UpdateSource,
 };
-use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
-};
+use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, RenderPurpose};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 
@@ -56,11 +55,8 @@ pub async fn send_http_request<R: Runtime>(
     let response_id = og_response.id.clone();
     let response = Arc::new(Mutex::new(og_response.clone()));
 
-    let cb = PluginTemplateCallback::new(
-        window.app_handle(),
-        &WindowContext::from_window(window),
-        RenderPurpose::Send,
-    );
+    let cb =
+        PluginTemplateCallback::new(window.app_handle(), &window.context(), RenderPurpose::Send);
     let update_source = UpdateSource::from_window(window);
 
     let request = match render_http_request(
@@ -388,7 +384,7 @@ pub async fn send_http_request<R: Runtime>(
                                 };
                             }
 
-                            // Set file path if not empty
+                            // Set file path if it is not empty
                             if !file_path.is_empty() {
                                 let filename = PathBuf::from(file_path)
                                     .file_name()
@@ -448,7 +444,8 @@ pub async fn send_http_request<R: Runtime>(
                 })
                 .collect(),
         };
-        let auth_result = plugin_manager.call_http_authentication(window, &auth_name, req).await;
+        let auth_result =
+            plugin_manager.call_http_authentication(&window.context(), &auth_name, req).await;
         let plugin_result = match auth_result {
             Ok(r) => r,
             Err(e) => {

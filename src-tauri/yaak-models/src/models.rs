@@ -234,6 +234,7 @@ pub enum WorkspaceMetaIden {
     UpdatedAt,
 
     SettingSyncDir,
+    EncryptedKey,
 }
 
 impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {

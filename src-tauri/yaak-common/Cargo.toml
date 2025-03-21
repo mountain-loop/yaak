@@ -1,0 +1,10 @@
+[package]
+name = "yaak-common"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tauri = { workspace = true }
+yaak-plugins = { workspace = true }
+regex = "1.11.0"
