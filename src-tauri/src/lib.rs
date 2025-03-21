@@ -1735,7 +1735,10 @@ async fn cmd_list_workspaces<R: Runtime>(
     query_manager: State<'_, QueryManager>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Vec<Workspace>> {
-    let workspaces = query_manager.with_tx(|tx| manager::list_workspaces(tx))?;
+    let workspaces = query_manager.with_tx(|tx| {
+        let w = tx.list_workspaces()?;
+        Ok(w)
+    })?;
 
     if workspaces.is_empty() {
         let workspace = upsert_workspace(
