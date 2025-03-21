@@ -178,7 +178,6 @@ export function removeModelByKv(model: KeyValue) {
 }
 
 function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
-  console.log('HELLO', updateSource);
   // Never ignore updates from non-user sources
   if (updateSource.type !== 'window') {
     return false;

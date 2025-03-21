@@ -1,3 +1,4 @@
+use crate::manager::QueryManager;
 use log::info;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -15,6 +16,12 @@ use tauri::plugin::TauriPlugin;
 use tauri::{plugin, AppHandle, Manager, Runtime};
 
 pub struct SqliteConnection(pub Mutex<Pool<SqliteConnectionManager>>);
+
+impl SqliteConnection {
+    pub(crate) fn new(pool: Pool<SqliteConnectionManager>) -> Self {
+        Self(Mutex::new(pool))
+    }
+}
 
 #[derive(Default, Deserialize)]
 pub struct PluginConfig {
@@ -54,7 +61,8 @@ impl Builder {
                     .build(manager)
                     .unwrap();
 
-                app.manage(SqliteConnection(Mutex::new(pool)));
+                app.manage(SqliteConnection::new(pool.clone()));
+                app.manage(QueryManager::new(pool));
 
                 Ok(())
             })

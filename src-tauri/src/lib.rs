@@ -30,6 +30,8 @@ use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
+use yaak_models::manager;
+use yaak_models::manager::QueryManager;
 use yaak_models::models::{
     CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState,
     GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
@@ -49,11 +51,10 @@ use yaak_models::queries::{
     get_or_create_settings, get_or_create_workspace_meta, get_plugin, get_workspace,
     get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
     list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
-    list_http_responses_for_workspace, list_key_values_raw, list_plugins, list_workspaces,
-    set_key_value_raw, update_response_if_id, update_settings, upsert_cookie_jar,
-    upsert_environment, upsert_folder, upsert_grpc_connection, upsert_grpc_event,
-    upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
-    upsert_workspace_meta, BatchUpsertResult, UpdateSource,
+    list_http_responses_for_workspace, list_key_values_raw, list_plugins, set_key_value_raw,
+    update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder,
+    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_http_request,
+    upsert_plugin, upsert_workspace, upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
@@ -1731,9 +1732,11 @@ async fn cmd_delete_all_http_responses<R: Runtime>(
 #[tauri::command]
 async fn cmd_list_workspaces<R: Runtime>(
     app_handle: AppHandle<R>,
+    query_manager: State<'_, QueryManager>,
     window: WebviewWindow<R>,
-) -> Result<Vec<Workspace>, String> {
-    let workspaces = list_workspaces(&app_handle).await.expect("Failed to find workspaces");
+) -> YaakResult<Vec<Workspace>> {
+    let workspaces = query_manager.with_tx(|tx| manager::list_workspaces(tx))?;
+
     if workspaces.is_empty() {
         let workspace = upsert_workspace(
             &app_handle,
@@ -1745,8 +1748,7 @@ async fn cmd_list_workspaces<R: Runtime>(
             },
             &UpdateSource::from_window(&window),
         )
-        .await
-        .expect("Failed to create Workspace");
+        .await?;
         Ok(vec![workspace])
     } else {
         Ok(workspaces)

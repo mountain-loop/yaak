@@ -1464,3 +1464,30 @@ impl<'de> Deserialize<'de> for AnyModel {
         Ok(model)
     }
 }
+
+impl AnyModel {
+    pub fn resolved_name(&self) -> String {
+        let compute_name = |name: &str, url: &str, fallback: &str| -> String {
+            if !name.is_empty() {
+                return name.to_string();
+            }
+            let without_variables = url.replace(r"\$\{\[\s*([^\]\s]+)\s*]}", "$1");
+            if without_variables.is_empty() {
+                fallback.to_string()
+            } else {
+                without_variables
+            }
+        };
+
+        match self.clone() {
+            AnyModel::CookieJar(v) => v.name,
+            AnyModel::Environment(v) => v.name,
+            AnyModel::Folder(v) => v.name,
+            AnyModel::GrpcRequest(v) => compute_name(&v.name, &v.url, "gRPC Request"),
+            AnyModel::HttpRequest(v) => compute_name(&v.name, &v.url, "HTTP Request"),
+            AnyModel::WebsocketRequest(v) => compute_name(&v.name, &v.url, "WebSocket Request"),
+            AnyModel::Workspace(v) => v.name,
+            _ => "No Name".to_string(),
+        }
+    }
+}
