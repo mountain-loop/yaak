@@ -21,7 +21,7 @@ export function useUpdateAnyHttpRequest() {
 
       const patchedRequest =
         typeof update === 'function' ? update(request) : { ...request, ...update };
-      return invokeCmd<HttpRequest>('cmd_update_http_request', { request: patchedRequest });
+      return invokeCmd<HttpRequest>('cmd_upsert_http_request', { request: patchedRequest });
     },
     onSuccess: async (request) => {
       setHttpRequests(updateModelList(request));

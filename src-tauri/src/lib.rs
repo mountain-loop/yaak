@@ -30,8 +30,7 @@ use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
-use yaak_models::manager;
-use yaak_models::manager::QueryManager;
+use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{
     CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState,
     GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
@@ -53,8 +52,8 @@ use yaak_models::queries::{
     list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
     list_http_responses_for_workspace, list_key_values_raw, list_plugins, set_key_value_raw,
     update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder,
-    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_http_request,
-    upsert_plugin, upsert_workspace, upsert_workspace_meta, BatchUpsertResult, UpdateSource,
+    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_plugin,
+    upsert_workspace, upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
@@ -1333,17 +1332,6 @@ async fn cmd_duplicate_folder<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_create_http_request<R: Runtime>(
-    request: HttpRequest,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> Result<HttpRequest, String> {
-    upsert_http_request(&app_handle, request, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 async fn cmd_duplicate_http_request<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
@@ -1399,14 +1387,15 @@ async fn cmd_update_grpc_request<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_update_http_request<R: Runtime>(
+async fn cmd_upsert_http_request<R: Runtime>(
     request: HttpRequest,
-    app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<HttpRequest, String> {
-    upsert_http_request(&app_handle, request, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+    app_handle: AppHandle<R>,
+) -> YaakResult<HttpRequest> {
+    Ok(app_handle
+        .queries()
+        .connect()?
+        .upsert_http_request(request, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1732,10 +1721,9 @@ async fn cmd_delete_all_http_responses<R: Runtime>(
 #[tauri::command]
 async fn cmd_list_workspaces<R: Runtime>(
     app_handle: AppHandle<R>,
-    query_manager: State<'_, QueryManager>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Vec<Workspace>> {
-    let workspaces = query_manager.with_tx(|tx| {
+    let workspaces = app_handle.queries().with_tx(|tx| {
         let w = tx.list_workspaces()?;
         Ok(w)
     })?;
@@ -1900,7 +1888,6 @@ pub fn run() {
             cmd_create_cookie_jar,
             cmd_create_environment,
             cmd_create_grpc_request,
-            cmd_create_http_request,
             cmd_curl_to_request,
             cmd_delete_all_grpc_connections,
             cmd_delete_all_http_responses,
@@ -1967,7 +1954,7 @@ pub fn run() {
             cmd_update_environment,
             cmd_update_folder,
             cmd_update_grpc_request,
-            cmd_update_http_request,
+            cmd_upsert_http_request,
             cmd_update_settings,
             cmd_update_workspace,
             cmd_update_workspace_meta,

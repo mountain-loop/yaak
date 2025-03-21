@@ -8,7 +8,6 @@ type TauriCmd =
   | 'cmd_create_cookie_jar'
   | 'cmd_create_environment'
   | 'cmd_create_grpc_request'
-  | 'cmd_create_http_request'
   | 'cmd_curl_to_request'
   | 'cmd_delete_all_grpc_connections'
   | 'cmd_delete_all_http_responses'
@@ -75,7 +74,7 @@ type TauriCmd =
   | 'cmd_update_environment'
   | 'cmd_update_folder'
   | 'cmd_update_grpc_request'
-  | 'cmd_update_http_request'
+  | 'cmd_upsert_http_request'
   | 'cmd_update_settings'
   | 'cmd_update_workspace'
   | 'cmd_update_workspace_meta';

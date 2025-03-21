@@ -1,5 +1,6 @@
 use crate::error::Error::ModelNotFound;
 use crate::error::Result;
+use crate::manager::QueryManagerExt;
 use crate::models::{
     AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
     GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
@@ -1833,7 +1834,7 @@ pub async fn duplicate_http_request<R: Runtime>(
     };
     request.id = "".to_string();
     request.sort_priority = request.sort_priority + 0.001;
-    upsert_http_request(app_handle, request, update_source).await
+    app_handle.queries().connect()?.upsert_http_request(request, update_source)
 }
 
 pub async fn duplicate_folder<R: Runtime>(
@@ -2744,7 +2745,10 @@ pub async fn get_workspace_export_resources<R: Runtime>(
 
 // Generate the created_at or updated_at timestamps for an upsert operation, depending on the ID
 // provided.
-fn timestamp_for_upsert(update_source: &UpdateSource, dt: NaiveDateTime) -> NaiveDateTime {
+pub(crate) fn timestamp_for_upsert(
+    update_source: &UpdateSource,
+    dt: NaiveDateTime,
+) -> NaiveDateTime {
     match update_source {
         // Sync and import operations always preserve timestamps
         UpdateSource::Sync | UpdateSource::Import => {

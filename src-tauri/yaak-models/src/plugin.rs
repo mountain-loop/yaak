@@ -9,11 +9,12 @@ use sqlx::SqlitePool;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::mpsc;
 use std::time::Duration;
 use tauri::async_runtime::Mutex;
 use tauri::path::BaseDirectory;
 use tauri::plugin::TauriPlugin;
-use tauri::{plugin, AppHandle, Manager, Runtime};
+use tauri::{plugin, AppHandle, Emitter, Manager, Runtime};
 
 pub struct SqliteConnection(pub Mutex<Pool<SqliteConnectionManager>>);
 
@@ -41,8 +42,8 @@ impl Builder {
 
     pub fn build<R: Runtime>(&self) -> TauriPlugin<R, Option<PluginConfig>> {
         plugin::Builder::<R, Option<PluginConfig>>::new("yaak_models")
-            .setup(|app, _api| {
-                let app_path = app.path().app_data_dir().unwrap();
+            .setup(|app_handle, _api| {
+                let app_path = app_handle.path().app_data_dir().unwrap();
                 create_dir_all(app_path.clone()).expect("Problem creating App directory!");
 
                 let db_file_path = app_path.join("db.sqlite");
@@ -50,7 +51,7 @@ impl Builder {
                 {
                     let db_file_path = db_file_path.clone();
                     tauri::async_runtime::block_on(async move {
-                        must_migrate_db(app.app_handle(), &db_file_path).await;
+                        must_migrate_db(app_handle.app_handle(), &db_file_path).await;
                     });
                 };
 
@@ -61,8 +62,18 @@ impl Builder {
                     .build(manager)
                     .unwrap();
 
-                app.manage(SqliteConnection::new(pool.clone()));
-                app.manage(QueryManager::new(pool));
+                app_handle.manage(SqliteConnection::new(pool.clone()));
+
+                {
+                    let (tx, rx) = mpsc::channel();
+                    app_handle.manage(QueryManager::new(pool, tx));
+                    let app_handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        for p in rx.iter() {
+                            app_handle.emit("upserted_model", p).unwrap();
+                        }
+                    });
+                }
 
                 Ok(())
             })
