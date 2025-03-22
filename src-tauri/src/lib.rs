@@ -47,9 +47,9 @@ use yaak_models::queries::{
     duplicate_grpc_request, duplicate_http_request, ensure_base_environment, generate_model_id,
     get_base_environment, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
     get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
-    get_or_create_settings, get_or_create_workspace_meta, get_plugin, get_workspace,
+    get_or_create_settings, get_or_create_workspace_meta, get_plugin,
     get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
-    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
+    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests,
     list_http_responses_for_workspace, list_key_values_raw, list_plugins, set_key_value_raw,
     update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder,
     upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_plugin,
@@ -1487,8 +1487,8 @@ async fn cmd_list_grpc_requests<R: Runtime>(
 async fn cmd_list_http_requests<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
-) -> Result<Vec<HttpRequest>, String> {
-    list_http_requests(&app_handle, workspace_id).await.map_err(|e| e.to_string())
+) -> YaakResult<Vec<HttpRequest>> {
+    Ok(app_handle.queries().connect()?.list_http_requests(workspace_id)?)
 }
 
 #[tauri::command]
@@ -1625,8 +1625,8 @@ async fn cmd_get_environment<R: Runtime>(
 async fn cmd_get_workspace<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
-) -> Result<Workspace, String> {
-    get_workspace(&app_handle, id).await.map_err(|e| e.to_string())
+) -> YaakResult<Workspace> {
+    Ok(app_handle.queries().connect()?.get_workspace(id)?)
 }
 
 #[tauri::command]
@@ -1751,11 +1751,10 @@ async fn cmd_get_workspace_meta<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     workspace_id: &str,
-) -> Result<WorkspaceMeta, String> {
-    let workspace = get_workspace(&app_handle, workspace_id).await.map_err(|e| e.to_string())?;
-    get_or_create_workspace_meta(&app_handle, &workspace, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<WorkspaceMeta> {
+    let workspace = app_handle.queries().connect()?.get_workspace(workspace_id)?;
+    Ok(get_or_create_workspace_meta(&app_handle, &workspace, &UpdateSource::from_window(&window))
+        .await?)
 }
 
 #[tauri::command]
@@ -1849,7 +1848,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(yaak_license::init())
-        .plugin(yaak_models::plugin::Builder::default().build())
+        .plugin(yaak_models::init())
         .plugin(yaak_plugins::init())
         .plugin(yaak_git::init())
         .plugin(yaak_ws::init())
@@ -2126,10 +2125,10 @@ fn workspace_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Str
     }
 }
 
-async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Workspace> {
+async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> YaakResult<Workspace> {
     match workspace_id_from_window(&window) {
-        None => None,
-        Some(id) => get_workspace(window.app_handle(), id.as_str()).await.ok(),
+        None => Err(GenericError("Failed to get workspace ID from window".to_string())),
+        Some(id) => Ok(window.queries().connect()?.get_workspace(id.as_str())?),
     }
 }
 

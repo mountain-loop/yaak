@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 chrono = { version = "0.4.38", features = ["serde"] }
-git2 = { version = "0.20.0" , features = ["vendored-libgit2", "vendored-openssl"]}
+git2 = { version = "0.20.0", features = ["vendored-libgit2", "vendored-openssl"] }
 log = "0.4.22"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.132"
@@ -19,4 +19,4 @@ yaak-models = { workspace = true }
 yaak-sync = { workspace = true }
 
 [build-dependencies]
-tauri-plugin = { version = "2.0.3", features = ["build"] }
+tauri-plugin = { workspace = true, features = ["build"] }

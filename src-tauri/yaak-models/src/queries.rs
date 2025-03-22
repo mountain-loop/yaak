@@ -11,7 +11,7 @@ use crate::models::{
     WebsocketEventIden, WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden,
     WorkspaceMeta, WorkspaceMetaIden,
 };
-use crate::plugin::SqliteConnection;
+use crate::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
 use log::{debug, error, info, warn};
 use nanoid::nanoid;
@@ -277,19 +277,6 @@ pub async fn delete_plugin_key_value<R: Runtime>(
     true
 }
 
-pub async fn list_workspaces<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<Workspace>> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(WorkspaceIden::Table)
-        .column(Asterisk)
-        .order_by(WorkspaceIden::Name, Order::Asc)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
-}
-
 pub async fn list_workspace_metas<R: Runtime>(
     app_handle: &AppHandle<R>,
 ) -> Result<Vec<WorkspaceMeta>> {
@@ -302,18 +289,6 @@ pub async fn list_workspace_metas<R: Runtime>(
     let mut stmt = db.prepare(sql.as_str())?;
     let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
     Ok(items.map(|v| v.unwrap()).collect())
-}
-
-pub async fn get_workspace<R: Runtime>(app_handle: &AppHandle<R>, id: &str) -> Result<Workspace> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(WorkspaceIden::Table)
-        .column(Asterisk)
-        .cond_where(Expr::col(WorkspaceIden::Id).eq(id))
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
 }
 
 pub async fn get_workspace_meta<R: Runtime>(
@@ -474,7 +449,7 @@ pub async fn delete_workspace<R: Runtime>(
     id: &str,
     update_source: &UpdateSource,
 ) -> Result<Workspace> {
-    let workspace = get_workspace(app_handle, id).await?;
+    let workspace = app_handle.queries().connect()?.get_workspace(id)?;
 
     let dbm = &*app_handle.state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -1844,8 +1819,9 @@ pub async fn duplicate_folder<R: Runtime>(
 ) -> Result<()> {
     let workspace_id = src_folder.workspace_id.as_str();
 
-    let http_requests = list_http_requests(app_handle, workspace_id)
-        .await?
+    let http_requests = app_handle
+        .queries()
+        .with_conn(|c| c.list_http_requests(workspace_id))?
         .into_iter()
         .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
 
@@ -1871,8 +1847,7 @@ pub async fn duplicate_folder<R: Runtime>(
     .await?;
 
     for m in http_requests {
-        upsert_http_request(
-            app_handle,
+        app_handle.queries().connect()?.upsert_http_request(
             HttpRequest {
                 id: "".into(),
                 folder_id: Some(new_folder.id.clone()),
@@ -1880,8 +1855,7 @@ pub async fn duplicate_folder<R: Runtime>(
                 ..m
             },
             update_source,
-        )
-        .await?;
+        )?;
     }
     for m in grpc_requests {
         upsert_grpc_request(
@@ -1909,104 +1883,6 @@ pub async fn duplicate_folder<R: Runtime>(
         .await?;
     }
     Ok(())
-}
-
-pub async fn upsert_http_request<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    request: HttpRequest,
-    update_source: &UpdateSource,
-) -> Result<HttpRequest> {
-    let id = match request.id.as_str() {
-        "" => generate_model_id(ModelType::TypeHttpRequest),
-        _ => request.id.to_string(),
-    };
-    let trimmed_name = request.name.trim();
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::insert()
-        .into_table(HttpRequestIden::Table)
-        .columns([
-            HttpRequestIden::Id,
-            HttpRequestIden::CreatedAt,
-            HttpRequestIden::UpdatedAt,
-            HttpRequestIden::WorkspaceId,
-            HttpRequestIden::FolderId,
-            HttpRequestIden::Name,
-            HttpRequestIden::Description,
-            HttpRequestIden::Url,
-            HttpRequestIden::UrlParameters,
-            HttpRequestIden::Method,
-            HttpRequestIden::Body,
-            HttpRequestIden::BodyType,
-            HttpRequestIden::Authentication,
-            HttpRequestIden::AuthenticationType,
-            HttpRequestIden::Headers,
-            HttpRequestIden::SortPriority,
-        ])
-        .values_panic([
-            id.as_str().into(),
-            timestamp_for_upsert(update_source, request.created_at).into(),
-            timestamp_for_upsert(update_source, request.updated_at).into(),
-            request.workspace_id.into(),
-            request.folder_id.as_ref().map(|s| s.as_str()).into(),
-            trimmed_name.into(),
-            request.description.into(),
-            request.url.into(),
-            serde_json::to_string(&request.url_parameters)?.into(),
-            request.method.into(),
-            serde_json::to_string(&request.body)?.into(),
-            request.body_type.as_ref().map(|s| s.as_str()).into(),
-            serde_json::to_string(&request.authentication)?.into(),
-            request.authentication_type.as_ref().map(|s| s.as_str()).into(),
-            serde_json::to_string(&request.headers)?.into(),
-            request.sort_priority.into(),
-        ])
-        .on_conflict(
-            OnConflict::column(GrpcEventIden::Id)
-                .update_columns([
-                    HttpRequestIden::UpdatedAt,
-                    HttpRequestIden::WorkspaceId,
-                    HttpRequestIden::Name,
-                    HttpRequestIden::Description,
-                    HttpRequestIden::FolderId,
-                    HttpRequestIden::Method,
-                    HttpRequestIden::Headers,
-                    HttpRequestIden::Body,
-                    HttpRequestIden::BodyType,
-                    HttpRequestIden::Authentication,
-                    HttpRequestIden::AuthenticationType,
-                    HttpRequestIden::Url,
-                    HttpRequestIden::UrlParameters,
-                    HttpRequestIden::SortPriority,
-                ])
-                .to_owned(),
-        )
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(sql.as_str())?;
-    let m: HttpRequest = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    emit_upserted_model(app_handle, &AnyModel::HttpRequest(m.to_owned()), update_source);
-    Ok(m)
-}
-
-pub async fn list_http_requests<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    workspace_id: &str,
-) -> Result<Vec<HttpRequest>> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(HttpRequestIden::Table)
-        .cond_where(Expr::col(HttpRequestIden::WorkspaceId).eq(workspace_id))
-        .column(Asterisk)
-        .order_by(HttpRequestIden::CreatedAt, Order::Desc)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
 }
 
 pub async fn get_http_request<R: Runtime>(
@@ -2676,7 +2552,7 @@ pub async fn batch_upsert<R: Runtime>(
 
     if http_requests.len() > 0 {
         for v in http_requests {
-            let x = upsert_http_request(&app_handle, v, update_source).await?;
+            let x = app_handle.queries().connect()?.upsert_http_request(v, update_source)?;
             imported_resources.http_requests.push(x.clone());
         }
         info!("Imported {} http_requests", imported_resources.http_requests.len());
@@ -2721,12 +2597,14 @@ pub async fn get_workspace_export_resources<R: Runtime>(
     };
 
     for workspace_id in workspace_ids {
-        data.resources.workspaces.push(get_workspace(app_handle, workspace_id).await?);
+        data.resources
+            .workspaces
+            .push(app_handle.queries().connect()?.get_workspace(workspace_id)?);
         data.resources.environments.append(&mut list_environments(app_handle, workspace_id).await?);
         data.resources.folders.append(&mut list_folders(app_handle, workspace_id).await?);
         data.resources
             .http_requests
-            .append(&mut list_http_requests(app_handle, workspace_id).await?);
+            .append(&mut app_handle.queries().connect()?.list_http_requests(workspace_id)?);
         data.resources
             .grpc_requests
             .append(&mut list_grpc_requests(app_handle, workspace_id).await?);

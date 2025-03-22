@@ -7910,6 +7910,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tauri",
+ "tauri-plugin",
  "thiserror 2.0.11",
  "ts-rs",
 ]

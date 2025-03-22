@@ -5635,6 +5635,51 @@
         {
           "description": "Default permissions for the plugin",
           "type": "string",
+          "const": "yaak-models:default"
+        },
+        {
+          "description": "Enables the delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-delete"
+        },
+        {
+          "description": "Enables the delete_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-delete-model"
+        },
+        {
+          "description": "Enables the upsert command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-upsert"
+        },
+        {
+          "description": "Enables the upsert_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-upsert-model"
+        },
+        {
+          "description": "Denies the delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-delete"
+        },
+        {
+          "description": "Denies the delete_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-delete-model"
+        },
+        {
+          "description": "Denies the upsert command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-upsert"
+        },
+        {
+          "description": "Denies the upsert_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-upsert-model"
+        },
+        {
+          "description": "Default permissions for the plugin",
+          "type": "string",
           "const": "yaak-sync:default"
         },
         {
