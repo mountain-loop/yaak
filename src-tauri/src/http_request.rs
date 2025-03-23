@@ -24,6 +24,7 @@ use tokio::fs::{create_dir_all, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
 use tokio::sync::{oneshot, Mutex};
+use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,

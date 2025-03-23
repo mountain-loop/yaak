@@ -15,14 +15,7 @@ use yaak_models::queries::{
     create_default_http_response, delete_plugin_key_value, get_base_environment, get_http_request,
     get_plugin_key_value, list_plugins, set_plugin_key_value, upsert_plugin, UpdateSource,
 };
-use yaak_plugins::events::{
-    Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
-    GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
-    RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest,
-    TemplateRenderResponse, WindowContext, WindowNavigateEvent,
-    PluginWindowContext, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse,
-    ShowToastRequest, TemplateRenderResponse, WindowNavigateEvent,
-};
+use yaak_plugins::events::{Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload, PluginWindowContext, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse, WindowNavigateEvent};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -80,9 +73,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for render http request");
 
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
+            let workspace =
+                workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
             let base_environment = get_base_environment(app_handle, workspace.id.as_str())
                 .await
@@ -104,9 +96,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for render");
 
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
+            let workspace =
+                workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
             let base_environment = get_base_environment(app_handle, workspace.id.as_str())
                 .await
@@ -163,9 +154,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for sending HTTP request");
             let mut http_request = req.http_request;
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
+            let workspace =
+                workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let cookie_jar = cookie_jar_from_window(&window).await;
             let environment = environment_from_window(&window).await;
 

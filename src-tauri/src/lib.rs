@@ -2125,10 +2125,10 @@ fn get_window_from_window_context<R: Runtime>(
     window
 }
 
-async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Workspace> {
+fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Workspace> {
     match window.workspace_id() {
         None => None,
-        Some(id) => get_workspace(window.app_handle(), id.as_str()).await.ok(),
+        Some(id) => window.queries().connect().unwrap().get_workspace(id.as_str()).ok(),
     }
 }
 
