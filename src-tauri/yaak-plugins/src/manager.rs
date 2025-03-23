@@ -14,7 +14,7 @@ use crate::events::{
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
 use crate::server_ws::PluginRuntimeServerWebsocket;
-use log::{info, warn};
+use log::{error, info, warn};
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -25,7 +25,7 @@ use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::read_dir;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::timeout;
+use tokio::time::{timeout, Instant};
 use yaak_models::queries::{generate_id, list_plugins};
 use yaak_templates::error::Error::RenderError;
 
@@ -208,7 +208,7 @@ impl PluginManager {
 
         // Boot the plugin
         let event = timeout(
-            Duration::from_secs(2),
+            Duration::from_secs(5),
             self.send_to_plugin_and_wait(
                 window_context,
                 &plugin_handle,
@@ -239,12 +239,14 @@ impl PluginManager {
         app_handle: &AppHandle<R>,
         window_context: &WindowContext,
     ) -> Result<()> {
+        let start = Instant::now();
         let candidates = self.list_plugin_dirs(app_handle).await;
         for candidate in candidates.clone() {
             // First remove the plugin if it exists
             if let Some(plugin) = self.get_plugin_by_dir(candidate.dir.as_str()).await {
                 if let Err(e) = self.remove_plugin(window_context, &plugin).await {
-                    warn!("Failed to remove plugin {} {e:?}", candidate.dir);
+                    error!("Failed to remove plugin {} {e:?}", candidate.dir);
+                    continue;
                 }
             }
             if let Err(e) = self
@@ -255,15 +257,13 @@ impl PluginManager {
             }
         }
 
+        let plugins = self.plugins.lock().await;
+        let names = plugins.iter().map(|p| p.dir.to_string()).collect::<Vec<String>>();
         info!(
-            "Initialized all plugins:\n  - {}",
-            self.plugins
-                .lock()
-                .await
-                .iter()
-                .map(|p| p.dir.to_string())
-                .collect::<Vec<String>>()
-                .join("\n  - "),
+            "Initialized {} plugins in {:?}:\n  - {}",
+            plugins.len(),
+            start.elapsed(),
+            names.join("\n  - "),
         );
 
         Ok(())

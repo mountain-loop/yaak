@@ -15,7 +15,6 @@ export class PluginHandle {
       bootRequest: this.bootRequest,
     };
     this.#instance = new PluginInstance(workerData, pluginToAppEvents);
-    console.log('Created plugin worker for ', this.bootRequest.dir);
   }
 
   sendToWorker(event: InternalEvent) {
