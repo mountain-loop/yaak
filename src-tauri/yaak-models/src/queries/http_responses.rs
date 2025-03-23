@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::manager::DbContext;
 use crate::models::{HttpResponse, HttpResponseIden::*};
-use crate::queries::UpdateSource;
+use crate::queries_legacy::UpdateSource;
 
 impl<'a> DbContext<'a> {
     pub fn list_http_responses_for_request(

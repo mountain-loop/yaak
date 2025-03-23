@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::queries::ModelPayload;
+use crate::queries_legacy::ModelPayload;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, Statement, ToSql, Transaction};

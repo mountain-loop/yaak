@@ -14,8 +14,8 @@ use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
     WebsocketEventType, WebsocketRequest,
 };
-use yaak_models::queries;
-use yaak_models::queries::{
+use yaak_models::queries_legacy;
+use yaak_models::queries_legacy::{
     get_base_environment, get_cookie_jar, get_environment, get_websocket_connection,
     get_websocket_request, upsert_websocket_connection, upsert_websocket_event, UpdateSource,
 };
@@ -31,7 +31,7 @@ pub(crate) async fn upsert_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(queries::upsert_websocket_request(&app_handle, request, &UpdateSource::from_window(&window))
+    Ok(queries_legacy::upsert_websocket_request(&app_handle, request, &UpdateSource::from_window(&window))
         .await?)
 }
 
@@ -41,7 +41,7 @@ pub(crate) async fn duplicate_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(queries::duplicate_websocket_request(
+    Ok(queries_legacy::duplicate_websocket_request(
         &app_handle,
         request_id,
         &UpdateSource::from_window(&window),
@@ -55,7 +55,7 @@ pub(crate) async fn delete_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(queries::delete_websocket_request(&app_handle, request_id, &UpdateSource::from_window(&window)).await?)
+    Ok(queries_legacy::delete_websocket_request(&app_handle, request_id, &UpdateSource::from_window(&window)).await?)
 }
 
 #[tauri::command]
@@ -64,7 +64,7 @@ pub(crate) async fn delete_connection<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketConnection> {
-    Ok(queries::delete_websocket_connection(&app_handle, connection_id, &UpdateSource::from_window(&window))
+    Ok(queries_legacy::delete_websocket_connection(&app_handle, connection_id, &UpdateSource::from_window(&window))
         .await?)
 }
 
@@ -74,7 +74,7 @@ pub(crate) async fn delete_connections<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<()> {
-    Ok(queries::delete_all_websocket_connections(&app_handle, request_id, &UpdateSource::from_window(&window))
+    Ok(queries_legacy::delete_all_websocket_connections(&app_handle, request_id, &UpdateSource::from_window(&window))
         .await?)
 }
 
@@ -83,7 +83,7 @@ pub(crate) async fn list_events<R: Runtime>(
     connection_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketEvent>> {
-    Ok(queries::list_websocket_events(&app_handle, connection_id).await?)
+    Ok(queries_legacy::list_websocket_events(&app_handle, connection_id).await?)
 }
 
 #[tauri::command]
@@ -91,7 +91,7 @@ pub(crate) async fn list_requests<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketRequest>> {
-    Ok(queries::list_websocket_requests(&app_handle, workspace_id).await?)
+    Ok(queries_legacy::list_websocket_requests(&app_handle, workspace_id).await?)
 }
 
 #[tauri::command]
@@ -99,7 +99,7 @@ pub(crate) async fn list_connections<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketConnection>> {
-    Ok(queries::list_websocket_connections_for_workspace(&app_handle, workspace_id).await?)
+    Ok(queries_legacy::list_websocket_connections_for_workspace(&app_handle, workspace_id).await?)
 }
 
 #[tauri::command]

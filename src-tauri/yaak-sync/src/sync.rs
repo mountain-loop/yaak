@@ -13,7 +13,7 @@ use tokio::io::AsyncWriteExt;
 use ts_rs::TS;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{SyncState, WorkspaceMeta};
-use yaak_models::queries::{
+use yaak_models::queries_legacy::{
     batch_upsert, delete_environment, delete_folder, delete_grpc_request, delete_sync_state,
     delete_websocket_request, delete_workspace, get_workspace_export_resources, get_workspace_meta,
     list_sync_states_for_workspace, upsert_sync_state, upsert_workspace_meta, UpdateSource,

@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::manager::DbContext;
 use crate::models::{HttpRequest, HttpRequestIden::*, ModelType};
-use crate::queries::{generate_model_id, upsert_date, UpdateSource};
+use crate::queries_legacy::{generate_model_id, upsert_date, UpdateSource};
 
 impl<'a> DbContext<'a> {
     pub fn get_http_request(&self, id: &str) -> Result<Option<HttpRequest>> {

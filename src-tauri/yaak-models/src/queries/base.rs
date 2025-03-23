@@ -2,7 +2,7 @@ use crate::error::Error::{ModelNotFound, RowNotFound};
 use crate::error::Result;
 use crate::manager::DbContext;
 use crate::models::AnyModel;
-use crate::queries::{ModelChangeEvent, ModelPayload, UpdateSource};
+use crate::queries_legacy::{ModelChangeEvent, ModelPayload, UpdateSource};
 use rusqlite::{OptionalExtension, Row};
 use sea_query::{
     Asterisk, Expr, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr,

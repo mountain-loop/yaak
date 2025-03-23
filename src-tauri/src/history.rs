@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Runtime};
 
-use yaak_models::queries::{
+use yaak_models::queries_legacy::{
     get_key_value_int, get_key_value_string, set_key_value_int, set_key_value_string, UpdateSource,
 };
 

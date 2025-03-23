@@ -36,7 +36,7 @@ use yaak_models::models::{
     GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
     ModelType, Plugin, Settings, WebsocketRequest, Workspace, WorkspaceMeta,
 };
-use yaak_models::queries::{
+use yaak_models::queries_legacy::{
     batch_upsert, cancel_pending_grpc_connections, cancel_pending_http_responses,
     cancel_pending_websocket_connections, create_default_http_response,
     delete_all_grpc_connections, delete_all_grpc_connections_for_workspace,

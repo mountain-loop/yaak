@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{HttpResponse, Plugin};
-use yaak_models::queries::{
+use yaak_models::queries_legacy::{
     create_default_http_response, delete_plugin_key_value, get_base_environment, get_http_request,
     get_plugin_key_value, list_plugins, set_plugin_key_value, upsert_plugin, UpdateSource,
 };

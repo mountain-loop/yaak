@@ -29,7 +29,7 @@ use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries::{
+use yaak_models::queries_legacy::{
     get_base_environment, get_http_response, get_or_create_settings, update_response_if_id,
     upsert_cookie_jar, UpdateSource,
 };

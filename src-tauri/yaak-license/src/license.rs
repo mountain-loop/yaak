@@ -7,7 +7,7 @@ use std::ops::Add;
 use std::time::Duration;
 use tauri::{is_dev, AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
-use yaak_models::queries::UpdateSource;
+use yaak_models::queries_legacy::UpdateSource;
 
 const KV_NAMESPACE: &str = "license";
 const KV_ACTIVATION_ID_KEY: &str = "activation_id";
@@ -80,7 +80,7 @@ pub async fn activate_license<R: Runtime>(
     }
 
     let body: ActivateLicenseResponsePayload = response.json().await?;
-    yaak_models::queries::set_key_value_string(
+    yaak_models::queries_legacy::set_key_value_string(
         window.app_handle(),
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
@@ -119,7 +119,7 @@ pub async fn deactivate_license<R: Runtime>(
         return Err(ServerError);
     }
 
-    yaak_models::queries::delete_key_value(
+    yaak_models::queries_legacy::delete_key_value(
         app_handle,
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
@@ -149,7 +149,7 @@ pub async fn check_license<R: Runtime>(
     payload: CheckActivationRequestPayload,
 ) -> Result<LicenseCheckStatus> {
     let activation_id = get_activation_id(app_handle).await;
-    let settings = yaak_models::queries::get_or_create_settings(app_handle).await;
+    let settings = yaak_models::queries_legacy::get_or_create_settings(app_handle).await;
     let trial_end = settings.created_at.add(Duration::from_secs(TRIAL_SECONDS));
 
     debug!("Trial ending at {trial_end:?}");
@@ -200,6 +200,6 @@ fn build_url(path: &str) -> String {
 }
 
 pub async fn get_activation_id<R: Runtime>(app_handle: &AppHandle<R>) -> String {
-    yaak_models::queries::get_key_value_string(app_handle, KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
+    yaak_models::queries_legacy::get_key_value_string(app_handle, KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
         .await
 }

@@ -26,7 +26,7 @@ use tokio::fs::read_dir;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{timeout, Instant};
-use yaak_models::queries::{generate_id, list_plugins};
+use yaak_models::queries_legacy::{generate_id, list_plugins};
 use yaak_templates::error::Error::RenderError;
 
 #[derive(Clone)]

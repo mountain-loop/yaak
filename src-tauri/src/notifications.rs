@@ -7,7 +7,7 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
-use yaak_models::queries::{get_key_value_raw, set_key_value_raw, UpdateSource};
+use yaak_models::queries_legacy::{get_key_value_raw, set_key_value_raw, UpdateSource};
 
 // Check for updates every hour
 const MAX_UPDATE_CHECK_SECONDS: u64 = 60 * 60;

@@ -21,9 +21,9 @@ mod commands;
 pub mod error;
 pub mod manager;
 pub mod models;
-pub mod queries;
+pub mod queries_legacy;
 pub mod render;
-pub mod queries_2;
+pub mod queries;
 
 pub struct SqliteConnection(pub Mutex<Pool<SqliteConnectionManager>>);
 

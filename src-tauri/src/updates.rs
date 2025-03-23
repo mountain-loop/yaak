@@ -6,7 +6,7 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_updater::UpdaterExt;
 use tokio::task::block_in_place;
-use yaak_models::queries::get_or_create_settings;
+use yaak_models::queries_legacy::get_or_create_settings;
 use yaak_plugins::manager::PluginManager;
 
 use crate::is_dev;
