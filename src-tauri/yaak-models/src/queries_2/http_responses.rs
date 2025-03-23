@@ -19,7 +19,7 @@ impl<'a> DbContext<'a> {
     ) -> Result<()> {
         let responses = self.list_http_responses_for_request(request_id, None)?;
         for m in responses {
-            self.delete_one::<()>(Table, Id, &m.id, update_source)?;
+            self.delete_one::<HttpResponse>(Table, Id, &m.id, update_source)?;
         }
         Ok(())
     }

@@ -8,6 +8,17 @@ use std::fmt::Display;
 use std::str::FromStr;
 use ts_rs::TS;
 
+#[macro_export]
+macro_rules! impl_model {
+    ($t:ty, $variant:ident) => {
+        impl $crate::Model for $t {
+            fn into_any(self) -> $crate::AnyModel {
+                $crate::AnyModel::$variant(self)
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
 #[ts(export, export_to = "gen_models.ts")]
@@ -1069,30 +1080,49 @@ impl ModelType {
             ModelType::TypeWebSocketEvent => "we",
             ModelType::TypeWebsocketRequest => "wr",
         }
-        .to_string()
+            .to_string()
     }
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
-#[serde(rename_all = "camelCase", untagged)]
-#[ts(export, export_to = "gen_models.ts")]
-pub enum AnyModel {
-    CookieJar(CookieJar),
-    Environment(Environment),
-    Folder(Folder),
-    GrpcConnection(GrpcConnection),
-    GrpcEvent(GrpcEvent),
-    GrpcRequest(GrpcRequest),
-    HttpRequest(HttpRequest),
-    HttpResponse(HttpResponse),
-    Plugin(Plugin),
-    Settings(Settings),
-    KeyValue(KeyValue),
-    Workspace(Workspace),
-    WorkspaceMeta(WorkspaceMeta),
-    WebsocketConnection(WebsocketConnection),
-    WebsocketEvent(WebsocketEvent),
-    WebsocketRequest(WebsocketRequest),
+#[macro_export]
+macro_rules! define_any_model {
+    ($($type:ident),* $(,)?) => {
+        #[derive(Debug, Clone, Serialize, TS)]
+        #[serde(rename_all = "camelCase", untagged)]
+        #[ts(export, export_to = "gen_models.ts")]
+        pub enum AnyModel {
+            $(
+                $type($type),
+            )*
+        }
+
+        $(
+            impl From<$type> for AnyModel {
+                fn from(value: $type) -> Self {
+                    AnyModel::$type(value)
+                }
+            }
+        )*
+    };
+}
+
+define_any_model! {
+    CookieJar,
+    Environment,
+    Folder,
+    GrpcConnection,
+    GrpcEvent,
+    GrpcRequest,
+    HttpRequest,
+    HttpResponse,
+    Plugin,
+    Settings,
+    KeyValue,
+    Workspace,
+    WorkspaceMeta,
+    WebsocketConnection,
+    WebsocketEvent,
+    WebsocketRequest,
 }
 
 impl<'de> Deserialize<'de> for AnyModel {

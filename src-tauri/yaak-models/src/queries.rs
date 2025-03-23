@@ -2357,22 +2357,17 @@ pub fn generate_id() -> String {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct ModelPayload {
-    pub model: serde_json::Value,
+    pub model: AnyModel,
     pub update_source: UpdateSource,
+    pub change: ModelChangeEvent,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum ModelChangeEvent {
-    Upsert {
-        model: serde_json::Value,
-        update_source: UpdateSource,
-    },
-    Delete {
-        id: String,
-        update_source: UpdateSource,
-    },
+    Upsert,
+    Delete,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -2400,8 +2395,9 @@ fn emit_upserted_model<R: Runtime>(
     update_source: &UpdateSource,
 ) {
     let payload = ModelPayload {
-        model: serde_json::to_value(model.to_owned()).unwrap(),
+        model: model.to_owned(),
         update_source: update_source.to_owned(),
+        change: ModelChangeEvent::Upsert,
     };
 
     app_handle.emit("upserted_model", payload).unwrap();
@@ -2413,8 +2409,9 @@ fn emit_deleted_model<R: Runtime>(
     update_source: &UpdateSource,
 ) {
     let payload = ModelPayload {
-        model: serde_json::to_value(model.to_owned()).unwrap(),
+        model: model.to_owned(),
         update_source: update_source.to_owned(),
+        change: ModelChangeEvent::Delete,
     };
     app_handle.emit("deleted_model", payload).unwrap();
 }

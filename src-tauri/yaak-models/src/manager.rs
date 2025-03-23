@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::queries::ModelChangeEvent;
+use crate::queries::ModelPayload;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, Statement, ToSql, Transaction};
@@ -20,13 +20,13 @@ impl<'a, R: Runtime, T: Manager<R>> QueryManagerExt<'a, R> for T {
 #[derive(Clone)]
 pub struct QueryManager {
     pool: Arc<Mutex<Pool<SqliteConnectionManager>>>,
-    events_tx: Arc<Mutex<mpsc::Sender<ModelChangeEvent>>>,
+    events_tx: Arc<Mutex<mpsc::Sender<ModelPayload>>>,
 }
 
 impl QueryManager {
     pub(crate) fn new(
         pool: Pool<SqliteConnectionManager>,
-        events_tx: mpsc::Sender<ModelChangeEvent>,
+        events_tx: mpsc::Sender<ModelPayload>,
     ) -> Self {
         QueryManager {
             pool: Arc::new(Mutex::new(pool)),
@@ -99,6 +99,6 @@ impl<'a> ConnectionOrTx<'a> {
 }
 
 pub struct DbContext<'a> {
-    pub(crate) tx: mpsc::Sender<ModelChangeEvent>,
+    pub(crate) tx: mpsc::Sender<ModelPayload>,
     pub(crate) conn: ConnectionOrTx<'a>,
 }
