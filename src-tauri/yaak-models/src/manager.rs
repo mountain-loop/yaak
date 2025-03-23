@@ -1,8 +1,8 @@
 use crate::error::Result;
-use crate::queries::ModelPayload;
+use crate::queries::ModelChangeEvent;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{Connection, Statement, Transaction};
+use rusqlite::{Connection, Statement, ToSql, Transaction};
 use std::sync::{mpsc, Arc, Mutex};
 use tauri::{Manager, Runtime};
 
@@ -20,13 +20,13 @@ impl<'a, R: Runtime, T: Manager<R>> QueryManagerExt<'a, R> for T {
 #[derive(Clone)]
 pub struct QueryManager {
     pool: Arc<Mutex<Pool<SqliteConnectionManager>>>,
-    events_tx: Arc<Mutex<mpsc::Sender<ModelPayload>>>,
+    events_tx: Arc<Mutex<mpsc::Sender<ModelChangeEvent>>>,
 }
 
 impl QueryManager {
     pub(crate) fn new(
         pool: Pool<SqliteConnectionManager>,
-        events_tx: mpsc::Sender<ModelPayload>,
+        events_tx: mpsc::Sender<ModelChangeEvent>,
     ) -> Self {
         QueryManager {
             pool: Arc::new(Mutex::new(pool)),
@@ -92,9 +92,13 @@ impl<'a> ConnectionOrTx<'a> {
     pub(crate) fn prepare(&self, sql: &str) -> rusqlite::Result<Statement<'_>> {
         self.resolve().prepare(sql)
     }
+
+    pub(crate) fn execute(&self, sql: &str, params: &[&dyn ToSql]) -> rusqlite::Result<usize> {
+        self.resolve().execute(sql, params)
+    }
 }
 
 pub struct DbContext<'a> {
-    pub(crate) tx: mpsc::Sender<ModelPayload>,
+    pub(crate) tx: mpsc::Sender<ModelChangeEvent>,
     pub(crate) conn: ConnectionOrTx<'a>,
 }

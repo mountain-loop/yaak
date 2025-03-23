@@ -11,12 +11,12 @@ use tokio::fs;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use ts_rs::TS;
+use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{SyncState, WorkspaceMeta};
 use yaak_models::queries::{
-    batch_upsert, delete_environment, delete_folder, delete_grpc_request, delete_http_request,
-    delete_sync_state, delete_websocket_request, delete_workspace, get_workspace_export_resources,
-    get_workspace_meta, list_sync_states_for_workspace, upsert_sync_state, upsert_workspace_meta,
-    UpdateSource,
+    batch_upsert, delete_environment, delete_folder, delete_grpc_request, delete_sync_state,
+    delete_websocket_request, delete_workspace, get_workspace_export_resources, get_workspace_meta,
+    list_sync_states_for_workspace, upsert_sync_state, upsert_workspace_meta, UpdateSource,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -568,7 +568,10 @@ async fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) 
             delete_folder(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
         }
         SyncModel::HttpRequest(m) => {
-            delete_http_request(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
+            app_handle
+                .queries()
+                .connect()?
+                .delete_http_request(m.id.as_str(), &UpdateSource::Sync)?;
         }
         SyncModel::GrpcRequest(m) => {
             delete_grpc_request(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;

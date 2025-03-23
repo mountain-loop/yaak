@@ -9,11 +9,11 @@ use chrono::Utc;
 use log::warn;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::queries::{
     create_default_http_response, delete_plugin_key_value, get_base_environment, get_http_request,
-    get_plugin_key_value, list_http_responses_for_request, list_plugins, set_plugin_key_value,
-    upsert_plugin, UpdateSource,
+    get_plugin_key_value, list_plugins, set_plugin_key_value, upsert_plugin, UpdateSource,
 };
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
@@ -55,13 +55,15 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             call_frontend(window, event).await
         }
         InternalEventPayload::FindHttpResponsesRequest(req) => {
-            let http_responses = list_http_responses_for_request(
-                app_handle,
-                req.request_id.as_str(),
-                req.limit.map(|l| l as i64),
-            )
-            .await
-            .unwrap_or_default();
+            let http_responses = app_handle
+                .queries()
+                .connect()
+                .unwrap()
+                .list_http_responses_for_request(
+                    req.request_id.as_str(),
+                    req.limit.map(|l| l as u64),
+                )
+                .unwrap_or_default();
             Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
                 http_responses,
             }))
