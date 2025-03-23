@@ -49,7 +49,7 @@ pub async fn send_http_request<R: Runtime>(
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
-    let workspace = window.queries().connect()?.get_workspace(&unrendered_request.workspace_id)?;
+    let workspace = window.queries().connect().await?.get_workspace(&unrendered_request.workspace_id)?;
     let base_environment =
         get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
     let settings = get_or_create_settings(&app_handle).await;

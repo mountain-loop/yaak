@@ -3,8 +3,9 @@ use crate::queries_legacy::ModelPayload;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, Statement, ToSql, Transaction};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::Arc;
 use tauri::{Manager, Runtime};
+use tokio::sync::{mpsc, Mutex};
 
 pub trait QueryManagerExt<'a, R> {
     fn queries(&'a self) -> &'a QueryManager;
@@ -20,7 +21,7 @@ impl<'a, R: Runtime, T: Manager<R>> QueryManagerExt<'a, R> for T {
 #[derive(Clone)]
 pub struct QueryManager {
     pool: Arc<Mutex<Pool<SqliteConnectionManager>>>,
-    events_tx: Arc<Mutex<mpsc::Sender<ModelPayload>>>,
+    events_tx: mpsc::Sender<ModelPayload>,
 }
 
 impl QueryManager {
@@ -30,38 +31,38 @@ impl QueryManager {
     ) -> Self {
         QueryManager {
             pool: Arc::new(Mutex::new(pool)),
-            events_tx: Arc::new(Mutex::new(events_tx)),
+            events_tx,
         }
     }
 
-    pub fn connect(&self) -> Result<DbContext> {
-        let conn = self.pool.lock().unwrap().get()?;
+    pub async fn connect(&self) -> Result<DbContext> {
+        let conn = self.pool.lock().await.get()?;
         Ok(DbContext {
-            tx: self.events_tx.lock().unwrap().clone(),
+            tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Connection(conn),
         })
     }
 
-    pub fn with_conn<F, T>(&self, f: F) -> Result<T>
+    pub async fn with_conn<F, T>(&self, f: F) -> Result<T>
     where
         F: FnOnce(&DbContext) -> Result<T>,
     {
-        let conn = self.pool.lock().unwrap().get()?;
+        let conn = self.pool.lock().await.get()?;
         let db_context = DbContext {
-            tx: self.events_tx.lock().unwrap().clone(),
+            tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Connection(conn),
         };
         f(&db_context)
     }
 
-    pub fn with_tx<F, T>(&self, f: F) -> Result<T>
+    pub async fn with_tx<F, T>(&self, f: F) -> Result<T>
     where
         F: FnOnce(&DbContext) -> Result<T>,
     {
-        let mut conn = self.pool.lock().unwrap().get()?;
+        let mut conn = self.pool.lock().await.get()?;
         let tx = conn.transaction()?;
         let db_context = DbContext {
-            tx: self.events_tx.lock().unwrap().clone(),
+            tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Transaction(&tx),
         };
         let result = f(&db_context);

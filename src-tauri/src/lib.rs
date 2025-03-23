@@ -1393,7 +1393,8 @@ async fn cmd_upsert_http_request<R: Runtime>(
 ) -> YaakResult<HttpRequest> {
     Ok(app_handle
         .queries()
-        .connect()?
+        .connect()
+        .await?
         .upsert_http_request(request, &UpdateSource::from_window(&window))?)
 }
 
@@ -1487,7 +1488,7 @@ async fn cmd_list_http_requests<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<HttpRequest>> {
-    Ok(app_handle.queries().connect()?.list_http_requests(workspace_id)?)
+    Ok(app_handle.queries().connect().await?.list_http_requests(workspace_id)?)
 }
 
 #[tauri::command]
@@ -1625,7 +1626,7 @@ async fn cmd_get_workspace<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Workspace> {
-    Ok(app_handle.queries().connect()?.get_workspace(id)?)
+    Ok(app_handle.queries().connect().await?.get_workspace(id)?)
 }
 
 #[tauri::command]
@@ -1710,7 +1711,8 @@ async fn cmd_delete_all_http_responses<R: Runtime>(
 ) -> YaakResult<()> {
     Ok(app_handle
         .queries()
-        .connect()?
+        .connect()
+        .await?
         .delete_all_http_responses_for_request(request_id, &UpdateSource::from_window(&window))?)
 }
 
@@ -1719,11 +1721,7 @@ async fn cmd_list_workspaces<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Vec<Workspace>> {
-    let workspaces = app_handle.queries().with_tx(|tx| {
-        let w = tx.list_workspaces()?;
-        Ok(w)
-    })?;
-
+    let workspaces = app_handle.queries().connect().await?.list_workspaces()?;
     if workspaces.is_empty() {
         let workspace = upsert_workspace(
             &app_handle,
@@ -1748,7 +1746,7 @@ async fn cmd_get_workspace_meta<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: &str,
 ) -> YaakResult<WorkspaceMeta> {
-    let workspace = app_handle.queries().connect()?.get_workspace(workspace_id)?;
+    let workspace = app_handle.queries().connect().await?.get_workspace(workspace_id)?;
     Ok(get_or_create_workspace_meta(&app_handle, &workspace, &UpdateSource::from_window(&window))
         .await?)
 }
@@ -2124,7 +2122,7 @@ fn workspace_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Str
 async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> YaakResult<Workspace> {
     match workspace_id_from_window(&window) {
         None => Err(GenericError("Failed to get workspace ID from window".to_string())),
-        Some(id) => Ok(window.queries().connect()?.get_workspace(id.as_str())?),
+        Some(id) => Ok(window.queries().connect().await?.get_workspace(id.as_str())?),
     }
 }
 

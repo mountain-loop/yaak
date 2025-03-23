@@ -449,7 +449,7 @@ pub async fn delete_workspace<R: Runtime>(
     id: &str,
     update_source: &UpdateSource,
 ) -> Result<Workspace> {
-    let workspace = app_handle.queries().connect()?.get_workspace(id)?;
+    let workspace = app_handle.queries().connect().await?.get_workspace(id)?;
 
     let dbm = &*app_handle.state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -1809,7 +1809,7 @@ pub async fn duplicate_http_request<R: Runtime>(
     };
     request.id = "".to_string();
     request.sort_priority = request.sort_priority + 0.001;
-    app_handle.queries().connect()?.upsert_http_request(request, update_source)
+    app_handle.queries().connect().await?.upsert_http_request(request, update_source)
 }
 
 pub async fn duplicate_folder<R: Runtime>(
@@ -1821,7 +1821,8 @@ pub async fn duplicate_folder<R: Runtime>(
 
     let http_requests = app_handle
         .queries()
-        .with_conn(|c| c.list_http_requests(workspace_id))?
+        .with_conn(|c| c.list_http_requests(workspace_id))
+        .await?
         .into_iter()
         .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
 
@@ -1847,7 +1848,7 @@ pub async fn duplicate_folder<R: Runtime>(
     .await?;
 
     for m in http_requests {
-        app_handle.queries().connect()?.upsert_http_request(
+        app_handle.queries().connect().await?.upsert_http_request(
             HttpRequest {
                 id: "".into(),
                 folder_id: Some(new_folder.id.clone()),
@@ -1912,7 +1913,11 @@ pub async fn delete_http_request<R: Runtime>(
     };
 
     // DB deletes will cascade but this will delete the files
-    app_handle.queries().connect()?.delete_all_http_responses_for_request(id, update_source)?;
+    app_handle
+        .queries()
+        .connect()
+        .await?
+        .delete_all_http_responses_for_request(id, update_source)?;
 
     let dbm = &*app_handle.state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -1968,7 +1973,7 @@ pub async fn create_http_response<R: Runtime>(
     update_source: &UpdateSource,
 ) -> Result<HttpResponse> {
     let responses =
-        app_handle.queries().connect()?.list_http_responses_for_request(request_id, None)?;
+        app_handle.queries().connect().await?.list_http_responses_for_request(request_id, None)?;
     for response in responses.iter().skip(MAX_HISTORY_ITEMS - 1) {
         debug!("Deleting old response {}", response.id);
         delete_http_response(app_handle, response.id.as_str(), update_source).await?;
@@ -2533,7 +2538,7 @@ pub async fn batch_upsert<R: Runtime>(
 
     if http_requests.len() > 0 {
         for v in http_requests {
-            let x = app_handle.queries().connect()?.upsert_http_request(v, update_source)?;
+            let x = app_handle.queries().connect().await?.upsert_http_request(v, update_source)?;
             imported_resources.http_requests.push(x.clone());
         }
         info!("Imported {} http_requests", imported_resources.http_requests.len());
@@ -2580,12 +2585,12 @@ pub async fn get_workspace_export_resources<R: Runtime>(
     for workspace_id in workspace_ids {
         data.resources
             .workspaces
-            .push(app_handle.queries().connect()?.get_workspace(workspace_id)?);
+            .push(app_handle.queries().connect().await?.get_workspace(workspace_id)?);
         data.resources.environments.append(&mut list_environments(app_handle, workspace_id).await?);
         data.resources.folders.append(&mut list_folders(app_handle, workspace_id).await?);
         data.resources
             .http_requests
-            .append(&mut app_handle.queries().connect()?.list_http_requests(workspace_id)?);
+            .append(&mut app_handle.queries().connect().await?.list_http_requests(workspace_id)?);
         data.resources
             .grpc_requests
             .append(&mut list_grpc_requests(app_handle, workspace_id).await?);

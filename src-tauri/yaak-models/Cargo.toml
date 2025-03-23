@@ -20,6 +20,7 @@ sqlx = { version = "0.8.0", default-features = false, features = ["migrate", "sq
 tauri = { workspace = true }
 thiserror = "2.0.11"
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
+tokio = "1.43.0"
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }

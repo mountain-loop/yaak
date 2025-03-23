@@ -58,6 +58,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let http_responses = app_handle
                 .queries()
                 .connect()
+                .await
                 .unwrap()
                 .list_http_responses_for_request(
                     req.request_id.as_str(),

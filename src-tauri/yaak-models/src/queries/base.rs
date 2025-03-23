@@ -127,7 +127,7 @@ impl<'a> DbContext<'a> {
             update_source: update_source.clone(),
             change: ModelChangeEvent::Upsert,
         };
-        self.tx.send(payload).unwrap();
+        self.tx.try_send(payload).unwrap();
 
         Ok(m)
     }
@@ -159,7 +159,7 @@ impl<'a> DbContext<'a> {
             change: ModelChangeEvent::Delete,
         };
 
-        self.tx.send(payload).unwrap();
+        self.tx.try_send(payload).unwrap();
         Ok(m)
     }
 }

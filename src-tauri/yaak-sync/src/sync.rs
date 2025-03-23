@@ -570,7 +570,7 @@ async fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) 
         SyncModel::HttpRequest(m) => {
             app_handle
                 .queries()
-                .connect()?
+                .connect().await?
                 .delete_http_request(m.id.as_str(), &UpdateSource::Sync)?;
         }
         SyncModel::GrpcRequest(m) => {
