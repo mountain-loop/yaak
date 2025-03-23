@@ -51,7 +51,7 @@ export function useIntrospectGraphQL(
 
       const bodyText = await getResponseBodyText(response);
       if (response.status < 200 || response.status >= 300) {
-        return setError(`Request failed with status ${response.status}.\n\n${bodyText}`);
+        return setError(`Request failed with status ${response.status}.\nThe response body is:\n\n${bodyText}`);
       }
 
       if (bodyText === null) {
@@ -80,6 +80,7 @@ export function useIntrospectGraphQL(
   }, [request.id, request.url, request.method, activeEnvironment?.id]);
 
   const clear = useCallback(async () => {
+    setError('');
     await setIntrospection(null);
   }, [setIntrospection]);
 

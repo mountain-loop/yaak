@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 use rusqlite::Row;
-use sea_query::Iden;
+use sea_query::enum_def;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -73,6 +73,7 @@ impl Default for EditorKeymap {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "settings")]
 pub struct Settings {
     #[ts(type = "\"settings\"")]
     pub model: String,
@@ -92,29 +93,6 @@ pub struct Settings {
     pub theme_light: String,
     pub update_channel: String,
     pub editor_keymap: EditorKeymap,
-}
-
-#[derive(Iden)]
-pub enum SettingsIden {
-    #[iden = "settings"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-
-    Appearance,
-    EditorFontSize,
-    EditorKeymap,
-    EditorSoftWrap,
-    InterfaceFontSize,
-    InterfaceScale,
-    OpenWorkspaceNewWindow,
-    Proxy,
-    Theme,
-    ThemeDark,
-    ThemeLight,
-    UpdateChannel,
 }
 
 impl<'s> TryFrom<&Row<'s>> for Settings {
@@ -147,6 +125,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "workspaces")]
 pub struct Workspace {
     #[ts(type = "\"workspace\"")]
     pub model: String,
@@ -162,22 +141,6 @@ pub struct Workspace {
     #[serde(default = "default_true")]
     pub setting_follow_redirects: bool,
     pub setting_request_timeout: i32,
-}
-
-#[derive(Iden)]
-pub enum WorkspaceIden {
-    #[iden = "workspaces"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-
-    Description,
-    Name,
-    SettingFollowRedirects,
-    SettingRequestTimeout,
-    SettingValidateCertificates,
 }
 
 impl<'s> TryFrom<&Row<'s>> for Workspace {
@@ -213,6 +176,7 @@ impl Workspace {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "workspace_metas")]
 pub struct WorkspaceMeta {
     #[ts(type = "\"workspace_meta\"")]
     pub model: String,
@@ -221,20 +185,6 @@ pub struct WorkspaceMeta {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub setting_sync_dir: Option<String>,
-}
-
-#[derive(Iden)]
-pub enum WorkspaceMetaIden {
-    #[iden = "workspace_metas"]
-    Table,
-    Model,
-    Id,
-    WorkspaceId,
-    CreatedAt,
-    UpdatedAt,
-
-    SettingSyncDir,
-    EncryptedKey,
 }
 
 impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
@@ -280,6 +230,7 @@ pub struct Cookie {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "cookie_jars")]
 pub struct CookieJar {
     #[ts(type = "\"cookie_jar\"")]
     pub model: String,
@@ -290,20 +241,6 @@ pub struct CookieJar {
 
     pub cookies: Vec<Cookie>,
     pub name: String,
-}
-
-#[derive(Iden)]
-pub enum CookieJarIden {
-    #[iden = "cookie_jars"]
-    Table,
-    Id,
-    Model,
-    WorkspaceId,
-    CreatedAt,
-    UpdatedAt,
-
-    Cookies,
-    Name,
 }
 
 impl<'s> TryFrom<&Row<'s>> for CookieJar {
@@ -326,6 +263,7 @@ impl<'s> TryFrom<&Row<'s>> for CookieJar {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "environments")]
 pub struct Environment {
     #[ts(type = "\"environment\"")]
     pub model: String,
@@ -337,21 +275,6 @@ pub struct Environment {
 
     pub name: String,
     pub variables: Vec<EnvironmentVariable>,
-}
-
-#[derive(Iden)]
-pub enum EnvironmentIden {
-    #[iden = "environments"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    EnvironmentId,
-    WorkspaceId,
-
-    Name,
-    Variables,
 }
 
 impl<'s> TryFrom<&Row<'s>> for Environment {
@@ -388,6 +311,7 @@ pub struct EnvironmentVariable {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "folders")]
 pub struct Folder {
     #[ts(type = "\"folder\"")]
     pub model: String,
@@ -400,22 +324,6 @@ pub struct Folder {
     pub name: String,
     pub description: String,
     pub sort_priority: f32,
-}
-
-#[derive(Iden)]
-pub enum FolderIden {
-    #[iden = "folders"]
-    Table,
-    Id,
-    Model,
-    WorkspaceId,
-    FolderId,
-    CreatedAt,
-    UpdatedAt,
-
-    Name,
-    Description,
-    SortPriority,
 }
 
 impl<'s> TryFrom<&Row<'s>> for Folder {
@@ -465,6 +373,7 @@ pub struct HttpUrlParameter {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "http_requests")]
 pub struct HttpRequest {
     #[ts(type = "\"http_request\"")]
     pub model: String,
@@ -488,30 +397,6 @@ pub struct HttpRequest {
     pub sort_priority: f32,
     pub url: String,
     pub url_parameters: Vec<HttpUrlParameter>,
-}
-
-#[derive(Iden)]
-pub enum HttpRequestIden {
-    #[iden = "http_requests"]
-    Table,
-    Id,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    FolderId,
-
-    Authentication,
-    AuthenticationType,
-    Body,
-    BodyType,
-    Description,
-    Headers,
-    Method,
-    Name,
-    SortPriority,
-    Url,
-    UrlParameters,
 }
 
 impl<'s> TryFrom<&Row<'s>> for HttpRequest {
@@ -563,6 +448,7 @@ impl Default for WebsocketConnectionState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "websocket_connections")]
 pub struct WebsocketConnection {
     #[ts(type = "\"websocket_connection\"")]
     pub model: String,
@@ -578,25 +464,6 @@ pub struct WebsocketConnection {
     pub state: WebsocketConnectionState,
     pub status: i32,
     pub url: String,
-}
-
-#[derive(Iden)]
-pub enum WebsocketConnectionIden {
-    #[iden = "websocket_connections"]
-    Table,
-    Id,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
-
-    Elapsed,
-    Error,
-    Headers,
-    State,
-    Status,
-    Url,
 }
 
 impl<'s> TryFrom<&Row<'s>> for WebsocketConnection {
@@ -639,6 +506,7 @@ impl Default for WebsocketMessageType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "websocket_requests")]
 pub struct WebsocketRequest {
     #[ts(type = "\"websocket_request\"")]
     pub model: String,
@@ -658,28 +526,6 @@ pub struct WebsocketRequest {
     pub sort_priority: f32,
     pub url: String,
     pub url_parameters: Vec<HttpUrlParameter>,
-}
-
-#[derive(Iden)]
-pub enum WebsocketRequestIden {
-    #[iden = "websocket_requests"]
-    Table,
-    Id,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    FolderId,
-
-    Authentication,
-    AuthenticationType,
-    Message,
-    Description,
-    Headers,
-    Name,
-    SortPriority,
-    Url,
-    UrlParameters,
 }
 
 impl<'s> TryFrom<&Row<'s>> for WebsocketRequest {
@@ -731,6 +577,7 @@ impl Default for WebsocketEventType {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "websocket_events")]
 pub struct WebsocketEvent {
     #[ts(type = "\"websocket_event\"")]
     pub model: String,
@@ -744,23 +591,6 @@ pub struct WebsocketEvent {
 
     pub message: Vec<u8>,
     pub message_type: WebsocketEventType,
-}
-
-#[derive(Iden)]
-pub enum WebsocketEventIden {
-    #[iden = "websocket_events"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
-    ConnectionId,
-    IsServer,
-
-    MessageType,
-    Message,
 }
 
 impl<'s> TryFrom<&Row<'s>> for WebsocketEvent {
@@ -809,6 +639,7 @@ impl Default for HttpResponseState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "http_responses")]
 pub struct HttpResponse {
     #[ts(type = "\"http_response\"")]
     pub model: String,
@@ -830,31 +661,6 @@ pub struct HttpResponse {
     pub state: HttpResponseState,
     pub url: String,
     pub version: Option<String>,
-}
-
-#[derive(Iden)]
-pub enum HttpResponseIden {
-    #[iden = "http_responses"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
-
-    BodyPath,
-    ContentLength,
-    Elapsed,
-    ElapsedHeaders,
-    Error,
-    Headers,
-    RemoteAddr,
-    Status,
-    StatusReason,
-    State,
-    Url,
-    Version,
 }
 
 impl<'s> TryFrom<&Row<'s>> for HttpResponse {
@@ -911,6 +717,7 @@ pub struct GrpcMetadataEntry {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "grpc_requests")]
 pub struct GrpcRequest {
     #[ts(type = "\"grpc_request\"")]
     pub model: String,
@@ -931,29 +738,6 @@ pub struct GrpcRequest {
     pub service: Option<String>,
     pub sort_priority: f32,
     pub url: String,
-}
-
-#[derive(Iden)]
-pub enum GrpcRequestIden {
-    #[iden = "grpc_requests"]
-    Table,
-    Id,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    FolderId,
-
-    Authentication,
-    AuthenticationType,
-    Description,
-    Message,
-    Metadata,
-    Method,
-    Name,
-    Service,
-    SortPriority,
-    Url,
 }
 
 impl<'s> TryFrom<&Row<'s>> for GrpcRequest {
@@ -1001,6 +785,7 @@ impl Default for GrpcConnectionState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "grpc_connections")]
 pub struct GrpcConnection {
     #[ts(type = "\"grpc_connection\"")]
     pub model: String,
@@ -1018,27 +803,6 @@ pub struct GrpcConnection {
     pub state: GrpcConnectionState,
     pub trailers: BTreeMap<String, String>,
     pub url: String,
-}
-
-#[derive(Iden)]
-pub enum GrpcConnectionIden {
-    #[iden = "grpc_connections"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
-
-    Elapsed,
-    Error,
-    Method,
-    Service,
-    State,
-    Status,
-    Trailers,
-    Url,
 }
 
 impl<'s> TryFrom<&Row<'s>> for GrpcConnection {
@@ -1087,6 +851,7 @@ impl Default for GrpcEventType {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "grpc_events")]
 pub struct GrpcEvent {
     #[ts(type = "\"grpc_event\"")]
     pub model: String,
@@ -1102,25 +867,6 @@ pub struct GrpcEvent {
     pub event_type: GrpcEventType,
     pub metadata: BTreeMap<String, String>,
     pub status: Option<i32>,
-}
-
-#[derive(Iden)]
-pub enum GrpcEventIden {
-    #[iden = "grpc_events"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
-    ConnectionId,
-
-    Content,
-    Error,
-    EventType,
-    Metadata,
-    Status,
 }
 
 impl<'s> TryFrom<&Row<'s>> for GrpcEvent {
@@ -1149,6 +895,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcEvent {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "plugins")]
 pub struct Plugin {
     #[ts(type = "\"plugin\"")]
     pub model: String,
@@ -1160,21 +907,6 @@ pub struct Plugin {
     pub directory: String,
     pub enabled: bool,
     pub url: Option<String>,
-}
-
-#[derive(Iden)]
-pub enum PluginIden {
-    #[iden = "plugins"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-
-    CheckedAt,
-    Directory,
-    Enabled,
-    Url,
 }
 
 impl<'s> TryFrom<&Row<'s>> for Plugin {
@@ -1197,6 +929,7 @@ impl<'s> TryFrom<&Row<'s>> for Plugin {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "sync_states")]
 pub struct SyncState {
     #[ts(type = "\"sync_state\"")]
     pub model: String,
@@ -1210,39 +943,6 @@ pub struct SyncState {
     pub checksum: String,
     pub rel_path: String,
     pub sync_dir: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "gen_models.ts")]
-pub struct SyncHistory {
-    #[ts(type = "\"sync_history\"")]
-    pub model: String,
-    pub id: String,
-    pub workspace_id: String,
-    pub created_at: NaiveDateTime,
-
-    pub states: Vec<SyncState>,
-    pub checksum: String,
-    pub rel_path: String,
-    pub sync_dir: String,
-}
-
-#[derive(Iden)]
-pub enum SyncStateIden {
-    #[iden = "sync_states"]
-    Table,
-    Model,
-    Id,
-    WorkspaceId,
-    CreatedAt,
-    UpdatedAt,
-
-    Checksum,
-    FlushedAt,
-    ModelId,
-    RelPath,
-    SyncDir,
 }
 
 impl<'s> TryFrom<&Row<'s>> for SyncState {
@@ -1267,6 +967,7 @@ impl<'s> TryFrom<&Row<'s>> for SyncState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "key_values")]
 pub struct KeyValue {
     #[ts(type = "\"key_value\"")]
     pub model: String,
@@ -1276,19 +977,6 @@ pub struct KeyValue {
     pub key: String,
     pub namespace: String,
     pub value: String,
-}
-
-#[derive(Iden)]
-pub enum KeyValueIden {
-    #[iden = "key_values"]
-    Table,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-
-    Key,
-    Namespace,
-    Value,
 }
 
 impl<'s> TryFrom<&Row<'s>> for KeyValue {
@@ -1309,6 +997,7 @@ impl<'s> TryFrom<&Row<'s>> for KeyValue {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "plugin_key_values")]
 pub struct PluginKeyValue {
     #[ts(type = "\"plugin_key_value\"")]
     pub model: String,
@@ -1318,19 +1007,6 @@ pub struct PluginKeyValue {
     pub plugin_name: String,
     pub key: String,
     pub value: String,
-}
-
-#[derive(Iden)]
-pub enum PluginKeyValueIden {
-    #[iden = "plugin_key_values"]
-    Table,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-
-    PluginName,
-    Key,
-    Value,
 }
 
 impl<'s> TryFrom<&Row<'s>> for PluginKeyValue {
@@ -1463,5 +1139,32 @@ impl<'de> Deserialize<'de> for AnyModel {
         };
 
         Ok(model)
+    }
+}
+
+impl AnyModel {
+    pub fn resolved_name(&self) -> String {
+        let compute_name = |name: &str, url: &str, fallback: &str| -> String {
+            if !name.is_empty() {
+                return name.to_string();
+            }
+            let without_variables = url.replace(r"\$\{\[\s*([^\]\s]+)\s*]}", "$1");
+            if without_variables.is_empty() {
+                fallback.to_string()
+            } else {
+                without_variables
+            }
+        };
+
+        match self.clone() {
+            AnyModel::CookieJar(v) => v.name,
+            AnyModel::Environment(v) => v.name,
+            AnyModel::Folder(v) => v.name,
+            AnyModel::GrpcRequest(v) => compute_name(&v.name, &v.url, "gRPC Request"),
+            AnyModel::HttpRequest(v) => compute_name(&v.name, &v.url, "HTTP Request"),
+            AnyModel::WebsocketRequest(v) => compute_name(&v.name, &v.url, "WebSocket Request"),
+            AnyModel::Workspace(v) => v.name,
+            _ => "No Name".to_string(),
+        }
     }
 }

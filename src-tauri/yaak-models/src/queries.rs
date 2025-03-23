@@ -1,5 +1,6 @@
 use crate::error::Error::ModelNotFound;
 use crate::error::Result;
+use crate::manager::QueryManagerExt;
 use crate::models::{
     AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
     GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
@@ -10,14 +11,14 @@ use crate::models::{
     WebsocketEventIden, WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden,
     WorkspaceMeta, WorkspaceMetaIden,
 };
-use crate::plugin::SqliteConnection;
+use crate::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
 use log::{debug, error, info, warn};
 use nanoid::nanoid;
 use rusqlite::OptionalExtension;
 use sea_query::ColumnRef::Asterisk;
 use sea_query::Keyword::CurrentTimestamp;
-use sea_query::{Cond, Expr, OnConflict, Order, Query, SqliteQueryBuilder};
+use sea_query::{Cond, Expr, OnConflict, Order, Query, SimpleExpr, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -276,19 +277,6 @@ pub async fn delete_plugin_key_value<R: Runtime>(
     true
 }
 
-pub async fn list_workspaces<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<Workspace>> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(WorkspaceIden::Table)
-        .column(Asterisk)
-        .order_by(WorkspaceIden::Name, Order::Asc)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
-}
-
 pub async fn list_workspace_metas<R: Runtime>(
     app_handle: &AppHandle<R>,
 ) -> Result<Vec<WorkspaceMeta>> {
@@ -301,18 +289,6 @@ pub async fn list_workspace_metas<R: Runtime>(
     let mut stmt = db.prepare(sql.as_str())?;
     let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
     Ok(items.map(|v| v.unwrap()).collect())
-}
-
-pub async fn get_workspace<R: Runtime>(app_handle: &AppHandle<R>, id: &str) -> Result<Workspace> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(WorkspaceIden::Table)
-        .column(Asterisk)
-        .cond_where(Expr::col(WorkspaceIden::Id).eq(id))
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
 }
 
 pub async fn get_workspace_meta<R: Runtime>(
@@ -391,8 +367,8 @@ pub async fn upsert_workspace<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            timestamp_for_upsert(update_source, workspace.created_at).into(),
-            timestamp_for_upsert(update_source, workspace.updated_at).into(),
+            upsert_date(update_source, workspace.created_at).into(),
+            upsert_date(update_source, workspace.updated_at).into(),
             trimmed_name.into(),
             workspace.description.into(),
             workspace.setting_follow_redirects.into(),
@@ -447,8 +423,8 @@ pub async fn upsert_workspace_meta<R: Runtime>(
         .values_panic([
             id.as_str().into(),
             workspace_meta.workspace_id.into(),
-            timestamp_for_upsert(update_source, workspace_meta.created_at).into(),
-            timestamp_for_upsert(update_source, workspace_meta.updated_at).into(),
+            upsert_date(update_source, workspace_meta.created_at).into(),
+            upsert_date(update_source, workspace_meta.updated_at).into(),
             workspace_meta.setting_sync_dir.into(),
         ])
         .on_conflict(
@@ -473,7 +449,7 @@ pub async fn delete_workspace<R: Runtime>(
     id: &str,
     update_source: &UpdateSource,
 ) -> Result<Workspace> {
-    let workspace = get_workspace(app_handle, id).await?;
+    let workspace = app_handle.queries().connect()?.get_workspace(id)?;
 
     let dbm = &*app_handle.state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -614,8 +590,8 @@ pub async fn upsert_grpc_request<R: Runtime>(
         ])
         .values_panic([
             id.into(),
-            timestamp_for_upsert(update_source, request.created_at).into(),
-            timestamp_for_upsert(update_source, request.updated_at).into(),
+            upsert_date(update_source, request.created_at).into(),
+            upsert_date(update_source, request.updated_at).into(),
             trimmed_name.into(),
             request.description.into(),
             request.workspace_id.into(),
@@ -726,8 +702,8 @@ pub async fn upsert_grpc_connection<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            timestamp_for_upsert(update_source, connection.created_at).into(),
-            timestamp_for_upsert(update_source, connection.updated_at).into(),
+            upsert_date(update_source, connection.created_at).into(),
+            upsert_date(update_source, connection.updated_at).into(),
             connection.workspace_id.as_str().into(),
             connection.request_id.as_str().into(),
             connection.service.as_str().into(),
@@ -885,8 +861,8 @@ pub async fn upsert_grpc_event<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            timestamp_for_upsert(update_source, event.created_at).into(),
-            timestamp_for_upsert(update_source, event.updated_at).into(),
+            upsert_date(update_source, event.created_at).into(),
+            upsert_date(update_source, event.updated_at).into(),
             event.workspace_id.as_str().into(),
             event.request_id.as_str().into(),
             event.connection_id.as_str().into(),
@@ -1054,8 +1030,8 @@ pub async fn upsert_websocket_event<R: Runtime>(
         ])
         .values_panic([
             id.into(),
-            timestamp_for_upsert(update_source, event.created_at).into(),
-            timestamp_for_upsert(update_source, event.updated_at).into(),
+            upsert_date(update_source, event.created_at).into(),
+            upsert_date(update_source, event.updated_at).into(),
             event.workspace_id.into(),
             event.connection_id.into(),
             event.request_id.into(),
@@ -1129,8 +1105,8 @@ pub async fn upsert_websocket_request<R: Runtime>(
         ])
         .values_panic([
             id.into(),
-            timestamp_for_upsert(update_source, request.created_at).into(),
-            timestamp_for_upsert(update_source, request.updated_at).into(),
+            upsert_date(update_source, request.created_at).into(),
+            upsert_date(update_source, request.updated_at).into(),
             request.workspace_id.into(),
             request.folder_id.as_ref().map(|s| s.as_str()).into(),
             serde_json::to_string(&request.authentication)?.into(),
@@ -1241,8 +1217,8 @@ pub async fn upsert_websocket_connection<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            timestamp_for_upsert(update_source, connection.created_at).into(),
-            timestamp_for_upsert(update_source, connection.updated_at).into(),
+            upsert_date(update_source, connection.created_at).into(),
+            upsert_date(update_source, connection.updated_at).into(),
             connection.workspace_id.as_str().into(),
             connection.request_id.as_str().into(),
             connection.elapsed.into(),
@@ -1348,8 +1324,8 @@ pub async fn upsert_cookie_jar<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            timestamp_for_upsert(update_source, cookie_jar.created_at).into(),
-            timestamp_for_upsert(update_source, cookie_jar.updated_at).into(),
+            upsert_date(update_source, cookie_jar.created_at).into(),
+            upsert_date(update_source, cookie_jar.updated_at).into(),
             cookie_jar.workspace_id.as_str().into(),
             trimmed_name.into(),
             serde_json::to_string(&cookie_jar.cookies)?.into(),
@@ -1552,8 +1528,8 @@ pub async fn upsert_environment<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            timestamp_for_upsert(update_source, environment.created_at).into(),
-            timestamp_for_upsert(update_source, environment.updated_at).into(),
+            upsert_date(update_source, environment.created_at).into(),
+            upsert_date(update_source, environment.updated_at).into(),
             environment.environment_id.into(),
             environment.workspace_id.into(),
             trimmed_name.into(),
@@ -1665,8 +1641,8 @@ pub async fn upsert_plugin<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            timestamp_for_upsert(update_source, plugin.created_at).into(),
-            timestamp_for_upsert(update_source, plugin.updated_at).into(),
+            upsert_date(update_source, plugin.created_at).into(),
+            upsert_date(update_source, plugin.updated_at).into(),
             plugin.checked_at.into(),
             plugin.directory.into(),
             plugin.url.into(),
@@ -1794,8 +1770,8 @@ pub async fn upsert_folder<R: Runtime>(
         ])
         .values_panic([
             id.as_str().into(),
-            timestamp_for_upsert(update_source, folder.created_at).into(),
-            timestamp_for_upsert(update_source, folder.updated_at).into(),
+            upsert_date(update_source, folder.created_at).into(),
+            upsert_date(update_source, folder.updated_at).into(),
             folder.workspace_id.as_str().into(),
             folder.folder_id.as_ref().map(|s| s.as_str()).into(),
             trimmed_name.into(),
@@ -1833,7 +1809,7 @@ pub async fn duplicate_http_request<R: Runtime>(
     };
     request.id = "".to_string();
     request.sort_priority = request.sort_priority + 0.001;
-    upsert_http_request(app_handle, request, update_source).await
+    app_handle.queries().connect()?.upsert_http_request(request, update_source)
 }
 
 pub async fn duplicate_folder<R: Runtime>(
@@ -1843,8 +1819,9 @@ pub async fn duplicate_folder<R: Runtime>(
 ) -> Result<()> {
     let workspace_id = src_folder.workspace_id.as_str();
 
-    let http_requests = list_http_requests(app_handle, workspace_id)
-        .await?
+    let http_requests = app_handle
+        .queries()
+        .with_conn(|c| c.list_http_requests(workspace_id))?
         .into_iter()
         .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
 
@@ -1870,8 +1847,7 @@ pub async fn duplicate_folder<R: Runtime>(
     .await?;
 
     for m in http_requests {
-        upsert_http_request(
-            app_handle,
+        app_handle.queries().connect()?.upsert_http_request(
             HttpRequest {
                 id: "".into(),
                 folder_id: Some(new_folder.id.clone()),
@@ -1879,8 +1855,7 @@ pub async fn duplicate_folder<R: Runtime>(
                 ..m
             },
             update_source,
-        )
-        .await?;
+        )?;
     }
     for m in grpc_requests {
         upsert_grpc_request(
@@ -1910,104 +1885,6 @@ pub async fn duplicate_folder<R: Runtime>(
     Ok(())
 }
 
-pub async fn upsert_http_request<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    request: HttpRequest,
-    update_source: &UpdateSource,
-) -> Result<HttpRequest> {
-    let id = match request.id.as_str() {
-        "" => generate_model_id(ModelType::TypeHttpRequest),
-        _ => request.id.to_string(),
-    };
-    let trimmed_name = request.name.trim();
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::insert()
-        .into_table(HttpRequestIden::Table)
-        .columns([
-            HttpRequestIden::Id,
-            HttpRequestIden::CreatedAt,
-            HttpRequestIden::UpdatedAt,
-            HttpRequestIden::WorkspaceId,
-            HttpRequestIden::FolderId,
-            HttpRequestIden::Name,
-            HttpRequestIden::Description,
-            HttpRequestIden::Url,
-            HttpRequestIden::UrlParameters,
-            HttpRequestIden::Method,
-            HttpRequestIden::Body,
-            HttpRequestIden::BodyType,
-            HttpRequestIden::Authentication,
-            HttpRequestIden::AuthenticationType,
-            HttpRequestIden::Headers,
-            HttpRequestIden::SortPriority,
-        ])
-        .values_panic([
-            id.as_str().into(),
-            timestamp_for_upsert(update_source, request.created_at).into(),
-            timestamp_for_upsert(update_source, request.updated_at).into(),
-            request.workspace_id.into(),
-            request.folder_id.as_ref().map(|s| s.as_str()).into(),
-            trimmed_name.into(),
-            request.description.into(),
-            request.url.into(),
-            serde_json::to_string(&request.url_parameters)?.into(),
-            request.method.into(),
-            serde_json::to_string(&request.body)?.into(),
-            request.body_type.as_ref().map(|s| s.as_str()).into(),
-            serde_json::to_string(&request.authentication)?.into(),
-            request.authentication_type.as_ref().map(|s| s.as_str()).into(),
-            serde_json::to_string(&request.headers)?.into(),
-            request.sort_priority.into(),
-        ])
-        .on_conflict(
-            OnConflict::column(GrpcEventIden::Id)
-                .update_columns([
-                    HttpRequestIden::UpdatedAt,
-                    HttpRequestIden::WorkspaceId,
-                    HttpRequestIden::Name,
-                    HttpRequestIden::Description,
-                    HttpRequestIden::FolderId,
-                    HttpRequestIden::Method,
-                    HttpRequestIden::Headers,
-                    HttpRequestIden::Body,
-                    HttpRequestIden::BodyType,
-                    HttpRequestIden::Authentication,
-                    HttpRequestIden::AuthenticationType,
-                    HttpRequestIden::Url,
-                    HttpRequestIden::UrlParameters,
-                    HttpRequestIden::SortPriority,
-                ])
-                .to_owned(),
-        )
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(sql.as_str())?;
-    let m: HttpRequest = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    emit_upserted_model(app_handle, &AnyModel::HttpRequest(m.to_owned()), update_source);
-    Ok(m)
-}
-
-pub async fn list_http_requests<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    workspace_id: &str,
-) -> Result<Vec<HttpRequest>> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(HttpRequestIden::Table)
-        .cond_where(Expr::col(HttpRequestIden::WorkspaceId).eq(workspace_id))
-        .column(Asterisk)
-        .order_by(HttpRequestIden::CreatedAt, Order::Desc)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
-}
-
 pub async fn get_http_request<R: Runtime>(
     app_handle: &AppHandle<R>,
     id: &str,
@@ -2035,7 +1912,7 @@ pub async fn delete_http_request<R: Runtime>(
     };
 
     // DB deletes will cascade but this will delete the files
-    delete_all_http_responses_for_request(app_handle, id, update_source).await?;
+    app_handle.queries().connect()?.delete_all_http_responses_for_request(id, update_source)?;
 
     let dbm = &*app_handle.state::<SqliteConnection>();
     let db = dbm.0.lock().await.get().unwrap();
@@ -2090,7 +1967,8 @@ pub async fn create_http_response<R: Runtime>(
     remote_addr: Option<&str>,
     update_source: &UpdateSource,
 ) -> Result<HttpResponse> {
-    let responses = list_http_responses_for_request(app_handle, request_id, None).await?;
+    let responses =
+        app_handle.queries().connect()?.list_http_responses_for_request(request_id, None)?;
     for response in responses.iter().skip(MAX_HISTORY_ITEMS - 1) {
         debug!("Deleting old response {}", response.id);
         delete_http_response(app_handle, response.id.as_str(), update_source).await?;
@@ -2297,17 +2175,6 @@ pub async fn delete_http_response<R: Runtime>(
     Ok(resp)
 }
 
-pub async fn delete_all_http_responses_for_request<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    request_id: &str,
-    update_source: &UpdateSource,
-) -> Result<()> {
-    for r in list_http_responses_for_request(app_handle, request_id, None).await? {
-        delete_http_response(app_handle, &r.id, update_source).await?;
-    }
-    Ok(())
-}
-
 pub async fn delete_all_http_responses_for_workspace<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_id: &str,
@@ -2330,26 +2197,6 @@ pub async fn list_http_responses_for_workspace<R: Runtime>(
     let (sql, params) = Query::select()
         .from(HttpResponseIden::Table)
         .cond_where(Expr::col(HttpResponseIden::WorkspaceId).eq(workspace_id))
-        .column(Asterisk)
-        .order_by(HttpResponseIden::CreatedAt, Order::Desc)
-        .limit(limit_unwrapped as u64)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
-}
-
-pub async fn list_http_responses_for_request<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    request_id: &str,
-    limit: Option<i64>,
-) -> Result<Vec<HttpResponse>> {
-    let limit_unwrapped = limit.unwrap_or_else(|| i64::MAX);
-    let dbm = app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(HttpResponseIden::Table)
-        .cond_where(Expr::col(HttpResponseIden::RequestId).eq(request_id))
         .column(Asterisk)
         .order_by(HttpResponseIden::CreatedAt, Order::Desc)
         .limit(limit_unwrapped as u64)
@@ -2510,8 +2357,22 @@ pub fn generate_id() -> String {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct ModelPayload {
-    pub model: AnyModel,
+    pub model: serde_json::Value,
     pub update_source: UpdateSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case", tag = "type")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum ModelChangeEvent {
+    Upsert {
+        model: serde_json::Value,
+        update_source: UpdateSource,
+    },
+    Delete {
+        id: String,
+        update_source: UpdateSource,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -2539,7 +2400,7 @@ fn emit_upserted_model<R: Runtime>(
     update_source: &UpdateSource,
 ) {
     let payload = ModelPayload {
-        model: model.to_owned(),
+        model: serde_json::to_value(model.to_owned()).unwrap(),
         update_source: update_source.to_owned(),
     };
 
@@ -2552,7 +2413,7 @@ fn emit_deleted_model<R: Runtime>(
     update_source: &UpdateSource,
 ) {
     let payload = ModelPayload {
-        model: model.to_owned(),
+        model: serde_json::to_value(model.to_owned()).unwrap(),
         update_source: update_source.to_owned(),
     };
     app_handle.emit("deleted_model", payload).unwrap();
@@ -2675,7 +2536,7 @@ pub async fn batch_upsert<R: Runtime>(
 
     if http_requests.len() > 0 {
         for v in http_requests {
-            let x = upsert_http_request(&app_handle, v, update_source).await?;
+            let x = app_handle.queries().connect()?.upsert_http_request(v, update_source)?;
             imported_resources.http_requests.push(x.clone());
         }
         info!("Imported {} http_requests", imported_resources.http_requests.len());
@@ -2720,12 +2581,14 @@ pub async fn get_workspace_export_resources<R: Runtime>(
     };
 
     for workspace_id in workspace_ids {
-        data.resources.workspaces.push(get_workspace(app_handle, workspace_id).await?);
+        data.resources
+            .workspaces
+            .push(app_handle.queries().connect()?.get_workspace(workspace_id)?);
         data.resources.environments.append(&mut list_environments(app_handle, workspace_id).await?);
         data.resources.folders.append(&mut list_folders(app_handle, workspace_id).await?);
         data.resources
             .http_requests
-            .append(&mut list_http_requests(app_handle, workspace_id).await?);
+            .append(&mut app_handle.queries().connect()?.list_http_requests(workspace_id)?);
         data.resources
             .grpc_requests
             .append(&mut list_grpc_requests(app_handle, workspace_id).await?);
@@ -2744,18 +2607,18 @@ pub async fn get_workspace_export_resources<R: Runtime>(
 
 // Generate the created_at or updated_at timestamps for an upsert operation, depending on the ID
 // provided.
-fn timestamp_for_upsert(update_source: &UpdateSource, dt: NaiveDateTime) -> NaiveDateTime {
+pub(crate) fn upsert_date(update_source: &UpdateSource, dt: NaiveDateTime) -> SimpleExpr {
     match update_source {
         // Sync and import operations always preserve timestamps
         UpdateSource::Sync | UpdateSource::Import => {
             if dt.and_utc().timestamp() == 0 {
                 // Sometimes data won't have timestamps (partial data)
-                Utc::now().naive_utc()
+                Utc::now().naive_utc().into()
             } else {
-                dt
+                dt.into()
             }
         }
         // Other sources will always update to the latest time
-        _ => Utc::now().naive_utc(),
+        _ => Utc::now().naive_utc().into(),
     }
 }

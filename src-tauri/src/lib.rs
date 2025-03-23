@@ -30,6 +30,7 @@ use tokio::task::block_in_place;
 use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
+use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{
     CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState,
     GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
@@ -39,21 +40,19 @@ use yaak_models::queries::{
     batch_upsert, cancel_pending_grpc_connections, cancel_pending_http_responses,
     cancel_pending_websocket_connections, create_default_http_response,
     delete_all_grpc_connections, delete_all_grpc_connections_for_workspace,
-    delete_all_http_responses_for_request, delete_all_http_responses_for_workspace,
-    delete_all_websocket_connections_for_workspace, delete_cookie_jar, delete_environment,
-    delete_folder, delete_grpc_connection, delete_grpc_request, delete_http_request,
-    delete_http_response, delete_plugin, delete_workspace, duplicate_folder,
-    duplicate_grpc_request, duplicate_http_request, ensure_base_environment, generate_model_id,
-    get_base_environment, get_cookie_jar, get_environment, get_folder, get_grpc_connection,
-    get_grpc_request, get_http_request, get_http_response, get_key_value_raw,
-    get_or_create_settings, get_or_create_workspace_meta, get_plugin, get_workspace,
-    get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
-    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_http_requests,
-    list_http_responses_for_workspace, list_key_values_raw, list_plugins, list_workspaces,
-    set_key_value_raw, update_response_if_id, update_settings, upsert_cookie_jar,
-    upsert_environment, upsert_folder, upsert_grpc_connection, upsert_grpc_event,
-    upsert_grpc_request, upsert_http_request, upsert_plugin, upsert_workspace,
-    upsert_workspace_meta, BatchUpsertResult, UpdateSource,
+    delete_all_http_responses_for_workspace, delete_all_websocket_connections_for_workspace,
+    delete_cookie_jar, delete_environment, delete_folder, delete_grpc_connection,
+    delete_grpc_request, delete_http_request, delete_http_response, delete_plugin,
+    delete_workspace, duplicate_folder, duplicate_grpc_request, duplicate_http_request,
+    ensure_base_environment, generate_model_id, get_base_environment, get_cookie_jar,
+    get_environment, get_folder, get_grpc_connection, get_grpc_request, get_http_request,
+    get_http_response, get_key_value_raw, get_or_create_settings, get_or_create_workspace_meta,
+    get_plugin, get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
+    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests,
+    list_http_responses_for_workspace, list_key_values_raw, list_plugins, set_key_value_raw,
+    update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder,
+    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_plugin,
+    upsert_workspace, upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
@@ -1338,17 +1337,6 @@ async fn cmd_duplicate_folder<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_create_http_request<R: Runtime>(
-    request: HttpRequest,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> Result<HttpRequest, String> {
-    upsert_http_request(&app_handle, request, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 async fn cmd_duplicate_http_request<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
@@ -1404,14 +1392,15 @@ async fn cmd_update_grpc_request<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_update_http_request<R: Runtime>(
+async fn cmd_upsert_http_request<R: Runtime>(
     request: HttpRequest,
-    app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<HttpRequest, String> {
-    upsert_http_request(&app_handle, request, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+    app_handle: AppHandle<R>,
+) -> YaakResult<HttpRequest> {
+    Ok(app_handle
+        .queries()
+        .connect()?
+        .upsert_http_request(request, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1503,8 +1492,8 @@ async fn cmd_list_grpc_requests<R: Runtime>(
 async fn cmd_list_http_requests<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
-) -> Result<Vec<HttpRequest>, String> {
-    list_http_requests(&app_handle, workspace_id).await.map_err(|e| e.to_string())
+) -> YaakResult<Vec<HttpRequest>> {
+    Ok(app_handle.queries().connect()?.list_http_requests(workspace_id)?)
 }
 
 #[tauri::command]
@@ -1641,8 +1630,8 @@ async fn cmd_get_environment<R: Runtime>(
 async fn cmd_get_workspace<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
-) -> Result<Workspace, String> {
-    get_workspace(&app_handle, id).await.map_err(|e| e.to_string())
+) -> YaakResult<Workspace> {
+    Ok(app_handle.queries().connect()?.get_workspace(id)?)
 }
 
 #[tauri::command]
@@ -1724,22 +1713,23 @@ async fn cmd_delete_all_http_responses<R: Runtime>(
     request_id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<(), String> {
-    delete_all_http_responses_for_request(
-        &app_handle,
-        request_id,
-        &UpdateSource::from_window(&window),
-    )
-    .await
-    .map_err(|e| e.to_string())
+) -> YaakResult<()> {
+    Ok(app_handle
+        .queries()
+        .connect()?
+        .delete_all_http_responses_for_request(request_id, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
 async fn cmd_list_workspaces<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<Vec<Workspace>, String> {
-    let workspaces = list_workspaces(&app_handle).await.expect("Failed to find workspaces");
+) -> YaakResult<Vec<Workspace>> {
+    let workspaces = app_handle.queries().with_tx(|tx| {
+        let w = tx.list_workspaces()?;
+        Ok(w)
+    })?;
+
     if workspaces.is_empty() {
         let workspace = upsert_workspace(
             &app_handle,
@@ -1751,8 +1741,7 @@ async fn cmd_list_workspaces<R: Runtime>(
             },
             &UpdateSource::from_window(&window),
         )
-        .await
-        .expect("Failed to create Workspace");
+        .await?;
         Ok(vec![workspace])
     } else {
         Ok(workspaces)
@@ -1764,11 +1753,10 @@ async fn cmd_get_workspace_meta<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     workspace_id: &str,
-) -> Result<WorkspaceMeta, String> {
-    let workspace = get_workspace(&app_handle, workspace_id).await.map_err(|e| e.to_string())?;
-    get_or_create_workspace_meta(&app_handle, &workspace, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<WorkspaceMeta> {
+    let workspace = app_handle.queries().connect()?.get_workspace(workspace_id)?;
+    Ok(get_or_create_workspace_meta(&app_handle, &workspace, &UpdateSource::from_window(&window))
+        .await?)
 }
 
 #[tauri::command]
@@ -1862,7 +1850,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(yaak_license::init())
-        .plugin(yaak_models::plugin::Builder::default().build())
+        .plugin(yaak_models::init())
         .plugin(yaak_plugins::init())
         .plugin(yaak_crypto::init())
         .plugin(yaak_git::init())
@@ -1902,7 +1890,6 @@ pub fn run() {
             cmd_create_cookie_jar,
             cmd_create_environment,
             cmd_create_grpc_request,
-            cmd_create_http_request,
             cmd_curl_to_request,
             cmd_delete_all_grpc_connections,
             cmd_delete_all_http_responses,
@@ -1969,7 +1956,7 @@ pub fn run() {
             cmd_update_environment,
             cmd_update_folder,
             cmd_update_grpc_request,
-            cmd_update_http_request,
+            cmd_upsert_http_request,
             cmd_update_settings,
             cmd_update_workspace,
             cmd_update_workspace_meta,
@@ -1986,7 +1973,7 @@ pub fn run() {
         .run(|app_handle, event| {
             match event {
                 RunEvent::Ready => {
-                    window::create_main_window(app_handle, "/");
+                    let _ = window::create_main_window(app_handle, "/");
                     let h = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
                         let info = history::store_launch_history(&h).await;

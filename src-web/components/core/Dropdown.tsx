@@ -558,7 +558,15 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                   }
                   if (item.type === 'content') {
                     return (
-                      <div key={i} className={classNames('my-1.5 mx-2 max-w-xs')}>
+                      // eslint-disable-next-line jsx-a11y/no-static-element-interactions,jsx-a11y/click-events-have-key-events
+                      <div
+                        key={i}
+                        className={classNames('my-1 mx-2 max-w-xs')}
+                        onClick={() => {
+                          // Ensure the dropdown is closed when anything in the content is clicked
+                          onClose();
+                        }}
+                      >
                         {item.label}
                       </div>
                     );

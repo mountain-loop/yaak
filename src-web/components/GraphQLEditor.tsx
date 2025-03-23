@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from 'react-use';
 import { useIntrospectGraphQL } from '../hooks/useIntrospectGraphQL';
 import { showDialog } from '../lib/dialog';
+import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Dropdown } from './core/Dropdown';
 import type { EditorProps } from './core/Editor/Editor';
@@ -64,9 +65,50 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
   const actions = useMemo<EditorProps['actions']>(
     () => [
       <div key="introspection" className="!opacity-100">
-        {schema === undefined ? null /* Initializing */ : !error ? (
+        {schema === undefined ? null /* Initializing */ : (
           <Dropdown
             items={[
+              {
+                hidden: !error,
+                label: (
+                  <Banner color="danger">
+                    <p className="mb-1">Schema introspection failed</p>
+                    <Button
+                      size="xs"
+                      color="danger"
+                      variant="border"
+                      onClick={() => {
+                        showDialog({
+                          title: 'Introspection Failed',
+                          size: 'sm',
+                          id: 'introspection-failed',
+                          render: ({ hide }) => (
+                            <>
+                              <FormattedError>{error ?? 'unknown'}</FormattedError>
+                              <div className="w-full my-4">
+                                <Button
+                                  onClick={async () => {
+                                    hide();
+                                    await refetch();
+                                  }}
+                                  className="ml-auto"
+                                  color="primary"
+                                  size="sm"
+                                >
+                                  Retry Request
+                                </Button>
+                              </div>
+                            </>
+                          ),
+                        });
+                      }}
+                    >
+                      View Error
+                    </Button>
+                  </Banner>
+                ),
+                type: 'content',
+              },
               {
                 label: 'Refetch',
                 leftSlot: <Icon icon="refresh" />,
@@ -105,44 +147,12 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
               variant="border"
               title="Refetch Schema"
               isLoading={isLoading}
-              color={isLoading || schema ? 'default' : 'warning'}
+              color={error ? 'danger' : 'default'}
+              forDropdown
             >
-              {isLoading ? 'Introspecting' : schema ? 'Schema' : 'No Schema'}
+              {error ? 'Introspection Failed' : schema ? 'Schema' : 'No Schema'}
             </Button>
           </Dropdown>
-        ) : (
-          <Button
-            size="sm"
-            color="danger"
-            isLoading={isLoading}
-            onClick={() => {
-              showDialog({
-                title: 'Introspection Failed',
-                size: 'dynamic',
-                id: 'introspection-failed',
-                render: ({ hide }) => (
-                  <>
-                    <FormattedError>{error ?? 'unknown'}</FormattedError>
-                    <div className="w-full my-4">
-                      <Button
-                        onClick={async () => {
-                          hide();
-                          await refetch();
-                        }}
-                        className="ml-auto"
-                        color="primary"
-                        size="sm"
-                      >
-                        Try Again
-                      </Button>
-                    </div>
-                  </>
-                ),
-              });
-            }}
-          >
-            Introspection Failed
-          </Button>
         )}
       </div>,
     ],

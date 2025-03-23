@@ -25,7 +25,7 @@ export function useCreateHttpRequest() {
         }
       }
       patch.folderId = patch.folderId || activeRequest?.folderId;
-      return invokeCmd<HttpRequest>('cmd_create_http_request', {
+      return invokeCmd<HttpRequest>('cmd_upsert_http_request', {
         request: { workspaceId, ...patch },
       });
     },
