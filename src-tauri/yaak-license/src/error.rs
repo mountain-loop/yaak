@@ -12,6 +12,9 @@ pub enum Error {
     #[error("{message}")]
     ClientError { message: String, error: String },
 
+    #[error(transparent)]
+    ModelError(#[from] yaak_models::error::Error),
+
     #[error("Internal server error")]
     ServerError,
 }

@@ -112,29 +112,93 @@ pub struct Settings {
     pub editor_keymap: EditorKeymap,
 }
 
-impl<'s> TryFrom<&Row<'s>> for Settings {
-    type Error = rusqlite::Error;
+impl UpsertModelInfo for Settings {
+    fn table_name() -> impl IntoTableRef {
+        SettingsIden::Table
+    }
 
-    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
-        let proxy: Option<String> = r.get("proxy")?;
-        let editor_keymap: String = r.get("editor_keymap")?;
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        SettingsIden::Id
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn duplicate(&self) -> Self {
+        panic!("Cannot duplicate settings model")
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        Ok(vec![
+            (SettingsIden::CreatedAt, upsert_date(source, self.created_at)),
+            (SettingsIden::UpdatedAt, upsert_date(source, self.updated_at)),
+            (SettingsIden::Appearance, self.appearance.as_str().into()),
+            (SettingsIden::EditorFontSize, self.editor_font_size.into()),
+            (SettingsIden::EditorKeymap, self.editor_keymap.to_string().into()),
+            (SettingsIden::EditorSoftWrap, self.editor_soft_wrap.into()),
+            (SettingsIden::InterfaceFontSize, self.interface_font_size.into()),
+            (SettingsIden::InterfaceScale, self.interface_scale.into()),
+            (SettingsIden::OpenWorkspaceNewWindow, self.open_workspace_new_window.into()),
+            (SettingsIden::Theme, self.theme.as_str().into()),
+            (SettingsIden::ThemeDark, self.theme_dark.as_str().into()),
+            (SettingsIden::ThemeLight, self.theme_light.as_str().into()),
+            (SettingsIden::UpdateChannel, self.update_channel.into()),
+            (
+                SettingsIden::Proxy,
+                (match self.proxy {
+                    None => None,
+                    Some(p) => Some(serde_json::to_string(&p)?),
+                })
+                .into(),
+            ),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            SettingsIden::UpdatedAt,
+            SettingsIden::Appearance,
+            SettingsIden::EditorFontSize,
+            SettingsIden::EditorKeymap,
+            SettingsIden::EditorSoftWrap,
+            SettingsIden::InterfaceFontSize,
+            SettingsIden::InterfaceScale,
+            SettingsIden::OpenWorkspaceNewWindow,
+            SettingsIden::Proxy,
+            SettingsIden::Theme,
+            SettingsIden::ThemeDark,
+            SettingsIden::ThemeLight,
+            SettingsIden::UpdateChannel,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let proxy: Option<String> = row.get("proxy")?;
+        let editor_keymap: String = row.get("editor_keymap")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            appearance: r.get("appearance")?,
-            editor_font_size: r.get("editor_font_size")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            appearance: row.get("appearance")?,
+            editor_font_size: row.get("editor_font_size")?,
             editor_keymap: EditorKeymap::from_str(editor_keymap.as_str()).unwrap(),
-            editor_soft_wrap: r.get("editor_soft_wrap")?,
-            interface_font_size: r.get("interface_font_size")?,
-            interface_scale: r.get("interface_scale")?,
-            open_workspace_new_window: r.get("open_workspace_new_window")?,
+            editor_soft_wrap: row.get("editor_soft_wrap")?,
+            interface_font_size: row.get("interface_font_size")?,
+            interface_scale: row.get("interface_scale")?,
+            open_workspace_new_window: row.get("open_workspace_new_window")?,
             proxy: proxy.map(|p| -> ProxySetting { serde_json::from_str(p.as_str()).unwrap() }),
-            theme: r.get("theme")?,
-            theme_dark: r.get("theme_dark")?,
-            theme_light: r.get("theme_light")?,
-            update_channel: r.get("update_channel")?,
+            theme: row.get("theme")?,
+            theme_dark: row.get("theme_dark")?,
+            theme_light: row.get("theme_light")?,
+            update_channel: row.get("update_channel")?,
         })
     }
 }

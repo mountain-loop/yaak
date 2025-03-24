@@ -30,8 +30,7 @@ use yaak_models::models::{
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::queries_legacy::{
-    get_base_environment, get_or_create_settings, update_response_if_id, upsert_cookie_jar,
-    UpdateSource,
+    get_base_environment, update_response_if_id, upsert_cookie_jar, UpdateSource,
 };
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
@@ -49,11 +48,15 @@ pub async fn send_http_request<R: Runtime>(
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
-    let workspace =
-        window.queries().connect().await?.get_workspace(&unrendered_request.workspace_id)?;
+    let update_source = &UpdateSource::from_window(&window);
+    let (settings, workspace) = {
+        let db = window.queries().connect().await?;
+        let settings = db.get_or_create_settings(update_source)?;
+        let workspace = db.get_workspace(&unrendered_request.workspace_id)?;
+        (settings, workspace)
+    };
     let base_environment =
         get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
-    let settings = get_or_create_settings(&app_handle).await;
 
     let response_id = og_response.id.clone();
     let response = Arc::new(Mutex::new(og_response.clone()));

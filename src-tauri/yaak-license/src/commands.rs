@@ -5,16 +5,16 @@ use crate::{
 };
 use log::{debug, info};
 use std::string::ToString;
-use tauri::{command, AppHandle, Manager, Runtime, WebviewWindow};
+use tauri::{command, Manager, Runtime, WebviewWindow};
 
 #[command]
-pub async fn check<R: Runtime>(app_handle: AppHandle<R>) -> Result<LicenseCheckStatus> {
+pub async fn check<R: Runtime>(window: WebviewWindow<R>) -> Result<LicenseCheckStatus> {
     debug!("Checking license");
     check_license(
-        &app_handle,
+        &window,
         CheckActivationRequestPayload {
             app_platform: get_os().to_string(),
-            app_version: app_handle.package_info().version.to_string(),
+            app_version: window.package_info().version.to_string(),
         },
     )
     .await

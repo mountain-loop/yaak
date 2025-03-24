@@ -44,12 +44,12 @@ use yaak_models::queries_legacy::{
     delete_folder, delete_grpc_connection, delete_grpc_request, delete_plugin, duplicate_folder,
     duplicate_grpc_request, ensure_base_environment, generate_model_id, get_base_environment,
     get_cookie_jar, get_environment, get_folder, get_grpc_connection, get_grpc_request,
-    get_key_value_raw, get_or_create_settings, get_or_create_workspace_meta, get_plugin,
-    get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
-    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_key_values_raw,
-    list_plugins, set_key_value_raw, update_response_if_id, update_settings, upsert_cookie_jar,
-    upsert_environment, upsert_folder, upsert_grpc_connection, upsert_grpc_event,
-    upsert_grpc_request, upsert_plugin, upsert_workspace_meta, BatchUpsertResult, UpdateSource,
+    get_key_value_raw, get_or_create_workspace_meta, get_plugin, get_workspace_export_resources,
+    list_cookie_jars, list_environments, list_folders, list_grpc_connections_for_workspace,
+    list_grpc_events, list_grpc_requests, list_key_values_raw, list_plugins, set_key_value_raw,
+    update_response_if_id, upsert_cookie_jar, upsert_environment, upsert_folder,
+    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_plugin,
+    upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
@@ -1529,8 +1529,12 @@ async fn cmd_plugin_info<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_get_settings<R: Runtime>(app_handle: AppHandle<R>) -> Result<Settings, ()> {
-    Ok(get_or_create_settings(&app_handle).await)
+async fn cmd_get_settings<R: Runtime>(window: WebviewWindow<R>) -> YaakResult<Settings> {
+    Ok(window
+        .queries()
+        .connect()
+        .await?
+        .get_or_create_settings(&UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1538,10 +1542,12 @@ async fn cmd_update_settings<R: Runtime>(
     settings: Settings,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<Settings, String> {
-    update_settings(&app_handle, settings, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<Settings> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .upsert_settings(&settings, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1771,12 +1777,12 @@ async fn cmd_delete_workspace<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_check_for_updates(
-    app_handle: AppHandle,
+async fn cmd_check_for_updates<R: Runtime>(
+    window: WebviewWindow<R>,
     yaak_updater: State<'_, Mutex<YaakUpdater>>,
 ) -> YaakResult<bool> {
-    let update_mode = get_update_mode(&app_handle).await;
-    Ok(yaak_updater.lock().await.check_now(&app_handle, update_mode, UpdateTrigger::User).await?)
+    let update_mode = get_update_mode(&window).await?;
+    Ok(yaak_updater.lock().await.check_now(&window, update_mode, UpdateTrigger::User).await?)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1960,14 +1966,16 @@ pub fn run() {
                 }
                 RunEvent::WindowEvent {
                     event: WindowEvent::Focused(true),
+                    label,
                     ..
                 } => {
+                    let w = app_handle.get_webview_window(&label).unwrap();
                     let h = app_handle.clone();
                     // Run update check whenever window is focused
                     tauri::async_runtime::spawn(async move {
                         let val: State<'_, Mutex<YaakUpdater>> = h.state();
-                        let update_mode = get_update_mode(&h).await;
-                        if let Err(e) = val.lock().await.maybe_check(&h, update_mode).await {
+                        let update_mode = get_update_mode(&w).await.unwrap();
+                        if let Err(e) = val.lock().await.maybe_check(&w, update_mode).await {
                             warn!("Failed to check for updates {e:?}");
                         };
                     });
@@ -1984,11 +1992,6 @@ pub fn run() {
                         }
                     });
                 }
-                _ => {}
-            };
-
-            // Save window state on exit
-            match event {
                 RunEvent::WindowEvent {
                     event: WindowEvent::CloseRequested { .. },
                     ..
@@ -2004,9 +2007,13 @@ pub fn run() {
         });
 }
 
-async fn get_update_mode(h: &AppHandle) -> UpdateMode {
-    let settings = get_or_create_settings(h).await;
-    UpdateMode::new(settings.update_channel.as_str())
+async fn get_update_mode<R: Runtime>(window: &WebviewWindow<R>) -> YaakResult<UpdateMode> {
+    let settings = window
+        .queries()
+        .connect()
+        .await?
+        .get_or_create_settings(&UpdateSource::from_window(window))?;
+    Ok(UpdateMode::new(settings.update_channel.as_str()))
 }
 
 fn safe_uri(endpoint: &str) -> String {

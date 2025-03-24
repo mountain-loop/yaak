@@ -6,10 +6,9 @@ use crate::models::{
     GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
     GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseIden,
     HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden, PluginKeyValue,
-    PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden, WebsocketConnection,
-    WebsocketConnectionIden, WebsocketConnectionState, WebsocketEvent, WebsocketEventIden,
-    WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta,
-    WorkspaceMetaIden,
+    PluginKeyValueIden, SyncState, SyncStateIden, WebsocketConnection, WebsocketConnectionIden,
+    WebsocketConnectionState, WebsocketEvent, WebsocketEventIden, WebsocketRequest,
+    WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden,
 };
 use crate::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
@@ -1329,92 +1328,6 @@ pub async fn delete_environment<R: Runtime>(
 
     emit_deleted_model(app_handle, &AnyModel::Environment(env.to_owned()), update_source);
     Ok(env)
-}
-
-const SETTINGS_ID: &str = "default";
-
-async fn get_settings<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Option<Settings>> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::select()
-        .from(SettingsIden::Table)
-        .column(Asterisk)
-        .cond_where(Expr::col(SettingsIden::Id).eq(SETTINGS_ID))
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into()).optional()?)
-}
-
-pub async fn get_or_create_settings<R: Runtime>(app_handle: &AppHandle<R>) -> Settings {
-    match get_settings(app_handle).await {
-        Ok(Some(settings)) => return settings,
-        Err(e) => panic!("Failed to get settings {e:?}"),
-        Ok(None) => {}
-    };
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::insert()
-        .into_table(SettingsIden::Table)
-        .columns([SettingsIden::Id])
-        .values_panic([SETTINGS_ID.into()])
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(sql.as_str()).expect("Failed to prepare Settings insert");
-    stmt.query_row(&*params.as_params(), |row| row.try_into()).expect("Failed to insert Settings")
-}
-
-pub async fn update_settings<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    settings: Settings,
-    update_source: &UpdateSource,
-) -> Result<Settings> {
-    // Correct for the bug where created_at was being updated by mistake
-    let created_at = if settings.created_at > settings.updated_at {
-        settings.updated_at
-    } else {
-        settings.created_at
-    };
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::update()
-        .table(SettingsIden::Table)
-        .cond_where(Expr::col(SettingsIden::Id).eq("default"))
-        .values([
-            (SettingsIden::Id, "default".into()),
-            (SettingsIden::CreatedAt, created_at.into()),
-            (SettingsIden::UpdatedAt, CurrentTimestamp.into()),
-            (SettingsIden::Appearance, settings.appearance.as_str().into()),
-            (SettingsIden::ThemeDark, settings.theme_dark.as_str().into()),
-            (SettingsIden::ThemeLight, settings.theme_light.as_str().into()),
-            (SettingsIden::UpdateChannel, settings.update_channel.into()),
-            (SettingsIden::InterfaceFontSize, settings.interface_font_size.into()),
-            (SettingsIden::InterfaceScale, settings.interface_scale.into()),
-            (SettingsIden::EditorFontSize, settings.editor_font_size.into()),
-            (SettingsIden::EditorKeymap, settings.editor_keymap.to_string().into()),
-            (SettingsIden::EditorSoftWrap, settings.editor_soft_wrap.into()),
-            (SettingsIden::OpenWorkspaceNewWindow, settings.open_workspace_new_window.into()),
-            (
-                SettingsIden::Proxy,
-                (match settings.proxy {
-                    None => None,
-                    Some(p) => Some(serde_json::to_string(&p)?),
-                })
-                .into(),
-            ),
-        ])
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(sql.as_str())?;
-    let m: Settings = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    emit_upserted_model(app_handle, &AnyModel::Settings(m.to_owned()), update_source);
-    Ok(m)
 }
 
 pub async fn upsert_environment<R: Runtime>(
