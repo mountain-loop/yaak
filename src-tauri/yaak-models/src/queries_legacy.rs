@@ -4,12 +4,12 @@ use crate::manager::QueryManagerExt;
 use crate::models::{
     AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
     GrpcConnection, GrpcConnectionIden, GrpcConnectionState, GrpcEvent, GrpcEventIden, GrpcRequest,
-    GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseHeader,
-    HttpResponseIden, HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden,
-    PluginKeyValue, PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden,
-    WebsocketConnection, WebsocketConnectionIden, WebsocketConnectionState, WebsocketEvent,
-    WebsocketEventIden, WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden,
-    WorkspaceMeta, WorkspaceMetaIden,
+    GrpcRequestIden, HttpRequest, HttpRequestIden, HttpResponse, HttpResponseIden,
+    HttpResponseState, KeyValue, KeyValueIden, ModelType, Plugin, PluginIden, PluginKeyValue,
+    PluginKeyValueIden, Settings, SettingsIden, SyncState, SyncStateIden, WebsocketConnection,
+    WebsocketConnectionIden, WebsocketConnectionState, WebsocketEvent, WebsocketEventIden,
+    WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta,
+    WorkspaceMetaIden,
 };
 use crate::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
@@ -21,12 +21,11 @@ use sea_query::Keyword::CurrentTimestamp;
 use sea_query::{Cond, Expr, OnConflict, Order, Query, SimpleExpr, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 
-const MAX_HISTORY_ITEMS: usize = 20;
+pub(crate) const MAX_HISTORY_ITEMS: usize = 20;
 
 pub async fn set_key_value_string<R: Runtime>(
     app_handle: &AppHandle<R>,
@@ -339,65 +338,6 @@ pub async fn exists_workspace<R: Runtime>(app_handle: &AppHandle<R>, id: &str) -
     Ok(stmt.exists(&*params.as_params())?)
 }
 
-pub async fn upsert_workspace<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    workspace: Workspace,
-    update_source: &UpdateSource,
-) -> Result<Workspace> {
-    let id = match workspace.id.as_str() {
-        "" => generate_model_id(ModelType::TypeWorkspace),
-        _ => workspace.id.to_string(),
-    };
-    let trimmed_name = workspace.name.trim();
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::insert()
-        .into_table(WorkspaceIden::Table)
-        .columns([
-            WorkspaceIden::Id,
-            WorkspaceIden::CreatedAt,
-            WorkspaceIden::UpdatedAt,
-            WorkspaceIden::Name,
-            WorkspaceIden::Description,
-            WorkspaceIden::SettingFollowRedirects,
-            WorkspaceIden::SettingRequestTimeout,
-            WorkspaceIden::SettingValidateCertificates,
-        ])
-        .values_panic([
-            id.as_str().into(),
-            upsert_date(update_source, workspace.created_at).into(),
-            upsert_date(update_source, workspace.updated_at).into(),
-            trimmed_name.into(),
-            workspace.description.into(),
-            workspace.setting_follow_redirects.into(),
-            workspace.setting_request_timeout.into(),
-            workspace.setting_validate_certificates.into(),
-        ])
-        .on_conflict(
-            OnConflict::column(GrpcRequestIden::Id)
-                .update_columns([
-                    WorkspaceIden::UpdatedAt,
-                    WorkspaceIden::Name,
-                    WorkspaceIden::Description,
-                    WorkspaceIden::SettingRequestTimeout,
-                    WorkspaceIden::SettingFollowRedirects,
-                    WorkspaceIden::SettingRequestTimeout,
-                    WorkspaceIden::SettingValidateCertificates,
-                ])
-                .values([(WorkspaceIden::UpdatedAt, CurrentTimestamp.into())])
-                .to_owned(),
-        )
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(&sql)?;
-    let m: Workspace = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    emit_upserted_model(app_handle, &AnyModel::Workspace(m.to_owned()), update_source);
-    Ok(m)
-}
-
 pub async fn upsert_workspace_meta<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_meta: WorkspaceMeta,
@@ -442,30 +382,6 @@ pub async fn upsert_workspace_meta<R: Runtime>(
     let m: WorkspaceMeta = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
     emit_upserted_model(app_handle, &AnyModel::WorkspaceMeta(m.to_owned()), update_source);
     Ok(m)
-}
-
-pub async fn delete_workspace<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    id: &str,
-    update_source: &UpdateSource,
-) -> Result<Workspace> {
-    let workspace = app_handle.queries().connect().await?.get_workspace(id)?;
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::delete()
-        .from_table(WorkspaceIden::Table)
-        .cond_where(Expr::col(WorkspaceIden::Id).eq(id))
-        .build_rusqlite(SqliteQueryBuilder);
-    db.execute(sql.as_str(), &*params.as_params())?;
-
-    for r in list_responses_by_workspace_id(app_handle, id).await? {
-        delete_http_response(app_handle, &r.id, update_source).await?;
-    }
-
-    emit_deleted_model(app_handle, &AnyModel::Workspace(workspace.to_owned()), update_source);
-    Ok(workspace)
 }
 
 pub async fn get_cookie_jar<R: Runtime>(app_handle: &AppHandle<R>, id: &str) -> Result<CookieJar> {
@@ -1798,20 +1714,6 @@ pub async fn upsert_folder<R: Runtime>(
     Ok(m)
 }
 
-pub async fn duplicate_http_request<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    id: &str,
-    update_source: &UpdateSource,
-) -> Result<HttpRequest> {
-    let mut request = match get_http_request(app_handle, id).await? {
-        None => return Err(ModelNotFound(id.to_string())),
-        Some(r) => r,
-    };
-    request.id = "".to_string();
-    request.sort_priority = request.sort_priority + 0.001;
-    app_handle.queries().connect().await?.upsert_http_request(request, update_source)
-}
-
 pub async fn duplicate_folder<R: Runtime>(
     app_handle: &AppHandle<R>,
     src_folder: &Folder,
@@ -1821,7 +1723,7 @@ pub async fn duplicate_folder<R: Runtime>(
 
     let http_requests = app_handle
         .queries()
-        .with_conn(|c| c.list_http_requests(workspace_id))
+        .with_conn(|c| c.find_many::<HttpRequest>(HttpRequestIden::WorkspaceId, workspace_id, None))
         .await?
         .into_iter()
         .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
@@ -1848,8 +1750,8 @@ pub async fn duplicate_folder<R: Runtime>(
     .await?;
 
     for m in http_requests {
-        app_handle.queries().connect().await?.upsert_http_request(
-            HttpRequest {
+        app_handle.queries().connect().await?.upsert(
+            &HttpRequest {
                 id: "".into(),
                 folder_id: Some(new_folder.id.clone()),
                 sort_priority: m.sort_priority + 0.001,
@@ -1886,152 +1788,21 @@ pub async fn duplicate_folder<R: Runtime>(
     Ok(())
 }
 
-pub async fn get_http_request<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    id: &str,
-) -> Result<Option<HttpRequest>> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::select()
-        .from(HttpRequestIden::Table)
-        .column(Asterisk)
-        .cond_where(Expr::col(HttpRequestIden::Id).eq(id))
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into()).optional()?)
-}
-
-pub async fn delete_http_request<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    id: &str,
-    update_source: &UpdateSource,
-) -> Result<HttpRequest> {
-    let req = match get_http_request(app_handle, id).await? {
-        None => return Err(ModelNotFound(id.to_string())),
-        Some(r) => r,
-    };
-
-    // DB deletes will cascade but this will delete the files
-    app_handle
-        .queries()
-        .connect()
-        .await?
-        .delete_all_http_responses_for_request(id, update_source)?;
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::delete()
-        .from_table(HttpRequestIden::Table)
-        .cond_where(Expr::col(HttpRequestIden::Id).eq(id))
-        .build_rusqlite(SqliteQueryBuilder);
-    db.execute(sql.as_str(), &*params.as_params())?;
-
-    emit_deleted_model(app_handle, &AnyModel::HttpRequest(req.to_owned()), update_source);
-    Ok(req)
-}
-
 pub async fn create_default_http_response<R: Runtime>(
-    app_handle: &AppHandle<R>,
+    window: &WebviewWindow<R>,
     request_id: &str,
     update_source: &UpdateSource,
 ) -> Result<HttpResponse> {
-    create_http_response(
-        &app_handle,
-        request_id,
-        0,
-        0,
-        "",
-        HttpResponseState::Initialized,
-        0,
-        None,
-        None,
-        None,
-        vec![],
-        None,
-        None,
+    let r = window.queries().connect().await?.upsert(
+        &HttpResponse {
+            request_id: request_id.to_string(),
+            state: HttpResponseState::Initialized,
+            ..Default::default()
+        },
         update_source,
-    )
-    .await
-}
+    )?;
 
-#[allow(clippy::too_many_arguments)]
-pub async fn create_http_response<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    request_id: &str,
-    elapsed: i64,
-    elapsed_headers: i64,
-    url: &str,
-    state: HttpResponseState,
-    status: i64,
-    status_reason: Option<&str>,
-    content_length: Option<i64>,
-    body_path: Option<&str>,
-    headers: Vec<HttpResponseHeader>,
-    version: Option<&str>,
-    remote_addr: Option<&str>,
-    update_source: &UpdateSource,
-) -> Result<HttpResponse> {
-    let responses =
-        app_handle.queries().connect().await?.list_http_responses_for_request(request_id, None)?;
-    for response in responses.iter().skip(MAX_HISTORY_ITEMS - 1) {
-        debug!("Deleting old response {}", response.id);
-        delete_http_response(app_handle, response.id.as_str(), update_source).await?;
-    }
-
-    let req = match get_http_request(app_handle, request_id).await? {
-        None => return Err(ModelNotFound(request_id.to_string())),
-        Some(r) => r,
-    };
-    let id = generate_model_id(ModelType::TypeHttpResponse);
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::insert()
-        .into_table(HttpResponseIden::Table)
-        .columns([
-            HttpResponseIden::Id,
-            HttpResponseIden::CreatedAt,
-            HttpResponseIden::UpdatedAt,
-            HttpResponseIden::RequestId,
-            HttpResponseIden::WorkspaceId,
-            HttpResponseIden::Elapsed,
-            HttpResponseIden::ElapsedHeaders,
-            HttpResponseIden::Url,
-            HttpResponseIden::State,
-            HttpResponseIden::Status,
-            HttpResponseIden::StatusReason,
-            HttpResponseIden::ContentLength,
-            HttpResponseIden::BodyPath,
-            HttpResponseIden::Headers,
-            HttpResponseIden::Version,
-            HttpResponseIden::RemoteAddr,
-        ])
-        .values_panic([
-            id.as_str().into(),
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
-            req.id.as_str().into(),
-            req.workspace_id.as_str().into(),
-            elapsed.into(),
-            elapsed_headers.into(),
-            url.into(),
-            serde_json::to_value(state)?.as_str().unwrap_or_default().into(),
-            status.into(),
-            status_reason.into(),
-            content_length.into(),
-            body_path.into(),
-            serde_json::to_string(&headers)?.into(),
-            version.into(),
-            remote_addr.into(),
-        ])
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(sql.as_str())?;
-    let m: HttpResponse = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    emit_upserted_model(app_handle, &AnyModel::HttpResponse(m.to_owned()), update_source);
-    Ok(m)
+    Ok(r.clone())
 }
 
 pub async fn cancel_pending_websocket_connections<R: Runtime>(
@@ -2092,140 +1863,8 @@ pub async fn update_response_if_id<R: Runtime>(
     if response.id.is_empty() {
         Ok(response.clone())
     } else {
-        update_http_response(app_handle, response, update_source).await
+        app_handle.queries().connect().await?.upsert(response, update_source)
     }
-}
-
-pub async fn update_http_response<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    response: &HttpResponse,
-    update_source: &UpdateSource,
-) -> Result<HttpResponse> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::update()
-        .table(HttpResponseIden::Table)
-        .cond_where(Expr::col(HttpResponseIden::Id).eq(response.clone().id))
-        .values([
-            (HttpResponseIden::UpdatedAt, CurrentTimestamp.into()),
-            (HttpResponseIden::Elapsed, response.elapsed.into()),
-            (HttpResponseIden::Url, response.url.as_str().into()),
-            (HttpResponseIden::Status, response.status.into()),
-            (
-                HttpResponseIden::StatusReason,
-                response.status_reason.as_ref().map(|s| s.as_str()).into(),
-            ),
-            (HttpResponseIden::ContentLength, response.content_length.into()),
-            (HttpResponseIden::BodyPath, response.body_path.as_ref().map(|s| s.as_str()).into()),
-            (HttpResponseIden::Error, response.error.as_ref().map(|s| s.as_str()).into()),
-            (
-                HttpResponseIden::Headers,
-                serde_json::to_string(&response.headers).unwrap_or_default().into(),
-            ),
-            (HttpResponseIden::Version, response.version.as_ref().map(|s| s.as_str()).into()),
-            (HttpResponseIden::State, serde_json::to_value(&response.state)?.as_str().into()),
-            (
-                HttpResponseIden::RemoteAddr,
-                response.remote_addr.as_ref().map(|s| s.as_str()).into(),
-            ),
-        ])
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(sql.as_str())?;
-    let m: HttpResponse = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    emit_upserted_model(app_handle, &AnyModel::HttpResponse(m.to_owned()), update_source);
-    Ok(m)
-}
-
-pub async fn get_http_response<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    id: &str,
-) -> Result<HttpResponse> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(HttpResponseIden::Table)
-        .column(Asterisk)
-        .cond_where(Expr::col(HttpResponseIden::Id).eq(id))
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
-}
-
-pub async fn delete_http_response<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    id: &str,
-    update_source: &UpdateSource,
-) -> Result<HttpResponse> {
-    let resp = get_http_response(app_handle, id).await?;
-
-    // Delete the body file if it exists
-    if let Some(p) = resp.body_path.clone() {
-        if let Err(e) = fs::remove_file(p) {
-            error!("Failed to delete body file: {}", e);
-        };
-    }
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::delete()
-        .from_table(HttpResponseIden::Table)
-        .cond_where(Expr::col(HttpResponseIden::Id).eq(id))
-        .build_rusqlite(SqliteQueryBuilder);
-    db.execute(sql.as_str(), &*params.as_params())?;
-
-    emit_deleted_model(app_handle, &AnyModel::HttpResponse(resp.to_owned()), update_source);
-    Ok(resp)
-}
-
-pub async fn delete_all_http_responses_for_workspace<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    workspace_id: &str,
-    update_source: &UpdateSource,
-) -> Result<()> {
-    for r in list_http_responses_for_workspace(app_handle, workspace_id, None).await? {
-        delete_http_response(app_handle, &r.id, update_source).await?;
-    }
-    Ok(())
-}
-
-pub async fn list_http_responses_for_workspace<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    workspace_id: &str,
-    limit: Option<i64>,
-) -> Result<Vec<HttpResponse>> {
-    let limit_unwrapped = limit.unwrap_or_else(|| i64::MAX);
-    let dbm = app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(HttpResponseIden::Table)
-        .cond_where(Expr::col(HttpResponseIden::WorkspaceId).eq(workspace_id))
-        .column(Asterisk)
-        .order_by(HttpResponseIden::CreatedAt, Order::Desc)
-        .limit(limit_unwrapped as u64)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
-}
-
-pub async fn list_responses_by_workspace_id<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    workspace_id: &str,
-) -> Result<Vec<HttpResponse>> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(HttpResponseIden::Table)
-        .cond_where(Expr::col(HttpResponseIden::WorkspaceId).eq(workspace_id))
-        .column(Asterisk)
-        .order_by(HttpResponseIden::CreatedAt, Order::Desc)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
 }
 
 pub async fn get_sync_state_for_model<R: Runtime>(
@@ -2488,7 +2127,7 @@ pub async fn batch_upsert<R: Runtime>(
     if workspaces.len() > 0 {
         info!("Batch inserting {} workspaces", workspaces.len());
         for v in workspaces {
-            let x = upsert_workspace(&app_handle, v, update_source).await?;
+            let x = app_handle.queries().connect().await?.upsert(&v, update_source)?;
             imported_resources.workspaces.push(x.clone());
         }
     }
@@ -2538,7 +2177,7 @@ pub async fn batch_upsert<R: Runtime>(
 
     if http_requests.len() > 0 {
         for v in http_requests {
-            let x = app_handle.queries().connect().await?.upsert_http_request(v, update_source)?;
+            let x = app_handle.queries().connect().await?.upsert(&v, update_source)?;
             imported_resources.http_requests.push(x.clone());
         }
         info!("Imported {} http_requests", imported_resources.http_requests.len());
@@ -2585,12 +2224,14 @@ pub async fn get_workspace_export_resources<R: Runtime>(
     for workspace_id in workspace_ids {
         data.resources
             .workspaces
-            .push(app_handle.queries().connect().await?.get_workspace(workspace_id)?);
+            .push(app_handle.queries().connect().await?.find_one(WorkspaceIden::Id, workspace_id)?);
         data.resources.environments.append(&mut list_environments(app_handle, workspace_id).await?);
         data.resources.folders.append(&mut list_folders(app_handle, workspace_id).await?);
-        data.resources
-            .http_requests
-            .append(&mut app_handle.queries().connect().await?.list_http_requests(workspace_id)?);
+        data.resources.http_requests.append(&mut app_handle.queries().connect().await?.find_many(
+            HttpRequestIden::WorkspaceId,
+            workspace_id,
+            None,
+        )?);
         data.resources
             .grpc_requests
             .append(&mut list_grpc_requests(app_handle, workspace_id).await?);

@@ -1,9 +1,9 @@
 use crate::error::Error::{ModelNotFound, RowNotFound};
 use crate::error::Result;
 use crate::manager::DbContext;
-use crate::models::AnyModel;
-use crate::queries_legacy::{ModelChangeEvent, ModelPayload, UpdateSource};
-use rusqlite::{OptionalExtension, Row};
+use crate::models::{AnyModel, ModelType, UpsertModelInfo};
+use crate::queries_legacy::{generate_model_id, ModelChangeEvent, ModelPayload, UpdateSource};
+use rusqlite::OptionalExtension;
 use sea_query::{
     Asterisk, Expr, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr,
     SqliteQueryBuilder,
@@ -11,84 +11,112 @@ use sea_query::{
 use sea_query_rusqlite::RusqliteBinder;
 
 impl<'a> DbContext<'a> {
-    pub fn find_one<'s, M>(
+    pub(crate) fn find_one<'s, M>(
         &self,
-        table: impl IntoTableRef,
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
     ) -> Result<M>
     where
-        M: for<'r> TryFrom<&'r Row<'r>, Error = rusqlite::Error>,
+        M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
-        match self.find_optional::<M>(table, col, value) {
+        match self.find_optional::<M>(col, value) {
             Ok(Some(v)) => Ok(v),
             Ok(None) => Err(RowNotFound),
             Err(e) => Err(e),
         }
     }
 
+    pub(crate) fn get_by_id<'s, M>(&self, value: impl Into<SimpleExpr>) -> Result<M>
+    where
+        M: Into<AnyModel> + Clone + UpsertModelInfo,
+    {
+        self.find_one(M::id_column().into_iden(), value)
+    }
+
     pub fn find_optional<'s, M>(
         &self,
-        table: impl IntoTableRef,
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
     ) -> Result<Option<M>>
     where
-        M: for<'r> TryFrom<&'r Row<'r>, Error = rusqlite::Error>,
+        M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
         let (sql, params) = Query::select()
-            .from(table)
+            .from(M::table_name())
             .column(Asterisk)
             .cond_where(Expr::col(col).eq(value))
             .build_rusqlite(SqliteQueryBuilder);
         let mut stmt = self.conn.prepare(sql.as_str())?;
-        Ok(stmt.query_row(&*params.as_params(), |row| row.try_into()).optional()?)
+        Ok(stmt.query_row(&*params.as_params(), M::from_row).optional()?)
     }
 
-    pub fn find_all<'s, M, T>(&self, table: T) -> Result<Vec<M>>
+    pub fn find_all<'s, M>(&self) -> Result<Vec<M>>
     where
-        M: for<'r> TryFrom<&'r Row<'r>, Error = rusqlite::Error>,
-        T: IntoTableRef,
+        M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
-        let (sql, params) =
-            Query::select().from(table).column(Asterisk).build_rusqlite(SqliteQueryBuilder);
+        let (sql, params) = Query::select()
+            .from(M::table_name())
+            .column(Asterisk)
+            .build_rusqlite(SqliteQueryBuilder);
         let mut stmt = self.conn.resolve().prepare(sql.as_str())?;
-        let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+        let items = stmt.query_map(&*params.as_params(), M::from_row)?;
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
     pub fn find_many<'s, M>(
         &self,
-        table: impl IntoTableRef,
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
         limit: Option<u64>,
     ) -> Result<Vec<M>>
     where
-        M: for<'r> TryFrom<&'r Row<'r>, Error = rusqlite::Error>,
+        M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
         // TODO: Figure out how to do this conditional builder better
         let (sql, params) = if let Some(limit) = limit {
             Query::select()
-                .from(table)
+                .from(M::table_name())
                 .column(Asterisk)
                 .cond_where(Expr::col(col).eq(value))
                 .limit(limit)
                 .build_rusqlite(SqliteQueryBuilder)
         } else {
             Query::select()
-                .from(table)
+                .from(M::table_name())
                 .column(Asterisk)
                 .cond_where(Expr::col(col).eq(value))
                 .build_rusqlite(SqliteQueryBuilder)
         };
 
         let mut stmt = self.conn.resolve().prepare(sql.as_str())?;
-        let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+        let items = stmt.query_map(&*params.as_params(), M::from_row)?;
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
-    pub fn upsert_one<M>(
+    pub fn duplicate<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
+    where
+        M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
+    {
+        let m: M = self.find_one(M::id_column().into_iden(), model.get_id())?;
+        self.upsert(&m.duplicate(), source)
+    }
+
+    pub fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
+    where
+        M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
+    {
+        self.upsert_one(
+            M::table_name(),
+            M::id_column(),
+            model.get_id().as_str(),
+            || generate_model_id(ModelType::TypeEnvironment),
+            model.clone().insert_values(source)?,
+            M::update_columns(),
+            source,
+        )
+    }
+
+    fn upsert_one<M>(
         &self,
         table: impl IntoTableRef,
         id_col: impl IntoIden + Eq + Clone,
@@ -96,10 +124,10 @@ impl<'a> DbContext<'a> {
         gen_id: fn() -> String,
         other_values: Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>,
         update_columns: Vec<impl IntoIden>,
-        update_source: &UpdateSource,
+        source: &UpdateSource,
     ) -> Result<M>
     where
-        M: for<'r> TryFrom<&'r Row<'r>, Error = rusqlite::Error> + Into<AnyModel> + Clone,
+        M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
     {
         let id_iden = id_col.into_iden();
         let mut column_vec = vec![id_iden.clone()];
@@ -120,11 +148,11 @@ impl<'a> DbContext<'a> {
             .build_rusqlite(SqliteQueryBuilder);
 
         let mut stmt = self.conn.resolve().prepare(sql.as_str())?;
-        let m: M = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
+        let m: M = stmt.query_row(&*params.as_params(), |row| M::from_row(row))?;
 
         let payload = ModelPayload {
             model: m.clone().into(),
-            update_source: update_source.clone(),
+            update_source: source.clone(),
             change: ModelChangeEvent::Upsert,
         };
         self.tx.try_send(payload).unwrap();
@@ -132,24 +160,13 @@ impl<'a> DbContext<'a> {
         Ok(m)
     }
 
-    pub fn delete_one<'s, M>(
-        &self,
-        table: impl IntoTableRef + Clone,
-        col: impl IntoColumnRef + Clone,
-        value: &str,
-        update_source: &UpdateSource,
-    ) -> Result<M>
+    pub(crate) fn delete<'s, M>(&self, m: &M, update_source: &UpdateSource) -> Result<M>
     where
-        M: for<'r> TryFrom<&'r Row<'r>, Error = rusqlite::Error> + Clone + Into<AnyModel>,
+        M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
-        let m: M = match self.find_optional(table.clone(), col.clone(), value)? {
-            None => return Err(ModelNotFound(format!("{value}"))),
-            Some(r) => r,
-        };
-
         let (sql, params) = Query::delete()
-            .from_table(table)
-            .cond_where(Expr::col(col).eq(value))
+            .from_table(M::table_name())
+            .cond_where(Expr::col(M::id_column().into_iden()).eq(m.get_id()))
             .build_rusqlite(SqliteQueryBuilder);
         self.conn.execute(sql.as_str(), &*params.as_params())?;
 
@@ -160,6 +177,18 @@ impl<'a> DbContext<'a> {
         };
 
         self.tx.try_send(payload).unwrap();
-        Ok(m)
+        Ok(m.clone())
+    }
+
+    pub(crate) fn delete_by_id<'s, M>(&self, id: &str, update_source: &UpdateSource) -> Result<M>
+    where
+        M: Into<AnyModel> + Clone + UpsertModelInfo,
+    {
+        let m: M = match self.find_optional(M::id_column().into_iden(), id)? {
+            None => return Err(ModelNotFound(format!("{}", id))),
+            Some(r) => r,
+        };
+
+        self.delete(&m, update_source)
     }
 }

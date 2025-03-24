@@ -12,7 +12,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::queries_legacy::{
-    create_default_http_response, delete_plugin_key_value, get_base_environment, get_http_request,
+    create_default_http_response, delete_plugin_key_value, get_base_environment,
     get_plugin_key_value, list_plugins, set_plugin_key_value, upsert_plugin, UpdateSource,
 };
 use yaak_plugins::events::{
@@ -70,7 +70,13 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             }))
         }
         InternalEventPayload::GetHttpRequestByIdRequest(req) => {
-            let http_request = get_http_request(app_handle, req.id.as_str()).await.unwrap();
+            let http_request = app_handle
+                .queries()
+                .connect()
+                .await
+                .unwrap()
+                .get_http_request(req.id.as_str())
+                .unwrap();
             Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
                 http_request,
             }))
@@ -180,7 +186,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 HttpResponse::new()
             } else {
                 create_default_http_response(
-                    app_handle,
+                    &window,
                     http_request.id.as_str(),
                     &UpdateSource::Plugin,
                 )

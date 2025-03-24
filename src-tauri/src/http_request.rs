@@ -30,8 +30,8 @@ use yaak_models::models::{
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::queries_legacy::{
-    get_base_environment, get_http_response, get_or_create_settings, update_response_if_id,
-    upsert_cookie_jar, UpdateSource,
+    get_base_environment, get_or_create_settings, update_response_if_id, upsert_cookie_jar,
+    UpdateSource,
 };
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
@@ -49,7 +49,8 @@ pub async fn send_http_request<R: Runtime>(
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
-    let workspace = window.queries().connect().await?.get_workspace(&unrendered_request.workspace_id)?;
+    let workspace =
+        window.queries().connect().await?.get_workspace(&unrendered_request.workspace_id)?;
     let base_environment =
         get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
     let settings = get_or_create_settings(&app_handle).await;
@@ -650,7 +651,7 @@ pub async fn send_http_request<R: Runtime>(
     Ok(tokio::select! {
         Ok(r) = done_rx => r,
         _ = cancelled_rx.changed() => {
-            match get_http_response(&app_handle, response_id.as_str()).await {
+            match app_handle.queries().with_conn(|c| c.get_http_response(&response_id)).await {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
                     update_response_if_id(&app_handle, &r, &UpdateSource::from_window(window)).await.expect("Failed to update response")

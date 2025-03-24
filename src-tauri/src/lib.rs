@@ -40,19 +40,16 @@ use yaak_models::queries_legacy::{
     batch_upsert, cancel_pending_grpc_connections, cancel_pending_http_responses,
     cancel_pending_websocket_connections, create_default_http_response,
     delete_all_grpc_connections, delete_all_grpc_connections_for_workspace,
-    delete_all_http_responses_for_workspace, delete_all_websocket_connections_for_workspace,
-    delete_cookie_jar, delete_environment, delete_folder, delete_grpc_connection,
-    delete_grpc_request, delete_http_request, delete_http_response, delete_plugin,
-    delete_workspace, duplicate_folder, duplicate_grpc_request, duplicate_http_request,
-    ensure_base_environment, generate_model_id, get_base_environment, get_cookie_jar,
-    get_environment, get_folder, get_grpc_connection, get_grpc_request, get_http_request,
-    get_http_response, get_key_value_raw, get_or_create_settings, get_or_create_workspace_meta,
-    get_plugin, get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
-    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests,
-    list_http_responses_for_workspace, list_key_values_raw, list_plugins, set_key_value_raw,
-    update_response_if_id, update_settings, upsert_cookie_jar, upsert_environment, upsert_folder,
-    upsert_grpc_connection, upsert_grpc_event, upsert_grpc_request, upsert_plugin,
-    upsert_workspace, upsert_workspace_meta, BatchUpsertResult, UpdateSource,
+    delete_all_websocket_connections_for_workspace, delete_cookie_jar, delete_environment,
+    delete_folder, delete_grpc_connection, delete_grpc_request, delete_plugin, duplicate_folder,
+    duplicate_grpc_request, ensure_base_environment, generate_model_id, get_base_environment,
+    get_cookie_jar, get_environment, get_folder, get_grpc_connection, get_grpc_request,
+    get_key_value_raw, get_or_create_settings, get_or_create_workspace_meta, get_plugin,
+    get_workspace_export_resources, list_cookie_jars, list_environments, list_folders,
+    list_grpc_connections_for_workspace, list_grpc_events, list_grpc_requests, list_key_values_raw,
+    list_plugins, set_key_value_raw, update_response_if_id, update_settings, upsert_cookie_jar,
+    upsert_environment, upsert_folder, upsert_grpc_connection, upsert_grpc_event,
+    upsert_grpc_request, upsert_plugin, upsert_workspace_meta, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
@@ -763,12 +760,11 @@ async fn cmd_filter_response<R: Runtime>(
     response_id: &str,
     plugin_manager: State<'_, PluginManager>,
     filter: &str,
-) -> Result<FilterResponse, String> {
-    let response =
-        get_http_response(&app_handle, response_id).await.expect("Failed to get http response");
+) -> YaakResult<FilterResponse> {
+    let response = app_handle.queries().connect().await?.get_http_response(response_id)?;
 
     if let None = response.body_path {
-        return Err("Response body path not set".to_string());
+        return Err(GenericError("Response body path not set".to_string()));
     }
 
     let mut content_type = "".to_string();
@@ -779,13 +775,12 @@ async fn cmd_filter_response<R: Runtime>(
         }
     }
 
-    let body = read_response_body(response).await.unwrap();
+    let body = read_response_body(response)
+        .await
+        .ok_or(GenericError("Failed to find response body".to_string()))?;
 
     // TODO: Have plugins register their own content type (regex?)
-    plugin_manager
-        .filter_data(&window, filter, &body, &content_type)
-        .await
-        .map_err(|e| e.to_string())
+    Ok(plugin_manager.filter_data(&window, filter, &body, &content_type).await?)
 }
 
 #[tauri::command]
@@ -1057,17 +1052,12 @@ async fn cmd_save_response<R: Runtime>(
     app_handle: AppHandle<R>,
     response_id: &str,
     filepath: &str,
-) -> Result<(), String> {
-    let response = get_http_response(&app_handle, response_id).await.map_err(|e| e.to_string())?;
+) -> YaakResult<()> {
+    let response = app_handle.queries().connect().await?.get_http_response(response_id)?;
 
-    let body_path = match response.body_path {
-        None => {
-            return Err("Response does not have a body".to_string());
-        }
-        Some(p) => p,
-    };
-
-    fs::copy(body_path, filepath).map_err(|e| e.to_string())?;
+    let body_path =
+        response.body_path.ok_or(GenericError("Response does not have a body".to_string()))?;
+    fs::copy(body_path, filepath).map_err(|e| GenericError(e.to_string()))?;
 
     Ok(())
 }
@@ -1084,7 +1074,7 @@ async fn cmd_send_http_request<R: Runtime>(
     request: HttpRequest,
 ) -> YaakResult<HttpResponse> {
     let response =
-        create_default_http_response(&app_handle, &request.id, &UpdateSource::from_window(&window))
+        create_default_http_response(&window, &request.id, &UpdateSource::from_window(&window))
             .await?;
 
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
@@ -1335,10 +1325,10 @@ async fn cmd_duplicate_http_request<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<HttpRequest, String> {
-    duplicate_http_request(&app_handle, id, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<HttpRequest> {
+    let db = app_handle.queries().connect().await?;
+    let request = db.get_http_request(id)?.unwrap();
+    Ok(db.duplicate(&request, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1346,10 +1336,12 @@ async fn cmd_update_workspace<R: Runtime>(
     workspace: Workspace,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<Workspace, String> {
-    upsert_workspace(&app_handle, workspace, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<Workspace> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .upsert_workspace(&workspace, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1395,7 +1387,7 @@ async fn cmd_upsert_http_request<R: Runtime>(
         .queries()
         .connect()
         .await?
-        .upsert_http_request(request, &UpdateSource::from_window(&window))?)
+        .upsert(&request, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1414,10 +1406,12 @@ async fn cmd_delete_http_request<R: Runtime>(
     app_handle: AppHandle<R>,
     request_id: &str,
     window: WebviewWindow<R>,
-) -> Result<HttpRequest, String> {
-    delete_http_request(&app_handle, request_id, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<HttpRequest> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .delete_http_request_by_id(request_id, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1567,8 +1561,8 @@ async fn cmd_get_grpc_request<R: Runtime>(
 async fn cmd_get_http_request<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
-) -> Result<Option<HttpRequest>, String> {
-    get_http_request(&app_handle, id).await.map_err(|e| e.to_string())
+) -> YaakResult<Option<HttpRequest>> {
+    Ok(app_handle.queries().connect().await?.get_http_request(id)?)
 }
 
 #[tauri::command]
@@ -1634,10 +1628,12 @@ async fn cmd_list_http_responses<R: Runtime>(
     workspace_id: &str,
     limit: Option<i64>,
     app_handle: AppHandle<R>,
-) -> Result<Vec<HttpResponse>, String> {
-    list_http_responses_for_workspace(&app_handle, workspace_id, limit)
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<Vec<HttpResponse>> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .list_http_responses_for_workspace(workspace_id, limit.map(|l| l as u64))?)
 }
 
 #[tauri::command]
@@ -1645,10 +1641,10 @@ async fn cmd_delete_http_response<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<HttpResponse, String> {
-    delete_http_response(&app_handle, id, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<HttpResponse> {
+    let db = app_handle.queries().connect().await?;
+    let http_response = db.get_http_response(id)?;
+    Ok(db.delete_http_response(&http_response, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1656,10 +1652,8 @@ async fn cmd_delete_grpc_connection<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<GrpcConnection, String> {
-    delete_grpc_connection(&app_handle, id, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<GrpcConnection> {
+    Ok(delete_grpc_connection(&app_handle, id, &UpdateSource::from_window(&window)).await?)
 }
 
 #[tauri::command]
@@ -1678,28 +1672,23 @@ async fn cmd_delete_send_history<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<(), String> {
-    delete_all_http_responses_for_workspace(
-        &app_handle,
+) -> YaakResult<()> {
+    app_handle.queries().connect().await?.delete_all_http_responses_for_workspace(
         workspace_id,
         &UpdateSource::from_window(&window),
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    )?;
     delete_all_grpc_connections_for_workspace(
         &app_handle,
         workspace_id,
         &UpdateSource::from_window(&window),
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     delete_all_websocket_connections_for_workspace(
         &app_handle,
         workspace_id,
         &UpdateSource::from_window(&window),
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(())
 }
 
@@ -1721,19 +1710,18 @@ async fn cmd_list_workspaces<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Vec<Workspace>> {
-    let workspaces = app_handle.queries().connect().await?.list_workspaces()?;
+    let queries = app_handle.queries().connect().await?;
+    let workspaces = queries.find_all::<Workspace>()?;
     if workspaces.is_empty() {
-        let workspace = upsert_workspace(
-            &app_handle,
-            Workspace {
+        let workspace = queries.upsert_workspace(
+            &Workspace {
                 name: "Yaak".to_string(),
                 setting_follow_redirects: true,
                 setting_validate_certificates: true,
                 ..Default::default()
             },
             &UpdateSource::from_window(&window),
-        )
-        .await?;
+        )?;
         Ok(vec![workspace])
     } else {
         Ok(workspaces)
@@ -1774,24 +1762,21 @@ async fn cmd_delete_workspace<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     workspace_id: &str,
-) -> Result<Workspace, String> {
-    delete_workspace(&app_handle, workspace_id, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<Workspace> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .delete_workspace_by_id(workspace_id, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
 async fn cmd_check_for_updates(
     app_handle: AppHandle,
     yaak_updater: State<'_, Mutex<YaakUpdater>>,
-) -> Result<bool, String> {
+) -> YaakResult<bool> {
     let update_mode = get_update_mode(&app_handle).await;
-    yaak_updater
-        .lock()
-        .await
-        .check_now(&app_handle, update_mode, UpdateTrigger::User)
-        .await
-        .map_err(|e| e.to_string())
+    Ok(yaak_updater.lock().await.check_now(&app_handle, update_mode, UpdateTrigger::User).await?)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

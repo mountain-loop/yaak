@@ -15,7 +15,7 @@ use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{SyncState, WorkspaceMeta};
 use yaak_models::queries_legacy::{
     batch_upsert, delete_environment, delete_folder, delete_grpc_request, delete_sync_state,
-    delete_websocket_request, delete_workspace, get_workspace_export_resources, get_workspace_meta,
+    delete_websocket_request, get_workspace_export_resources, get_workspace_meta,
     list_sync_states_for_workspace, upsert_sync_state, upsert_workspace_meta, UpdateSource,
 };
 
@@ -559,7 +559,7 @@ fn derive_model_filename(m: &SyncModel) -> PathBuf {
 async fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) -> Result<()> {
     match model {
         SyncModel::Workspace(m) => {
-            delete_workspace(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
+            app_handle.queries().connect().await?.delete_workspace(&m, &UpdateSource::Sync)?;
         }
         SyncModel::Environment(m) => {
             delete_environment(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
@@ -568,10 +568,7 @@ async fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) 
             delete_folder(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
         }
         SyncModel::HttpRequest(m) => {
-            app_handle
-                .queries()
-                .connect().await?
-                .delete_http_request(m.id.as_str(), &UpdateSource::Sync)?;
+            app_handle.queries().connect().await?.delete_http_request(m, &UpdateSource::Sync)?;
         }
         SyncModel::GrpcRequest(m) => {
             delete_grpc_request(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;

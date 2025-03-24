@@ -24,6 +24,9 @@ pub enum Error {
     #[error(transparent)]
     PluginError(#[from] yaak_plugins::error::Error),
 
+    #[error("Updater error: {0}")]
+    UpdaterError(#[from] tauri_plugin_updater::Error),
+
     #[error("Request error: {0}")]
     RequestError(#[from] reqwest::Error),
 
