@@ -29,7 +29,7 @@ use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries_legacy::{upsert_cookie_jar, UpdateSource};
+use yaak_models::queries_legacy::UpdateSource;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
@@ -635,12 +635,12 @@ pub async fn send_http_request<R: Runtime>(
                             })
                             .collect::<Vec<_>>();
                         cookie_jar.cookies = json_cookies;
-                        if let Err(e) = upsert_cookie_jar(
-                            &app_handle,
-                            &cookie_jar,
-                            &UpdateSource::from_window(&window),
-                        )
-                        .await
+                        if let Err(e) = app_handle
+                            .queries()
+                            .connect()
+                            .await
+                            .unwrap()
+                            .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))
                         {
                             error!("Failed to update cookie jar: {}", e);
                         };

@@ -13,10 +13,7 @@ use tokio::io::AsyncWriteExt;
 use ts_rs::TS;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{SyncState, WorkspaceMeta};
-use yaak_models::queries_legacy::{
-    batch_upsert, delete_sync_state, get_workspace_export_resources, get_workspace_meta,
-    list_sync_states_for_workspace, upsert_sync_state, upsert_workspace_meta, UpdateSource,
-};
+use yaak_models::queries_legacy::{get_workspace_export_resources, UpdateSource};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -114,12 +111,14 @@ pub(crate) async fn get_db_candidates<R: Runtime>(
         .into_iter()
         .map(|m| (m.id(), m))
         .collect();
-    let sync_states: HashMap<_, _> =
-        list_sync_states_for_workspace(app_handle, workspace_id, sync_dir)
-            .await?
-            .into_iter()
-            .map(|s| (s.model_id.clone(), s))
-            .collect();
+    let sync_states: HashMap<_, _> = app_handle
+        .queries()
+        .connect()
+        .await?
+        .list_sync_states_for_workspace(workspace_id, sync_dir)?
+        .into_iter()
+        .map(|s| (s.model_id.clone(), s))
+        .collect();
 
     // 1. Add candidates for models (created/modified/unmodified)
     let mut candidates: Vec<DbCandidate> = models
@@ -441,41 +440,47 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
         });
     }
 
-    let upserted_models = batch_upsert(
-        app_handle,
-        workspaces_to_upsert,
-        environments_to_upsert,
-        folders_to_upsert,
-        http_requests_to_upsert,
-        grpc_requests_to_upsert,
-        websocket_requests_to_upsert,
-        &UpdateSource::Sync,
-    )
-    .await?;
+    let upserted_models = app_handle
+        .queries()
+        .with_tx(|tx| {
+            tx.batch_upsert(
+                workspaces_to_upsert,
+                environments_to_upsert,
+                folders_to_upsert,
+                http_requests_to_upsert,
+                grpc_requests_to_upsert,
+                websocket_requests_to_upsert,
+                &UpdateSource::Sync,
+            )
+        })
+        .await?;
 
     // Ensure we creat WorkspaceMeta models for each new workspace, with the appropriate sync dir
     let sync_dir_string = sync_dir.to_string_lossy().to_string();
+    let db = app_handle.queries().connect().await?;
     for workspace in upserted_models.workspaces {
-        let r = match get_workspace_meta(app_handle, &workspace).await {
+        let r = match db.get_workspace_meta(&workspace) {
             Ok(Some(m)) => {
                 if m.setting_sync_dir == Some(sync_dir_string.clone()) {
                     // We don't need to update if unchanged
                     continue;
                 }
-                let wm = WorkspaceMeta {
-                    setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
-                    ..m
-                };
-                upsert_workspace_meta(app_handle, wm, &UpdateSource::Sync).await
+                db.upsert_workspace_meta(
+                    &WorkspaceMeta {
+                        setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
+                        ..m
+                    },
+                    &UpdateSource::Sync,
+                )
             }
-            Ok(None) => {
-                let wm = WorkspaceMeta {
+            Ok(None) => db.upsert_workspace_meta(
+                &WorkspaceMeta {
                     workspace_id: workspace_id.to_string(),
                     setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
                     ..Default::default()
-                };
-                upsert_workspace_meta(app_handle, wm, &UpdateSource::Sync).await
-            }
+                },
+                &UpdateSource::Sync,
+            ),
             Err(e) => Err(e),
         };
 
@@ -526,7 +531,7 @@ pub(crate) async fn apply_sync_state_ops<R: Runtime>(
                     flushed_at: Utc::now().naive_utc(),
                     ..Default::default()
                 };
-                upsert_sync_state(app_handle, sync_state).await?;
+                app_handle.queries().connect().await?.upsert_sync_state(&sync_state)?;
             }
             SyncStateOp::Update {
                 state: sync_state,
@@ -540,10 +545,10 @@ pub(crate) async fn apply_sync_state_ops<R: Runtime>(
                     flushed_at: Utc::now().naive_utc(),
                     ..sync_state
                 };
-                upsert_sync_state(app_handle, sync_state).await?;
+                app_handle.queries().connect().await?.upsert_sync_state(&sync_state)?;
             }
             SyncStateOp::Delete { state } => {
-                delete_sync_state(app_handle, state.id.as_str()).await?;
+                app_handle.queries().connect().await?.delete_sync_state(&state)?;
             }
         }
     }

@@ -2,7 +2,6 @@ use crate::error::Error::{
     AuthPluginNotFound, ClientNotInitializedErr, PluginErr, PluginNotFoundErr, UnknownEventErr,
 };
 use crate::error::Result;
-use yaak_templates::error::Result as TemplateResult;
 use crate::events::{
     BootRequest, CallHttpAuthenticationActionArgs, CallHttpAuthenticationActionRequest,
     CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
@@ -27,8 +26,10 @@ use tokio::fs::read_dir;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{timeout, Instant};
-use yaak_models::queries_legacy::{generate_id, list_plugins};
+use yaak_models::manager::QueryManagerExt;
+use yaak_models::queries_legacy::generate_id;
 use yaak_templates::error::Error::RenderError;
+use yaak_templates::error::Result as TemplateResult;
 
 #[derive(Clone)]
 pub struct PluginManager {
@@ -158,7 +159,8 @@ impl PluginManager {
             })
             .collect();
 
-        let plugins = list_plugins(app_handle).await.unwrap_or_default();
+        let plugins =
+            app_handle.queries().connect().await.unwrap().list_plugins().unwrap_or_default();
         let installed_plugin_dirs: Vec<PluginCandidate> = plugins
             .iter()
             .map(|p| PluginCandidate {
@@ -622,7 +624,7 @@ impl PluginManager {
 
         match value {
             None => Err(RenderError(format!("Template function {fn_name}(…) not found "))),
-            Some(Some(v)) => Ok(v), // Plugin returned string
+            Some(Some(v)) => Ok(v),           // Plugin returned string
             Some(None) => Ok("".to_string()), // Plugin returned null
         }
     }

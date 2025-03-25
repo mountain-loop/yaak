@@ -14,11 +14,11 @@ impl<'a> DbContext<'a> {
 
     pub fn delete_websocket_request(
         &self,
-        m: &WebsocketRequest,
+        websocket_request: &WebsocketRequest,
         source: &UpdateSource,
     ) -> Result<WebsocketRequest> {
-        self.delete_all_websocket_connections_for_request(m.id.as_str(), source)?;
-        self.delete(m, source)
+        self.delete_all_websocket_connections_for_request(websocket_request.id.as_str(), source)?;
+        self.delete(websocket_request, source)
     }
 
     pub fn delete_websocket_request_by_id(
@@ -35,10 +35,10 @@ impl<'a> DbContext<'a> {
         websocket_request: &WebsocketRequest,
         source: &UpdateSource,
     ) -> Result<WebsocketRequest> {
-        let mut request = websocket_request.clone();
-        request.id = "".to_string();
-        request.sort_priority = request.sort_priority + 0.001;
-        self.upsert(&request, source)
+        let mut websocket_request = websocket_request.clone();
+        websocket_request.id = "".to_string();
+        websocket_request.sort_priority = websocket_request.sort_priority + 0.001;
+        self.upsert(&websocket_request, source)
     }
 
     pub fn upsert_websocket_request(

@@ -37,10 +37,7 @@ use yaak_models::models::{
     ModelType, Plugin, Settings, WebsocketRequest, Workspace, WorkspaceMeta,
 };
 use yaak_models::queries_legacy::{
-    batch_upsert, delete_cookie_jar, delete_plugin, generate_model_id, get_cookie_jar,
-    get_or_create_workspace_meta, get_plugin, get_workspace_export_resources, list_cookie_jars,
-    list_plugins, upsert_cookie_jar, upsert_plugin, upsert_workspace_meta, BatchUpsertResult,
-    UpdateSource,
+    generate_model_id, get_workspace_export_resources, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
@@ -760,7 +757,7 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
         None => None,
     };
     let cookie_jar = match cookie_jar_id {
-        Some(id) => Some(get_cookie_jar(&app_handle, id).await.expect("Failed to get cookie jar")),
+        Some(id) => Some(app_handle.queries().connect().await?.get_cookie_jar(id)?),
         None => None,
     };
 
@@ -836,13 +833,12 @@ async fn cmd_import_data<R: Runtime>(
     app_handle: AppHandle<R>,
     plugin_manager: State<'_, PluginManager>,
     file_path: &str,
-) -> Result<BatchUpsertResult, String> {
+) -> YaakResult<BatchUpsertResult> {
     let file = read_to_string(file_path)
         .await
         .unwrap_or_else(|_| panic!("Unable to read file {}", file_path));
     let file_contents = file.as_str();
-    let import_result =
-        plugin_manager.import_data(&window, file_contents).await.map_err(|e| e.to_string())?;
+    let import_result = plugin_manager.import_data(&window, file_contents).await?;
 
     let mut id_map: BTreeMap<String, String> = BTreeMap::new();
 
@@ -944,18 +940,20 @@ async fn cmd_import_data<R: Runtime>(
         })
         .collect();
 
-    let upserted = batch_upsert(
-        &app_handle,
-        workspaces,
-        environments,
-        folders,
-        http_requests,
-        grpc_requests,
-        websocket_requests,
-        &UpdateSource::Import,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let upserted = app_handle
+        .queries()
+        .with_tx(|tx| {
+            tx.batch_upsert(
+                workspaces,
+                environments,
+                folders,
+                http_requests,
+                grpc_requests,
+                websocket_requests,
+                &UpdateSource::Import,
+            )
+        })
+        .await?;
 
     Ok(upserted)
 }
@@ -1127,7 +1125,7 @@ async fn cmd_send_http_request<R: Runtime>(
     };
 
     let cookie_jar = match cookie_jar_id {
-        Some(id) => Some(get_cookie_jar(&app_handle, id).await.expect("Failed to get cookie jar")),
+        Some(id) => Some(app_handle.queries().connect().await?.get_cookie_jar(id)?),
         None => None,
     };
 
@@ -1202,25 +1200,19 @@ async fn cmd_install_plugin<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<Plugin, String> {
+) -> YaakResult<Plugin> {
     plugin_manager
         .add_plugin_by_dir(&WindowContext::from_window(&window), &directory, true)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
-    let plugin = upsert_plugin(
-        &app_handle,
-        Plugin {
+    Ok(app_handle.queries().connect().await?.upsert_plugin(
+        &Plugin {
             directory: directory.into(),
             url,
             ..Default::default()
         },
         &UpdateSource::from_window(&window),
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-
-    Ok(plugin)
+    )?)
 }
 
 #[tauri::command]
@@ -1229,15 +1221,16 @@ async fn cmd_uninstall_plugin<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
-) -> Result<Plugin, String> {
-    let plugin = delete_plugin(&app_handle, plugin_id, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())?;
+) -> YaakResult<Plugin> {
+    let plugin = app_handle
+        .queries()
+        .connect()
+        .await?
+        .delete_plugin_by_id(plugin_id, &UpdateSource::from_window(&window))?;
 
     plugin_manager
         .uninstall(&WindowContext::from_window(&window), plugin.directory.as_str())
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(plugin)
 }
@@ -1247,10 +1240,12 @@ async fn cmd_update_cookie_jar<R: Runtime>(
     cookie_jar: CookieJar,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<CookieJar, String> {
-    upsert_cookie_jar(&app_handle, &cookie_jar, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<CookieJar> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1258,10 +1253,12 @@ async fn cmd_delete_cookie_jar<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     cookie_jar_id: &str,
-) -> Result<CookieJar, String> {
-    delete_cookie_jar(&app_handle, cookie_jar_id, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<CookieJar> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .delete_cookie_jar_by_id(cookie_jar_id, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1270,18 +1267,15 @@ async fn cmd_create_cookie_jar<R: Runtime>(
     name: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<CookieJar, String> {
-    upsert_cookie_jar(
-        &app_handle,
+) -> YaakResult<CookieJar> {
+    Ok(app_handle.queries().connect().await?.upsert_cookie_jar(
         &CookieJar {
             name: name.to_string(),
             workspace_id: workspace_id.to_string(),
             ..Default::default()
         },
         &UpdateSource::from_window(&window),
-    )
-    .await
-    .map_err(|e| e.to_string())
+    )?)
 }
 
 #[tauri::command]
@@ -1377,10 +1371,12 @@ async fn cmd_update_workspace_meta<R: Runtime>(
     workspace_meta: WorkspaceMeta,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<WorkspaceMeta, String> {
-    upsert_workspace_meta(&app_handle, workspace_meta, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<WorkspaceMeta> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .upsert_workspace_meta(&workspace_meta, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1543,8 +1539,8 @@ async fn cmd_list_environments<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_list_plugins<R: Runtime>(app_handle: AppHandle<R>) -> Result<Vec<Plugin>, String> {
-    list_plugins(&app_handle).await.map_err(|e| e.to_string())
+async fn cmd_list_plugins<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<Vec<Plugin>> {
+    Ok(app_handle.queries().connect().await?.list_plugins()?)
 }
 
 #[tauri::command]
@@ -1565,12 +1561,12 @@ async fn cmd_plugin_info<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> Result<BootResponse, String> {
-    let plugin = get_plugin(&app_handle, id).await.map_err(|e| e.to_string())?;
+) -> YaakResult<BootResponse> {
+    let plugin = app_handle.queries().connect().await?.get_plugin(id)?;
     Ok(plugin_manager
         .get_plugin_by_dir(plugin.directory.as_str())
         .await
-        .ok_or("Failed to find plugin for info".to_string())?
+        .ok_or(GenericError("Failed to find plugin for info".to_string()))?
         .info()
         .await)
 }
@@ -1622,8 +1618,8 @@ async fn cmd_get_http_request<R: Runtime>(
 async fn cmd_get_cookie_jar<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
-) -> Result<CookieJar, String> {
-    get_cookie_jar(&app_handle, id).await.map_err(|e| e.to_string())
+) -> YaakResult<CookieJar> {
+    Ok(app_handle.queries().connect().await?.get_cookie_jar(id)?)
 }
 
 #[tauri::command]
@@ -1631,22 +1627,19 @@ async fn cmd_list_cookie_jars<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<Vec<CookieJar>, String> {
-    let cookie_jars =
-        list_cookie_jars(&app_handle, workspace_id).await.expect("Failed to find cookie jars");
+) -> YaakResult<Vec<CookieJar>> {
+    let db = app_handle.queries().connect().await?;
+    let cookie_jars = db.list_cookie_jars(workspace_id)?;
 
     if cookie_jars.is_empty() {
-        let cookie_jar = upsert_cookie_jar(
-            &app_handle,
+        let cookie_jar = db.upsert_cookie_jar(
             &CookieJar {
                 name: "Default".to_string(),
                 workspace_id: workspace_id.to_string(),
                 ..Default::default()
             },
             &UpdateSource::from_window(&window),
-        )
-        .await
-        .expect("Failed to create CookieJar");
+        )?;
         Ok(vec![cookie_jar])
     } else {
         Ok(cookie_jars)
@@ -1784,9 +1777,9 @@ async fn cmd_get_workspace_meta<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: &str,
 ) -> YaakResult<WorkspaceMeta> {
-    let workspace = app_handle.queries().connect().await?.get_workspace(workspace_id)?;
-    Ok(get_or_create_workspace_meta(&app_handle, &workspace, &UpdateSource::from_window(&window))
-        .await?)
+    let db = app_handle.queries().connect().await?;
+    let workspace = db.get_workspace(workspace_id)?;
+    Ok(db.get_or_create_workspace_meta(&workspace, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -2185,6 +2178,6 @@ fn cookie_jar_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<St
 async fn cookie_jar_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<CookieJar> {
     match cookie_jar_id_from_window(&window) {
         None => None,
-        Some(id) => get_cookie_jar(window.app_handle(), id.as_str()).await.ok(),
+        Some(id) => window.queries().connect().await.unwrap().get_cookie_jar(&id).ok(),
     }
 }

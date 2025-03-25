@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{HttpResponse, Plugin};
-use yaak_models::queries_legacy::{list_plugins, upsert_plugin, UpdateSource};
+use yaak_models::queries_legacy::UpdateSource;
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
     GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
@@ -149,7 +149,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         InternalEventPayload::ReloadResponse(_) => {
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for plugin reload");
-            let plugins = list_plugins(app_handle).await.unwrap();
+            let plugins = app_handle.queries().connect().await.unwrap().list_plugins().unwrap();
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {
                     continue;
@@ -159,7 +159,13 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     updated_at: Utc::now().naive_utc(), // TODO: Add reloaded_at field to use instead
                     ..plugin
                 };
-                upsert_plugin(app_handle, new_plugin, &UpdateSource::Plugin).await.unwrap();
+                app_handle
+                    .queries()
+                    .connect()
+                    .await
+                    .unwrap()
+                    .upsert_plugin(&new_plugin, &UpdateSource::Plugin)
+                    .unwrap();
             }
             let toast_event = plugin_handle.build_event_to_send(
                 &WindowContext::from_window(&window),

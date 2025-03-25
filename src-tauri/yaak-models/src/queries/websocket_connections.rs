@@ -52,10 +52,10 @@ impl<'a> DbContext<'a> {
 
     pub fn delete_websocket_connection(
         &self,
-        m: &WebsocketConnection,
+        websocket_connection: &WebsocketConnection,
         source: &UpdateSource,
     ) -> Result<WebsocketConnection> {
-        self.delete(m, source)
+        self.delete(websocket_connection, source)
     }
 
     pub fn delete_websocket_connection_by_id(
@@ -63,8 +63,8 @@ impl<'a> DbContext<'a> {
         id: &str,
         source: &UpdateSource,
     ) -> Result<WebsocketConnection> {
-        let request = self.get_websocket_connection(id)?;
-        self.delete_websocket_connection(&request, source)
+        let websocket_connection = self.get_websocket_connection(id)?;
+        self.delete_websocket_connection(&websocket_connection, source)
     }
 
     pub fn upsert_websocket_connection(

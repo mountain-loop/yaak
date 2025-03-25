@@ -3,8 +3,8 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::queries_legacy::{generate_model_id, upsert_date, UpdateSource};
-use chrono::NaiveDateTime;
+use crate::queries_legacy::{generate_model_id, UpdateSource};
+use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
 use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -303,17 +303,50 @@ pub struct WorkspaceMeta {
     pub setting_sync_dir: Option<String>,
 }
 
-impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
-    type Error = rusqlite::Error;
+impl UpsertModelInfo for WorkspaceMeta {
+    fn table_name() -> impl IntoTableRef {
+        WorkspaceMetaIden::Table
+    }
 
-    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        WorkspaceMetaIden::Id
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use WorkspaceMetaIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (SettingSyncDir, self.setting_sync_dir.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            WorkspaceMetaIden::UpdatedAt,
+            WorkspaceMetaIden::SettingSyncDir,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            id: r.get("id")?,
-            workspace_id: r.get("workspace_id")?,
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            setting_sync_dir: r.get("setting_sync_dir")?,
+            id: row.get("id")?,
+            workspace_id: row.get("workspace_id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            setting_sync_dir: row.get("setting_sync_dir")?,
         })
     }
 }
@@ -359,18 +392,53 @@ pub struct CookieJar {
     pub name: String,
 }
 
-impl<'s> TryFrom<&Row<'s>> for CookieJar {
-    type Error = rusqlite::Error;
+impl UpsertModelInfo for CookieJar {
+    fn table_name() -> impl IntoTableRef {
+        CookieJarIden::Table
+    }
 
-    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
-        let cookies: String = r.get("cookies")?;
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        CookieJarIden::Id
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use CookieJarIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (Name, self.name.trim().into()),
+            (Cookies, serde_json::to_string(&self.cookies)?.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            CookieJarIden::UpdatedAt,
+            CookieJarIden::Name,
+            CookieJarIden::Cookies,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let cookies: String = row.get("cookies")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            name: r.get("name")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            name: row.get("name")?,
             cookies: serde_json::from_str(cookies.as_str()).unwrap_or_default(),
         })
     }
@@ -932,21 +1000,60 @@ pub struct WebsocketEvent {
     pub message_type: WebsocketEventType,
 }
 
-impl<'s> TryFrom<&Row<'s>> for WebsocketEvent {
-    type Error = rusqlite::Error;
+impl UpsertModelInfo for WebsocketEvent {
+    fn table_name() -> impl IntoTableRef {
+        WebsocketEventIden::Table
+    }
 
-    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
-        let message_type: String = r.get("message_type")?;
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        WebsocketEventIden::Id
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use WebsocketEventIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (ConnectionId, self.connection_id.into()),
+            (RequestId, self.request_id.into()),
+            (MessageType, serde_json::to_string(&self.message_type)?.into()),
+            (IsServer, self.is_server.into()),
+            (Message, self.message.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            WebsocketEventIden::UpdatedAt,
+            WebsocketEventIden::MessageType,
+            WebsocketEventIden::IsServer,
+            WebsocketEventIden::Message,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let message_type: String = row.get("message_type")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            request_id: r.get("request_id")?,
-            connection_id: r.get("connection_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            message: r.get("message")?,
-            is_server: r.get("is_server")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            request_id: row.get("request_id")?,
+            connection_id: row.get("connection_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            message: row.get("message")?,
+            is_server: row.get("is_server")?,
             message_type: serde_json::from_str(message_type.as_str()).unwrap_or_default(),
         })
     }
@@ -1440,19 +1547,57 @@ pub struct Plugin {
     pub url: Option<String>,
 }
 
-impl<'s> TryFrom<&Row<'s>> for Plugin {
-    type Error = rusqlite::Error;
+impl UpsertModelInfo for Plugin {
+    fn table_name() -> impl IntoTableRef {
+        PluginIden::Table
+    }
 
-    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        PluginIden::Id
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use PluginIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (CheckedAt, self.checked_at.into()),
+            (Directory, self.directory.into()),
+            (Url, self.url.into()),
+            (Enabled, self.enabled.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            PluginIden::UpdatedAt,
+            PluginIden::CheckedAt,
+            PluginIden::Directory,
+            PluginIden::Url,
+            PluginIden::Enabled,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            checked_at: r.get("checked_at")?,
-            url: r.get("url")?,
-            directory: r.get("directory")?,
-            enabled: r.get("enabled")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            checked_at: row.get("checked_at")?,
+            url: row.get("url")?,
+            directory: row.get("directory")?,
+            enabled: row.get("enabled")?,
         })
     }
 }
@@ -1476,21 +1621,61 @@ pub struct SyncState {
     pub sync_dir: String,
 }
 
-impl<'s> TryFrom<&Row<'s>> for SyncState {
-    type Error = rusqlite::Error;
+impl UpsertModelInfo for SyncState {
+    fn table_name() -> impl IntoTableRef {
+        SyncStateIden::Table
+    }
 
-    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        SyncStateIden::Id
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use SyncStateIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (FlushedAt, self.flushed_at.into()),
+            (Checksum, self.checksum.into()),
+            (ModelId, self.model_id.into()),
+            (RelPath, self.rel_path.into()),
+            (SyncDir, self.sync_dir.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            SyncStateIden::UpdatedAt,
+            SyncStateIden::FlushedAt,
+            SyncStateIden::Checksum,
+            SyncStateIden::RelPath,
+            SyncStateIden::SyncDir,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            id: r.get("id")?,
-            workspace_id: r.get("workspace_id")?,
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            flushed_at: r.get("flushed_at")?,
-            checksum: r.get("checksum")?,
-            model_id: r.get("model_id")?,
-            sync_dir: r.get("sync_dir")?,
-            rel_path: r.get("rel_path")?,
+            id: row.get("id")?,
+            workspace_id: row.get("workspace_id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            flushed_at: row.get("flushed_at")?,
+            checksum: row.get("checksum")?,
+            model_id: row.get("model_id")?,
+            sync_dir: row.get("sync_dir")?,
+            rel_path: row.get("rel_path")?,
         })
     }
 }
@@ -1647,14 +1832,15 @@ define_any_model! {
     GrpcRequest,
     HttpRequest,
     HttpResponse,
+    KeyValue,
     Plugin,
     Settings,
-    KeyValue,
-    Workspace,
-    WorkspaceMeta,
+    SyncState,
     WebsocketConnection,
     WebsocketEvent,
     WebsocketRequest,
+    Workspace,
+    WorkspaceMeta,
 }
 
 impl<'de> Deserialize<'de> for AnyModel {
@@ -1743,4 +1929,22 @@ pub trait UpsertModelInfo {
     fn from_row(row: &Row) -> rusqlite::Result<Self>
     where
         Self: Sized;
+}
+
+// Generate the created_at or updated_at timestamps for an upsert operation, depending on the ID
+// provided.
+fn upsert_date(update_source: &UpdateSource, dt: NaiveDateTime) -> SimpleExpr {
+    match update_source {
+        // Sync and import operations always preserve timestamps
+        UpdateSource::Sync | UpdateSource::Import => {
+            if dt.and_utc().timestamp() == 0 {
+                // Sometimes data won't have timestamps (partial data)
+                Utc::now().naive_utc().into()
+            } else {
+                dt.into()
+            }
+        }
+        // Other sources will always update to the latest time
+        _ => Utc::now().naive_utc().into(),
+    }
 }

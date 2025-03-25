@@ -15,8 +15,7 @@ use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
     WebsocketEventType, WebsocketRequest,
 };
-use yaak_models::queries_legacy;
-use yaak_models::queries_legacy::{get_cookie_jar, upsert_websocket_event, UpdateSource};
+use yaak_models::queries_legacy::UpdateSource;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
@@ -90,7 +89,7 @@ pub(crate) async fn list_events<R: Runtime>(
     connection_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketEvent>> {
-    Ok(queries_legacy::list_websocket_events(&app_handle, connection_id).await?)
+    Ok(app_handle.queries().connect().await?.list_websocket_events(connection_id)?)
 }
 
 #[tauri::command]
@@ -153,9 +152,8 @@ pub(crate) async fn send<R: Runtime>(
     let mut ws_manager = ws_manager.lock().await;
     ws_manager.send(&connection.id, Message::Text(request.message.clone().into())).await?;
 
-    upsert_websocket_event(
-        &app_handle,
-        WebsocketEvent {
+    app_handle.queries().connect().await?.upsert_websocket_event(
+        &WebsocketEvent {
             connection_id: connection.id.clone(),
             request_id: request.id.clone(),
             workspace_id: connection.workspace_id.clone(),
@@ -165,9 +163,7 @@ pub(crate) async fn send<R: Runtime>(
             ..Default::default()
         },
         &UpdateSource::from_window(&window),
-    )
-    .await
-    .unwrap();
+    )?;
 
     Ok(connection)
 }
@@ -266,7 +262,7 @@ pub(crate) async fn connect<R: Runtime>(
 
     // TODO: Handle cookies
     let _cookie_jar = match cookie_jar_id {
-        Some(id) => Some(get_cookie_jar(&app_handle, id).await?),
+        Some(id) => Some(app_handle.queries().connect().await?.get_cookie_jar(id)?),
         None => None,
     };
 
@@ -311,9 +307,8 @@ pub(crate) async fn connect<R: Runtime>(
         }
     };
 
-    upsert_websocket_event(
-        &app_handle,
-        WebsocketEvent {
+    app_handle.queries().connect().await?.upsert_websocket_event(
+        &WebsocketEvent {
             connection_id: connection.id.clone(),
             request_id: request.id.clone(),
             workspace_id: connection.workspace_id.clone(),
@@ -322,9 +317,7 @@ pub(crate) async fn connect<R: Runtime>(
             ..Default::default()
         },
         &UpdateSource::from_window(&window),
-    )
-    .await
-    .unwrap();
+    )?;
 
     let response_headers = response
         .headers()
@@ -358,46 +351,52 @@ pub(crate) async fn connect<R: Runtime>(
                     has_written_close = true;
                 }
 
-                upsert_websocket_event(
-                    &app_handle,
-                    WebsocketEvent {
-                        connection_id: connection_id.clone(),
-                        request_id: request_id.clone(),
-                        workspace_id: workspace_id.clone(),
-                        is_server: true,
-                        message_type: match message {
-                            Message::Text(_) => WebsocketEventType::Text,
-                            Message::Binary(_) => WebsocketEventType::Binary,
-                            Message::Ping(_) => WebsocketEventType::Ping,
-                            Message::Pong(_) => WebsocketEventType::Pong,
-                            Message::Close(_) => WebsocketEventType::Close,
-                            // Raw frame will never happen during a read
-                            Message::Frame(_) => WebsocketEventType::Frame,
+                app_handle
+                    .queries()
+                    .connect()
+                    .await
+                    .unwrap()
+                    .upsert_websocket_event(
+                        &WebsocketEvent {
+                            connection_id: connection_id.clone(),
+                            request_id: request_id.clone(),
+                            workspace_id: workspace_id.clone(),
+                            is_server: true,
+                            message_type: match message {
+                                Message::Text(_) => WebsocketEventType::Text,
+                                Message::Binary(_) => WebsocketEventType::Binary,
+                                Message::Ping(_) => WebsocketEventType::Ping,
+                                Message::Pong(_) => WebsocketEventType::Pong,
+                                Message::Close(_) => WebsocketEventType::Close,
+                                // Raw frame will never happen during a read
+                                Message::Frame(_) => WebsocketEventType::Frame,
+                            },
+                            message: message.into_data().into(),
+                            ..Default::default()
                         },
-                        message: message.into_data().into(),
-                        ..Default::default()
-                    },
-                    &UpdateSource::from_window(&window),
-                )
-                .await
-                .unwrap();
+                        &UpdateSource::from_window(&window),
+                    )
+                    .unwrap();
             }
             info!("Websocket connection closed");
             if !has_written_close {
-                upsert_websocket_event(
-                    &app_handle,
-                    WebsocketEvent {
-                        connection_id: connection_id.clone(),
-                        request_id: request_id.clone(),
-                        workspace_id: workspace_id.clone(),
-                        is_server: true,
-                        message_type: WebsocketEventType::Close,
-                        ..Default::default()
-                    },
-                    &UpdateSource::from_window(&window),
-                )
-                .await
-                .unwrap();
+                app_handle
+                    .queries()
+                    .connect()
+                    .await
+                    .unwrap()
+                    .upsert_websocket_event(
+                        &WebsocketEvent {
+                            connection_id: connection_id.clone(),
+                            request_id: request_id.clone(),
+                            workspace_id: workspace_id.clone(),
+                            is_server: true,
+                            message_type: WebsocketEventType::Close,
+                            ..Default::default()
+                        },
+                        &UpdateSource::from_window(&window),
+                    )
+                    .unwrap();
             }
             app_handle
                 .queries()
