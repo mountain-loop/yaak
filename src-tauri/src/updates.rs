@@ -1,12 +1,14 @@
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
 
+use crate::error::Result;
 use log::info;
-use tauri::{AppHandle, Manager};
+use tauri::{Manager, Runtime, WebviewWindow};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_updater::UpdaterExt;
 use tokio::task::block_in_place;
-use yaak_models::queries::get_or_create_settings;
+use yaak_models::manager::QueryManagerExt;
+use yaak_models::queries_legacy::UpdateSource;
 use yaak_plugins::manager::PluginManager;
 
 use crate::is_dev;
@@ -59,30 +61,34 @@ impl YaakUpdater {
         }
     }
 
-    pub async fn check_now(
+    pub async fn check_now<R: Runtime>(
         &mut self,
-        app_handle: &AppHandle,
+        window: &WebviewWindow<R>,
         mode: UpdateMode,
         update_trigger: UpdateTrigger,
-    ) -> Result<bool, tauri_plugin_updater::Error> {
-        let settings = get_or_create_settings(app_handle).await;
+    ) -> Result<bool> {
+        let settings = window
+            .queries()
+            .connect()
+            .await?
+            .get_or_create_settings(&UpdateSource::from_window(window))?;
         let update_key = format!("{:x}", md5::compute(settings.id));
         self.last_update_check = SystemTime::now();
 
         info!("Checking for updates mode={}", mode);
 
-        let h = app_handle.clone();
-        let update_check_result = app_handle
+        let w = window.clone();
+        let update_check_result = w
             .updater_builder()
             .on_before_exit(move || {
                 // Kill plugin manager before exit or NSIS installer will fail to replace sidecar
                 // while it's running.
                 // NOTE: This is only called on Windows
-                let h = h.clone();
+                let w = w.clone();
                 block_in_place(|| {
                     tauri::async_runtime::block_on(async move {
                         info!("Shutting down plugin manager before update");
-                        let plugin_manager = h.state::<PluginManager>();
+                        let plugin_manager = w.state::<PluginManager>();
                         plugin_manager.terminate().await;
                     });
                 });
@@ -100,11 +106,11 @@ impl YaakUpdater {
             .check()
             .await;
 
-        match update_check_result {
-            Ok(Some(update)) => {
-                let h = app_handle.clone();
-                app_handle
-                    .dialog()
+        let result = match update_check_result? {
+            None => false,
+            Some(update) => {
+                let w = window.clone();
+                w.dialog()
                     .message(format!(
                         "{} is available. Would you like to download and install it now?",
                         update.version
@@ -121,7 +127,7 @@ impl YaakUpdater {
                         tauri::async_runtime::spawn(async move {
                             match update.download_and_install(|_, _| {}, || {}).await {
                                 Ok(_) => {
-                                    if h.dialog()
+                                    if w.dialog()
                                         .message("Would you like to restart the app?")
                                         .title("Update Installed")
                                         .buttons(MessageDialogButtons::OkCancelCustom(
@@ -130,27 +136,27 @@ impl YaakUpdater {
                                         ))
                                         .blocking_show()
                                     {
-                                        h.restart();
+                                        w.app_handle().restart();
                                     }
                                 }
                                 Err(e) => {
-                                    h.dialog()
+                                    w.dialog()
                                         .message(format!("The update failed to install: {}", e));
                                 }
                             }
                         });
                     });
-                Ok(true)
+                true
             }
-            Ok(None) => Ok(false),
-            Err(e) => Err(e),
-        }
+        };
+
+        Ok(result)
     }
-    pub async fn maybe_check(
+    pub async fn maybe_check<R: Runtime>(
         &mut self,
-        app_handle: &AppHandle,
+        window: &WebviewWindow<R>,
         mode: UpdateMode,
-    ) -> Result<bool, tauri_plugin_updater::Error> {
+    ) -> Result<bool> {
         let update_period_seconds = match mode {
             UpdateMode::Stable => MAX_UPDATE_CHECK_HOURS_STABLE,
             UpdateMode::Beta => MAX_UPDATE_CHECK_HOURS_BETA,
@@ -167,6 +173,6 @@ impl YaakUpdater {
             return Ok(false);
         }
 
-        self.check_now(app_handle, mode, UpdateTrigger::Background).await
+        self.check_now(window, mode, UpdateTrigger::Background).await
     }
 }

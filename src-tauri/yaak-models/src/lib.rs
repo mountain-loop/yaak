@@ -1,5 +1,6 @@
 use crate::commands::{delete, upsert};
 use crate::manager::QueryManager;
+use crate::queries_legacy::ModelChangeEvent;
 use log::info;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -9,12 +10,12 @@ use sqlx::SqlitePool;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::mpsc;
 use std::time::Duration;
 use tauri::async_runtime::Mutex;
 use tauri::path::BaseDirectory;
 use tauri::plugin::TauriPlugin;
 use tauri::{generate_handler, AppHandle, Emitter, Manager, Runtime};
+use tokio::sync::mpsc;
 
 mod commands;
 
@@ -22,8 +23,8 @@ pub mod error;
 pub mod manager;
 pub mod models;
 pub mod queries;
+pub mod queries_legacy;
 pub mod render;
-pub mod queries_2;
 
 pub struct SqliteConnection(pub Mutex<Pool<SqliteConnectionManager>>);
 
@@ -59,12 +60,16 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             app_handle.manage(SqliteConnection::new(pool.clone()));
 
             {
-                let (tx, rx) = mpsc::channel();
+                let (tx, mut rx) = mpsc::channel(128);
                 app_handle.manage(QueryManager::new(pool, tx));
                 let app_handle = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
-                    for p in rx.iter() {
-                        app_handle.emit("upserted_model", p).unwrap();
+                    while let Some(p) = rx.recv().await {
+                        let name = match p.change {
+                            ModelChangeEvent::Upsert => "upserted_model",
+                            ModelChangeEvent::Delete => "deleted_model",
+                        };
+                        app_handle.emit(name, p).unwrap();
                     }
                 });
             }

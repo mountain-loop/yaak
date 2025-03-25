@@ -1,10 +1,11 @@
 use crate::error::Result;
-use crate::queries::ModelChangeEvent;
+use crate::queries_legacy::ModelPayload;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{Connection, Statement, ToSql, Transaction};
-use std::sync::{mpsc, Arc, Mutex};
+use rusqlite::{Connection, Statement, ToSql, Transaction, TransactionBehavior};
+use std::sync::Arc;
 use tauri::{Manager, Runtime};
+use tokio::sync::{mpsc, Mutex};
 
 pub trait QueryManagerExt<'a, R> {
     fn queries(&'a self) -> &'a QueryManager;
@@ -20,58 +21,61 @@ impl<'a, R: Runtime, T: Manager<R>> QueryManagerExt<'a, R> for T {
 #[derive(Clone)]
 pub struct QueryManager {
     pool: Arc<Mutex<Pool<SqliteConnectionManager>>>,
-    events_tx: Arc<Mutex<mpsc::Sender<ModelChangeEvent>>>,
+    events_tx: mpsc::Sender<ModelPayload>,
 }
 
 impl QueryManager {
     pub(crate) fn new(
         pool: Pool<SqliteConnectionManager>,
-        events_tx: mpsc::Sender<ModelChangeEvent>,
+        events_tx: mpsc::Sender<ModelPayload>,
     ) -> Self {
         QueryManager {
             pool: Arc::new(Mutex::new(pool)),
-            events_tx: Arc::new(Mutex::new(events_tx)),
+            events_tx,
         }
     }
 
-    pub fn connect(&self) -> Result<DbContext> {
-        let conn = self.pool.lock().unwrap().get()?;
+    pub async fn connect(&self) -> Result<DbContext> {
+        let conn = self.pool.lock().await.get()?;
         Ok(DbContext {
-            tx: self.events_tx.lock().unwrap().clone(),
+            tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Connection(conn),
         })
     }
 
-    pub fn with_conn<F, T>(&self, f: F) -> Result<T>
+    pub async fn with_conn<F, T>(&self, func: F) -> Result<T>
     where
         F: FnOnce(&DbContext) -> Result<T>,
     {
-        let conn = self.pool.lock().unwrap().get()?;
+        let conn = self.pool.lock().await.get()?;
         let db_context = DbContext {
-            tx: self.events_tx.lock().unwrap().clone(),
+            tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Connection(conn),
         };
-        f(&db_context)
+        func(&db_context)
     }
 
-    pub fn with_tx<F, T>(&self, f: F) -> Result<T>
+    pub async fn with_tx<F, T>(&self, func: F) -> Result<T>
     where
         F: FnOnce(&DbContext) -> Result<T>,
     {
-        let mut conn = self.pool.lock().unwrap().get()?;
-        let tx = conn.transaction()?;
+        let mut conn = self.pool.lock().await.get()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+
         let db_context = DbContext {
-            tx: self.events_tx.lock().unwrap().clone(),
+            tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Transaction(&tx),
         };
-        let result = f(&db_context);
-        match result {
+
+        match func(&db_context) {
             Ok(val) => {
                 tx.commit()?;
                 Ok(val)
             }
-            // rollback is automatic on drop of value
-            e => e,
+            Err(e) => {
+                tx.rollback()?;
+                Err(e)
+            }
         }
     }
 }
@@ -99,6 +103,6 @@ impl<'a> ConnectionOrTx<'a> {
 }
 
 pub struct DbContext<'a> {
-    pub(crate) tx: mpsc::Sender<ModelChangeEvent>,
+    pub(crate) tx: mpsc::Sender<ModelPayload>,
     pub(crate) conn: ConnectionOrTx<'a>,
 }

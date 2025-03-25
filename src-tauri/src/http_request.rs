@@ -24,17 +24,15 @@ use tokio::fs::{create_dir_all, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
 use tokio::sync::{oneshot, Mutex};
-use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries::{
-    get_base_environment, get_http_response, get_or_create_settings, update_response_if_id,
-    upsert_cookie_jar, UpdateSource,
+use yaak_models::queries_legacy::UpdateSource;
+use yaak_plugins::events::{
+    CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
-use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, RenderPurpose};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 
@@ -48,10 +46,18 @@ pub async fn send_http_request<R: Runtime>(
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
-    let workspace = window.queries().connect()?.get_workspace(&unrendered_request.workspace_id)?;
-    let base_environment =
-        get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
-    let settings = get_or_create_settings(&app_handle).await;
+    let update_source = &UpdateSource::from_window(&window);
+    let (settings, workspace) = {
+        let db = window.queries().connect().await?;
+        let settings = db.get_or_create_settings(update_source)?;
+        let workspace = db.get_workspace(&unrendered_request.workspace_id)?;
+        (settings, workspace)
+    };
+    let base_environment = app_handle
+        .queries()
+        .connect()
+        .await?
+        .get_base_environment(&unrendered_request.workspace_id)?;
 
     let response_id = og_response.id.clone();
     let response = Arc::new(Mutex::new(og_response.clone()));
@@ -532,8 +538,12 @@ pub async fn send_http_request<R: Runtime>(
                         };
 
                         r.state = HttpResponseState::Connected;
-                        update_response_if_id(&app_handle, &r, &update_source)
+                        app_handle
+                            .queries()
+                            .connect()
                             .await
+                            .unwrap()
+                            .update_http_response_if_id(&r, &update_source)
                             .expect("Failed to update response after connected");
                     }
 
@@ -561,8 +571,12 @@ pub async fn send_http_request<R: Runtime>(
                                 f.flush().await.expect("Failed to flush file");
                                 written_bytes += bytes.len();
                                 r.content_length = Some(written_bytes as i32);
-                                update_response_if_id(&app_handle, &r, &update_source)
+                                app_handle
+                                    .queries()
+                                    .connect()
                                     .await
+                                    .unwrap()
+                                    .update_http_response_if_id(&r, &update_source)
                                     .expect("Failed to update response");
                             }
                             Ok(None) => {
@@ -589,8 +603,12 @@ pub async fn send_http_request<R: Runtime>(
                             None => Some(written_bytes as i32),
                         };
                         r.state = HttpResponseState::Closed;
-                        update_response_if_id(&app_handle, &r, &UpdateSource::from_window(&window))
+                        app_handle
+                            .queries()
+                            .connect()
                             .await
+                            .unwrap()
+                            .update_http_response_if_id(&r, &UpdateSource::from_window(&window))
                             .expect("Failed to update response");
                     };
 
@@ -615,12 +633,12 @@ pub async fn send_http_request<R: Runtime>(
                             })
                             .collect::<Vec<_>>();
                         cookie_jar.cookies = json_cookies;
-                        if let Err(e) = upsert_cookie_jar(
-                            &app_handle,
-                            &cookie_jar,
-                            &UpdateSource::from_window(&window),
-                        )
-                        .await
+                        if let Err(e) = app_handle
+                            .queries()
+                            .connect()
+                            .await
+                            .unwrap()
+                            .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))
                         {
                             error!("Failed to update cookie jar: {}", e);
                         };
@@ -647,10 +665,16 @@ pub async fn send_http_request<R: Runtime>(
     Ok(tokio::select! {
         Ok(r) = done_rx => r,
         _ = cancelled_rx.changed() => {
-            match get_http_response(&app_handle, response_id.as_str()).await {
+            match app_handle.queries().with_conn(|c| c.get_http_response(&response_id)).await {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
-                    update_response_if_id(&app_handle, &r, &UpdateSource::from_window(window)).await.expect("Failed to update response")
+                    app_handle
+                        .queries()
+                        .connect()
+                        .await
+                        .unwrap()
+                        .update_http_response_if_id(&r, &UpdateSource::from_window(window))
+                        .expect("Failed to update response")
                 },
                 _ => {
                     response_err(&app_handle, &*response.lock().await, "Ephemeral request was cancelled".to_string(), &update_source).await

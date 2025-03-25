@@ -7,7 +7,8 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
-use yaak_models::queries::{get_key_value_raw, set_key_value_raw, UpdateSource};
+use yaak_models::manager::QueryManagerExt;
+use yaak_models::queries_legacy::UpdateSource;
 
 // Check for updates every hour
 const MAX_UPDATE_CHECK_SECONDS: u64 = 60 * 60;
@@ -43,13 +44,22 @@ impl YaakNotifier {
         }
     }
 
-    pub async fn seen<R: Runtime>(&mut self, window: &WebviewWindow<R>, id: &str) -> Result<(), String> {
+    pub async fn seen<R: Runtime>(
+        &mut self,
+        window: &WebviewWindow<R>,
+        id: &str,
+    ) -> Result<(), String> {
         let app_handle = window.app_handle();
         let mut seen = get_kv(app_handle).await?;
         seen.push(id.to_string());
         debug!("Marked notification as seen {}", id);
         let seen_json = serde_json::to_string(&seen).map_err(|e| e.to_string())?;
-        set_key_value_raw(app_handle, KV_NAMESPACE, KV_KEY, seen_json.as_str(), &UpdateSource::from_window(window)).await;
+        window.queries().connect().await.map_err(|e| e.to_string())?.set_key_value_raw(
+            KV_NAMESPACE,
+            KV_KEY,
+            seen_json.as_str(),
+            &UpdateSource::from_window(window),
+        );
         Ok(())
     }
 
@@ -70,7 +80,7 @@ impl YaakNotifier {
             .query(&[
                 ("version", info.version.to_string().as_str()),
                 ("launches", num_launches.to_string().as_str()),
-                ("platform", get_os())
+                ("platform", get_os()),
             ]);
         let resp = req.send().await.map_err(|e| e.to_string())?;
         if resp.status() != 200 {
@@ -108,7 +118,13 @@ impl YaakNotifier {
 }
 
 async fn get_kv<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<String>, String> {
-    match get_key_value_raw(app_handle, "notifications", "seen").await {
+    match app_handle
+        .queries()
+        .connect()
+        .await
+        .map_err(|e| e.to_string())?
+        .get_key_value_raw("notifications", "seen")
+    {
         None => Ok(Vec::new()),
         Some(v) => serde_json::from_str(&v.value).map_err(|e| e.to_string()),
     }

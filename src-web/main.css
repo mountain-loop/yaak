@@ -66,35 +66,37 @@
    * Mac doesn't like this (especially in CodeMirror) so we only do it on non-macos platforms. On Mac,
    * styling the scrollbar seems to cause them to not show up at all most of the time
   */
-  html:not([data-platform="macos"]) * {
-    ::-webkit-scrollbar-corner,
-    ::-webkit-scrollbar {
-      @apply w-[10px] h-[10px];
+  html:not([data-platform="macos"]) {
+    * {
+      ::-webkit-scrollbar-corner,
+      ::-webkit-scrollbar {
+        @apply w-[10px] h-[10px];
+      }
+
+      .scrollbar-track,
+      ::-webkit-scrollbar-corner,
+      ::-webkit-scrollbar {
+        @apply bg-transparent;
+      }
+
+      &:hover {
+        &.scrollbar-thumb,
+        &::-webkit-scrollbar-thumb {
+          @apply bg-text-subtlest hover:bg-text-subtle rounded-[2px];
+        }
+      }
     }
 
-    .scrollbar-track,
-    ::-webkit-scrollbar-corner,
-    ::-webkit-scrollbar {
-      @apply bg-transparent;
-    }
-
-    &:hover {
-      &.scrollbar-thumb,
-      &::-webkit-scrollbar-thumb {
-        @apply bg-text-subtlest hover:bg-text-subtle rounded-[2px];
+    iframe {
+      &::-webkit-scrollbar-corner,
+      &::-webkit-scrollbar {
+        @apply bg-surface-highlight !important;
       }
     }
   }
 
   .rtl {
     direction: rtl;
-  }
-
-  iframe {
-    &::-webkit-scrollbar-corner,
-    &::-webkit-scrollbar {
-      @apply bg-surface-highlight !important;
-    }
   }
 
   :root {
