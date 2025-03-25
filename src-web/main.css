@@ -66,7 +66,7 @@
    * Mac doesn't like this (especially in CodeMirror) so we only do it on non-macos platforms. On Mac,
    * styling the scrollbar seems to cause them to not show up at all most of the time
   */
-  html * {
+  html:not([data-platform="macos"]) * {
     ::-webkit-scrollbar-corner,
     ::-webkit-scrollbar {
       @apply w-[10px] h-[10px];
