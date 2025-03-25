@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::{Runtime, WebviewWindow};
 use ts_rs::TS;
-
+use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::models::{
     Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest, Workspace,
 };
@@ -45,10 +45,10 @@ pub enum PluginWindowContext {
 }
 
 impl PluginWindowContext {
-    pub fn new<R: Runtime>(window: &WebviewWindow<R>, workspace_id: &str) -> Self {
+    pub fn new<R: Runtime>(window: &WebviewWindow<R>) -> Self {
         Self::Label {
             label: window.label().to_string(),
-            workspace_id: Some(workspace_id.to_string()),
+            workspace_id: window.workspace_id(),
         }
     }
     pub fn new_no_workspace<R: Runtime>(window: &WebviewWindow<R>) -> Self {

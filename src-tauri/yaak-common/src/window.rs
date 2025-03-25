@@ -1,22 +1,13 @@
 use regex::Regex;
 use tauri::{Runtime, WebviewWindow};
-use yaak_plugins::events::PluginWindowContext;
 
 pub trait WorkspaceWindowTrait {
-    fn context(&self) -> PluginWindowContext;
     fn workspace_id(&self) -> Option<String>;
     fn cookie_jar_id(&self) -> Option<String>;
     fn environment_id(&self) -> Option<String>;
 }
 
 impl<R: Runtime> WorkspaceWindowTrait for WebviewWindow<R> {
-    fn context(&self) -> PluginWindowContext {
-        match self.workspace_id() {
-            None => PluginWindowContext::new_no_workspace(self),
-            Some(id) => PluginWindowContext::new(self, &id),
-        }
-    }
-
     fn workspace_id(&self) -> Option<String> {
         let url = self.url().unwrap();
         let re = Regex::new(r"/workspaces/(?<id>\w+)").unwrap();

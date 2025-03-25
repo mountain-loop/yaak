@@ -23,4 +23,5 @@ ts-rs = { workspace = true, features = ["import-esm"] }
 yaak-models = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-crypto = { workspace = true }
+yaak-common = { workspace = true }
 base64 = "0.22.1"
