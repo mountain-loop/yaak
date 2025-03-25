@@ -3,7 +3,7 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::queries_legacy::{generate_model_id, UpdateSource};
+use crate::queries_legacy::UpdateSource;
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
 use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};
@@ -556,7 +556,7 @@ impl UpsertModelInfo for Folder {
     }
 
     fn get_id(&self) -> String {
-        generate_model_id(ModelType::TypeFolder)
+        self.id.clone()
     }
 
     fn insert_values(

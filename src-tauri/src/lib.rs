@@ -1422,7 +1422,7 @@ async fn cmd_upsert_http_request<R: Runtime>(
         .queries()
         .connect()
         .await?
-        .upsert(&request, &UpdateSource::from_window(&window))?)
+        .upsert_http_request(&request, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1760,10 +1760,12 @@ async fn cmd_list_workspaces<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Vec<Workspace>> {
-    let queries = app_handle.queries().connect().await?;
-    let workspaces = queries.find_all::<Workspace>()?;
+    let db = app_handle.queries().connect().await?;
+    let workspaces = db.list_workspaces()?;
+
     if workspaces.is_empty() {
-        let workspace = queries.upsert_workspace(
+        // Create initial workspace
+        let workspace = db.upsert_workspace(
             &Workspace {
                 name: "Yaak".to_string(),
                 setting_follow_redirects: true,

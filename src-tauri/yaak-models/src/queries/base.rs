@@ -28,7 +28,7 @@ impl<'a> DbContext<'a> {
         }
     }
 
-    pub fn find_optional<'s, M>(
+    pub(crate) fn find_optional<'s, M>(
         &self,
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
@@ -45,7 +45,7 @@ impl<'a> DbContext<'a> {
         Ok(stmt.query_row(&*params.as_params(), M::from_row).optional()?)
     }
 
-    pub fn find_all<'s, M>(&self) -> Result<Vec<M>>
+    pub(crate) fn find_all<'s, M>(&self) -> Result<Vec<M>>
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
@@ -58,7 +58,7 @@ impl<'a> DbContext<'a> {
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
-    pub fn find_many<'s, M>(
+    pub(crate) fn find_many<'s, M>(
         &self,
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
@@ -88,7 +88,7 @@ impl<'a> DbContext<'a> {
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
-    pub fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
+    pub(crate) fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
     where
         M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
     {
