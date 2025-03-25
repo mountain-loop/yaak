@@ -10,6 +10,8 @@ use sea_query::{
 };
 use sea_query_rusqlite::RusqliteBinder;
 
+pub(crate) const MAX_HISTORY_ITEMS: usize = 20;
+
 impl<'a> DbContext<'a> {
     pub(crate) fn find_one<'s, M>(
         &self,

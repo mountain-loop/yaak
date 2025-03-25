@@ -16,9 +16,7 @@ use yaak_models::models::{
     WebsocketEventType, WebsocketRequest,
 };
 use yaak_models::queries_legacy;
-use yaak_models::queries_legacy::{
-    get_base_environment, get_cookie_jar, get_environment, upsert_websocket_event, UpdateSource,
-};
+use yaak_models::queries_legacy::{get_cookie_jar, upsert_websocket_event, UpdateSource};
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
@@ -132,11 +130,14 @@ pub(crate) async fn send<R: Runtime>(
         (connection, unrendered_request)
     };
     let environment = match environment_id {
-        Some(id) => Some(get_environment(&app_handle, id).await?),
+        Some(id) => Some(app_handle.queries().connect().await?.get_environment(id)?),
         None => None,
     };
-    let base_environment =
-        get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
+    let base_environment = app_handle
+        .queries()
+        .connect()
+        .await?
+        .get_base_environment(&unrendered_request.workspace_id)?;
     let request = render_request(
         &unrendered_request,
         &base_environment,
@@ -215,11 +216,14 @@ pub(crate) async fn connect<R: Runtime>(
         .get_websocket_request(request_id)?
         .ok_or(GenericError("Failed to find GRPC request".to_string()))?;
     let environment = match environment_id {
-        Some(id) => Some(get_environment(&app_handle, id).await?),
+        Some(id) => Some(app_handle.queries().connect().await?.get_environment(id)?),
         None => None,
     };
-    let base_environment =
-        get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
+    let base_environment = app_handle
+        .queries()
+        .connect()
+        .await?
+        .get_base_environment(&unrendered_request.workspace_id)?;
     let request = render_request(
         &unrendered_request,
         &base_environment,

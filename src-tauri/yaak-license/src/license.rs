@@ -81,14 +81,12 @@ pub async fn activate_license<R: Runtime>(
     }
 
     let body: ActivateLicenseResponsePayload = response.json().await?;
-    yaak_models::queries_legacy::set_key_value_string(
-        window.app_handle(),
+    window.app_handle().queries().connect().await?.set_key_value_string(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         body.activation_id.as_str(),
         &UpdateSource::from_window(&window),
-    )
-    .await;
+    );
 
     if let Err(e) = window.emit("license-activated", true) {
         warn!("Failed to emit check-license event: {}", e);
@@ -120,13 +118,11 @@ pub async fn deactivate_license<R: Runtime>(
         return Err(ServerError);
     }
 
-    yaak_models::queries_legacy::delete_key_value(
-        app_handle,
+    app_handle.queries().connect().await?.delete_key_value(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         &UpdateSource::from_window(&window),
-    )
-    .await;
+    )?;
 
     if let Err(e) = app_handle.emit("license-deactivated", true) {
         warn!("Failed to emit deactivate-license event: {}", e);
@@ -205,11 +201,9 @@ fn build_url(path: &str) -> String {
 }
 
 pub async fn get_activation_id<R: Runtime>(app_handle: &AppHandle<R>) -> String {
-    yaak_models::queries_legacy::get_key_value_string(
-        app_handle,
+    app_handle.queries().connect().await.unwrap().get_key_value_string(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         "",
     )
-    .await
 }

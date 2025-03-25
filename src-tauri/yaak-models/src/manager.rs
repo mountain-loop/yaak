@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::queries_legacy::ModelPayload;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{Connection, Statement, ToSql, Transaction};
+use rusqlite::{Connection, Statement, ToSql, Transaction, TransactionBehavior};
 use std::sync::Arc;
 use tauri::{Manager, Runtime};
 use tokio::sync::{mpsc, Mutex};
@@ -43,7 +43,7 @@ impl QueryManager {
         })
     }
 
-    pub async fn with_conn<F, T>(&self, f: F) -> Result<T>
+    pub async fn with_conn<F, T>(&self, func: F) -> Result<T>
     where
         F: FnOnce(&DbContext) -> Result<T>,
     {
@@ -52,27 +52,30 @@ impl QueryManager {
             tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Connection(conn),
         };
-        f(&db_context)
+        func(&db_context)
     }
 
-    pub async fn with_tx<F, T>(&self, f: F) -> Result<T>
+    pub async fn with_tx<F, T>(&self, func: F) -> Result<T>
     where
         F: FnOnce(&DbContext) -> Result<T>,
     {
         let mut conn = self.pool.lock().await.get()?;
-        let tx = conn.transaction()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+
         let db_context = DbContext {
             tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Transaction(&tx),
         };
-        let result = f(&db_context);
-        match result {
+
+        match func(&db_context) {
             Ok(val) => {
                 tx.commit()?;
                 Ok(val)
             }
-            // rollback is automatic on drop of value
-            e => e,
+            Err(e) => {
+                tx.rollback()?;
+                Err(e)
+            }
         }
     }
 }

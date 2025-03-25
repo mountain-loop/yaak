@@ -29,7 +29,7 @@ use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries_legacy::{get_base_environment, upsert_cookie_jar, UpdateSource};
+use yaak_models::queries_legacy::{upsert_cookie_jar, UpdateSource};
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
@@ -53,8 +53,11 @@ pub async fn send_http_request<R: Runtime>(
         let workspace = db.get_workspace(&unrendered_request.workspace_id)?;
         (settings, workspace)
     };
-    let base_environment =
-        get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
+    let base_environment = app_handle
+        .queries()
+        .connect()
+        .await?
+        .get_base_environment(&unrendered_request.workspace_id)?;
 
     let response_id = og_response.id.clone();
     let response = Arc::new(Mutex::new(og_response.clone()));

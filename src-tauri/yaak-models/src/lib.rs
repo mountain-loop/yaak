@@ -1,5 +1,6 @@
 use crate::commands::{delete, upsert};
 use crate::manager::QueryManager;
+use crate::queries_legacy::ModelChangeEvent;
 use log::info;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -64,7 +65,11 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 let app_handle = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     while let Some(p) = rx.recv().await {
-                        app_handle.emit("upserted_model", p).unwrap();
+                        let name = match p.change {
+                            ModelChangeEvent::Upsert => "upserted_model",
+                            ModelChangeEvent::Delete => "deleted_model",
+                        };
+                        app_handle.emit(name, p).unwrap();
                     }
                 });
             }

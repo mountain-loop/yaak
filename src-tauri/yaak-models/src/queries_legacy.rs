@@ -2,14 +2,13 @@ use crate::error::Result;
 use crate::manager::QueryManagerExt;
 use crate::models::{
     AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, GrpcRequest,
-    GrpcRequestIden, HttpRequest, HttpRequestIden, KeyValue, KeyValueIden, ModelType, Plugin,
-    PluginIden, PluginKeyValue, PluginKeyValueIden, SyncState, SyncStateIden, WebsocketEvent,
-    WebsocketEventIden, WebsocketRequest, Workspace, WorkspaceIden, WorkspaceMeta,
+    GrpcRequestIden, HttpRequest, ModelType, Plugin, PluginIden, SyncState, SyncStateIden,
+    WebsocketEvent, WebsocketEventIden, WebsocketRequest, Workspace, WorkspaceIden, WorkspaceMeta,
     WorkspaceMetaIden,
 };
 use crate::SqliteConnection;
 use chrono::{NaiveDateTime, Utc};
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use nanoid::nanoid;
 use rusqlite::OptionalExtension;
 use sea_query::ColumnRef::Asterisk;
@@ -20,257 +19,6 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
-
-pub(crate) const MAX_HISTORY_ITEMS: usize = 20;
-
-pub async fn set_key_value_string<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    namespace: &str,
-    key: &str,
-    value: &str,
-    update_source: &UpdateSource,
-) -> (KeyValue, bool) {
-    let encoded = serde_json::to_string(value);
-    set_key_value_raw(app_handle, namespace, key, &encoded.unwrap(), update_source).await
-}
-
-pub async fn set_key_value_int<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    namespace: &str,
-    key: &str,
-    value: i32,
-    update_source: &UpdateSource,
-) -> (KeyValue, bool) {
-    let encoded = serde_json::to_string(&value);
-    set_key_value_raw(app_handle, namespace, key, &encoded.unwrap(), update_source).await
-}
-
-pub async fn get_key_value_string<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    namespace: &str,
-    key: &str,
-    default: &str,
-) -> String {
-    match get_key_value_raw(app_handle, namespace, key).await {
-        None => default.to_string(),
-        Some(v) => {
-            let result = serde_json::from_str(&v.value);
-            match result {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("Failed to parse string key value: {}", e);
-                    default.to_string()
-                }
-            }
-        }
-    }
-}
-
-pub async fn get_key_value_int<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    namespace: &str,
-    key: &str,
-    default: i32,
-) -> i32 {
-    match get_key_value_raw(app_handle, namespace, key).await {
-        None => default.clone(),
-        Some(v) => {
-            let result = serde_json::from_str(&v.value);
-            match result {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("Failed to parse int key value: {}", e);
-                    default.clone()
-                }
-            }
-        }
-    }
-}
-
-pub async fn set_key_value_raw<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    namespace: &str,
-    key: &str,
-    value: &str,
-    update_source: &UpdateSource,
-) -> (KeyValue, bool) {
-    let existing = get_key_value_raw(app_handle, namespace, key).await;
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::insert()
-        .into_table(KeyValueIden::Table)
-        .columns([
-            KeyValueIden::CreatedAt,
-            KeyValueIden::UpdatedAt,
-            KeyValueIden::Namespace,
-            KeyValueIden::Key,
-            KeyValueIden::Value,
-        ])
-        .values_panic([
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
-            namespace.into(),
-            key.into(),
-            value.into(),
-        ])
-        .on_conflict(
-            OnConflict::new()
-                .update_columns([KeyValueIden::UpdatedAt, KeyValueIden::Value])
-                .to_owned(),
-        )
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(sql.as_str()).expect("Failed to prepare KeyValue upsert");
-    let m: KeyValue = stmt
-        .query_row(&*params.as_params(), |row| row.try_into())
-        .expect("Failed to upsert KeyValue");
-    emit_upserted_model(app_handle, &AnyModel::KeyValue(m.to_owned()), update_source);
-    (m, existing.is_none())
-}
-
-pub async fn delete_key_value<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    namespace: &str,
-    key: &str,
-    update_source: &UpdateSource,
-) {
-    let kv = match get_key_value_raw(app_handle, namespace, key).await {
-        None => return,
-        Some(m) => m,
-    };
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::delete()
-        .from_table(KeyValueIden::Table)
-        .cond_where(
-            Cond::all()
-                .add(Expr::col(KeyValueIden::Namespace).eq(namespace))
-                .add(Expr::col(KeyValueIden::Key).eq(key)),
-        )
-        .build_rusqlite(SqliteQueryBuilder);
-    db.execute(sql.as_str(), &*params.as_params()).expect("Failed to delete PluginKeyValue");
-    emit_deleted_model(app_handle, &AnyModel::KeyValue(kv.to_owned()), update_source);
-}
-
-pub async fn list_key_values_raw<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<KeyValue>> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(KeyValueIden::Table)
-        .column(Asterisk)
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-    Ok(items.map(|v| v.unwrap()).collect())
-}
-
-pub async fn get_key_value_raw<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    namespace: &str,
-    key: &str,
-) -> Option<KeyValue> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(KeyValueIden::Table)
-        .column(Asterisk)
-        .cond_where(
-            Cond::all()
-                .add(Expr::col(KeyValueIden::Namespace).eq(namespace))
-                .add(Expr::col(KeyValueIden::Key).eq(key)),
-        )
-        .build_rusqlite(SqliteQueryBuilder);
-
-    db.query_row(sql.as_str(), &*params.as_params(), |row| row.try_into()).ok()
-}
-
-pub async fn get_plugin_key_value<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    plugin_name: &str,
-    key: &str,
-) -> Option<PluginKeyValue> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::select()
-        .from(PluginKeyValueIden::Table)
-        .column(Asterisk)
-        .cond_where(
-            Cond::all()
-                .add(Expr::col(PluginKeyValueIden::PluginName).eq(plugin_name))
-                .add(Expr::col(PluginKeyValueIden::Key).eq(key)),
-        )
-        .build_rusqlite(SqliteQueryBuilder);
-
-    db.query_row(sql.as_str(), &*params.as_params(), |row| row.try_into()).ok()
-}
-
-pub async fn set_plugin_key_value<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    plugin_name: &str,
-    key: &str,
-    value: &str,
-) -> (PluginKeyValue, bool) {
-    let existing = get_plugin_key_value(app_handle, plugin_name, key).await;
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::insert()
-        .into_table(PluginKeyValueIden::Table)
-        .columns([
-            PluginKeyValueIden::CreatedAt,
-            PluginKeyValueIden::UpdatedAt,
-            PluginKeyValueIden::PluginName,
-            PluginKeyValueIden::Key,
-            PluginKeyValueIden::Value,
-        ])
-        .values_panic([
-            CurrentTimestamp.into(),
-            CurrentTimestamp.into(),
-            plugin_name.into(),
-            key.into(),
-            value.into(),
-        ])
-        .on_conflict(
-            OnConflict::new()
-                .update_columns([PluginKeyValueIden::UpdatedAt, PluginKeyValueIden::Value])
-                .to_owned(),
-        )
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(sql.as_str()).expect("Failed to prepare PluginKeyValue upsert");
-    let m: PluginKeyValue = stmt
-        .query_row(&*params.as_params(), |row| row.try_into())
-        .expect("Failed to upsert KeyValue");
-    (m, existing.is_none())
-}
-
-pub async fn delete_plugin_key_value<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    plugin_name: &str,
-    key: &str,
-) -> bool {
-    if let None = get_plugin_key_value(app_handle, plugin_name, key).await {
-        return false;
-    }
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-    let (sql, params) = Query::delete()
-        .from_table(PluginKeyValueIden::Table)
-        .cond_where(
-            Cond::all()
-                .add(Expr::col(PluginKeyValueIden::PluginName).eq(plugin_name))
-                .add(Expr::col(PluginKeyValueIden::Key).eq(key)),
-        )
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str()).unwrap();
-    stmt.execute(&*params.as_params()).expect("Failed to delete PluginKeyValue");
-    true
-}
 
 pub async fn list_workspace_metas<R: Runtime>(
     app_handle: &AppHandle<R>,
@@ -535,161 +283,6 @@ pub async fn upsert_cookie_jar<R: Runtime>(
     let m: CookieJar = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
     emit_upserted_model(app_handle, &AnyModel::CookieJar(m.to_owned()), update_source);
     Ok(m)
-}
-
-pub async fn ensure_base_environment<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    workspace_id: &str,
-) -> Result<()> {
-    let environments = list_environments(app_handle, workspace_id).await?;
-    let base_environment =
-        environments.iter().find(|e| e.environment_id == None && e.workspace_id == workspace_id);
-
-    if let None = base_environment {
-        info!("Creating base environment for {workspace_id}");
-        upsert_environment(
-            app_handle,
-            Environment {
-                workspace_id: workspace_id.to_string(),
-                name: "Global Variables".to_string(),
-                ..Default::default()
-            },
-            &UpdateSource::Background,
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
-pub async fn list_environments<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    workspace_id: &str,
-) -> Result<Vec<Environment>> {
-    let environments: Vec<Environment> = {
-        let dbm = &*app_handle.state::<SqliteConnection>();
-        let db = dbm.0.lock().await.get().unwrap();
-        let (sql, params) = Query::select()
-            .from(EnvironmentIden::Table)
-            .cond_where(Expr::col(EnvironmentIden::WorkspaceId).eq(workspace_id))
-            .column(Asterisk)
-            .order_by(EnvironmentIden::Name, Order::Asc)
-            .build_rusqlite(SqliteQueryBuilder);
-        let mut stmt = db.prepare(sql.as_str())?;
-        let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
-        items.map(|v| v.unwrap()).collect()
-    };
-
-    Ok(environments)
-}
-
-pub async fn delete_environment<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    id: &str,
-    update_source: &UpdateSource,
-) -> Result<Environment> {
-    let env = get_environment(app_handle, id).await?;
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::delete()
-        .from_table(EnvironmentIden::Table)
-        .cond_where(Expr::col(EnvironmentIden::Id).eq(id))
-        .build_rusqlite(SqliteQueryBuilder);
-
-    db.execute(sql.as_str(), &*params.as_params())?;
-
-    emit_deleted_model(app_handle, &AnyModel::Environment(env.to_owned()), update_source);
-    Ok(env)
-}
-
-pub async fn upsert_environment<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    environment: Environment,
-    update_source: &UpdateSource,
-) -> Result<Environment> {
-    let id = match environment.id.as_str() {
-        "" => generate_model_id(ModelType::TypeEnvironment),
-        _ => environment.id.to_string(),
-    };
-    let trimmed_name = environment.name.trim();
-
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::insert()
-        .into_table(EnvironmentIden::Table)
-        .columns([
-            EnvironmentIden::Id,
-            EnvironmentIden::CreatedAt,
-            EnvironmentIden::UpdatedAt,
-            EnvironmentIden::EnvironmentId,
-            EnvironmentIden::WorkspaceId,
-            EnvironmentIden::Name,
-            EnvironmentIden::Variables,
-        ])
-        .values_panic([
-            id.as_str().into(),
-            upsert_date(update_source, environment.created_at).into(),
-            upsert_date(update_source, environment.updated_at).into(),
-            environment.environment_id.into(),
-            environment.workspace_id.into(),
-            trimmed_name.into(),
-            serde_json::to_string(&environment.variables)?.into(),
-        ])
-        .on_conflict(
-            OnConflict::column(EnvironmentIden::Id)
-                .update_columns([
-                    EnvironmentIden::UpdatedAt,
-                    EnvironmentIden::Name,
-                    EnvironmentIden::Variables,
-                ])
-                .to_owned(),
-        )
-        .returning_all()
-        .build_rusqlite(SqliteQueryBuilder);
-
-    let mut stmt = db.prepare(sql.as_str())?;
-    let m: Environment = stmt.query_row(&*params.as_params(), |row| row.try_into())?;
-    emit_upserted_model(app_handle, &AnyModel::Environment(m.to_owned()), update_source);
-    Ok(m)
-}
-
-pub async fn get_environment<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    id: &str,
-) -> Result<Environment> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::select()
-        .from(EnvironmentIden::Table)
-        .column(Asterisk)
-        .cond_where(Expr::col(EnvironmentIden::Id).eq(id))
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
-}
-
-pub async fn get_base_environment<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    workspace_id: &str,
-) -> Result<Environment> {
-    let dbm = &*app_handle.state::<SqliteConnection>();
-    let db = dbm.0.lock().await.get().unwrap();
-
-    let (sql, params) = Query::select()
-        .from(EnvironmentIden::Table)
-        .column(Asterisk)
-        .cond_where(
-            Cond::all()
-                .add(Expr::col(EnvironmentIden::WorkspaceId).eq(workspace_id))
-                .add(Expr::col(EnvironmentIden::EnvironmentId).is_null()),
-        )
-        .build_rusqlite(SqliteQueryBuilder);
-    let mut stmt = db.prepare(sql.as_str())?;
-    Ok(stmt.query_row(&*params.as_params(), |row| row.try_into())?)
 }
 
 pub async fn get_plugin<R: Runtime>(app_handle: &AppHandle<R>, id: &str) -> Result<Plugin> {
@@ -1045,14 +638,14 @@ pub async fn batch_upsert<R: Runtime>(
     http_requests: Vec<HttpRequest>,
     grpc_requests: Vec<GrpcRequest>,
     websocket_requests: Vec<WebsocketRequest>,
-    update_source: &UpdateSource,
+    source: &UpdateSource,
 ) -> Result<BatchUpsertResult> {
     let mut imported_resources = BatchUpsertResult::default();
 
     if workspaces.len() > 0 {
         info!("Batch inserting {} workspaces", workspaces.len());
         for v in workspaces {
-            let x = app_handle.queries().connect().await?.upsert(&v, update_source)?;
+            let x = app_handle.queries().connect().await?.upsert(&v, source)?;
             imported_resources.workspaces.push(x.clone());
         }
     }
@@ -1072,7 +665,7 @@ pub async fn batch_upsert<R: Runtime>(
                 if let Some(_) = imported_resources.environments.iter().find(|f| f.id == v.id) {
                     continue;
                 }
-                let x = upsert_environment(&app_handle, v, update_source).await?;
+                let x = app_handle.queries().connect().await?.upsert_environment(&v, source)?;
                 imported_resources.environments.push(x.clone());
             }
         }
@@ -1093,7 +686,7 @@ pub async fn batch_upsert<R: Runtime>(
                 if let Some(_) = imported_resources.folders.iter().find(|f| f.id == v.id) {
                     continue;
                 }
-                let x = app_handle.queries().connect().await?.upsert_folder(&v, update_source)?;
+                let x = app_handle.queries().connect().await?.upsert_folder(&v, source)?;
                 imported_resources.folders.push(x.clone());
             }
         }
@@ -1102,7 +695,7 @@ pub async fn batch_upsert<R: Runtime>(
 
     if http_requests.len() > 0 {
         for v in http_requests {
-            let x = app_handle.queries().connect().await?.upsert(&v, update_source)?;
+            let x = app_handle.queries().connect().await?.upsert(&v, source)?;
             imported_resources.http_requests.push(x.clone());
         }
         info!("Imported {} http_requests", imported_resources.http_requests.len());
@@ -1110,7 +703,7 @@ pub async fn batch_upsert<R: Runtime>(
 
     if grpc_requests.len() > 0 {
         for v in grpc_requests {
-            let x = app_handle.queries().connect().await?.upsert_grpc_request(&v, update_source)?;
+            let x = app_handle.queries().connect().await?.upsert_grpc_request(&v, source)?;
             imported_resources.grpc_requests.push(x.clone());
         }
         info!("Imported {} grpc_requests", imported_resources.grpc_requests.len());
@@ -1118,11 +711,7 @@ pub async fn batch_upsert<R: Runtime>(
 
     if websocket_requests.len() > 0 {
         for v in websocket_requests {
-            let x = app_handle
-                .queries()
-                .connect()
-                .await?
-                .upsert_websocket_request(&v, update_source)?;
+            let x = app_handle.queries().connect().await?.upsert_websocket_request(&v, source)?;
             imported_resources.websocket_requests.push(x.clone());
         }
         info!("Imported {} websocket_requests", imported_resources.websocket_requests.len());
@@ -1150,25 +739,14 @@ pub async fn get_workspace_export_resources<R: Runtime>(
         },
     };
 
+    let db = app_handle.queries().connect().await?;
     for workspace_id in workspace_ids {
-        data.resources
-            .workspaces
-            .push(app_handle.queries().connect().await?.find_one(WorkspaceIden::Id, workspace_id)?);
-        data.resources.environments.append(&mut list_environments(app_handle, workspace_id).await?);
-        data.resources
-            .folders
-            .append(&mut app_handle.queries().connect().await?.list_folders(workspace_id)?);
-        data.resources.http_requests.append(&mut app_handle.queries().connect().await?.find_many(
-            HttpRequestIden::WorkspaceId,
-            workspace_id,
-            None,
-        )?);
-        data.resources
-            .grpc_requests
-            .append(&mut app_handle.queries().connect().await?.list_grpc_requests(workspace_id)?);
-        data.resources.websocket_requests.append(
-            &mut app_handle.queries().connect().await?.list_websocket_requests(workspace_id)?,
-        );
+        data.resources.workspaces.push(db.find_one(WorkspaceIden::Id, workspace_id)?);
+        data.resources.environments.append(&mut db.list_environments(workspace_id)?);
+        data.resources.folders.append(&mut db.list_folders(workspace_id)?);
+        data.resources.http_requests.append(&mut db.list_http_requests(workspace_id)?);
+        data.resources.grpc_requests.append(&mut db.list_grpc_requests(workspace_id)?);
+        data.resources.websocket_requests.append(&mut db.list_websocket_requests(workspace_id)?);
     }
 
     // Nuke environments if we don't want them

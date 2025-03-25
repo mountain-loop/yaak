@@ -14,9 +14,8 @@ use ts_rs::TS;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{SyncState, WorkspaceMeta};
 use yaak_models::queries_legacy::{
-    batch_upsert, delete_environment, delete_sync_state, get_workspace_export_resources,
-    get_workspace_meta, list_sync_states_for_workspace, upsert_sync_state, upsert_workspace_meta,
-    UpdateSource,
+    batch_upsert, delete_sync_state, get_workspace_export_resources, get_workspace_meta,
+    list_sync_states_for_workspace, upsert_sync_state, upsert_workspace_meta, UpdateSource,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -557,28 +556,25 @@ fn derive_model_filename(m: &SyncModel) -> PathBuf {
 }
 
 async fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) -> Result<()> {
+    let db = app_handle.queries().connect().await?;
     match model {
         SyncModel::Workspace(m) => {
-            app_handle.queries().connect().await?.delete_workspace(&m, &UpdateSource::Sync)?;
+            db.delete_workspace(&m, &UpdateSource::Sync)?;
         }
         SyncModel::Environment(m) => {
-            delete_environment(app_handle, m.id.as_str(), &UpdateSource::Sync).await?;
+            db.delete_environment(&m, &UpdateSource::Sync)?;
         }
         SyncModel::Folder(m) => {
-            app_handle.queries().connect().await?.delete_folder(&m, &UpdateSource::Sync)?;
+            db.delete_folder(&m, &UpdateSource::Sync)?;
         }
         SyncModel::HttpRequest(m) => {
-            app_handle.queries().connect().await?.delete_http_request(&m, &UpdateSource::Sync)?;
+            db.delete_http_request(&m, &UpdateSource::Sync)?;
         }
         SyncModel::GrpcRequest(m) => {
-            app_handle.queries().connect().await?.delete_grpc_request(&m, &UpdateSource::Sync)?;
+            db.delete_grpc_request(&m, &UpdateSource::Sync)?;
         }
         SyncModel::WebsocketRequest(m) => {
-            app_handle
-                .queries()
-                .connect()
-                .await?
-                .delete_websocket_request(&m, &UpdateSource::Sync)?;
+            db.delete_websocket_request(&m, &UpdateSource::Sync)?;
         }
     };
     Ok(())

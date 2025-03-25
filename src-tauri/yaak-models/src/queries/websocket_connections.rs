@@ -1,7 +1,8 @@
 use crate::error::Result;
 use crate::manager::DbContext;
 use crate::models::{WebsocketConnection, WebsocketConnectionIden, WebsocketConnectionState};
-use crate::queries_legacy::{UpdateSource, MAX_HISTORY_ITEMS};
+use crate::queries::base::MAX_HISTORY_ITEMS;
+use crate::queries_legacy::UpdateSource;
 use log::debug;
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
@@ -49,10 +50,6 @@ impl<'a> DbContext<'a> {
         self.find_many(WebsocketConnectionIden::RequestId, request_id, None)
     }
 
-    pub fn list_websocket_connections(&self, request_id: &str) -> Result<Vec<WebsocketConnection>> {
-        self.find_many(WebsocketConnectionIden::RequestId, request_id, None)
-    }
-
     pub fn delete_websocket_connection(
         &self,
         m: &WebsocketConnection,
@@ -75,15 +72,12 @@ impl<'a> DbContext<'a> {
         websocket_connection: &WebsocketConnection,
         source: &UpdateSource,
     ) -> Result<WebsocketConnection> {
-        let connections = self.find_many(
-            WebsocketConnectionIden::RequestId,
-            websocket_connection.request_id.as_str(),
-            None,
-        )?;
+        let connections =
+            self.list_websocket_connections_for_request(&websocket_connection.request_id)?;
 
         for m in connections.iter().skip(MAX_HISTORY_ITEMS - 1) {
             debug!("Deleting old websocket connection {}", websocket_connection.id);
-            self.delete_http_response(&m, source)?;
+            self.delete_websocket_connection(&m, source)?;
         }
 
         self.upsert(websocket_connection, source)

@@ -2,6 +2,7 @@ use crate::error::Error::{
     AuthPluginNotFound, ClientNotInitializedErr, PluginErr, PluginNotFoundErr, UnknownEventErr,
 };
 use crate::error::Result;
+use yaak_templates::error::Result as TemplateResult;
 use crate::events::{
     BootRequest, CallHttpAuthenticationActionArgs, CallHttpAuthenticationActionRequest,
     CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
@@ -598,7 +599,7 @@ impl PluginManager {
         fn_name: &str,
         args: HashMap<String, String>,
         purpose: RenderPurpose,
-    ) -> yaak_templates::error::Result<String> {
+    ) -> TemplateResult<String> {
         let req = CallTemplateFunctionRequest {
             name: fn_name.to_string(),
             args: CallTemplateFunctionArgs {
@@ -615,13 +616,14 @@ impl PluginManager {
         let value = events.into_iter().find_map(|e| match e.payload {
             InternalEventPayload::CallTemplateFunctionResponse(CallTemplateFunctionResponse {
                 value,
-            }) => value,
+            }) => Some(value),
             _ => None,
         });
 
         match value {
-            None => Err(RenderError(format!("Template function not found {fn_name}"))),
-            Some(v) => Ok(v),
+            None => Err(RenderError(format!("Template function {fn_name}(…) not found "))),
+            Some(Some(v)) => Ok(v), // Plugin returned string
+            Some(None) => Ok("".to_string()), // Plugin returned null
         }
     }
 

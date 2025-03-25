@@ -1,7 +1,9 @@
 use crate::error::Result;
 use crate::manager::DbContext;
 use crate::models::{GrpcConnection, GrpcConnectionIden, GrpcConnectionState};
+use crate::queries::base::MAX_HISTORY_ITEMS;
 use crate::queries_legacy::UpdateSource;
+use log::debug;
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 
@@ -83,6 +85,14 @@ impl<'a> DbContext<'a> {
         grpc_connection: &GrpcConnection,
         source: &UpdateSource,
     ) -> Result<GrpcConnection> {
+        let connections =
+            self.list_grpc_connections_for_request(grpc_connection.request_id.as_str(), None)?;
+
+        for m in connections.iter().skip(MAX_HISTORY_ITEMS - 1) {
+            debug!("Deleting old gRPC connection {}", grpc_connection.id);
+            self.delete_grpc_connection(&m, source)?;
+        }
+
         self.upsert(grpc_connection, source)
     }
 }

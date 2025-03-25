@@ -11,10 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{HttpResponse, Plugin};
-use yaak_models::queries_legacy::{
-    delete_plugin_key_value, get_base_environment, get_plugin_key_value, list_plugins,
-    set_plugin_key_value, upsert_plugin, UpdateSource,
-};
+use yaak_models::queries_legacy::{list_plugins, upsert_plugin, UpdateSource};
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
     GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
@@ -89,8 +86,12 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 .await
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
-            let base_environment = get_base_environment(app_handle, workspace.id.as_str())
+            let base_environment = app_handle
+                .queries()
+                .connect()
                 .await
+                .unwrap()
+                .get_base_environment(&workspace.id)
                 .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
             let http_request = render_http_request(
@@ -113,8 +114,12 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 .await
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
-            let base_environment = get_base_environment(app_handle, workspace.id.as_str())
+            let base_environment = app_handle
+                .queries()
+                .connect()
                 .await
+                .unwrap()
+                .get_base_environment(&workspace.id)
                 .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
             let data = render_json_value(req.data, &base_environment, environment.as_ref(), &cb)
@@ -182,7 +187,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 http_request.workspace_id = workspace.id;
             }
 
-            let resp = if http_request.id.is_empty() {
+            let http_response = if http_request.id.is_empty() {
                 HttpResponse::default()
             } else {
                 window
@@ -193,6 +198,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     .upsert_http_response(
                         &HttpResponse {
                             request_id: http_request.id.clone(),
+                            workspace_id: http_request.workspace_id.clone(),
                             ..Default::default()
                         },
                         &UpdateSource::Plugin,
@@ -203,7 +209,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let result = send_http_request(
                 &window,
                 &http_request,
-                &resp,
+                &http_response,
                 environment,
                 cookie_jar,
                 &mut tokio::sync::watch::channel(false).1, // No-op cancel channel
@@ -280,17 +286,34 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         }
         InternalEventPayload::SetKeyValueRequest(req) => {
             let name = plugin_handle.name().await;
-            set_plugin_key_value(app_handle, &name, &req.key, &req.value).await;
+            app_handle
+                .queries()
+                .connect()
+                .await
+                .unwrap()
+                .set_plugin_key_value(&name, &req.key, &req.value);
             Some(InternalEventPayload::SetKeyValueResponse(SetKeyValueResponse {}))
         }
         InternalEventPayload::GetKeyValueRequest(req) => {
             let name = plugin_handle.name().await;
-            let value = get_plugin_key_value(app_handle, &name, &req.key).await.map(|v| v.value);
+            let value = app_handle
+                .queries()
+                .connect()
+                .await
+                .unwrap()
+                .get_plugin_key_value(&name, &req.key)
+                .map(|v| v.value);
             Some(InternalEventPayload::GetKeyValueResponse(GetKeyValueResponse { value }))
         }
         InternalEventPayload::DeleteKeyValueRequest(req) => {
             let name = plugin_handle.name().await;
-            let deleted = delete_plugin_key_value(app_handle, &name, &req.key).await;
+            let deleted = app_handle
+                .queries()
+                .connect()
+                .await
+                .unwrap()
+                .delete_plugin_key_value(&name, &req.key)
+                .unwrap();
             Some(InternalEventPayload::DeleteKeyValueResponse(DeleteKeyValueResponse { deleted }))
         }
         _ => None,

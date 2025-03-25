@@ -37,11 +37,10 @@ use yaak_models::models::{
     ModelType, Plugin, Settings, WebsocketRequest, Workspace, WorkspaceMeta,
 };
 use yaak_models::queries_legacy::{
-    batch_upsert, delete_cookie_jar, delete_environment, delete_plugin, ensure_base_environment,
-    generate_model_id, get_base_environment, get_cookie_jar, get_environment, get_key_value_raw,
+    batch_upsert, delete_cookie_jar, delete_plugin, generate_model_id, get_cookie_jar,
     get_or_create_workspace_meta, get_plugin, get_workspace_export_resources, list_cookie_jars,
-    list_environments, list_key_values_raw, list_plugins, set_key_value_raw, upsert_cookie_jar,
-    upsert_environment, upsert_plugin, upsert_workspace_meta, BatchUpsertResult, UpdateSource,
+    list_plugins, upsert_cookie_jar, upsert_plugin, upsert_workspace_meta, BatchUpsertResult,
+    UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
@@ -112,10 +111,11 @@ async fn cmd_render_template<R: Runtime>(
     environment_id: Option<&str>,
 ) -> YaakResult<String> {
     let environment = match environment_id {
-        Some(id) => get_environment(&app_handle, id).await.ok(),
+        Some(id) => app_handle.queries().connect().await?.get_environment(id).ok(),
         None => None,
     };
-    let base_environment = get_base_environment(&app_handle, &workspace_id).await?;
+    let base_environment =
+        app_handle.queries().connect().await?.get_base_environment(&workspace_id)?;
     let result = render_template(
         template,
         &base_environment,
@@ -178,7 +178,7 @@ async fn cmd_grpc_go<R: Runtime>(
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<String> {
     let environment = match environment_id {
-        Some(id) => get_environment(&app_handle, id).await.ok(),
+        Some(id) => app_handle.queries().connect().await?.get_environment(id).ok(),
         None => None,
     };
     let unrendered_request = app_handle
@@ -187,8 +187,11 @@ async fn cmd_grpc_go<R: Runtime>(
         .await?
         .get_grpc_request(request_id)?
         .ok_or(GenericError("Failed to get GRPC request".to_string()))?;
-    let base_environment =
-        get_base_environment(&app_handle, &unrendered_request.workspace_id).await?;
+    let base_environment = app_handle
+        .queries()
+        .connect()
+        .await?
+        .get_base_environment(&unrendered_request.workspace_id)?;
     let request = render_grpc_request(
         &unrendered_request,
         &base_environment,
@@ -753,9 +756,7 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
     let response = HttpResponse::default();
     request.id = "".to_string();
     let environment = match environment_id {
-        Some(id) => {
-            Some(get_environment(&app_handle, id).await.expect("Failed to get environment"))
-        }
+        Some(id) => Some(app_handle.queries().connect().await?.get_environment(id)?),
         None => None,
     };
     let cookie_jar = match cookie_jar_id {
@@ -1098,11 +1099,14 @@ async fn cmd_send_http_request<R: Runtime>(
     //   that has not yet been saved in the DB.
     request: HttpRequest,
 ) -> YaakResult<HttpResponse> {
-    let response = app_handle
-        .queries()
-        .connect()
-        .await?
-        .upsert_http_response(&HttpResponse::default(), &UpdateSource::from_window(&window))?;
+    let response = app_handle.queries().connect().await?.upsert_http_response(
+        &HttpResponse {
+            request_id: request.id.clone(),
+            workspace_id: request.workspace_id.clone(),
+            ..Default::default()
+        },
+        &UpdateSource::from_window(&window),
+    )?;
 
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
     app_handle.listen_any(format!("cancel_http_response_{}", response.id), move |_event| {
@@ -1112,7 +1116,7 @@ async fn cmd_send_http_request<R: Runtime>(
     });
 
     let environment = match environment_id {
-        Some(id) => match get_environment(&app_handle, id).await {
+        Some(id) => match app_handle.queries().connect().await?.get_environment(id) {
             Ok(env) => Some(env),
             Err(e) => {
                 warn!("Failed to find environment by id {id} {}", e);
@@ -1156,14 +1160,12 @@ async fn cmd_set_update_mode<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<KeyValue> {
-    let (key_value, _created) = set_key_value_raw(
-        &app_handle,
+    let (key_value, _created) = app_handle.queries().connect().await?.set_key_value_raw(
         "app",
         "update_mode",
         update_mode,
         &UpdateSource::from_window(&window),
-    )
-    .await;
+    );
     Ok(key_value)
 }
 
@@ -1172,9 +1174,8 @@ async fn cmd_get_key_value<R: Runtime>(
     namespace: &str,
     key: &str,
     app_handle: AppHandle<R>,
-) -> Result<Option<KeyValue>, ()> {
-    let result = get_key_value_raw(&app_handle, namespace, key).await;
-    Ok(result)
+) -> YaakResult<Option<KeyValue>> {
+    Ok(app_handle.queries().connect().await?.get_key_value_raw(namespace, key))
 }
 
 #[tauri::command]
@@ -1184,10 +1185,13 @@ async fn cmd_set_key_value<R: Runtime>(
     namespace: &str,
     key: &str,
     value: &str,
-) -> Result<KeyValue, String> {
-    let (key_value, _created) =
-        set_key_value_raw(&app_handle, namespace, key, value, &UpdateSource::from_window(&window))
-            .await;
+) -> YaakResult<KeyValue> {
+    let (key_value, _created) = app_handle.queries().connect().await?.set_key_value_raw(
+        namespace,
+        key,
+        value,
+        &UpdateSource::from_window(&window),
+    );
     Ok(key_value)
 }
 
@@ -1288,10 +1292,9 @@ async fn cmd_create_environment<R: Runtime>(
     variables: Vec<EnvironmentVariable>,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<Environment, String> {
-    upsert_environment(
-        &app_handle,
-        Environment {
+) -> YaakResult<Environment> {
+    Ok(app_handle.queries().connect().await?.upsert_environment(
+        &Environment {
             workspace_id: workspace_id.to_string(),
             environment_id: environment_id.map(|s| s.to_string()),
             name: name.to_string(),
@@ -1299,9 +1302,7 @@ async fn cmd_create_environment<R: Runtime>(
             ..Default::default()
         },
         &UpdateSource::from_window(&window),
-    )
-    .await
-    .map_err(|e| e.to_string())
+    )?)
 }
 
 #[tauri::command]
@@ -1387,10 +1388,12 @@ async fn cmd_update_environment<R: Runtime>(
     environment: Environment,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-) -> Result<Environment, String> {
-    upsert_environment(&app_handle, environment, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<Environment> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .upsert_environment(&environment, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1484,10 +1487,12 @@ async fn cmd_delete_environment<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     environment_id: &str,
-) -> Result<Environment, String> {
-    delete_environment(&app_handle, environment_id, &UpdateSource::from_window(&window))
-        .await
-        .map_err(|e| e.to_string())
+) -> YaakResult<Environment> {
+    Ok(app_handle
+        .queries()
+        .connect()
+        .await?
+        .delete_environment_by_id(environment_id, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1530,10 +1535,11 @@ async fn cmd_list_http_requests<R: Runtime>(
 async fn cmd_list_environments<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
-) -> Result<Vec<Environment>, String> {
+) -> YaakResult<Vec<Environment>> {
     // Not sure of a better place to put this...
-    ensure_base_environment(&app_handle, workspace_id).await.map_err(|e| e.to_string())?;
-    list_environments(&app_handle, workspace_id).await.map_err(|e| e.to_string())
+    let db = app_handle.queries().connect().await?;
+    db.ensure_base_environment(workspace_id)?;
+    Ok(db.list_environments(workspace_id)?)
 }
 
 #[tauri::command]
@@ -1648,18 +1654,16 @@ async fn cmd_list_cookie_jars<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_list_key_values<R: Runtime>(
-    app_handle: AppHandle<R>,
-) -> Result<Vec<KeyValue>, String> {
-    list_key_values_raw(&app_handle).await.map_err(|e| e.to_string())
+async fn cmd_list_key_values<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<Vec<KeyValue>> {
+    Ok(app_handle.queries().connect().await?.list_key_values_raw()?)
 }
 
 #[tauri::command]
 async fn cmd_get_environment<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
-) -> Result<Environment, String> {
-    get_environment(&app_handle, id).await.map_err(|e| e.to_string())
+) -> YaakResult<Environment> {
+    Ok(app_handle.queries().connect().await?.get_environment(id)?)
 }
 
 #[tauri::command]
@@ -2168,7 +2172,7 @@ fn environment_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<S
 async fn environment_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Environment> {
     match environment_id_from_window(&window) {
         None => None,
-        Some(id) => get_environment(window.app_handle(), id.as_str()).await.ok(),
+        Some(id) => window.queries().connect().await.unwrap().get_environment(&id).ok(),
     }
 }
 

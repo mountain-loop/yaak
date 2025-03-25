@@ -393,19 +393,55 @@ pub struct Environment {
     pub variables: Vec<EnvironmentVariable>,
 }
 
-impl<'s> TryFrom<&Row<'s>> for Environment {
-    type Error = rusqlite::Error;
+impl UpsertModelInfo for Environment {
+    fn table_name() -> impl IntoTableRef {
+        EnvironmentIden::Table
+    }
 
-    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
-        let variables: String = r.get("variables")?;
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        EnvironmentIden::Id
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use EnvironmentIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (EnvironmentId, self.environment_id.into()),
+            (WorkspaceId, self.workspace_id.into()),
+            (Name, self.name.trim().into()),
+            (Variables, serde_json::to_string(&self.variables)?.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            EnvironmentIden::UpdatedAt,
+            EnvironmentIden::Name,
+            EnvironmentIden::Variables,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let variables: String = row.get("variables")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            environment_id: r.get("environment_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            name: r.get("name")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            environment_id: row.get("environment_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            name: row.get("name")?,
             variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
         })
     }
@@ -989,17 +1025,18 @@ impl UpsertModelInfo for HttpResponse {
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (RequestId, self.request_id.into()),
             (WorkspaceId, self.workspace_id.into()),
+            (BodyPath, self.body_path.into()),
+            (ContentLength, self.content_length.into()),
             (Elapsed, self.elapsed.into()),
             (ElapsedHeaders, self.elapsed_headers.into()),
-            (Url, self.url.into()),
+            (Error, self.error.into()),
+            (Headers, serde_json::to_string(&self.headers)?.into()),
+            (RemoteAddr, self.remote_addr.into()),
             (State, serde_json::to_value(self.state)?.as_str().into()),
             (Status, self.status.into()),
             (StatusReason, self.status_reason.into()),
-            (ContentLength, self.content_length.into()),
-            (BodyPath, self.body_path.into()),
-            (Headers, serde_json::to_string(&self.headers)?.into()),
+            (Url, self.url.into()),
             (Version, self.version.into()),
-            (RemoteAddr, self.remote_addr.into()),
         ])
     }
 

@@ -1,7 +1,8 @@
 use crate::error::Result;
 use crate::manager::DbContext;
 use crate::models::{HttpResponse, HttpResponseIden, HttpResponseState};
-use crate::queries_legacy::{UpdateSource, MAX_HISTORY_ITEMS};
+use crate::queries::base::MAX_HISTORY_ITEMS;
+use crate::queries_legacy::UpdateSource;
 use log::{debug, error};
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
@@ -73,8 +74,7 @@ impl<'a> DbContext<'a> {
         http_response: &HttpResponse,
         source: &UpdateSource,
     ) -> Result<HttpResponse> {
-        let responses =
-            self.find_many(HttpResponseIden::RequestId, http_response.request_id.as_str(), None)?;
+        let responses = self.list_http_responses_for_request(&http_response.request_id, None)?;
 
         for m in responses.iter().skip(MAX_HISTORY_ITEMS - 1) {
             debug!("Deleting old HTTP response {}", http_response.id);
