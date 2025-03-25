@@ -29,9 +29,7 @@ use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries_legacy::{
-    get_base_environment, update_response_if_id, upsert_cookie_jar, UpdateSource,
-};
+use yaak_models::queries_legacy::{get_base_environment, upsert_cookie_jar, UpdateSource};
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
@@ -539,8 +537,12 @@ pub async fn send_http_request<R: Runtime>(
                         };
 
                         r.state = HttpResponseState::Connected;
-                        update_response_if_id(&app_handle, &r, &update_source)
+                        app_handle
+                            .queries()
+                            .connect()
                             .await
+                            .unwrap()
+                            .update_http_response_if_id(&r, &update_source)
                             .expect("Failed to update response after connected");
                     }
 
@@ -568,8 +570,12 @@ pub async fn send_http_request<R: Runtime>(
                                 f.flush().await.expect("Failed to flush file");
                                 written_bytes += bytes.len();
                                 r.content_length = Some(written_bytes as i32);
-                                update_response_if_id(&app_handle, &r, &update_source)
+                                app_handle
+                                    .queries()
+                                    .connect()
                                     .await
+                                    .unwrap()
+                                    .update_http_response_if_id(&r, &update_source)
                                     .expect("Failed to update response");
                             }
                             Ok(None) => {
@@ -596,8 +602,12 @@ pub async fn send_http_request<R: Runtime>(
                             None => Some(written_bytes as i32),
                         };
                         r.state = HttpResponseState::Closed;
-                        update_response_if_id(&app_handle, &r, &UpdateSource::from_window(&window))
+                        app_handle
+                            .queries()
+                            .connect()
                             .await
+                            .unwrap()
+                            .update_http_response_if_id(&r, &UpdateSource::from_window(&window))
                             .expect("Failed to update response");
                     };
 
@@ -657,7 +667,13 @@ pub async fn send_http_request<R: Runtime>(
             match app_handle.queries().with_conn(|c| c.get_http_response(&response_id)).await {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
-                    update_response_if_id(&app_handle, &r, &UpdateSource::from_window(window)).await.expect("Failed to update response")
+                    app_handle
+                        .queries()
+                        .connect()
+                        .await
+                        .unwrap()
+                        .update_http_response_if_id(&r, &UpdateSource::from_window(window))
+                        .expect("Failed to update response")
                 },
                 _ => {
                     response_err(&app_handle, &*response.lock().await, "Ephemeral request was cancelled".to_string(), &update_source).await

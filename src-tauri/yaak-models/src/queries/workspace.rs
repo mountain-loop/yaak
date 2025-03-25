@@ -1,6 +1,9 @@
 use crate::error::Result;
 use crate::manager::DbContext;
-use crate::models::{Workspace, WorkspaceIden};
+use crate::models::{
+    Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestIden,
+    WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden,
+};
 use crate::queries_legacy::UpdateSource;
 
 impl<'a> DbContext<'a> {
@@ -12,15 +15,37 @@ impl<'a> DbContext<'a> {
         self.find_all()
     }
 
-    pub fn delete_workspace(&self, workspace: &Workspace, source: &UpdateSource) -> Result<Workspace> {
-        self.delete_workspace_by_id(&workspace.id, source)
+    pub fn delete_workspace(
+        &self,
+        workspace: &Workspace,
+        source: &UpdateSource,
+    ) -> Result<Workspace> {
+        for folder in self.find_many::<Folder>(FolderIden::WorkspaceId, &workspace.id, None)? {
+            self.delete_folder(&folder, source)?;
+        }
+        for request in
+            self.find_many::<HttpRequest>(HttpRequestIden::WorkspaceId, &workspace.id, None)?
+        {
+            self.delete_http_request(&request, source)?;
+        }
+        for request in
+            self.find_many::<GrpcRequest>(GrpcRequestIden::WorkspaceId, &workspace.id, None)?
+        {
+            self.delete_grpc_request(&request, source)?;
+        }
+        for request in
+            self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, &workspace.id, None)?
+        {
+            self.delete_websocket_request(&request, source)?;
+        }
+        self.delete(workspace, source)
     }
-    
+
     pub fn delete_workspace_by_id(&self, id: &str, source: &UpdateSource) -> Result<Workspace> {
-        self.delete_all_http_responses_for_workspace(id, source)?;
-        self.delete_by_id(id, source)
+        let workspace = self.get_workspace(id)?;
+        self.delete_workspace(&workspace, source)
     }
-    
+
     pub fn upsert_workspace(&self, w: &Workspace, source: &UpdateSource) -> Result<Workspace> {
         self.upsert(w, source)
     }

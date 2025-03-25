@@ -1,4 +1,4 @@
-use crate::error::Error::{ModelNotFound, RowNotFound};
+use crate::error::Error::RowNotFound;
 use crate::error::Result;
 use crate::manager::DbContext;
 use crate::models::{AnyModel, ModelType, UpsertModelInfo};
@@ -24,13 +24,6 @@ impl<'a> DbContext<'a> {
             Ok(None) => Err(RowNotFound),
             Err(e) => Err(e),
         }
-    }
-
-    pub(crate) fn get_by_id<'s, M>(&self, value: impl Into<SimpleExpr>) -> Result<M>
-    where
-        M: Into<AnyModel> + Clone + UpsertModelInfo,
-    {
-        self.find_one(M::id_column().into_iden(), value)
     }
 
     pub fn find_optional<'s, M>(
@@ -91,14 +84,6 @@ impl<'a> DbContext<'a> {
         let mut stmt = self.conn.resolve().prepare(sql.as_str())?;
         let items = stmt.query_map(&*params.as_params(), M::from_row)?;
         Ok(items.map(|v| v.unwrap()).collect())
-    }
-
-    pub fn duplicate<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
-    where
-        M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
-    {
-        let m: M = self.find_one(M::id_column().into_iden(), model.get_id())?;
-        self.upsert(&m.duplicate(), source)
     }
 
     pub fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
@@ -178,17 +163,5 @@ impl<'a> DbContext<'a> {
 
         self.tx.try_send(payload).unwrap();
         Ok(m.clone())
-    }
-
-    pub(crate) fn delete_by_id<'s, M>(&self, id: &str, update_source: &UpdateSource) -> Result<M>
-    where
-        M: Into<AnyModel> + Clone + UpsertModelInfo,
-    {
-        let m: M = match self.find_optional(M::id_column().into_iden(), id)? {
-            None => return Err(ModelNotFound(format!("{}", id))),
-            Some(r) => r,
-        };
-
-        self.delete(&m, update_source)
     }
 }

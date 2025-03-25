@@ -1,5 +1,11 @@
 mod base;
+mod folder;
+mod grpc_connections;
+mod grpc_event;
+mod grpc_request;
 mod http_request;
 mod http_responses;
-mod workspace;
 mod settings;
+mod websocket_connections;
+mod websocket_request;
+mod workspace;

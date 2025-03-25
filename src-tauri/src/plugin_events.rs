@@ -12,8 +12,8 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::queries_legacy::{
-    create_default_http_response, delete_plugin_key_value, get_base_environment,
-    get_plugin_key_value, list_plugins, set_plugin_key_value, upsert_plugin, UpdateSource,
+    delete_plugin_key_value, get_base_environment, get_plugin_key_value, list_plugins,
+    set_plugin_key_value, upsert_plugin, UpdateSource,
 };
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
@@ -183,15 +183,21 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             }
 
             let resp = if http_request.id.is_empty() {
-                HttpResponse::new()
+                HttpResponse::default()
             } else {
-                create_default_http_response(
-                    &window,
-                    http_request.id.as_str(),
-                    &UpdateSource::Plugin,
-                )
-                .await
-                .unwrap()
+                window
+                    .queries()
+                    .connect()
+                    .await
+                    .unwrap()
+                    .upsert_http_response(
+                        &HttpResponse {
+                            request_id: http_request.id.clone(),
+                            ..Default::default()
+                        },
+                        &UpdateSource::Plugin,
+                    )
+                    .unwrap()
             };
 
             let result = send_http_request(

@@ -1,13 +1,15 @@
 use crate::error::Result;
 use crate::manager::DbContext;
-use crate::models::{HttpResponse, HttpResponseIden::*};
+use crate::models::{HttpResponse, HttpResponseIden, HttpResponseState};
 use crate::queries_legacy::{UpdateSource, MAX_HISTORY_ITEMS};
 use log::{debug, error};
+use sea_query::{Expr, Query, SqliteQueryBuilder};
+use sea_query_rusqlite::RusqliteBinder;
 use std::fs;
 
 impl<'a> DbContext<'a> {
     pub fn get_http_response(&self, id: &str) -> Result<HttpResponse> {
-        self.find_one(Id, id)
+        self.find_one(HttpResponseIden::Id, id)
     }
 
     pub fn list_http_responses_for_request(
@@ -15,7 +17,7 @@ impl<'a> DbContext<'a> {
         request_id: &str,
         limit: Option<u64>,
     ) -> Result<Vec<HttpResponse>> {
-        self.find_many(RequestId, request_id, limit)
+        self.find_many(HttpResponseIden::RequestId, request_id, limit)
     }
 
     pub fn list_http_responses_for_workspace(
@@ -23,7 +25,7 @@ impl<'a> DbContext<'a> {
         workspace_id: &str,
         limit: Option<u64>,
     ) -> Result<Vec<HttpResponse>> {
-        self.find_many(WorkspaceId, workspace_id, limit)
+        self.find_many(HttpResponseIden::WorkspaceId, workspace_id, limit)
     }
 
     pub fn delete_all_http_responses_for_request(
@@ -43,7 +45,8 @@ impl<'a> DbContext<'a> {
         workspace_id: &str,
         source: &UpdateSource,
     ) -> Result<()> {
-        let responses = self.find_many::<HttpResponse>(WorkspaceId, workspace_id, None)?;
+        let responses =
+            self.find_many::<HttpResponse>(HttpResponseIden::WorkspaceId, workspace_id, None)?;
         for m in responses {
             self.delete(&m, source)?;
         }
@@ -70,7 +73,8 @@ impl<'a> DbContext<'a> {
         http_response: &HttpResponse,
         source: &UpdateSource,
     ) -> Result<HttpResponse> {
-        let responses = self.find_many(RequestId, http_response.request_id.as_str(), None)?;
+        let responses =
+            self.find_many(HttpResponseIden::RequestId, http_response.request_id.as_str(), None)?;
 
         for m in responses.iter().skip(MAX_HISTORY_ITEMS - 1) {
             debug!("Deleting old HTTP response {}", http_response.id);
@@ -78,5 +82,29 @@ impl<'a> DbContext<'a> {
         }
 
         self.upsert(http_response, source)
+    }
+
+    pub fn cancel_pending_http_responses(&self) -> Result<()> {
+        let closed = serde_json::to_value(&HttpResponseState::Closed)?;
+        let (sql, params) = Query::update()
+            .table(HttpResponseIden::Table)
+            .values([(HttpResponseIden::State, closed.as_str().into())])
+            .cond_where(Expr::col(HttpResponseIden::State).ne(closed.as_str()))
+            .build_rusqlite(SqliteQueryBuilder);
+        let mut stmt = self.conn.prepare(sql.as_str())?;
+        stmt.execute(&*params.as_params())?;
+        Ok(())
+    }
+
+    pub fn update_http_response_if_id(
+        &self,
+        response: &HttpResponse,
+        source: &UpdateSource,
+    ) -> Result<HttpResponse> {
+        if response.id.is_empty() {
+            Ok(response.clone())
+        } else {
+            self.upsert(response, source)
+        }
     }
 }
