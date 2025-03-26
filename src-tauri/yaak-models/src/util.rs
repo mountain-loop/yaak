@@ -63,18 +63,6 @@ impl UpdateSource {
     }
 }
 
-pub trait UpdateSourceExt<R> {
-    fn update_source(&self) -> UpdateSource;
-}
-
-impl<'a, R: Runtime> UpdateSourceExt<R> for WebviewWindow<R> {
-    fn update_source(&self) -> UpdateSource {
-        UpdateSource::Window {
-            label: self.label().to_string(),
-        }
-    }
-}
-
 pub fn listen_to_model_delete<F, R>(app_handle: &AppHandle<R>, handler: F)
 where
     F: Fn(ModelPayload) + Send + 'static,
