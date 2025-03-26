@@ -37,7 +37,7 @@ impl SqliteConnection {
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    tauri::plugin::Builder::new("yaak_models")
+    tauri::plugin::Builder::new("yaak-models")
         .invoke_handler(generate_handler![upsert, delete])
         .setup(|app_handle, _api| {
             let app_path = app_handle.path().app_data_dir().unwrap();

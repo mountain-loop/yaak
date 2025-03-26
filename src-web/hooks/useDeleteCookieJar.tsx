@@ -1,15 +1,10 @@
 import type { CookieJar } from '@yaakapp-internal/models';
-import { useSetAtom } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { showConfirmDelete } from '../lib/confirm';
 import { invokeCmd } from '../lib/tauri';
-import { cookieJarsAtom } from './useCookieJars';
 import { useFastMutation } from './useFastMutation';
-import { removeModelById } from './useSyncModelStores';
 
 export function useDeleteCookieJar(cookieJar: CookieJar | null) {
-  const setCookieJars = useSetAtom(cookieJarsAtom);
-
   return useFastMutation<CookieJar | null, string>({
     mutationKey: ['delete_cookie_jar', cookieJar?.id],
     mutationFn: async () => {
@@ -24,11 +19,6 @@ export function useDeleteCookieJar(cookieJar: CookieJar | null) {
       });
       if (!confirmed) return null;
       return invokeCmd('cmd_delete_cookie_jar', { cookieJarId: cookieJar?.id });
-    },
-    onSuccess: (cookieJar) => {
-      if (cookieJar == null) return;
-
-      setCookieJars(removeModelById(cookieJar));
     },
   });
 }

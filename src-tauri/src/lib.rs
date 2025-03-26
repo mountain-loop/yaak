@@ -33,11 +33,11 @@ use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition}
 use yaak_models::models::{
     CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState,
     GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
-    ModelType, Plugin, Settings, WebsocketRequest, Workspace, WorkspaceMeta,
+    Plugin, Settings, WebsocketRequest, Workspace, WorkspaceMeta,
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{
-    generate_model_id, get_workspace_export_resources, BatchUpsertResult, UpdateSource,
+    get_workspace_export_resources, maybe_gen_id, maybe_gen_id_opt, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
@@ -803,39 +803,13 @@ async fn cmd_import_data<R: Runtime>(
 
     let mut id_map: BTreeMap<String, String> = BTreeMap::new();
 
-    fn maybe_gen_id(id: &str, model: ModelType, ids: &mut BTreeMap<String, String>) -> String {
-        if !id.starts_with("GENERATE_ID::") {
-            return id.to_string();
-        }
-
-        let unique_key = id.replace("GENERATE_ID", "");
-        if let Some(existing) = ids.get(unique_key.as_str()) {
-            existing.to_string()
-        } else {
-            let new_id = generate_model_id(model);
-            ids.insert(unique_key, new_id.clone());
-            new_id
-        }
-    }
-
-    fn maybe_gen_id_opt(
-        id: Option<String>,
-        model: ModelType,
-        ids: &mut BTreeMap<String, String>,
-    ) -> Option<String> {
-        match id {
-            Some(id) => Some(maybe_gen_id(id.as_str(), model, ids)),
-            None => None,
-        }
-    }
-
     let resources = import_result.resources;
 
     let workspaces: Vec<Workspace> = resources
         .workspaces
         .into_iter()
         .map(|mut v| {
-            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeWorkspace, &mut id_map);
+            v.id = maybe_gen_id::<Workspace>(v.id.as_str(), &mut id_map);
             v
         })
         .collect();
@@ -844,11 +818,9 @@ async fn cmd_import_data<R: Runtime>(
         .environments
         .into_iter()
         .map(|mut v| {
-            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeEnvironment, &mut id_map);
-            v.workspace_id =
-                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-            v.environment_id =
-                maybe_gen_id_opt(v.environment_id, ModelType::TypeEnvironment, &mut id_map);
+            v.id = maybe_gen_id::<Environment>(v.id.as_str(), &mut id_map);
+            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
+            v.environment_id = maybe_gen_id_opt::<Environment>(v.environment_id, &mut id_map);
             v
         })
         .collect();
@@ -857,10 +829,9 @@ async fn cmd_import_data<R: Runtime>(
         .folders
         .into_iter()
         .map(|mut v| {
-            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeFolder, &mut id_map);
-            v.workspace_id =
-                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-            v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
+            v.id = maybe_gen_id::<Folder>(v.id.as_str(), &mut id_map);
+            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
+            v.folder_id = maybe_gen_id_opt::<Folder>(v.folder_id, &mut id_map);
             v
         })
         .collect();
@@ -869,10 +840,9 @@ async fn cmd_import_data<R: Runtime>(
         .http_requests
         .into_iter()
         .map(|mut v| {
-            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeHttpRequest, &mut id_map);
-            v.workspace_id =
-                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-            v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
+            v.id = maybe_gen_id::<HttpRequest>(v.id.as_str(), &mut id_map);
+            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
+            v.folder_id = maybe_gen_id_opt::<Folder>(v.folder_id, &mut id_map);
             v
         })
         .collect();
@@ -881,10 +851,9 @@ async fn cmd_import_data<R: Runtime>(
         .grpc_requests
         .into_iter()
         .map(|mut v| {
-            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeGrpcRequest, &mut id_map);
-            v.workspace_id =
-                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-            v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
+            v.id = maybe_gen_id::<GrpcRequest>(v.id.as_str(), &mut id_map);
+            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
+            v.folder_id = maybe_gen_id_opt::<Folder>(v.folder_id, &mut id_map);
             v
         })
         .collect();
@@ -893,10 +862,9 @@ async fn cmd_import_data<R: Runtime>(
         .websocket_requests
         .into_iter()
         .map(|mut v| {
-            v.id = maybe_gen_id(v.id.as_str(), ModelType::TypeWebsocketRequest, &mut id_map);
-            v.workspace_id =
-                maybe_gen_id(v.workspace_id.as_str(), ModelType::TypeWorkspace, &mut id_map);
-            v.folder_id = maybe_gen_id_opt(v.folder_id, ModelType::TypeFolder, &mut id_map);
+            v.id = maybe_gen_id::<WebsocketRequest>(v.id.as_str(), &mut id_map);
+            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
+            v.folder_id = maybe_gen_id_opt::<Folder>(v.folder_id, &mut id_map);
             v
         })
         .collect();
@@ -1612,11 +1580,11 @@ async fn cmd_list_workspaces<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Vec<Workspace>> {
-    let queries = app_handle.db();
-    let workspaces = queries.find_all::<Workspace>()?;
+    let db = app_handle.db();
+    let mut workspaces = db.find_all::<Workspace>()?;
+
     if workspaces.is_empty() {
-        // Create initial workspace
-        let workspace = db.upsert_workspace(
+        workspaces.push(db.upsert_workspace(
             &Workspace {
                 name: "Yaak".to_string(),
                 setting_follow_redirects: true,
@@ -1624,11 +1592,10 @@ async fn cmd_list_workspaces<R: Runtime>(
                 ..Default::default()
             },
             &UpdateSource::from_window(&window),
-        )?;
-        Ok(vec![workspace])
-    } else {
-        Ok(workspaces)
+        )?);
     }
+
+    Ok(workspaces)
 }
 
 #[tauri::command]
@@ -2003,27 +1970,21 @@ async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<
     }
 }
 
-async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> YaakResult<Workspace> {
-    match workspace_id_from_window(&window) {
-        None => Err(GenericError("Failed to get workspace ID from window".to_string())),
-        Some(id) => Ok(window.db().get_workspace(id.as_str())?),
+fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Workspace> {
+    match window.workspace_id() {
+        None => None,
+        Some(id) => window.db().get_workspace(&id).ok(),
     }
 }
 
-fn environment_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<String> {
-    let url = window.url().unwrap();
-    let mut query_pairs = url.query_pairs();
-    query_pairs.find(|(k, _v)| k == "environment_id").map(|(_k, v)| v.to_string())
-}
-
-async fn environment_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Environment> {
+fn environment_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Environment> {
     match window.environment_id() {
         None => None,
         Some(id) => window.db().get_environment(&id).ok(),
     }
 }
 
-async fn cookie_jar_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<CookieJar> {
+fn cookie_jar_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<CookieJar> {
     match window.cookie_jar_id() {
         None => None,
         Some(id) => window.db().get_cookie_jar(&id).ok(),

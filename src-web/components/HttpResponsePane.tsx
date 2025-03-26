@@ -86,7 +86,6 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     },
     [activeRequestId, setActiveTabs],
   );
-  console.log("ACTIVE RESPONSE", activeResponse);
 
   return (
     <div

@@ -1,19 +1,16 @@
+use std::collections::BTreeMap;
 use crate::error::Result;
-use crate::models::{
-    AnyModel, Environment, Folder, GrpcRequest, HttpRequest, ModelType, WebsocketRequest,
-    Workspace, WorkspaceIden,
-};
+use crate::models::{AnyModel, Environment, Folder, GrpcRequest, HttpRequest, UpsertModelInfo, WebsocketRequest, Workspace, WorkspaceIden};
+use crate::query_manager::QueryManagerExt;
 use chrono::{NaiveDateTime, Utc};
 use log::warn;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Listener, Runtime, WebviewWindow};
 use ts_rs::TS;
-use crate::query_manager::QueryManagerExt;
 
-pub fn generate_model_id(model: ModelType) -> String {
-    let id = generate_id();
-    format!("{}_{}", model.id_prefix(), id)
+pub fn generate_prefixed_id(prefix: &str) -> String {
+    format!("{prefix}_{}", generate_id())
 }
 
 pub fn generate_id() -> String {
@@ -150,4 +147,29 @@ pub async fn get_workspace_export_resources<R: Runtime>(
     }
 
     Ok(data)
+}
+
+pub fn maybe_gen_id<M: UpsertModelInfo>(id: &str, ids: &mut BTreeMap<String, String>) -> String {
+    if !id.starts_with("GENERATE_ID::") {
+        return id.to_string();
+    }
+
+    let unique_key = id.replace("GENERATE_ID", "");
+    if let Some(existing) = ids.get(unique_key.as_str()) {
+        existing.to_string()
+    } else {
+        let new_id = M::generate_id();
+        ids.insert(unique_key, new_id.clone());
+        new_id
+    }
+}
+
+pub fn maybe_gen_id_opt<M: UpsertModelInfo>(
+    id: Option<String>,
+    ids: &mut BTreeMap<String, String>,
+) -> Option<String> {
+    match id {
+        Some(id) => Some(maybe_gen_id::<M>(id.as_str(), ids)),
+        None => None,
+    }
 }

@@ -1,3 +1,4 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{KeyValue, KeyValueIden};
 use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
@@ -5,7 +6,6 @@ use log::error;
 use sea_query::Keyword::CurrentTimestamp;
 use sea_query::{Asterisk, Cond, Expr, OnConflict, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
-use crate::db_context::DbContext;
 
 impl<'a> DbContext<'a> {
     pub fn list_key_values_raw(&self) -> Result<Vec<KeyValue>> {
@@ -92,8 +92,39 @@ impl<'a> DbContext<'a> {
         value: &str,
         source: &UpdateSource,
     ) -> (KeyValue, bool) {
-        let existing = self.get_key_value_raw(namespace, key);
+        match self.get_key_value_raw(namespace, key) {
+            None => (
+                self.upsert_key_value(
+                    &KeyValue {
+                        namespace: namespace.to_string(),
+                        key: key.to_string(),
+                        value: value.to_string(),
+                        ..Default::default()
+                    },
+                    source,
+                )
+                .expect("Failed to create key value"),
+                true,
+            ),
+            Some(kv) => (
+                self.upsert_key_value(
+                    &KeyValue {
+                        value: value.to_string(),
+                        ..kv
+                    },
+                    source,
+                )
+                .expect("Failed to update key value"),
+                false,
+            ),
+        }
+    }
 
+    pub fn upsert_key_value(
+        &self,
+        key_value: &KeyValue,
+        source: &UpdateSource,
+    ) -> Result<KeyValue> {
         let (sql, params) = Query::insert()
             .into_table(KeyValueIden::Table)
             .columns([
@@ -106,9 +137,9 @@ impl<'a> DbContext<'a> {
             .values_panic([
                 CurrentTimestamp.into(),
                 CurrentTimestamp.into(),
-                namespace.into(),
-                key.into(),
-                value.into(),
+                key_value.namespace.clone().into(),
+                key_value.key.clone().into(),
+                key_value.value.clone().into(),
             ])
             .on_conflict(
                 OnConflict::new()
@@ -130,7 +161,7 @@ impl<'a> DbContext<'a> {
         };
         self.tx.try_send(payload).unwrap();
 
-        (m, existing.is_none())
+        Ok(m)
     }
 
     pub fn delete_key_value(

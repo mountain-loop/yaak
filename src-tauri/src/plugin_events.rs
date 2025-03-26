@@ -73,10 +73,9 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for render http request");
 
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
-            let environment = environment_from_window(&window).await;
+            let workspace =
+                workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
+            let environment = environment_from_window(&window);
             let base_environment = app_handle
                 .db()
                 .get_base_environment(&workspace.id)
@@ -98,10 +97,9 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for render");
 
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
-            let environment = environment_from_window(&window).await;
+            let workspace =
+                workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
+            let environment = environment_from_window(&window);
             let base_environment = app_handle
                 .db()
                 .get_base_environment(&workspace.id)
@@ -130,8 +128,6 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             None
         }
         InternalEventPayload::ReloadResponse(_) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for plugin reload");
             let plugins = app_handle.db().list_plugins().unwrap();
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {
@@ -160,11 +156,10 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for sending HTTP request");
             let mut http_request = req.http_request;
-            let workspace = workspace_from_window(&window)
-                .await
-                .expect("Failed to get workspace_id from window URL");
-            let cookie_jar = cookie_jar_from_window(&window).await;
-            let environment = environment_from_window(&window).await;
+            let workspace =
+                workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
+            let cookie_jar = cookie_jar_from_window(&window);
+            let environment = environment_from_window(&window);
 
             if http_request.workspace_id.is_empty() {
                 http_request.workspace_id = workspace.id;

@@ -1,7 +1,7 @@
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::error::Error::RowNotFound;
-use crate::models::{AnyModel, ModelType, UpsertModelInfo};
-use crate::util::{generate_model_id, ModelChangeEvent, ModelPayload, UpdateSource};
+use crate::models::{AnyModel, UpsertModelInfo};
+use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
 use rusqlite::OptionalExtension;
 use sea_query::{
     Asterisk, Expr, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr,
@@ -100,7 +100,6 @@ impl<'a> DbContext<'a> {
             M::table_name(),
             M::id_column(),
             model.get_id().as_str(),
-            || generate_model_id(ModelType::TypeEnvironment),
             model.clone().insert_values(source)?,
             M::update_columns(),
             source,
@@ -112,7 +111,6 @@ impl<'a> DbContext<'a> {
         table: impl IntoTableRef,
         id_col: impl IntoIden + Eq + Clone,
         id_val: &str,
-        gen_id: fn() -> String,
         other_values: Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>,
         update_columns: Vec<impl IntoIden>,
         source: &UpdateSource,
@@ -122,7 +120,8 @@ impl<'a> DbContext<'a> {
     {
         let id_iden = id_col.into_iden();
         let mut column_vec = vec![id_iden.clone()];
-        let mut value_vec = vec![if id_val == "" { gen_id().into() } else { id_val.into() }];
+        let mut value_vec =
+            vec![if id_val == "" { M::generate_id().into() } else { id_val.into() }];
 
         for (col, val) in other_values {
             value_vec.push(val.into());

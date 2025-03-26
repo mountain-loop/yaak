@@ -1,12 +1,9 @@
 import type { Folder } from '@yaakapp-internal/models';
-import { useSetAtom } from 'jotai/index';
 import { invokeCmd } from '../lib/tauri';
 import { useFastMutation } from './useFastMutation';
-import { foldersAtom, getFolder } from './useFolders';
-import { updateModelList } from './useSyncModelStores';
+import { getFolder } from './useFolders';
 
 export function useUpdateAnyFolder() {
-  const setFolders = useSetAtom(foldersAtom);
   return useFastMutation<Folder, unknown, { id: string; update: (r: Folder) => Folder }>({
     mutationKey: ['update_any_folder'],
     mutationFn: async ({ id, update }) => {
@@ -16,9 +13,6 @@ export function useUpdateAnyFolder() {
       }
 
       return invokeCmd<Folder>('cmd_update_folder', { folder: update(folder) });
-    },
-    onSuccess: async (folder) => {
-      setFolders(updateModelList(folder));
     },
   });
 }

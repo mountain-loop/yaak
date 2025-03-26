@@ -1,12 +1,9 @@
-import { useFastMutation } from './useFastMutation';
 import type { CookieJar } from '@yaakapp-internal/models';
-import { useSetAtom } from 'jotai/index';
 import { invokeCmd } from '../lib/tauri';
-import { cookieJarsAtom, getCookieJar } from './useCookieJars';
-import { updateModelList } from './useSyncModelStores';
+import { getCookieJar } from './useCookieJars';
+import { useFastMutation } from './useFastMutation';
 
 export function useUpdateCookieJar(id: string | null) {
-  const setCookieJars = useSetAtom(cookieJarsAtom);
   return useFastMutation<CookieJar, unknown, Partial<CookieJar> | ((j: CookieJar) => CookieJar)>({
     mutationKey: ['update_cookie_jar', id],
     mutationFn: async (v) => {
@@ -17,9 +14,6 @@ export function useUpdateCookieJar(id: string | null) {
 
       const newCookieJar = typeof v === 'function' ? v(cookieJar) : { ...cookieJar, ...v };
       return invokeCmd<CookieJar>('cmd_update_cookie_jar', { cookieJar: newCookieJar });
-    },
-    onSuccess: (cookieJar) => {
-      setCookieJars(updateModelList(cookieJar));
     },
   });
 }

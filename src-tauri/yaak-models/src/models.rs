@@ -3,7 +3,7 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::util::UpdateSource;
+use crate::util::{generate_prefixed_id, UpdateSource};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
 use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};
@@ -121,6 +121,10 @@ impl UpsertModelInfo for Settings {
         SettingsIden::Id
     }
 
+    fn generate_id() -> String {
+        panic!("Settings does not have unique IDs")
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -227,6 +231,10 @@ impl UpsertModelInfo for Workspace {
         WorkspaceIden::Id
     }
 
+    fn generate_id() -> String {
+        generate_prefixed_id("wk")
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -310,6 +318,10 @@ impl UpsertModelInfo for WorkspaceMeta {
 
     fn id_column() -> impl IntoIden + Eq + Clone {
         WorkspaceMetaIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("wm")
     }
 
     fn get_id(&self) -> String {
@@ -401,6 +413,10 @@ impl UpsertModelInfo for CookieJar {
         CookieJarIden::Id
     }
 
+    fn generate_id() -> String {
+        generate_prefixed_id("cj")
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -468,6 +484,10 @@ impl UpsertModelInfo for Environment {
 
     fn id_column() -> impl IntoIden + Eq + Clone {
         EnvironmentIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("ev")
     }
 
     fn get_id(&self) -> String {
@@ -553,6 +573,10 @@ impl UpsertModelInfo for Folder {
 
     fn id_column() -> impl IntoIden + Eq + Clone {
         FolderIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("fl")
     }
 
     fn get_id(&self) -> String {
@@ -665,6 +689,10 @@ impl UpsertModelInfo for HttpRequest {
 
     fn id_column() -> impl IntoIden + Eq + Clone {
         HttpRequestIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("rq")
     }
 
     fn get_id(&self) -> String {
@@ -786,6 +814,10 @@ impl UpsertModelInfo for WebsocketConnection {
         WebsocketConnectionIden::Id
     }
 
+    fn generate_id() -> String {
+        generate_prefixed_id("wc")
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -890,6 +922,10 @@ impl UpsertModelInfo for WebsocketRequest {
 
     fn id_column() -> impl IntoIden + Eq + Clone {
         WebsocketRequestIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("wr")
     }
 
     fn get_id(&self) -> String {
@@ -1009,6 +1045,10 @@ impl UpsertModelInfo for WebsocketEvent {
         WebsocketEventIden::Id
     }
 
+    fn generate_id() -> String {
+        generate_prefixed_id("we")
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1116,6 +1156,10 @@ impl UpsertModelInfo for HttpResponse {
 
     fn id_column() -> impl IntoIden + Eq + Clone {
         HttpResponseIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("rs")
     }
 
     fn get_id(&self) -> String {
@@ -1242,6 +1286,10 @@ impl UpsertModelInfo for GrpcRequest {
         GrpcRequestIden::Id
     }
 
+    fn generate_id() -> String {
+        generate_prefixed_id("gr")
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1361,6 +1409,10 @@ impl UpsertModelInfo for GrpcConnection {
         GrpcConnectionIden::Id
     }
 
+    fn generate_id() -> String {
+        generate_prefixed_id("gc")
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1473,6 +1525,10 @@ impl UpsertModelInfo for GrpcEvent {
         GrpcEventIden::Id
     }
 
+    fn generate_id() -> String {
+        generate_prefixed_id("ge")
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1556,6 +1612,10 @@ impl UpsertModelInfo for Plugin {
         PluginIden::Id
     }
 
+    fn generate_id() -> String {
+        generate_prefixed_id("pg")
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1628,6 +1688,10 @@ impl UpsertModelInfo for SyncState {
 
     fn id_column() -> impl IntoIden + Eq + Clone {
         SyncStateIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("ss")
     }
 
     fn get_id(&self) -> String {
@@ -1748,47 +1812,6 @@ fn default_http_method() -> String {
     "GET".to_string()
 }
 
-pub enum ModelType {
-    TypeCookieJar,
-    TypeEnvironment,
-    TypeFolder,
-    TypeGrpcConnection,
-    TypeGrpcEvent,
-    TypeGrpcRequest,
-    TypeHttpRequest,
-    TypeHttpResponse,
-    TypePlugin,
-    TypeSyncState,
-    TypeWebSocketConnection,
-    TypeWebSocketEvent,
-    TypeWebsocketRequest,
-    TypeWorkspace,
-    TypeWorkspaceMeta,
-}
-
-impl ModelType {
-    pub fn id_prefix(&self) -> String {
-        match self {
-            ModelType::TypeCookieJar => "cj",
-            ModelType::TypeEnvironment => "ev",
-            ModelType::TypeFolder => "fl",
-            ModelType::TypeGrpcConnection => "gc",
-            ModelType::TypeGrpcEvent => "ge",
-            ModelType::TypeGrpcRequest => "gr",
-            ModelType::TypeHttpRequest => "rq",
-            ModelType::TypeHttpResponse => "rs",
-            ModelType::TypePlugin => "pg",
-            ModelType::TypeWorkspace => "wk",
-            ModelType::TypeWorkspaceMeta => "wm",
-            ModelType::TypeSyncState => "ss",
-            ModelType::TypeWebSocketConnection => "wc",
-            ModelType::TypeWebSocketEvent => "we",
-            ModelType::TypeWebsocketRequest => "wr",
-        }
-        .to_string()
-    }
-}
-
 #[macro_export]
 macro_rules! define_any_model {
     ($($type:ident),* $(,)?) => {
@@ -1850,34 +1873,19 @@ impl<'de> Deserialize<'de> for AnyModel {
     {
         let value = Value::deserialize(deserializer)?;
         let model = value.as_object().unwrap();
+        use serde_json::from_value as fv;
 
         let model = match model.get("model") {
-            Some(m) if m == "http_request" => {
-                AnyModel::HttpRequest(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "grpc_request" => {
-                AnyModel::GrpcRequest(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "workspace" => {
-                AnyModel::Workspace(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "environment" => {
-                AnyModel::Environment(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "folder" => AnyModel::Folder(serde_json::from_value(value).unwrap()),
-            Some(m) if m == "key_value" => {
-                AnyModel::KeyValue(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "grpc_connection" => {
-                AnyModel::GrpcConnection(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "grpc_event" => {
-                AnyModel::GrpcEvent(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "cookie_jar" => {
-                AnyModel::CookieJar(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "plugin" => AnyModel::Plugin(serde_json::from_value(value).unwrap()),
+            Some(m) if m == "http_request" => AnyModel::HttpRequest(fv(value).unwrap()),
+            Some(m) if m == "grpc_request" => AnyModel::GrpcRequest(fv(value).unwrap()),
+            Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
+            Some(m) if m == "environment" => AnyModel::Environment(fv(value).unwrap()),
+            Some(m) if m == "folder" => AnyModel::Folder(fv(value).unwrap()),
+            Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
+            Some(m) if m == "grpc_connection" => AnyModel::GrpcConnection(fv(value).unwrap()),
+            Some(m) if m == "grpc_event" => AnyModel::GrpcEvent(fv(value).unwrap()),
+            Some(m) if m == "cookie_jar" => AnyModel::CookieJar(fv(value).unwrap()),
+            Some(m) if m == "plugin" => AnyModel::Plugin(fv(value).unwrap()),
             Some(m) => {
                 return Err(serde::de::Error::custom(format!("Unknown model {}", m)));
             }
@@ -1920,6 +1928,7 @@ impl AnyModel {
 pub trait UpsertModelInfo {
     fn table_name() -> impl IntoTableRef;
     fn id_column() -> impl IntoIden + Eq + Clone;
+    fn generate_id() -> String;
     fn get_id(&self) -> String;
     fn insert_values(
         self,

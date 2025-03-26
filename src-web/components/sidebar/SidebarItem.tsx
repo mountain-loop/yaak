@@ -152,7 +152,9 @@ export const SidebarItem = memo(function SidebarItem({
         if (request == null) return;
         await upsertWebsocketRequest.mutateAsync({ ...request, name: el.value });
       }
-      setEditing(false);
+
+      // Slight delay for the model to propagate to the local store
+      setTimeout(() => setEditing(false));
     },
     [itemId, itemModel, updateGrpcRequest, updateHttpRequest],
   );
@@ -268,10 +270,7 @@ export const SidebarItem = memo(function SidebarItem({
               size="sm"
               icon="chevron_right"
               color="secondary"
-              className={classNames(
-                'transition-transform',
-                !collapsed && 'transform rotate-90',
-              )}
+              className={classNames('transition-transform', !collapsed && 'transform rotate-90')}
             />
           )}
           <div className="flex items-center gap-2 min-w-0">

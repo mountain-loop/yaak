@@ -1,14 +1,11 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
-import { useSetAtom } from 'jotai/index';
-import { invokeCmd } from '../lib/tauri';
+import { upsertAnyModel } from '@yaakapp-internal/models';
 import { useFastMutation } from './useFastMutation';
-import { getHttpRequest, httpRequestsAtom } from './useHttpRequests';
-import { updateModelList } from './useSyncModelStores';
+import { getHttpRequest } from './useHttpRequests';
 
 export function useUpdateAnyHttpRequest() {
-  const setHttpRequests = useSetAtom(httpRequestsAtom);
   return useFastMutation<
-    HttpRequest,
+    void,
     unknown,
     { id: string; update: Partial<HttpRequest> | ((r: HttpRequest) => HttpRequest) }
   >({
@@ -21,10 +18,7 @@ export function useUpdateAnyHttpRequest() {
 
       const patchedRequest =
         typeof update === 'function' ? update(request) : { ...request, ...update };
-      return invokeCmd<HttpRequest>('cmd_upsert_http_request', { request: patchedRequest });
-    },
-    onSuccess: async (request) => {
-      setHttpRequests(updateModelList(request));
+      await upsertAnyModel(patchedRequest);
     },
   });
 }

@@ -131,7 +131,7 @@ export function useSyncModelStores() {
   });
 }
 
-export function updateModelList<T extends AnyModel>(model: T) {
+function updateModelList<T extends AnyModel>(model: T) {
   // Mark these models as DESC instead of ASC
   const pushToFront =
     model.model === 'http_response' ||
@@ -152,7 +152,7 @@ export function updateModelList<T extends AnyModel>(model: T) {
   };
 }
 
-export function removeModelById<T extends { id: string }>(model: T) {
+function removeModelById<T extends { id: string }>(model: T) {
   return (prevEntries: T[] | undefined) => {
     const entries = prevEntries?.filter((e) => e.id !== model.id) ?? [];
 
@@ -165,7 +165,7 @@ export function removeModelById<T extends { id: string }>(model: T) {
   };
 }
 
-export function removeModelByKv(model: KeyValue) {
+function removeModelByKv(model: KeyValue) {
   return (prevEntries: KeyValue[] | undefined) =>
     prevEntries?.filter(
       (e) =>

@@ -305,16 +305,6 @@
           "const": "deny-delete"
         },
         {
-          "description": "Enables the delete_model command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-delete-model"
-        },
-        {
-          "description": "Denies the delete_model command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-delete-model"
-        },
-        {
           "description": "Enables the upsert command without any pre-configured scope.",
           "type": "string",
           "const": "allow-upsert"
@@ -323,16 +313,6 @@
           "description": "Denies the upsert command without any pre-configured scope.",
           "type": "string",
           "const": "deny-upsert"
-        },
-        {
-          "description": "Enables the upsert_model command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-upsert-model"
-        },
-        {
-          "description": "Denies the upsert_model command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-upsert-model"
         },
         {
           "description": "Default permissions for the plugin",
