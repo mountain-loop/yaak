@@ -1,12 +1,12 @@
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{HttpResponse, HttpResponseIden, HttpResponseState};
-use crate::queries::base::MAX_HISTORY_ITEMS;
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 use log::{debug, error};
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 use std::fs;
+use crate::db_context::DbContext;
+use crate::queries::MAX_HISTORY_ITEMS;
 
 impl<'a> DbContext<'a> {
     pub fn get_http_response(&self, id: &str) -> Result<HttpResponse> {

@@ -1,10 +1,10 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{Workspace, WorkspaceMeta, WorkspaceMetaIden};
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
-    pub fn get_workspace_meta(&self, workspace: &Workspace) -> Result<Option<WorkspaceMeta>> {
+    pub fn get_workspace_meta(&self, workspace: &Workspace) -> Option<WorkspaceMeta> {
         self.find_optional(WorkspaceMetaIden::WorkspaceId, &workspace.id)
     }
 
@@ -13,7 +13,7 @@ impl<'a> DbContext<'a> {
         workspace: &Workspace,
         source: &UpdateSource,
     ) -> Result<WorkspaceMeta> {
-        let workspace_meta = self.get_workspace_meta(workspace)?;
+        let workspace_meta = self.get_workspace_meta(workspace);
         if let Some(workspace_meta) = workspace_meta {
             return Ok(workspace_meta);
         }

@@ -7,8 +7,8 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
-use yaak_models::manager::QueryManagerExt;
-use yaak_models::queries_legacy::UpdateSource;
+use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::util::UpdateSource;
 
 // Check for updates every hour
 const MAX_UPDATE_CHECK_SECONDS: u64 = 60 * 60;
@@ -54,7 +54,7 @@ impl YaakNotifier {
         seen.push(id.to_string());
         debug!("Marked notification as seen {}", id);
         let seen_json = serde_json::to_string(&seen).map_err(|e| e.to_string())?;
-        window.queries().connect().await.map_err(|e| e.to_string())?.set_key_value_raw(
+        window.db().set_key_value_raw(
             KV_NAMESPACE,
             KV_KEY,
             seen_json.as_str(),
@@ -118,13 +118,7 @@ impl YaakNotifier {
 }
 
 async fn get_kv<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<String>, String> {
-    match app_handle
-        .queries()
-        .connect()
-        .await
-        .map_err(|e| e.to_string())?
-        .get_key_value_raw("notifications", "seen")
-    {
+    match app_handle.db().get_key_value_raw("notifications", "seen") {
         None => Ok(Vec::new()),
         Some(v) => serde_json::from_str(&v.value).map_err(|e| e.to_string()),
     }

@@ -1,7 +1,7 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{GrpcEvent, GrpcEventIden};
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
     pub fn get_grpc_events(&self, id: &str) -> Result<GrpcEvent> {

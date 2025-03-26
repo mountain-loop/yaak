@@ -26,8 +26,8 @@ use tokio::fs::read_dir;
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{timeout, Instant};
-use yaak_models::manager::QueryManagerExt;
-use yaak_models::queries_legacy::generate_id;
+use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::util::generate_id;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result as TemplateResult;
 
@@ -160,7 +160,7 @@ impl PluginManager {
             .collect();
 
         let plugins =
-            app_handle.queries().connect().await.unwrap().list_plugins().unwrap_or_default();
+            app_handle.db().list_plugins().unwrap_or_default();
         let installed_plugin_dirs: Vec<PluginCandidate> = plugins
             .iter()
             .map(|p| PluginCandidate {

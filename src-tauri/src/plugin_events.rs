@@ -9,9 +9,9 @@ use chrono::Utc;
 use log::warn;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
-use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{HttpResponse, Plugin};
-use yaak_models::queries_legacy::UpdateSource;
+use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
     GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
@@ -53,10 +53,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         }
         InternalEventPayload::FindHttpResponsesRequest(req) => {
             let http_responses = app_handle
-                .queries()
-                .connect()
-                .await
-                .unwrap()
+                .db()
                 .list_http_responses_for_request(
                     req.request_id.as_str(),
                     req.limit.map(|l| l as u64),
@@ -67,13 +64,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             }))
         }
         InternalEventPayload::GetHttpRequestByIdRequest(req) => {
-            let http_request = app_handle
-                .queries()
-                .connect()
-                .await
-                .unwrap()
-                .get_http_request(req.id.as_str())
-                .unwrap();
+            let http_request = app_handle.db().get_http_request(req.id.as_str()).ok();
             Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
                 http_request,
             }))
@@ -87,10 +78,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
             let base_environment = app_handle
-                .queries()
-                .connect()
-                .await
-                .unwrap()
+                .db()
                 .get_base_environment(&workspace.id)
                 .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
@@ -115,10 +103,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 .expect("Failed to get workspace_id from window URL");
             let environment = environment_from_window(&window).await;
             let base_environment = app_handle
-                .queries()
-                .connect()
-                .await
-                .unwrap()
+                .db()
                 .get_base_environment(&workspace.id)
                 .expect("Failed to get base environment");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
@@ -149,7 +134,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         InternalEventPayload::ReloadResponse(_) => {
             let window = get_window_from_window_context(app_handle, &window_context)
                 .expect("Failed to find window for plugin reload");
-            let plugins = app_handle.queries().connect().await.unwrap().list_plugins().unwrap();
+            let plugins = app_handle.db().list_plugins().unwrap();
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {
                     continue;
@@ -159,13 +144,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     updated_at: Utc::now().naive_utc(), // TODO: Add reloaded_at field to use instead
                     ..plugin
                 };
-                app_handle
-                    .queries()
-                    .connect()
-                    .await
-                    .unwrap()
-                    .upsert_plugin(&new_plugin, &UpdateSource::Plugin)
-                    .unwrap();
+                app_handle.db().upsert_plugin(&new_plugin, &UpdateSource::Plugin).unwrap();
             }
             let toast_event = plugin_handle.build_event_to_send(
                 &WindowContext::from_window(&window),
@@ -197,10 +176,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 HttpResponse::default()
             } else {
                 window
-                    .queries()
-                    .connect()
-                    .await
-                    .unwrap()
+                    .db()
                     .upsert_http_response(
                         &HttpResponse {
                             request_id: http_request.id.clone(),
@@ -292,34 +268,17 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         }
         InternalEventPayload::SetKeyValueRequest(req) => {
             let name = plugin_handle.name().await;
-            app_handle
-                .queries()
-                .connect()
-                .await
-                .unwrap()
-                .set_plugin_key_value(&name, &req.key, &req.value);
+            app_handle.db().set_plugin_key_value(&name, &req.key, &req.value);
             Some(InternalEventPayload::SetKeyValueResponse(SetKeyValueResponse {}))
         }
         InternalEventPayload::GetKeyValueRequest(req) => {
             let name = plugin_handle.name().await;
-            let value = app_handle
-                .queries()
-                .connect()
-                .await
-                .unwrap()
-                .get_plugin_key_value(&name, &req.key)
-                .map(|v| v.value);
+            let value = app_handle.db().get_plugin_key_value(&name, &req.key).map(|v| v.value);
             Some(InternalEventPayload::GetKeyValueResponse(GetKeyValueResponse { value }))
         }
         InternalEventPayload::DeleteKeyValueRequest(req) => {
             let name = plugin_handle.name().await;
-            let deleted = app_handle
-                .queries()
-                .connect()
-                .await
-                .unwrap()
-                .delete_plugin_key_value(&name, &req.key)
-                .unwrap();
+            let deleted = app_handle.db().delete_plugin_key_value(&name, &req.key).unwrap();
             Some(InternalEventPayload::DeleteKeyValueResponse(DeleteKeyValueResponse { deleted }))
         }
         _ => None,

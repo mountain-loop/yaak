@@ -11,9 +11,9 @@ use tokio::fs;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use ts_rs::TS;
-use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{SyncState, WorkspaceMeta};
-use yaak_models::queries_legacy::{get_workspace_export_resources, UpdateSource};
+use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::util::{get_workspace_export_resources, UpdateSource};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -112,9 +112,7 @@ pub(crate) async fn get_db_candidates<R: Runtime>(
         .map(|m| (m.id(), m))
         .collect();
     let sync_states: HashMap<_, _> = app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .list_sync_states_for_workspace(workspace_id, sync_dir)?
         .into_iter()
         .map(|s| (s.model_id.clone(), s))
@@ -440,27 +438,24 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
         });
     }
 
-    let upserted_models = app_handle
-        .queries()
-        .with_tx(|tx| {
-            tx.batch_upsert(
-                workspaces_to_upsert,
-                environments_to_upsert,
-                folders_to_upsert,
-                http_requests_to_upsert,
-                grpc_requests_to_upsert,
-                websocket_requests_to_upsert,
-                &UpdateSource::Sync,
-            )
-        })
-        .await?;
+    let upserted_models = app_handle.with_tx(|tx| {
+        tx.batch_upsert(
+            workspaces_to_upsert,
+            environments_to_upsert,
+            folders_to_upsert,
+            http_requests_to_upsert,
+            grpc_requests_to_upsert,
+            websocket_requests_to_upsert,
+            &UpdateSource::Sync,
+        )
+    })?;
 
     // Ensure we creat WorkspaceMeta models for each new workspace, with the appropriate sync dir
     let sync_dir_string = sync_dir.to_string_lossy().to_string();
-    let db = app_handle.queries().connect().await?;
+    let db = app_handle.db();
     for workspace in upserted_models.workspaces {
         let r = match db.get_workspace_meta(&workspace) {
-            Ok(Some(m)) => {
+            Some(m) => {
                 if m.setting_sync_dir == Some(sync_dir_string.clone()) {
                     // We don't need to update if unchanged
                     continue;
@@ -473,7 +468,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                     &UpdateSource::Sync,
                 )
             }
-            Ok(None) => db.upsert_workspace_meta(
+            None => db.upsert_workspace_meta(
                 &WorkspaceMeta {
                     workspace_id: workspace_id.to_string(),
                     setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
@@ -481,7 +476,6 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                 },
                 &UpdateSource::Sync,
             ),
-            Err(e) => Err(e),
         };
 
         if let Err(e) = r {
@@ -531,7 +525,7 @@ pub(crate) async fn apply_sync_state_ops<R: Runtime>(
                     flushed_at: Utc::now().naive_utc(),
                     ..Default::default()
                 };
-                app_handle.queries().connect().await?.upsert_sync_state(&sync_state)?;
+                app_handle.db().upsert_sync_state(&sync_state)?;
             }
             SyncStateOp::Update {
                 state: sync_state,
@@ -545,10 +539,10 @@ pub(crate) async fn apply_sync_state_ops<R: Runtime>(
                     flushed_at: Utc::now().naive_utc(),
                     ..sync_state
                 };
-                app_handle.queries().connect().await?.upsert_sync_state(&sync_state)?;
+                app_handle.db().upsert_sync_state(&sync_state)?;
             }
             SyncStateOp::Delete { state } => {
-                app_handle.queries().connect().await?.delete_sync_state(&state)?;
+                app_handle.db().delete_sync_state(&state)?;
             }
         }
     }
@@ -561,7 +555,7 @@ fn derive_model_filename(m: &SyncModel) -> PathBuf {
 }
 
 async fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) -> Result<()> {
-    let db = app_handle.queries().connect().await?;
+    let db = app_handle.db();
     match model {
         SyncModel::Workspace(m) => {
             db.delete_workspace(&m, &UpdateSource::Sync)?;

@@ -3,7 +3,7 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
 use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};

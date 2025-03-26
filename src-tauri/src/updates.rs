@@ -7,8 +7,8 @@ use tauri::{Manager, Runtime, WebviewWindow};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_updater::UpdaterExt;
 use tokio::task::block_in_place;
-use yaak_models::manager::QueryManagerExt;
-use yaak_models::queries_legacy::UpdateSource;
+use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::util::UpdateSource;
 use yaak_plugins::manager::PluginManager;
 
 use crate::is_dev;
@@ -67,11 +67,7 @@ impl YaakUpdater {
         mode: UpdateMode,
         update_trigger: UpdateTrigger,
     ) -> Result<bool> {
-        let settings = window
-            .queries()
-            .connect()
-            .await?
-            .get_or_create_settings(&UpdateSource::from_window(window))?;
+        let settings = window.db().get_or_create_settings(&UpdateSource::from_window(window));
         let update_key = format!("{:x}", md5::compute(settings.id));
         self.last_update_check = SystemTime::now();
 

@@ -1,11 +1,11 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{WebsocketRequest, WebsocketRequestIden};
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
-    pub fn get_websocket_request(&self, id: &str) -> Result<Option<WebsocketRequest>> {
-        self.find_optional(WebsocketRequestIden::Id, id)
+    pub fn get_websocket_request(&self, id: &str) -> Result<WebsocketRequest> {
+        self.find_one(WebsocketRequestIden::Id, id)
     }
 
     pub fn list_websocket_requests(&self, workspace_id: &str) -> Result<Vec<WebsocketRequest>> {
@@ -26,7 +26,7 @@ impl<'a> DbContext<'a> {
         id: &str,
         source: &UpdateSource,
     ) -> Result<WebsocketRequest> {
-        let request = self.get_websocket_request(id)?.unwrap();
+        let request = self.get_websocket_request(id)?;
         self.delete_websocket_request(&request, source)
     }
 

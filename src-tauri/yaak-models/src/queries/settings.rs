@@ -1,22 +1,24 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{Settings, SettingsIden};
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
-    pub fn get_or_create_settings(&self, source: &UpdateSource) -> Result<Settings> {
-        let id = "default";
-        if let Some(s) = self.find_optional::<Settings>(SettingsIden::Id, id)? {
-            return Ok(s);
+    pub fn get_or_create_settings(&self, source: &UpdateSource) -> Settings {
+        let id = "default".to_string();
+
+        if let Some(s) = self.find_optional::<Settings>(SettingsIden::Id, &id) {
+            return s;
         };
 
         self.upsert(
             &Settings {
-                id: id.to_string(),
+                id,
                 ..Default::default()
             },
             source,
         )
+        .expect("Failed to upsert settings")
     }
 
     pub fn upsert_settings(&self, settings: &Settings, source: &UpdateSource) -> Result<Settings> {

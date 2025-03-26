@@ -1,11 +1,11 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{HttpRequest, HttpRequestIden};
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
-    pub fn get_http_request(&self, id: &str) -> Result<Option<HttpRequest>> {
-        self.find_optional(HttpRequestIden::Id, id)
+    pub fn get_http_request(&self, id: &str) -> Result<HttpRequest> {
+        self.find_one(HttpRequestIden::Id, id)
     }
 
     pub fn list_http_requests(&self, workspace_id: &str) -> Result<Vec<HttpRequest>> {
@@ -26,7 +26,7 @@ impl<'a> DbContext<'a> {
         id: &str,
         source: &UpdateSource,
     ) -> Result<HttpRequest> {
-        let http_request = self.get_http_request(id)?.unwrap();
+        let http_request = self.get_http_request(id)?;
         self.delete_http_request(&http_request, source)
     }
 

@@ -1,10 +1,10 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{
     Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestIden,
     WebsocketRequest, WebsocketRequestIden,
 };
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
     pub fn get_folder(&self, id: &str) -> Result<Folder> {

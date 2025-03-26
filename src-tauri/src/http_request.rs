@@ -24,12 +24,12 @@ use tokio::fs::{create_dir_all, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
 use tokio::sync::{oneshot, Mutex};
-use yaak_models::manager::QueryManagerExt;
+use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries_legacy::UpdateSource;
+use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
@@ -48,16 +48,13 @@ pub async fn send_http_request<R: Runtime>(
     let plugin_manager = app_handle.state::<PluginManager>();
     let update_source = &UpdateSource::from_window(&window);
     let (settings, workspace) = {
-        let db = window.queries().connect().await?;
-        let settings = db.get_or_create_settings(update_source)?;
+        let db = window.db();
+        let settings = db.get_or_create_settings(update_source);
         let workspace = db.get_workspace(&unrendered_request.workspace_id)?;
         (settings, workspace)
     };
-    let base_environment = app_handle
-        .queries()
-        .connect()
-        .await?
-        .get_base_environment(&unrendered_request.workspace_id)?;
+    let base_environment =
+        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
 
     let response_id = og_response.id.clone();
     let response = Arc::new(Mutex::new(og_response.clone()));
@@ -84,8 +81,7 @@ pub async fn send_http_request<R: Runtime>(
                 &*response.lock().await,
                 e.to_string(),
                 &update_source,
-            )
-            .await)
+            ))
         }
     };
 
@@ -200,8 +196,7 @@ pub async fn send_http_request<R: Runtime>(
                 &*response.lock().await,
                 format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
                 &update_source,
-            )
-            .await);
+            ));
         }
     };
     // Yes, we're parsing both URI and URL because they could return different errors
@@ -213,8 +208,7 @@ pub async fn send_http_request<R: Runtime>(
                 &*response.lock().await,
                 format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
                 &update_source,
-            )
-            .await);
+            ));
         }
     };
 
@@ -321,8 +315,7 @@ pub async fn send_http_request<R: Runtime>(
                         &*response.lock().await,
                         e,
                         &update_source,
-                    )
-                    .await);
+                    ));
                 }
             }
         } else if body_type == "multipart/form-data" && request_body.contains_key("form") {
@@ -353,8 +346,7 @@ pub async fn send_http_request<R: Runtime>(
                                             &*response.lock().await,
                                             e.to_string(),
                                             &update_source,
-                                        )
-                                        .await);
+                                        ));
                                     }
                                 }
                             };
@@ -371,8 +363,7 @@ pub async fn send_http_request<R: Runtime>(
                                             &*response.lock().await,
                                             format!("Invalid mime for multi-part entry {e:?}"),
                                             &update_source,
-                                        )
-                                        .await);
+                                        ));
                                     }
                                 };
                             } else if !file_path.is_empty() {
@@ -388,8 +379,7 @@ pub async fn send_http_request<R: Runtime>(
                                             &*response.lock().await,
                                             format!("Invalid mime for multi-part entry {e:?}"),
                                             &update_source,
-                                        )
-                                        .await);
+                                        ));
                                     }
                                 };
                             }
@@ -431,8 +421,7 @@ pub async fn send_http_request<R: Runtime>(
                 &*response.lock().await,
                 e.to_string(),
                 &update_source,
-            )
-            .await);
+            ));
         }
     };
 
@@ -463,8 +452,7 @@ pub async fn send_http_request<R: Runtime>(
                     &*response.lock().await,
                     e.to_string(),
                     &update_source,
-                )
-                .await);
+                ));
             }
         };
 
@@ -490,7 +478,7 @@ pub async fn send_http_request<R: Runtime>(
         Ok(r) = resp_rx => r,
         _ = cancelled_rx.changed() => {
             debug!("Request cancelled");
-            return Ok(response_err(&app_handle, &*response.lock().await, "Request was cancelled".to_string(), &update_source).await);
+            return Ok(response_err(&app_handle, &*response.lock().await, "Request was cancelled".to_string(), &update_source));
         }
     };
 
@@ -541,10 +529,7 @@ pub async fn send_http_request<R: Runtime>(
 
                         r.state = HttpResponseState::Connected;
                         app_handle
-                            .queries()
-                            .connect()
-                            .await
-                            .unwrap()
+                            .db()
                             .update_http_response_if_id(&r, &update_source)
                             .expect("Failed to update response after connected");
                     }
@@ -574,10 +559,7 @@ pub async fn send_http_request<R: Runtime>(
                                 written_bytes += bytes.len();
                                 r.content_length = Some(written_bytes as i32);
                                 app_handle
-                                    .queries()
-                                    .connect()
-                                    .await
-                                    .unwrap()
+                                    .db()
                                     .update_http_response_if_id(&r, &update_source)
                                     .expect("Failed to update response");
                             }
@@ -590,8 +572,7 @@ pub async fn send_http_request<R: Runtime>(
                                     &*response.lock().await,
                                     e.to_string(),
                                     &update_source,
-                                )
-                                .await;
+                                );
                                 break;
                             }
                         }
@@ -606,10 +587,7 @@ pub async fn send_http_request<R: Runtime>(
                         };
                         r.state = HttpResponseState::Closed;
                         app_handle
-                            .queries()
-                            .connect()
-                            .await
-                            .unwrap()
+                            .db()
                             .update_http_response_if_id(&r, &UpdateSource::from_window(&window))
                             .expect("Failed to update response");
                     };
@@ -636,10 +614,7 @@ pub async fn send_http_request<R: Runtime>(
                             .collect::<Vec<_>>();
                         cookie_jar.cookies = json_cookies;
                         if let Err(e) = app_handle
-                            .queries()
-                            .connect()
-                            .await
-                            .unwrap()
+                            .db()
                             .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))
                         {
                             error!("Failed to update cookie jar: {}", e);
@@ -653,8 +628,7 @@ pub async fn send_http_request<R: Runtime>(
                         &*response.lock().await,
                         format!("{e} → {e:?}"),
                         &update_source,
-                    )
-                    .await;
+                    );
                 }
             };
 
@@ -667,19 +641,14 @@ pub async fn send_http_request<R: Runtime>(
     Ok(tokio::select! {
         Ok(r) = done_rx => r,
         _ = cancelled_rx.changed() => {
-            match app_handle.queries().with_conn(|c| c.get_http_response(&response_id)).await {
+            match app_handle.with_db(|c| c.get_http_response(&response_id)) {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
-                    app_handle
-                        .queries()
-                        .connect()
-                        .await
-                        .unwrap()
-                        .update_http_response_if_id(&r, &UpdateSource::from_window(window))
+                    app_handle.db().update_http_response_if_id(&r, &UpdateSource::from_window(window))
                         .expect("Failed to update response")
                 },
                 _ => {
-                    response_err(&app_handle, &*response.lock().await, "Ephemeral request was cancelled".to_string(), &update_source).await
+                    response_err(&app_handle, &*response.lock().await, "Ephemeral request was cancelled".to_string(), &update_source)
                 }.clone(),
             }
         }

@@ -1,4 +1,3 @@
-use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::manager::WebsocketManager;
 use crate::render::render_request;
@@ -10,12 +9,12 @@ use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
 use yaak_http::apply_path_placeholders;
-use yaak_models::manager::QueryManagerExt;
+use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
     WebsocketEventType, WebsocketRequest,
 };
-use yaak_models::queries_legacy::UpdateSource;
+use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
 };
@@ -28,11 +27,7 @@ pub(crate) async fn upsert_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .upsert_websocket_request(&request, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().upsert_websocket_request(&request, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -41,8 +36,8 @@ pub(crate) async fn duplicate_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    let db = app_handle.queries().connect().await?;
-    let request = db.get_websocket_request(request_id)?.unwrap();
+    let db = app_handle.db();
+    let request = db.get_websocket_request(request_id)?;
     Ok(db.duplicate_websocket_request(&request, &UpdateSource::from_window(&window))?)
 }
 
@@ -53,9 +48,7 @@ pub(crate) async fn delete_request<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
     Ok(app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .delete_websocket_request_by_id(request_id, &UpdateSource::from_window(&window))?)
 }
 
@@ -66,9 +59,7 @@ pub(crate) async fn delete_connection<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> Result<WebsocketConnection> {
     Ok(app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .delete_websocket_connection_by_id(connection_id, &UpdateSource::from_window(&window))?)
 }
 
@@ -78,7 +69,7 @@ pub(crate) async fn delete_connections<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<()> {
-    Ok(app_handle.queries().connect().await?.delete_all_websocket_connections_for_request(
+    Ok(app_handle.db().delete_all_websocket_connections_for_request(
         request_id,
         &UpdateSource::from_window(&window),
     )?)
@@ -89,7 +80,7 @@ pub(crate) async fn list_events<R: Runtime>(
     connection_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketEvent>> {
-    Ok(app_handle.queries().connect().await?.list_websocket_events(connection_id)?)
+    Ok(app_handle.db().list_websocket_events(connection_id)?)
 }
 
 #[tauri::command]
@@ -97,7 +88,7 @@ pub(crate) async fn list_requests<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketRequest>> {
-    Ok(app_handle.queries().connect().await?.list_websocket_requests(workspace_id)?)
+    Ok(app_handle.db().list_websocket_requests(workspace_id)?)
 }
 
 #[tauri::command]
@@ -105,11 +96,7 @@ pub(crate) async fn list_connections<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketConnection>> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .list_websocket_connections_for_workspace(workspace_id)?)
+    Ok(app_handle.db().list_websocket_connections_for_workspace(workspace_id)?)
 }
 
 #[tauri::command]
@@ -121,22 +108,17 @@ pub(crate) async fn send<R: Runtime>(
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
     let (connection, unrendered_request) = {
-        let db = app_handle.queries().connect().await?;
+        let db = app_handle.db();
         let connection = db.get_websocket_connection(connection_id)?;
-        let unrendered_request = db
-            .get_websocket_request(&connection.request_id)?
-            .ok_or(GenericError("WebSocket Request not found".to_string()))?;
+        let unrendered_request = db.get_websocket_request(&connection.request_id)?;
         (connection, unrendered_request)
     };
     let environment = match environment_id {
-        Some(id) => Some(app_handle.queries().connect().await?.get_environment(id)?),
+        Some(id) => Some(app_handle.db().get_environment(id)?),
         None => None,
     };
-    let base_environment = app_handle
-        .queries()
-        .connect()
-        .await?
-        .get_base_environment(&unrendered_request.workspace_id)?;
+    let base_environment =
+        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
     let request = render_request(
         &unrendered_request,
         &base_environment,
@@ -152,7 +134,7 @@ pub(crate) async fn send<R: Runtime>(
     let mut ws_manager = ws_manager.lock().await;
     ws_manager.send(&connection.id, Message::Text(request.message.clone().into())).await?;
 
-    app_handle.queries().connect().await?.upsert_websocket_event(
+    app_handle.db().upsert_websocket_event(
         &WebsocketEvent {
             connection_id: connection.id.clone(),
             request_id: request.id.clone(),
@@ -176,7 +158,7 @@ pub(crate) async fn close<R: Runtime>(
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
     let connection = {
-        let db = app_handle.queries().connect().await?;
+        let db = app_handle.db();
         let connection = db.get_websocket_connection(connection_id)?;
         db.upsert_websocket_connection(
             &WebsocketConnection {
@@ -205,21 +187,13 @@ pub(crate) async fn connect<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
-    let unrendered_request = app_handle
-        .queries()
-        .connect()
-        .await?
-        .get_websocket_request(request_id)?
-        .ok_or(GenericError("Failed to find GRPC request".to_string()))?;
+    let unrendered_request = app_handle.db().get_websocket_request(request_id)?;
     let environment = match environment_id {
-        Some(id) => Some(app_handle.queries().connect().await?.get_environment(id)?),
+        Some(id) => Some(app_handle.db().get_environment(id)?),
         None => None,
     };
-    let base_environment = app_handle
-        .queries()
-        .connect()
-        .await?
-        .get_base_environment(&unrendered_request.workspace_id)?;
+    let base_environment =
+        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
     let request = render_request(
         &unrendered_request,
         &base_environment,
@@ -262,11 +236,11 @@ pub(crate) async fn connect<R: Runtime>(
 
     // TODO: Handle cookies
     let _cookie_jar = match cookie_jar_id {
-        Some(id) => Some(app_handle.queries().connect().await?.get_cookie_jar(id)?),
+        Some(id) => Some(app_handle.db().get_cookie_jar(id)?),
         None => None,
     };
 
-    let connection = app_handle.queries().connect().await?.upsert_websocket_connection(
+    let connection = app_handle.db().upsert_websocket_connection(
         &WebsocketConnection {
             workspace_id: request.workspace_id.clone(),
             request_id: request_id.to_string(),
@@ -296,7 +270,7 @@ pub(crate) async fn connect<R: Runtime>(
     {
         Ok(r) => r,
         Err(e) => {
-            return Ok(app_handle.queries().connect().await?.upsert_websocket_connection(
+            return Ok(app_handle.db().upsert_websocket_connection(
                 &WebsocketConnection {
                     error: Some(format!("{e:?}")),
                     state: WebsocketConnectionState::Closed,
@@ -307,7 +281,7 @@ pub(crate) async fn connect<R: Runtime>(
         }
     };
 
-    app_handle.queries().connect().await?.upsert_websocket_event(
+    app_handle.db().upsert_websocket_event(
         &WebsocketEvent {
             connection_id: connection.id.clone(),
             request_id: request.id.clone(),
@@ -328,7 +302,7 @@ pub(crate) async fn connect<R: Runtime>(
         })
         .collect::<Vec<HttpResponseHeader>>();
 
-    let connection = app_handle.queries().connect().await?.upsert_websocket_connection(
+    let connection = app_handle.db().upsert_websocket_connection(
         &WebsocketConnection {
             state: WebsocketConnectionState::Connected,
             headers: response_headers,
@@ -352,10 +326,7 @@ pub(crate) async fn connect<R: Runtime>(
                 }
 
                 app_handle
-                    .queries()
-                    .connect()
-                    .await
-                    .unwrap()
+                    .db()
                     .upsert_websocket_event(
                         &WebsocketEvent {
                             connection_id: connection_id.clone(),
@@ -381,10 +352,7 @@ pub(crate) async fn connect<R: Runtime>(
             info!("Websocket connection closed");
             if !has_written_close {
                 app_handle
-                    .queries()
-                    .connect()
-                    .await
-                    .unwrap()
+                    .db()
                     .upsert_websocket_event(
                         &WebsocketEvent {
                             connection_id: connection_id.clone(),
@@ -399,10 +367,7 @@ pub(crate) async fn connect<R: Runtime>(
                     .unwrap();
             }
             app_handle
-                .queries()
-                .connect()
-                .await
-                .unwrap()
+                .db()
                 .upsert_websocket_connection(
                     &WebsocketConnection {
                         workspace_id: request.workspace_id.clone(),

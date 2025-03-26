@@ -1,38 +1,40 @@
+use crate::connection_or_tx::ConnectionOrTx;
 use crate::error::Error::RowNotFound;
-use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{AnyModel, ModelType, UpsertModelInfo};
-use crate::queries_legacy::{generate_model_id, ModelChangeEvent, ModelPayload, UpdateSource};
+use crate::util::{generate_model_id, ModelChangeEvent, ModelPayload, UpdateSource};
 use rusqlite::OptionalExtension;
 use sea_query::{
     Asterisk, Expr, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr,
     SqliteQueryBuilder,
 };
 use sea_query_rusqlite::RusqliteBinder;
+use tokio::sync::mpsc;
 
-pub(crate) const MAX_HISTORY_ITEMS: usize = 20;
+pub struct DbContext<'a> {
+    pub(crate) tx: mpsc::Sender<ModelPayload>,
+    pub(crate) conn: ConnectionOrTx<'a>,
+}
 
 impl<'a> DbContext<'a> {
     pub(crate) fn find_one<'s, M>(
         &self,
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
-    ) -> Result<M>
+    ) -> crate::error::Result<M>
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
         match self.find_optional::<M>(col, value) {
-            Ok(Some(v)) => Ok(v),
-            Ok(None) => Err(RowNotFound),
-            Err(e) => Err(e),
+            Some(v) => Ok(v),
+            None => Err(RowNotFound),
         }
     }
 
-    pub fn find_optional<'s, M>(
+    pub(crate) fn find_optional<'s, M>(
         &self,
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
-    ) -> Result<Option<M>>
+    ) -> Option<M>
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
@@ -41,11 +43,13 @@ impl<'a> DbContext<'a> {
             .column(Asterisk)
             .cond_where(Expr::col(col).eq(value))
             .build_rusqlite(SqliteQueryBuilder);
-        let mut stmt = self.conn.prepare(sql.as_str())?;
-        Ok(stmt.query_row(&*params.as_params(), M::from_row).optional()?)
+        let mut stmt = self.conn.prepare(sql.as_str()).expect("Failed to prepare query");
+        stmt.query_row(&*params.as_params(), M::from_row)
+            .optional()
+            .expect("Failed to run find on DB")
     }
 
-    pub fn find_all<'s, M>(&self) -> Result<Vec<M>>
+    pub fn find_all<'s, M>(&self) -> crate::error::Result<Vec<M>>
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
@@ -63,7 +67,7 @@ impl<'a> DbContext<'a> {
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
         limit: Option<u64>,
-    ) -> Result<Vec<M>>
+    ) -> crate::error::Result<Vec<M>>
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
@@ -88,7 +92,7 @@ impl<'a> DbContext<'a> {
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
-    pub fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
+    pub fn upsert<M>(&self, model: &M, source: &UpdateSource) -> crate::error::Result<M>
     where
         M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
     {
@@ -112,7 +116,7 @@ impl<'a> DbContext<'a> {
         other_values: Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>,
         update_columns: Vec<impl IntoIden>,
         source: &UpdateSource,
-    ) -> Result<M>
+    ) -> crate::error::Result<M>
     where
         M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
     {
@@ -147,7 +151,11 @@ impl<'a> DbContext<'a> {
         Ok(m)
     }
 
-    pub(crate) fn delete<'s, M>(&self, m: &M, update_source: &UpdateSource) -> Result<M>
+    pub(crate) fn delete<'s, M>(
+        &self,
+        m: &M,
+        update_source: &UpdateSource,
+    ) -> crate::error::Result<M>
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
