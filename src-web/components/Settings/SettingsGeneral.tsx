@@ -1,11 +1,11 @@
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { patchModel } from '@yaakapp-internal/models';
 import React from 'react';
 import { upsertWorkspace } from '../../commands/upsertWorkspace';
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
 import { useAppInfo } from '../../hooks/useAppInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { useSettings } from '../../hooks/useSettings';
-import { useUpdateSettings } from '../../hooks/useUpdateSettings';
 import { revealInFinderText } from '../../lib/reveal';
 import { Checkbox } from '../core/Checkbox';
 import { Heading } from '../core/Heading';
@@ -19,7 +19,6 @@ import { VStack } from '../core/Stacks';
 export function SettingsGeneral() {
   const workspace = useActiveWorkspace();
   const settings = useSettings();
-  const updateSettings = useUpdateSettings();
   const appInfo = useAppInfo();
   const checkForUpdates = useCheckForUpdates();
 
@@ -37,7 +36,7 @@ export function SettingsGeneral() {
           labelClassName="w-[14rem]"
           size="sm"
           value={settings.updateChannel}
-          onChange={(updateChannel) => updateSettings.mutate({ updateChannel })}
+          onChange={(updateChannel) => patchModel(settings, { updateChannel })}
           options={[
             { label: 'Stable (less frequent)', value: 'stable' },
             { label: 'Beta (more frequent)', value: 'beta' },
@@ -65,10 +64,10 @@ export function SettingsGeneral() {
               ? 'current'
               : 'ask'
         }
-        onChange={(v) => {
-          if (v === 'current') updateSettings.mutate({ openWorkspaceNewWindow: false });
-          else if (v === 'new') updateSettings.mutate({ openWorkspaceNewWindow: true });
-          else updateSettings.mutate({ openWorkspaceNewWindow: null });
+        onChange={async (v) => {
+          if (v === 'current') await patchModel(settings, { openWorkspaceNewWindow: false });
+          else if (v === 'new') await patchModel(settings, { openWorkspaceNewWindow: true });
+          else await patchModel(settings, { openWorkspaceNewWindow: null });
         }}
         options={[
           { label: 'Always Ask', value: 'ask' },

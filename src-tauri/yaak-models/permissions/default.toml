@@ -3,4 +3,5 @@ description = "Default permissions for the plugin"
 permissions = [
     "allow-upsert",
     "allow-delete",
+    "allow-workspace-models",
 ]

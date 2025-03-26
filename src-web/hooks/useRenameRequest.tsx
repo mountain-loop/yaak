@@ -1,14 +1,10 @@
-import type { GrpcRequest, HttpRequest } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import { InlineCode } from '../components/core/InlineCode';
-import {showPrompt} from "../lib/prompt";
+import { showPrompt } from '../lib/prompt';
 import { useFastMutation } from './useFastMutation';
 import { useRequests } from './useRequests';
-import { useUpdateAnyGrpcRequest } from './useUpdateAnyGrpcRequest';
-import { useUpdateAnyHttpRequest } from './useUpdateAnyHttpRequest';
 
 export function useRenameRequest(requestId: string | null) {
-  const updateHttpRequest = useUpdateAnyHttpRequest();
-  const updateGrpcRequest = useUpdateAnyGrpcRequest();
   const requests = useRequests();
 
   return useFastMutation({
@@ -36,11 +32,7 @@ export function useRenameRequest(requestId: string | null) {
 
       if (name == null) return;
 
-      if (request.model === 'http_request') {
-        updateHttpRequest.mutate({ id: request.id, update: (r: HttpRequest) => ({ ...r, name }) });
-      } else {
-        updateGrpcRequest.mutate({ id: request.id, update: (r: GrpcRequest) => ({ ...r, name }) });
-      }
+      await patchModel(request, { name });
     },
   });
 }

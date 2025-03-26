@@ -1,3 +1,4 @@
+import {initModelStore} from "@yaakapp-internal/models/guest-js/store";
 import {listWebsocketConnections, listWebsocketRequests} from '@yaakapp-internal/ws';
 import { useEffect } from 'react';
 import { jotaiStore } from '../lib/jotai';
@@ -29,6 +30,8 @@ async function sync() {
 
   const workspaceId = getActiveWorkspaceId();
   if (workspaceId == null) return;
+
+  initModelStore(workspaceId);
 
   const args = { workspaceId };
 

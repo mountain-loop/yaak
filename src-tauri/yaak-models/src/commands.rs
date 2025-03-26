@@ -51,3 +51,37 @@ pub(crate) fn delete<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> R
 
     Ok(id)
 }
+
+#[tauri::command]
+pub(crate) fn workspace_models<R: Runtime>(
+    window: WebviewWindow<R>,
+    workspace_id: &str,
+) -> Result<Vec<AnyModel>> {
+    let db = window.db();
+    let wid = workspace_id;
+    let mut l: Vec<AnyModel> = Vec::new();
+    let source = &UpdateSource::from_window(&window);
+
+    // Add the settings
+    l.push(db.get_or_create_settings(source).into());
+
+    // Add the workspace
+    l.push(db.get_workspace(workspace_id)?.into());
+    l.push(db.get_or_create_workspace_meta(workspace_id, source)?.into());
+
+    // Add global models
+    l.append(&mut db.list_key_values()?.into_iter().map(Into::into).collect());
+    l.append(&mut db.list_plugins()?.into_iter().map(Into::into).collect());
+
+    // Add the workspace children
+    l.append(&mut db.list_cookie_jars(wid)?.into_iter().map(Into::into).collect());
+    l.append(&mut db.list_environments(wid)?.into_iter().map(Into::into).collect());
+    l.append(&mut db.list_folders(wid)?.into_iter().map(Into::into).collect());
+    l.append(&mut db.list_http_requests(wid)?.into_iter().map(Into::into).collect());
+    l.append(&mut db.list_grpc_requests(wid)?.into_iter().map(Into::into).collect());
+    l.append(&mut db.list_grpc_connections(wid)?.into_iter().map(Into::into).collect());
+    l.append(&mut db.list_websocket_requests(wid)?.into_iter().map(Into::into).collect());
+    l.append(&mut db.list_websocket_connections(wid)?.into_iter().map(Into::into).collect());
+
+    Ok(l)
+}

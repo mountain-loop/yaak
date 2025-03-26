@@ -1,4 +1,5 @@
 import type { HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
 import classNames from 'classnames';
@@ -16,7 +17,6 @@ import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
 import { requestsAtom } from '../hooks/useRequests';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
-import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { useLatestWebsocketConnection } from '../hooks/useWebsocketConnections';
 import { deepEqualAtom } from '../lib/atoms';
 import { languageFromContentType } from '../lib/contentType';
@@ -153,7 +153,6 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
 
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
-  const { mutate: updateRequest } = useUpdateAnyHttpRequest();
   const { updateKey } = useRequestUpdateKey(activeRequestId);
   const connection = useLatestWebsocketConnection(activeRequestId);
 
@@ -212,12 +211,12 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   );
 
   const handlePaste = useCallback(
-    (e: ClipboardEvent, text: string) => {
-      const data = prepareImportQuerystring(text);
-      if (data != null) {
+    async (e: ClipboardEvent, text: string) => {
+      const patch = prepareImportQuerystring(text);
+      if (patch != null) {
         e.preventDefault(); // Prevent input onChange
 
-        updateRequest({ id: activeRequestId, update: data });
+        await patchModel(activeRequest, patch);
         focusParamsTab();
 
         // Wait for request to update, then refresh the UI
@@ -228,7 +227,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
         }, 100);
       }
     },
-    [activeRequestId, focusParamsTab, forceParamsRefresh, forceUrlRefresh, updateRequest],
+    [activeRequest, focusParamsTab, forceParamsRefresh, forceUrlRefresh],
   );
 
   const messageLanguage = languageFromContentType(null, activeRequest.message);

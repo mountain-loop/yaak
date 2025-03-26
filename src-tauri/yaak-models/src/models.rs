@@ -3,10 +3,10 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::util::{generate_prefixed_id, UpdateSource};
+use crate::util::{UpdateSource, generate_prefixed_id};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
-use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};
+use sea_query::{IntoIden, IntoTableRef, SimpleExpr, enum_def};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -1751,6 +1751,7 @@ impl UpsertModelInfo for SyncState {
 pub struct KeyValue {
     #[ts(type = "\"key_value\"")]
     pub model: String,
+    pub id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 
@@ -1759,17 +1760,53 @@ pub struct KeyValue {
     pub value: String,
 }
 
-impl<'s> TryFrom<&Row<'s>> for KeyValue {
-    type Error = rusqlite::Error;
+impl UpsertModelInfo for KeyValue {
+    fn table_name() -> impl IntoTableRef {
+        KeyValueIden::Table
+    }
 
-    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        KeyValueIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("kv")
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use KeyValueIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (Namespace, self.namespace.clone().into()),
+            (Key, self.key.clone().into()),
+            (Value, self.value.clone().into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![KeyValueIden::UpdatedAt, KeyValueIden::Value]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            namespace: r.get("namespace")?,
-            key: r.get("key")?,
-            value: r.get("value")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            namespace: row.get("namespace")?,
+            key: row.get("key")?,
+            value: row.get("value")?,
         })
     }
 }
@@ -1886,6 +1923,7 @@ impl<'de> Deserialize<'de> for AnyModel {
             Some(m) if m == "grpc_event" => AnyModel::GrpcEvent(fv(value).unwrap()),
             Some(m) if m == "cookie_jar" => AnyModel::CookieJar(fv(value).unwrap()),
             Some(m) if m == "plugin" => AnyModel::Plugin(fv(value).unwrap()),
+            Some(m) if m == "settings" => AnyModel::Settings(fv(value).unwrap()),
             Some(m) => {
                 return Err(serde::de::Error::custom(format!("Unknown model {}", m)));
             }
@@ -1905,11 +1943,7 @@ impl AnyModel {
                 return name.to_string();
             }
             let without_variables = url.replace(r"\$\{\[\s*([^\]\s]+)\s*]}", "$1");
-            if without_variables.is_empty() {
-                fallback.to_string()
-            } else {
-                without_variables
-            }
+            if without_variables.is_empty() { fallback.to_string() } else { without_variables }
         };
 
         match self.clone() {

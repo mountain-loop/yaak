@@ -4,6 +4,7 @@ Default permissions for the plugin
 
 - `allow-upsert`
 - `allow-delete`
+- `allow-workspace-models`
 
 ## Permission Table
 
@@ -62,6 +63,32 @@ Enables the upsert command without any pre-configured scope.
 <td>
 
 Denies the upsert command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-models:allow-workspace-models`
+
+</td>
+<td>
+
+Enables the workspace_models command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-models:deny-workspace-models`
+
+</td>
+<td>
+
+Denies the workspace_models command without any pre-configured scope.
 
 </td>
 </tr>

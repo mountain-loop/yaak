@@ -315,6 +315,16 @@
           "const": "deny-upsert"
         },
         {
+          "description": "Enables the workspace_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-workspace-models"
+        },
+        {
+          "description": "Denies the workspace_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-workspace-models"
+        },
+        {
           "description": "Default permissions for the plugin",
           "type": "string",
           "const": "default"

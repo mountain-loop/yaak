@@ -5,11 +5,11 @@ import type {
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
+import { patchModelById } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
 import React, { useCallback, useRef, useState } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
-import { upsertWebsocketRequest } from '../../commands/upsertWebsocketRequest';
 import { getActiveRequest } from '../../hooks/useActiveRequest';
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
@@ -17,17 +17,13 @@ import { useDeleteAnyRequest } from '../../hooks/useDeleteAnyRequest';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useSidebarHidden } from '../../hooks/useSidebarHidden';
 import { getSidebarCollapsedMap } from '../../hooks/useSidebarItemCollapsed';
-import { useUpdateAnyFolder } from '../../hooks/useUpdateAnyFolder';
-import { useUpdateAnyGrpcRequest } from '../../hooks/useUpdateAnyGrpcRequest';
-import { useUpdateAnyHttpRequest } from '../../hooks/useUpdateAnyHttpRequest';
-import { getWebsocketRequest } from '../../hooks/useWebsocketRequests';
 import { router } from '../../lib/router';
 import { setWorkspaceSearchParams } from '../../lib/setWorkspaceSearchParams';
 import { ContextMenu } from '../core/Dropdown';
+import { GitDropdown } from '../GitDropdown';
 import { sidebarSelectedIdAtom, sidebarTreeAtom } from './SidebarAtoms';
 import type { SidebarItemProps } from './SidebarItem';
 import { SidebarItems } from './SidebarItems';
-import { GitDropdown } from '../GitDropdown';
 
 interface Props {
   className?: string;
@@ -53,9 +49,6 @@ export function Sidebar({ className }: Props) {
   const [hasFocus, setHasFocus] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useAtom(sidebarSelectedIdAtom);
   const [selectedTree, setSelectedTree] = useState<SidebarTreeNode | null>(null);
-  const { mutateAsync: updateAnyHttpRequest } = useUpdateAnyHttpRequest();
-  const { mutateAsync: updateAnyGrpcRequest } = useUpdateAnyGrpcRequest();
-  const { mutateAsync: updateAnyFolder } = useUpdateAnyFolder();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoveredTree, setHoveredTree] = useState<SidebarTreeNode | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -277,52 +270,16 @@ export function Sidebar({ className }: Props) {
         await Promise.all(
           newChildren.map((child, i) => {
             const sortPriority = i * 1000;
-            if (child.model === 'folder') {
-              const updateFolder = (f: Folder) => ({ ...f, sortPriority, folderId });
-              return updateAnyFolder({ id: child.id, update: updateFolder });
-            } else if (child.model === 'grpc_request') {
-              const updateRequest = (r: GrpcRequest) => ({ ...r, sortPriority, folderId });
-              return updateAnyGrpcRequest({ id: child.id, update: updateRequest });
-            } else if (child.model === 'http_request') {
-              const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
-              return updateAnyHttpRequest({ id: child.id, update: updateRequest });
-            } else if (child.model === 'websocket_request') {
-              const request = getWebsocketRequest(child.id);
-              return upsertWebsocketRequest.mutateAsync({ ...request, sortPriority, folderId });
-            } else {
-              throw new Error('Invalid model to update: ' + child.model);
-            }
+            return patchModelById(child.model, child.id, { sortPriority, folderId });
           }),
         );
       } else {
         const sortPriority = afterPriority - (afterPriority - beforePriority) / 2;
-        if (child.model === 'folder') {
-          const updateFolder = (f: Folder) => ({ ...f, sortPriority, folderId });
-          await updateAnyFolder({ id: child.id, update: updateFolder });
-        } else if (child.model === 'grpc_request') {
-          const updateRequest = (r: GrpcRequest) => ({ ...r, sortPriority, folderId });
-          await updateAnyGrpcRequest({ id: child.id, update: updateRequest });
-        } else if (child.model === 'http_request') {
-          const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
-          await updateAnyHttpRequest({ id: child.id, update: updateRequest });
-        } else if (child.model === 'websocket_request') {
-          const request = getWebsocketRequest(child.id);
-          return upsertWebsocketRequest.mutateAsync({ ...request, sortPriority, folderId });
-        } else {
-          throw new Error('Invalid model to update: ' + child.model);
-        }
+        return patchModelById(child.model, child.id, { sortPriority, folderId });
       }
       setDraggingId(null);
     },
-    [
-      handleClearSelected,
-      hoveredTree,
-      hoveredIndex,
-      treeParentMap,
-      updateAnyFolder,
-      updateAnyGrpcRequest,
-      updateAnyHttpRequest,
-    ],
+    [handleClearSelected, hoveredTree, hoveredIndex, treeParentMap],
   );
 
   const [showMainContextMenu, setShowMainContextMenu] = useState<{

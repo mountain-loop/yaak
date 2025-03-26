@@ -5648,6 +5648,11 @@
           "const": "yaak-models:allow-upsert"
         },
         {
+          "description": "Enables the workspace_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-workspace-models"
+        },
+        {
           "description": "Denies the delete command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-models:deny-delete"
@@ -5656,6 +5661,11 @@
           "description": "Denies the upsert command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-models:deny-upsert"
+        },
+        {
+          "description": "Denies the workspace_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-workspace-models"
         },
         {
           "description": "Default permissions for the plugin",

@@ -29,14 +29,14 @@ impl<'a> DbContext<'a> {
         workspace_id: &str,
         source: &UpdateSource,
     ) -> Result<()> {
-        let responses = self.list_websocket_connections_for_workspace(workspace_id)?;
+        let responses = self.list_websocket_connections(workspace_id)?;
         for m in responses {
             self.delete(&m, source)?;
         }
         Ok(())
     }
 
-    pub fn list_websocket_connections_for_workspace(
+    pub fn list_websocket_connections(
         &self,
         workspace_id: &str,
     ) -> Result<Vec<WebsocketConnection>> {

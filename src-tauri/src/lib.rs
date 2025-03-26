@@ -13,12 +13,12 @@ use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
 use std::collections::{BTreeMap, HashMap};
-use std::fs::{create_dir_all, File};
+use std::fs::{File, create_dir_all};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{fs, panic};
-use tauri::{is_dev, AppHandle, Emitter, RunEvent, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, RunEvent, State, WebviewWindow, is_dev};
 use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
@@ -29,7 +29,7 @@ use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
-use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
+use yaak_grpc::{Code, ServiceDefinition, deserialize_message, serialize_message};
 use yaak_models::models::{
     CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState,
     GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
@@ -37,7 +37,7 @@ use yaak_models::models::{
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{
-    get_workspace_export_resources, maybe_gen_id, maybe_gen_id_opt, BatchUpsertResult, UpdateSource,
+    BatchUpsertResult, UpdateSource, get_workspace_export_resources, maybe_gen_id, maybe_gen_id_opt,
 };
 use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
@@ -1367,7 +1367,7 @@ async fn cmd_list_grpc_connections<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<GrpcConnection>> {
-    Ok(app_handle.db().list_grpc_connections_for_workspace(workspace_id, None)?)
+    Ok(app_handle.db().list_grpc_connections(workspace_id)?)
 }
 
 #[tauri::command]
@@ -1483,7 +1483,7 @@ async fn cmd_list_cookie_jars<R: Runtime>(
 
 #[tauri::command]
 async fn cmd_list_key_values<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<Vec<KeyValue>> {
-    Ok(app_handle.db().list_key_values_raw()?)
+    Ok(app_handle.db().list_key_values()?)
 }
 
 #[tauri::command]
@@ -1599,7 +1599,7 @@ async fn cmd_get_workspace_meta<R: Runtime>(
 ) -> YaakResult<WorkspaceMeta> {
     let db = app_handle.db();
     let workspace = db.get_workspace(workspace_id)?;
-    Ok(db.get_or_create_workspace_meta(&workspace, &UpdateSource::from_window(&window))?)
+    Ok(db.get_or_create_workspace_meta(&workspace.id, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1934,13 +1934,10 @@ fn get_window_from_window_context<R: Runtime>(
         }
     };
 
-    let window = app_handle.webview_windows().iter().find_map(|(_, w)| {
-        if w.label() == label {
-            Some(w.to_owned())
-        } else {
-            None
-        }
-    });
+    let window = app_handle
+        .webview_windows()
+        .iter()
+        .find_map(|(_, w)| if w.label() == label { Some(w.to_owned()) } else { None });
 
     if window.is_none() {
         error!("Failed to find window by {window_context:?}");

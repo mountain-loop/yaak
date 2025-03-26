@@ -96,7 +96,7 @@ pub(crate) async fn list_connections<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketConnection>> {
-    Ok(app_handle.db().list_websocket_connections_for_workspace(workspace_id)?)
+    Ok(app_handle.db().list_websocket_connections(workspace_id)?)
 }
 
 #[tauri::command]

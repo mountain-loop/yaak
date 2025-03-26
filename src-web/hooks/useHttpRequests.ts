@@ -1,13 +1,14 @@
-import type {HttpRequest} from '@yaakapp-internal/models';
-import {atom, useAtomValue} from 'jotai';
-import {jotaiStore} from "../lib/jotai";
+import type { HttpRequest } from '@yaakapp-internal/models';
+import { useModelList } from '@yaakapp-internal/models';
+import { getModel } from '@yaakapp-internal/models/guest-js/store';
+import { atom } from 'jotai';
 
 export const httpRequestsAtom = atom<HttpRequest[]>([]);
 
 export function useHttpRequests() {
-    return useAtomValue(httpRequestsAtom);
+  return useModelList('http_request');
 }
 
 export function getHttpRequest(id: string) {
-    return jotaiStore.get(httpRequestsAtom).find(r => r.id === id) ?? null;
+  return getModel('http_request', id);
 }

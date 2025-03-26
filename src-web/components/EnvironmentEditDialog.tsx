@@ -1,4 +1,5 @@
 import type { Environment } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
@@ -7,7 +8,6 @@ import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
 import { useDeleteEnvironment } from '../hooks/useDeleteEnvironment';
 import { useEnvironments } from '../hooks/useEnvironments';
 import { useKeyValue } from '../hooks/useKeyValue';
-import { useUpdateEnvironment } from '../hooks/useUpdateEnvironment';
 import { showPrompt } from '../lib/prompt';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -128,10 +128,9 @@ const EnvironmentEditor = function ({
     fallback: true,
   });
   const { allEnvironments } = useEnvironments();
-  const updateEnvironment = useUpdateEnvironment(activeEnvironment?.id ?? null);
   const handleChange = useCallback<PairEditorProps['onChange']>(
-    (variables) => updateEnvironment.mutate({ variables }),
-    [updateEnvironment],
+    (variables) => patchModel(activeEnvironment, { variables }),
+    [activeEnvironment],
   );
 
   // Gather a list of env names from other environments, to help the user get them aligned
@@ -217,7 +216,6 @@ function SidebarButton({
   rightSlot?: ReactNode;
   environment: Environment | null;
 }) {
-  const updateEnvironment = useUpdateEnvironment(environment?.id ?? null);
   const deleteEnvironment = useDeleteEnvironment(environment);
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
@@ -277,7 +275,7 @@ function SidebarButton({
                   defaultValue: environment.name,
                 });
                 if (name == null) return;
-                updateEnvironment.mutate({ name });
+                await patchModel(environment, { name });
               },
             },
             {
