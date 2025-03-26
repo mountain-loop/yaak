@@ -12,7 +12,6 @@ use crate::uri_scheme::handle_uri_scheme;
 use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, warn};
-use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{create_dir_all, File};
 use std::path::PathBuf;
@@ -28,6 +27,7 @@ use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::fs::read_to_string;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
+use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
 use yaak_models::models::{
@@ -43,14 +43,15 @@ use yaak_plugins::events::{
     BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
     GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, HttpHeader, InternalEvent,
-    InternalEventPayload, JsonPrimitive, RenderPurpose, WindowContext,
+    InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
-use yaak_templates::{Parser, Tokens};
+use yaak_templates::{transform_args, Parser, Tokens};
 
+mod commands;
 mod encoding;
 mod error;
 mod grpc;
@@ -95,8 +96,18 @@ async fn cmd_parse_template(template: &str) -> YaakResult<Tokens> {
 }
 
 #[tauri::command]
-async fn cmd_template_tokens_to_string(tokens: Tokens) -> Result<String, String> {
-    Ok(tokens.to_string())
+async fn cmd_template_tokens_to_string<R: Runtime>(
+    window: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
+    tokens: Tokens,
+) -> YaakResult<String> {
+    let cb = PluginTemplateCallback::new(
+        &app_handle,
+        &PluginWindowContext::new(&window),
+        RenderPurpose::Preview,
+    );
+    let new_tokens = transform_args(tokens, &cb).await?;
+    Ok(new_tokens.to_string())
 }
 
 #[tauri::command]
@@ -118,7 +129,7 @@ async fn cmd_render_template<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             &app_handle,
-            &WindowContext::from_window(&window),
+            &PluginWindowContext::new(&window),
             RenderPurpose::Preview,
         ),
     )
@@ -181,7 +192,7 @@ async fn cmd_grpc_go<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             &app_handle,
-            &WindowContext::from_window(&window),
+            &PluginWindowContext::new(&window),
             RenderPurpose::Send,
         ),
     )
@@ -336,7 +347,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 environment.as_ref(),
                                 &PluginTemplateCallback::new(
                                     &app_handle,
-                                    &WindowContext::from_window(&window),
+                                    &PluginWindowContext::new(&window),
                                     RenderPurpose::Send,
                                 ),
                             )
@@ -405,7 +416,7 @@ async fn cmd_grpc_go<R: Runtime>(
             environment.as_ref(),
             &PluginTemplateCallback::new(
                 &app_handle,
-                &WindowContext::from_window(&window),
+                &PluginWindowContext::new(&window),
                 RenderPurpose::Send,
             ),
         )
@@ -945,18 +956,20 @@ async fn cmd_curl_to_request<R: Runtime>(
     command: &str,
     plugin_manager: State<'_, PluginManager>,
     workspace_id: &str,
-) -> Result<HttpRequest, String> {
-    let import_result =
-        { plugin_manager.import_data(&window, command).await.map_err(|e| e.to_string())? };
+) -> YaakResult<HttpRequest> {
+    let import_result = plugin_manager.import_data(&window, command).await?;
 
-    import_result.resources.http_requests.get(0).ok_or("No curl command found".to_string()).map(
-        |r| {
+    Ok(import_result
+        .resources
+        .http_requests
+        .get(0)
+        .ok_or(GenericError("No curl command found".to_string()))
+        .map(|r| {
             let mut request = r.clone();
             request.workspace_id = workspace_id.into();
             request.id = "".to_string();
             request
-        },
-    )
+        })?)
 }
 
 #[tauri::command]
@@ -965,11 +978,9 @@ async fn cmd_export_data<R: Runtime>(
     export_path: &str,
     workspace_ids: Vec<&str>,
     include_environments: bool,
-) -> Result<(), String> {
+) -> YaakResult<()> {
     let export_data =
-        get_workspace_export_resources(&app_handle, workspace_ids, include_environments)
-            .await
-            .map_err(|e| e.to_string())?;
+        get_workspace_export_resources(&app_handle, workspace_ids, include_environments).await?;
     let f = File::options()
         .create(true)
         .truncate(true)
@@ -978,7 +989,7 @@ async fn cmd_export_data<R: Runtime>(
         .expect("Unable to create file");
 
     serde_json::to_writer_pretty(&f, &export_data)
-        .map_err(|e| e.to_string())
+        .map_err(|e| GenericError(e.to_string()))
         .expect("Failed to write");
 
     f.sync_all().expect("Failed to sync");
@@ -1113,9 +1124,7 @@ async fn cmd_install_plugin<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Plugin> {
-    plugin_manager
-        .add_plugin_by_dir(&WindowContext::from_window(&window), &directory, true)
-        .await?;
+    plugin_manager.add_plugin_by_dir(&PluginWindowContext::new(&window), &directory, true).await?;
 
     Ok(app_handle.db().upsert_plugin(
         &Plugin {
@@ -1137,9 +1146,7 @@ async fn cmd_uninstall_plugin<R: Runtime>(
     let plugin =
         app_handle.db().delete_plugin_by_id(plugin_id, &UpdateSource::from_window(&window))?;
 
-    plugin_manager
-        .uninstall(&WindowContext::from_window(&window), plugin.directory.as_str())
-        .await?;
+    plugin_manager.uninstall(&PluginWindowContext::new(&window), plugin.directory.as_str()).await?;
 
     Ok(plugin)
 }
@@ -1417,7 +1424,7 @@ async fn cmd_reload_plugins<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<(), String> {
     plugin_manager
-        .initialize_all_plugins(&app_handle, &WindowContext::from_window(&window))
+        .initialize_all_plugins(&app_handle, &PluginWindowContext::new(&window))
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -1688,6 +1695,7 @@ pub fn run() {
         .plugin(yaak_license::init())
         .plugin(yaak_models::init())
         .plugin(yaak_plugins::init())
+        .plugin(yaak_crypto::init())
         .plugin(yaak_git::init())
         .plugin(yaak_ws::init())
         .plugin(yaak_sync::init());
@@ -1764,9 +1772,9 @@ pub fn run() {
             cmd_list_grpc_connections,
             cmd_list_grpc_events,
             cmd_list_grpc_requests,
-            cmd_list_key_values,
             cmd_list_http_requests,
             cmd_list_http_responses,
+            cmd_list_key_values,
             cmd_list_plugins,
             cmd_list_workspaces,
             cmd_metadata,
@@ -1792,6 +1800,12 @@ pub fn run() {
             cmd_update_settings,
             cmd_update_workspace,
             cmd_update_workspace_meta,
+            //
+            //
+            // Migrated commands
+            crate::commands::cmd_show_workspace_key,
+            crate::commands::cmd_encrypt_input,
+            crate::commands::cmd_decrypt_input,
         ])
         .register_uri_scheme_protocol("yaak", handle_uri_scheme)
         .build(tauri::generate_context!())
@@ -1925,11 +1939,11 @@ async fn call_frontend<R: Runtime>(
 
 fn get_window_from_window_context<R: Runtime>(
     app_handle: &AppHandle<R>,
-    window_context: &WindowContext,
+    window_context: &PluginWindowContext,
 ) -> Option<WebviewWindow<R>> {
     let label = match window_context {
-        WindowContext::Label { label } => label,
-        WindowContext::None => {
+        PluginWindowContext::Label { label, .. } => label,
+        PluginWindowContext::None => {
             return app_handle.webview_windows().iter().next().map(|(_, w)| w.to_owned());
         }
     };
@@ -1949,43 +1963,22 @@ fn get_window_from_window_context<R: Runtime>(
     window
 }
 
-fn workspace_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<String> {
-    let url = window.url().unwrap();
-    let re = Regex::new(r"/workspaces/(?<wid>\w+)").unwrap();
-    match re.captures(url.as_str()) {
-        None => None,
-        Some(captures) => captures.name("wid").map(|c| c.as_str().to_string()),
-    }
-}
-
 fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Workspace> {
-    match workspace_id_from_window(&window) {
+    match window.workspace_id() {
         None => None,
         Some(id) => window.db().get_workspace(&id).ok(),
     }
 }
 
-fn environment_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<String> {
-    let url = window.url().unwrap();
-    let mut query_pairs = url.query_pairs();
-    query_pairs.find(|(k, _v)| k == "environment_id").map(|(_k, v)| v.to_string())
-}
-
 fn environment_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Environment> {
-    match environment_id_from_window(&window) {
+    match window.environment_id() {
         None => None,
         Some(id) => window.db().get_environment(&id).ok(),
     }
 }
 
-fn cookie_jar_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<String> {
-    let url = window.url().unwrap();
-    let mut query_pairs = url.query_pairs();
-    query_pairs.find(|(k, _v)| k == "cookie_jar_id").map(|(_k, v)| v.to_string())
-}
-
 fn cookie_jar_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<CookieJar> {
-    match cookie_jar_id_from_window(&window) {
+    match window.cookie_jar_id() {
         None => None,
         Some(id) => window.db().get_cookie_jar(&id).ok(),
     }

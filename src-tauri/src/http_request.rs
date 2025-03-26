@@ -31,7 +31,7 @@ use yaak_models::models::{
 };
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
+    CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -61,7 +61,7 @@ pub async fn send_http_request<R: Runtime>(
 
     let cb = PluginTemplateCallback::new(
         window.app_handle(),
-        &WindowContext::from_window(window),
+        &PluginWindowContext::new(window),
         RenderPurpose::Send,
     );
     let update_source = UpdateSource::from_window(window);
@@ -384,7 +384,7 @@ pub async fn send_http_request<R: Runtime>(
                                 };
                             }
 
-                            // Set file path if not empty
+                            // Set file path if it is not empty
                             if !file_path.is_empty() {
                                 let filename = PathBuf::from(file_path)
                                     .file_name()
@@ -443,7 +443,7 @@ pub async fn send_http_request<R: Runtime>(
                 })
                 .collect(),
         };
-        let auth_result = plugin_manager.call_http_authentication(window, &auth_name, req).await;
+        let auth_result = plugin_manager.call_http_authentication(&window, &auth_name, req).await;
         let plugin_result = match auth_result {
             Ok(r) => r,
             Err(e) => {

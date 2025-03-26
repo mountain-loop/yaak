@@ -76,4 +76,4 @@ export type WebsocketRequest = { model: "websocket_request", id: string, created
 
 export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
 
-export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, settingSyncDir: string | null, };
+export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, settingSyncDir: string | null, encryptedKey: Array<number> | null, };

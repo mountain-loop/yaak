@@ -6,12 +6,12 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateTokensToString } from '../hooks/useTemplateTokensToString';
 import { useToggle } from '../hooks/useToggle';
+import { Banner } from './core/Banner';
 import { Button } from './core/Button';
+import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import { HStack, VStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
-import { IconButton } from './core/IconButton';
-import { Banner } from './core/Banner';
 
 interface Props {
   templateFunction: TemplateFunction;
@@ -23,6 +23,10 @@ interface Props {
 export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, onChange }: Props) {
   const [showSecretsInPreview, toggleShowSecretsInPreview] = useToggle(false);
   const [argValues, setArgValues] = useState<Record<string, string | boolean>>(() => {
+    if (templateFunction.name === 'secure') {
+      return {};
+    }
+
     const initial: Record<string, string> = {};
     const initialArgs =
       initialTokens.tokens[0]?.type === 'tag' && initialTokens.tokens[0]?.val.type === 'fn'
@@ -79,15 +83,16 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
     hide();
   };
 
-  const debouncedTagText = useDebouncedValue(tagText.data ?? '', 200);
+  const debouncedTagText = useDebouncedValue(tagText.data ?? '', 400);
   const rendered = useRenderTemplate(debouncedTagText);
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
   const dataContainsSecrets = useMemo(() => {
     for (const [name, value] of Object.entries(argValues)) {
-      const isPassword = templateFunction.args.some(
-        (a) => a.type === 'text' && a.password && a.name === name,
-      );
-      if (isPassword && typeof value === 'string' && value && rendered.data?.includes(value)) {
+      const arg = templateFunction.args.find((a) => 'name' in a && a.name === name);
+      const isTextPassword = arg?.type === 'text' && arg.password;
+      const isSecureText = arg?.type === 'secure_text';
+      const isSecret = isTextPassword || isSecureText;
+      if (isSecret && typeof value === 'string' && value && rendered.data?.includes(value)) {
         return true;
       }
     }
@@ -98,7 +103,6 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
 
   return (
     <VStack className="pb-3" space={4}>
-      <h1 className="font-mono !text-base">{templateFunction.name}(…)</h1>
       <DynamicForm
         autocompleteVariables
         autocompleteFunctions
@@ -142,7 +146,7 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
         )}
       </VStack>
       <Button color="primary" onClick={handleDone}>
-        Done
+        Save
       </Button>
     </VStack>
   );

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::{Runtime, WebviewWindow};
 use ts_rs::TS;
-
+use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::models::{
     Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest, Workspace,
 };
@@ -15,7 +15,7 @@ pub struct InternalEvent {
     pub plugin_ref_id: String,
     pub plugin_name: String,
     pub reply_id: Option<String>,
-    pub window_context: WindowContext,
+    pub window_context: PluginWindowContext,
     pub payload: InternalEventPayload,
 }
 
@@ -29,22 +29,32 @@ pub(crate) struct InternalEventRawPayload {
     pub plugin_ref_id: String,
     pub plugin_name: String,
     pub reply_id: Option<String>,
-    pub window_context: WindowContext,
+    pub window_context: PluginWindowContext,
     pub payload: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "gen_events.ts")]
-pub enum WindowContext {
+pub enum PluginWindowContext {
     None,
-    Label { label: String },
+    Label {
+        label: String,
+        workspace_id: Option<String>,
+    },
 }
 
-impl WindowContext {
-    pub fn from_window<R: Runtime>(window: &WebviewWindow<R>) -> Self {
+impl PluginWindowContext {
+    pub fn new<R: Runtime>(window: &WebviewWindow<R>) -> Self {
         Self::Label {
             label: window.label().to_string(),
+            workspace_id: window.workspace_id(),
+        }
+    }
+    pub fn new_no_workspace<R: Runtime>(window: &WebviewWindow<R>) -> Self {
+        Self::Label {
+            label: window.label().to_string(),
+            workspace_id: None,
         }
     }
 }
@@ -497,7 +507,16 @@ pub struct TemplateFunction {
     /// tags when changing the `name` property
     #[ts(optional)]
     pub aliases: Option<Vec<String>>,
-    pub args: Vec<FormInput>,
+    pub args: Vec<TemplateFunctionArg>,
+}
+
+/// Similar to FormInput, but contains
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case", untagged)]
+#[ts(export, export_to = "gen_events.ts")]
+pub enum TemplateFunctionArg {
+    FormInput(FormInput),
+    Extra(FormInputTemplateFunction),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -513,6 +532,13 @@ pub enum FormInput {
     Accordion(FormInputAccordion),
     Banner(FormInputBanner),
     Markdown(FormInputMarkdown),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case", tag = "type")]
+#[ts(export, export_to = "gen_events.ts")]
+pub enum FormInputTemplateFunction {
+    SecureText(FormInputSecureText),
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -545,6 +571,14 @@ pub struct FormInputBase {
 
     #[ts(optional)]
     pub disabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct FormInputSecureText {
+    #[serde(flatten)]
+    pub base: FormInputBase,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
