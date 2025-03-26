@@ -1,4 +1,3 @@
-mod base;
 mod batch;
 mod cookie_jars;
 mod environments;
@@ -18,3 +17,5 @@ mod websocket_events;
 mod websocket_requests;
 mod workspace_metas;
 mod workspaces;
+
+const MAX_HISTORY_ITEMS: usize = 20;

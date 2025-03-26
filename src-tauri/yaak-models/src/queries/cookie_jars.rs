@@ -1,7 +1,7 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{CookieJar, CookieJarIden};
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
     pub fn get_cookie_jar(&self, id: &str) -> Result<CookieJar> {

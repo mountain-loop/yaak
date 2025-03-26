@@ -7,8 +7,8 @@ use std::ops::Add;
 use std::time::Duration;
 use tauri::{is_dev, AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
-use yaak_models::manager::QueryManagerExt;
-use yaak_models::queries_legacy::UpdateSource;
+use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::util::UpdateSource;
 
 const KV_NAMESPACE: &str = "license";
 const KV_ACTIVATION_ID_KEY: &str = "activation_id";
@@ -81,7 +81,7 @@ pub async fn activate_license<R: Runtime>(
     }
 
     let body: ActivateLicenseResponsePayload = response.json().await?;
-    window.app_handle().queries().connect().await?.set_key_value_string(
+    window.app_handle().db().set_key_value_string(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         body.activation_id.as_str(),
@@ -118,7 +118,7 @@ pub async fn deactivate_license<R: Runtime>(
         return Err(ServerError);
     }
 
-    app_handle.queries().connect().await?.delete_key_value(
+    app_handle.db().delete_key_value(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         &UpdateSource::from_window(&window),
@@ -146,11 +146,7 @@ pub async fn check_license<R: Runtime>(
     payload: CheckActivationRequestPayload,
 ) -> Result<LicenseCheckStatus> {
     let activation_id = get_activation_id(window.app_handle()).await;
-    let settings = window
-        .queries()
-        .connect()
-        .await?
-        .get_or_create_settings(&UpdateSource::from_window(window))?;
+    let settings = window.db().get_or_create_settings(&UpdateSource::from_window(window));
     let trial_end = settings.created_at.add(Duration::from_secs(TRIAL_SECONDS));
 
     debug!("Trial ending at {trial_end:?}");
@@ -201,7 +197,7 @@ fn build_url(path: &str) -> String {
 }
 
 pub async fn get_activation_id<R: Runtime>(app_handle: &AppHandle<R>) -> String {
-    app_handle.queries().connect().await.unwrap().get_key_value_string(
+    app_handle.db().get_key_value_string(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         "",

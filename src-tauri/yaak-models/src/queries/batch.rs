@@ -1,8 +1,8 @@
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{Environment, Folder, GrpcRequest, HttpRequest, WebsocketRequest, Workspace};
-use crate::queries_legacy::{BatchUpsertResult, UpdateSource};
+use crate::util::{BatchUpsertResult, UpdateSource};
 use log::info;
+use crate::db_context::DbContext;
 
 impl<'a> DbContext<'a> {
     pub fn batch_upsert(

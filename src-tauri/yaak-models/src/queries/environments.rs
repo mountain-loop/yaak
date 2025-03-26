@@ -1,11 +1,11 @@
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{Environment, EnvironmentIden, UpsertModelInfo};
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 use log::info;
 use sea_query::ColumnRef::Asterisk;
 use sea_query::{Cond, Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
+use crate::db_context::DbContext;
 
 impl<'a> DbContext<'a> {
     pub fn get_environment(&self, id: &str) -> Result<Environment> {

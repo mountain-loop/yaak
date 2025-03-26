@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Runtime};
-use yaak_models::manager::QueryManagerExt;
-use yaak_models::queries_legacy::UpdateSource;
+use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::util::UpdateSource;
 
 const NAMESPACE: &str = "analytics";
 const NUM_LAUNCHES_KEY: &str = "num_launches";
@@ -22,7 +22,6 @@ pub async fn store_launch_history<R: Runtime>(app_handle: &AppHandle<R>) -> Laun
     info.current_version = app_handle.package_info().version.to_string();
 
     app_handle
-        .queries()
         .with_tx(|tx| {
             info.previous_version =
                 tx.get_key_value_string(NAMESPACE, last_tracked_version_key, "");
@@ -39,7 +38,6 @@ pub async fn store_launch_history<R: Runtime>(app_handle: &AppHandle<R>) -> Laun
             tx.set_key_value_int(NAMESPACE, NUM_LAUNCHES_KEY, info.num_launches, source);
             Ok(())
         })
-        .await
         .unwrap();
 
     info
@@ -58,5 +56,5 @@ pub fn get_os() -> &'static str {
 }
 
 pub async fn get_num_launches<R: Runtime>(app_handle: &AppHandle<R>) -> i32 {
-    app_handle.queries().connect().await.unwrap().get_key_value_int(NAMESPACE, NUM_LAUNCHES_KEY, 0)
+    app_handle.db().get_key_value_int(NAMESPACE, NUM_LAUNCHES_KEY, 0)
 }

@@ -1,11 +1,11 @@
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{KeyValue, KeyValueIden};
-use crate::queries_legacy::{ModelChangeEvent, ModelPayload, UpdateSource};
+use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
 use log::error;
 use sea_query::Keyword::CurrentTimestamp;
 use sea_query::{Asterisk, Cond, Expr, OnConflict, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
+use crate::db_context::DbContext;
 
 impl<'a> DbContext<'a> {
     pub fn list_key_values_raw(&self) -> Result<Vec<KeyValue>> {

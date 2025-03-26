@@ -1,8 +1,8 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{WebsocketConnection, WebsocketConnectionIden, WebsocketConnectionState};
-use crate::queries::base::MAX_HISTORY_ITEMS;
-use crate::queries_legacy::UpdateSource;
+use crate::queries::MAX_HISTORY_ITEMS;
+use crate::util::UpdateSource;
 use log::debug;
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;

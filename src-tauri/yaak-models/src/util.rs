@@ -1,12 +1,15 @@
 use crate::error::Result;
-use crate::manager::QueryManagerExt;
-use crate::models::{AnyModel, Environment, Folder, GrpcRequest, HttpRequest, ModelType, WebsocketRequest, Workspace, WorkspaceIden};
+use crate::models::{
+    AnyModel, Environment, Folder, GrpcRequest, HttpRequest, ModelType, WebsocketRequest,
+    Workspace, WorkspaceIden,
+};
 use chrono::{NaiveDateTime, Utc};
 use log::warn;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Listener, Runtime, WebviewWindow};
 use ts_rs::TS;
+use crate::query_manager::QueryManagerExt;
 
 pub fn generate_model_id(model: ModelType) -> String {
     let id = generate_id();
@@ -131,7 +134,7 @@ pub async fn get_workspace_export_resources<R: Runtime>(
         },
     };
 
-    let db = app_handle.queries().connect().await?;
+    let db = app_handle.db();
     for workspace_id in workspace_ids {
         data.resources.workspaces.push(db.find_one(WorkspaceIden::Id, workspace_id)?);
         data.resources.environments.append(&mut db.list_environments(workspace_id)?);

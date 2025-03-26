@@ -30,13 +30,13 @@ use tokio::task::block_in_place;
 use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{deserialize_message, serialize_message, Code, ServiceDefinition};
-use yaak_models::manager::QueryManagerExt;
 use yaak_models::models::{
     CookieJar, Environment, EnvironmentVariable, Folder, GrpcConnection, GrpcConnectionState,
     GrpcEvent, GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, KeyValue,
     ModelType, Plugin, Settings, WebsocketRequest, Workspace, WorkspaceMeta,
 };
-use yaak_models::queries_legacy::{
+use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::util::{
     generate_model_id, get_workspace_export_resources, BatchUpsertResult, UpdateSource,
 };
 use yaak_plugins::events::{
@@ -119,11 +119,10 @@ async fn cmd_render_template<R: Runtime>(
     environment_id: Option<&str>,
 ) -> YaakResult<String> {
     let environment = match environment_id {
-        Some(id) => app_handle.queries().connect().await?.get_environment(id).ok(),
+        Some(id) => app_handle.db().get_environment(id).ok(),
         None => None,
     };
-    let base_environment =
-        app_handle.queries().connect().await?.get_base_environment(&workspace_id)?;
+    let base_environment = app_handle.db().get_base_environment(&workspace_id)?;
     let result = render_template(
         template,
         &base_environment,
@@ -154,12 +153,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
     app_handle: AppHandle<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<Vec<ServiceDefinition>> {
-    let req = app_handle
-        .queries()
-        .connect()
-        .await?
-        .get_grpc_request(request_id)?
-        .ok_or(GenericError("Failed to find GRPC request".to_string()))?;
+    let req = app_handle.db().get_grpc_request(request_id)?;
 
     let uri = safe_uri(&req.url);
 
@@ -186,20 +180,12 @@ async fn cmd_grpc_go<R: Runtime>(
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<String> {
     let environment = match environment_id {
-        Some(id) => app_handle.queries().connect().await?.get_environment(id).ok(),
+        Some(id) => app_handle.db().get_environment(id).ok(),
         None => None,
     };
-    let unrendered_request = app_handle
-        .queries()
-        .connect()
-        .await?
-        .get_grpc_request(request_id)?
-        .ok_or(GenericError("Failed to get GRPC request".to_string()))?;
-    let base_environment = app_handle
-        .queries()
-        .connect()
-        .await?
-        .get_base_environment(&unrendered_request.workspace_id)?;
+    let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
+    let base_environment =
+        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
     let request = render_grpc_request(
         &unrendered_request,
         &base_environment,
@@ -248,7 +234,7 @@ async fn cmd_grpc_go<R: Runtime>(
         }
     }
 
-    let conn = app_handle.queries().connect().await?.upsert_grpc_connection(
+    let conn = app_handle.db().upsert_grpc_connection(
         &GrpcConnection {
             workspace_id: request.workspace_id.clone(),
             request_id: request.id.clone(),
@@ -300,7 +286,7 @@ async fn cmd_grpc_go<R: Runtime>(
     let connection = match connection {
         Ok(c) => c,
         Err(err) => {
-            app_handle.queries().connect().await?.upsert_grpc_connection(
+            app_handle.db().upsert_grpc_connection(
                 &GrpcConnection {
                     elapsed: start.elapsed().as_millis() as i32,
                     error: Some(err.clone()),
@@ -375,10 +361,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         Err(e) => {
                             tauri::async_runtime::spawn(async move {
                                 app_handle
-                                    .queries()
-                                    .connect()
-                                    .await
-                                    .unwrap()
+                                    .db()
                                     .upsert_grpc_event(
                                         &GrpcEvent {
                                             event_type: GrpcEventType::Error,
@@ -395,10 +378,7 @@ async fn cmd_grpc_go<R: Runtime>(
                     in_msg_tx.try_send(d_msg).unwrap();
                     tauri::async_runtime::spawn(async move {
                         app_handle
-                            .queries()
-                            .connect()
-                            .await
-                            .unwrap()
+                            .db()
                             .upsert_grpc_event(
                                 &GrpcEvent {
                                     content: msg,
@@ -442,7 +422,7 @@ async fn cmd_grpc_go<R: Runtime>(
         )
         .await?;
 
-        app_handle.queries().connect().await?.upsert_grpc_event(
+        app_handle.db().upsert_grpc_event(
             &GrpcEvent {
                 content: format!("Connecting to {}", req.url),
                 event_type: GrpcEventType::ConnectionStart,
@@ -480,10 +460,7 @@ async fn cmd_grpc_go<R: Runtime>(
 
             if !method_desc.is_client_streaming() {
                 app_handle
-                    .queries()
-                    .connect()
-                    .await
-                    .unwrap()
+                    .db()
                     .upsert_grpc_event(
                         &GrpcEvent {
                             event_type: GrpcEventType::ClientMessage,
@@ -498,10 +475,7 @@ async fn cmd_grpc_go<R: Runtime>(
             match maybe_msg {
                 Some(Ok(msg)) => {
                     app_handle
-                        .queries()
-                        .connect()
-                        .await
-                        .unwrap()
+                        .db()
                         .upsert_grpc_event(
                             &GrpcEvent {
                                 metadata: metadata_to_map(msg.metadata().clone()),
@@ -518,10 +492,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         )
                         .unwrap();
                     app_handle
-                        .queries()
-                        .connect()
-                        .await
-                        .unwrap()
+                        .db()
                         .upsert_grpc_event(
                             &GrpcEvent {
                                 content: serialize_message(&msg.into_inner()).unwrap(),
@@ -532,10 +503,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         )
                         .unwrap();
                     app_handle
-                        .queries()
-                        .connect()
-                        .await
-                        .unwrap()
+                        .db()
                         .upsert_grpc_event(
                             &GrpcEvent {
                                 content: "Connection complete".to_string(),
@@ -549,10 +517,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 }
                 Some(Err(e)) => {
                     app_handle
-                        .queries()
-                        .connect()
-                        .await
-                        .unwrap()
+                        .db()
                         .upsert_grpc_event(
                             &(match e.status {
                                 Some(s) => GrpcEvent {
@@ -583,10 +548,7 @@ async fn cmd_grpc_go<R: Runtime>(
             let mut stream = match maybe_stream {
                 Some(Ok(stream)) => {
                     app_handle
-                        .queries()
-                        .connect()
-                        .await
-                        .unwrap()
+                        .db()
                         .upsert_grpc_event(
                             &GrpcEvent {
                                 metadata: metadata_to_map(stream.metadata().clone()),
@@ -607,10 +569,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 Some(Err(e)) => {
                     warn!("GRPC stream error {e:?}");
                     app_handle
-                        .queries()
-                        .connect()
-                        .await
-                        .unwrap()
+                        .db()
                         .upsert_grpc_event(
                             &(match e.status {
                                 Some(s) => GrpcEvent {
@@ -642,10 +601,7 @@ async fn cmd_grpc_go<R: Runtime>(
                     Ok(Some(msg)) => {
                         let message = serialize_message(&msg).unwrap();
                         app_handle
-                            .queries()
-                            .connect()
-                            .await
-                            .unwrap()
+                            .db()
                             .upsert_grpc_event(
                                 &GrpcEvent {
                                     content: message,
@@ -660,10 +616,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         let trailers =
                             stream.trailers().await.unwrap_or_default().unwrap_or_default();
                         app_handle
-                            .queries()
-                            .connect()
-                            .await
-                            .unwrap()
+                            .db()
                             .upsert_grpc_event(
                                 &GrpcEvent {
                                     content: "Connection complete".to_string(),
@@ -679,10 +632,7 @@ async fn cmd_grpc_go<R: Runtime>(
                     }
                     Err(status) => {
                         app_handle
-                            .queries()
-                            .connect()
-                            .await
-                            .unwrap()
+                            .db()
                             .upsert_grpc_event(
                                 &GrpcEvent {
                                     content: status.to_string(),
@@ -706,12 +656,12 @@ async fn cmd_grpc_go<R: Runtime>(
             let w = app_handle.clone();
             tokio::select! {
                 _ = grpc_listen => {
-                    let events = w.queries().connect().await.unwrap().list_grpc_events(&conn_id).unwrap();
+                    let events = w.db().list_grpc_events(&conn_id).unwrap();
                     let closed_event = events
                         .iter()
                         .find(|e| GrpcEventType::ConnectionEnd == e.event_type);
                     let closed_status = closed_event.and_then(|e| e.status).unwrap_or(Code::Unavailable as i32);
-                    w.queries().with_conn(|c| {
+                    w.with_tx(|c| {
                         c.upsert_grpc_connection(
                             &GrpcConnection{
                                 elapsed: start.elapsed().as_millis() as i32,
@@ -721,10 +671,10 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::from_window(&window),
                         )
-                    }).await.unwrap();
+                    }).unwrap();
                 },
                 _ = cancelled_rx.changed() => {
-                    w.queries().connect().await.unwrap().upsert_grpc_event(
+                    w.db().upsert_grpc_event(
                         &GrpcEvent {
                             content: "Cancelled".to_string(),
                             event_type: GrpcEventType::ConnectionEnd,
@@ -733,7 +683,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         },
                         &UpdateSource::from_window(&window),
                     ).unwrap();
-                    w.queries().with_conn(|c| {
+                    w.with_tx(|c| {
                         c.upsert_grpc_connection(
                             &GrpcConnection{
                             elapsed: start.elapsed().as_millis() as i32,
@@ -743,7 +693,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             },
                             &UpdateSource::from_window(&window),
                         )
-                    }).await.unwrap();
+                    }).unwrap();
                 },
             }
             w.unlisten(event_handler);
@@ -764,11 +714,11 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
     let response = HttpResponse::default();
     request.id = "".to_string();
     let environment = match environment_id {
-        Some(id) => Some(app_handle.queries().connect().await?.get_environment(id)?),
+        Some(id) => Some(app_handle.db().get_environment(id)?),
         None => None,
     };
     let cookie_jar = match cookie_jar_id {
-        Some(id) => Some(app_handle.queries().connect().await?.get_cookie_jar(id)?),
+        Some(id) => Some(app_handle.db().get_cookie_jar(id)?),
         None => None,
     };
 
@@ -795,7 +745,7 @@ async fn cmd_filter_response<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
     filter: &str,
 ) -> YaakResult<FilterResponse> {
-    let response = app_handle.queries().connect().await?.get_http_response(response_id)?;
+    let response = app_handle.db().get_http_response(response_id)?;
 
     if let None = response.body_path {
         return Err(GenericError("Response body path not set".to_string()));
@@ -951,20 +901,17 @@ async fn cmd_import_data<R: Runtime>(
         })
         .collect();
 
-    let upserted = app_handle
-        .queries()
-        .with_tx(|tx| {
-            tx.batch_upsert(
-                workspaces,
-                environments,
-                folders,
-                http_requests,
-                grpc_requests,
-                websocket_requests,
-                &UpdateSource::Import,
-            )
-        })
-        .await?;
+    let upserted = app_handle.with_tx(|tx| {
+        tx.batch_upsert(
+            workspaces,
+            environments,
+            folders,
+            http_requests,
+            grpc_requests,
+            websocket_requests,
+            &UpdateSource::Import,
+        )
+    })?;
 
     Ok(upserted)
 }
@@ -1088,7 +1035,7 @@ async fn cmd_save_response<R: Runtime>(
     response_id: &str,
     filepath: &str,
 ) -> YaakResult<()> {
-    let response = app_handle.queries().connect().await?.get_http_response(response_id)?;
+    let response = app_handle.db().get_http_response(response_id)?;
 
     let body_path =
         response.body_path.ok_or(GenericError("Response does not have a body".to_string()))?;
@@ -1108,7 +1055,7 @@ async fn cmd_send_http_request<R: Runtime>(
     //   that has not yet been saved in the DB.
     request: HttpRequest,
 ) -> YaakResult<HttpResponse> {
-    let response = app_handle.queries().connect().await?.upsert_http_response(
+    let response = app_handle.db().upsert_http_response(
         &HttpResponse {
             request_id: request.id.clone(),
             workspace_id: request.workspace_id.clone(),
@@ -1125,7 +1072,7 @@ async fn cmd_send_http_request<R: Runtime>(
     });
 
     let environment = match environment_id {
-        Some(id) => match app_handle.queries().connect().await?.get_environment(id) {
+        Some(id) => match app_handle.db().get_environment(id) {
             Ok(env) => Some(env),
             Err(e) => {
                 warn!("Failed to find environment by id {id} {}", e);
@@ -1136,14 +1083,14 @@ async fn cmd_send_http_request<R: Runtime>(
     };
 
     let cookie_jar = match cookie_jar_id {
-        Some(id) => Some(app_handle.queries().connect().await?.get_cookie_jar(id)?),
+        Some(id) => Some(app_handle.db().get_cookie_jar(id)?),
         None => None,
     };
 
     send_http_request(&window, &request, &response, environment, cookie_jar, &mut cancel_rx).await
 }
 
-async fn response_err<R: Runtime>(
+fn response_err<R: Runtime>(
     app_handle: &AppHandle<R>,
     response: &HttpResponse,
     error: String,
@@ -1154,10 +1101,7 @@ async fn response_err<R: Runtime>(
     response.state = HttpResponseState::Closed;
     response.error = Some(error.clone());
     response = app_handle
-        .queries()
-        .connect()
-        .await
-        .unwrap()
+        .db()
         .update_http_response_if_id(&response, update_source)
         .expect("Failed to update response");
     response
@@ -1169,7 +1113,7 @@ async fn cmd_set_update_mode<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<KeyValue> {
-    let (key_value, _created) = app_handle.queries().connect().await?.set_key_value_raw(
+    let (key_value, _created) = app_handle.db().set_key_value_raw(
         "app",
         "update_mode",
         update_mode,
@@ -1184,7 +1128,7 @@ async fn cmd_get_key_value<R: Runtime>(
     key: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Option<KeyValue>> {
-    Ok(app_handle.queries().connect().await?.get_key_value_raw(namespace, key))
+    Ok(app_handle.db().get_key_value_raw(namespace, key))
 }
 
 #[tauri::command]
@@ -1195,7 +1139,7 @@ async fn cmd_set_key_value<R: Runtime>(
     key: &str,
     value: &str,
 ) -> YaakResult<KeyValue> {
-    let (key_value, _created) = app_handle.queries().connect().await?.set_key_value_raw(
+    let (key_value, _created) = app_handle.db().set_key_value_raw(
         namespace,
         key,
         value,
@@ -1214,7 +1158,7 @@ async fn cmd_install_plugin<R: Runtime>(
 ) -> YaakResult<Plugin> {
     plugin_manager.add_plugin_by_dir(&PluginWindowContext::new(&window), &directory, true).await?;
 
-    Ok(app_handle.queries().connect().await?.upsert_plugin(
+    Ok(app_handle.db().upsert_plugin(
         &Plugin {
             directory: directory.into(),
             url,
@@ -1231,11 +1175,8 @@ async fn cmd_uninstall_plugin<R: Runtime>(
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Plugin> {
-    let plugin = app_handle
-        .queries()
-        .connect()
-        .await?
-        .delete_plugin_by_id(plugin_id, &UpdateSource::from_window(&window))?;
+    let plugin =
+        app_handle.db().delete_plugin_by_id(plugin_id, &UpdateSource::from_window(&window))?;
 
     plugin_manager.uninstall(&PluginWindowContext::new(&window), plugin.directory.as_str()).await?;
 
@@ -1248,11 +1189,7 @@ async fn cmd_update_cookie_jar<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<CookieJar> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1262,9 +1199,7 @@ async fn cmd_delete_cookie_jar<R: Runtime>(
     cookie_jar_id: &str,
 ) -> YaakResult<CookieJar> {
     Ok(app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .delete_cookie_jar_by_id(cookie_jar_id, &UpdateSource::from_window(&window))?)
 }
 
@@ -1275,7 +1210,7 @@ async fn cmd_create_cookie_jar<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<CookieJar> {
-    Ok(app_handle.queries().connect().await?.upsert_cookie_jar(
+    Ok(app_handle.db().upsert_cookie_jar(
         &CookieJar {
             name: name.to_string(),
             workspace_id: workspace_id.to_string(),
@@ -1294,7 +1229,7 @@ async fn cmd_create_environment<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Environment> {
-    Ok(app_handle.queries().connect().await?.upsert_environment(
+    Ok(app_handle.db().upsert_environment(
         &Environment {
             workspace_id: workspace_id.to_string(),
             environment_id: environment_id.map(|s| s.to_string()),
@@ -1315,7 +1250,7 @@ async fn cmd_create_grpc_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<GrpcRequest> {
-    Ok(app_handle.queries().connect().await?.upsert_grpc_request(
+    Ok(app_handle.db().upsert_grpc_request(
         &GrpcRequest {
             workspace_id: workspace_id.to_string(),
             name: name.to_string(),
@@ -1333,8 +1268,8 @@ async fn cmd_duplicate_grpc_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<GrpcRequest> {
-    let db = app_handle.queries().connect().await?;
-    let request = db.get_grpc_request(id)?.unwrap();
+    let db = app_handle.db();
+    let request = db.get_grpc_request(id)?;
     Ok(db.duplicate_grpc_request(&request, &UpdateSource::from_window(&window))?)
 }
 
@@ -1344,7 +1279,7 @@ async fn cmd_duplicate_folder<R: Runtime>(
     window: WebviewWindow<R>,
     id: &str,
 ) -> YaakResult<Folder> {
-    let db = app_handle.queries().connect().await?;
+    let db = app_handle.db();
     let folder = db.get_folder(id)?;
     Ok(db.duplicate_folder(&folder, &UpdateSource::from_window(&window))?)
 }
@@ -1355,8 +1290,8 @@ async fn cmd_duplicate_http_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<HttpRequest> {
-    let db = app_handle.queries().connect().await?;
-    let request = db.get_http_request(id)?.unwrap();
+    let db = app_handle.db();
+    let request = db.get_http_request(id)?;
     Ok(db.duplicate_http_request(&request, &UpdateSource::from_window(&window))?)
 }
 
@@ -1366,11 +1301,7 @@ async fn cmd_update_workspace<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Workspace> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .upsert_workspace(&workspace, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().upsert_workspace(&workspace, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1380,9 +1311,7 @@ async fn cmd_update_workspace_meta<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> YaakResult<WorkspaceMeta> {
     Ok(app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .upsert_workspace_meta(&workspace_meta, &UpdateSource::from_window(&window))?)
 }
 
@@ -1392,11 +1321,7 @@ async fn cmd_update_environment<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Environment> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .upsert_environment(&environment, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().upsert_environment(&environment, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1405,11 +1330,7 @@ async fn cmd_update_grpc_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<GrpcRequest> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .upsert_grpc_request(&request, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().upsert_grpc_request(&request, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1418,11 +1339,7 @@ async fn cmd_upsert_http_request<R: Runtime>(
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
 ) -> YaakResult<HttpRequest> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .upsert_http_request(&request, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().upsert(&request, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1432,9 +1349,7 @@ async fn cmd_delete_grpc_request<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> YaakResult<GrpcRequest> {
     Ok(app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .delete_grpc_request_by_id(request_id, &UpdateSource::from_window(&window))?)
 }
 
@@ -1445,9 +1360,7 @@ async fn cmd_delete_http_request<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> YaakResult<HttpRequest> {
     Ok(app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .delete_http_request_by_id(request_id, &UpdateSource::from_window(&window))?)
 }
 
@@ -1456,7 +1369,7 @@ async fn cmd_list_folders<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<Folder>> {
-    Ok(app_handle.queries().connect().await?.list_folders(workspace_id)?)
+    Ok(app_handle.db().list_folders(workspace_id)?)
 }
 
 #[tauri::command]
@@ -1465,11 +1378,7 @@ async fn cmd_update_folder<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Folder> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .upsert_folder(&folder, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().upsert_folder(&folder, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1478,11 +1387,7 @@ async fn cmd_delete_folder<R: Runtime>(
     window: WebviewWindow<R>,
     folder_id: &str,
 ) -> YaakResult<Folder> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .delete_folder_by_id(folder_id, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().delete_folder_by_id(folder_id, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1492,9 +1397,7 @@ async fn cmd_delete_environment<R: Runtime>(
     environment_id: &str,
 ) -> YaakResult<Environment> {
     Ok(app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .delete_environment_by_id(environment_id, &UpdateSource::from_window(&window))?)
 }
 
@@ -1503,11 +1406,7 @@ async fn cmd_list_grpc_connections<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<GrpcConnection>> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .list_grpc_connections_for_workspace(workspace_id, None)?)
+    Ok(app_handle.db().list_grpc_connections_for_workspace(workspace_id, None)?)
 }
 
 #[tauri::command]
@@ -1515,7 +1414,7 @@ async fn cmd_list_grpc_events<R: Runtime>(
     connection_id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<GrpcEvent>> {
-    Ok(app_handle.queries().connect().await?.list_grpc_events(connection_id)?)
+    Ok(app_handle.db().list_grpc_events(connection_id)?)
 }
 
 #[tauri::command]
@@ -1523,7 +1422,7 @@ async fn cmd_list_grpc_requests<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<GrpcRequest>> {
-    Ok(app_handle.queries().connect().await?.list_grpc_requests(workspace_id)?)
+    Ok(app_handle.db().list_grpc_requests(workspace_id)?)
 }
 
 #[tauri::command]
@@ -1531,7 +1430,7 @@ async fn cmd_list_http_requests<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<HttpRequest>> {
-    Ok(app_handle.queries().connect().await?.list_http_requests(workspace_id)?)
+    Ok(app_handle.db().list_http_requests(workspace_id)?)
 }
 
 #[tauri::command]
@@ -1540,14 +1439,14 @@ async fn cmd_list_environments<R: Runtime>(
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<Environment>> {
     // Not sure of a better place to put this...
-    let db = app_handle.queries().connect().await?;
+    let db = app_handle.db();
     db.ensure_base_environment(workspace_id)?;
     Ok(db.list_environments(workspace_id)?)
 }
 
 #[tauri::command]
 async fn cmd_list_plugins<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<Vec<Plugin>> {
-    Ok(app_handle.queries().connect().await?.list_plugins()?)
+    Ok(app_handle.db().list_plugins()?)
 }
 
 #[tauri::command]
@@ -1569,7 +1468,7 @@ async fn cmd_plugin_info<R: Runtime>(
     app_handle: AppHandle<R>,
     plugin_manager: State<'_, PluginManager>,
 ) -> YaakResult<BootResponse> {
-    let plugin = app_handle.queries().connect().await?.get_plugin(id)?;
+    let plugin = app_handle.db().get_plugin(id)?;
     Ok(plugin_manager
         .get_plugin_by_dir(plugin.directory.as_str())
         .await
@@ -1580,11 +1479,7 @@ async fn cmd_plugin_info<R: Runtime>(
 
 #[tauri::command]
 async fn cmd_get_settings<R: Runtime>(window: WebviewWindow<R>) -> YaakResult<Settings> {
-    Ok(window
-        .queries()
-        .connect()
-        .await?
-        .get_or_create_settings(&UpdateSource::from_window(&window))?)
+    Ok(window.db().get_or_create_settings(&UpdateSource::from_window(&window)))
 }
 
 #[tauri::command]
@@ -1593,40 +1488,12 @@ async fn cmd_update_settings<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Settings> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .upsert_settings(&settings, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().upsert_settings(&settings, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
 async fn cmd_get_folder<R: Runtime>(id: &str, app_handle: AppHandle<R>) -> YaakResult<Folder> {
-    Ok(app_handle.queries().connect().await?.get_folder(id)?)
-}
-
-#[tauri::command]
-async fn cmd_get_grpc_request<R: Runtime>(
-    id: &str,
-    app_handle: AppHandle<R>,
-) -> YaakResult<Option<GrpcRequest>> {
-    Ok(app_handle.queries().connect().await?.get_grpc_request(id)?)
-}
-
-#[tauri::command]
-async fn cmd_get_http_request<R: Runtime>(
-    id: &str,
-    app_handle: AppHandle<R>,
-) -> YaakResult<Option<HttpRequest>> {
-    Ok(app_handle.queries().connect().await?.get_http_request(id)?)
-}
-
-#[tauri::command]
-async fn cmd_get_cookie_jar<R: Runtime>(
-    id: &str,
-    app_handle: AppHandle<R>,
-) -> YaakResult<CookieJar> {
-    Ok(app_handle.queries().connect().await?.get_cookie_jar(id)?)
+    Ok(app_handle.db().get_folder(id)?)
 }
 
 #[tauri::command]
@@ -1635,7 +1502,7 @@ async fn cmd_list_cookie_jars<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Vec<CookieJar>> {
-    let db = app_handle.queries().connect().await?;
+    let db = app_handle.db();
     let cookie_jars = db.list_cookie_jars(workspace_id)?;
 
     if cookie_jars.is_empty() {
@@ -1655,7 +1522,7 @@ async fn cmd_list_cookie_jars<R: Runtime>(
 
 #[tauri::command]
 async fn cmd_list_key_values<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<Vec<KeyValue>> {
-    Ok(app_handle.queries().connect().await?.list_key_values_raw()?)
+    Ok(app_handle.db().list_key_values_raw()?)
 }
 
 #[tauri::command]
@@ -1663,7 +1530,7 @@ async fn cmd_get_environment<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Environment> {
-    Ok(app_handle.queries().connect().await?.get_environment(id)?)
+    Ok(app_handle.db().get_environment(id)?)
 }
 
 #[tauri::command]
@@ -1671,7 +1538,7 @@ async fn cmd_get_workspace<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Workspace> {
-    Ok(app_handle.queries().connect().await?.get_workspace(id)?)
+    Ok(app_handle.db().get_workspace(id)?)
 }
 
 #[tauri::command]
@@ -1680,11 +1547,7 @@ async fn cmd_list_http_responses<R: Runtime>(
     limit: Option<i64>,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<HttpResponse>> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .list_http_responses_for_workspace(workspace_id, limit.map(|l| l as u64))?)
+    Ok(app_handle.db().list_http_responses_for_workspace(workspace_id, limit.map(|l| l as u64))?)
 }
 
 #[tauri::command]
@@ -1693,7 +1556,7 @@ async fn cmd_delete_http_response<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<HttpResponse> {
-    let db = app_handle.queries().connect().await?;
+    let db = app_handle.db();
     let http_response = db.get_http_response(id)?;
     Ok(db.delete_http_response(&http_response, &UpdateSource::from_window(&window))?)
 }
@@ -1704,11 +1567,7 @@ async fn cmd_delete_grpc_connection<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<GrpcConnection> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .delete_grpc_connection_by_id(id, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().delete_grpc_connection_by_id(id, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1718,9 +1577,7 @@ async fn cmd_delete_all_grpc_connections<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> YaakResult<()> {
     Ok(app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .delete_all_grpc_connections_for_request(request_id, &UpdateSource::from_window(&window))?)
 }
 
@@ -1730,16 +1587,13 @@ async fn cmd_delete_send_history<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<()> {
-    Ok(app_handle
-        .queries()
-        .with_tx(|tx| {
-            let source = &UpdateSource::from_window(&window);
-            tx.delete_all_http_responses_for_workspace(workspace_id, source)?;
-            tx.delete_all_grpc_connections_for_workspace(workspace_id, source)?;
-            tx.delete_all_websocket_connections_for_workspace(workspace_id, source)?;
-            Ok(())
-        })
-        .await?)
+    Ok(app_handle.with_tx(|tx| {
+        let source = &UpdateSource::from_window(&window);
+        tx.delete_all_http_responses_for_workspace(workspace_id, source)?;
+        tx.delete_all_grpc_connections_for_workspace(workspace_id, source)?;
+        tx.delete_all_websocket_connections_for_workspace(workspace_id, source)?;
+        Ok(())
+    })?)
 }
 
 #[tauri::command]
@@ -1749,9 +1603,7 @@ async fn cmd_delete_all_http_responses<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> YaakResult<()> {
     Ok(app_handle
-        .queries()
-        .connect()
-        .await?
+        .db()
         .delete_all_http_responses_for_request(request_id, &UpdateSource::from_window(&window))?)
 }
 
@@ -1760,9 +1612,8 @@ async fn cmd_list_workspaces<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Vec<Workspace>> {
-    let db = app_handle.queries().connect().await?;
-    let workspaces = db.list_workspaces()?;
-
+    let queries = app_handle.db();
+    let workspaces = queries.find_all::<Workspace>()?;
     if workspaces.is_empty() {
         // Create initial workspace
         let workspace = db.upsert_workspace(
@@ -1786,7 +1637,7 @@ async fn cmd_get_workspace_meta<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: &str,
 ) -> YaakResult<WorkspaceMeta> {
-    let db = app_handle.queries().connect().await?;
+    let db = app_handle.db();
     let workspace = db.get_workspace(workspace_id)?;
     Ok(db.get_or_create_workspace_meta(&workspace, &UpdateSource::from_window(&window))?)
 }
@@ -1815,11 +1666,7 @@ async fn cmd_delete_workspace<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: &str,
 ) -> YaakResult<Workspace> {
-    Ok(app_handle
-        .queries()
-        .connect()
-        .await?
-        .delete_workspace_by_id(workspace_id, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().delete_workspace_by_id(workspace_id, &UpdateSource::from_window(&window))?)
 }
 
 #[tauri::command]
@@ -1938,13 +1785,10 @@ pub fn run() {
             cmd_export_data,
             cmd_filter_response,
             cmd_format_json,
-            cmd_get_cookie_jar,
             cmd_get_environment,
             cmd_get_folder,
-            cmd_get_grpc_request,
-            cmd_get_http_authentication_config,
             cmd_get_http_authentication_summaries,
-            cmd_get_http_request,
+            cmd_get_http_authentication_config,
             cmd_get_key_value,
             cmd_get_settings,
             cmd_get_sse_events,
@@ -2012,7 +1856,7 @@ pub fn run() {
                     // Cancel pending requests
                     let h = app_handle.clone();
                     tauri::async_runtime::block_on(async move {
-                        let db = h.queries().connect().await.unwrap();
+                        let db = h.db();
                         let _ = db.cancel_pending_http_responses();
                         let _ = db.cancel_pending_grpc_connections();
                         let _ = db.cancel_pending_websocket_connections();
@@ -2062,11 +1906,7 @@ pub fn run() {
 }
 
 async fn get_update_mode<R: Runtime>(window: &WebviewWindow<R>) -> YaakResult<UpdateMode> {
-    let settings = window
-        .queries()
-        .connect()
-        .await?
-        .get_or_create_settings(&UpdateSource::from_window(window))?;
+    let settings = window.db().get_or_create_settings(&UpdateSource::from_window(window));
     Ok(UpdateMode::new(settings.update_channel.as_str()))
 }
 
@@ -2163,16 +2003,29 @@ async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<
     }
 }
 
+async fn workspace_from_window<R: Runtime>(window: &WebviewWindow<R>) -> YaakResult<Workspace> {
+    match workspace_id_from_window(&window) {
+        None => Err(GenericError("Failed to get workspace ID from window".to_string())),
+        Some(id) => Ok(window.db().get_workspace(id.as_str())?),
+    }
+}
+
+fn environment_id_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<String> {
+    let url = window.url().unwrap();
+    let mut query_pairs = url.query_pairs();
+    query_pairs.find(|(k, _v)| k == "environment_id").map(|(_k, v)| v.to_string())
+}
+
 async fn environment_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<Environment> {
     match window.environment_id() {
         None => None,
-        Some(id) => window.queries().connect().await.unwrap().get_environment(&id).ok(),
+        Some(id) => window.db().get_environment(&id).ok(),
     }
 }
 
 async fn cookie_jar_from_window<R: Runtime>(window: &WebviewWindow<R>) -> Option<CookieJar> {
     match window.cookie_jar_id() {
         None => None,
-        Some(id) => window.queries().connect().await.unwrap().get_cookie_jar(&id).ok(),
+        Some(id) => window.db().get_cookie_jar(&id).ok(),
     }
 }

@@ -1,13 +1,20 @@
 use crate::error::Result;
+use crate::query_manager::QueryManagerExt;
 use crate::models::AnyModel;
+use crate::util::UpdateSource;
 use tauri::{Runtime, WebviewWindow};
 
 #[tauri::command]
 pub(crate) async fn upsert<R: Runtime>(
-    _window: WebviewWindow<R>,
-    _model: AnyModel,
+    window: WebviewWindow<R>,
+    model: AnyModel,
 ) -> Result<String> {
-    todo!();
+    let id = match model {
+        AnyModel::HttpRequest(r) => window.db().upsert(&r, &UpdateSource::from_window(&window))?.id,
+        _ => todo!(),
+    };
+
+    Ok(id)
 }
 
 #[tauri::command]

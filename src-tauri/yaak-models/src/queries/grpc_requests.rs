@@ -1,11 +1,11 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::manager::DbContext;
 use crate::models::{GrpcRequest, GrpcRequestIden};
-use crate::queries_legacy::UpdateSource;
+use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
-    pub fn get_grpc_request(&self, id: &str) -> Result<Option<GrpcRequest>> {
-        self.find_optional(GrpcRequestIden::Id, id)
+    pub fn get_grpc_request(&self, id: &str) -> Result<GrpcRequest> {
+        self.find_one(GrpcRequestIden::Id, id)
     }
 
     pub fn list_grpc_requests(&self, workspace_id: &str) -> Result<Vec<GrpcRequest>> {
@@ -26,7 +26,7 @@ impl<'a> DbContext<'a> {
         id: &str,
         source: &UpdateSource,
     ) -> Result<GrpcRequest> {
-        let request = self.get_grpc_request(id)?.unwrap();
+        let request = self.get_grpc_request(id)?;
         self.delete_grpc_request(&request, source)
     }
 

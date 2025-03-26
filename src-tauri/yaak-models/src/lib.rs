@@ -1,6 +1,6 @@
 use crate::commands::{delete, upsert};
-use crate::manager::QueryManager;
-use crate::queries_legacy::ModelChangeEvent;
+use crate::query_manager::QueryManager;
+use crate::util::ModelChangeEvent;
 use log::info;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -19,11 +19,13 @@ use tokio::sync::mpsc;
 
 mod commands;
 
+mod connection_or_tx;
+mod db_context;
 pub mod error;
-pub mod manager;
+pub mod query_manager;
 pub mod models;
 pub mod queries;
-pub mod queries_legacy;
+pub mod util;
 pub mod render;
 
 pub struct SqliteConnection(pub Mutex<Pool<SqliteConnectionManager>>);
