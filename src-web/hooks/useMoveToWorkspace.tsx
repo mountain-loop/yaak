@@ -1,16 +1,16 @@
+import { requestsAtom } from '@yaakapp-internal/models';
 import React from 'react';
 import { MoveToWorkspaceDialog } from '../components/MoveToWorkspaceDialog';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
-import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
-import { requestsAtom } from './useRequests';
 
 export function useMoveToWorkspace(id: string) {
   return useFastMutation<void, unknown>({
     mutationKey: ['move_workspace', id],
     mutationFn: async () => {
-      const activeWorkspaceId = getActiveWorkspaceId();
+      const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
       if (activeWorkspaceId == null) return;
 
       const request = jotaiStore.get(requestsAtom).find((r) => r.id === id);

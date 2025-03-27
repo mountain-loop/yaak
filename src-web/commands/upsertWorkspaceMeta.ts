@@ -1,6 +1,6 @@
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
+import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
-import { workspaceMetaAtom } from '../hooks/useWorkspaceMeta';
 import { jotaiStore } from '../lib/jotai';
 import { invokeCmd } from '../lib/tauri';
 
@@ -11,7 +11,7 @@ export const upsertWorkspaceMeta = createFastMutation<
 >({
   mutationKey: ['update_workspace_meta'],
   mutationFn: async (patch) => {
-    const workspaceMeta = jotaiStore.get(workspaceMetaAtom);
+    const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
     return invokeCmd<WorkspaceMeta>('cmd_update_workspace_meta', {
       workspaceMeta: { ...workspaceMeta, ...patch },
     });

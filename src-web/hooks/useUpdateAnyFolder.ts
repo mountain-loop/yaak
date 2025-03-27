@@ -1,13 +1,13 @@
-import type { Folder } from '@yaakapp-internal/models';
+import type { Folder} from '@yaakapp-internal/models';
+import { getModel } from '@yaakapp-internal/models';
 import { invokeCmd } from '../lib/tauri';
 import { useFastMutation } from './useFastMutation';
-import { getFolder } from './useFolders';
 
 export function useUpdateAnyFolder() {
   return useFastMutation<Folder, unknown, { id: string; update: (r: Folder) => Folder }>({
     mutationKey: ['update_any_folder'],
     mutationFn: async ({ id, update }) => {
-      const folder = getFolder(id);
+      const folder = getModel('folder', id);
       if (folder === null) {
         throw new Error("Can't update a null folder");
       }

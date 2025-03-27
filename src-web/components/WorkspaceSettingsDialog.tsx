@@ -1,8 +1,9 @@
+import { useModelList } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { upsertWorkspace } from '../commands/upsertWorkspace';
 import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
+import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useDeleteActiveWorkspace } from '../hooks/useDeleteActiveWorkspace';
-import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
-import { useWorkspaces } from '../hooks/useWorkspaces';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
@@ -19,9 +20,9 @@ interface Props {
 }
 
 export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Props) {
-  const workspaces = useWorkspaces();
+  const workspaces = useModelList('workspace');
   const workspace = workspaces.find((w) => w.id === workspaceId);
-  const workspaceMeta = useWorkspaceMeta();
+  const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const { mutateAsync: deleteActiveWorkspace } = useDeleteActiveWorkspace();
 
   if (workspace == null) {

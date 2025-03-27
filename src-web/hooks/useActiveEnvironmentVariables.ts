@@ -1,7 +1,7 @@
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
+import { environmentsBreakdownAtom } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import { activeEnvironmentAtom } from './useActiveEnvironment';
-import { environmentsBreakdownAtom } from './useEnvironments';
 
 const activeEnvironmentVariablesAtom = atom((get) => {
   const { baseEnvironment } = get(environmentsBreakdownAtom);

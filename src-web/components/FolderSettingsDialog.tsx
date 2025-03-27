@@ -1,4 +1,4 @@
-import { useFolders } from '../hooks/useFolders';
+import { useModelList } from '@yaakapp-internal/models';
 import { useUpdateAnyFolder } from '../hooks/useUpdateAnyFolder';
 import { Input } from './core/Input';
 import { VStack } from './core/Stacks';
@@ -10,7 +10,7 @@ interface Props {
 
 export function FolderSettingsDialog({ folderId }: Props) {
   const { mutate: updateFolder } = useUpdateAnyFolder();
-  const folders = useFolders();
+  const folders = useModelList('folder');
   const folder = folders.find((f) => f.id === folderId);
 
   if (folder == null) return null;

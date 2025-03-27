@@ -1,11 +1,11 @@
-import { patchModel } from '@yaakapp-internal/models';
+import { patchModel, requestsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { InlineCode } from '../components/core/InlineCode';
 import { showPrompt } from '../lib/prompt';
 import { useFastMutation } from './useFastMutation';
-import { useRequests } from './useRequests';
 
 export function useRenameRequest(requestId: string | null) {
-  const requests = useRequests();
+  const requests = useAtomValue(requestsAtom);
 
   return useFastMutation({
     mutationKey: ['rename_request'],

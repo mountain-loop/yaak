@@ -1,5 +1,5 @@
-import type { Cookie } from '@yaakapp-internal/models';
-import { useCookieJars } from '../hooks/useCookieJars';
+import type { Cookie} from '@yaakapp-internal/models';
+import { listModels } from '@yaakapp-internal/models';
 import { useUpdateCookieJar } from '../hooks/useUpdateCookieJar';
 import { cookieDomain } from '../lib/model_util';
 import { Banner } from './core/Banner';
@@ -12,7 +12,7 @@ interface Props {
 
 export const CookieDialog = function ({ cookieJarId }: Props) {
   const updateCookieJar = useUpdateCookieJar(cookieJarId ?? null);
-  const cookieJars = useCookieJars();
+  const cookieJars = listModels('cookie_jar');
   const cookieJar = cookieJars?.find((c) => c.id === cookieJarId);
 
   if (cookieJar == null) {

@@ -1,5 +1,5 @@
 import type { HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
+import { patchModel, requestsAtom } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
 import classNames from 'classnames';
@@ -14,10 +14,9 @@ import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
+import { activeWebsocketConnectionAtom } from '../hooks/usePinnedWebsocketConnection';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import { requestsAtom } from '../hooks/useRequests';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
-import { useLatestWebsocketConnection } from '../hooks/useWebsocketConnections';
 import { deepEqualAtom } from '../lib/atoms';
 import { languageFromContentType } from '../lib/contentType';
 import { generateId } from '../lib/generateId';
@@ -154,7 +153,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
   const { updateKey } = useRequestUpdateKey(activeRequestId);
-  const connection = useLatestWebsocketConnection(activeRequestId);
+  const connection = useAtomValue(activeWebsocketConnectionAtom);
 
   const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(

@@ -1,15 +1,16 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import { jotaiStore } from '../lib/jotai';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
 import { getActiveRequest } from './useActiveRequest';
-import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 
 export function useCreateHttpRequest() {
   return useFastMutation<HttpRequest, unknown, Partial<HttpRequest>>({
     mutationKey: ['create_http_request'],
     mutationFn: async (patch = {}) => {
-      const workspaceId = getActiveWorkspaceId();
+      const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
       if (workspaceId == null) {
         throw new Error("Cannot create request when there's no active workspace");
       }

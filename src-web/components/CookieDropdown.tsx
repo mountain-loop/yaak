@@ -1,7 +1,6 @@
-import { useAtomValue } from 'jotai';
+import { listModels } from '@yaakapp-internal/models';
 import { memo, useMemo } from 'react';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
-import { cookieJarsAtom } from '../hooks/useCookieJars';
 import { useCreateCookieJar } from '../hooks/useCreateCookieJar';
 import { useDeleteCookieJar } from '../hooks/useDeleteCookieJar';
 import { useUpdateCookieJar } from '../hooks/useUpdateCookieJar';
@@ -19,7 +18,7 @@ export const CookieDropdown = memo(function CookieDropdown() {
   const updateCookieJar = useUpdateCookieJar(activeCookieJar?.id ?? null);
   const deleteCookieJar = useDeleteCookieJar(activeCookieJar ?? null);
   const createCookieJar = useCreateCookieJar();
-  const cookieJars = useAtomValue(cookieJarsAtom);
+  const cookieJars = listModels('cookie_jar');
 
   const items = useMemo((): DropdownItem[] => {
     return [

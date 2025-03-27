@@ -1,12 +1,12 @@
 import { useGit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import type { HTMLAttributes } from 'react';
 import { forwardRef } from 'react';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useKeyValue } from '../hooks/useKeyValue';
-import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
 import { sync } from '../init/sync';
 import { showConfirm, showConfirmDelete } from '../lib/confirm';
 import { showDialog } from '../lib/dialog';
@@ -22,7 +22,7 @@ import { HistoryDialog } from './git/HistoryDialog';
 import { GitCommitDialog } from './GitCommitDialog';
 
 export function GitDropdown() {
-  const workspaceMeta = useWorkspaceMeta();
+  const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   if (workspaceMeta == null) return null;
 
   if (workspaceMeta.settingSyncDir == null) {
@@ -33,7 +33,7 @@ export function GitDropdown() {
 }
 
 function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
-  const workspace = useActiveWorkspace();
+  const workspace = useAtomValue(activeWorkspaceAtom);
   const [
     { status, log },
     { branch, deleteBranch, fetchAll, mergeBranch, push, pull, checkout, init },

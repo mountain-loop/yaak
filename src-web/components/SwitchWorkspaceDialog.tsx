@@ -1,8 +1,8 @@
 import type { Workspace } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
+import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { useState } from 'react';
 import { switchWorkspace } from '../commands/switchWorkspace';
-import { useSettings } from '../hooks/useSettings';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { Icon } from './core/Icon';
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function SwitchWorkspaceDialog({ hide, workspace }: Props) {
-  const settings = useSettings();
+  const settings = useAtomValue(settingsAtom);
   const [remember, setRemember] = useState<boolean>(false);
 
   return (

@@ -1,7 +1,12 @@
-import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
+import type {
+  GrpcRequest,
+  HttpRequest,
+  WebsocketRequest} from '@yaakapp-internal/models';
+import {
+  patchModel,
+  useModelList
+} from '@yaakapp-internal/models';
 import React, { useState } from 'react';
-import { useWorkspaces } from '../hooks/useWorkspaces';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
 import { showToast } from '../lib/toast';
@@ -17,7 +22,7 @@ interface Props {
 }
 
 export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Props) {
-  const workspaces = useWorkspaces();
+  const workspaces = useModelList('workspace');
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(activeWorkspaceId);
 
   return (

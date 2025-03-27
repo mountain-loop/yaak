@@ -1,9 +1,9 @@
-import { patchModel } from '@yaakapp-internal/models';
+import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { useCallback } from 'react';
-import { useSettings } from './useSettings';
 
 export function useZoom() {
-  const settings = useSettings();
+  const settings = useAtomValue(settingsAtom);
 
   const zoomIn = useCallback(async () => {
     if (!settings) return;

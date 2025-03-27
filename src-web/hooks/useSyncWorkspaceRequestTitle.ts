@@ -1,15 +1,16 @@
 import { emit } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { useAtomValue } from 'jotai';
 import { useEffect } from 'react';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { useActiveEnvironment } from './useActiveEnvironment';
 import { getActiveRequest } from './useActiveRequest';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { activeWorkspaceAtom } from './useActiveWorkspace';
 import { useAppInfo } from './useAppInfo';
 import { useOsInfo } from './useOsInfo';
 
 export function useSyncWorkspaceRequestTitle() {
-  const activeWorkspace = useActiveWorkspace();
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const activeEnvironment = useActiveEnvironment();
   const osInfo = useOsInfo();
   const appInfo = useAppInfo();

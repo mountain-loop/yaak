@@ -1,7 +1,7 @@
 import { open } from '@tauri-apps/plugin-dialog';
+import { useModelById } from '@yaakapp-internal/models';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
-import { useGrpcRequest } from '../hooks/useGrpcRequest';
 import { pluralizeCount } from '../lib/pluralize';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -16,7 +16,7 @@ interface Props {
 }
 
 export function GrpcProtoSelection({ requestId }: Props) {
-  const request = useGrpcRequest(requestId);
+  const request = useModelById('grpc_request', requestId);
   const protoFilesKv = useGrpcProtoFiles(requestId);
   const protoFiles = protoFilesKv.value ?? [];
   const grpc = useGrpc(request, null, protoFiles);

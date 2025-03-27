@@ -1,17 +1,18 @@
+import { useModelList } from '@yaakapp-internal/models';
 import { useEffect, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useKeyValue } from './useKeyValue';
-import { useWorkspaces } from './useWorkspaces';
 
 const kvKey = () => 'recent_workspaces';
 const namespace = 'global';
 const fallback: string[] = [];
 
 export function useRecentWorkspaces() {
-  const workspaces = useWorkspaces();
+  const workspaces = useModelList('workspace');
   const { value, isLoading } = useKeyValue<string[]>({ key: kvKey(), namespace, fallback });
+  console.log("VALUE", value, isLoading);
 
   const onlyValidIds = useMemo(
     () => value?.filter((id) => workspaces.some((w) => w.id === id)) ?? [],

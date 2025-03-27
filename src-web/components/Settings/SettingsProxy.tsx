@@ -1,6 +1,6 @@
-import { patchModel } from '@yaakapp-internal/models';
+import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import React from 'react';
-import { useSettings } from '../../hooks/useSettings';
 import { Checkbox } from '../core/Checkbox';
 import { PlainInput } from '../core/PlainInput';
 import { Select } from '../core/Select';
@@ -8,7 +8,7 @@ import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';
 
 export function SettingsProxy() {
-  const settings = useSettings();
+  const settings = useAtomValue(settingsAtom);
 
   return (
     <VStack space={1.5} className="mb-4">

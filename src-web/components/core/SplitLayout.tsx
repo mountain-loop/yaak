@@ -1,8 +1,9 @@
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from 'react-use';
-import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useContainerSize } from '../../hooks/useContainerQuery';
 import { clamp } from '../../lib/clamp';
 import { ResizeHandle } from '../ResizeHandle';
@@ -42,7 +43,7 @@ export function SplitLayout({
   minWidthPx = 10,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const activeWorkspace = useActiveWorkspace();
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const [widthRaw, setWidth] = useLocalStorage<number>(
     `${name}_width::${activeWorkspace?.id ?? 'n/a'}`,
   );

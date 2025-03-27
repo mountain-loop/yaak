@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import { useAtomValue } from 'jotai';
 import { invokeCmd } from '../lib/tauri';
 import { useActiveEnvironment } from './useActiveEnvironment';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 
 export function useRenderTemplate(template: string) {
-  const workspaceId = useActiveWorkspace()?.id ?? 'n/a';
+  const workspaceId = useAtomValue(activeWorkspaceIdAtom) ?? 'n/a';
   const environmentId = useActiveEnvironment()?.id ?? null;
   return useQuery<string>({
     placeholderData: (prev) => prev, // Keep previous data on refetch

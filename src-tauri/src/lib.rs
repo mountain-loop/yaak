@@ -1508,7 +1508,7 @@ async fn cmd_list_http_responses<R: Runtime>(
     limit: Option<i64>,
     app_handle: AppHandle<R>,
 ) -> YaakResult<Vec<HttpResponse>> {
-    Ok(app_handle.db().list_http_responses_for_workspace(workspace_id, limit.map(|l| l as u64))?)
+    Ok(app_handle.db().list_http_responses(workspace_id, limit.map(|l| l as u64))?)
 }
 
 #[tauri::command]

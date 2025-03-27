@@ -1,9 +1,9 @@
+import { requestsAtom } from '@yaakapp-internal/models';
 import { deleteWebsocketRequest } from '../commands/deleteWebsocketRequest';
 import { jotaiStore } from '../lib/jotai';
 import { useDeleteAnyGrpcRequest } from './useDeleteAnyGrpcRequest';
 import { useDeleteAnyHttpRequest } from './useDeleteAnyHttpRequest';
 import { useFastMutation } from './useFastMutation';
-import { requestsAtom } from './useRequests';
 
 export function useDeleteAnyRequest() {
   const deleteAnyHttpRequest = useDeleteAnyHttpRequest();

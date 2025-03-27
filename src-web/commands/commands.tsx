@@ -3,12 +3,13 @@ import { applySync, calculateSync } from '@yaakapp-internal/sync';
 import { Banner } from '../components/core/Banner';
 import { InlineCode } from '../components/core/InlineCode';
 import { VStack } from '../components/core/Stacks';
-import { getActiveWorkspaceId } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
 import { showConfirm } from '../lib/confirm';
-import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
+import { jotaiStore } from '../lib/jotai';
 import { pluralizeCount } from '../lib/pluralize';
 import { showPrompt } from '../lib/prompt';
+import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
 import { invokeCmd } from '../lib/tauri';
 
 export const createFolder = createFastMutation<
@@ -18,7 +19,7 @@ export const createFolder = createFastMutation<
 >({
   mutationKey: ['create_folder'],
   mutationFn: async (patch) => {
-    const workspaceId = getActiveWorkspaceId();
+    const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
     if (workspaceId == null) {
       throw new Error("Cannot create folder when there's no active workspace");
     }

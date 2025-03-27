@@ -4,4 +4,6 @@ permissions = [
     "allow-upsert",
     "allow-delete",
     "allow-workspace-models",
+    "allow-grpc-events",
+    "allow-websocket-events",
 ]

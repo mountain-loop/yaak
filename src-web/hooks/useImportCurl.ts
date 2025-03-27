@@ -1,8 +1,9 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { createModel, patchModelById } from '@yaakapp-internal/models';
+import { jotaiStore } from '../lib/jotai';
 import { invokeCmd } from '../lib/tauri';
 import { showToast } from '../lib/toast';
-import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 import { useRequestUpdateKey } from './useRequestUpdateKey';
 
@@ -18,7 +19,7 @@ export function useImportCurl() {
       overwriteRequestId?: string;
       command: string;
     }) => {
-      const workspaceId = getActiveWorkspaceId();
+      const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
       const importedRequest: HttpRequest = await invokeCmd('cmd_curl_to_request', {
         command,
         workspaceId,

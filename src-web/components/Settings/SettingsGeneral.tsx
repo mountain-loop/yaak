@@ -1,11 +1,11 @@
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { patchModel } from '@yaakapp-internal/models';
+import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai/index';
 import React from 'react';
 import { upsertWorkspace } from '../../commands/upsertWorkspace';
-import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useAppInfo } from '../../hooks/useAppInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
-import { useSettings } from '../../hooks/useSettings';
 import { revealInFinderText } from '../../lib/reveal';
 import { Checkbox } from '../core/Checkbox';
 import { Heading } from '../core/Heading';
@@ -17,8 +17,8 @@ import { Separator } from '../core/Separator';
 import { VStack } from '../core/Stacks';
 
 export function SettingsGeneral() {
-  const workspace = useActiveWorkspace();
-  const settings = useSettings();
+  const workspace = useAtomValue(activeWorkspaceAtom);
+  const settings = useAtomValue(settingsAtom);
   const appInfo = useAppInfo();
   const checkForUpdates = useCheckForUpdates();
 

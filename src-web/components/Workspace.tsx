@@ -1,16 +1,18 @@
+import { useModelList } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import {duplicateWebsocketRequest} from "../commands/duplicateWebsocketRequest";
+import { duplicateWebsocketRequest } from '../commands/duplicateWebsocketRequest';
 import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
 } from '../hooks/useActiveCookieJar';
 import { useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
-import { getActiveRequest, useActiveRequest } from '../hooks/useActiveRequest';
+import { activeRequestAtom, getActiveRequest, useActiveRequest } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
 import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
 import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
@@ -25,7 +27,6 @@ import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
-import { useWorkspaces } from '../hooks/useWorkspaces';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { HotKeyList } from './core/HotKeyList';
@@ -51,7 +52,7 @@ export function Workspace() {
   // First, subscribe to some things applicable to workspaces
   useGlobalWorkspaceHooks();
 
-  const workspaces = useWorkspaces();
+  const workspaces = useModelList('workspace');
   const { setWidth, width, resetWidth } = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
@@ -181,8 +182,8 @@ export function Workspace() {
 }
 
 function WorkspaceBody() {
-  const activeRequest = useActiveRequest();
-  const activeWorkspace = useActiveWorkspace();
+  const activeRequest = useAtomValue(activeRequestAtom);
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const importData = useImportData();
 
   if (activeWorkspace == null) {

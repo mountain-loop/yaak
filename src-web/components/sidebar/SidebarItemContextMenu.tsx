@@ -1,3 +1,4 @@
+import { getModel, useModelList } from '@yaakapp-internal/models';
 import React, { useMemo } from 'react';
 import { duplicateWebsocketRequest } from '../../commands/duplicateWebsocketRequest';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
@@ -7,12 +8,10 @@ import { useDuplicateFolder } from '../../hooks/useDuplicateFolder';
 import { useDuplicateGrpcRequest } from '../../hooks/useDuplicateGrpcRequest';
 import { useDuplicateHttpRequest } from '../../hooks/useDuplicateHttpRequest';
 import { useHttpRequestActions } from '../../hooks/useHttpRequestActions';
-import { getHttpRequest } from '../../hooks/useHttpRequests';
 import { useMoveToWorkspace } from '../../hooks/useMoveToWorkspace';
 import { useRenameRequest } from '../../hooks/useRenameRequest';
 import { useSendAnyHttpRequest } from '../../hooks/useSendAnyHttpRequest';
 import { useSendManyRequests } from '../../hooks/useSendManyRequests';
-import { useWorkspaces } from '../../hooks/useWorkspaces';
 
 import { showDialog } from '../../lib/dialog';
 import type { DropdownItem } from '../core/Dropdown';
@@ -33,7 +32,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
   const deleteFolder = useDeleteFolder(child.id);
   const httpRequestActions = useHttpRequestActions();
   const sendRequest = useSendAnyHttpRequest();
-  const workspaces = useWorkspaces();
+  const workspaces = useModelList('workspace');
   const deleteRequest = useDeleteAnyRequest();
   const renameRequest = useRenameRequest(child.id);
   const duplicateHttpRequest = useDuplicateHttpRequest({ id: child.id, navigateAfter: true });
@@ -92,7 +91,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
                 onSelect: async () => {
-                  const request = getHttpRequest(child.id);
+                  const request = getModel('http_request', child.id);
                   if (request != null) await a.call(request);
                 },
               })),

@@ -11,7 +11,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import React, { useCallback, useRef, useState } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
 import { getActiveRequest } from '../../hooks/useActiveRequest';
-import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
 import { useDeleteAnyRequest } from '../../hooks/useDeleteAnyRequest';
 import { useHotKey } from '../../hooks/useHotKey';
@@ -45,7 +45,7 @@ export interface SidebarTreeNode {
 export function Sidebar({ className }: Props) {
   const [hidden, setHidden] = useSidebarHidden();
   const sidebarRef = useRef<HTMLElement>(null);
-  const activeWorkspace = useActiveWorkspace();
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const [hasFocus, setHasFocus] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useAtom(sidebarSelectedIdAtom);
   const [selectedTree, setSelectedTree] = useState<SidebarTreeNode | null>(null);
@@ -171,7 +171,8 @@ export function Sidebar({ className }: Props) {
       if (!hasFocus) return;
       e.preventDefault();
       const i = selectableRequests.findIndex((r) => r.id === selectedId);
-      const newSelectable = selectableRequests[i - 1];
+      const newI = i <= 0 ? selectableRequests.length - 1 : i - 1;
+      const newSelectable = selectableRequests[newI];
       if (newSelectable == null) {
         return;
       }
@@ -189,7 +190,8 @@ export function Sidebar({ className }: Props) {
       if (!hasFocus) return;
       e.preventDefault();
       const i = selectableRequests.findIndex((r) => r.id === selectedId);
-      const newSelectable = selectableRequests[i + 1];
+      const newI = i >= selectableRequests.length - 1 ? 0 : i + 1;
+      const newSelectable = selectableRequests[newI];
       if (newSelectable == null) {
         return;
       }

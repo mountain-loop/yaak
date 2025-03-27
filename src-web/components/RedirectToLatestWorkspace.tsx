@@ -1,18 +1,21 @@
+import { useModelList } from '@yaakapp-internal/models';
 import { useEffect } from 'react';
 import { getRecentCookieJars } from '../hooks/useRecentCookieJars';
 import { getRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { getRecentRequests } from '../hooks/useRecentRequests';
 import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
-import { useWorkspaces } from '../hooks/useWorkspaces';
 import { router } from '../lib/router';
 
 export function RedirectToLatestWorkspace() {
-  const workspaces = useWorkspaces();
+  const workspaces = useModelList('workspace');
   const recentWorkspaces = useRecentWorkspaces();
 
   useEffect(() => {
     if (workspaces.length === 0 || recentWorkspaces == null) {
-      console.log('No workspaces found to redirect to. Skipping.');
+      console.log('No workspaces found to redirect to. Skipping.', {
+        workspaces,
+        recentWorkspaces,
+      });
       return;
     }
 

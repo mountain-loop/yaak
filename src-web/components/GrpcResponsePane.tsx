@@ -1,11 +1,15 @@
 import type { GrpcEvent, GrpcRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { format } from 'date-fns';
+import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCopy } from '../hooks/useCopy';
-import { useGrpcEvents } from '../hooks/useGrpcEvents';
-import { usePinnedGrpcConnection } from '../hooks/usePinnedGrpcConnection';
+import {
+    activeGrpcConnectionAtom,
+    activeGrpcConnections,
+    activeGrpcEventsAtom, setPinnedGrpcConnectionId,
+} from '../hooks/usePinnedGrpcConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
@@ -34,13 +38,13 @@ interface Props {
     | 'no-method';
 }
 
-export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }: Props) {
+export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [showLarge, setShowLarge] = useStateWithDeps<boolean>(false, [activeRequest.id]);
   const [showingLarge, setShowingLarge] = useState<boolean>(false);
-  const { activeConnection, connections, setPinnedConnectionId } =
-    usePinnedGrpcConnection(activeRequest);
-  const events = useGrpcEvents(activeConnection?.id ?? null);
+  const connections = useAtomValue(activeGrpcConnections);
+  const activeConnection = useAtomValue(activeGrpcConnectionAtom);
+  const events = useAtomValue(activeGrpcEventsAtom);
   const copy = useCopy();
 
   const activeEvent = useMemo(
@@ -78,7 +82,7 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
                 <RecentGrpcConnectionsDropdown
                   connections={connections}
                   activeConnection={activeConnection}
-                  onPinnedConnectionId={setPinnedConnectionId}
+                  onPinnedConnectionId={setPinnedGrpcConnectionId}
                 />
               </div>
             </HStack>

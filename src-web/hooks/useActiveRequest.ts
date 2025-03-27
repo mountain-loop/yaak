@@ -1,8 +1,8 @@
 import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import { requestsAtom } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import { jotaiStore } from '../lib/jotai';
 import { activeRequestIdAtom } from './useActiveRequestId';
-import { requestsAtom } from './useRequests';
 
 interface TypeMap {
   http_request: HttpRequest;

@@ -51,7 +51,7 @@ const TAB_METADATA = 'metadata';
 const TAB_AUTH = 'auth';
 const TAB_DESCRIPTION = 'description';
 
-export function GrpcConnectionSetupPane({
+export function GrpcRequestPane({
   style,
   services,
   methodType,

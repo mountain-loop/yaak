@@ -2,12 +2,17 @@ import type { WebsocketEvent, WebsocketRequest } from '@yaakapp-internal/models'
 import classNames from 'classnames';
 import { format } from 'date-fns';
 import { hexy } from 'hexy';
+import { useAtomValue } from 'jotai';
 import { useMemo, useRef, useState } from 'react';
 import { useCopy } from '../hooks/useCopy';
 import { useFormatText } from '../hooks/useFormatText';
-import { usePinnedWebsocketConnection } from '../hooks/usePinnedWebsocketConnection';
+import {
+  activeWebsocketConnectionAtom,
+  activeWebsocketConnectionsAtom,
+  activeWebsocketEventsAtom,
+  setPinnedWebsocketConnectionId,
+} from '../hooks/usePinnedWebsocketConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
-import { useWebsocketEvents } from '../hooks/useWebsocketEvents';
 import { languageFromContentType } from '../lib/contentType';
 import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
@@ -33,11 +38,11 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
   const [showingLarge, setShowingLarge] = useState<boolean>(false);
   const [hexDumps, setHexDumps] = useState<Record<string, boolean>>({});
 
-  const { activeConnection, connections, setPinnedConnectionId } =
-    usePinnedWebsocketConnection(activeRequest);
+  const activeConnection = useAtomValue(activeWebsocketConnectionAtom);
+  const connections = useAtomValue(activeWebsocketConnectionsAtom);
 
   // const isLoading = activeConnection !== null && activeConnection.state !== 'closed';
-  const events = useWebsocketEvents(activeConnection?.id ?? null);
+  const events = useAtomValue(activeWebsocketEventsAtom);
 
   const activeEvent = useMemo(
     () => events.find((m) => m.id === activeEventId) ?? null,
@@ -82,7 +87,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                 <RecentWebsocketConnectionsDropdown
                   connections={connections}
                   activeConnection={activeConnection}
-                  onPinnedConnectionId={setPinnedConnectionId}
+                  onPinnedConnectionId={setPinnedWebsocketConnectionId}
                 />
               </HStack>
             </HStack>

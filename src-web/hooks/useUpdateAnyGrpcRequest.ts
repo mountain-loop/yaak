@@ -1,7 +1,7 @@
 import type { GrpcRequest } from '@yaakapp-internal/models';
+import { getModel } from '@yaakapp-internal/models';
 import { invokeCmd } from '../lib/tauri';
 import { useFastMutation } from './useFastMutation';
-import { getGrpcRequest } from './useGrpcRequests';
 
 export function useUpdateAnyGrpcRequest() {
   return useFastMutation<
@@ -11,7 +11,7 @@ export function useUpdateAnyGrpcRequest() {
   >({
     mutationKey: ['update_any_grpc_request'],
     mutationFn: async ({ id, update }) => {
-      const request = getGrpcRequest(id);
+      const request = getModel('grpc_request', id);
       if (request === null) {
         throw new Error("Can't update a null request");
       }

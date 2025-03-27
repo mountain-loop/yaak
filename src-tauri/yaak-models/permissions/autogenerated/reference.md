@@ -5,6 +5,8 @@ Default permissions for the plugin
 - `allow-upsert`
 - `allow-delete`
 - `allow-workspace-models`
+- `allow-grpc-events`
+- `allow-websocket-events`
 
 ## Permission Table
 
@@ -44,6 +46,32 @@ Denies the delete command without any pre-configured scope.
 <tr>
 <td>
 
+`yaak-models:allow-grpc-events`
+
+</td>
+<td>
+
+Enables the grpc_events command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-models:deny-grpc-events`
+
+</td>
+<td>
+
+Denies the grpc_events command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `yaak-models:allow-upsert`
 
 </td>
@@ -63,6 +91,32 @@ Enables the upsert command without any pre-configured scope.
 <td>
 
 Denies the upsert command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-models:allow-websocket-events`
+
+</td>
+<td>
+
+Enables the websocket_events command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-models:deny-websocket-events`
+
+</td>
+<td>
+
+Denies the websocket_events command without any pre-configured scope.
 
 </td>
 </tr>

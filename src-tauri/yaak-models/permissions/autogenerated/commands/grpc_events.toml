@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-grpc-events"
+description = "Enables the grpc_events command without any pre-configured scope."
+commands.allow = ["grpc_events"]
+
+[[permission]]
+identifier = "deny-grpc-events"
+description = "Denies the grpc_events command without any pre-configured scope."
+commands.deny = ["grpc_events"]

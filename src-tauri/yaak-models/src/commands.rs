@@ -1,9 +1,9 @@
 use crate::error::Error::GenericError;
 use crate::error::Result;
-use crate::models::AnyModel;
+use crate::models::{AnyModel, GrpcEvent, WebsocketEvent};
 use crate::query_manager::QueryManagerExt;
 use crate::util::UpdateSource;
-use tauri::{Runtime, WebviewWindow};
+use tauri::{AppHandle, Runtime, WebviewWindow};
 
 #[tauri::command]
 pub(crate) async fn upsert<R: Runtime>(
@@ -53,35 +53,51 @@ pub(crate) fn delete<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> R
 }
 
 #[tauri::command]
+pub(crate) fn websocket_events<R: Runtime>(
+    app_handle: AppHandle<R>,
+    connection_id: &str,
+) -> Result<Vec<WebsocketEvent>> {
+    Ok(app_handle.db().list_websocket_events(connection_id)?)
+}
+
+#[tauri::command]
+pub(crate) fn grpc_events<R: Runtime>(
+    app_handle: AppHandle<R>,
+    connection_id: &str,
+) -> Result<Vec<GrpcEvent>> {
+    Ok(app_handle.db().list_grpc_events(connection_id)?)
+}
+
+#[tauri::command]
 pub(crate) fn workspace_models<R: Runtime>(
     window: WebviewWindow<R>,
-    workspace_id: &str,
+    workspace_id: Option<&str>,
 ) -> Result<Vec<AnyModel>> {
     let db = window.db();
-    let wid = workspace_id;
     let mut l: Vec<AnyModel> = Vec::new();
     let source = &UpdateSource::from_window(&window);
 
     // Add the settings
     l.push(db.get_or_create_settings(source).into());
 
-    // Add the workspace
-    l.push(db.get_workspace(workspace_id)?.into());
-    l.push(db.get_or_create_workspace_meta(workspace_id, source)?.into());
-
     // Add global models
+    l.append(&mut db.list_workspaces()?.into_iter().map(Into::into).collect());
+    l.append(&mut db.list_workspace_metas()?.into_iter().map(Into::into).collect());
     l.append(&mut db.list_key_values()?.into_iter().map(Into::into).collect());
     l.append(&mut db.list_plugins()?.into_iter().map(Into::into).collect());
 
     // Add the workspace children
-    l.append(&mut db.list_cookie_jars(wid)?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_environments(wid)?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_folders(wid)?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_http_requests(wid)?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_grpc_requests(wid)?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_grpc_connections(wid)?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_websocket_requests(wid)?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_websocket_connections(wid)?.into_iter().map(Into::into).collect());
+    if let Some(wid) = workspace_id {
+        l.append(&mut db.list_cookie_jars(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_environments(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_folders(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_grpc_connections(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_grpc_requests(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_http_requests(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_http_responses(wid, None)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_websocket_connections(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_websocket_requests(wid)?.into_iter().map(Into::into).collect());
+    }
 
     Ok(l)
 }

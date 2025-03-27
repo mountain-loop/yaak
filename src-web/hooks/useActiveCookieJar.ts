@@ -1,10 +1,10 @@
 import { useSearch } from '@tanstack/react-router';
-import type { CookieJar } from '@yaakapp-internal/models';
+import type { CookieJar} from '@yaakapp-internal/models';
+import { cookieJarsAtom, useModelList } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai/index';
 import { useEffect } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
-import { cookieJarsAtom, useCookieJars } from './useCookieJars';
 
 export const QUERY_COOKIE_JAR_ID = 'cookie_jar_id';
 
@@ -30,7 +30,7 @@ export function getActiveCookieJar() {
 }
 
 export function useEnsureActiveCookieJar() {
-  const cookieJars = useCookieJars();
+  const cookieJars = useModelList('cookie_jar');
   const { cookie_jar_id: activeCookieJarId } = useSearch({ from: '/workspaces/$workspaceId/' });
 
   // Set the active cookie jar to the first one, if none set

@@ -1,3 +1,4 @@
+import { useAtomValue } from 'jotai';
 import { useMemo } from 'react';
 import { createFolder } from '../commands/commands';
 import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
@@ -6,7 +7,7 @@ import { Icon } from '../components/core/Icon';
 import { generateId } from '../lib/generateId';
 import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
 import { getActiveRequest } from './useActiveRequest';
-import { getActiveWorkspace } from './useActiveWorkspace';
+import { activeWorkspaceAtom } from './useActiveWorkspace';
 import { useCreateGrpcRequest } from './useCreateGrpcRequest';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
 
@@ -21,7 +22,7 @@ export function useCreateDropdownItems({
 } = {}): DropdownItem[] {
   const { mutate: createHttpRequest } = useCreateHttpRequest();
   const { mutate: createGrpcRequest } = useCreateGrpcRequest();
-  const activeWorkspace = getActiveWorkspace();
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
 
   const items = useMemo((): DropdownItem[] => {
     const activeRequest = getActiveRequest();

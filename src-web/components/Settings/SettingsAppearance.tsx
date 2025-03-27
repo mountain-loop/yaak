@@ -1,10 +1,10 @@
 import type { EditorKeymap} from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
+import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import React from 'react';
-import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useResolvedAppearance } from '../../hooks/useResolvedAppearance';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
-import { useSettings } from '../../hooks/useSettings';
 import { clamp } from '../../lib/clamp';
 import { getThemes } from '../../lib/theme/themes';
 import { isThemeDark } from '../../lib/theme/window';
@@ -62,8 +62,8 @@ const icons: IconProps['icon'][] = [
 const { themes } = getThemes();
 
 export function SettingsAppearance() {
-  const workspace = useActiveWorkspace();
-  const settings = useSettings();
+  const workspace = useAtomValue(activeWorkspaceAtom);
+  const settings = useAtomValue(settingsAtom);
   const appearance = useResolvedAppearance();
   const activeTheme = useResolvedTheme();
 

@@ -2,10 +2,9 @@ import type {
   AnyModel,
   GrpcConnection,
   HttpResponse,
-  WebsocketConnection} from '@yaakapp-internal/models';
-import {
-  patchModelById
+  WebsocketConnection,
 } from '@yaakapp-internal/models';
+import { foldersAtom, patchModelById, requestsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { ReactElement } from 'react';
@@ -13,8 +12,6 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
 import { activeRequestAtom } from '../../hooks/useActiveRequest';
-import { foldersAtom } from '../../hooks/useFolders';
-import { requestsAtom } from '../../hooks/useRequests';
 import { useScrollIntoView } from '../../hooks/useScrollIntoView';
 import { useSidebarItemCollapsed } from '../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../lib/jotai';

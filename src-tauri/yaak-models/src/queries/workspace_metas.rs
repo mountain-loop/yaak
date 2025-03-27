@@ -8,6 +8,10 @@ impl<'a> DbContext<'a> {
         self.find_optional(WorkspaceMetaIden::WorkspaceId, workspace_id)
     }
 
+    pub fn list_workspace_metas(&self) -> Result<Vec<WorkspaceMeta>> {
+        self.find_all()
+    }
+
     pub fn get_or_create_workspace_meta(
         &self,
         workspace_id: &str,

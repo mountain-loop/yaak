@@ -1,5 +1,5 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
+import type { HttpRequest} from '@yaakapp-internal/models';
+import { patchModel, requestsAtom } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
@@ -7,9 +7,7 @@ import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
-import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
 import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
-import { httpRequestsAtom } from '../hooks/useHttpRequests';
 import { useImportCurl } from '../hooks/useImportCurl';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
@@ -67,7 +65,7 @@ const TAB_DESCRIPTION = 'description';
 
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
-  const requests = [...get(httpRequestsAtom), ...get(grpcRequestsAtom)];
+  const requests = get(requestsAtom);
   return requests
     .filter((r) => r.id !== activeRequestId)
     .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url }));

@@ -1,8 +1,9 @@
 import type { Environment } from '@yaakapp-internal/models';
+import { jotaiStore } from '../lib/jotai';
 import { showPrompt } from '../lib/prompt';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import { invokeCmd } from '../lib/tauri';
-import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 
 export function useCreateEnvironment() {
@@ -13,7 +14,7 @@ export function useCreateEnvironment() {
         throw new Error('No base environment passed');
       }
 
-      const workspaceId = getActiveWorkspaceId();
+      const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
       const name = await showPrompt({
         id: 'new-environment',
         title: 'New Environment',

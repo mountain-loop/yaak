@@ -1,9 +1,11 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
-import type { Plugin } from '@yaakapp-internal/models';
+import type { Plugin} from '@yaakapp-internal/models';
+import { pluginsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import React from 'react';
 import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
-import { usePlugins, useRefreshPlugins } from '../../hooks/usePlugins';
+import { useRefreshPlugins } from '../../hooks/usePlugins';
 import { useUninstallPlugin } from '../../hooks/useUninstallPlugin';
 import { Button } from '../core/Button';
 import { IconButton } from '../core/IconButton';
@@ -14,7 +16,7 @@ import { SelectFile } from '../SelectFile';
 
 export function SettingsPlugins() {
   const [directory, setDirectory] = React.useState<string | null>(null);
-  const plugins = usePlugins();
+  const plugins = useAtomValue(pluginsAtom);
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
   return (
@@ -61,12 +63,7 @@ export function SettingsPlugins() {
           />
           <HStack>
             {directory && (
-              <Button
-                size="xs"
-                type="submit"
-                color="primary"
-                className="ml-auto"
-              >
+              <Button size="xs" type="submit" color="primary" className="ml-auto">
                 Add Plugin
               </Button>
             )}

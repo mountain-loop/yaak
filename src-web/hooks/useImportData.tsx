@@ -11,15 +11,16 @@ import { VStack } from '../components/core/Stacks';
 import { ImportDataDialog } from '../components/ImportDataDialog';
 import { showAlert } from '../lib/alert';
 import { showDialog } from '../lib/dialog';
+import { jotaiStore } from '../lib/jotai';
 import { pluralizeCount } from '../lib/pluralize';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
-import { getActiveWorkspace } from './useActiveWorkspace';
+import { activeWorkspaceAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 
 export function useImportData() {
   const importData = async (filePath: string): Promise<boolean> => {
-    const activeWorkspace = getActiveWorkspace();
+    const activeWorkspace = jotaiStore.get(activeWorkspaceAtom);
     const imported: {
       workspaces: Workspace[];
       environments: Environment[];

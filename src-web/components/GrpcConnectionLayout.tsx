@@ -1,17 +1,17 @@
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import React, { useEffect, useMemo } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
-import { useGrpcConnections } from '../hooks/useGrpcConnections';
-import { useGrpcEvents } from '../hooks/useGrpcEvents';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
+import { activeGrpcConnectionAtom, activeGrpcEventsAtom } from '../hooks/usePinnedGrpcConnection';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { Banner } from './core/Banner';
 import { HotKeyList } from './core/HotKeyList';
 import { SplitLayout } from './core/SplitLayout';
-import { GrpcConnectionMessagesPane } from './GrpcConnectionMessagesPane';
-import { GrpcConnectionSetupPane } from './GrpcConnectionSetupPane';
+import { GrpcResponsePane } from './GrpcResponsePane';
+import { GrpcRequestPane } from './GrpcRequestPane';
 
 interface Props {
   style: CSSProperties;
@@ -22,9 +22,8 @@ const emptyArray: string[] = [];
 export function GrpcConnectionLayout({ style }: Props) {
   const activeRequest = useActiveRequest('grpc_request');
   const updateRequest = useUpdateAnyGrpcRequest();
-  const connections = useGrpcConnections().filter((c) => c.requestId === activeRequest?.id);
-  const activeConnection = connections[0] ?? null;
-  const messages = useGrpcEvents(activeConnection?.id ?? null);
+  const activeConnection = useAtomValue(activeGrpcConnectionAtom);
+  const grpcEvents = useAtomValue(activeGrpcEventsAtom);
   const protoFilesKv = useGrpcProtoFiles(activeRequest?.id ?? null);
   const protoFiles = protoFilesKv.value ?? emptyArray;
   const grpc = useGrpc(activeRequest, activeConnection, protoFiles);
@@ -87,7 +86,7 @@ export function GrpcConnectionLayout({ style }: Props) {
       className="p-3 gap-1.5"
       style={style}
       firstSlot={({ style }) => (
-        <GrpcConnectionSetupPane
+        <GrpcRequestPane
           style={style}
           activeRequest={activeRequest}
           protoFiles={protoFiles}
@@ -117,8 +116,8 @@ export function GrpcConnectionLayout({ style }: Props) {
               <Banner color="danger" className="m-2">
                 {grpc.go.error}
               </Banner>
-            ) : messages.length >= 0 ? (
-              <GrpcConnectionMessagesPane activeRequest={activeRequest} methodType={methodType} />
+            ) : grpcEvents.length >= 0 ? (
+              <GrpcResponsePane activeRequest={activeRequest} methodType={methodType} />
             ) : (
               <HotKeyList hotkeys={['grpc_request.send', 'sidebar.focus', 'url_bar.focus']} />
             )}
