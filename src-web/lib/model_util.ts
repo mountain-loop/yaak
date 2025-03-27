@@ -37,7 +37,9 @@ export function modelsEq(a: AnyModel, b: AnyModel) {
 }
 
 export function getContentTypeFromHeaders(headers: HttpResponseHeader[] | null): string | null {
-  return headers?.find((h) => h.name.toLowerCase() === 'content-type')?.value ?? null;
+  const contentType = headers?.find((h) => h.name.toLowerCase() === 'content-type')?.value ?? null;
+  
+  return contentType ? contentType.split(';')[0].trim() : null;
 }
 
 export function getCharsetFromContentType(headers: HttpResponseHeader[]): string | null {
