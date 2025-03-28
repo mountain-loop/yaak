@@ -1,11 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import {
-  changeModelStoreWorkspace,
-  listModels,
-  modelStoreDataAtom,
-  pluginsAtom,
-  replaceModelInData,
-} from '@yaakapp-internal/models';
+import { changeModelStoreWorkspace, listModels, pluginsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { jotaiStore } from '../lib/jotai';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
@@ -22,11 +16,10 @@ export function usePluginsKey() {
  * Reload all plugins and refresh the list of plugins
  */
 export function useRefreshPlugins() {
-  // const setPlugins = useSetAtom(pluginsAtom);
   return useMutation({
     mutationKey: ['refresh_plugins'],
     mutationFn: async () => {
-      const plugins = await minPromiseMillis(
+      await minPromiseMillis(
         (async function () {
           await invokeCmd('cmd_reload_plugins');
           const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
@@ -35,8 +28,6 @@ export function useRefreshPlugins() {
           return listModels('plugin');
         })(),
       );
-      const data = jotaiStore.get(modelStoreDataAtom);
-      plugins.forEach((p) => replaceModelInData(data, p));
     },
   });
 }

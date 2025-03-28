@@ -2,7 +2,7 @@ import './main.css';
 import { RouterProvider } from '@tanstack/react-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { type } from '@tauri-apps/plugin-os';
-import {changeModelStoreWorkspace, initModelStore} from '@yaakapp-internal/models';
+import { changeModelStoreWorkspace, initModelStore } from '@yaakapp-internal/models';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { initSync } from './init/sync';

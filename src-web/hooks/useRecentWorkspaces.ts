@@ -12,7 +12,6 @@ const fallback: string[] = [];
 export function useRecentWorkspaces() {
   const workspaces = useModelList('workspace');
   const { value, isLoading } = useKeyValue<string[]>({ key: kvKey(), namespace, fallback });
-  console.log("VALUE", value, isLoading);
 
   const onlyValidIds = useMemo(
     () => value?.filter((id) => workspaces.some((w) => w.id === id)) ?? [],

@@ -5,11 +5,9 @@ import { invokeCmd } from '../lib/tauri';
 import { showToast } from '../lib/toast';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
-import { useRequestUpdateKey } from './useRequestUpdateKey';
+import { wasUpdatedExternally } from './useRequestUpdateKey';
 
 export function useImportCurl() {
-  const { wasUpdatedExternally } = useRequestUpdateKey(null);
-
   return useFastMutation({
     mutationKey: ['import_curl'],
     mutationFn: async ({

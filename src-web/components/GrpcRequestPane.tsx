@@ -72,7 +72,7 @@ export function GrpcRequestPane({
     key: 'grpcRequestActiveTabs',
     fallback: {},
   });
-  const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
+  const forceUpdateKey = useRequestUpdateKey(activeRequest.id ?? null);
 
   const urlContainerEl = useRef<HTMLDivElement>(null);
   const { width: paneWidth } = useContainerSize(urlContainerEl);
@@ -209,7 +209,7 @@ export function GrpcRequestPane({
         className={classNames(
           'grid grid-cols-[minmax(0,1fr)_auto] gap-1.5',
           paneWidth === 0 && 'opacity-0',
-          paneWidth < 400 && '!grid-cols-1',
+          paneWidth > 0 && paneWidth < 400 && '!grid-cols-1',
         )}
       >
         <UrlBar

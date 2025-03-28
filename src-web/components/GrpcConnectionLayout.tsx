@@ -5,13 +5,13 @@ import React, { useEffect, useMemo } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
-import { activeGrpcConnectionAtom, activeGrpcEventsAtom } from '../hooks/usePinnedGrpcConnection';
+import { activeGrpcConnectionAtom, useGrpcEvents } from '../hooks/usePinnedGrpcConnection';
 import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { Banner } from './core/Banner';
 import { HotKeyList } from './core/HotKeyList';
 import { SplitLayout } from './core/SplitLayout';
-import { GrpcResponsePane } from './GrpcResponsePane';
 import { GrpcRequestPane } from './GrpcRequestPane';
+import { GrpcResponsePane } from './GrpcResponsePane';
 
 interface Props {
   style: CSSProperties;
@@ -23,7 +23,7 @@ export function GrpcConnectionLayout({ style }: Props) {
   const activeRequest = useActiveRequest('grpc_request');
   const updateRequest = useUpdateAnyGrpcRequest();
   const activeConnection = useAtomValue(activeGrpcConnectionAtom);
-  const grpcEvents = useAtomValue(activeGrpcEventsAtom);
+  const grpcEvents = useGrpcEvents();
   const protoFilesKv = useGrpcProtoFiles(activeRequest?.id ?? null);
   const protoFiles = protoFilesKv.value ?? emptyArray;
   const grpc = useGrpc(activeRequest, activeConnection, protoFiles);

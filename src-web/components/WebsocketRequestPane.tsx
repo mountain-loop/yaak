@@ -66,7 +66,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
     key: 'websocketRequestActiveTabs',
     fallback: {},
   });
-  const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
+  const forceUpdateKey = useRequestUpdateKey(activeRequest.id);
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const authentication = useHttpAuthenticationSummaries();
 
@@ -152,7 +152,6 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
 
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
-  const { updateKey } = useRequestUpdateKey(activeRequestId);
   const connection = useAtomValue(activeWebsocketConnectionAtom);
 
   const activeTab = activeTabs?.[activeRequestId];
@@ -264,7 +263,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
               onSend={isLoading ? handleSend : handleConnect}
               onCancel={cancelResponse}
               onUrlChange={handleUrlChange}
-              forceUpdateKey={updateKey}
+              forceUpdateKey={forceUpdateKey}
               isLoading={activeResponse != null && activeResponse.state !== 'closed'}
               method={null}
             />
@@ -316,7 +315,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 <PlainInput
                   label="Request Name"
                   hideLabel
-                  forceUpdateKey={updateKey}
+                  forceUpdateKey={forceUpdateKey}
                   defaultValue={activeRequest.name}
                   className="font-sans !text-xl !px-0"
                   containerClassName="border-0"
@@ -328,7 +327,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                   placeholder="Request description"
                   defaultValue={activeRequest.description}
                   stateKey={`description.${activeRequest.id}`}
-                  forceUpdateKey={updateKey}
+                  forceUpdateKey={forceUpdateKey}
                   onChange={(description) =>
                     upsertWebsocketRequest.mutate({ ...activeRequest, description })
                   }

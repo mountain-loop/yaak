@@ -1,4 +1,4 @@
-import type { HttpRequest} from '@yaakapp-internal/models';
+import type { HttpRequest } from '@yaakapp-internal/models';
 import { patchModel, requestsAtom } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
@@ -81,7 +81,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     fallback: {},
   });
   const [forceUpdateHeaderEditorKey, setForceUpdateHeaderEditorKey] = useState<number>(0);
-  const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
+  const forceUpdateKey = useRequestUpdateKey(activeRequest.id ?? null);
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const contentType = getContentTypeFromHeaders(activeRequest.headers);
   const authentication = useHttpAuthenticationSummaries();
@@ -254,7 +254,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   const { mutate: sendRequest } = useSendAnyHttpRequest();
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
-  const { updateKey } = useRequestUpdateKey(activeRequestId);
+  const updateKey = useRequestUpdateKey(activeRequestId);
   const { mutate: importCurl } = useImportCurl();
 
   const handleBodyChange = useCallback(
