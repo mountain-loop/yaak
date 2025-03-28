@@ -44,8 +44,6 @@ export function initModelStore(store: JotaiStore) {
 
       if (shouldIgnoreModel(payload)) return;
 
-      console.log('Upserted model', payload.model);
-
       mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
         return {
           ...prev,
@@ -162,6 +160,23 @@ export async function patchModel<M extends AnyModel['model'], T extends ExtractM
   patch: Partial<T>,
 ): Promise<string> {
   return patchModelById<M, T>(base.model, base.id, patch);
+}
+
+export async function deleteModelById<
+  M extends AnyModel['model'],
+  T extends ExtractModel<AnyModel, M>,
+>(modelType: M | M[], id: string) {
+  let model = getModel<M, T>(modelType, id);
+  await deleteModel(model);
+}
+
+export async function deleteModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+  model: T | null,
+) {
+  if (model == null) {
+    throw new Error('Failed to delete null model');
+  }
+  await invoke<string>('plugin:yaak-models|delete', { model });
 }
 
 export async function createModel<T extends Workspace>(

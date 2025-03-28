@@ -5,7 +5,7 @@ import type {
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
-import { patchModelById } from '@yaakapp-internal/models';
+import { getModel, patchModelById } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
 import React, { useCallback, useRef, useState } from 'react';
@@ -13,10 +13,10 @@ import { useKey, useKeyPressEvent } from 'react-use';
 import { getActiveRequest } from '../../hooks/useActiveRequest';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
-import { useDeleteAnyRequest } from '../../hooks/useDeleteAnyRequest';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useSidebarHidden } from '../../hooks/useSidebarHidden';
 import { getSidebarCollapsedMap } from '../../hooks/useSidebarItemCollapsed';
+import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
 import { router } from '../../lib/router';
 import { setWorkspaceSearchParams } from '../../lib/setWorkspaceSearchParams';
 import { ContextMenu } from '../core/Dropdown';
@@ -122,14 +122,14 @@ export function Sidebar({ className }: Props) {
   }, [focusActiveRequest, hasFocus]);
 
   const handleBlur = useCallback(() => setHasFocus(false), [setHasFocus]);
-  const deleteRequest = useDeleteAnyRequest();
 
   useHotKey(
-    'http_request.delete',
+    'sidebar.delete_selected_item',
     async () => {
-      // Delete only works if a request is focused
-      if (selectedId == null) return;
-      deleteRequest.mutate(selectedId);
+      const request = getModel(['http_request', 'grpc_request', 'websocket_request'], selectedId ?? 'n/a');
+      if (request != null) {
+        await deleteModelWithConfirm(request);
+      }
     },
     { enable: hasFocus },
   );

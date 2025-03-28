@@ -1,7 +1,6 @@
 import { patchModel, useModelList } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
-import { useDeleteActiveWorkspace } from '../hooks/useDeleteActiveWorkspace';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
+import { router } from '../lib/router';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
@@ -18,10 +17,8 @@ interface Props {
 }
 
 export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Props) {
-  const workspaces = useModelList('workspace');
-  const workspace = workspaces.find((w) => w.id === workspaceId);
-  const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
-  const { mutateAsync: deleteActiveWorkspace } = useDeleteActiveWorkspace();
+  const workspace = useModelList('workspace').find((w) => w.id === workspaceId);
+  const workspaceMeta = useModelList('workspace_meta').find((wm) => wm.workspaceId === workspaceId);
 
   if (workspace == null) {
     return (
@@ -68,9 +65,10 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Pro
         <Separator />
         <Button
           onClick={async () => {
-            const workspace = await deleteActiveWorkspace();
-            if (workspace) {
+            const didDelete = await deleteModelWithConfirm(workspace);
+            if (didDelete) {
               hide(); // Only hide if actually deleted workspace
+              await router.navigate({ to: '/workspaces' });
             }
           }}
           color="danger"

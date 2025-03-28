@@ -7,8 +7,8 @@ import { useAtomValue } from 'jotai';
 import type { ReactNode } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
-import { useDeleteEnvironment } from '../hooks/useDeleteEnvironment';
 import { useKeyValue } from '../hooks/useKeyValue';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { showPrompt } from '../lib/prompt';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -217,7 +217,6 @@ function SidebarButton({
   rightSlot?: ReactNode;
   environment: Environment | null;
 }) {
-  const deleteEnvironment = useDeleteEnvironment(environment);
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
     y: number;
@@ -283,10 +282,9 @@ function SidebarButton({
               color: 'danger',
               label: 'Delete',
               leftSlot: <Icon icon="trash" size="sm" />,
-              onSelect: () => {
-                deleteEnvironment.mutate(undefined, {
-                  onSuccess: onDelete,
-                });
+              onSelect: async () => {
+                await deleteModelWithConfirm(environment);
+                onDelete?.();
               },
             },
           ]}

@@ -1,9 +1,7 @@
-import { getModel, useModelList } from '@yaakapp-internal/models';
+import { deleteModelById, getModel, useModelList } from '@yaakapp-internal/models';
 import React, { useMemo } from 'react';
 import { duplicateWebsocketRequest } from '../../commands/duplicateWebsocketRequest';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
-import { useDeleteAnyRequest } from '../../hooks/useDeleteAnyRequest';
-import { useDeleteFolder } from '../../hooks/useDeleteFolder';
 import { useDuplicateFolder } from '../../hooks/useDuplicateFolder';
 import { useDuplicateGrpcRequest } from '../../hooks/useDuplicateGrpcRequest';
 import { useDuplicateHttpRequest } from '../../hooks/useDuplicateHttpRequest';
@@ -12,6 +10,7 @@ import { useMoveToWorkspace } from '../../hooks/useMoveToWorkspace';
 import { useRenameRequest } from '../../hooks/useRenameRequest';
 import { useSendAnyHttpRequest } from '../../hooks/useSendAnyHttpRequest';
 import { useSendManyRequests } from '../../hooks/useSendManyRequests';
+import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
 
 import { showDialog } from '../../lib/dialog';
 import type { DropdownItem } from '../core/Dropdown';
@@ -29,11 +28,9 @@ interface Props {
 export function SidebarItemContextMenu({ child, show, close }: Props) {
   const sendManyRequests = useSendManyRequests();
   const duplicateFolder = useDuplicateFolder(child.id);
-  const deleteFolder = useDeleteFolder(child.id);
   const httpRequestActions = useHttpRequestActions();
   const sendRequest = useSendAnyHttpRequest();
   const workspaces = useModelList('workspace');
-  const deleteRequest = useDeleteAnyRequest();
   const renameRequest = useRenameRequest(child.id);
   const duplicateHttpRequest = useDuplicateHttpRequest({ id: child.id, navigateAfter: true });
   const duplicateGrpcRequest = useDuplicateGrpcRequest({ id: child.id, navigateAfter: true });
@@ -70,7 +67,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
           label: 'Delete',
           color: 'danger',
           leftSlot: <Icon icon="trash" />,
-          onSelect: () => deleteFolder.mutate(),
+          onSelect: () => deleteModelWithConfirm(getModel(child.model, child.id)),
         },
         { type: 'separator' },
         ...createDropdownItems,
@@ -131,10 +128,10 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         {
           color: 'danger',
           label: 'Delete',
-          hotKeyAction: 'http_request.delete',
+          hotKeyAction: 'sidebar.delete_selected_item',
           hotKeyLabelOnly: true,
           leftSlot: <Icon icon="trash" />,
-          onSelect: () => deleteRequest.mutate(child.id),
+          onSelect: async () => deleteModelById(child.model, child.id),
         },
       ];
     }
@@ -143,8 +140,6 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
     child.id,
     child.model,
     createDropdownItems,
-    deleteFolder,
-    deleteRequest,
     duplicateFolder,
     duplicateGrpcRequest,
     duplicateHttpRequest,

@@ -16,7 +16,6 @@ import { useCreateGrpcRequest } from '../hooks/useCreateGrpcRequest';
 import { useCreateHttpRequest } from '../hooks/useCreateHttpRequest';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDebouncedState } from '../hooks/useDebouncedState';
-import { useDeleteAnyRequest } from '../hooks/useDeleteAnyRequest';
 import type { HotkeyAction } from '../hooks/useHotKey';
 import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
@@ -27,6 +26,7 @@ import { useRenameRequest } from '../hooks/useRenameRequest';
 import { useScrollIntoView } from '../hooks/useScrollIntoView';
 import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { showDialog, toggleDialog } from '../lib/dialog';
 import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
@@ -75,7 +75,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const { mutate: createEnvironment } = useCreateEnvironment();
   const { mutate: sendRequest } = useSendAnyHttpRequest();
   const { mutate: renameRequest } = useRenameRequest(activeRequest?.id ?? null);
-  const { mutate: deleteRequest } = useDeleteAnyRequest();
 
   const workspaceCommands = useMemo<CommandPaletteItem[]>(() => {
     const commands: CommandPaletteItem[] = [
@@ -169,9 +168,9 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       });
 
       commands.push({
-        key: 'http_request.delete',
+        key: 'sidebar.delete_selected_item',
         label: 'Delete Request',
-        onSelect: () => deleteRequest(activeRequest.id),
+        onSelect: () => deleteModelWithConfirm(activeRequest),
       });
     }
 
@@ -189,7 +188,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     createGrpcRequest,
     createHttpRequest,
     createWorkspace,
-    deleteRequest,
     httpRequestActions,
     renameRequest,
     sendRequest,
