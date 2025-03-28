@@ -1,6 +1,5 @@
 import type { Cookie} from '@yaakapp-internal/models';
-import { listModels } from '@yaakapp-internal/models';
-import { useUpdateCookieJar } from '../hooks/useUpdateCookieJar';
+import { listModels, patchModel } from '@yaakapp-internal/models';
 import { cookieDomain } from '../lib/model_util';
 import { Banner } from './core/Banner';
 import { IconButton } from './core/IconButton';
@@ -11,7 +10,6 @@ interface Props {
 }
 
 export const CookieDialog = function ({ cookieJarId }: Props) {
-  const updateCookieJar = useUpdateCookieJar(cookieJarId ?? null);
   const cookieJars = listModels('cookie_jar');
   const cookieJar = cookieJars?.find((c) => c.id === cookieJarId);
 
@@ -53,12 +51,11 @@ export const CookieDialog = function ({ cookieJarId }: Props) {
                   iconSize="sm"
                   title="Delete"
                   className="ml-auto"
-                  onClick={async () => {
-                    await updateCookieJar.mutateAsync({
-                      ...cookieJar,
+                  onClick={() =>
+                    patchModel(cookieJar, {
                       cookies: cookieJar.cookies.filter((c2: Cookie) => c2 !== c),
-                    });
-                  }}
+                    })
+                  }
                 />
               </td>
             </tr>

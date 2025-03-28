@@ -1,3 +1,4 @@
+import { patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
@@ -6,7 +7,6 @@ import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
 import { activeGrpcConnectionAtom, useGrpcEvents } from '../hooks/usePinnedGrpcConnection';
-import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { Banner } from './core/Banner';
 import { HotKeyList } from './core/HotKeyList';
 import { SplitLayout } from './core/SplitLayout';
@@ -21,7 +21,6 @@ const emptyArray: string[] = [];
 
 export function GrpcConnectionLayout({ style }: Props) {
   const activeRequest = useActiveRequest('grpc_request');
-  const updateRequest = useUpdateAnyGrpcRequest();
   const activeConnection = useAtomValue(activeGrpcConnectionAtom);
   const grpcEvents = useGrpcEvents();
   const protoFilesKv = useGrpcProtoFiles(activeRequest?.id ?? null);
@@ -33,25 +32,21 @@ export function GrpcConnectionLayout({ style }: Props) {
     if (services == null || activeRequest == null) return;
     const s = services.find((s) => s.name === activeRequest.service);
     if (s == null) {
-      updateRequest.mutate({
-        id: activeRequest.id,
-        update: {
-          service: services[0]?.name ?? null,
-          method: services[0]?.methods[0]?.name ?? null,
-        },
-      });
+      patchModel(activeRequest, {
+        service: services[0]?.name ?? null,
+        method: services[0]?.methods[0]?.name ?? null,
+      }).catch(console.error);
       return;
     }
 
     const m = s.methods.find((m) => m.name === activeRequest.method);
     if (m == null) {
-      updateRequest.mutate({
-        id: activeRequest.id,
-        update: { method: s.methods[0]?.name ?? null },
-      });
+      patchModel(activeRequest, {
+        method: s.methods[0]?.name ?? null,
+      }).catch(console.error);
       return;
     }
-  }, [activeRequest, services, updateRequest]);
+  }, [activeRequest, services]);
 
   const activeMethod = useMemo(() => {
     if (services == null || activeRequest == null) return null;

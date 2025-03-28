@@ -2,7 +2,6 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai/index';
 import React from 'react';
-import { upsertWorkspace } from '../../commands/upsertWorkspace';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useAppInfo } from '../../hooks/useAppInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
@@ -95,9 +94,7 @@ export function SettingsGeneral() {
           labelPosition="left"
           defaultValue={`${workspace.settingRequestTimeout}`}
           validate={(value) => parseInt(value) >= 0}
-          onChange={(v) =>
-            upsertWorkspace.mutate({ ...workspace, settingRequestTimeout: parseInt(v) || 0 })
-          }
+          onChange={(v) => patchModel(workspace, { settingRequestTimeout: parseInt(v) || 0 })}
           type="number"
         />
 
@@ -105,7 +102,7 @@ export function SettingsGeneral() {
           checked={workspace.settingValidateCertificates}
           title="Validate TLS Certificates"
           onChange={(settingValidateCertificates) =>
-            upsertWorkspace.mutate({ ...workspace, settingValidateCertificates })
+            patchModel(workspace, { settingValidateCertificates })
           }
         />
 
@@ -113,8 +110,7 @@ export function SettingsGeneral() {
           checked={workspace.settingFollowRedirects}
           title="Follow Redirects"
           onChange={(settingFollowRedirects) =>
-            upsertWorkspace.mutate({
-              ...workspace,
+            patchModel(workspace, {
               settingFollowRedirects,
             })
           }

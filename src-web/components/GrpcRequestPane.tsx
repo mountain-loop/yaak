@@ -1,4 +1,4 @@
-import type { GrpcMetadataEntry, GrpcRequest } from '@yaakapp-internal/models';
+import { type GrpcMetadataEntry, type GrpcRequest, patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useRef } from 'react';
@@ -7,7 +7,6 @@ import type { ReflectResponseService } from '../hooks/useGrpc';
 import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
-import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
@@ -65,7 +64,6 @@ export function GrpcRequestPane({
   onCancel,
   onSend,
 }: Props) {
-  const updateRequest = useUpdateAnyGrpcRequest();
   const authentication = useHttpAuthenticationSummaries();
   const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
     namespace: 'no_sync',
@@ -78,15 +76,13 @@ export function GrpcRequestPane({
   const { width: paneWidth } = useContainerSize(urlContainerEl);
 
   const handleChangeUrl = useCallback(
-    (url: string) => updateRequest.mutateAsync({ id: activeRequest.id, update: { url } }),
-    [activeRequest.id, updateRequest],
+    (url: string) => patchModel(activeRequest, { url }),
+    [activeRequest],
   );
 
   const handleChangeMessage = useCallback(
-    (message: string) => {
-      return updateRequest.mutateAsync({ id: activeRequest.id, update: { message } });
-    },
-    [activeRequest.id, updateRequest],
+    (message: string) => patchModel(activeRequest, { message }),
+    [activeRequest],
   );
 
   const select = useMemo(() => {
@@ -105,15 +101,12 @@ export function GrpcRequestPane({
     async (v: string) => {
       const [serviceName, methodName] = v.split('/', 2);
       if (serviceName == null || methodName == null) throw new Error('Should never happen');
-      await updateRequest.mutateAsync({
-        id: activeRequest.id,
-        update: {
-          service: serviceName,
-          method: methodName,
-        },
+      await patchModel(activeRequest, {
+        service: serviceName,
+        method: methodName,
       });
     },
-    [activeRequest.id, updateRequest],
+    [activeRequest],
   );
 
   const handleConnect = useCallback(async () => {
@@ -151,16 +144,16 @@ export function GrpcRequestPane({
             { type: 'separator' },
             { label: 'No Authentication', shortLabel: 'Auth', value: null },
           ],
-          onChange: (authenticationType) => {
+          onChange: async (authenticationType) => {
             let authentication: GrpcRequest['authentication'] = activeRequest.authentication;
             if (activeRequest.authenticationType !== authenticationType) {
               authentication = {
                 // Reset auth if changing types
               };
             }
-            updateRequest.mutate({
-              id: activeRequest.id,
-              update: { authenticationType, authentication },
+            await patchModel(activeRequest, {
+              authenticationType,
+              authentication,
             });
           },
         },
@@ -172,14 +165,7 @@ export function GrpcRequestPane({
         rightSlot: activeRequest.description && <CountBadge count={true} />,
       },
     ],
-    [
-      activeRequest.authentication,
-      activeRequest.authenticationType,
-      activeRequest.description,
-      activeRequest.id,
-      authentication,
-      updateRequest,
-    ],
+    [activeRequest, authentication],
   );
 
   const activeTab = activeTabs?.[activeRequest.id];
@@ -191,15 +177,13 @@ export function GrpcRequestPane({
   );
 
   const handleMetadataChange = useCallback(
-    (metadata: GrpcMetadataEntry[]) =>
-      updateRequest.mutate({ id: activeRequest.id, update: { metadata } }),
-    [activeRequest.id, updateRequest],
+    (metadata: GrpcMetadataEntry[]) => patchModel(activeRequest, { metadata }),
+    [activeRequest],
   );
 
   const handleDescriptionChange = useCallback(
-    (description: string) =>
-      updateRequest.mutate({ id: activeRequest.id, update: { description } }),
-    [activeRequest.id, updateRequest],
+    (description: string) => patchModel(activeRequest, { description }),
+    [activeRequest],
   );
 
   return (
@@ -346,7 +330,7 @@ export function GrpcRequestPane({
               className="font-sans !text-xl !px-0"
               containerClassName="border-0"
               placeholder={resolvedModelName(activeRequest)}
-              onChange={(name) => updateRequest.mutate({ id: activeRequest.id, update: { name } })}
+              onChange={(name) => patchModel(activeRequest, { name })}
             />
             <MarkdownEditor
               name="request-description"

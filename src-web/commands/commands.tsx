@@ -1,4 +1,5 @@
 import type { Folder } from '@yaakapp-internal/models';
+import { createWorkspaceModel } from '@yaakapp-internal/models';
 import { applySync, calculateSync } from '@yaakapp-internal/sync';
 import { Banner } from '../components/core/Banner';
 import { InlineCode } from '../components/core/InlineCode';
@@ -10,10 +11,9 @@ import { jotaiStore } from '../lib/jotai';
 import { pluralizeCount } from '../lib/pluralize';
 import { showPrompt } from '../lib/prompt';
 import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
-import { invokeCmd } from '../lib/tauri';
 
 export const createFolder = createFastMutation<
-  Folder | null,
+  void,
   void,
   Partial<Pick<Folder, 'name' | 'sortPriority' | 'folderId'>>
 >({
@@ -34,13 +34,13 @@ export const createFolder = createFastMutation<
         confirmText: 'Create',
         placeholder: 'Name',
       });
-      if (name == null) return null;
+      if (name == null) throw new Error('No name provided to create folder');
 
       patch.name = name;
     }
 
     patch.sortPriority = patch.sortPriority || -Date.now();
-    return invokeCmd<Folder>('cmd_update_folder', { folder: { workspaceId, ...patch } });
+    await createWorkspaceModel({ model: 'folder', workspaceId, ...patch });
   },
 });
 

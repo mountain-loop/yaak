@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { createStore, useAtomValue } from 'jotai';
-import { AnyModel, ModelPayload } from '../bindings/gen_models';
+import { useAtomValue } from 'jotai';
+import { AnyModel, ModelPayload, Workspace } from '../bindings/gen_models';
 import {
   cookieJarsAtom,
   environmentsAtom,
@@ -20,13 +20,8 @@ import {
   workspaceMetasAtom,
   workspacesAtom,
 } from './atoms';
-import { ExtractModel, ExtractModels } from './types';
+import { ExtractModel, ExtractModels, JotaiStore, ModelStoreData } from './types';
 import { newData } from './util';
-
-type ModelStoreData<T extends AnyModel = AnyModel> = {
-  [M in T['model']]: Record<string, Extract<T, { model: M }>>;
-};
-type JotaiStore = ReturnType<typeof createStore>;
 
 let _store: JotaiStore | null = null;
 
@@ -169,8 +164,14 @@ export async function patchModel<M extends AnyModel['model'], T extends ExtractM
   return patchModelById<M, T>(base.model, base.id, patch);
 }
 
-export async function createModel<T extends AnyModel>(
+export async function createModel<T extends Workspace>(
   patch: Partial<T> & Pick<T, 'model'>,
+): Promise<string> {
+  return invoke<string>('plugin:yaak-models|upsert', { model: patch });
+}
+
+export async function createWorkspaceModel<T extends Extract<AnyModel, { workspaceId: string }>>(
+  patch: Partial<T> & Pick<T, 'model' | 'workspaceId'>,
 ): Promise<string> {
   return invoke<string>('plugin:yaak-models|upsert', { model: patch });
 }

@@ -1,9 +1,8 @@
-import { listModels } from '@yaakapp-internal/models';
+import { listModels, patchModel } from '@yaakapp-internal/models';
 import { memo, useMemo } from 'react';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useCreateCookieJar } from '../hooks/useCreateCookieJar';
 import { useDeleteCookieJar } from '../hooks/useDeleteCookieJar';
-import { useUpdateCookieJar } from '../hooks/useUpdateCookieJar';
 import { showDialog } from '../lib/dialog';
 import { showPrompt } from '../lib/prompt';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
@@ -15,7 +14,6 @@ import { InlineCode } from './core/InlineCode';
 
 export const CookieDropdown = memo(function CookieDropdown() {
   const activeCookieJar = useActiveCookieJar();
-  const updateCookieJar = useUpdateCookieJar(activeCookieJar?.id ?? null);
   const deleteCookieJar = useDeleteCookieJar(activeCookieJar ?? null);
   const createCookieJar = useCreateCookieJar();
   const cookieJars = listModels('cookie_jar');
@@ -66,7 +64,7 @@ export const CookieDropdown = memo(function CookieDropdown() {
                   defaultValue: activeCookieJar?.name,
                 });
                 if (name == null) return;
-                updateCookieJar.mutate({ name });
+                await patchModel(activeCookieJar, { name });
               },
             },
             ...(((cookieJars ?? []).length > 1 // Never delete the last one
@@ -89,7 +87,7 @@ export const CookieDropdown = memo(function CookieDropdown() {
         onSelect: () => createCookieJar.mutate(),
       },
     ];
-  }, [activeCookieJar, cookieJars, createCookieJar, deleteCookieJar, updateCookieJar]);
+  }, [activeCookieJar, cookieJars, createCookieJar, deleteCookieJar]);
 
   return (
     <Dropdown items={items}>

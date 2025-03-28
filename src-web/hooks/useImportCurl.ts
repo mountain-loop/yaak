@@ -1,5 +1,5 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
-import { createModel, patchModelById } from '@yaakapp-internal/models';
+import type { HttpRequest} from '@yaakapp-internal/models';
+import { createWorkspaceModel, patchModelById } from '@yaakapp-internal/models';
 import { jotaiStore } from '../lib/jotai';
 import { invokeCmd } from '../lib/tauri';
 import { showToast } from '../lib/toast';
@@ -26,7 +26,7 @@ export function useImportCurl() {
       let verb;
       if (overwriteRequestId == null) {
         verb = 'Created';
-        await createModel(importedRequest);
+        await createWorkspaceModel(importedRequest);
       } else {
         verb = 'Updated';
         await patchModelById(importedRequest.model, overwriteRequestId, (r: HttpRequest) => ({

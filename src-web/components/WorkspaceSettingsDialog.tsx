@@ -1,7 +1,5 @@
-import { useModelList } from '@yaakapp-internal/models';
+import { patchModel, useModelList } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { upsertWorkspace } from '../commands/upsertWorkspace';
-import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
 import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useDeleteActiveWorkspace } from '../hooks/useDeleteActiveWorkspace';
 import { Banner } from './core/Banner';
@@ -46,7 +44,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Pro
         required
         label="Name"
         defaultValue={workspace.name}
-        onChange={(name) => upsertWorkspace.mutate({ ...workspace, name })}
+        onChange={(name) => patchModel(workspace, { name })}
         stateKey={`name.${workspace.id}`}
       />
 
@@ -56,7 +54,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Pro
         className="min-h-[10rem] max-h-[25rem] border border-border px-2"
         defaultValue={workspace.description}
         stateKey={`description.${workspace.id}`}
-        onChange={(description) => upsertWorkspace.mutate({ ...workspace, description })}
+        onChange={(description) => patchModel(workspace, { description })}
         heightMode="auto"
       />
 
@@ -65,9 +63,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Pro
           value={{ filePath: workspaceMeta.settingSyncDir }}
           forceOpen={openSyncMenu}
           onCreateNewWorkspace={hide}
-          onChange={({ filePath }) => {
-            upsertWorkspaceMeta.mutate({ ...workspaceMeta, settingSyncDir: filePath });
-          }}
+          onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
         />
         <Separator />
         <Button

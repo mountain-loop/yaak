@@ -1,13 +1,13 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import { createWorkspaceModel } from '@yaakapp-internal/models';
 import { jotaiStore } from '../lib/jotai';
 import { router } from '../lib/router';
-import { invokeCmd } from '../lib/tauri';
 import { getActiveRequest } from './useActiveRequest';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 
 export function useCreateHttpRequest() {
-  return useFastMutation<HttpRequest, unknown, Partial<HttpRequest>>({
+  return useFastMutation<string, unknown, Partial<HttpRequest>>({
     mutationKey: ['create_http_request'],
     mutationFn: async (patch = {}) => {
       const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
@@ -26,15 +26,15 @@ export function useCreateHttpRequest() {
         }
       }
       patch.folderId = patch.folderId || activeRequest?.folderId;
-      return invokeCmd<HttpRequest>('cmd_upsert_http_request', {
-        request: { workspaceId, ...patch },
-      });
+      return createWorkspaceModel({ model: 'http_request', workspaceId, ...patch });
     },
-    onSuccess: async (request) => {
+    onSuccess: async (requestId) => {
+      const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+      if (workspaceId == null) return;
       await router.navigate({
         to: '/workspaces/$workspaceId',
-        params: { workspaceId: request.workspaceId },
-        search: (prev) => ({ ...prev, request_id: request.id }),
+        params: { workspaceId },
+        search: (prev) => ({ ...prev, request_id: requestId }),
       });
     },
   });

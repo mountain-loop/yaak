@@ -6,7 +6,6 @@ import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo } from 'react';
-import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
 import { getActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { getActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
@@ -135,8 +134,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 // Reset auth if changing types
               };
             }
-            upsertWebsocketRequest.mutate({
-              ...activeRequest,
+            await patchModel(activeRequest, {
               authenticationType,
               authentication,
             });
@@ -204,7 +202,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   }, [connection]);
 
   const handleUrlChange = useCallback(
-    (url: string) => upsertWebsocketRequest.mutate({ ...activeRequest, url }),
+    (url: string) => patchModel(activeRequest, { url }),
     [activeRequest],
   );
 
@@ -284,7 +282,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 forceUpdateKey={forceUpdateKey}
                 headers={activeRequest.headers}
                 stateKey={`headers.${activeRequest.id}`}
-                onChange={(headers) => upsertWebsocketRequest.mutate({ ...activeRequest, headers })}
+                onChange={(headers) => patchModel(activeRequest, { headers })}
               />
             </TabContent>
             <TabContent value={TAB_PARAMS}>
@@ -292,9 +290,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 stateKey={`params.${activeRequest.id}`}
                 forceUpdateKey={forceUpdateKey + urlParametersKey}
                 pairs={urlParameterPairs}
-                onChange={(urlParameters) =>
-                  upsertWebsocketRequest.mutate({ ...activeRequest, urlParameters })
-                }
+                onChange={(urlParameters) => patchModel(activeRequest, { urlParameters })}
               />
             </TabContent>
             <TabContent value={TAB_MESSAGE}>
@@ -306,7 +302,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 heightMode={fullHeight ? 'full' : 'auto'}
                 defaultValue={activeRequest.message}
                 language={messageLanguage}
-                onChange={(message) => upsertWebsocketRequest.mutate({ ...activeRequest, message })}
+                onChange={(message) => patchModel(activeRequest, { message })}
                 stateKey={`json.${activeRequest.id}`}
               />
             </TabContent>
@@ -320,7 +316,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                   className="font-sans !text-xl !px-0"
                   containerClassName="border-0"
                   placeholder={resolvedModelName(activeRequest)}
-                  onChange={(name) => upsertWebsocketRequest.mutate({ ...activeRequest, name })}
+                  onChange={(name) => patchModel(activeRequest, { name })}
                 />
                 <MarkdownEditor
                   name="request-description"
@@ -328,9 +324,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                   defaultValue={activeRequest.description}
                   stateKey={`description.${activeRequest.id}`}
                   forceUpdateKey={forceUpdateKey}
-                  onChange={(description) =>
-                    upsertWebsocketRequest.mutate({ ...activeRequest, description })
-                  }
+                  onChange={(description) => patchModel(activeRequest, { description })}
                 />
               </div>
             </TabContent>

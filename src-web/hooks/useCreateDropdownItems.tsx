@@ -1,14 +1,13 @@
+import { createWorkspaceModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { useMemo } from 'react';
 import { createFolder } from '../commands/commands';
-import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
 import type { DropdownItem } from '../components/core/Dropdown';
 import { Icon } from '../components/core/Icon';
 import { generateId } from '../lib/generateId';
 import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
 import { getActiveRequest } from './useActiveRequest';
-import { activeWorkspaceAtom } from './useActiveWorkspace';
-import { useCreateGrpcRequest } from './useCreateGrpcRequest';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
 
 export function useCreateDropdownItems({
@@ -21,14 +20,13 @@ export function useCreateDropdownItems({
   folderId?: string | null | 'active-folder';
 } = {}): DropdownItem[] {
   const { mutate: createHttpRequest } = useCreateHttpRequest();
-  const { mutate: createGrpcRequest } = useCreateGrpcRequest();
-  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
+  const workspaceId = useAtomValue(activeWorkspaceIdAtom);
 
   const items = useMemo((): DropdownItem[] => {
     const activeRequest = getActiveRequest();
     const folderId =
       (folderIdOption === 'active-folder' ? activeRequest?.folderId : folderIdOption) ?? null;
-    if (activeWorkspace == null) return [];
+    if (workspaceId == null) return [];
 
     return [
       {
@@ -52,13 +50,12 @@ export function useCreateDropdownItems({
       {
         label: 'gRPC',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-        onSelect: () => createGrpcRequest({ folderId }),
+        onSelect: () => createWorkspaceModel({ model: 'grpc_request', workspaceId, folderId }),
       },
       {
         label: 'WebSocket',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-        onSelect: () =>
-          upsertWebsocketRequest.mutate({ folderId, workspaceId: activeWorkspace.id }),
+        onSelect: () => createWorkspaceModel({ model: 'websocket_request', workspaceId, folderId }),
       },
       ...((hideFolder
         ? []
@@ -71,14 +68,7 @@ export function useCreateDropdownItems({
             },
           ]) as DropdownItem[]),
     ];
-  }, [
-    activeWorkspace,
-    createGrpcRequest,
-    createHttpRequest,
-    folderIdOption,
-    hideFolder,
-    hideIcons,
-  ]);
+  }, [createHttpRequest, folderIdOption, hideFolder, hideIcons, workspaceId]);
 
   return items;
 }

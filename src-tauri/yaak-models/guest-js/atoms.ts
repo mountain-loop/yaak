@@ -1,4 +1,4 @@
-import { Atom, atom } from 'jotai';
+import { atom } from 'jotai';
 
 import { selectAtom } from 'jotai/utils';
 import type { AnyModel, Environment } from '../bindings/gen_models';
@@ -53,9 +53,7 @@ export const requestsAtom = atom(function (get) {
   return [...get(httpRequestsAtom), ...get(grpcRequestsAtom), ...get(websocketRequestsAtom)];
 });
 
-export function createModelAtom<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
-  modelType: M,
-): Atom<T[]> {
+export function createModelAtom<M extends AnyModel['model']>(modelType: M) {
   return selectAtom(
     modelStoreDataAtom,
     (data) => Object.values(data[modelType] ?? {}),
@@ -63,30 +61,30 @@ export function createModelAtom<M extends AnyModel['model'], T extends ExtractMo
   );
 }
 
-export function createSingularModelAtom<
-  M extends AnyModel['model'],
-  T extends ExtractModel<AnyModel, M>,
->(modelType: M) {
+export function createSingularModelAtom<M extends AnyModel['model']>(modelType: M) {
   return selectAtom(modelStoreDataAtom, (data) => {
-    const modelData: T[] = Object.values(data[modelType] ?? {});
+    const modelData = Object.values(data[modelType] ?? {});
     const item = modelData[0];
     if (item == null) throw new Error('Failed creating singular model with no data: ' + modelType);
     return item;
   });
 }
 
-export function createSortedModelAtom<
-  M extends AnyModel['model'],
-  T extends ExtractModel<AnyModel, M>,
->(modelType: M, field: keyof T, order: 'asc' | 'desc'): Atom<T[]> {
+export function createSortedModelAtom<M extends AnyModel['model']>(
+  modelType: M,
+  field: keyof ExtractModel<AnyModel, M>,
+  order: 'asc' | 'desc',
+) {
   return selectAtom(
     modelStoreDataAtom,
     (data) => {
-      const modelData: T[] = data[modelType] ?? {};
-      return Object.values(modelData).sort((a: T, b: T) => {
-        const n = a[field] > b[field] ? 1 : -1;
-        return order === 'desc' ? n * -1 : n;
-      });
+      const modelData = data[modelType] ?? {};
+      return Object.values(modelData).sort(
+        (a: ExtractModel<AnyModel, M>, b: ExtractModel<AnyModel, M>) => {
+          const n = a[field] > b[field] ? 1 : -1;
+          return order === 'desc' ? n * -1 : n;
+        },
+      );
     },
     shallowEqual,
   );
