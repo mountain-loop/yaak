@@ -6,10 +6,7 @@ use crate::util::UpdateSource;
 use tauri::{AppHandle, Runtime, WebviewWindow};
 
 #[tauri::command]
-pub(crate) fn upsert<R: Runtime>(
-    window: WebviewWindow<R>,
-    model: AnyModel,
-) -> Result<String> {
+pub(crate) fn upsert<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> Result<String> {
     let db = window.db();
     let source = &UpdateSource::from_window(&window);
     let id = match model {
@@ -60,7 +57,7 @@ pub(crate) fn duplicate<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -
     let id = match model {
         AnyModel::HttpRequest(m) => db.duplicate_http_request(&m, source)?.id,
         AnyModel::Environment(m) => db.duplicate_environment(&m, source)?.id,
-        AnyModel::Folder(m) => db.delete_folder(&m, source)?.id,
+        AnyModel::Folder(m) => db.duplicate_folder(&m, source)?.id,
         AnyModel::GrpcRequest(m) => db.duplicate_grpc_request(&m, source)?.id,
         AnyModel::WebsocketRequest(m) => db.duplicate_websocket_request(&m, source)?.id,
         a => return Err(GenericError(format!("Cannot duplicate AnyModel {a:?})"))),
