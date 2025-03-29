@@ -51,9 +51,10 @@ const TAB_DESCRIPTION = 'description';
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
   const requests = get(requestsAtom);
-  return requests
+  const urls = requests
     .filter((r) => r.id !== activeRequestId)
     .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url }));
+  return urls;
 });
 
 const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
@@ -87,17 +88,6 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   }, [activeRequest.url, activeRequest.urlParameters]);
 
   const tabs = useMemo<TabItem[]>(() => {
-    // const options: Omit<RadioDropdownProps<WebsocketMessageType>, 'children'> = {
-    //   value: activeRequest.messageType ?? 'text',
-    //   items: [
-    //     { label: 'Text', value: 'text' },
-    //     { label: 'Binary', value: 'binary' },
-    //   ],
-    //   onChange: async (messageType) => {
-    //     if (messageType === activeRequest.messageType) return;
-    //     upsertWebsocketRequest.mutate({ ...activeRequest, messageType });
-    //   },
-    // };
     return [
       {
         value: TAB_MESSAGE,

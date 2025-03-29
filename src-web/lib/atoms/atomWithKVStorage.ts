@@ -9,7 +9,7 @@ export function atomWithKVStorage<T extends object | boolean | number | string |
   const baseAtom = atom<T>(fallback);
 
   baseAtom.onMount = (setValue) => {
-    getKeyValue<T>({ namespace, key, fallback }).then(setValue);
+    setValue(getKeyValue<T>({ namespace, key, fallback }));
   };
 
   const derivedAtom = atom<T, [T | ((prev: T) => T)], void>(

@@ -1,6 +1,6 @@
 import { useGitInit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
-import { createModel, patchModel } from '@yaakapp-internal/models';
+import { createGlobalModel, patchModel } from '@yaakapp-internal/models';
 import { useState } from 'react';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
@@ -30,7 +30,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
       className="pb-3 max-h-[50vh]"
       onSubmit={async (e) => {
         e.preventDefault();
-        const workspaceId = await createModel({ model: 'workspace', name });
+        const workspaceId = await createGlobalModel({ model: 'workspace', name });
         if (workspaceId == null) return;
 
         // Do getWorkspaceMeta instead of naively creating one because it might have
@@ -38,6 +38,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         const workspaceMeta = await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', {
           workspaceId,
         });
+        console.log("WORKSPACE META", workspaceMeta)
         await patchModel(workspaceMeta, {
           settingSyncDir: syncConfig.filePath,
         });

@@ -3,10 +3,10 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::util::{UpdateSource, generate_prefixed_id};
+use crate::util::{generate_prefixed_id, UpdateSource};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
-use sea_query::{IntoIden, IntoTableRef, SimpleExpr, enum_def};
+use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -1913,19 +1913,20 @@ impl<'de> Deserialize<'de> for AnyModel {
         use serde_json::from_value as fv;
 
         let model = match model.get("model") {
-            Some(m) if m == "http_request" => AnyModel::HttpRequest(fv(value).unwrap()),
-            Some(m) if m == "grpc_request" => AnyModel::GrpcRequest(fv(value).unwrap()),
-            Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
+            Some(m) if m == "cookie_jar" => AnyModel::CookieJar(fv(value).unwrap()),
             Some(m) if m == "environment" => AnyModel::Environment(fv(value).unwrap()),
             Some(m) if m == "folder" => AnyModel::Folder(fv(value).unwrap()),
-            Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
             Some(m) if m == "grpc_connection" => AnyModel::GrpcConnection(fv(value).unwrap()),
             Some(m) if m == "grpc_event" => AnyModel::GrpcEvent(fv(value).unwrap()),
-            Some(m) if m == "cookie_jar" => AnyModel::CookieJar(fv(value).unwrap()),
+            Some(m) if m == "grpc_request" => AnyModel::GrpcRequest(fv(value).unwrap()),
+            Some(m) if m == "http_request" => AnyModel::HttpRequest(fv(value).unwrap()),
+            Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
             Some(m) if m == "plugin" => AnyModel::Plugin(fv(value).unwrap()),
             Some(m) if m == "settings" => AnyModel::Settings(fv(value).unwrap()),
+            Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
+            Some(m) if m == "workspace_meta" => AnyModel::WorkspaceMeta(fv(value).unwrap()),
             Some(m) => {
-                return Err(serde::de::Error::custom(format!("Unknown model {}", m)));
+                return Err(serde::de::Error::custom(format!("Failed to deserialize AnyModel {}", m)));
             }
             None => {
                 return Err(serde::de::Error::custom("Missing or invalid model"));

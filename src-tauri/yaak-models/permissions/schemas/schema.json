@@ -315,6 +315,16 @@
           "const": "deny-duplicate"
         },
         {
+          "description": "Enables the get_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-settings"
+        },
+        {
+          "description": "Denies the get_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-settings"
+        },
+        {
           "description": "Enables the grpc_events command without any pre-configured scope.",
           "type": "string",
           "const": "allow-grpc-events"

@@ -4,6 +4,7 @@ Default permissions for the plugin
 
 - `allow-delete`
 - `allow-duplicate`
+- `allow-get-settings`
 - `allow-grpc-events`
 - `allow-upsert`
 - `allow-websocket-events`
@@ -66,6 +67,32 @@ Enables the duplicate command without any pre-configured scope.
 <td>
 
 Denies the duplicate command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-models:allow-get-settings`
+
+</td>
+<td>
+
+Enables the get_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-models:deny-get-settings`
+
+</td>
+<td>
+
+Denies the get_settings command without any pre-configured scope.
 
 </td>
 </tr>

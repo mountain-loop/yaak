@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useAtomValue } from 'jotai';
-import { AnyModel, ModelPayload, Workspace } from '../bindings/gen_models';
+import { AnyModel, ModelPayload } from '../bindings/gen_models';
 import {
   cookieJarsAtom,
   environmentsAtom,
@@ -129,9 +129,7 @@ export function useModelList<M extends ModelName>(model: M): AtomReturn<ModelToA
   return useAtomValue(atom);
 }
 
-export function getAnyModel(
-    id: string,
-): AnyModel | null {
+export function getAnyModel(id: string): AnyModel | null {
   let data = mustStore().get(modelStoreDataAtom);
   for (const modelData of Object.values(data)) {
     let model = modelData[id];
@@ -200,17 +198,16 @@ export function duplicateModelById<
   return duplicateModel(model);
 }
 
-export function duplicateModel<
-  M extends AnyModel['model'],
-  T extends ExtractModel<AnyModel, M>,
->(model: T | null) {
+export function duplicateModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+  model: T | null,
+) {
   if (model == null) {
     throw new Error('Failed to delete null model');
   }
   return invoke<string>('plugin:yaak-models|duplicate', { model });
 }
 
-export async function createModel<T extends Workspace>(
+export async function createGlobalModel<T extends Exclude<AnyModel, { workspaceId: string }>>(
   patch: Partial<T> & Pick<T, 'model'>,
 ): Promise<string> {
   return invoke<string>('plugin:yaak-models|upsert', { model: patch });

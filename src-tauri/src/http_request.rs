@@ -24,11 +24,11 @@ use tokio::fs::{create_dir_all, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
 use tokio::sync::{oneshot, Mutex};
-use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
+use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
@@ -46,10 +46,9 @@ pub async fn send_http_request<R: Runtime>(
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
-    let update_source = &UpdateSource::from_window(&window);
     let (settings, workspace) = {
         let db = window.db();
-        let settings = db.get_or_create_settings(update_source);
+        let settings = db.get_settings();
         let workspace = db.get_workspace(&unrendered_request.workspace_id)?;
         (settings, workspace)
     };

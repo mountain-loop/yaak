@@ -38,7 +38,7 @@ export function useSubscribeRecentEnvironments() {
 
       const key = kvKey(activeWorkspaceId);
 
-      const recentIds = await getKeyValue<string[]>({ namespace, key, fallback });
+      const recentIds = getKeyValue<string[]>({ namespace, key, fallback });
       if (recentIds[0] === activeEnvironmentId) return; // Short-circuit
 
       const withoutActiveId = recentIds.filter((id) => id !== activeEnvironmentId);

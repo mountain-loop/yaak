@@ -1,6 +1,7 @@
 const COMMANDS: &[&str] = &[
     "delete",
     "duplicate",
+    "get_settings",
     "grpc_events",
     "upsert",
     "websocket_events",

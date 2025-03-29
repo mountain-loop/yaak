@@ -1,7 +1,6 @@
 import type { WebsocketConnection } from '@yaakapp-internal/models';
-import { getModel } from '@yaakapp-internal/models';
+import { deleteModel, getModel } from '@yaakapp-internal/models';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { deleteWebsocketConnection } from '../commands/deleteWebsocketConnection';
 import { deleteWebsocketConnections } from '../commands/deleteWebsocketConnections';
 import { pluralizeCount } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
@@ -27,7 +26,7 @@ export function RecentWebsocketConnectionsDropdown({
       items={[
         {
           label: 'Clear Connection',
-          onSelect: () => deleteWebsocketConnection.mutate(activeConnection),
+          onSelect: () => deleteModel(activeConnection),
           disabled: connections.length === 0,
         },
         {

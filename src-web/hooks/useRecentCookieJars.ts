@@ -38,7 +38,7 @@ export function useSubscribeRecentCookieJars() {
 
       const key = kvKey(activeWorkspaceId);
 
-      const recentIds = await getKeyValue<string[]>({ namespace, key, fallback });
+      const recentIds = getKeyValue<string[]>({ namespace, key, fallback });
       if (recentIds[0] === activeCookieJarId) return; // Short-circuit
 
       const withoutActiveId = recentIds.filter((id) => id !== activeCookieJarId);

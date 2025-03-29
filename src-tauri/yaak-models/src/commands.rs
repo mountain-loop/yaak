@@ -1,12 +1,12 @@
 use crate::error::Error::GenericError;
 use crate::error::Result;
-use crate::models::{AnyModel, GrpcEvent, WebsocketEvent};
+use crate::models::{AnyModel, GrpcEvent, Settings, WebsocketEvent};
 use crate::query_manager::QueryManagerExt;
 use crate::util::UpdateSource;
 use tauri::{AppHandle, Runtime, WebviewWindow};
 
 #[tauri::command]
-pub(crate) async fn upsert<R: Runtime>(
+pub(crate) fn upsert<R: Runtime>(
     window: WebviewWindow<R>,
     model: AnyModel,
 ) -> Result<String> {
@@ -17,6 +17,7 @@ pub(crate) async fn upsert<R: Runtime>(
         AnyModel::CookieJar(m) => db.upsert_cookie_jar(&m, source)?.id,
         AnyModel::Environment(m) => db.upsert_environment(&m, source)?.id,
         AnyModel::Folder(m) => db.upsert_folder(&m, source)?.id,
+        AnyModel::KeyValue(m) => db.upsert_key_value(&m, source)?.id,
         AnyModel::GrpcRequest(m) => db.upsert_grpc_request(&m, source)?.id,
         AnyModel::HttpResponse(m) => db.upsert_http_response(&m, source)?.id,
         AnyModel::Plugin(m) => db.upsert_plugin(&m, source)?.id,
@@ -85,16 +86,20 @@ pub(crate) fn grpc_events<R: Runtime>(
 }
 
 #[tauri::command]
+pub(crate) fn get_settings<R: Runtime>(app_handle: AppHandle<R>) -> Result<Settings> {
+    Ok(app_handle.db().get_settings())
+}
+
+#[tauri::command]
 pub(crate) fn workspace_models<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: Option<&str>,
 ) -> Result<Vec<AnyModel>> {
     let db = window.db();
     let mut l: Vec<AnyModel> = Vec::new();
-    let source = &UpdateSource::from_window(&window);
 
     // Add the settings
-    l.push(db.get_or_create_settings(source).into());
+    l.push(db.get_settings().into());
 
     // Add global models
     l.append(&mut db.list_workspaces()?.into_iter().map(Into::into).collect());
