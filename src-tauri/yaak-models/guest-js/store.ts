@@ -109,9 +109,9 @@ const modelAtomMap = {
   http_response: httpResponsesAtom,
   key_value: keyValuesAtom,
   plugin: pluginsAtom,
+  websocket_connection: websocketConnectionsAtom,
   websocket_events: websocketEventsAtom,
   websocket_request: websocketRequestsAtom,
-  websocket_connection: websocketConnectionsAtom,
   workspace: workspacesAtom,
   workspace_meta: workspaceMetasAtom,
 } as const;
@@ -223,30 +223,27 @@ export function listModels<M extends AnyModel['model']>(
   models: M | M[],
 ): ExtractModels<AnyModel, M>[] {
   const data = mustStore().get(modelStoreDataAtom);
-  return modelsFromData(data, models);
-}
-
-export function modelsFromData<M extends AnyModel['model'], T extends ExtractModels<AnyModel, M>>(
-  data: ModelStoreData,
-  models: M | M[],
-): T[] {
-  const values: T[] = [];
+  const values = [];
   for (const model of Array.isArray(models) ? models : [models]) {
-    values.push(...(Object.values(data[model]) as T[]));
+    values.push(...(Object.values(data[model])));
   }
   return values;
 }
 
-export function modelFromData<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
-  data: ModelStoreData,
-  models: M | M[],
-  id: string,
-): T | null {
-  for (const model of Array.isArray(models) ? models : [models]) {
-    let v = data[model][id];
-    if (v?.model === model) return v as T;
+export function replaceModelsInStore<
+  M extends AnyModel['model'],
+  T extends Extract<AnyModel, { model: M }>,
+>(model: M, models: T[]) {
+  const newModels: Record<string, T> = {};
+  for (const model of models) {
+    newModels[model.id] = model;
   }
-  return null;
+  mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
+    return {
+      ...prev,
+      [model]: newModels,
+    };
+  });
 }
 
 function shouldIgnoreModel({ model, updateSource }: ModelPayload) {

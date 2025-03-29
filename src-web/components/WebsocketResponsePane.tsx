@@ -9,8 +9,8 @@ import { useFormatText } from '../hooks/useFormatText';
 import {
   activeWebsocketConnectionAtom,
   activeWebsocketConnectionsAtom,
-  activeWebsocketEventsAtom,
   setPinnedWebsocketConnectionId,
+  useWebsocketEvents,
 } from '../hooks/usePinnedWebsocketConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { languageFromContentType } from '../lib/contentType';
@@ -40,9 +40,9 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
 
   const activeConnection = useAtomValue(activeWebsocketConnectionAtom);
   const connections = useAtomValue(activeWebsocketConnectionsAtom);
+  console.log('ACTIVE CONNECTION', activeConnection);
 
-  // const isLoading = activeConnection !== null && activeConnection.state !== 'closed';
-  const events = useAtomValue(activeWebsocketEventsAtom);
+  const events = useWebsocketEvents(activeConnection?.id ?? null);
 
   const activeEvent = useMemo(
     () => events.find((m) => m.id === activeEventId) ?? null,

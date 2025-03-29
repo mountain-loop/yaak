@@ -26,14 +26,14 @@ export const environmentsBreakdownAtom = atom<{
 
 export const foldersAtom = createModelAtom('folder');
 export const httpRequestsAtom = createModelAtom('http_request');
-export const httpResponsesAtom = createSortedModelAtom('http_response', 'createdAt', 'desc');
+export const httpResponsesAtom = createOrderedModelAtom('http_response', 'createdAt', 'desc');
 export const grpcRequestsAtom = createModelAtom('grpc_request');
-export const grpcConnectionsAtom = createSortedModelAtom('grpc_connection', 'createdAt', 'desc');
-export const grpcEventsAtom = createSortedModelAtom('grpc_event', 'createdAt', 'desc');
+export const grpcConnectionsAtom = createOrderedModelAtom('grpc_connection', 'createdAt', 'desc');
+export const grpcEventsAtom = createOrderedModelAtom('grpc_event', 'createdAt', 'asc');
 export const settingsAtom = createSingularModelAtom('settings');
 export const websocketRequestsAtom = createModelAtom('websocket_request');
-export const websocketEventsAtom = createSortedModelAtom('websocket_event', 'createdAt', 'desc');
-export const websocketConnectionsAtom = createModelAtom('websocket_connection');
+export const websocketEventsAtom = createOrderedModelAtom('websocket_event', 'createdAt', 'asc');
+export const websocketConnectionsAtom = createOrderedModelAtom('websocket_connection', 'createdAt', 'desc');
 export const workspacesAtom = createModelAtom('workspace');
 export const pluginsAtom = createModelAtom('plugin');
 export const workspaceMetasAtom = createModelAtom('workspace_meta');
@@ -70,7 +70,7 @@ export function createSingularModelAtom<M extends AnyModel['model']>(modelType: 
   });
 }
 
-export function createSortedModelAtom<M extends AnyModel['model']>(
+export function createOrderedModelAtom<M extends AnyModel['model']>(
   modelType: M,
   field: keyof ExtractModel<AnyModel, M>,
   order: 'asc' | 'desc',

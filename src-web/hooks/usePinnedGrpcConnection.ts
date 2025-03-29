@@ -1,11 +1,15 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { GrpcConnection, GrpcEvent } from '@yaakapp-internal/models';
-import { grpcConnectionsAtom } from '@yaakapp-internal/models';
+import {
+  grpcConnectionsAtom,
+  grpcEventsAtom,
+  replaceModelsInStore,
+} from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { atom } from 'jotai/index';
+import { useEffect } from 'react';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { activeRequestIdAtom } from './useActiveRequestId';
-import { useEffect, useState } from 'react';
 
 const pinnedGrpcConnectionIdsAtom = atomWithKVStorage<Record<string, string | null>>(
   'pinned-grpc-connection-ids',
@@ -55,21 +59,14 @@ export const activeGrpcConnectionAtom = atom<GrpcConnection | null>((get) => {
   return activeConnections.find((c) => c.id === pinnedConnectionId) ?? activeConnections[0] ?? null;
 });
 
-// export const activeGrpcEventsAtom = atom(async (get) => {
-//   const connection = get(activeGrpcConnectionAtom);
-//   return invoke<GrpcEvent[]>('plugin:yaak-models|grpc_events', {
-//     connectionId: connection?.id ?? 'n/a',
-//   });
-// });
-
-export function useGrpcEvents() {
-  const [events, setEvents] = useState<GrpcEvent[]>([]);
-  const connection = useAtomValue(activeGrpcConnectionAtom);
+export function useGrpcEvents(connectionId: string | null) {
+  const events = useAtomValue(grpcEventsAtom);
 
   useEffect(() => {
-    const connectionId = connection?.id ?? 'n/a';
-    invoke<GrpcEvent[]>('plugin:yaak-models|grpc_events', { connectionId }).then(setEvents);
-  }, [connection?.id]);
+    invoke<GrpcEvent[]>('plugin:yaak-models|grpc_events', { connectionId }).then((events) => {
+      replaceModelsInStore('grpc_event', events);
+    });
+  }, [connectionId]);
 
   return events;
 }

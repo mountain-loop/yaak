@@ -22,7 +22,7 @@ const emptyArray: string[] = [];
 export function GrpcConnectionLayout({ style }: Props) {
   const activeRequest = useActiveRequest('grpc_request');
   const activeConnection = useAtomValue(activeGrpcConnectionAtom);
-  const grpcEvents = useGrpcEvents();
+  const grpcEvents = useGrpcEvents(activeConnection?.id ?? null);
   const protoFilesKv = useGrpcProtoFiles(activeRequest?.id ?? null);
   const protoFiles = protoFilesKv.value ?? emptyArray;
   const grpc = useGrpc(activeRequest, activeConnection, protoFiles);
