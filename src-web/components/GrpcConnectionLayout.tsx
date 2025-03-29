@@ -1,17 +1,17 @@
+import { patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import React, { useEffect, useMemo } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
-import { useGrpcConnections } from '../hooks/useGrpcConnections';
-import { useGrpcEvents } from '../hooks/useGrpcEvents';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
-import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
+import { activeGrpcConnectionAtom, useGrpcEvents } from '../hooks/usePinnedGrpcConnection';
 import { Banner } from './core/Banner';
 import { HotKeyList } from './core/HotKeyList';
 import { SplitLayout } from './core/SplitLayout';
-import { GrpcConnectionMessagesPane } from './GrpcConnectionMessagesPane';
-import { GrpcConnectionSetupPane } from './GrpcConnectionSetupPane';
+import { GrpcRequestPane } from './GrpcRequestPane';
+import { GrpcResponsePane } from './GrpcResponsePane';
 
 interface Props {
   style: CSSProperties;
@@ -21,10 +21,8 @@ const emptyArray: string[] = [];
 
 export function GrpcConnectionLayout({ style }: Props) {
   const activeRequest = useActiveRequest('grpc_request');
-  const updateRequest = useUpdateAnyGrpcRequest();
-  const connections = useGrpcConnections().filter((c) => c.requestId === activeRequest?.id);
-  const activeConnection = connections[0] ?? null;
-  const messages = useGrpcEvents(activeConnection?.id ?? null);
+  const activeConnection = useAtomValue(activeGrpcConnectionAtom);
+  const grpcEvents = useGrpcEvents(activeConnection?.id ?? null);
   const protoFilesKv = useGrpcProtoFiles(activeRequest?.id ?? null);
   const protoFiles = protoFilesKv.value ?? emptyArray;
   const grpc = useGrpc(activeRequest, activeConnection, protoFiles);
@@ -34,25 +32,21 @@ export function GrpcConnectionLayout({ style }: Props) {
     if (services == null || activeRequest == null) return;
     const s = services.find((s) => s.name === activeRequest.service);
     if (s == null) {
-      updateRequest.mutate({
-        id: activeRequest.id,
-        update: {
-          service: services[0]?.name ?? null,
-          method: services[0]?.methods[0]?.name ?? null,
-        },
-      });
+      patchModel(activeRequest, {
+        service: services[0]?.name ?? null,
+        method: services[0]?.methods[0]?.name ?? null,
+      }).catch(console.error);
       return;
     }
 
     const m = s.methods.find((m) => m.name === activeRequest.method);
     if (m == null) {
-      updateRequest.mutate({
-        id: activeRequest.id,
-        update: { method: s.methods[0]?.name ?? null },
-      });
+      patchModel(activeRequest, {
+        method: s.methods[0]?.name ?? null,
+      }).catch(console.error);
       return;
     }
-  }, [activeRequest, services, updateRequest]);
+  }, [activeRequest, services]);
 
   const activeMethod = useMemo(() => {
     if (services == null || activeRequest == null) return null;
@@ -87,7 +81,7 @@ export function GrpcConnectionLayout({ style }: Props) {
       className="p-3 gap-1.5"
       style={style}
       firstSlot={({ style }) => (
-        <GrpcConnectionSetupPane
+        <GrpcRequestPane
           style={style}
           activeRequest={activeRequest}
           protoFiles={protoFiles}
@@ -117,8 +111,8 @@ export function GrpcConnectionLayout({ style }: Props) {
               <Banner color="danger" className="m-2">
                 {grpc.go.error}
               </Banner>
-            ) : messages.length >= 0 ? (
-              <GrpcConnectionMessagesPane activeRequest={activeRequest} methodType={methodType} />
+            ) : grpcEvents.length >= 0 ? (
+              <GrpcResponsePane activeRequest={activeRequest} methodType={methodType} />
             ) : (
               <HotKeyList hotkeys={['grpc_request.send', 'sidebar.focus', 'url_bar.focus']} />
             )}

@@ -1,11 +1,12 @@
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { useAtomValue } from 'jotai';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useKeyValue } from './useKeyValue';
 
 export function useSidebarHidden() {
-  const activeWorkspace = useActiveWorkspace();
+  const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom);
   const { set, value } = useKeyValue<boolean>({
     namespace: 'no_sync',
-    key: ['sidebar_hidden', activeWorkspace?.id ?? 'n/a'],
+    key: ['sidebar_hidden', activeWorkspaceId ?? 'n/a'],
     fallback: false,
   });
 

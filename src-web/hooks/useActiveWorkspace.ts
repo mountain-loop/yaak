@@ -1,31 +1,24 @@
-import {useParams} from '@tanstack/react-router';
-import type {Workspace} from '@yaakapp-internal/models';
-import {atom, useAtomValue} from 'jotai/index';
-import {useEffect} from 'react';
-import {jotaiStore} from '../lib/jotai';
-import {workspacesAtom} from './useWorkspaces';
+import { useParams } from '@tanstack/react-router';
+import { workspaceMetasAtom, workspacesAtom } from '@yaakapp-internal/models';
+import { atom } from 'jotai/index';
+import { useEffect } from 'react';
+import { jotaiStore } from '../lib/jotai';
 
-export const activeWorkspaceIdAtom = atom<string>();
+export const activeWorkspaceIdAtom = atom<string | null>(null);
 
-export const activeWorkspaceAtom = atom<Workspace | null>((get) => {
-    const activeWorkspaceId = get(activeWorkspaceIdAtom);
-    const workspaces = get(workspacesAtom);
-    return workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
+export const activeWorkspaceAtom = atom((get) => {
+  const activeWorkspaceId = get(activeWorkspaceIdAtom);
+  const workspaces = get(workspacesAtom);
+  return workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 });
 
-export function useActiveWorkspace(): Workspace | null {
-    return useAtomValue(activeWorkspaceAtom);
-}
-
-export function getActiveWorkspaceId() {
-    return jotaiStore.get(activeWorkspaceIdAtom) ?? null;
-}
-
-export function getActiveWorkspace() {
-    return jotaiStore.get(activeWorkspaceAtom) ?? null;
-}
+export const activeWorkspaceMetaAtom = atom((get) => {
+  const activeWorkspaceId = get(activeWorkspaceIdAtom);
+  const workspaceMetas = get(workspaceMetasAtom);
+  return workspaceMetas.find((m) => m.workspaceId === activeWorkspaceId) ?? null;
+});
 
 export function useSubscribeActiveWorkspaceId() {
-    const {workspaceId} = useParams({strict: false});
-    useEffect(() => jotaiStore.set(activeWorkspaceIdAtom, workspaceId), [workspaceId]);
+  const { workspaceId } = useParams({ strict: false });
+  useEffect(() => jotaiStore.set(activeWorkspaceIdAtom, workspaceId ?? null), [workspaceId]);
 }

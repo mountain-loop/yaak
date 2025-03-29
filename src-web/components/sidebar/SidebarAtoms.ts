@@ -1,10 +1,15 @@
-import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import {
+  type Folder,
+  foldersAtom,
+  type GrpcRequest,
+  type HttpRequest,
+  requestsAtom,
+  type WebsocketRequest,
+} from '@yaakapp-internal/models';
 
 // This is an atom so we can use it in the child items to avoid re-rendering the entire list
 import { atom } from 'jotai';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
-import { foldersAtom } from '../../hooks/useFolders';
-import { requestsAtom } from '../../hooks/useRequests';
 import { deepEqualAtom } from '../../lib/atoms';
 import { resolvedModelName } from '../../lib/resolvedModelName';
 import type { SidebarTreeNode } from './Sidebar';

@@ -6,10 +6,12 @@ import { keymap, placeholder as placeholderExt, tooltips } from '@codemirror/vie
 import { emacs } from '@replit/codemirror-emacs';
 import { vim } from '@replit/codemirror-vim';
 import { vscodeKeymap } from '@replit/codemirror-vscode-keymap';
-import type { EditorKeymap, EnvironmentVariable } from '@yaakapp-internal/models';
+import type {EditorKeymap, EnvironmentVariable} from '@yaakapp-internal/models';
+import { settingsAtom} from '@yaakapp-internal/models';
 import type { EditorLanguage, TemplateFunction } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { EditorView } from 'codemirror';
+import {useAtomValue} from "jotai";
 import { md5 } from 'js-md5';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
@@ -26,7 +28,6 @@ import {
 import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
 import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
-import { useSettings } from '../../../hooks/useSettings';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { showDialog } from '../../../lib/dialog';
 import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
@@ -125,7 +126,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   }: EditorProps,
   ref,
 ) {
-  const settings = useSettings();
+  const settings = useAtomValue(settingsAtom);
 
   const allEnvironmentVariables = useActiveEnvironmentVariables();
   const environmentVariables = autocompleteVariables ? allEnvironmentVariables : emptyVariables;

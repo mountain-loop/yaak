@@ -1,3 +1,4 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{Environment, EnvironmentIden, UpsertModelInfo};
 use crate::util::UpdateSource;
@@ -5,7 +6,6 @@ use log::info;
 use sea_query::ColumnRef::Asterisk;
 use sea_query::{Cond, Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
-use crate::db_context::DbContext;
 
 impl<'a> DbContext<'a> {
     pub fn get_environment(&self, id: &str) -> Result<Environment> {
@@ -67,6 +67,16 @@ impl<'a> DbContext<'a> {
     pub fn delete_environment_by_id(&self, id: &str, source: &UpdateSource) -> Result<Environment> {
         let environment = self.get_environment(id)?;
         self.delete_environment(&environment, source)
+    }
+
+    pub fn duplicate_environment(
+        &self,
+        environment: &Environment,
+        source: &UpdateSource,
+    ) -> Result<Environment> {
+        let mut environment = environment.clone();
+        environment.id = "".to_string();
+        self.upsert(&environment, source)
     }
 
     pub fn upsert_environment(

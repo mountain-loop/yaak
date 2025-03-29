@@ -49,6 +49,7 @@ pub enum UpdateSource {
     Window { label: String },
     Plugin,
     Background,
+    Core,
     Import,
 }
 

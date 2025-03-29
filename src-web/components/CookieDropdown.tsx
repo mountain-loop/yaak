@@ -1,10 +1,8 @@
-import { useAtomValue } from 'jotai';
+import { patchModel, useModelList } from '@yaakapp-internal/models';
 import { memo, useMemo } from 'react';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
-import { cookieJarsAtom } from '../hooks/useCookieJars';
 import { useCreateCookieJar } from '../hooks/useCreateCookieJar';
-import { useDeleteCookieJar } from '../hooks/useDeleteCookieJar';
-import { useUpdateCookieJar } from '../hooks/useUpdateCookieJar';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { showDialog } from '../lib/dialog';
 import { showPrompt } from '../lib/prompt';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
@@ -16,10 +14,8 @@ import { InlineCode } from './core/InlineCode';
 
 export const CookieDropdown = memo(function CookieDropdown() {
   const activeCookieJar = useActiveCookieJar();
-  const updateCookieJar = useUpdateCookieJar(activeCookieJar?.id ?? null);
-  const deleteCookieJar = useDeleteCookieJar(activeCookieJar ?? null);
   const createCookieJar = useCreateCookieJar();
-  const cookieJars = useAtomValue(cookieJarsAtom);
+  const cookieJars = useModelList('cookie_jar');
 
   const items = useMemo((): DropdownItem[] => {
     return [
@@ -67,7 +63,7 @@ export const CookieDropdown = memo(function CookieDropdown() {
                   defaultValue: activeCookieJar?.name,
                 });
                 if (name == null) return;
-                updateCookieJar.mutate({ name });
+                await patchModel(activeCookieJar, { name });
               },
             },
             ...(((cookieJars ?? []).length > 1 // Never delete the last one
@@ -76,7 +72,9 @@ export const CookieDropdown = memo(function CookieDropdown() {
                     label: 'Delete',
                     leftSlot: <Icon icon="trash" />,
                     color: 'danger',
-                    onSelect: deleteCookieJar.mutate,
+                    onSelect: async () => {
+                      await deleteModelWithConfirm(activeCookieJar);
+                    },
                   },
                 ]
               : []) as DropdownItem[]),
@@ -90,7 +88,7 @@ export const CookieDropdown = memo(function CookieDropdown() {
         onSelect: () => createCookieJar.mutate(),
       },
     ];
-  }, [activeCookieJar, cookieJars, createCookieJar, deleteCookieJar, updateCookieJar]);
+  }, [activeCookieJar, cookieJars, createCookieJar]);
 
   return (
     <Dropdown items={items}>

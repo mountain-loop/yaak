@@ -1,4 +1,5 @@
-import type { Folder, HttpRequest } from '@yaakapp-internal/models';
+import type { Folder, HttpRequest} from '@yaakapp-internal/models';
+import { useModelList } from '@yaakapp-internal/models';
 import type {
   FormInput,
   FormInputCheckbox,
@@ -12,8 +13,6 @@ import type {
 import classNames from 'classnames';
 import { useCallback } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
-import { useFolders } from '../hooks/useFolders';
-import { useHttpRequests } from '../hooks/useHttpRequests';
 import { capitalize } from '../lib/capitalize';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { Banner } from './core/Banner';
@@ -354,8 +353,8 @@ function HttpRequestArg({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const folders = useFolders();
-  const httpRequests = useHttpRequests();
+  const folders = useModelList('folder');
+  const httpRequests = useModelList('http_request');
   const activeRequest = useActiveRequest();
   return (
     <Select

@@ -1,24 +1,25 @@
 import type { Folder } from '@yaakapp-internal/models';
+import { createWorkspaceModel } from '@yaakapp-internal/models';
 import { applySync, calculateSync } from '@yaakapp-internal/sync';
 import { Banner } from '../components/core/Banner';
 import { InlineCode } from '../components/core/InlineCode';
 import { VStack } from '../components/core/Stacks';
-import { getActiveWorkspaceId } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
 import { showConfirm } from '../lib/confirm';
-import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
+import { jotaiStore } from '../lib/jotai';
 import { pluralizeCount } from '../lib/pluralize';
 import { showPrompt } from '../lib/prompt';
-import { invokeCmd } from '../lib/tauri';
+import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
 
 export const createFolder = createFastMutation<
-  Folder | null,
+  void,
   void,
   Partial<Pick<Folder, 'name' | 'sortPriority' | 'folderId'>>
 >({
   mutationKey: ['create_folder'],
   mutationFn: async (patch) => {
-    const workspaceId = getActiveWorkspaceId();
+    const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
     if (workspaceId == null) {
       throw new Error("Cannot create folder when there's no active workspace");
     }
@@ -33,13 +34,13 @@ export const createFolder = createFastMutation<
         confirmText: 'Create',
         placeholder: 'Name',
       });
-      if (name == null) return null;
+      if (name == null) throw new Error('No name provided to create folder');
 
       patch.name = name;
     }
 
     patch.sortPriority = patch.sortPriority || -Date.now();
-    return invokeCmd<Folder>('cmd_update_folder', { folder: { workspaceId, ...patch } });
+    await createWorkspaceModel({ model: 'folder', workspaceId, ...patch });
   },
 });
 

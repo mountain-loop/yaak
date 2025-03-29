@@ -1,4 +1,4 @@
-use crate::commands::{delete, upsert};
+use crate::commands::*;
 use crate::query_manager::QueryManager;
 use crate::util::ModelChangeEvent;
 use log::info;
@@ -22,11 +22,11 @@ mod commands;
 mod connection_or_tx;
 mod db_context;
 pub mod error;
-pub mod query_manager;
 pub mod models;
 pub mod queries;
-pub mod util;
+pub mod query_manager;
 pub mod render;
+pub mod util;
 
 pub struct SqliteConnection(pub Mutex<Pool<SqliteConnectionManager>>);
 
@@ -38,7 +38,15 @@ impl SqliteConnection {
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     tauri::plugin::Builder::new("yaak-models")
-        .invoke_handler(generate_handler![upsert, delete])
+        .invoke_handler(generate_handler![
+            upsert,
+            delete,
+            duplicate,
+            workspace_models,
+            grpc_events,
+            websocket_events,
+            get_settings,
+        ])
         .setup(|app_handle, _api| {
             let app_path = app_handle.path().app_data_dir().unwrap();
             create_dir_all(app_path.clone()).expect("Problem creating App directory!");

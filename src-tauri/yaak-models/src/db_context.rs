@@ -3,10 +3,7 @@ use crate::error::Error::RowNotFound;
 use crate::models::{AnyModel, UpsertModelInfo};
 use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
 use rusqlite::OptionalExtension;
-use sea_query::{
-    Asterisk, Expr, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr,
-    SqliteQueryBuilder,
-};
+use sea_query::{Asterisk, Expr, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 use tokio::sync::mpsc;
 

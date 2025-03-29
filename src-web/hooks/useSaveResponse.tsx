@@ -1,5 +1,6 @@
 import { save } from '@tauri-apps/plugin-dialog';
 import type { HttpResponse } from '@yaakapp-internal/models';
+import { getModel } from '@yaakapp-internal/models';
 import mime from 'mime';
 import slugify from 'slugify';
 import { InlineCode } from '../components/core/InlineCode';
@@ -7,13 +8,12 @@ import { getContentTypeFromHeaders } from '../lib/model_util';
 import { invokeCmd } from '../lib/tauri';
 import { showToast } from '../lib/toast';
 import { useFastMutation } from './useFastMutation';
-import { getHttpRequest } from './useHttpRequests';
 
 export function useSaveResponse(response: HttpResponse) {
   return useFastMutation({
     mutationKey: ['save_response', response.id],
     mutationFn: async () => {
-      const request = getHttpRequest(response.requestId);
+      const request = getModel('http_request', response.requestId);
       if (request == null) return null;
 
       const contentType = getContentTypeFromHeaders(response.headers) ?? 'unknown';

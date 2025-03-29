@@ -1,11 +1,17 @@
 import type { GrpcEvent, GrpcRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { format } from 'date-fns';
+import { useAtomValue } from 'jotai';
+import { useSetAtom } from 'jotai/index';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCopy } from '../hooks/useCopy';
-import { useGrpcEvents } from '../hooks/useGrpcEvents';
-import { usePinnedGrpcConnection } from '../hooks/usePinnedGrpcConnection';
+import {
+  activeGrpcConnectionAtom,
+  activeGrpcConnections,
+  pinnedGrpcConnectionIdAtom,
+  useGrpcEvents,
+} from '../hooks/usePinnedGrpcConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
@@ -34,13 +40,14 @@ interface Props {
     | 'no-method';
 }
 
-export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }: Props) {
+export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   const [showLarge, setShowLarge] = useStateWithDeps<boolean>(false, [activeRequest.id]);
   const [showingLarge, setShowingLarge] = useState<boolean>(false);
-  const { activeConnection, connections, setPinnedConnectionId } =
-    usePinnedGrpcConnection(activeRequest);
-  const events = useGrpcEvents(activeConnection?.id ?? null);
+  const connections = useAtomValue(activeGrpcConnections);
+  const activeConnection = useAtomValue(activeGrpcConnectionAtom);
+  const events = useGrpcEvents();
+  const setPinnedGrpcConnectionId = useSetAtom(pinnedGrpcConnectionIdAtom);
   const copy = useCopy();
 
   const activeEvent = useMemo(
@@ -78,7 +85,7 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
                 <RecentGrpcConnectionsDropdown
                   connections={connections}
                   activeConnection={activeConnection}
-                  onPinnedConnectionId={setPinnedConnectionId}
+                  onPinnedConnectionId={setPinnedGrpcConnectionId}
                 />
               </div>
             </HStack>
@@ -113,7 +120,7 @@ export function GrpcConnectionMessagesPane({ style, methodType, activeRequest }:
             <div className="pb-3 px-2">
               <Separator />
             </div>
-            <div className="pl-2 overflow-y-auto">
+            <div className="h-full pl-2 overflow-y-auto grid grid-rows-[auto_minmax(0,1fr)] ">
               {activeEvent.eventType === 'client_message' ||
               activeEvent.eventType === 'server_message' ? (
                 <>

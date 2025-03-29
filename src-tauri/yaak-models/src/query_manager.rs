@@ -22,7 +22,7 @@ pub trait QueryManagerExt<'a, R> {
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
     fn db(&'a self) -> DbContext<'a> {
         let qm = self.state::<QueryManager>();
-        qm.inner().connect_2()
+        qm.inner().connect()
     }
 
     fn with_db<F, T>(&'a self, func: F) -> T
@@ -59,7 +59,7 @@ impl QueryManager {
         }
     }
 
-    pub fn connect_2(&self) -> DbContext {
+    pub fn connect(&self) -> DbContext {
         let conn = self
             .pool
             .lock()

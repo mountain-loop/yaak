@@ -12,7 +12,21 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn list_workspaces(&self) -> Result<Vec<Workspace>> {
-        self.find_all()
+        let mut workspaces = self.find_all()?;
+
+        if workspaces.is_empty() {
+            workspaces.push(self.upsert_workspace(
+                &Workspace {
+                    name: "Yaak".to_string(),
+                    setting_follow_redirects: true,
+                    setting_validate_certificates: true,
+                    ..Default::default()
+                },
+                &UpdateSource::Core,
+            )?);
+        }
+
+        Ok(workspaces)
     }
 
     pub fn delete_workspace(

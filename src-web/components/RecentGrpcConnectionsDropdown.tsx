@@ -1,7 +1,7 @@
-import { formatDistanceToNowStrict } from 'date-fns';
-import { useDeleteGrpcConnection } from '../hooks/useDeleteGrpcConnection';
-import { useDeleteGrpcConnections } from '../hooks/useDeleteGrpcConnections';
 import type { GrpcConnection } from '@yaakapp-internal/models';
+import { deleteModel } from '@yaakapp-internal/models';
+import { formatDistanceToNowStrict } from 'date-fns';
+import { useDeleteGrpcConnections } from '../hooks/useDeleteGrpcConnections';
 import { pluralizeCount } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
@@ -19,7 +19,6 @@ export function RecentGrpcConnectionsDropdown({
   connections,
   onPinnedConnectionId,
 }: Props) {
-  const deleteConnection = useDeleteGrpcConnection(activeConnection?.id ?? null);
   const deleteAllConnections = useDeleteGrpcConnections(activeConnection?.requestId);
   const latestConnectionId = connections[0]?.id ?? 'n/a';
 
@@ -28,7 +27,7 @@ export function RecentGrpcConnectionsDropdown({
       items={[
         {
           label: 'Clear Connection',
-          onSelect: deleteConnection.mutate,
+          onSelect: () => deleteModel(activeConnection),
           disabled: connections.length === 0,
         },
         {

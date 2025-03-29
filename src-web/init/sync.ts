@@ -2,9 +2,8 @@ import { debounce } from '@yaakapp-internal/lib';
 import type { AnyModel, ModelPayload } from '@yaakapp-internal/models';
 import { watchWorkspaceFiles } from '@yaakapp-internal/sync';
 import { syncWorkspace } from '../commands/commands';
-import { getActiveWorkspaceId } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceIdAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { listenToTauriEvent } from '../hooks/useListenToTauriEvent';
-import { getWorkspaceMeta, workspaceMetaAtom } from '../hooks/useWorkspaceMeta';
 import { jotaiStore } from '../lib/jotai';
 
 export function initSync() {
@@ -14,7 +13,7 @@ export function initSync() {
 }
 
 export async function sync({ force }: { force?: boolean } = {}) {
-  const workspaceMeta = getWorkspaceMeta();
+  const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
   if (workspaceMeta == null || workspaceMeta.settingSyncDir == null) {
     return;
   }
@@ -50,9 +49,9 @@ function initModelListeners() {
  */
 function initFileChangeListeners() {
   let unsub: null | ReturnType<typeof watchWorkspaceFiles> = null;
-  jotaiStore.sub(workspaceMetaAtom, async () => {
+  jotaiStore.sub(activeWorkspaceMetaAtom, async () => {
     await unsub?.(); // Unsub to previous
-    const workspaceMeta = jotaiStore.get(workspaceMetaAtom);
+    const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
     if (workspaceMeta == null || workspaceMeta.settingSyncDir == null) return;
     debouncedSync(); // Perform an initial sync when switching workspace
     unsub = watchWorkspaceFiles(
@@ -64,7 +63,7 @@ function initFileChangeListeners() {
 }
 
 function isModelRelevant(m: AnyModel) {
-  const workspaceId = getActiveWorkspaceId();
+  const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
 
   if (
     m.model !== 'workspace' &&

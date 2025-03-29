@@ -35,6 +35,9 @@
     "tauri-before-build": "npm run bootstrap && npm run --workspaces --if-present build",
     "tauri-before-dev": "npm run --workspaces --if-present dev"
   },
+  "dependencies": {
+    "jotai": "^2.12.2"
+  },
   "devDependencies": {
     "@tauri-apps/cli": "^2.4.0",
     "@typescript-eslint/eslint-plugin": "^8.27.0",

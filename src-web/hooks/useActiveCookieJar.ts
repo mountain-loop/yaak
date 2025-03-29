@@ -1,12 +1,10 @@
 import { useSearch } from '@tanstack/react-router';
 import type { CookieJar } from '@yaakapp-internal/models';
+import { useModelList } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai/index';
 import { useEffect } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
-import { cookieJarsAtom, useCookieJars } from './useCookieJars';
-
-export const QUERY_COOKIE_JAR_ID = 'cookie_jar_id';
 
 export const activeCookieJarAtom = atom<CookieJar | null>(null);
 
@@ -17,7 +15,7 @@ export function useActiveCookieJar() {
 export function useSubscribeActiveCookieJarId() {
   const search = useSearch({ strict: false });
   const cookieJarId = search.cookie_jar_id;
-  const cookieJars = useAtomValue(cookieJarsAtom);
+  const cookieJars = useModelList('cookie_jar');
   useEffect(() => {
     if (search == null) return; // Happens during Vite hot reload
     const activeCookieJar = cookieJars?.find((j) => j.id == cookieJarId) ?? null;
@@ -30,7 +28,7 @@ export function getActiveCookieJar() {
 }
 
 export function useEnsureActiveCookieJar() {
-  const cookieJars = useCookieJars();
+  const cookieJars = useModelList('cookie_jar');
   const { cookie_jar_id: activeCookieJarId } = useSearch({ from: '/workspaces/$workspaceId/' });
 
   // Set the active cookie jar to the first one, if none set

@@ -1,18 +1,12 @@
-import { useFastMutation } from './useFastMutation';
-import { useSetAtom } from 'jotai';
 import { invokeCmd } from '../lib/tauri';
-import { httpResponsesAtom } from './useHttpResponses';
+import { useFastMutation } from './useFastMutation';
 
 export function useDeleteHttpResponses(requestId?: string) {
-  const setHttpResponses = useSetAtom(httpResponsesAtom);
   return useFastMutation({
     mutationKey: ['delete_http_responses', requestId],
     mutationFn: async () => {
       if (requestId === undefined) return;
       await invokeCmd('cmd_delete_all_http_responses', { requestId });
-    },
-    onSuccess: () => {
-      setHttpResponses((all) => all.filter((r) => r.requestId !== requestId));
     },
   });
 }

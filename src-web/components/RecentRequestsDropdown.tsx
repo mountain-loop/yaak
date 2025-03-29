@@ -1,13 +1,13 @@
+import { requestsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useMemo, useRef } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
-import { getActiveWorkspaceId } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { useHotKey } from '../hooks/useHotKey';
 import { useKeyboardEvent } from '../hooks/useKeyboardEvent';
 import { useRecentRequests } from '../hooks/useRecentRequests';
-import { requestsAtom } from '../hooks/useRequests';
-import { resolvedModelName } from '../lib/resolvedModelName';
 import { jotaiStore } from '../lib/jotai';
+import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
 import { Button } from './core/Button';
 import type { DropdownItem, DropdownRef } from './core/Dropdown';
@@ -47,7 +47,7 @@ export function RecentRequestsDropdown({ className }: Props) {
   });
 
   const items = useMemo(() => {
-    const activeWorkspaceId = getActiveWorkspaceId();
+    const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
     if (activeWorkspaceId === null) return [];
 
     const requests = jotaiStore.get(requestsAtom);

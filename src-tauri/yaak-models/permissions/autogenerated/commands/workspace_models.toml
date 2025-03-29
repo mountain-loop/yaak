@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-workspace-models"
+description = "Enables the workspace_models command without any pre-configured scope."
+commands.allow = ["workspace_models"]
+
+[[permission]]
+identifier = "deny-workspace-models"
+description = "Denies the workspace_models command without any pre-configured scope."
+commands.deny = ["workspace_models"]

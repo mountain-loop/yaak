@@ -1,8 +1,9 @@
+import { settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import type { HTMLAttributes, ReactNode } from 'react';
 import React from 'react';
 import { useOsInfo } from '../hooks/useOsInfo';
-import { useSettings } from '../hooks/useSettings';
 import { useStoplightsVisible } from '../hooks/useStoplightsVisible';
 import { HEADER_SIZE_LG, HEADER_SIZE_MD, WINDOW_CONTROLS_WIDTH } from '../lib/constants';
 import { WindowControls } from './WindowControls';
@@ -23,7 +24,7 @@ export function HeaderSize({
   children,
 }: HeaderSizeProps) {
   const osInfo = useOsInfo();
-  const settings = useSettings();
+  const settings = useAtomValue(settingsAtom);
   const stoplightsVisible = useStoplightsVisible();
   return (
     <div

@@ -1,13 +1,14 @@
 import { SettingsTab } from '../components/Settings/SettingsTab';
-import { getActiveWorkspaceId } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
+import { jotaiStore } from '../lib/jotai';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
 
 export const openSettings = createFastMutation<void, string, SettingsTab | null>({
   mutationKey: ['open_settings'],
   mutationFn: async function (tab) {
-    const workspaceId = getActiveWorkspaceId();
+    const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
     if (workspaceId == null) return;
 
     const location = router.buildLocation({

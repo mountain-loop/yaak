@@ -5,29 +5,26 @@ import type {
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
+import { getAnyModel, patchModelById } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
 import React, { useCallback, useRef, useState } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
-import { upsertWebsocketRequest } from '../../commands/upsertWebsocketRequest';
-import { getActiveRequest } from '../../hooks/useActiveRequest';
-import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
+import { activeRequestIdAtom } from '../../hooks/useActiveRequestId';
+import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
-import { useDeleteAnyRequest } from '../../hooks/useDeleteAnyRequest';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useSidebarHidden } from '../../hooks/useSidebarHidden';
 import { getSidebarCollapsedMap } from '../../hooks/useSidebarItemCollapsed';
-import { useUpdateAnyFolder } from '../../hooks/useUpdateAnyFolder';
-import { useUpdateAnyGrpcRequest } from '../../hooks/useUpdateAnyGrpcRequest';
-import { useUpdateAnyHttpRequest } from '../../hooks/useUpdateAnyHttpRequest';
-import { getWebsocketRequest } from '../../hooks/useWebsocketRequests';
+import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
+import { jotaiStore } from '../../lib/jotai';
 import { router } from '../../lib/router';
 import { setWorkspaceSearchParams } from '../../lib/setWorkspaceSearchParams';
 import { ContextMenu } from '../core/Dropdown';
+import { GitDropdown } from '../GitDropdown';
 import { sidebarSelectedIdAtom, sidebarTreeAtom } from './SidebarAtoms';
 import type { SidebarItemProps } from './SidebarItem';
 import { SidebarItems } from './SidebarItems';
-import { GitDropdown } from '../GitDropdown';
 
 interface Props {
   className?: string;
@@ -49,13 +46,10 @@ export interface SidebarTreeNode {
 export function Sidebar({ className }: Props) {
   const [hidden, setHidden] = useSidebarHidden();
   const sidebarRef = useRef<HTMLElement>(null);
-  const activeWorkspace = useActiveWorkspace();
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const [hasFocus, setHasFocus] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useAtom(sidebarSelectedIdAtom);
   const [selectedTree, setSelectedTree] = useState<SidebarTreeNode | null>(null);
-  const { mutateAsync: updateAnyHttpRequest } = useUpdateAnyHttpRequest();
-  const { mutateAsync: updateAnyGrpcRequest } = useUpdateAnyGrpcRequest();
-  const { mutateAsync: updateAnyFolder } = useUpdateAnyFolder();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoveredTree, setHoveredTree] = useState<SidebarTreeNode | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -72,11 +66,11 @@ export function Sidebar({ className }: Props) {
         noFocusSidebar?: boolean;
       } = {},
     ) => {
-      const activeRequest = getActiveRequest();
+      const activeRequestId = jotaiStore.get(activeRequestIdAtom);
       const { forced, noFocusSidebar } = args;
-      const tree = forced?.tree ?? treeParentMap[activeRequest?.id ?? 'n/a'] ?? null;
+      const tree = forced?.tree ?? treeParentMap[activeRequestId ?? 'n/a'] ?? null;
       const children = tree?.children ?? [];
-      const id = forced?.id ?? children.find((m) => m.id === activeRequest?.id)?.id ?? null;
+      const id = forced?.id ?? children.find((m) => m.id === activeRequestId)?.id ?? null;
 
       setHasFocus(true);
       setSelectedId(id);
@@ -129,14 +123,14 @@ export function Sidebar({ className }: Props) {
   }, [focusActiveRequest, hasFocus]);
 
   const handleBlur = useCallback(() => setHasFocus(false), [setHasFocus]);
-  const deleteRequest = useDeleteAnyRequest();
 
   useHotKey(
-    'http_request.delete',
+    'sidebar.delete_selected_item',
     async () => {
-      // Delete only works if a request is focused
-      if (selectedId == null) return;
-      deleteRequest.mutate(selectedId);
+      const request = getAnyModel(selectedId ?? 'n/a');
+      if (request != null) {
+        await deleteModelWithConfirm(request);
+      }
     },
     { enable: hasFocus },
   );
@@ -178,7 +172,8 @@ export function Sidebar({ className }: Props) {
       if (!hasFocus) return;
       e.preventDefault();
       const i = selectableRequests.findIndex((r) => r.id === selectedId);
-      const newSelectable = selectableRequests[i - 1];
+      const newI = i <= 0 ? selectableRequests.length - 1 : i - 1;
+      const newSelectable = selectableRequests[newI];
       if (newSelectable == null) {
         return;
       }
@@ -196,7 +191,8 @@ export function Sidebar({ className }: Props) {
       if (!hasFocus) return;
       e.preventDefault();
       const i = selectableRequests.findIndex((r) => r.id === selectedId);
-      const newSelectable = selectableRequests[i + 1];
+      const newI = i >= selectableRequests.length - 1 ? 0 : i + 1;
+      const newSelectable = selectableRequests[newI];
       if (newSelectable == null) {
         return;
       }
@@ -277,52 +273,16 @@ export function Sidebar({ className }: Props) {
         await Promise.all(
           newChildren.map((child, i) => {
             const sortPriority = i * 1000;
-            if (child.model === 'folder') {
-              const updateFolder = (f: Folder) => ({ ...f, sortPriority, folderId });
-              return updateAnyFolder({ id: child.id, update: updateFolder });
-            } else if (child.model === 'grpc_request') {
-              const updateRequest = (r: GrpcRequest) => ({ ...r, sortPriority, folderId });
-              return updateAnyGrpcRequest({ id: child.id, update: updateRequest });
-            } else if (child.model === 'http_request') {
-              const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
-              return updateAnyHttpRequest({ id: child.id, update: updateRequest });
-            } else if (child.model === 'websocket_request') {
-              const request = getWebsocketRequest(child.id);
-              return upsertWebsocketRequest.mutateAsync({ ...request, sortPriority, folderId });
-            } else {
-              throw new Error('Invalid model to update: ' + child.model);
-            }
+            return patchModelById(child.model, child.id, { sortPriority, folderId });
           }),
         );
       } else {
         const sortPriority = afterPriority - (afterPriority - beforePriority) / 2;
-        if (child.model === 'folder') {
-          const updateFolder = (f: Folder) => ({ ...f, sortPriority, folderId });
-          await updateAnyFolder({ id: child.id, update: updateFolder });
-        } else if (child.model === 'grpc_request') {
-          const updateRequest = (r: GrpcRequest) => ({ ...r, sortPriority, folderId });
-          await updateAnyGrpcRequest({ id: child.id, update: updateRequest });
-        } else if (child.model === 'http_request') {
-          const updateRequest = (r: HttpRequest) => ({ ...r, sortPriority, folderId });
-          await updateAnyHttpRequest({ id: child.id, update: updateRequest });
-        } else if (child.model === 'websocket_request') {
-          const request = getWebsocketRequest(child.id);
-          return upsertWebsocketRequest.mutateAsync({ ...request, sortPriority, folderId });
-        } else {
-          throw new Error('Invalid model to update: ' + child.model);
-        }
+        return patchModelById(child.model, child.id, { sortPriority, folderId });
       }
       setDraggingId(null);
     },
-    [
-      handleClearSelected,
-      hoveredTree,
-      hoveredIndex,
-      treeParentMap,
-      updateAnyFolder,
-      updateAnyGrpcRequest,
-      updateAnyHttpRequest,
-    ],
+    [handleClearSelected, hoveredTree, hoveredIndex, treeParentMap],
   );
 
   const [showMainContextMenu, setShowMainContextMenu] = useState<{

@@ -1,11 +1,12 @@
+import { useAtomValue } from 'jotai';
 import { useCallback, useMemo } from 'react';
 import { useLocalStorage } from 'react-use';
-import { useActiveWorkspace } from './useActiveWorkspace';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 
 export function useSidebarWidth() {
-  const activeWorkspace = useActiveWorkspace();
+  const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom);
   const [width, setWidth] = useLocalStorage<number>(
-    `sidebar_width::${activeWorkspace?.id ?? 'n/a'}`,
+    `sidebar_width::${activeWorkspaceId ?? 'n/a'}`,
     250,
   );
   const resetWidth = useCallback(() => setWidth(250), [setWidth]);

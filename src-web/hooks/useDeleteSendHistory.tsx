@@ -1,19 +1,16 @@
-import { useSetAtom } from 'jotai/index';
+import { useModelList } from '@yaakapp-internal/models';
 import { showAlert } from '../lib/alert';
 import { showConfirmDelete } from '../lib/confirm';
+import { jotaiStore } from '../lib/jotai';
 import { pluralizeCount } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
-import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
-import { useGrpcConnections } from './useGrpcConnections';
-import { httpResponsesAtom, useHttpResponses } from './useHttpResponses';
-import { useWebsocketConnections } from './useWebsocketConnections';
 
 export function useDeleteSendHistory() {
-  const setHttpResponses = useSetAtom(httpResponsesAtom);
-  const httpResponses = useHttpResponses();
-  const grpcConnections = useGrpcConnections();
-  const websocketConnections = useWebsocketConnections();
+  const httpResponses = useModelList('http_response');
+  const grpcConnections = useModelList('grpc_connection');
+  const websocketConnections = useModelList('websocket_connection');
   const labels = [
     httpResponses.length > 0 ? pluralizeCount('Http Response', httpResponses.length) : null,
     grpcConnections.length > 0 ? pluralizeCount('Grpc Connection', grpcConnections.length) : null,
@@ -41,14 +38,9 @@ export function useDeleteSendHistory() {
       });
       if (!confirmed) return false;
 
-      const workspaceId = getActiveWorkspaceId();
+      const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
       await invokeCmd('cmd_delete_send_history', { workspaceId });
       return true;
-    },
-    onSuccess: async (confirmed) => {
-      if (!confirmed) return;
-      const activeWorkspaceId = getActiveWorkspaceId();
-      setHttpResponses((all) => all.filter((r) => r.workspaceId !== activeWorkspaceId));
     },
   });
 }

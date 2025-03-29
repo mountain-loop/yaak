@@ -13,7 +13,7 @@ use tokio::io::AsyncWriteExt;
 use ts_rs::TS;
 use yaak_models::models::{SyncState, WorkspaceMeta};
 use yaak_models::query_manager::QueryManagerExt;
-use yaak_models::util::{get_workspace_export_resources, UpdateSource};
+use yaak_models::util::{UpdateSource, get_workspace_export_resources};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -454,7 +454,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
     let sync_dir_string = sync_dir.to_string_lossy().to_string();
     let db = app_handle.db();
     for workspace in upserted_models.workspaces {
-        let r = match db.get_workspace_meta(&workspace) {
+        let r = match db.get_workspace_meta(&workspace.id) {
             Some(m) => {
                 if m.setting_sync_dir == Some(sync_dir_string.clone()) {
                     // We don't need to update if unchanged

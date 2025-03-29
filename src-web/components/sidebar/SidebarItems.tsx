@@ -1,8 +1,6 @@
+import { useModelList } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import React, { Fragment, memo } from 'react';
-import { useGrpcConnections } from '../../hooks/useGrpcConnections';
-import { useHttpResponses } from '../../hooks/useHttpResponses';
-import { useWebsocketConnections } from '../../hooks/useWebsocketConnections';
 import { VStack } from '../core/Stacks';
 import { DropMarker } from '../DropMarker';
 import type { SidebarTreeNode } from './Sidebar';
@@ -33,9 +31,9 @@ export const SidebarItems = memo(function SidebarItems({
   handleMove,
   handleDragStart,
 }: SidebarItemsProps) {
-  const httpResponses = useHttpResponses();
-  const grpcConnections = useGrpcConnections();
-  const websocketConnections = useWebsocketConnections();
+  const httpResponses = useModelList('http_response');
+  const grpcConnections = useModelList('grpc_connection');
+  const websocketConnections = useModelList('websocket_connection');
 
   return (
     <VStack

@@ -305,6 +305,36 @@
           "const": "deny-delete"
         },
         {
+          "description": "Enables the duplicate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-duplicate"
+        },
+        {
+          "description": "Denies the duplicate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-duplicate"
+        },
+        {
+          "description": "Enables the get_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-settings"
+        },
+        {
+          "description": "Denies the get_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-settings"
+        },
+        {
+          "description": "Enables the grpc_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-grpc-events"
+        },
+        {
+          "description": "Denies the grpc_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-grpc-events"
+        },
+        {
           "description": "Enables the upsert command without any pre-configured scope.",
           "type": "string",
           "const": "allow-upsert"
@@ -313,6 +343,26 @@
           "description": "Denies the upsert command without any pre-configured scope.",
           "type": "string",
           "const": "deny-upsert"
+        },
+        {
+          "description": "Enables the websocket_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-websocket-events"
+        },
+        {
+          "description": "Denies the websocket_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-websocket-events"
+        },
+        {
+          "description": "Enables the workspace_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-workspace-models"
+        },
+        {
+          "description": "Denies the workspace_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-workspace-models"
         },
         {
           "description": "Default permissions for the plugin",

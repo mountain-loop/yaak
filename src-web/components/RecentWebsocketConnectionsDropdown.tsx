@@ -1,9 +1,7 @@
 import type { WebsocketConnection } from '@yaakapp-internal/models';
+import { deleteModel, getModel } from '@yaakapp-internal/models';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { deleteWebsocketConnection } from '../commands/deleteWebsocketConnection';
 import { deleteWebsocketConnections } from '../commands/deleteWebsocketConnections';
-import { websocketRequestsAtom } from '../hooks/useWebsocketRequests';
-import { jotaiStore } from '../lib/jotai';
 import { pluralizeCount } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
@@ -28,15 +26,13 @@ export function RecentWebsocketConnectionsDropdown({
       items={[
         {
           label: 'Clear Connection',
-          onSelect: () => deleteWebsocketConnection.mutate(activeConnection),
+          onSelect: () => deleteModel(activeConnection),
           disabled: connections.length === 0,
         },
         {
           label: `Clear ${pluralizeCount('Connection', connections.length)}`,
           onSelect: () => {
-            const request = jotaiStore
-              .get(websocketRequestsAtom)
-              .find((r) => r.id === activeConnection.requestId);
+            const request = getModel('websocket_request', activeConnection.requestId);
             if (request != null) {
               deleteWebsocketConnections.mutate(request);
             }

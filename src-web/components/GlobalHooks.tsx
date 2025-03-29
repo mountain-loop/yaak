@@ -8,7 +8,6 @@ import { useSubscribeHttpAuthentication } from '../hooks/useHttpAuthentication';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { useNotificationToast } from '../hooks/useNotificationToast';
 import { useSyncFontSizeSetting } from '../hooks/useSyncFontSizeSetting';
-import { useSyncModelStores } from '../hooks/useSyncModelStores';
 import { useSyncWorkspaceChildModels } from '../hooks/useSyncWorkspaceChildModels';
 import { useSyncZoomSetting } from '../hooks/useSyncZoomSetting';
 import { useSubscribeTemplateFunctions } from '../hooks/useTemplateFunctions';
@@ -17,7 +16,6 @@ import { showPrompt } from '../lib/prompt';
 import { showToast } from '../lib/toast';
 
 export function GlobalHooks() {
-  useSyncModelStores();
   useSyncZoomSetting();
   useSyncFontSizeSetting();
   useGenerateThemeCss();

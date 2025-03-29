@@ -3,9 +3,10 @@ import { updateSchema } from 'cm6-graphql';
 import type { EditorView } from 'codemirror';
 
 import { formatSdl } from 'format-graphql';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLocalStorage } from 'react-use';
 import { useIntrospectGraphQL } from '../hooks/useIntrospectGraphQL';
+import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { showDialog } from '../lib/dialog';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -30,19 +31,20 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
   const { schema, isLoading, error, refetch, clear } = useIntrospectGraphQL(baseRequest, {
     disabled: autoIntrospectDisabled?.[baseRequest.id],
   });
-  const [currentBody, setCurrentBody] = useState<{ query: string; variables: string | undefined }>(
-    () => {
-      // Migrate text bodies to GraphQL format
-      // NOTE: This is how GraphQL used to be stored
-      if ('text' in request.body) {
-        const b = tryParseJson(request.body.text, {});
-        const variables = JSON.stringify(b.variables || undefined, null, 2);
-        return { query: b.query ?? '', variables };
-      }
+  const [currentBody, setCurrentBody] = useStateWithDeps<{
+    query: string;
+    variables: string | undefined;
+  }>(() => {
+    // Migrate text bodies to GraphQL format
+    // NOTE: This is how GraphQL used to be stored
+    if ('text' in request.body) {
+      const b = tryParseJson(request.body.text, {});
+      const variables = JSON.stringify(b.variables || undefined, null, 2);
+      return { query: b.query ?? '', variables };
+    }
 
-      return { query: request.body.query ?? '', variables: request.body.variables ?? '' };
-    },
-  );
+    return { query: request.body.query ?? '', variables: request.body.variables ?? '' };
+  }, [extraEditorProps.forceUpdateKey]);
 
   const handleChangeQuery = (query: string) => {
     const newBody = { query, variables: currentBody.variables || undefined };

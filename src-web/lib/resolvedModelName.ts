@@ -1,5 +1,5 @@
-import type { AnyModel } from '@yaakapp-internal/models';
-import { foldersAtom } from '../hooks/useFolders';
+import type { AnyModel} from '@yaakapp-internal/models';
+import { foldersAtom } from '@yaakapp-internal/models';
 import { jotaiStore } from './jotai';
 
 export function resolvedModelName(r: AnyModel | null): string {
