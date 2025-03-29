@@ -1,4 +1,4 @@
-import { listModels, patchModel } from '@yaakapp-internal/models';
+import { patchModel, useModelList } from '@yaakapp-internal/models';
 import { memo, useMemo } from 'react';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useCreateCookieJar } from '../hooks/useCreateCookieJar';
@@ -15,7 +15,7 @@ import { InlineCode } from './core/InlineCode';
 export const CookieDropdown = memo(function CookieDropdown() {
   const activeCookieJar = useActiveCookieJar();
   const createCookieJar = useCreateCookieJar();
-  const cookieJars = listModels('cookie_jar');
+  const cookieJars = useModelList('cookie_jar');
 
   const items = useMemo((): DropdownItem[] => {
     return [

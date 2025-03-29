@@ -1,6 +1,7 @@
 import { createWorkspaceModel } from '@yaakapp-internal/models';
 import { jotaiStore } from '../lib/jotai';
 import { showPrompt } from '../lib/prompt';
+import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 
@@ -23,7 +24,10 @@ export function useCreateCookieJar() {
       });
       if (name == null) return null;
 
-      await createWorkspaceModel({ model: 'cookie_jar', workspaceId, name });
+      return createWorkspaceModel({ model: 'cookie_jar', workspaceId, name });
+    },
+    onSuccess: async (cookieJarId) => {
+      setWorkspaceSearchParams({ cookie_jar_id: cookieJarId });
     },
   });
 }
