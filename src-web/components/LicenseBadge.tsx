@@ -23,12 +23,7 @@ export function LicenseBadge() {
 
   if (check.error) {
     return (
-      <LicenseBadgeButton
-        color="danger"
-        onClick={() => {
-          openSettings.mutate(SettingsTab.License);
-        }}
-      >
+      <LicenseBadgeButton color="danger" onClick={() => openSettings.mutate(SettingsTab.License)}>
         License Error
       </LicenseBadgeButton>
     );
