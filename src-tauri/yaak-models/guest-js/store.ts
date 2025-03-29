@@ -30,18 +30,6 @@ export function initModelStore(store: JotaiStore) {
 
   getCurrentWebviewWindow()
     .listen<ModelPayload>('upserted_model', ({ payload }) => {
-      // TODO: Move this logic to useRequestEditor() hook
-      if (
-        (payload.model.model === 'http_request' ||
-          payload.model.model === 'grpc_request' ||
-          payload.model.model === 'websocket_request') &&
-        ((payload.updateSource.type === 'window' &&
-          payload.updateSource.label !== getCurrentWebviewWindow().label) ||
-          payload.updateSource.type !== 'window')
-      ) {
-        // wasUpdatedExternally(payload.model.id);
-      }
-
       if (shouldIgnoreModel(payload)) return;
 
       mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
@@ -225,7 +213,7 @@ export function listModels<M extends AnyModel['model']>(
   const data = mustStore().get(modelStoreDataAtom);
   const values = [];
   for (const model of Array.isArray(models) ? models : [models]) {
-    values.push(...(Object.values(data[model])));
+    values.push(...Object.values(data[model]));
   }
   return values;
 }
@@ -247,6 +235,11 @@ export function replaceModelsInStore<
 }
 
 function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
+  // Ignore anything that doesn't have a local store
+  if (!(model.model in modelAtomMap)) {
+    return true;
+  }
+
   // Never ignore updates from non-user sources
   if (updateSource.type !== 'window') {
     return false;
@@ -259,11 +252,13 @@ function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
 
   // Only sync models that belong to this workspace, if a workspace ID is present
   if ('workspaceId' in model && model.workspaceId !== _activeWorkspaceId) {
-    return;
+    console.log('IGNORE 2');
+    return true;
   }
 
-  if (model.model === 'key_value') {
-    return model.namespace === 'no_sync';
+  if (model.model === 'key_value' && model.namespace === 'no_sync') {
+    console.log('IGNORE 3');
+    return true;
   }
 
   return false;

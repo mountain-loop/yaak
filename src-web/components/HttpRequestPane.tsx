@@ -87,7 +87,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   const authentication = useHttpAuthenticationSummaries();
 
   const handleContentTypeChange = useCallback(
-    async (contentType: string | null) => {
+    async (contentType: string | null, patch: Partial<Omit<HttpRequest, 'headers'>> = {}) => {
       if (activeRequest == null) {
         console.error('Failed to get active request to update', activeRequest);
         return;
@@ -103,7 +103,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
           id: generateId(),
         });
       }
-      await patchModel(activeRequest, { headers });
+      await patchModel(activeRequest, { ...patch, headers });
 
       // Force update header editor so any changed headers are reflected
       setTimeout(() => setForceUpdateHeaderEditorKey((u) => u + 1), 100);
@@ -200,10 +200,10 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
               showMethodToast(patch.method);
             }
 
-            await patchModel(activeRequest, patch);
-
             if (newContentType !== undefined) {
-              await handleContentTypeChange(newContentType);
+              await handleContentTypeChange(newContentType, patch);
+            } else {
+              await patchModel(activeRequest, patch);
             }
           },
         },

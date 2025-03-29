@@ -40,7 +40,6 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
 
   const activeConnection = useAtomValue(activeWebsocketConnectionAtom);
   const connections = useAtomValue(activeWebsocketConnectionsAtom);
-  console.log('ACTIVE CONNECTION', activeConnection);
 
   const events = useWebsocketEvents(activeConnection?.id ?? null);
 
