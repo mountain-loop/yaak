@@ -1,18 +1,20 @@
-import { deleteModelById, getModel, useModelList } from '@yaakapp-internal/models';
+import {
+  deleteModelById,
+  duplicateModelById,
+  getModel,
+  useModelList,
+} from '@yaakapp-internal/models';
 import React, { useMemo } from 'react';
-import { duplicateWebsocketRequest } from '../../commands/duplicateWebsocketRequest';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
-import { useDuplicateFolder } from '../../hooks/useDuplicateFolder';
-import { useDuplicateGrpcRequest } from '../../hooks/useDuplicateGrpcRequest';
-import { useDuplicateHttpRequest } from '../../hooks/useDuplicateHttpRequest';
 import { useHttpRequestActions } from '../../hooks/useHttpRequestActions';
 import { useMoveToWorkspace } from '../../hooks/useMoveToWorkspace';
-import { useRenameRequest } from '../../hooks/useRenameRequest';
 import { useSendAnyHttpRequest } from '../../hooks/useSendAnyHttpRequest';
 import { useSendManyRequests } from '../../hooks/useSendManyRequests';
 import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
+import { duplicateRequestAndNavigate } from '../../lib/deleteRequestAndNavigate';
 
 import { showDialog } from '../../lib/dialog';
+import { renameModelWithPrompt } from '../../lib/renameModelWithPrompt';
 import type { DropdownItem } from '../core/Dropdown';
 import { ContextMenu } from '../core/Dropdown';
 import { Icon } from '../core/Icon';
@@ -27,13 +29,9 @@ interface Props {
 
 export function SidebarItemContextMenu({ child, show, close }: Props) {
   const sendManyRequests = useSendManyRequests();
-  const duplicateFolder = useDuplicateFolder(child.id);
   const httpRequestActions = useHttpRequestActions();
   const sendRequest = useSendAnyHttpRequest();
   const workspaces = useModelList('workspace');
-  const renameRequest = useRenameRequest(child.id);
-  const duplicateHttpRequest = useDuplicateHttpRequest({ id: child.id, navigateAfter: true });
-  const duplicateGrpcRequest = useDuplicateGrpcRequest({ id: child.id, navigateAfter: true });
   const moveToWorkspace = useMoveToWorkspace(child.id);
   const createDropdownItems = useCreateDropdownItems({
     folderId: child.model === 'folder' ? child.id : null,
@@ -61,13 +59,15 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         {
           label: 'Duplicate',
           leftSlot: <Icon icon="copy" />,
-          onSelect: () => duplicateFolder.mutate(),
+          onSelect: () => duplicateModelById(child.model, child.id),
         },
         {
           label: 'Delete',
           color: 'danger',
           leftSlot: <Icon icon="trash" />,
-          onSelect: () => deleteModelWithConfirm(getModel(child.model, child.id)),
+          onSelect: async () => {
+            await deleteModelWithConfirm(getModel(child.model, child.id));
+          },
         },
         { type: 'separator' },
         ...createDropdownItems,
@@ -100,23 +100,25 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         {
           label: 'Rename',
           leftSlot: <Icon icon="pencil" />,
-          onSelect: renameRequest.mutate,
+          onSelect: async () => {
+            const request = getModel(
+              ['http_request', 'grpc_request', 'websocket_request'],
+              child.id,
+            );
+            await renameModelWithPrompt(request);
+          },
         },
         {
           label: 'Duplicate',
           hotKeyAction: 'http_request.duplicate',
           hotKeyLabelOnly: true, // Would trigger for every request (bad)
           leftSlot: <Icon icon="copy" />,
-          onSelect: () => {
-            if (child.model === 'http_request') {
-              duplicateHttpRequest.mutate();
-            } else if (child.model === 'grpc_request') {
-              duplicateGrpcRequest.mutate();
-            } else if (child.model === 'websocket_request') {
-              duplicateWebsocketRequest.mutate(child.id);
-            } else {
-              throw new Error('Cannot duplicate invalid model: ' + child.model);
-            }
+          onSelect: async () => {
+            const request = getModel(
+              ['http_request', 'grpc_request', 'websocket_request'],
+              child.id,
+            );
+            await duplicateRequestAndNavigate(request);
           },
         },
         {
@@ -140,12 +142,8 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
     child.id,
     child.model,
     createDropdownItems,
-    duplicateFolder,
-    duplicateGrpcRequest,
-    duplicateHttpRequest,
     httpRequestActions,
     moveToWorkspace.mutate,
-    renameRequest.mutate,
     sendManyRequests,
     sendRequest,
     workspaces.length,

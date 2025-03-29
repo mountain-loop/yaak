@@ -6,8 +6,6 @@ import { useEffect } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 
-export const QUERY_COOKIE_JAR_ID = 'cookie_jar_id';
-
 export const activeCookieJarAtom = atom<CookieJar | null>(null);
 
 export function useActiveCookieJar() {

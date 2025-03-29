@@ -2,7 +2,7 @@ import type { HttpRequest } from '@yaakapp-internal/models';
 import { createWorkspaceModel } from '@yaakapp-internal/models';
 import { jotaiStore } from '../lib/jotai';
 import { router } from '../lib/router';
-import { getActiveRequest } from './useActiveRequest';
+import { activeRequestAtom } from './useActiveRequest';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 
@@ -15,7 +15,7 @@ export function useCreateHttpRequest() {
         throw new Error("Cannot create request when there's no active workspace");
       }
 
-      const activeRequest = getActiveRequest();
+      const activeRequest = jotaiStore.get(activeRequestAtom);
       if (patch.sortPriority === undefined) {
         if (activeRequest != null) {
           // Place above currently active request

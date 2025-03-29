@@ -305,6 +305,16 @@
           "const": "deny-delete"
         },
         {
+          "description": "Enables the duplicate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-duplicate"
+        },
+        {
+          "description": "Denies the duplicate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-duplicate"
+        },
+        {
           "description": "Enables the grpc_events command without any pre-configured scope.",
           "type": "string",
           "const": "allow-grpc-events"

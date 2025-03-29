@@ -72,7 +72,9 @@ export const CookieDropdown = memo(function CookieDropdown() {
                     label: 'Delete',
                     leftSlot: <Icon icon="trash" />,
                     color: 'danger',
-                    onSelect: () => deleteModelWithConfirm(activeCookieJar),
+                    onSelect: async () => {
+                      await deleteModelWithConfirm(activeCookieJar);
+                    },
                   },
                 ]
               : []) as DropdownItem[]),

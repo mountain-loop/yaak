@@ -4,17 +4,14 @@ import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { duplicateWebsocketRequest } from '../commands/duplicateWebsocketRequest';
 import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
 } from '../hooks/useActiveCookieJar';
 import { useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
-import { activeRequestAtom, getActiveRequest, useActiveRequest } from '../hooks/useActiveRequest';
+import { activeRequestAtom } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
-import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
-import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
 import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
 import { useHotKey } from '../hooks/useHotKey';
 import { useImportData } from '../hooks/useImportData';
@@ -27,6 +24,8 @@ import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
+import { duplicateRequestAndNavigate } from '../lib/deleteRequestAndNavigate';
+import { jotaiStore } from '../lib/jotai';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { HotKeyList } from './core/HotKeyList';
@@ -243,29 +242,7 @@ function useGlobalWorkspaceHooks() {
   const toggleCommandPalette = useToggleCommandPalette();
   useHotKey('command_palette.toggle', toggleCommandPalette);
 
-  const activeRequest = useActiveRequest();
-  const duplicateHttpRequest = useDuplicateHttpRequest({
-    id: activeRequest?.id ?? null,
-    navigateAfter: true,
-  });
-  const duplicateGrpcRequest = useDuplicateGrpcRequest({
-    id: activeRequest?.id ?? null,
-    navigateAfter: true,
-  });
-
-  useHotKey('http_request.duplicate', async () => {
-    const activeRequest = getActiveRequest();
-    if (activeRequest == null) {
-      // Nothing
-    } else if (activeRequest.model === 'http_request') {
-      await duplicateHttpRequest.mutateAsync();
-    } else if (activeRequest.model === 'grpc_request') {
-      await duplicateGrpcRequest.mutateAsync();
-    } else if (activeRequest.model === 'websocket_request') {
-      await duplicateWebsocketRequest.mutateAsync(activeRequest.id);
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      throw new Error('Failed to duplicate invalid request model: ' + (activeRequest as any).model);
-    }
-  });
+  useHotKey('http_request.duplicate', () =>
+    duplicateRequestAndNavigate(jotaiStore.get(activeRequestAtom)),
+  );
 }

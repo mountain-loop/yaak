@@ -22,12 +22,12 @@ import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { useRecentRequests } from '../hooks/useRecentRequests';
 import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
-import { useRenameRequest } from '../hooks/useRenameRequest';
 import { useScrollIntoView } from '../hooks/useScrollIntoView';
 import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { showDialog, toggleDialog } from '../lib/dialog';
+import { renameModelWithPrompt } from '../lib/renameModelWithPrompt';
 import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
@@ -74,7 +74,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const { mutate: createGrpcRequest } = useCreateGrpcRequest();
   const { mutate: createEnvironment } = useCreateEnvironment();
   const { mutate: sendRequest } = useSendAnyHttpRequest();
-  const { mutate: renameRequest } = useRenameRequest(activeRequest?.id ?? null);
 
   const workspaceCommands = useMemo<CommandPaletteItem[]>(() => {
     const commands: CommandPaletteItem[] = [
@@ -164,7 +163,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       commands.push({
         key: 'http_request.rename',
         label: 'Rename Request',
-        onSelect: renameRequest,
+        onSelect: () => renameModelWithPrompt(activeRequest),
       });
 
       commands.push({
@@ -189,7 +188,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     createHttpRequest,
     createWorkspace,
     httpRequestActions,
-    renameRequest,
     sendRequest,
     setSidebarHidden,
   ]);

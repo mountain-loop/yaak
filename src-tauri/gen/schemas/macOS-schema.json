@@ -5643,6 +5643,11 @@
           "const": "yaak-models:allow-delete"
         },
         {
+          "description": "Enables the duplicate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-duplicate"
+        },
+        {
           "description": "Enables the grpc_events command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-models:allow-grpc-events"
@@ -5666,6 +5671,11 @@
           "description": "Denies the delete command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-models:deny-delete"
+        },
+        {
+          "description": "Denies the duplicate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-duplicate"
         },
         {
           "description": "Denies the grpc_events command without any pre-configured scope.",

@@ -129,6 +129,19 @@ export function useModelList<M extends ModelName>(model: M): AtomReturn<ModelToA
   return useAtomValue(atom);
 }
 
+export function getAnyModel(
+    id: string,
+): AnyModel | null {
+  let data = mustStore().get(modelStoreDataAtom);
+  for (const modelData of Object.values(data)) {
+    let model = modelData[id];
+    if (model != null) {
+      return model;
+    }
+  }
+  return null;
+}
+
 export function getModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
   modelType: M | M[],
   id: string,
@@ -177,6 +190,24 @@ export async function deleteModel<M extends AnyModel['model'], T extends Extract
     throw new Error('Failed to delete null model');
   }
   await invoke<string>('plugin:yaak-models|delete', { model });
+}
+
+export function duplicateModelById<
+  M extends AnyModel['model'],
+  T extends ExtractModel<AnyModel, M>,
+>(modelType: M | M[], id: string) {
+  let model = getModel<M, T>(modelType, id);
+  return duplicateModel(model);
+}
+
+export function duplicateModel<
+  M extends AnyModel['model'],
+  T extends ExtractModel<AnyModel, M>,
+>(model: T | null) {
+  if (model == null) {
+    throw new Error('Failed to delete null model');
+  }
+  return invoke<string>('plugin:yaak-models|duplicate', { model });
 }
 
 export async function createModel<T extends Workspace>(

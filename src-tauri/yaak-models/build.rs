@@ -1,9 +1,10 @@
 const COMMANDS: &[&str] = &[
-    "upsert",
     "delete",
-    "workspace_models",
+    "duplicate",
     "grpc_events",
+    "upsert",
     "websocket_events",
+    "workspace_models",
 ];
 
 fn main() {

@@ -1,9 +1,10 @@
 [default]
 description = "Default permissions for the plugin"
 permissions = [
-    "allow-upsert",
     "allow-delete",
-    "allow-workspace-models",
+    "allow-duplicate",
     "allow-grpc-events",
+    "allow-upsert",
     "allow-websocket-events",
+    "allow-workspace-models",
 ]

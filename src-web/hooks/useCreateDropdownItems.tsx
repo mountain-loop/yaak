@@ -5,8 +5,9 @@ import { createFolder } from '../commands/commands';
 import type { DropdownItem } from '../components/core/Dropdown';
 import { Icon } from '../components/core/Icon';
 import { generateId } from '../lib/generateId';
+import { jotaiStore } from '../lib/jotai';
 import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
-import { getActiveRequest } from './useActiveRequest';
+import { activeRequestAtom } from './useActiveRequest';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useCreateHttpRequest } from './useCreateHttpRequest';
 
@@ -23,7 +24,7 @@ export function useCreateDropdownItems({
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
 
   const items = useMemo((): DropdownItem[] => {
-    const activeRequest = getActiveRequest();
+    const activeRequest = jotaiStore.get(activeRequestAtom);
     const folderId =
       (folderIdOption === 'active-folder' ? activeRequest?.folderId : folderIdOption) ?? null;
     if (workspaceId == null) return [];

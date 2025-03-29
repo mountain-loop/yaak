@@ -5,18 +5,19 @@ import type {
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
-import { getModel, patchModelById } from '@yaakapp-internal/models';
+import { getAnyModel, patchModelById } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
 import React, { useCallback, useRef, useState } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
-import { getActiveRequest } from '../../hooks/useActiveRequest';
+import { activeRequestIdAtom } from '../../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useSidebarHidden } from '../../hooks/useSidebarHidden';
 import { getSidebarCollapsedMap } from '../../hooks/useSidebarItemCollapsed';
 import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
+import { jotaiStore } from '../../lib/jotai';
 import { router } from '../../lib/router';
 import { setWorkspaceSearchParams } from '../../lib/setWorkspaceSearchParams';
 import { ContextMenu } from '../core/Dropdown';
@@ -65,11 +66,11 @@ export function Sidebar({ className }: Props) {
         noFocusSidebar?: boolean;
       } = {},
     ) => {
-      const activeRequest = getActiveRequest();
+      const activeRequestId = jotaiStore.get(activeRequestIdAtom);
       const { forced, noFocusSidebar } = args;
-      const tree = forced?.tree ?? treeParentMap[activeRequest?.id ?? 'n/a'] ?? null;
+      const tree = forced?.tree ?? treeParentMap[activeRequestId ?? 'n/a'] ?? null;
       const children = tree?.children ?? [];
-      const id = forced?.id ?? children.find((m) => m.id === activeRequest?.id)?.id ?? null;
+      const id = forced?.id ?? children.find((m) => m.id === activeRequestId)?.id ?? null;
 
       setHasFocus(true);
       setSelectedId(id);
@@ -126,7 +127,7 @@ export function Sidebar({ className }: Props) {
   useHotKey(
     'sidebar.delete_selected_item',
     async () => {
-      const request = getModel(['http_request', 'grpc_request', 'websocket_request'], selectedId ?? 'n/a');
+      const request = getAnyModel(selectedId ?? 'n/a');
       if (request != null) {
         await deleteModelWithConfirm(request);
       }

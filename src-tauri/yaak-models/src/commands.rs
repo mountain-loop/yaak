@@ -53,6 +53,22 @@ pub(crate) fn delete<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> R
 }
 
 #[tauri::command]
+pub(crate) fn duplicate<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> Result<String> {
+    let db = window.db();
+    let source = &UpdateSource::from_window(&window);
+    let id = match model {
+        AnyModel::HttpRequest(m) => db.duplicate_http_request(&m, source)?.id,
+        AnyModel::Environment(m) => db.duplicate_environment(&m, source)?.id,
+        AnyModel::Folder(m) => db.delete_folder(&m, source)?.id,
+        AnyModel::GrpcRequest(m) => db.duplicate_grpc_request(&m, source)?.id,
+        AnyModel::WebsocketRequest(m) => db.duplicate_websocket_request(&m, source)?.id,
+        a => return Err(GenericError(format!("Cannot duplicate AnyModel {a:?})"))),
+    };
+
+    Ok(id)
+}
+
+#[tauri::command]
 pub(crate) fn websocket_events<R: Runtime>(
     app_handle: AppHandle<R>,
     connection_id: &str,
