@@ -23,11 +23,12 @@ export async function setKeyValue<T>({
 
 export function getKeyValueRaw({
   namespace = 'global',
-  key,
+  key: keyOrKeys,
 }: {
   namespace?: string;
   key: string | string[];
 }) {
+  const key = buildKeyValueKey(keyOrKeys);
   const kv = listModels('key_value').find((kv) => kv.namespace === namespace && kv?.key === key);
   return kv ?? null;
 }

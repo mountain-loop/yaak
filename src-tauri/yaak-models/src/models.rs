@@ -1923,6 +1923,9 @@ impl<'de> Deserialize<'de> for AnyModel {
             Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
             Some(m) if m == "plugin" => AnyModel::Plugin(fv(value).unwrap()),
             Some(m) if m == "settings" => AnyModel::Settings(fv(value).unwrap()),
+            Some(m) if m == "websocket_connection" => AnyModel::WebsocketConnection(fv(value).unwrap()),
+            Some(m) if m == "websocket_event" => AnyModel::WebsocketEvent(fv(value).unwrap()),
+            Some(m) if m == "websocket_request" => AnyModel::WebsocketRequest(fv(value).unwrap()),
             Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
             Some(m) if m == "workspace_meta" => AnyModel::WorkspaceMeta(fv(value).unwrap()),
             Some(m) => {

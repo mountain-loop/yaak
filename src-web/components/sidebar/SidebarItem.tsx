@@ -178,8 +178,11 @@ export const SidebarItem = memo(function SidebarItem({
   );
 
   const handleSelect = useCallback(async () => {
-    if (itemModel === 'folder') toggleCollapsed();
-    else onSelect(itemId);
+    if (itemModel === 'folder') {
+      toggleCollapsed();
+    } else {
+      onSelect(itemId);
+    }
   }, [itemModel, toggleCollapsed, onSelect, itemId]);
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
