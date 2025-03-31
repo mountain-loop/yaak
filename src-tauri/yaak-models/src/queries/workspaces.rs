@@ -22,7 +22,7 @@ impl<'a> DbContext<'a> {
                     setting_validate_certificates: true,
                     ..Default::default()
                 },
-                &UpdateSource::Core,
+                &UpdateSource::Background,
             )?);
         }
 

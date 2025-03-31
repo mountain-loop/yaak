@@ -14,6 +14,7 @@ import {
   keyValuesAtom,
   modelStoreDataAtom,
   pluginsAtom,
+  settingsAtom,
   websocketConnectionsAtom,
   websocketEventsAtom,
   websocketRequestsAtom,
@@ -97,6 +98,7 @@ const modelAtomMap = {
   http_response: httpResponsesAtom,
   key_value: keyValuesAtom,
   plugin: pluginsAtom,
+  settings: settingsAtom,
   websocket_connection: websocketConnectionsAtom,
   websocket_events: websocketEventsAtom,
   websocket_request: websocketRequestsAtom,
@@ -252,12 +254,10 @@ function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
 
   // Only sync models that belong to this workspace, if a workspace ID is present
   if ('workspaceId' in model && model.workspaceId !== _activeWorkspaceId) {
-    console.log('IGNORE 2');
     return true;
   }
 
   if (model.model === 'key_value' && model.namespace === 'no_sync') {
-    console.log('IGNORE 3');
     return true;
   }
 

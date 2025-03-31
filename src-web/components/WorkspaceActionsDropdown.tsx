@@ -91,7 +91,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     return { workspaceItems, extraItems };
   }, [workspaces, workspaceMeta, deleteSendHistory, createWorkspace, workspace?.id]);
 
-  const handleChangeWorkspace = useCallback(async (workspaceId: string | null) => {
+  const handleSwitchWorkspace = useCallback(async (workspaceId: string | null) => {
     if (workspaceId == null) return;
 
     const settings = jotaiStore.get(settingsAtom);
@@ -115,7 +115,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     <RadioDropdown
       items={workspaceItems}
       extraItems={extraItems}
-      onChange={handleChangeWorkspace}
+      onChange={handleSwitchWorkspace}
       value={workspace?.id ?? null}
     >
       <Button

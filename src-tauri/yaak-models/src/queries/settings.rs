@@ -15,7 +15,7 @@ impl<'a> DbContext<'a> {
             id,
             ..Default::default()
         };
-        self.upsert(&settings, &UpdateSource::Core).expect("Failed to upsert settings")
+        self.upsert(&settings, &UpdateSource::Background).expect("Failed to upsert settings")
     }
 
     pub fn upsert_settings(&self, settings: &Settings, source: &UpdateSource) -> Result<Settings> {

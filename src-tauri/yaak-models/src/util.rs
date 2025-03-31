@@ -45,12 +45,11 @@ pub enum ModelChangeEvent {
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum UpdateSource {
+    Background,
+    Import,
+    Plugin,
     Sync,
     Window { label: String },
-    Plugin,
-    Background,
-    Core,
-    Import,
 }
 
 impl UpdateSource {
