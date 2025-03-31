@@ -1,7 +1,7 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{KeyValue, KeyValueIden, UpsertModelInfo};
-use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
+use crate::util::UpdateSource;
 use log::error;
 use sea_query::{Asterisk, Cond, Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
@@ -138,21 +138,7 @@ impl<'a> DbContext<'a> {
             Some(m) => m,
         };
 
-        let (sql, params) = Query::delete()
-            .from_table(KeyValueIden::Table)
-            .cond_where(
-                Cond::all()
-                    .add(Expr::col(KeyValueIden::Namespace).eq(namespace))
-                    .add(Expr::col(KeyValueIden::Key).eq(key)),
-            )
-            .build_rusqlite(SqliteQueryBuilder);
-        self.conn.execute(sql.as_str(), &*params.as_params())?;
-        let payload = ModelPayload {
-            model: kv.clone().into(),
-            update_source: source.clone(),
-            change: ModelChangeEvent::Delete,
-        };
-        self.tx.try_send(payload).unwrap();
+        self.delete(&kv, source)?;
         Ok(())
     }
 }

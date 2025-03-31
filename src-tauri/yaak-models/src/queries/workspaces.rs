@@ -34,24 +34,24 @@ impl<'a> DbContext<'a> {
         workspace: &Workspace,
         source: &UpdateSource,
     ) -> Result<Workspace> {
+        for m in self.find_many::<HttpRequest>(HttpRequestIden::WorkspaceId, &workspace.id, None)? {
+            self.delete_http_request(&m, source)?;
+        }
+        
+        for m in self.find_many::<GrpcRequest>(GrpcRequestIden::WorkspaceId, &workspace.id, None)? {
+            self.delete_grpc_request(&m, source)?;
+        }
+        
+        for m in
+            self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, &workspace.id, None)?
+        {
+            self.delete_websocket_request(&m, source)?;
+        }
+        
         for folder in self.find_many::<Folder>(FolderIden::WorkspaceId, &workspace.id, None)? {
             self.delete_folder(&folder, source)?;
         }
-        for request in
-            self.find_many::<HttpRequest>(HttpRequestIden::WorkspaceId, &workspace.id, None)?
-        {
-            self.delete_http_request(&request, source)?;
-        }
-        for request in
-            self.find_many::<GrpcRequest>(GrpcRequestIden::WorkspaceId, &workspace.id, None)?
-        {
-            self.delete_grpc_request(&request, source)?;
-        }
-        for request in
-            self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, &workspace.id, None)?
-        {
-            self.delete_websocket_request(&request, source)?;
-        }
+        
         self.delete(workspace, source)
     }
 

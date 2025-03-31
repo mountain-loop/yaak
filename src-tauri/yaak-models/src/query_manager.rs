@@ -67,7 +67,7 @@ impl QueryManager {
             .get()
             .expect("Failed to get a new DB connection from the pool");
         DbContext {
-            tx: self.events_tx.clone(),
+            events_tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Connection(conn),
         }
     }
@@ -84,7 +84,7 @@ impl QueryManager {
             .expect("Failed to get new DB connection from the pool");
 
         let db_context = DbContext {
-            tx: self.events_tx.clone(),
+            events_tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Connection(conn),
         };
 
@@ -106,7 +106,7 @@ impl QueryManager {
             .expect("Failed to start DB transaction");
 
         let db_context = DbContext {
-            tx: self.events_tx.clone(),
+            events_tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Transaction(&tx),
         };
 

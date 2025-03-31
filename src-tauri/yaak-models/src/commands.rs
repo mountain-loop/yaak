@@ -10,13 +10,13 @@ pub(crate) fn upsert<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> R
     let db = window.db();
     let source = &UpdateSource::from_window(&window);
     let id = match model {
-        AnyModel::HttpRequest(m) => db.upsert_http_request(&m, source)?.id,
         AnyModel::CookieJar(m) => db.upsert_cookie_jar(&m, source)?.id,
         AnyModel::Environment(m) => db.upsert_environment(&m, source)?.id,
         AnyModel::Folder(m) => db.upsert_folder(&m, source)?.id,
-        AnyModel::KeyValue(m) => db.upsert_key_value(&m, source)?.id,
         AnyModel::GrpcRequest(m) => db.upsert_grpc_request(&m, source)?.id,
+        AnyModel::HttpRequest(m) => db.upsert_http_request(&m, source)?.id,
         AnyModel::HttpResponse(m) => db.upsert_http_response(&m, source)?.id,
+        AnyModel::KeyValue(m) => db.upsert_key_value(&m, source)?.id,
         AnyModel::Plugin(m) => db.upsert_plugin(&m, source)?.id,
         AnyModel::Settings(m) => db.upsert_settings(&m, source)?.id,
         AnyModel::WebsocketRequest(m) => db.upsert_websocket_request(&m, source)?.id,
@@ -30,40 +30,43 @@ pub(crate) fn upsert<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> R
 
 #[tauri::command]
 pub(crate) fn delete<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> Result<String> {
-    let db = window.db();
-    let source = &UpdateSource::from_window(&window);
-    let id = match model {
-        AnyModel::HttpRequest(m) => db.delete_http_request(&m, source)?.id,
-        AnyModel::CookieJar(m) => db.delete_cookie_jar(&m, source)?.id,
-        AnyModel::Environment(m) => db.delete_environment(&m, source)?.id,
-        AnyModel::Folder(m) => db.delete_folder(&m, source)?.id,
-        AnyModel::GrpcConnection(m) => db.delete_grpc_connection(&m, source)?.id,
-        AnyModel::GrpcRequest(m) => db.delete_grpc_request(&m, source)?.id,
-        AnyModel::HttpResponse(m) => db.delete_http_response(&m, source)?.id,
-        AnyModel::Plugin(m) => db.delete_plugin(&m, source)?.id,
-        AnyModel::WebsocketConnection(m) => db.delete_websocket_connection(&m, source)?.id,
-        AnyModel::WebsocketRequest(m) => db.delete_websocket_request(&m, source)?.id,
-        AnyModel::Workspace(m) => db.delete_workspace(&m, source)?.id,
-        a => return Err(GenericError(format!("Cannot delete AnyModel {a:?})"))),
-    };
-
-    Ok(id)
+    // Use transaction for deletions because it might recurse
+    window.with_tx(|tx| {
+        let source = &UpdateSource::from_window(&window);
+        let id = match model {
+            AnyModel::CookieJar(m) => tx.delete_cookie_jar(&m, source)?.id,
+            AnyModel::Environment(m) => tx.delete_environment(&m, source)?.id,
+            AnyModel::Folder(m) => tx.delete_folder(&m, source)?.id,
+            AnyModel::GrpcConnection(m) => tx.delete_grpc_connection(&m, source)?.id,
+            AnyModel::GrpcRequest(m) => tx.delete_grpc_request(&m, source)?.id,
+            AnyModel::HttpRequest(m) => tx.delete_http_request(&m, source)?.id,
+            AnyModel::HttpResponse(m) => tx.delete_http_response(&m, source)?.id,
+            AnyModel::Plugin(m) => tx.delete_plugin(&m, source)?.id,
+            AnyModel::WebsocketConnection(m) => tx.delete_websocket_connection(&m, source)?.id,
+            AnyModel::WebsocketRequest(m) => tx.delete_websocket_request(&m, source)?.id,
+            AnyModel::Workspace(m) => tx.delete_workspace(&m, source)?.id,
+            a => return Err(GenericError(format!("Cannot delete AnyModel {a:?})"))),
+        };
+        Ok(id)
+    })
 }
 
 #[tauri::command]
 pub(crate) fn duplicate<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> Result<String> {
-    let db = window.db();
-    let source = &UpdateSource::from_window(&window);
-    let id = match model {
-        AnyModel::HttpRequest(m) => db.duplicate_http_request(&m, source)?.id,
-        AnyModel::Environment(m) => db.duplicate_environment(&m, source)?.id,
-        AnyModel::Folder(m) => db.duplicate_folder(&m, source)?.id,
-        AnyModel::GrpcRequest(m) => db.duplicate_grpc_request(&m, source)?.id,
-        AnyModel::WebsocketRequest(m) => db.duplicate_websocket_request(&m, source)?.id,
-        a => return Err(GenericError(format!("Cannot duplicate AnyModel {a:?})"))),
-    };
+    // Use transaction for duplications because it might recurse
+    window.with_tx(|tx| {
+        let source = &UpdateSource::from_window(&window);
+        let id = match model {
+            AnyModel::Environment(m) => tx.duplicate_environment(&m, source)?.id,
+            AnyModel::Folder(m) => tx.duplicate_folder(&m, source)?.id,
+            AnyModel::GrpcRequest(m) => tx.duplicate_grpc_request(&m, source)?.id,
+            AnyModel::HttpRequest(m) => tx.duplicate_http_request(&m, source)?.id,
+            AnyModel::WebsocketRequest(m) => tx.duplicate_websocket_request(&m, source)?.id,
+            a => return Err(GenericError(format!("Cannot duplicate AnyModel {a:?})"))),
+        };
 
-    Ok(id)
+        Ok(id)
+    })
 }
 
 #[tauri::command]
