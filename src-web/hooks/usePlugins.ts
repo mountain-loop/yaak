@@ -1,10 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
-import { changeModelStoreWorkspace, listModels, pluginsAtom } from '@yaakapp-internal/models';
+import { changeModelStoreWorkspace, pluginsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { jotaiStore } from '../lib/jotai';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { invokeCmd } from '../lib/tauri';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
+import { invalidateAllPluginInfo } from './usePluginInfo';
 
 export function usePluginsKey() {
   return useAtomValue(pluginsAtom)
@@ -23,9 +24,8 @@ export function useRefreshPlugins() {
         (async function () {
           await invokeCmd('cmd_reload_plugins');
           const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-          // A hacky way to force the plugins to refresh
-          await changeModelStoreWorkspace(workspaceId);
-          return listModels('plugin');
+          await changeModelStoreWorkspace(workspaceId); // Force refresh models
+          invalidateAllPluginInfo();
         })(),
       );
     },
