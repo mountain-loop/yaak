@@ -1,5 +1,5 @@
-import { useFolders } from '../hooks/useFolders';
-import { useUpdateAnyFolder } from '../hooks/useUpdateAnyFolder';
+import { foldersAtom, patchModel } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai/index';
 import { Input } from './core/Input';
 import { VStack } from './core/Stacks';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -9,8 +9,7 @@ interface Props {
 }
 
 export function FolderSettingsDialog({ folderId }: Props) {
-  const { mutate: updateFolder } = useUpdateAnyFolder();
-  const folders = useFolders();
+  const folders = useAtomValue(foldersAtom);
   const folder = folders.find((f) => f.id === folderId);
 
   if (folder == null) return null;
@@ -20,10 +19,7 @@ export function FolderSettingsDialog({ folderId }: Props) {
       <Input
         label="Folder Name"
         defaultValue={folder.name}
-        onChange={(name) => {
-          if (folderId == null) return;
-          updateFolder({ id: folderId, update: (folder) => ({ ...folder, name }) });
-        }}
+        onChange={(name) => patchModel(folder, { name })}
         stateKey={`name.${folder.id}`}
       />
 
@@ -33,13 +29,7 @@ export function FolderSettingsDialog({ folderId }: Props) {
         className="min-h-[10rem] border border-border px-2"
         defaultValue={folder.description}
         stateKey={`description.${folder.id}`}
-        onChange={(description) => {
-          if (folderId == null) return;
-          updateFolder({
-            id: folderId,
-            update: (folder) => ({ ...folder, description }),
-          });
-        }}
+        onChange={(description) => patchModel(folder, { description })}
       />
     </VStack>
   );

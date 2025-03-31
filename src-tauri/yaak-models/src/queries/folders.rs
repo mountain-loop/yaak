@@ -1,3 +1,4 @@
+use crate::connection_or_tx::ConnectionOrTx;
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{
@@ -16,20 +17,29 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn delete_folder(&self, folder: &Folder, source: &UpdateSource) -> Result<Folder> {
-        for folder in self.find_many::<Folder>(FolderIden::FolderId, &folder.id, None)? {
+        match self.conn {
+            ConnectionOrTx::Connection(_) => {}
+            ConnectionOrTx::Transaction(_) => {}
+        }
+
+        let fid = &folder.id;
+        for m in self.find_many::<HttpRequest>(HttpRequestIden::FolderId, fid, None)? {
+            self.delete_http_request(&m, source)?;
+        }
+
+        for m in self.find_many::<GrpcRequest>(GrpcRequestIden::FolderId, fid, None)? {
+            self.delete_grpc_request(&m, source)?;
+        }
+
+        for m in self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, fid, None)? {
+            self.delete_websocket_request(&m, source)?;
+        }
+
+        // Recurse down into child folders
+        for folder in self.find_many::<Folder>(FolderIden::FolderId, fid, None)? {
             self.delete_folder(&folder, source)?;
         }
-        for request in self.find_many::<HttpRequest>(HttpRequestIden::FolderId, &folder.id, None)? {
-            self.delete_http_request(&request, source)?;
-        }
-        for request in self.find_many::<GrpcRequest>(GrpcRequestIden::FolderId, &folder.id, None)? {
-            self.delete_grpc_request(&request, source)?;
-        }
-        for request in
-            self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, &folder.id, None)?
-        {
-            self.delete_websocket_request(&request, source)?;
-        }
+
         self.delete(folder, source)
     }
 
@@ -43,22 +53,7 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn duplicate_folder(&self, src_folder: &Folder, source: &UpdateSource) -> Result<Folder> {
-        let workspace_id = src_folder.workspace_id.as_str();
-
-        let http_requests = self
-            .find_many::<HttpRequest>(HttpRequestIden::WorkspaceId, workspace_id, None)?
-            .into_iter()
-            .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
-
-        let grpc_requests = self
-            .find_many::<GrpcRequest>(GrpcRequestIden::WorkspaceId, workspace_id, None)?
-            .into_iter()
-            .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
-
-        let folders = self
-            .find_many::<Folder>(FolderIden::WorkspaceId, workspace_id, None)?
-            .into_iter()
-            .filter(|m| m.folder_id.as_ref() == Some(&src_folder.id));
+        let fid = &src_folder.id;
 
         let new_folder = self.upsert_folder(
             &Folder {
@@ -69,29 +64,40 @@ impl<'a> DbContext<'a> {
             source,
         )?;
 
-        for m in http_requests {
+        for m in self.find_many::<HttpRequest>(HttpRequestIden::FolderId, fid, None)? {
             self.upsert_http_request(
                 &HttpRequest {
                     id: "".into(),
                     folder_id: Some(new_folder.id.clone()),
-                    sort_priority: m.sort_priority + 0.001,
                     ..m
                 },
                 source,
             )?;
         }
-        for m in grpc_requests {
+
+        for m in self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, fid, None)? {
+            self.upsert_websocket_request(
+                &WebsocketRequest {
+                    id: "".into(),
+                    folder_id: Some(new_folder.id.clone()),
+                    ..m
+                },
+                source,
+            )?;
+        }
+
+        for m in self.find_many::<GrpcRequest>(GrpcRequestIden::FolderId, fid, None)? {
             self.upsert_grpc_request(
                 &GrpcRequest {
                     id: "".into(),
                     folder_id: Some(new_folder.id.clone()),
-                    sort_priority: m.sort_priority + 0.001,
                     ..m
                 },
                 source,
             )?;
         }
-        for m in folders {
+
+        for m in self.find_many::<Folder>(FolderIden::FolderId, fid, None)? {
             // Recurse down
             self.duplicate_folder(
                 &Folder {
@@ -101,6 +107,7 @@ impl<'a> DbContext<'a> {
                 source,
             )?;
         }
+
         Ok(new_folder)
     }
 }

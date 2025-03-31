@@ -1,9 +1,7 @@
 import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import React, { useCallback } from 'react';
-import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
 import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
-import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
-import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { Checkbox } from './core/Checkbox';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
@@ -18,8 +16,6 @@ interface Props {
 }
 
 export function HttpAuthenticationEditor({ request }: Props) {
-  const updateHttpRequest = useUpdateAnyHttpRequest();
-  const updateGrpcRequest = useUpdateAnyGrpcRequest();
   const authConfig = useHttpAuthenticationConfig(
     request.authenticationType,
     request.authentication,
@@ -27,22 +23,8 @@ export function HttpAuthenticationEditor({ request }: Props) {
   );
 
   const handleChange = useCallback(
-    (authentication: Record<string, boolean>) => {
-      if (request.model === 'http_request') {
-        updateHttpRequest.mutate({
-          id: request.id,
-          update: (r) => ({ ...r, authentication }),
-        });
-      } else if (request.model === 'websocket_request') {
-        upsertWebsocketRequest.mutate({ ...request, authentication });
-      } else {
-        updateGrpcRequest.mutate({
-          id: request.id,
-          update: (r) => ({ ...r, authentication }),
-        });
-      }
-    },
-    [request, updateGrpcRequest, updateHttpRequest],
+    (authentication: Record<string, boolean>) => patchModel(request, { authentication }),
+    [request],
   );
 
   if (authConfig.data == null) {

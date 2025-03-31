@@ -1,11 +1,11 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{GrpcConnection, GrpcConnectionIden, GrpcConnectionState};
+use crate::queries::MAX_HISTORY_ITEMS;
 use crate::util::UpdateSource;
 use log::debug;
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
-use crate::db_context::DbContext;
-use crate::queries::MAX_HISTORY_ITEMS;
 
 impl<'a> DbContext<'a> {
     pub fn get_grpc_connection(&self, id: &str) -> Result<GrpcConnection> {
@@ -29,7 +29,7 @@ impl<'a> DbContext<'a> {
         workspace_id: &str,
         source: &UpdateSource,
     ) -> Result<()> {
-        for m in self.list_grpc_connections_for_workspace(workspace_id, None)? {
+        for m in self.list_grpc_connections(workspace_id)? {
             self.delete(&m, source)?;
         }
         Ok(())
@@ -60,12 +60,8 @@ impl<'a> DbContext<'a> {
         self.find_many(GrpcConnectionIden::RequestId, request_id, limit)
     }
 
-    pub fn list_grpc_connections_for_workspace(
-        &self,
-        workspace_id: &str,
-        limit: Option<u64>,
-    ) -> Result<Vec<GrpcConnection>> {
-        self.find_many(GrpcConnectionIden::WorkspaceId, workspace_id, limit)
+    pub fn list_grpc_connections(&self, workspace_id: &str) -> Result<Vec<GrpcConnection>> {
+        self.find_many(GrpcConnectionIden::WorkspaceId, workspace_id, None)
     }
 
     pub fn cancel_pending_grpc_connections(&self) -> Result<()> {

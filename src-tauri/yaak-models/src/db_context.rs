@@ -11,7 +11,7 @@ use sea_query_rusqlite::RusqliteBinder;
 use tokio::sync::mpsc;
 
 pub struct DbContext<'a> {
-    pub(crate) tx: mpsc::Sender<ModelPayload>,
+    pub(crate) events_tx: mpsc::Sender<ModelPayload>,
     pub(crate) conn: ConnectionOrTx<'a>,
 }
 
@@ -145,7 +145,7 @@ impl<'a> DbContext<'a> {
             update_source: source.clone(),
             change: ModelChangeEvent::Upsert,
         };
-        self.tx.try_send(payload).unwrap();
+        self.events_tx.try_send(payload).unwrap();
 
         Ok(m)
     }
@@ -170,7 +170,7 @@ impl<'a> DbContext<'a> {
             change: ModelChangeEvent::Delete,
         };
 
-        self.tx.try_send(payload).unwrap();
+        self.events_tx.try_send(payload).unwrap();
         Ok(m.clone())
     }
 }

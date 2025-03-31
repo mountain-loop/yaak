@@ -1,8 +1,7 @@
 import { useGitInit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
+import { createGlobalModel, patchModel } from '@yaakapp-internal/models';
 import { useState } from 'react';
-import { upsertWorkspace } from '../commands/upsertWorkspace';
-import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
@@ -31,16 +30,15 @@ export function CreateWorkspaceDialog({ hide }: Props) {
       className="pb-3 max-h-[50vh]"
       onSubmit={async (e) => {
         e.preventDefault();
-        const workspace = await upsertWorkspace.mutateAsync({ name });
-        if (workspace == null) return;
+        const workspaceId = await createGlobalModel({ model: 'workspace', name });
+        if (workspaceId == null) return;
 
         // Do getWorkspaceMeta instead of naively creating one because it might have
         // been created already when the store refreshes the workspace meta after
         const workspaceMeta = await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', {
-          workspaceId: workspace.id,
+          workspaceId,
         });
-        await upsertWorkspaceMeta.mutateAsync({
-          ...workspaceMeta,
+        await patchModel(workspaceMeta, {
           settingSyncDir: syncConfig.filePath,
         });
 
@@ -53,7 +51,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         // Navigate to workspace
         await router.navigate({
           to: '/workspaces/$workspaceId',
-          params: { workspaceId: workspace.id },
+          params: { workspaceId },
         });
 
         hide();

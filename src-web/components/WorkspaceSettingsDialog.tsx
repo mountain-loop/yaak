@@ -1,8 +1,7 @@
-import { upsertWorkspace } from '../commands/upsertWorkspace';
-import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
-import { useDeleteActiveWorkspace } from '../hooks/useDeleteActiveWorkspace';
-import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
-import { useWorkspaces } from '../hooks/useWorkspaces';
+import { patchModel, workspaceMetasAtom, workspacesAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai/index';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
+import { router } from '../lib/router';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
@@ -19,10 +18,10 @@ interface Props {
 }
 
 export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Props) {
-  const workspaces = useWorkspaces();
-  const workspace = workspaces.find((w) => w.id === workspaceId);
-  const workspaceMeta = useWorkspaceMeta();
-  const { mutateAsync: deleteActiveWorkspace } = useDeleteActiveWorkspace();
+  const workspace = useAtomValue(workspacesAtom).find((w) => w.id === workspaceId);
+  const workspaceMeta = useAtomValue(workspaceMetasAtom).find(
+    (wm) => wm.workspaceId === workspaceId,
+  );
 
   if (workspace == null) {
     return (
@@ -45,7 +44,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Pro
         required
         label="Name"
         defaultValue={workspace.name}
-        onChange={(name) => upsertWorkspace.mutate({ ...workspace, name })}
+        onChange={(name) => patchModel(workspace, { name })}
         stateKey={`name.${workspace.id}`}
       />
 
@@ -55,7 +54,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Pro
         className="min-h-[10rem] max-h-[25rem] border border-border px-2"
         defaultValue={workspace.description}
         stateKey={`description.${workspace.id}`}
-        onChange={(description) => upsertWorkspace.mutate({ ...workspace, description })}
+        onChange={(description) => patchModel(workspace, { description })}
         heightMode="auto"
       />
 
@@ -64,16 +63,15 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Pro
           value={{ filePath: workspaceMeta.settingSyncDir }}
           forceOpen={openSyncMenu}
           onCreateNewWorkspace={hide}
-          onChange={({ filePath }) => {
-            upsertWorkspaceMeta.mutate({ ...workspaceMeta, settingSyncDir: filePath });
-          }}
+          onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
         />
         <Separator />
         <Button
           onClick={async () => {
-            const workspace = await deleteActiveWorkspace();
-            if (workspace) {
+            const didDelete = await deleteModelWithConfirm(workspace);
+            if (didDelete) {
               hide(); // Only hide if actually deleted workspace
+              await router.navigate({ to: '/workspaces' });
             }
           }}
           color="danger"

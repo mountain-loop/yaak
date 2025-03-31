@@ -1,21 +1,22 @@
+import { useAtomValue } from 'jotai';
 import { useEffect, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
 import { activeRequestIdAtom } from './useActiveRequestId';
-import { activeWorkspaceIdAtom, useActiveWorkspace } from './useActiveWorkspace';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useKeyValue } from './useKeyValue';
-import { useRequests } from './useRequests';
+import { useAllRequests } from './useAllRequests';
 
 const kvKey = (workspaceId: string) => 'recent_requests::' + workspaceId;
 const namespace = 'global';
 const fallback: string[] = [];
 
 export function useRecentRequests() {
-  const requests = useRequests();
-  const activeWorkspace = useActiveWorkspace();
+  const requests = useAllRequests();
+  const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom);
 
   const { set: setRecentRequests, value: recentRequests } = useKeyValue<string[]>({
-    key: kvKey(activeWorkspace?.id ?? 'n/a'),
+    key: kvKey(activeWorkspaceId ?? 'n/a'),
     namespace,
     fallback,
   });
@@ -38,7 +39,7 @@ export function useSubscribeRecentRequests() {
 
       const key = kvKey(activeWorkspaceId);
 
-      const recentIds = await getKeyValue<string[]>({ namespace, key, fallback });
+      const recentIds = getKeyValue<string[]>({ namespace, key, fallback });
       if (recentIds[0] === activeRequestId) return; // Short-circuit
 
       const withoutActiveId = recentIds.filter((id) => id !== activeRequestId);

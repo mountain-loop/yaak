@@ -4,26 +4,22 @@ import type {
   HttpResponse,
   WebsocketConnection,
 } from '@yaakapp-internal/models';
+import { foldersAtom, patchModelById } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { ReactElement } from 'react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
-import { upsertWebsocketRequest } from '../../commands/upsertWebsocketRequest';
 import { activeRequestAtom } from '../../hooks/useActiveRequest';
-import { foldersAtom } from '../../hooks/useFolders';
-import { requestsAtom } from '../../hooks/useRequests';
+import {allRequestsAtom} from "../../hooks/useAllRequests";
 import { useScrollIntoView } from '../../hooks/useScrollIntoView';
 import { useSidebarItemCollapsed } from '../../hooks/useSidebarItemCollapsed';
-import { useUpdateAnyGrpcRequest } from '../../hooks/useUpdateAnyGrpcRequest';
-import { useUpdateAnyHttpRequest } from '../../hooks/useUpdateAnyHttpRequest';
-import { getWebsocketRequest } from '../../hooks/useWebsocketRequests';
 import { jotaiStore } from '../../lib/jotai';
 import { HttpMethodTag } from '../core/HttpMethodTag';
+import { HttpStatusTag } from '../core/HttpStatusTag';
 import { Icon } from '../core/Icon';
 import { LoadingIcon } from '../core/LoadingIcon';
-import { HttpStatusTag } from '../core/HttpStatusTag';
 import type { SidebarTreeNode } from './Sidebar';
 import { sidebarSelectedIdAtom } from './SidebarAtoms';
 import { SidebarItemContextMenu } from './SidebarItemContextMenu';
@@ -110,8 +106,6 @@ export const SidebarItem = memo(function SidebarItem({
 
   connectDrag(connectDrop(ref));
 
-  const updateHttpRequest = useUpdateAnyHttpRequest();
-  const updateGrpcRequest = useUpdateAnyGrpcRequest();
   const [editing, setEditing] = useState<boolean>(false);
 
   const [selected, setSelected] = useState<boolean>(
@@ -137,26 +131,12 @@ export const SidebarItem = memo(function SidebarItem({
 
   const handleSubmitNameEdit = useCallback(
     async (el: HTMLInputElement) => {
-      if (itemModel === 'http_request') {
-        await updateHttpRequest.mutateAsync({
-          id: itemId,
-          update: (r) => ({ ...r, name: el.value }),
-        });
-      } else if (itemModel === 'grpc_request') {
-        await updateGrpcRequest.mutateAsync({
-          id: itemId,
-          update: (r) => ({ ...r, name: el.value }),
-        });
-      } else if (itemModel === 'websocket_request') {
-        const request = getWebsocketRequest(itemId);
-        if (request == null) return;
-        await upsertWebsocketRequest.mutateAsync({ ...request, name: el.value });
-      }
+      await patchModelById(itemModel, itemId, { name: el.value });
 
       // Slight delay for the model to propagate to the local store
       setTimeout(() => setEditing(false));
     },
-    [itemId, itemModel, updateGrpcRequest, updateHttpRequest],
+    [itemId, itemModel],
   );
 
   const handleFocus = useCallback((el: HTMLInputElement | null) => {
@@ -199,8 +179,11 @@ export const SidebarItem = memo(function SidebarItem({
   );
 
   const handleSelect = useCallback(async () => {
-    if (itemModel === 'folder') toggleCollapsed();
-    else onSelect(itemId);
+    if (itemModel === 'folder') {
+      toggleCollapsed();
+    } else {
+      onSelect(itemId);
+    }
   }, [itemModel, toggleCollapsed, onSelect, itemId]);
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
@@ -220,7 +203,7 @@ export const SidebarItem = memo(function SidebarItem({
       if (itemModel === 'folder') {
         return get(foldersAtom).find((v) => v.id === itemId);
       } else {
-        return get(requestsAtom).find((v) => v.id === itemId);
+        return get(allRequestsAtom).find((v) => v.id === itemId);
       }
     });
   }, [itemId, itemModel]);

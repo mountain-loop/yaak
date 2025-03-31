@@ -1,20 +1,21 @@
+import {
+  deleteModelById,
+  duplicateModelById,
+  getModel,
+  workspacesAtom,
+} from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import React, { useMemo } from 'react';
-import { duplicateWebsocketRequest } from '../../commands/duplicateWebsocketRequest';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
-import { useDeleteAnyRequest } from '../../hooks/useDeleteAnyRequest';
-import { useDeleteFolder } from '../../hooks/useDeleteFolder';
-import { useDuplicateFolder } from '../../hooks/useDuplicateFolder';
-import { useDuplicateGrpcRequest } from '../../hooks/useDuplicateGrpcRequest';
-import { useDuplicateHttpRequest } from '../../hooks/useDuplicateHttpRequest';
 import { useHttpRequestActions } from '../../hooks/useHttpRequestActions';
-import { getHttpRequest } from '../../hooks/useHttpRequests';
 import { useMoveToWorkspace } from '../../hooks/useMoveToWorkspace';
-import { useRenameRequest } from '../../hooks/useRenameRequest';
 import { useSendAnyHttpRequest } from '../../hooks/useSendAnyHttpRequest';
 import { useSendManyRequests } from '../../hooks/useSendManyRequests';
-import { useWorkspaces } from '../../hooks/useWorkspaces';
+import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
+import { duplicateRequestAndNavigate } from '../../lib/deleteRequestAndNavigate';
 
 import { showDialog } from '../../lib/dialog';
+import { renameModelWithPrompt } from '../../lib/renameModelWithPrompt';
 import type { DropdownItem } from '../core/Dropdown';
 import { ContextMenu } from '../core/Dropdown';
 import { Icon } from '../core/Icon';
@@ -29,15 +30,9 @@ interface Props {
 
 export function SidebarItemContextMenu({ child, show, close }: Props) {
   const sendManyRequests = useSendManyRequests();
-  const duplicateFolder = useDuplicateFolder(child.id);
-  const deleteFolder = useDeleteFolder(child.id);
   const httpRequestActions = useHttpRequestActions();
   const sendRequest = useSendAnyHttpRequest();
-  const workspaces = useWorkspaces();
-  const deleteRequest = useDeleteAnyRequest();
-  const renameRequest = useRenameRequest(child.id);
-  const duplicateHttpRequest = useDuplicateHttpRequest({ id: child.id, navigateAfter: true });
-  const duplicateGrpcRequest = useDuplicateGrpcRequest({ id: child.id, navigateAfter: true });
+  const workspaces = useAtomValue(workspacesAtom);
   const moveToWorkspace = useMoveToWorkspace(child.id);
   const createDropdownItems = useCreateDropdownItems({
     folderId: child.model === 'folder' ? child.id : null,
@@ -65,13 +60,15 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         {
           label: 'Duplicate',
           leftSlot: <Icon icon="copy" />,
-          onSelect: () => duplicateFolder.mutate(),
+          onSelect: () => duplicateModelById(child.model, child.id),
         },
         {
           label: 'Delete',
           color: 'danger',
           leftSlot: <Icon icon="trash" />,
-          onSelect: () => deleteFolder.mutate(),
+          onSelect: async () => {
+            await deleteModelWithConfirm(getModel(child.model, child.id));
+          },
         },
         { type: 'separator' },
         ...createDropdownItems,
@@ -92,7 +89,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
                 onSelect: async () => {
-                  const request = getHttpRequest(child.id);
+                  const request = getModel('http_request', child.id);
                   if (request != null) await a.call(request);
                 },
               })),
@@ -104,23 +101,25 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         {
           label: 'Rename',
           leftSlot: <Icon icon="pencil" />,
-          onSelect: renameRequest.mutate,
+          onSelect: async () => {
+            const request = getModel(
+              ['http_request', 'grpc_request', 'websocket_request'],
+              child.id,
+            );
+            await renameModelWithPrompt(request);
+          },
         },
         {
           label: 'Duplicate',
           hotKeyAction: 'http_request.duplicate',
           hotKeyLabelOnly: true, // Would trigger for every request (bad)
           leftSlot: <Icon icon="copy" />,
-          onSelect: () => {
-            if (child.model === 'http_request') {
-              duplicateHttpRequest.mutate();
-            } else if (child.model === 'grpc_request') {
-              duplicateGrpcRequest.mutate();
-            } else if (child.model === 'websocket_request') {
-              duplicateWebsocketRequest.mutate(child.id);
-            } else {
-              throw new Error('Cannot duplicate invalid model: ' + child.model);
-            }
+          onSelect: async () => {
+            const request = getModel(
+              ['http_request', 'grpc_request', 'websocket_request'],
+              child.id,
+            );
+            await duplicateRequestAndNavigate(request);
           },
         },
         {
@@ -132,10 +131,10 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         {
           color: 'danger',
           label: 'Delete',
-          hotKeyAction: 'http_request.delete',
+          hotKeyAction: 'sidebar.delete_selected_item',
           hotKeyLabelOnly: true,
           leftSlot: <Icon icon="trash" />,
-          onSelect: () => deleteRequest.mutate(child.id),
+          onSelect: async () => deleteModelById(child.model, child.id),
         },
       ];
     }
@@ -144,14 +143,8 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
     child.id,
     child.model,
     createDropdownItems,
-    deleteFolder,
-    deleteRequest,
-    duplicateFolder,
-    duplicateGrpcRequest,
-    duplicateHttpRequest,
     httpRequestActions,
     moveToWorkspace.mutate,
-    renameRequest.mutate,
     sendManyRequests,
     sendRequest,
     workspaces.length,

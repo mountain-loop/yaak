@@ -530,7 +530,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                 className={classNames(
                   className,
                   'h-auto bg-surface rounded-md shadow-lg py-1.5 border',
-                  'border-border-subtle overflow-auto mx-0.5',
+                  'border-border-subtle overflow-y-auto overflow-x-hidden mx-0.5',
                 )}
               >
                 {filter && (

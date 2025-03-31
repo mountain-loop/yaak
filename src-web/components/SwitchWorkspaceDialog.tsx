@@ -1,8 +1,8 @@
 import type { Workspace } from '@yaakapp-internal/models';
+import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { useState } from 'react';
 import { switchWorkspace } from '../commands/switchWorkspace';
-import { useSettings } from '../hooks/useSettings';
-import { useUpdateSettings } from '../hooks/useUpdateSettings';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { Icon } from './core/Icon';
@@ -15,8 +15,7 @@ interface Props {
 }
 
 export function SwitchWorkspaceDialog({ hide, workspace }: Props) {
-  const settings = useSettings();
-  const updateSettings = useUpdateSettings();
+  const settings = useAtomValue(settingsAtom);
   const [remember, setRemember] = useState<boolean>(false);
 
   return (
@@ -28,11 +27,11 @@ export function SwitchWorkspaceDialog({ hide, workspace }: Props) {
         <Button
           className="focus"
           color="primary"
-          onClick={() => {
+          onClick={async () => {
             hide();
             switchWorkspace.mutate({ workspaceId: workspace.id, inNewWindow: false });
             if (remember) {
-              updateSettings.mutate({ openWorkspaceNewWindow: false });
+              await patchModel(settings, { openWorkspaceNewWindow: false });
             }
           }}
         >
@@ -42,11 +41,11 @@ export function SwitchWorkspaceDialog({ hide, workspace }: Props) {
           className="focus"
           color="secondary"
           rightSlot={<Icon icon="external_link" />}
-          onClick={() => {
+          onClick={async () => {
             hide();
             switchWorkspace.mutate({ workspaceId: workspace.id, inNewWindow: true });
             if (remember) {
-              updateSettings.mutate({ openWorkspaceNewWindow: true });
+              await patchModel(settings, { openWorkspaceNewWindow: true });
             }
           }}
         >

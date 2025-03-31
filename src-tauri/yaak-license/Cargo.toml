@@ -2,7 +2,7 @@
 name = "yaak-license"
 links = "yaak-license"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 publish = false
 
 [dependencies]

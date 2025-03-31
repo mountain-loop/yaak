@@ -1,11 +1,8 @@
-use crate::error::Result;
-use crate::models::{Environment, EnvironmentIden, UpsertModelInfo};
-use crate::util::UpdateSource;
-use log::info;
-use sea_query::ColumnRef::Asterisk;
-use sea_query::{Cond, Expr, Query, SqliteQueryBuilder};
-use sea_query_rusqlite::RusqliteBinder;
 use crate::db_context::DbContext;
+use crate::error::Error::GenericError;
+use crate::error::Result;
+use crate::models::{Environment, EnvironmentIden};
+use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
     pub fn get_environment(&self, id: &str) -> Result<Environment> {
@@ -13,42 +10,38 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn get_base_environment(&self, workspace_id: &str) -> Result<Environment> {
-        let (sql, params) = Query::select()
-            .from(EnvironmentIden::Table)
-            .column(Asterisk)
-            .cond_where(
-                Cond::all()
-                    .add(Expr::col(EnvironmentIden::WorkspaceId).eq(workspace_id))
-                    .add(Expr::col(EnvironmentIden::EnvironmentId).is_null()),
-            )
-            .build_rusqlite(SqliteQueryBuilder);
-        let mut stmt = self.conn.prepare(sql.as_str())?;
-        Ok(stmt.query_row(&*params.as_params(), Environment::from_row)?)
+        // Will create base environment if it doesn't exist
+        let environments = self.list_environments(workspace_id)?;
+
+        let base_environment = environments
+            .into_iter()
+            .find(|e| e.environment_id == None && e.workspace_id == workspace_id)
+            .ok_or(GenericError(format!("No base environment found for {workspace_id}")))?;
+
+        Ok(base_environment)
     }
 
-    pub fn ensure_base_environment(&self, workspace_id: &str) -> Result<()> {
-        let environments = self.list_environments(workspace_id)?;
+    pub fn list_environments(&self, workspace_id: &str) -> Result<Vec<Environment>> {
+        let mut environments =
+            self.find_many::<Environment>(EnvironmentIden::WorkspaceId, workspace_id, None)?;
+
         let base_environment = environments
             .iter()
             .find(|e| e.environment_id == None && e.workspace_id == workspace_id);
 
         if let None = base_environment {
-            info!("Creating base environment for {workspace_id}");
-            self.upsert_environment(
+            environments.push(self.upsert_environment(
                 &Environment {
                     workspace_id: workspace_id.to_string(),
+                    environment_id: None,
                     name: "Global Variables".to_string(),
                     ..Default::default()
                 },
                 &UpdateSource::Background,
-            )?;
+            )?);
         }
 
-        Ok(())
-    }
-
-    pub fn list_environments(&self, workspace_id: &str) -> Result<Vec<Environment>> {
-        self.find_many(EnvironmentIden::WorkspaceId, workspace_id, None)
+        Ok(environments)
     }
 
     pub fn delete_environment(
@@ -67,6 +60,16 @@ impl<'a> DbContext<'a> {
     pub fn delete_environment_by_id(&self, id: &str, source: &UpdateSource) -> Result<Environment> {
         let environment = self.get_environment(id)?;
         self.delete_environment(&environment, source)
+    }
+
+    pub fn duplicate_environment(
+        &self,
+        environment: &Environment,
+        source: &UpdateSource,
+    ) -> Result<Environment> {
+        let mut environment = environment.clone();
+        environment.id = "".to_string();
+        self.upsert(&environment, source)
     }
 
     pub fn upsert_environment(

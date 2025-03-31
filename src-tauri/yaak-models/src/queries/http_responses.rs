@@ -21,7 +21,7 @@ impl<'a> DbContext<'a> {
         self.find_many(HttpResponseIden::RequestId, request_id, limit)
     }
 
-    pub fn list_http_responses_for_workspace(
+    pub fn list_http_responses(
         &self,
         workspace_id: &str,
         limit: Option<u64>,

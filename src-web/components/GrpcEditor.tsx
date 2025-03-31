@@ -143,9 +143,7 @@ export function GrpcEditor({
               title: 'Configure Schema',
               size: 'md',
               id: 'reflection-failed',
-              render: ({ hide }) => {
-                return <GrpcProtoSelectionDialog onDone={hide} requestId={request.id} />;
-              },
+              render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
             });
           }}
         >
@@ -163,14 +161,7 @@ export function GrpcEditor({
         </Button>
       </div>,
     ],
-    [
-      protoFiles.length,
-      reflectionError,
-      reflectionLoading,
-      reflectionUnavailable,
-      request.id,
-      services,
-    ],
+    [protoFiles.length, reflectionError, reflectionLoading, reflectionUnavailable, services],
   );
 
   return (

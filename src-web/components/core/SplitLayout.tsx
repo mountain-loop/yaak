@@ -1,8 +1,9 @@
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from 'react-use';
-import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useContainerSize } from '../../hooks/useContainerQuery';
 import { clamp } from '../../lib/clamp';
 import { ResizeHandle } from '../ResizeHandle';
@@ -42,7 +43,7 @@ export function SplitLayout({
   minWidthPx = 10,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const activeWorkspace = useActiveWorkspace();
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const [widthRaw, setWidth] = useLocalStorage<number>(
     `${name}_width::${activeWorkspace?.id ?? 'n/a'}`,
   );
@@ -140,21 +141,27 @@ export function SplitLayout({
     [width, height, vertical, minHeightPx, setHeight, minWidthPx, setWidth],
   );
 
+  const containerQueryReady = size.width > 0 || size.height > 0;
+
   return (
-    <div ref={containerRef} className={classNames(className, 'grid w-full h-full')} style={styles}>
-      {firstSlot({ style: areaL, orientation: vertical ? 'vertical' : 'horizontal' })}
-      {secondSlot && (
+    <div ref={containerRef} style={styles} className={classNames(className, 'grid w-full h-full')}>
+      {containerQueryReady && (
         <>
-          <ResizeHandle
-            style={areaD}
-            isResizing={isResizing}
-            className={classNames(vertical ? '-translate-y-1.5' : '-translate-x-1.5')}
-            onResizeStart={handleResizeStart}
-            onReset={handleReset}
-            side={vertical ? 'top' : 'left'}
-            justify="center"
-          />
-          {secondSlot({ style: areaR, orientation: vertical ? 'vertical' : 'horizontal' })}
+          {firstSlot({ style: areaL, orientation: vertical ? 'vertical' : 'horizontal' })}
+          {secondSlot && (
+            <>
+              <ResizeHandle
+                style={areaD}
+                isResizing={isResizing}
+                className={classNames(vertical ? '-translate-y-1.5' : '-translate-x-1.5')}
+                onResizeStart={handleResizeStart}
+                onReset={handleReset}
+                side={vertical ? 'top' : 'left'}
+                justify="center"
+              />
+              {secondSlot({ style: areaR, orientation: vertical ? 'vertical' : 'horizontal' })}
+            </>
+          )}
         </>
       )}
     </div>

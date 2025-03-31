@@ -15,13 +15,13 @@ export type HotkeyAction =
   | 'grpc_request.send'
   | 'hotkeys.showHelp'
   | 'http_request.create'
-  | 'http_request.delete'
   | 'http_request.duplicate'
   | 'http_request.send'
   | 'request_switcher.next'
   | 'request_switcher.prev'
   | 'request_switcher.toggle'
   | 'settings.show'
+  | 'sidebar.delete_selected_item'
   | 'sidebar.focus'
   | 'url_bar.focus'
   | 'workspace_settings.show';
@@ -35,13 +35,13 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'grpc_request.send': ['CmdCtrl+Enter', 'CmdCtrl+r'],
   'hotkeys.showHelp': ['CmdCtrl+Shift+/', 'CmdCtrl+Shift+?'], // when shift is pressed, it might be a question mark
   'http_request.create': ['CmdCtrl+n'],
-  'http_request.delete': ['Backspace'],
   'http_request.duplicate': ['CmdCtrl+d'],
   'http_request.send': ['CmdCtrl+Enter', 'CmdCtrl+r'],
   'request_switcher.next': ['Control+Shift+Tab'],
   'request_switcher.prev': ['Control+Tab'],
   'request_switcher.toggle': ['CmdCtrl+p'],
   'settings.show': ['CmdCtrl+,'],
+  'sidebar.delete_selected_item': ['Backspace'],
   'sidebar.focus': ['CmdCtrl+b'],
   'url_bar.focus': ['CmdCtrl+l'],
   'workspace_settings.show': ['CmdCtrl+;'],
@@ -56,13 +56,13 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'grpc_request.send': 'Send Message',
   'hotkeys.showHelp': 'Show Keyboard Shortcuts',
   'http_request.create': 'New Request',
-  'http_request.delete': 'Delete Request',
   'http_request.duplicate': 'Duplicate Request',
   'http_request.send': 'Send Request',
   'request_switcher.next': 'Go To Previous Request',
   'request_switcher.prev': 'Go To Next Request',
   'request_switcher.toggle': 'Toggle Request Switcher',
   'settings.show': 'Open Settings',
+  'sidebar.delete_selected_item': 'Delete Request',
   'sidebar.focus': 'Focus or Toggle Sidebar',
   'url_bar.focus': 'Focus URL',
   'workspace_settings.show': 'Open Workspace Settings',

@@ -1,15 +1,11 @@
-import {useMutation} from "@tanstack/react-query";
-import type { Plugin } from '@yaakapp-internal/models';
-import { atom, useAtomValue, useSetAtom } from 'jotai';
+import { useMutation } from '@tanstack/react-query';
+import { changeModelStoreWorkspace, pluginsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
+import { jotaiStore } from '../lib/jotai';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { invokeCmd } from '../lib/tauri';
-
-const plugins = await listPlugins();
-export const pluginsAtom = atom<Plugin[]>(plugins);
-
-export function usePlugins() {
-  return useAtomValue(pluginsAtom);
-}
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
+import { invalidateAllPluginInfo } from './usePluginInfo';
 
 export function usePluginsKey() {
   return useAtomValue(pluginsAtom)
@@ -21,22 +17,17 @@ export function usePluginsKey() {
  * Reload all plugins and refresh the list of plugins
  */
 export function useRefreshPlugins() {
-  const setPlugins = useSetAtom(pluginsAtom);
   return useMutation({
     mutationKey: ['refresh_plugins'],
     mutationFn: async () => {
-      const plugins = await minPromiseMillis(
+      await minPromiseMillis(
         (async function () {
           await invokeCmd('cmd_reload_plugins');
-          return listPlugins();
+          const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+          await changeModelStoreWorkspace(workspaceId); // Force refresh models
+          invalidateAllPluginInfo();
         })(),
       );
-      setPlugins(plugins);
     },
   });
-}
-
-async function listPlugins(): Promise<Plugin[]> {
-  const plugins: Plugin[] = (await invokeCmd('cmd_list_plugins')) ?? [];
-  return plugins;
 }

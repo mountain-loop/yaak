@@ -22,7 +22,7 @@ pub trait QueryManagerExt<'a, R> {
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
     fn db(&'a self) -> DbContext<'a> {
         let qm = self.state::<QueryManager>();
-        qm.inner().connect_2()
+        qm.inner().connect()
     }
 
     fn with_db<F, T>(&'a self, func: F) -> T
@@ -59,7 +59,7 @@ impl QueryManager {
         }
     }
 
-    pub fn connect_2(&self) -> DbContext {
+    pub fn connect(&self) -> DbContext {
         let conn = self
             .pool
             .lock()
@@ -67,7 +67,7 @@ impl QueryManager {
             .get()
             .expect("Failed to get a new DB connection from the pool");
         DbContext {
-            tx: self.events_tx.clone(),
+            events_tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Connection(conn),
         }
     }
@@ -84,7 +84,7 @@ impl QueryManager {
             .expect("Failed to get new DB connection from the pool");
 
         let db_context = DbContext {
-            tx: self.events_tx.clone(),
+            events_tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Connection(conn),
         };
 
@@ -106,7 +106,7 @@ impl QueryManager {
             .expect("Failed to start DB transaction");
 
         let db_context = DbContext {
-            tx: self.events_tx.clone(),
+            events_tx: self.events_tx.clone(),
             conn: ConnectionOrTx::Transaction(&tx),
         };
 

@@ -1,4 +1,5 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
@@ -6,16 +7,14 @@ import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
-import { grpcRequestsAtom } from '../hooks/useGrpcRequests';
 import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
-import { httpRequestsAtom } from '../hooks/useHttpRequests';
 import { useImportCurl } from '../hooks/useImportCurl';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
+import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
-import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
 import { deepEqualAtom } from '../lib/atoms';
 import { languageFromContentType } from '../lib/contentType';
 import { generateId } from '../lib/generateId';
@@ -67,7 +66,7 @@ const TAB_DESCRIPTION = 'description';
 
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
-  const requests = [...get(httpRequestsAtom), ...get(grpcRequestsAtom)];
+  const requests = get(allRequestsAtom);
   return requests
     .filter((r) => r.id !== activeRequestId)
     .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url }));
@@ -77,20 +76,19 @@ const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
 
 export function HttpRequestPane({ style, fullHeight, className, activeRequest }: Props) {
   const activeRequestId = activeRequest.id;
-  const { mutateAsync: updateRequestAsync, mutate: updateRequest } = useUpdateAnyHttpRequest();
   const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
     namespace: 'no_sync',
     key: 'httpRequestActiveTabs',
     fallback: {},
   });
   const [forceUpdateHeaderEditorKey, setForceUpdateHeaderEditorKey] = useState<number>(0);
-  const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
+  const forceUpdateKey = useRequestUpdateKey(activeRequest.id ?? null);
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const contentType = getContentTypeFromHeaders(activeRequest.headers);
   const authentication = useHttpAuthenticationSummaries();
 
   const handleContentTypeChange = useCallback(
-    async (contentType: string | null) => {
+    async (contentType: string | null, patch: Partial<Omit<HttpRequest, 'headers'>> = {}) => {
       if (activeRequest == null) {
         console.error('Failed to get active request to update', activeRequest);
         return;
@@ -106,12 +104,12 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
           id: generateId(),
         });
       }
-      await updateRequestAsync({ id: activeRequest.id, update: { headers } });
+      await patchModel(activeRequest, { ...patch, headers });
 
       // Force update header editor so any changed headers are reflected
       setTimeout(() => setForceUpdateHeaderEditorKey((u) => u + 1), 100);
     },
-    [activeRequest, updateRequestAsync],
+    [activeRequest],
   );
 
   const { urlParameterPairs, urlParametersKey } = useMemo(() => {
@@ -203,10 +201,10 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
               showMethodToast(patch.method);
             }
 
-            await updateRequestAsync({ id: activeRequestId, update: patch });
-
             if (newContentType !== undefined) {
-              await handleContentTypeChange(newContentType);
+              await handleContentTypeChange(newContentType, patch);
+            } else {
+              await patchModel(activeRequest, patch);
             }
           },
         },
@@ -242,10 +240,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 // Reset auth if changing types
               };
             }
-            updateRequest({
-              id: activeRequestId,
-              update: { authenticationType, authentication },
-            });
+            await patchModel(activeRequest, { authenticationType, authentication });
           },
         },
       },
@@ -254,36 +249,23 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
         label: 'Info',
       },
     ],
-    [
-      activeRequest.authentication,
-      activeRequest.authenticationType,
-      activeRequest.bodyType,
-      activeRequest.headers,
-      activeRequest.method,
-      activeRequestId,
-      authentication,
-      handleContentTypeChange,
-      numParams,
-      updateRequest,
-      updateRequestAsync,
-      urlParameterPairs.length,
-    ],
+    [activeRequest, authentication, handleContentTypeChange, numParams, urlParameterPairs.length],
   );
 
   const { mutate: sendRequest } = useSendAnyHttpRequest();
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
-  const { updateKey } = useRequestUpdateKey(activeRequestId);
+  const updateKey = useRequestUpdateKey(activeRequestId);
   const { mutate: importCurl } = useImportCurl();
 
   const handleBodyChange = useCallback(
-    (body: HttpRequest['body']) => updateRequest({ id: activeRequestId, update: { body } }),
-    [activeRequestId, updateRequest],
+    (body: HttpRequest['body']) => patchModel(activeRequest, { body }),
+    [activeRequest],
   );
 
   const handleBodyTextChange = useCallback(
-    (text: string) => updateRequest({ id: activeRequestId, update: { body: { text } } }),
-    [activeRequestId, updateRequest],
+    (text: string) => patchModel(activeRequest, { body: { text } }),
+    [activeRequest],
   );
 
   const activeTab = activeTabs?.[activeRequestId];
@@ -315,15 +297,15 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   );
 
   const handlePaste = useCallback(
-    (e: ClipboardEvent, text: string) => {
+    async (e: ClipboardEvent, text: string) => {
       if (text.startsWith('curl ')) {
         importCurl({ overwriteRequestId: activeRequestId, command: text });
       } else {
-        const data = prepareImportQuerystring(text);
-        if (data != null) {
+        const patch = prepareImportQuerystring(text);
+        if (patch != null) {
           e.preventDefault(); // Prevent input onChange
 
-          updateRequest({ id: activeRequestId, update: data });
+          await patchModel(activeRequest, patch);
           focusParamsTab();
 
           // Wait for request to update, then refresh the UI
@@ -336,12 +318,12 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
       }
     },
     [
+      activeRequest,
       activeRequestId,
       focusParamsTab,
       forceParamsRefresh,
       forceUrlRefresh,
       importCurl,
-      updateRequest,
     ],
   );
   const handleSend = useCallback(
@@ -350,13 +332,13 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   );
 
   const handleMethodChange = useCallback(
-    (method: string) => updateRequest({ id: activeRequestId, update: { method } }),
-    [activeRequestId, updateRequest],
+    (method: string) => patchModel(activeRequest, { method }),
+    [activeRequest],
   );
 
   const handleUrlChange = useCallback(
-    (url: string) => updateRequest({ id: activeRequestId, update: { url } }),
-    [activeRequestId, updateRequest],
+    (url: string) => patchModel(activeRequest, { url }),
+    [activeRequest],
   );
 
   return (
@@ -397,7 +379,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 forceUpdateKey={`${forceUpdateHeaderEditorKey}::${forceUpdateKey}`}
                 headers={activeRequest.headers}
                 stateKey={`headers.${activeRequest.id}`}
-                onChange={(headers) => updateRequest({ id: activeRequestId, update: { headers } })}
+                onChange={(headers) => patchModel(activeRequest, { headers })}
               />
             </TabContent>
             <TabContent value={TAB_PARAMS}>
@@ -405,9 +387,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 stateKey={`params.${activeRequest.id}`}
                 forceUpdateKey={forceUpdateKey + urlParametersKey}
                 pairs={urlParameterPairs}
-                onChange={(urlParameters) =>
-                  updateRequest({ id: activeRequestId, update: { urlParameters } })
-                }
+                onChange={(urlParameters) => patchModel(activeRequest, { urlParameters })}
               />
             </TabContent>
             <TabContent value={TAB_BODY}>
@@ -459,7 +439,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                   requestId={activeRequest.id}
                   contentType={contentType}
                   body={activeRequest.body}
-                  onChange={(body) => updateRequest({ id: activeRequestId, update: { body } })}
+                  onChange={(body) => patchModel(activeRequest, { body })}
                   onChangeContentType={handleContentTypeChange}
                 />
               ) : typeof activeRequest.bodyType === 'string' ? (
@@ -488,7 +468,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                   className="font-sans !text-xl !px-0"
                   containerClassName="border-0"
                   placeholder={resolvedModelName(activeRequest)}
-                  onChange={(name) => updateRequest({ id: activeRequestId, update: { name } })}
+                  onChange={(name) => patchModel(activeRequest, { name })}
                 />
                 <MarkdownEditor
                   name="request-description"
@@ -496,9 +476,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                   defaultValue={activeRequest.description}
                   stateKey={`description.${activeRequest.id}`}
                   forceUpdateKey={updateKey}
-                  onChange={(description) =>
-                    updateRequest({ id: activeRequestId, update: { description } })
-                  }
+                  onChange={(description) => patchModel(activeRequest, { description })}
                 />
               </div>
             </TabContent>

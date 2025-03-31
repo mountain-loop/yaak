@@ -1,14 +1,14 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
+import { deleteModel } from '@yaakapp-internal/models';
 import { useCopyHttpResponse } from '../hooks/useCopyHttpResponse';
-import { useDeleteHttpResponse } from '../hooks/useDeleteHttpResponse';
 import { useDeleteHttpResponses } from '../hooks/useDeleteHttpResponses';
 import { useSaveResponse } from '../hooks/useSaveResponse';
 import { pluralize } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
+import { HttpStatusTag } from './core/HttpStatusTag';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
-import { HttpStatusTag } from './core/HttpStatusTag';
 
 interface Props {
   responses: HttpResponse[];
@@ -22,7 +22,6 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
   responses,
   onPinnedResponseId,
 }: Props) {
-  const deleteResponse = useDeleteHttpResponse(activeResponse?.id ?? null);
   const deleteAllResponses = useDeleteHttpResponses(activeResponse?.requestId);
   const latestResponseId = responses[0]?.id ?? 'n/a';
   const saveResponse = useSaveResponse(activeResponse);
@@ -48,7 +47,7 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
         {
           label: 'Delete',
           leftSlot: <Icon icon="trash" />,
-          onSelect: deleteResponse.mutate,
+          onSelect: () => deleteModel(activeResponse),
         },
         {
           label: 'Unpin Response',

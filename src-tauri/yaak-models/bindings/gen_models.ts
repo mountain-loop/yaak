@@ -42,7 +42,7 @@ export type HttpResponseState = "initialized" | "connected" | "closed";
 
 export type HttpUrlParameter = { enabled?: boolean, name: string, value: string, id?: string, };
 
-export type KeyValue = { model: "key_value", createdAt: string, updatedAt: string, key: string, namespace: string, value: string, };
+export type KeyValue = { model: "key_value", id: string, createdAt: string, updatedAt: string, key: string, namespace: string, value: string, };
 
 export type ModelChangeEvent = { "type": "upsert" } | { "type": "delete" };
 

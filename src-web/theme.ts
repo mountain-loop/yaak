@@ -1,12 +1,11 @@
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import type { ModelPayload, Settings } from '@yaakapp-internal/models';
-import { invokeCmd } from './lib/tauri';
+import type { ModelPayload } from '@yaakapp-internal/models';
+import { getSettings } from './lib/settings';
 import type { Appearance } from './lib/theme/appearance';
 import { getCSSAppearance, subscribeToPreferredAppearance } from './lib/theme/appearance';
 import { getResolvedTheme } from './lib/theme/themes';
-import type { YaakTheme } from './lib/theme/window';
-import { addThemeStylesToDocument, setThemeOnDocument } from './lib/theme/window';
+import { addThemeStylesToDocument, setThemeOnDocument, type YaakTheme } from './lib/theme/window';
 
 // NOTE: CSS appearance isn't as accurate as getting it async from the window (next step), but we want
 //  a good appearance guess so we're not waiting too long
@@ -32,7 +31,7 @@ listen<ModelPayload>('upserted_model', async (event) => {
 }).catch(console.error);
 
 async function configureTheme() {
-  const settings = await invokeCmd<Settings>('cmd_get_settings');
+  const settings = await getSettings();
   const theme = getResolvedTheme(
     preferredAppearance,
     settings.appearance,

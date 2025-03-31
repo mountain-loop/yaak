@@ -1,13 +1,13 @@
 import type { Environment } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
-import { useDeleteEnvironment } from '../hooks/useDeleteEnvironment';
-import { useEnvironments } from '../hooks/useEnvironments';
+import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useKeyValue } from '../hooks/useKeyValue';
-import { useUpdateEnvironment } from '../hooks/useUpdateEnvironment';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { showPrompt } from '../lib/prompt';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -29,8 +29,7 @@ interface Props {
 
 export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
   const createEnvironment = useCreateEnvironment();
-  const { baseEnvironment, subEnvironments, allEnvironments } = useEnvironments();
-
+  const { baseEnvironment, subEnvironments, allEnvironments } = useEnvironmentsBreakdown();
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(
     initialEnvironment?.id ?? null,
   );
@@ -42,9 +41,8 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
 
   const handleCreateEnvironment = async () => {
     if (baseEnvironment == null) return;
-    const e = await createEnvironment.mutateAsync(baseEnvironment);
-    if (e == null) return;
-    setSelectedEnvironmentId(e.id);
+    const id = await createEnvironment.mutateAsync(baseEnvironment);
+    setSelectedEnvironmentId(id);
   };
 
   return (
@@ -127,11 +125,10 @@ const EnvironmentEditor = function ({
     key: 'environmentValueVisibility',
     fallback: true,
   });
-  const { allEnvironments } = useEnvironments();
-  const updateEnvironment = useUpdateEnvironment(activeEnvironment?.id ?? null);
+  const { allEnvironments } = useEnvironmentsBreakdown();
   const handleChange = useCallback<PairEditorProps['onChange']>(
-    (variables) => updateEnvironment.mutate({ variables }),
-    [updateEnvironment],
+    (variables) => patchModel(activeEnvironment, { variables }),
+    [activeEnvironment],
   );
 
   // Gather a list of env names from other environments, to help the user get them aligned
@@ -217,8 +214,6 @@ function SidebarButton({
   rightSlot?: ReactNode;
   environment: Environment | null;
 }) {
-  const updateEnvironment = useUpdateEnvironment(environment?.id ?? null);
-  const deleteEnvironment = useDeleteEnvironment(environment);
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
     y: number;
@@ -277,17 +272,16 @@ function SidebarButton({
                   defaultValue: environment.name,
                 });
                 if (name == null) return;
-                updateEnvironment.mutate({ name });
+                await patchModel(environment, { name });
               },
             },
             {
               color: 'danger',
               label: 'Delete',
               leftSlot: <Icon icon="trash" size="sm" />,
-              onSelect: () => {
-                deleteEnvironment.mutate(undefined, {
-                  onSuccess: onDelete,
-                });
+              onSelect: async () => {
+                await deleteModelWithConfirm(environment);
+                onDelete?.();
               },
             },
           ]}

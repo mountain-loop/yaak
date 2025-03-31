@@ -15,7 +15,7 @@ const details: Record<
   commercial_use: null,
   invalid_license: { label: 'License Error', color: 'danger' },
   personal_use: { label: 'Personal Use', color: 'notice' },
-  trialing: { label: 'Personal Use', color: 'notice' },
+  trialing: { label: 'Personal Use', color: 'info' },
 };
 
 export function LicenseBadge() {
@@ -28,12 +28,7 @@ export function LicenseBadge() {
 
   if (check.error) {
     return (
-      <LicenseBadgeButton
-        color="danger"
-        onClick={() => {
-          openSettings.mutate(SettingsTab.License);
-        }}
-      >
+      <LicenseBadgeButton color="danger" onClick={() => openSettings.mutate(SettingsTab.License)}>
         License Error
       </LicenseBadgeButton>
     );

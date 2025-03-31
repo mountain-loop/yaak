@@ -1,37 +1,42 @@
 import type { KeyValue } from '@yaakapp-internal/models';
-import { invokeCmd } from './tauri';
+import { createGlobalModel, keyValuesAtom, patchModel } from '@yaakapp-internal/models';
+import { jotaiStore } from './jotai';
 
 export async function setKeyValue<T>({
   namespace = 'global',
-  key,
-  value,
+  key: keyOrKeys,
+  value: rawValue,
 }: {
   namespace?: string;
   key: string | string[];
   value: T;
 }): Promise<void> {
-  await invokeCmd('cmd_set_key_value', {
-    namespace,
-    key: buildKeyValueKey(key),
-    value: JSON.stringify(value),
-  });
+  const kv = getKeyValueRaw({ namespace, key: keyOrKeys });
+  const key = buildKeyValueKey(keyOrKeys);
+  const value = JSON.stringify(rawValue);
+
+  if (kv) {
+    await patchModel(kv, { namespace, key, value });
+  } else {
+    await createGlobalModel({ model: 'key_value', namespace, key, value });
+  }
 }
 
-export async function getKeyValueRaw({
+export function getKeyValueRaw({
   namespace = 'global',
-  key,
+  key: keyOrKeys,
 }: {
   namespace?: string;
   key: string | string[];
 }) {
-  const kv = (await invokeCmd('cmd_get_key_value', {
-    namespace,
-    key: buildKeyValueKey(key),
-  })) as KeyValue | null;
-  return kv;
+  const key = buildKeyValueKey(keyOrKeys);
+  const kv = jotaiStore
+    .get(keyValuesAtom)
+    .find((kv) => kv.namespace === namespace && kv?.key === key);
+  return kv ?? null;
 }
 
-export async function getKeyValue<T>({
+export function getKeyValue<T>({
   namespace = 'global',
   key,
   fallback,
@@ -40,7 +45,7 @@ export async function getKeyValue<T>({
   key: string | string[];
   fallback: T;
 }) {
-  const kv = await getKeyValueRaw({ namespace, key });
+  const kv = getKeyValueRaw({ namespace, key });
   return extractKeyValueOrFallback(kv, fallback);
 }
 

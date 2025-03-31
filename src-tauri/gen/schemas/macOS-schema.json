@@ -5643,9 +5643,34 @@
           "const": "yaak-models:allow-delete"
         },
         {
+          "description": "Enables the duplicate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-duplicate"
+        },
+        {
+          "description": "Enables the get_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-get-settings"
+        },
+        {
+          "description": "Enables the grpc_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-grpc-events"
+        },
+        {
           "description": "Enables the upsert command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-models:allow-upsert"
+        },
+        {
+          "description": "Enables the websocket_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-websocket-events"
+        },
+        {
+          "description": "Enables the workspace_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:allow-workspace-models"
         },
         {
           "description": "Denies the delete command without any pre-configured scope.",
@@ -5653,9 +5678,34 @@
           "const": "yaak-models:deny-delete"
         },
         {
+          "description": "Denies the duplicate command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-duplicate"
+        },
+        {
+          "description": "Denies the get_settings command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-get-settings"
+        },
+        {
+          "description": "Denies the grpc_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-grpc-events"
+        },
+        {
           "description": "Denies the upsert command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-models:deny-upsert"
+        },
+        {
+          "description": "Denies the websocket_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-websocket-events"
+        },
+        {
+          "description": "Denies the workspace_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-models:deny-workspace-models"
         },
         {
           "description": "Default permissions for the plugin",

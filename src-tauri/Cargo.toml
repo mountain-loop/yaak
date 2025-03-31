@@ -16,7 +16,7 @@ members = [
 [package]
 name = "yaak-app"
 version = "0.0.0"
-edition = "2021"
+edition = "2024"
 authors = ["Gregory Schier"]
 publish = false
 
@@ -35,6 +35,7 @@ cargo-clippy = []
 tauri-build = { version = "2.1.0", features = [] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+hex_color = "3.0.0"
 objc = "0.2.7"
 cocoa = "0.26.0"
 
@@ -45,16 +46,15 @@ openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu inst
 chrono = { version = "0.4.31", features = ["serde"] }
 encoding_rs = "0.8.35"
 eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.14.0" }
-hex_color = "3.0.0"
 http = { version = "1.2.0", default-features = false }
-log = "0.4.21"
+log = "0.4.27"
 md5 = "0.7.0"
 mime_guess = "2.0.5"
 rand = "0.9.0"
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider"] }
 reqwest_cookie_store = "0.8.0"
-rustls = { version = "0.23.22", default-features = false, features = ["custom-provider", "ring"] }
-rustls-platform-verifier = "0.5.0"
+rustls = { version = "0.23.25", default-features = false, features = ["custom-provider", "ring"] }
+rustls-platform-verifier = "0.5.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
@@ -68,9 +68,9 @@ tauri-plugin-shell = { workspace = true }
 tauri-plugin-single-instance = "2.2.2"
 tauri-plugin-updater = "2.6.1"
 tauri-plugin-window-state = "2.2.1"
+thiserror = { workspace = true }
 tokio = { version = "1.43.0", features = ["sync"] }
 tokio-stream = "0.1.17"
-thiserror = { workspace = true }
 uuid = "1.12.1"
 yaak-common = { workspace = true }
 yaak-crypto = { workspace = true }
@@ -94,11 +94,12 @@ tauri-plugin = "2.1.0"
 tauri-plugin-shell = "2.2.0"
 thiserror = "2.0.3"
 ts-rs = "10.0.0"
+yaak-common = { path = "yaak-common" }
 yaak-http = { path = "yaak-http" }
 yaak-models = { path = "yaak-models" }
 yaak-plugins = { path = "yaak-plugins" }
-yaak-sync = { path = "yaak-sync" }
 yaak-sse = { path = "yaak-sse" }
+yaak-sync = { path = "yaak-sync" }
 yaak-templates = { path = "yaak-templates" }
 yaak-crypto = { path = "yaak-crypto" }
 yaak-common = { path = "yaak-common" }

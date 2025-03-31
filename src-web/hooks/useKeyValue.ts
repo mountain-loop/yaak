@@ -1,24 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
-import type { KeyValue } from '@yaakapp-internal/models';
+import { keyValuesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { atom } from 'jotai/index';
 import { useCallback, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { buildKeyValueKey, extractKeyValueOrFallback, setKeyValue } from '../lib/keyValueStore';
 
 const DEFAULT_NAMESPACE = 'global';
-
-export const keyValuesAtom = atom<KeyValue[] | null>(null);
-
-export function keyValueQueryKey({
-  namespace = DEFAULT_NAMESPACE,
-  key,
-}: {
-  namespace?: string;
-  key: string | string[];
-}) {
-  return ['key_value', { namespace, key: buildKeyValueKey(key) }];
-}
 
 export function useKeyValue<T extends object | boolean | number | string | null>({
   namespace = DEFAULT_NAMESPACE,

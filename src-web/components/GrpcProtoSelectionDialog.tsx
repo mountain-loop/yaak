@@ -1,7 +1,8 @@
 import { open } from '@tauri-apps/plugin-dialog';
+import type { GrpcRequest } from '@yaakapp-internal/models';
+import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
-import { useGrpcRequest } from '../hooks/useGrpcRequest';
 import { pluralizeCount } from '../lib/pluralize';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -11,13 +12,18 @@ import { Link } from './core/Link';
 import { HStack, VStack } from './core/Stacks';
 
 interface Props {
-  requestId: string;
   onDone: () => void;
 }
 
-export function GrpcProtoSelectionDialog({ requestId }: Props) {
-  const request = useGrpcRequest(requestId);
-  const protoFilesKv = useGrpcProtoFiles(requestId);
+export function GrpcProtoSelectionDialog(props: Props) {
+  const request = useActiveRequest();
+  if (request?.model !== 'grpc_request') return null;
+
+  return GrpcProtoSelectionDialogWithRequest({ ...props, request });
+}
+
+function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: GrpcRequest }) {
+  const protoFilesKv = useGrpcProtoFiles(request.id);
   const protoFiles = protoFilesKv.value ?? [];
   const grpc = useGrpc(request, null, protoFiles);
   const services = grpc.reflect.data;
@@ -34,7 +40,7 @@ export function GrpcProtoSelectionDialog({ requestId }: Props) {
   }
 
   return (
-    <VStack className="flex-col-reverse pb-2" space={3}>
+    <VStack className="flex-col-reverse mb-3" space={3}>
       {/* Buttons on top so they get focus first */}
       <HStack space={2} justifyContent="start" className="flex-row-reverse">
         <Button

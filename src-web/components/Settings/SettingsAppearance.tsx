@@ -1,10 +1,10 @@
 import type { EditorKeymap } from '@yaakapp-internal/models';
+import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import React from 'react';
-import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useResolvedAppearance } from '../../hooks/useResolvedAppearance';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
-import { useSettings } from '../../hooks/useSettings';
-import { useUpdateSettings } from '../../hooks/useUpdateSettings';
 import { clamp } from '../../lib/clamp';
 import { getThemes } from '../../lib/theme/themes';
 import { isThemeDark } from '../../lib/theme/window';
@@ -62,9 +62,8 @@ const icons: IconProps['icon'][] = [
 const { themes } = getThemes();
 
 export function SettingsAppearance() {
-  const workspace = useActiveWorkspace();
-  const settings = useSettings();
-  const updateSettings = useUpdateSettings();
+  const workspace = useAtomValue(activeWorkspaceAtom);
+  const settings = useAtomValue(settingsAtom);
   const appearance = useResolvedAppearance();
   const activeTheme = useResolvedTheme();
 
@@ -93,18 +92,20 @@ export function SettingsAppearance() {
         name="interfaceFontSize"
         label="Font Size"
         labelPosition="left"
+        defaultValue="15"
         value={`${settings.interfaceFontSize}`}
         options={fontSizeOptions}
-        onChange={(v) => updateSettings.mutate({ interfaceFontSize: parseInt(v) })}
+        onChange={(v) => patchModel(settings, { interfaceFontSize: parseInt(v) })}
       />
       <Select
         size="sm"
         name="editorFontSize"
         label="Editor Font Size"
         labelPosition="left"
+        defaultValue="13"
         value={`${settings.editorFontSize}`}
         options={fontSizeOptions}
-        onChange={(v) => updateSettings.mutate({ editorFontSize: clamp(parseInt(v) || 14, 8, 30) })}
+        onChange={(v) => patchModel(settings, { editorFontSize: clamp(parseInt(v) || 14, 8, 30) })}
       />
       <Select
         size="sm"
@@ -113,12 +114,12 @@ export function SettingsAppearance() {
         labelPosition="left"
         value={`${settings.editorKeymap}`}
         options={keymaps}
-        onChange={(v) => updateSettings.mutate({ editorKeymap: v })}
+        onChange={(v) => patchModel(settings, { editorKeymap: v })}
       />
       <Checkbox
         checked={settings.editorSoftWrap}
         title="Wrap Editor Lines"
-        onChange={(editorSoftWrap) => updateSettings.mutate({ editorSoftWrap })}
+        onChange={(editorSoftWrap) => patchModel(settings, { editorSoftWrap })}
       />
 
       <Separator className="my-4" />
@@ -129,7 +130,7 @@ export function SettingsAppearance() {
         labelPosition="top"
         size="sm"
         value={settings.appearance}
-        onChange={(appearance) => updateSettings.mutate({ appearance })}
+        onChange={(appearance) => patchModel(settings, { appearance })}
         options={[
           { label: 'Automatic', value: 'system' },
           { label: 'Light', value: 'light' },
@@ -147,7 +148,7 @@ export function SettingsAppearance() {
             className="flex-1"
             value={activeTheme.light.id}
             options={lightThemes}
-            onChange={(themeLight) => updateSettings.mutate({ ...settings, themeLight })}
+            onChange={(themeLight) => patchModel(settings, { themeLight })}
           />
         )}
         {(settings.appearance === 'system' || settings.appearance === 'dark') && (
@@ -160,7 +161,7 @@ export function SettingsAppearance() {
             size="sm"
             value={activeTheme.dark.id}
             options={darkThemes}
-            onChange={(themeDark) => updateSettings.mutate({ ...settings, themeDark })}
+            onChange={(themeDark) => patchModel(settings, { themeDark })}
           />
         )}
       </HStack>

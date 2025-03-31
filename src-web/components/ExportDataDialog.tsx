@@ -1,9 +1,10 @@
 import { save } from '@tauri-apps/plugin-dialog';
-import type { Workspace } from '@yaakapp-internal/models';
+import type { Workspace} from '@yaakapp-internal/models';
+import { workspacesAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { useCallback, useMemo, useState } from 'react';
 import slugify from 'slugify';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
-import { useWorkspaces } from '../hooks/useWorkspaces';
+import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { pluralizeCount } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
 import { Banner } from './core/Banner';
@@ -17,8 +18,8 @@ interface Props {
 }
 
 export function ExportDataDialog({ onHide, onSuccess }: Props) {
-  const allWorkspaces = useWorkspaces();
-  const activeWorkspace = useActiveWorkspace();
+  const allWorkspaces = useAtomValue(workspacesAtom);
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   if (activeWorkspace == null || allWorkspaces.length === 0) return null;
 
   return (
@@ -40,7 +41,7 @@ function ExportDataDialogContent({
   allWorkspaces: Workspace[];
   activeWorkspace: Workspace;
 }) {
-  const [includeEnvironments, setIncludeEnvironments] = useState<boolean>(true);
+  const [includeEnvironments, setIncludeEnvironments] = useState<boolean>(false);
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<Record<string, boolean>>({
     [activeWorkspace.id]: true,
   });

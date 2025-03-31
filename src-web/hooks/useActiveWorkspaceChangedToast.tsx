@@ -1,10 +1,11 @@
+import { useAtomValue } from 'jotai';
 import { useEffect, useState } from 'react';
 import { InlineCode } from '../components/core/InlineCode';
-import { useActiveWorkspace } from './useActiveWorkspace';
 import { showToast } from '../lib/toast';
+import { activeWorkspaceAtom } from './useActiveWorkspace';
 
 export function useActiveWorkspaceChangedToast() {
-  const activeWorkspace = useActiveWorkspace();
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const [id, setId] = useState<string | null>(activeWorkspace?.id ?? null);
 
   useEffect(() => {

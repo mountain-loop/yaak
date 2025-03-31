@@ -1,14 +1,13 @@
 [package]
 name = "yaak-templates"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 publish = false
 
 [dependencies]
 base64 = "0.22.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-log = "0.4.22"
 thiserror = { workspace = true }
 tokio = { version = "1.39.3", features = ["macros", "rt"] }
 ts-rs = { version = "10.0.0" }
