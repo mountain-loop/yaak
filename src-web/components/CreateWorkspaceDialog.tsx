@@ -38,7 +38,6 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         const workspaceMeta = await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', {
           workspaceId,
         });
-        console.log("WORKSPACE META", workspaceMeta)
         await patchModel(workspaceMeta, {
           settingSyncDir: syncConfig.filePath,
         });
