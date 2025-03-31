@@ -1,6 +1,6 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { getModel, settingsAtom, useModelList } from '@yaakapp-internal/models';
+import { getModel, settingsAtom, workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { memo, useCallback, useMemo } from 'react';
@@ -27,7 +27,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   className,
   ...buttonProps
 }: Props) {
-  const workspaces = useModelList('workspace');
+  const workspaces = useAtomValue(workspacesAtom);
   const workspace = useAtomValue(activeWorkspaceAtom);
   const createWorkspace = useCreateWorkspace();
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);

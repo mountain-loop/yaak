@@ -1,5 +1,6 @@
 import type { KeyValue } from '@yaakapp-internal/models';
-import { createGlobalModel, listModels, patchModel } from '@yaakapp-internal/models';
+import { createGlobalModel, keyValuesAtom, patchModel } from '@yaakapp-internal/models';
+import { jotaiStore } from './jotai';
 
 export async function setKeyValue<T>({
   namespace = 'global',
@@ -29,7 +30,9 @@ export function getKeyValueRaw({
   key: string | string[];
 }) {
   const key = buildKeyValueKey(keyOrKeys);
-  const kv = listModels('key_value').find((kv) => kv.namespace === namespace && kv?.key === key);
+  const kv = jotaiStore
+    .get(keyValuesAtom)
+    .find((kv) => kv.namespace === namespace && kv?.key === key);
   return kv ?? null;
 }
 

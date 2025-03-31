@@ -1,5 +1,10 @@
-import { useModelList } from '@yaakapp-internal/models';
+import {
+  grpcConnectionsAtom,
+  httpResponsesAtom,
+  websocketConnectionsAtom,
+} from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai/index';
 import React, { Fragment, memo } from 'react';
 import { VStack } from '../core/Stacks';
 import { DropMarker } from '../DropMarker';
@@ -31,9 +36,9 @@ export const SidebarItems = memo(function SidebarItems({
   handleMove,
   handleDragStart,
 }: SidebarItemsProps) {
-  const httpResponses = useModelList('http_response');
-  const grpcConnections = useModelList('grpc_connection');
-  const websocketConnections = useModelList('websocket_connection');
+  const httpResponses = useAtomValue(httpResponsesAtom);
+  const grpcConnections = useAtomValue(grpcConnectionsAtom);
+  const websocketConnections = useAtomValue(websocketConnectionsAtom);
 
   return (
     <VStack

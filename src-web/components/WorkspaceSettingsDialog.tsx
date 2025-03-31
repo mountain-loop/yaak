@@ -1,4 +1,5 @@
-import { patchModel, useModelList } from '@yaakapp-internal/models';
+import { patchModel, workspaceMetasAtom, workspacesAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai/index';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { router } from '../lib/router';
 import { Banner } from './core/Banner';
@@ -17,8 +18,10 @@ interface Props {
 }
 
 export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Props) {
-  const workspace = useModelList('workspace').find((w) => w.id === workspaceId);
-  const workspaceMeta = useModelList('workspace_meta').find((wm) => wm.workspaceId === workspaceId);
+  const workspace = useAtomValue(workspacesAtom).find((w) => w.id === workspaceId);
+  const workspaceMeta = useAtomValue(workspaceMetasAtom).find(
+    (wm) => wm.workspaceId === workspaceId,
+  );
 
   if (workspace == null) {
     return (

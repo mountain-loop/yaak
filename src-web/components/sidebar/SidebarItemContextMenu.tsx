@@ -2,8 +2,9 @@ import {
   deleteModelById,
   duplicateModelById,
   getModel,
-  useModelList,
+  workspacesAtom,
 } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import React, { useMemo } from 'react';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
 import { useHttpRequestActions } from '../../hooks/useHttpRequestActions';
@@ -31,7 +32,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
   const sendManyRequests = useSendManyRequests();
   const httpRequestActions = useHttpRequestActions();
   const sendRequest = useSendAnyHttpRequest();
-  const workspaces = useModelList('workspace');
+  const workspaces = useAtomValue(workspacesAtom);
   const moveToWorkspace = useMoveToWorkspace(child.id);
   const createDropdownItems = useCreateDropdownItems({
     folderId: child.model === 'folder' ? child.id : null,

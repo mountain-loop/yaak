@@ -1,4 +1,4 @@
-import { useModelList } from '@yaakapp-internal/models';
+import { workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
@@ -51,7 +51,7 @@ export function Workspace() {
   // First, subscribe to some things applicable to workspaces
   useGlobalWorkspaceHooks();
 
-  const workspaces = useModelList('workspace');
+  const workspaces = useAtomValue(workspacesAtom);
   const { setWidth, width, resetWidth } = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();

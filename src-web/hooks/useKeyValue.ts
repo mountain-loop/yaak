@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
-import { keyValuesAtom, useModelList } from '@yaakapp-internal/models';
+import { keyValuesAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { useCallback, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { buildKeyValueKey, extractKeyValueOrFallback, setKeyValue } from '../lib/keyValueStore';
@@ -15,7 +16,7 @@ export function useKeyValue<T extends object | boolean | number | string | null>
   key: string | string[];
   fallback: T;
 }) {
-  const keyValues = useModelList('key_value');
+  const keyValues = useAtomValue(keyValuesAtom);
   const keyValue =
     keyValues?.find((kv) => buildKeyValueKey(kv.key) === buildKeyValueKey(key)) ?? null;
   const value = keyValues == null ? null : extractKeyValueOrFallback(keyValue, fallback);

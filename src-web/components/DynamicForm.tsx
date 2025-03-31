@@ -1,5 +1,5 @@
-import type { Folder, HttpRequest} from '@yaakapp-internal/models';
-import { useModelList } from '@yaakapp-internal/models';
+import type { Folder, HttpRequest } from '@yaakapp-internal/models';
+import { foldersAtom, httpRequestsAtom } from '@yaakapp-internal/models';
 import type {
   FormInput,
   FormInputCheckbox,
@@ -11,6 +11,7 @@ import type {
   JsonPrimitive,
 } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai/index';
 import { useCallback } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { capitalize } from '../lib/capitalize';
@@ -353,8 +354,8 @@ function HttpRequestArg({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const folders = useModelList('folder');
-  const httpRequests = useModelList('http_request');
+  const folders = useAtomValue(foldersAtom);
+  const httpRequests = useAtomValue(httpRequestsAtom);
   const activeRequest = useActiveRequest();
   return (
     <Select

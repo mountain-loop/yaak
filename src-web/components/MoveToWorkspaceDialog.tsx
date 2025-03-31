@@ -4,8 +4,9 @@ import type {
   WebsocketRequest} from '@yaakapp-internal/models';
 import {
   patchModel,
-  useModelList
+  workspacesAtom,
 } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import React, { useState } from 'react';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
@@ -22,7 +23,7 @@ interface Props {
 }
 
 export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Props) {
-  const workspaces = useModelList('workspace');
+  const workspaces = useAtomValue(workspacesAtom);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(activeWorkspaceId);
 
   return (

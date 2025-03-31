@@ -1,6 +1,6 @@
 import { ModelStoreData } from './types';
 
-export function newData(): ModelStoreData {
+export function newStoreData(): ModelStoreData {
   return {
     cookie_jar: {},
     environment: {},

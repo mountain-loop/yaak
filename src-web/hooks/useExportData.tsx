@@ -1,10 +1,10 @@
-import {listModels} from "@yaakapp-internal/models";
+import { workspacesAtom } from '@yaakapp-internal/models';
 import { ExportDataDialog } from '../components/ExportDataDialog';
 import { showAlert } from '../lib/alert';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { showToast } from '../lib/toast';
-import {activeWorkspaceAtom} from "./useActiveWorkspace";
+import { activeWorkspaceAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 
 export function useExportData() {
@@ -15,7 +15,7 @@ export function useExportData() {
     },
     mutationFn: async () => {
       const activeWorkspace = jotaiStore.get(activeWorkspaceAtom);
-      const workspaces = listModels('workspace');
+      const workspaces = jotaiStore.get(workspacesAtom);
 
       if (activeWorkspace == null || workspaces.length === 0) return;
 

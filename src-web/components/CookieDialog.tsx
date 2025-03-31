@@ -1,5 +1,6 @@
-import type { Cookie } from '@yaakapp-internal/models';
-import { patchModel, useModelList } from '@yaakapp-internal/models';
+import type { Cookie} from '@yaakapp-internal/models';
+import { cookieJarsAtom, patchModel } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { cookieDomain } from '../lib/model_util';
 import { Banner } from './core/Banner';
 import { IconButton } from './core/IconButton';
@@ -10,7 +11,7 @@ interface Props {
 }
 
 export const CookieDialog = function ({ cookieJarId }: Props) {
-  const cookieJars = useModelList('cookie_jar');
+  const cookieJars = useAtomValue(cookieJarsAtom);
   const cookieJar = cookieJars?.find((c) => c.id === cookieJarId);
 
   if (cookieJar == null) {

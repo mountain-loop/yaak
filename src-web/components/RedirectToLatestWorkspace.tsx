@@ -1,4 +1,5 @@
-import { useModelList } from '@yaakapp-internal/models';
+import { workspacesAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { useEffect } from 'react';
 import { getRecentCookieJars } from '../hooks/useRecentCookieJars';
 import { getRecentEnvironments } from '../hooks/useRecentEnvironments';
@@ -7,7 +8,7 @@ import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
 import { router } from '../lib/router';
 
 export function RedirectToLatestWorkspace() {
-  const workspaces = useModelList('workspace');
+  const workspaces = useAtomValue(workspacesAtom);
   const recentWorkspaces = useRecentWorkspaces();
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import type { GrpcConnection} from '@yaakapp-internal/models';
-import { useModelList } from '@yaakapp-internal/models';
+import { grpcConnectionsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai/index';
 
 export function useLatestGrpcConnection(requestId: string | null): GrpcConnection | null {
-  return useModelList('grpc_connection').find((c) => c.requestId === requestId) ?? null;
+  return useAtomValue(grpcConnectionsAtom).find((c) => c.requestId === requestId) ?? null;
 }

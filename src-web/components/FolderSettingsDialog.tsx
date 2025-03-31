@@ -1,4 +1,5 @@
-import { patchModel, useModelList } from '@yaakapp-internal/models';
+import { foldersAtom, patchModel } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai/index';
 import { Input } from './core/Input';
 import { VStack } from './core/Stacks';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -8,7 +9,7 @@ interface Props {
 }
 
 export function FolderSettingsDialog({ folderId }: Props) {
-  const folders = useModelList('folder');
+  const folders = useAtomValue(foldersAtom);
   const folder = folders.find((f) => f.id === folderId);
 
   if (folder == null) return null;

@@ -1,8 +1,9 @@
-import { useModelList } from '@yaakapp-internal/models';
+import { environmentsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai/index';
 import { useMemo } from 'react';
 
 export function useEnvironmentsBreakdown() {
-  const allEnvironments = useModelList('environment');
+  const allEnvironments = useAtomValue(environmentsAtom);
   return useMemo(() => {
     const baseEnvironment = allEnvironments.find((e) => e.environmentId == null) ?? null;
     const subEnvironments =

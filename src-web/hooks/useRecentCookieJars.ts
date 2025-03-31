@@ -1,4 +1,4 @@
-import { useModelList } from '@yaakapp-internal/models';
+import { cookieJarsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { useEffect, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
@@ -12,7 +12,7 @@ const namespace = 'global';
 const fallback: string[] = [];
 
 export function useRecentCookieJars() {
-  const cookieJars = useModelList('cookie_jar');
+  const cookieJars = useAtomValue(cookieJarsAtom);
   const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom);
   const kv = useKeyValue<string[]>({
     key: kvKey(activeWorkspaceId ?? 'n/a'),

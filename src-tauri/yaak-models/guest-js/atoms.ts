@@ -3,9 +3,9 @@ import { atom } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import type { AnyModel } from '../bindings/gen_models';
 import { ExtractModel } from './types';
-import { newData } from './util';
+import { newStoreData } from './util';
 
-export const modelStoreDataAtom = atom(newData());
+export const modelStoreDataAtom = atom(newStoreData());
 
 export const cookieJarsAtom = createOrderedModelAtom('cookie_jar', 'name', 'asc');
 export const environmentsAtom = createOrderedModelAtom('environment', 'name', 'asc');

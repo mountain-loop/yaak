@@ -1,28 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { useAtomValue } from 'jotai';
 import { AnyModel, ModelPayload } from '../bindings/gen_models';
-import {
-  cookieJarsAtom,
-  environmentsAtom,
-  foldersAtom,
-  grpcConnectionsAtom,
-  grpcEventsAtom,
-  grpcRequestsAtom,
-  httpRequestsAtom,
-  httpResponsesAtom,
-  keyValuesAtom,
-  modelStoreDataAtom,
-  pluginsAtom,
-  settingsAtom,
-  websocketConnectionsAtom,
-  websocketEventsAtom,
-  websocketRequestsAtom,
-  workspaceMetasAtom,
-  workspacesAtom,
-} from './atoms';
-import { ExtractModel, ExtractModels, JotaiStore, ModelStoreData } from './types';
-import { newData } from './util';
+import { modelStoreDataAtom } from './atoms';
+import { ExtractModel, JotaiStore, ModelStoreData } from './types';
+import { newStoreData } from './util';
 
 let _store: JotaiStore | null = null;
 
@@ -75,7 +56,7 @@ export async function changeModelStoreWorkspace(workspaceId: string | null) {
   const workspaceModels = await invoke<AnyModel[]>('plugin:yaak-models|workspace_models', {
     workspaceId, // NOTE: if no workspace id provided, it will just fetch global models
   });
-  const data = newData();
+  const data = newStoreData();
   for (const model of workspaceModels) {
     data[model.model][model.id] = model;
   }
@@ -85,38 +66,6 @@ export async function changeModelStoreWorkspace(workspaceId: string | null) {
   console.log('Synced model store with workspace', workspaceId, data);
 
   _activeWorkspaceId = workspaceId;
-}
-
-const modelAtomMap = {
-  cookie_jar: cookieJarsAtom,
-  environment: environmentsAtom,
-  folder: foldersAtom,
-  grpc_connection: grpcConnectionsAtom,
-  grpc_events: grpcEventsAtom,
-  grpc_request: grpcRequestsAtom,
-  http_request: httpRequestsAtom,
-  http_response: httpResponsesAtom,
-  key_value: keyValuesAtom,
-  plugin: pluginsAtom,
-  settings: settingsAtom,
-  websocket_connection: websocketConnectionsAtom,
-  websocket_events: websocketEventsAtom,
-  websocket_request: websocketRequestsAtom,
-  workspace: workspacesAtom,
-  workspace_meta: workspaceMetasAtom,
-} as const;
-
-type ModelToAtomMap = typeof modelAtomMap;
-type ModelName = keyof ModelToAtomMap;
-type AtomReturn<T> = T extends import('jotai').Atom<infer R> ? R : never;
-
-export function useModelList<M extends ModelName>(model: M): AtomReturn<ModelToAtomMap[M]> {
-  if (!(model in modelAtomMap)) {
-    throw new Error('Cannot list models for ' + model);
-  }
-
-  const atom = modelAtomMap[model];
-  return useAtomValue(atom);
 }
 
 export function getAnyModel(id: string): AnyModel | null {
@@ -209,17 +158,6 @@ export async function createWorkspaceModel<T extends Extract<AnyModel, { workspa
   return invoke<string>('plugin:yaak-models|upsert', { model: patch });
 }
 
-export function listModels<M extends AnyModel['model']>(
-  models: M | M[],
-): ExtractModels<AnyModel, M>[] {
-  const data = mustStore().get(modelStoreDataAtom);
-  const values = [];
-  for (const model of Array.isArray(models) ? models : [models]) {
-    values.push(...Object.values(data[model]));
-  }
-  return values;
-}
-
 export function replaceModelsInStore<
   M extends AnyModel['model'],
   T extends Extract<AnyModel, { model: M }>,
@@ -228,6 +166,7 @@ export function replaceModelsInStore<
   for (const model of models) {
     newModels[model.id] = model;
   }
+
   mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
     return {
       ...prev,
@@ -237,11 +176,6 @@ export function replaceModelsInStore<
 }
 
 function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
-  // Ignore anything that doesn't have a local store
-  if (!(model.model in modelAtomMap)) {
-    return true;
-  }
-
   // Never ignore updates from non-user sources
   if (updateSource.type !== 'window') {
     return false;

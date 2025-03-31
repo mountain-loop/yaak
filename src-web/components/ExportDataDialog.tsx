@@ -1,6 +1,6 @@
 import { save } from '@tauri-apps/plugin-dialog';
-import type { Workspace } from '@yaakapp-internal/models';
-import { useModelList } from '@yaakapp-internal/models';
+import type { Workspace} from '@yaakapp-internal/models';
+import { workspacesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { useCallback, useMemo, useState } from 'react';
 import slugify from 'slugify';
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function ExportDataDialog({ onHide, onSuccess }: Props) {
-  const allWorkspaces = useModelList('workspace');
+  const allWorkspaces = useAtomValue(workspacesAtom);
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   if (activeWorkspace == null || allWorkspaces.length === 0) return null;
 
