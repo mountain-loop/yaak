@@ -102,4 +102,3 @@ yaak-sse = { path = "yaak-sse" }
 yaak-sync = { path = "yaak-sync" }
 yaak-templates = { path = "yaak-templates" }
 yaak-crypto = { path = "yaak-crypto" }
-yaak-common = { path = "yaak-common" }
