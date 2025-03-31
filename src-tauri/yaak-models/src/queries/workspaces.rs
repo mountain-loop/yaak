@@ -23,7 +23,7 @@ impl<'a> DbContext<'a> {
                     ..Default::default()
                 },
                 &UpdateSource::Background,
-            )?);
+            )?)
         }
 
         Ok(workspaces)

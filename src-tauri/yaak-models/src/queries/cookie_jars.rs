@@ -9,7 +9,18 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn list_cookie_jars(&self, workspace_id: &str) -> Result<Vec<CookieJar>> {
-        self.find_many(CookieJarIden::WorkspaceId, workspace_id, None)
+        let mut cookie_jars = self.find_many(CookieJarIden::WorkspaceId, workspace_id, None)?;
+
+        if cookie_jars.is_empty() {
+            let jar = CookieJar {
+                name: "Default".to_string(),
+                workspace_id: workspace_id.to_string(),
+                ..Default::default()
+            };
+            cookie_jars.push(self.upsert_cookie_jar(&jar, &UpdateSource::Background)?);
+        }
+
+        Ok(cookie_jars)
     }
 
     pub fn delete_cookie_jar(

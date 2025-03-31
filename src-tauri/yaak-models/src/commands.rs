@@ -100,7 +100,6 @@ pub(crate) fn workspace_models<R: Runtime>(
 
     // Add global models
     l.append(&mut db.list_workspaces()?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_workspace_metas()?.into_iter().map(Into::into).collect());
     l.append(&mut db.list_key_values()?.into_iter().map(Into::into).collect());
     l.append(&mut db.list_plugins()?.into_iter().map(Into::into).collect());
 
@@ -115,6 +114,7 @@ pub(crate) fn workspace_models<R: Runtime>(
         l.append(&mut db.list_http_responses(wid, None)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_websocket_connections(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_websocket_requests(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_workspace_metas(wid)?.into_iter().map(Into::into).collect());
     }
 
     Ok(l)
