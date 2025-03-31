@@ -19,6 +19,7 @@ export interface SelectProps<T extends string> {
   leftSlot?: ReactNode;
   options: RadioDropdownItem<T>[];
   onChange: (value: T) => void;
+  defaultValue?: T;
   size?: ButtonProps['size'];
   className?: string;
   disabled?: boolean;
@@ -36,6 +37,7 @@ export function Select<T extends string>({
   leftSlot,
   onChange,
   className,
+  defaultValue,
   size = 'md',
 }: SelectProps<T>) {
   const osInfo = useOsInfo();
@@ -83,7 +85,9 @@ export function Select<T extends string>({
             onChange={(e) => handleChange(e.target.value as T)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            className={classNames('pr-7 w-full outline-none bg-transparent disabled:opacity-disabled')}
+            className={classNames(
+              'pr-7 w-full outline-none bg-transparent disabled:opacity-disabled',
+            )}
             disabled={disabled}
           >
             {isInvalidSelection && <option value={'__NONE__'}>-- Select an Option --</option>}
@@ -92,6 +96,7 @@ export function Select<T extends string>({
               return (
                 <option key={o.value} value={o.value}>
                   {o.label}
+                  {o.value === defaultValue && ' (default)'}
                 </option>
               );
             })}

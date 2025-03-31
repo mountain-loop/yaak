@@ -1,6 +1,6 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{Settings, SettingsIden};
+use crate::models::{EditorKeymap, Settings, SettingsIden};
 use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {
@@ -12,8 +12,22 @@ impl<'a> DbContext<'a> {
         };
 
         let settings = Settings {
+            model: "settings".to_string(),
             id,
-            ..Default::default()
+            created_at: Default::default(),
+            updated_at: Default::default(),
+
+            appearance: "system".to_string(),
+            editor_font_size: 13,
+            editor_keymap: EditorKeymap::Default,
+            editor_soft_wrap: true,
+            interface_font_size: 15,
+            interface_scale: 1.0,
+            open_workspace_new_window: None,
+            proxy: None,
+            theme_dark: "yaak-dark".to_string(),
+            theme_light: "yaak-light".to_string(),
+            update_channel: "stable".to_string(),
         };
         self.upsert(&settings, &UpdateSource::Background).expect("Failed to upsert settings")
     }

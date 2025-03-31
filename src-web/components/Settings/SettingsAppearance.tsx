@@ -1,4 +1,4 @@
-import type { EditorKeymap} from '@yaakapp-internal/models';
+import type { EditorKeymap } from '@yaakapp-internal/models';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import React from 'react';
@@ -92,6 +92,7 @@ export function SettingsAppearance() {
         name="interfaceFontSize"
         label="Font Size"
         labelPosition="left"
+        defaultValue="15"
         value={`${settings.interfaceFontSize}`}
         options={fontSizeOptions}
         onChange={(v) => patchModel(settings, { interfaceFontSize: parseInt(v) })}
@@ -101,6 +102,7 @@ export function SettingsAppearance() {
         name="editorFontSize"
         label="Editor Font Size"
         labelPosition="left"
+        defaultValue="13"
         value={`${settings.editorFontSize}`}
         options={fontSizeOptions}
         onChange={(v) => patchModel(settings, { editorFontSize: clamp(parseInt(v) || 14, 8, 30) })}
