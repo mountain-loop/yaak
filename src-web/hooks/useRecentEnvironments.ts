@@ -1,10 +1,10 @@
-import { environmentsBreakdownAtom } from '@yaakapp-internal/models/guest-js/atoms';
 import { useAtomValue } from 'jotai';
 import { useEffect, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
 import { activeEnvironmentIdAtom } from './useActiveEnvironment';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from './useActiveWorkspace';
+import { useEnvironmentsBreakdown } from './useEnvironmentsBreakdown';
 import { useKeyValue } from './useKeyValue';
 
 const kvKey = (workspaceId: string) => 'recent_environments::' + workspaceId;
@@ -12,7 +12,7 @@ const namespace = 'global';
 const fallback: string[] = [];
 
 export function useRecentEnvironments() {
-  const { subEnvironments } = useAtomValue(environmentsBreakdownAtom);
+  const { subEnvironments } = useEnvironmentsBreakdown();
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const kv = useKeyValue<string[]>({
     key: kvKey(activeWorkspace?.id ?? 'n/a'),

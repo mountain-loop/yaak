@@ -4,7 +4,7 @@ import type {
   HttpResponse,
   WebsocketConnection,
 } from '@yaakapp-internal/models';
-import { foldersAtom, patchModelById, requestsAtom } from '@yaakapp-internal/models';
+import { foldersAtom, patchModelById } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { ReactElement } from 'react';
@@ -12,6 +12,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
 import { activeRequestAtom } from '../../hooks/useActiveRequest';
+import {allRequestsAtom} from "../../hooks/useAllRequests";
 import { useScrollIntoView } from '../../hooks/useScrollIntoView';
 import { useSidebarItemCollapsed } from '../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../lib/jotai';
@@ -202,7 +203,7 @@ export const SidebarItem = memo(function SidebarItem({
       if (itemModel === 'folder') {
         return get(foldersAtom).find((v) => v.id === itemId);
       } else {
-        return get(requestsAtom).find((v) => v.id === itemId);
+        return get(allRequestsAtom).find((v) => v.id === itemId);
       }
     });
   }, [itemId, itemModel]);

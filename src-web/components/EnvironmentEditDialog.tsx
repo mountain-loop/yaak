@@ -1,12 +1,11 @@
 import type { Environment } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
-import { environmentsBreakdownAtom } from '@yaakapp-internal/models/guest-js/atoms';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
 import type { ReactNode } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
+import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { showPrompt } from '../lib/prompt';
@@ -30,9 +29,7 @@ interface Props {
 
 export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
   const createEnvironment = useCreateEnvironment();
-  const { baseEnvironment, subEnvironments, allEnvironments } =
-    useAtomValue(environmentsBreakdownAtom);
-
+  const { baseEnvironment, subEnvironments, allEnvironments } = useEnvironmentsBreakdown();
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(
     initialEnvironment?.id ?? null,
   );
@@ -128,7 +125,7 @@ const EnvironmentEditor = function ({
     key: 'environmentValueVisibility',
     fallback: true,
   });
-  const { allEnvironments } = useAtomValue(environmentsBreakdownAtom);
+  const { allEnvironments } = useEnvironmentsBreakdown();
   const handleChange = useCallback<PairEditorProps['onChange']>(
     (variables) => patchModel(activeEnvironment, { variables }),
     [activeEnvironment],

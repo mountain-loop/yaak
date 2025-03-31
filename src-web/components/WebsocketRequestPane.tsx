@@ -1,5 +1,5 @@
 import type { HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import { patchModel, requestsAtom } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
 import classNames from 'classnames';
@@ -15,6 +15,7 @@ import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { activeWebsocketConnectionAtom } from '../hooks/usePinnedWebsocketConnection';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
+import {allRequestsAtom} from "../hooks/useAllRequests";
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { deepEqualAtom } from '../lib/atoms';
 import { languageFromContentType } from '../lib/contentType';
@@ -50,7 +51,7 @@ const TAB_DESCRIPTION = 'description';
 
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
-  const requests = get(requestsAtom);
+  const requests = get(allRequestsAtom);
   const urls = requests
     .filter((r) => r.id !== activeRequestId)
     .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url }));

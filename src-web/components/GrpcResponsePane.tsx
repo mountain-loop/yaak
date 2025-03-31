@@ -46,7 +46,7 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
   const [showingLarge, setShowingLarge] = useState<boolean>(false);
   const connections = useAtomValue(activeGrpcConnections);
   const activeConnection = useAtomValue(activeGrpcConnectionAtom);
-  const events = useGrpcEvents();
+  const events = useGrpcEvents(activeConnection?.id ?? null);
   const setPinnedGrpcConnectionId = useSetAtom(pinnedGrpcConnectionIdAtom);
   const copy = useCopy();
 

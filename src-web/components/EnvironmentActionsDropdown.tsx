@@ -1,8 +1,7 @@
-import { environmentsBreakdownAtom } from '@yaakapp-internal/models/guest-js/atoms';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
 import { memo, useCallback, useMemo } from 'react';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
+import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { toggleDialog } from '../lib/dialog';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import type { ButtonProps } from './core/Button';
@@ -20,7 +19,7 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
   className,
   ...buttonProps
 }: Props) {
-  const { subEnvironments, baseEnvironment } = useAtomValue(environmentsBreakdownAtom);
+  const { subEnvironments, baseEnvironment } = useEnvironmentsBreakdown();
   const activeEnvironment = useActiveEnvironment();
 
   const showEnvironmentDialog = useCallback(() => {

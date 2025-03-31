@@ -1,57 +1,32 @@
 import { atom } from 'jotai';
 
 import { selectAtom } from 'jotai/utils';
-import type { AnyModel, Environment } from '../bindings/gen_models';
+import type { AnyModel } from '../bindings/gen_models';
 import { ExtractModel } from './types';
 import { newData } from './util';
 
 export const modelStoreDataAtom = atom(newData());
 
-export const environmentsAtom = createModelAtom('environment');
-export const sortedEnvironmentsAtom = atom(function (get) {
-  return get(environmentsAtom).sort((a, b) => a.name.localeCompare(b.name));
-});
-
-export const environmentsBreakdownAtom = atom<{
-  baseEnvironment: Environment | null;
-  allEnvironments: Environment[];
-  subEnvironments: Environment[];
-}>(function (get) {
-  const allEnvironments = get(sortedEnvironmentsAtom);
-  const baseEnvironment = allEnvironments.find((e) => e.environmentId == null) ?? null;
-  const subEnvironments =
-    allEnvironments.filter((e) => e.environmentId === (baseEnvironment?.id ?? 'n/a')) ?? [];
-  return { baseEnvironment, subEnvironments, allEnvironments } as const;
-});
-
+export const cookieJarsAtom = createOrderedModelAtom('cookie_jar', 'name', 'asc');
+export const environmentsAtom = createOrderedModelAtom('environment', 'name', 'asc');
 export const foldersAtom = createModelAtom('folder');
-export const httpRequestsAtom = createModelAtom('http_request');
-export const httpResponsesAtom = createOrderedModelAtom('http_response', 'createdAt', 'desc');
-export const grpcRequestsAtom = createModelAtom('grpc_request');
 export const grpcConnectionsAtom = createOrderedModelAtom('grpc_connection', 'createdAt', 'desc');
 export const grpcEventsAtom = createOrderedModelAtom('grpc_event', 'createdAt', 'asc');
+export const grpcRequestsAtom = createModelAtom('grpc_request');
+export const httpRequestsAtom = createModelAtom('http_request');
+export const httpResponsesAtom = createOrderedModelAtom('http_response', 'createdAt', 'desc');
+export const keyValuesAtom = createModelAtom('key_value');
+export const pluginsAtom = createModelAtom('plugin');
 export const settingsAtom = createSingularModelAtom('settings');
 export const websocketRequestsAtom = createModelAtom('websocket_request');
 export const websocketEventsAtom = createOrderedModelAtom('websocket_event', 'createdAt', 'asc');
-export const websocketConnectionsAtom = createOrderedModelAtom('websocket_connection', 'createdAt', 'desc');
-export const workspacesAtom = createModelAtom('workspace');
-export const pluginsAtom = createModelAtom('plugin');
+export const websocketConnectionsAtom = createOrderedModelAtom(
+  'websocket_connection',
+  'createdAt',
+  'desc',
+);
 export const workspaceMetasAtom = createModelAtom('workspace_meta');
-
-export const sortedWorkspacesAtom = atom(function (get) {
-  return get(workspacesAtom).sort((a, b) => a.name.localeCompare(b.name));
-});
-
-export const keyValuesAtom = createModelAtom('key_value');
-export const cookieJarsAtom = createModelAtom('cookie_jar');
-
-export const sortedCookieJars = atom(function (get) {
-  return get(cookieJarsAtom)?.sort((a, b) => a.name.localeCompare(b.name));
-});
-
-export const requestsAtom = atom(function (get) {
-  return [...get(httpRequestsAtom), ...get(grpcRequestsAtom), ...get(websocketRequestsAtom)];
-});
+export const workspacesAtom = createOrderedModelAtom('workspace', 'name', 'asc');
 
 export function createModelAtom<M extends AnyModel['model']>(modelType: M) {
   return selectAtom(

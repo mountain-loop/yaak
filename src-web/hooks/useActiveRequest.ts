@@ -1,11 +1,11 @@
 import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import { requestsAtom } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import { activeRequestIdAtom } from './useActiveRequestId';
+import { allRequestsAtom } from './useAllRequests';
 
 export const activeRequestAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
-  const requests = get(requestsAtom);
+  const requests = get(allRequestsAtom);
   return requests.find((r) => r.id === activeRequestId) ?? null;
 });
 

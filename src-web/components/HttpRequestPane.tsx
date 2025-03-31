@@ -1,5 +1,5 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
-import { patchModel, requestsAtom } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
@@ -12,6 +12,7 @@ import { useImportCurl } from '../hooks/useImportCurl';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
+import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { deepEqualAtom } from '../lib/atoms';
@@ -65,7 +66,7 @@ const TAB_DESCRIPTION = 'description';
 
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
-  const requests = get(requestsAtom);
+  const requests = get(allRequestsAtom);
   return requests
     .filter((r) => r.id !== activeRequestId)
     .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url }));
