@@ -41,7 +41,7 @@ function ExportDataDialogContent({
   allWorkspaces: Workspace[];
   activeWorkspace: Workspace;
 }) {
-  const [includeEnvironments, setIncludeEnvironments] = useState<boolean>(true);
+  const [includeEnvironments, setIncludeEnvironments] = useState<boolean>(false);
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<Record<string, boolean>>({
     [activeWorkspace.id]: true,
   });
