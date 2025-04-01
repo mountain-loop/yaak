@@ -149,11 +149,30 @@ async fn cmd_dismiss_notification<R: Runtime>(
 #[tauri::command]
 async fn cmd_grpc_reflect<R: Runtime>(
     request_id: &str,
+    environment_id: Option<&str>,
     proto_files: Vec<String>,
+    window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<Vec<ServiceDefinition>> {
-    let req = app_handle.db().get_grpc_request(request_id)?;
+    let environment = match environment_id {
+        Some(id) => app_handle.db().get_environment(id).ok(),
+        None => None,
+    };
+    let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
+    let base_environment =
+        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let req = render_grpc_request(
+        &unrendered_request,
+        &base_environment,
+        environment.as_ref(),
+        &PluginTemplateCallback::new(
+            &app_handle,
+            &WindowContext::from_window(&window),
+            RenderPurpose::Send,
+        ),
+    )
+        .await?;
 
     let uri = safe_uri(&req.url);
 
@@ -197,6 +216,7 @@ async fn cmd_grpc_go<R: Runtime>(
         ),
     )
     .await?;
+
     let mut metadata = BTreeMap::new();
 
     // Add the rest of metadata

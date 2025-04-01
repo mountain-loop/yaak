@@ -1,9 +1,10 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { emit } from '@tauri-apps/api/event';
 import type { GrpcConnection, GrpcRequest } from '@yaakapp-internal/models';
+import {jotaiStore} from "../lib/jotai";
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { invokeCmd } from '../lib/tauri';
-import { useActiveEnvironment } from './useActiveEnvironment';
+import {activeEnvironmentIdAtom, useActiveEnvironment} from './useActiveEnvironment';
 import { useDebouncedValue } from './useDebouncedValue';
 
 export interface ReflectResponseService {
@@ -46,11 +47,13 @@ export function useGrpc(
   const reflect = useQuery<ReflectResponseService[], string>({
     enabled: req != null,
     queryKey: ['grpc_reflect', req?.id ?? 'n/a', debouncedUrl, protoFiles],
-    queryFn: () =>
-      minPromiseMillis<ReflectResponseService[]>(
-        invokeCmd('cmd_grpc_reflect', { requestId, protoFiles }),
+    queryFn: () => {
+      const environmentId = jotaiStore.get(activeEnvironmentIdAtom);
+      return minPromiseMillis<ReflectResponseService[]>(
+        invokeCmd('cmd_grpc_reflect', { requestId, protoFiles, environmentId }),
         300,
-      ),
+      );
+    },
   });
 
   return {
