@@ -4,7 +4,7 @@ use crate::master_key::MasterKey;
 use crate::workspace_key::WorkspaceKey;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use log::{debug, info};
+use log::info;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, Runtime, State};
@@ -59,7 +59,6 @@ impl EncryptionManager {
         {
             let cache = self.cached_workspace_keys.lock().unwrap();
             if let Some(k) = cache.get(workspace_id) {
-                debug!("Got cached workspace key for {workspace_id}");
                 return Ok(k.clone());
             }
         };
@@ -74,6 +73,7 @@ impl EncryptionManager {
                     .decode(k.encrypted_key)
                     .map_err(|e| GenericError(format!("Failed to decode workspace key {e:?}")))?;
                 let raw_key = mkey.decrypt(decoded_key.as_slice())?;
+                info!("Got existing workspace key for {workspace_id}");
                 WorkspaceKey::from_raw_key(raw_key.as_slice())
             }
             None => {
