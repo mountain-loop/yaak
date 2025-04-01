@@ -1,4 +1,4 @@
-use crate::error::Error::InvalidEncryptedData;
+use crate::error::Error::{DecryptionError, EncryptionError, InvalidEncryptedData};
 use crate::error::Result;
 use aes_gcm::aead::consts::U12;
 use aes_gcm::aead::{Aead, OsRng};
@@ -12,7 +12,7 @@ const NONCE_LENGTH: usize = 12;
 pub(crate) fn encrypt_data(data: &[u8], key: &Key<Aes256Gcm>) -> Result<Vec<u8>> {
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
     let cipher = Aes256Gcm::new(&key);
-    let ciphered_data = cipher.encrypt(&nonce, data)?;
+    let ciphered_data = cipher.encrypt(&nonce, data).map_err(|_| EncryptionError)?;
 
     // Yaak Tag + Version + Nonce + ... ciphertext ...
     let mut data: Vec<u8> = Vec::new();
@@ -40,7 +40,7 @@ pub(crate) fn decrypt_data(cipher_data: &[u8], key: &Key<AesGcm<Aes256, U12>>) -
     let (nonce, ciphered_data) = rest.split_at_checked(NONCE_LENGTH).ok_or(InvalidEncryptedData)?;
 
     let cipher = Aes256Gcm::new(&key);
-    let data = cipher.decrypt(nonce.into(), ciphered_data)?;
+    let data = cipher.decrypt(nonce.into(), ciphered_data).map_err(|_| DecryptionError)?;
 
     Ok(data)
 }

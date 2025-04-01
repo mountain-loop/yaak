@@ -36,8 +36,7 @@ impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
         let fn_name = if fn_name == "Response" { "response" } else { fn_name };
 
         if fn_name == "secure" {
-            return template_function_secure_run(&self.app_handle, args, &self.window_context)
-                .await;
+            return template_function_secure_run(&self.app_handle, args, &self.window_context);
         }
 
         let plugin_manager = &*self.app_handle.state::<PluginManager>();
@@ -64,8 +63,7 @@ impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
                 &self.window_context,
                 arg_name,
                 arg_value,
-            )
-            .await;
+            );
         }
 
         Ok(arg_value.to_string())

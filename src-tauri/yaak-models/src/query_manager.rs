@@ -6,10 +6,11 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::TransactionBehavior;
 use std::sync::{Arc, Mutex};
-use tauri::{Manager, Runtime};
+use tauri::{Manager, Runtime, State};
 use tokio::sync::mpsc;
 
 pub trait QueryManagerExt<'a, R> {
+    fn db_manager(&'a self) -> State<'a, QueryManager>;
     fn db(&'a self) -> DbContext<'a>;
     fn with_db<F, T>(&'a self, func: F) -> T
     where
@@ -20,6 +21,10 @@ pub trait QueryManagerExt<'a, R> {
 }
 
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
+    fn db_manager(&'a self) -> State<'a, QueryManager> {
+        self.state::<QueryManager>()
+    }
+
     fn db(&'a self) -> DbContext<'a> {
         let qm = self.state::<QueryManager>();
         qm.inner().connect()
@@ -42,7 +47,7 @@ impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct QueryManager {
     pool: Arc<Mutex<Pool<SqliteConnectionManager>>>,
     events_tx: mpsc::Sender<ModelPayload>,

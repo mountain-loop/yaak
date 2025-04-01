@@ -2,10 +2,13 @@ import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useMemo, useState } from 'react';
+import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateTokensToString } from '../hooks/useTemplateTokensToString';
 import { useToggle } from '../hooks/useToggle';
+import { jotaiStore } from '../lib/jotai';
+import { invokeCmd } from '../lib/tauri';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
@@ -145,9 +148,23 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
           </InlineCode>
         )}
       </VStack>
-      <Button color="primary" onClick={handleDone}>
-        Save
-      </Button>
+      <div className="flex justify-stretch w-full flex-grow gap-2 [&>*]:flex-1">
+        {templateFunction.name === 'secure' && (
+          <Button
+            variant="border"
+            color="secondary"
+            onClick={async () => {
+              const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+              await invokeCmd('cmd_show_workspace_key', { workspaceId: workspaceId });
+            }}
+          >
+            Reveal Encryption Key
+          </Button>
+        )}
+        <Button color="primary" onClick={handleDone}>
+          Save
+        </Button>
+      </div>
     </VStack>
   );
 }

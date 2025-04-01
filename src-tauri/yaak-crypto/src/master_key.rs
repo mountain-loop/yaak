@@ -56,8 +56,8 @@ mod tests {
     use crate::error::Result;
     use crate::master_key::MasterKey;
 
-    #[tokio::test]
-    async fn test_master_key() -> Result<()> {
+    #[test]
+    fn test_master_key() -> Result<()> {
         // Test out the master key
         let mkey = MasterKey::test_key();
         let encrypted = mkey.encrypt("hello".as_bytes())?;

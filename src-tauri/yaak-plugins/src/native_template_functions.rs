@@ -5,9 +5,8 @@ use crate::events::{
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use std::collections::HashMap;
-use tauri::{AppHandle, Manager, Runtime};
-use tokio::sync::Mutex;
-use yaak_crypto::manager::EncryptionManager;
+use tauri::{AppHandle, Runtime};
+use yaak_crypto::manager::EncryptionManagerExt;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result;
 
@@ -32,7 +31,7 @@ pub(crate) fn template_function_secure() -> TemplateFunction {
     }
 }
 
-pub(crate) async fn template_function_secure_run<R: Runtime>(
+pub(crate) fn template_function_secure_run<R: Runtime>(
     app_handle: &AppHandle<R>,
     args: HashMap<String, String>,
     window_context: &PluginWindowContext,
@@ -49,17 +48,15 @@ pub(crate) async fn template_function_secure_run<R: Runtime>(
 
             let value = match value.strip_prefix("YENC_") {
                 None => {
-                    return Err(RenderError("Could not decrypt non-encrypted value".to_string()))
+                    return Err(RenderError("Could not decrypt non-encrypted value".to_string()));
                 }
                 Some(v) => v,
             };
 
             let value = BASE64_STANDARD.decode(&value).unwrap();
-            let crypto_manager = &*app_handle.state::<Mutex<EncryptionManager>>();
-            let crypto_manager = crypto_manager.lock().await;
-            let r = crypto_manager
+            let r = app_handle
+                .crypto()
                 .decrypt(&wid, value.as_slice())
-                .await
                 .map_err(|e| RenderError(e.to_string()))?;
             let r = String::from_utf8(r).map_err(|e| RenderError(e.to_string()))?;
             Ok(r)
@@ -68,7 +65,7 @@ pub(crate) async fn template_function_secure_run<R: Runtime>(
     }
 }
 
-pub(crate) async fn template_function_secure_transform_arg<R: Runtime>(
+pub(crate) fn template_function_secure_transform_arg<R: Runtime>(
     app_handle: &AppHandle<R>,
     window_context: &PluginWindowContext,
     arg_name: &str,
@@ -84,7 +81,7 @@ pub(crate) async fn template_function_secure_transform_arg<R: Runtime>(
             ..
         } => {
             if arg_value.is_empty() {
-                return Ok("".to_string())
+                return Ok("".to_string());
             }
 
             if arg_value.starts_with("YENC_") {
@@ -92,11 +89,9 @@ pub(crate) async fn template_function_secure_transform_arg<R: Runtime>(
                 return Ok(arg_value.to_string());
             }
 
-            let crypto_manager = &*app_handle.state::<Mutex<EncryptionManager>>();
-            let crypto_manager = crypto_manager.lock().await;
-            let r = crypto_manager
+            let r = app_handle
+                .crypto()
                 .encrypt(&wid, arg_value.as_bytes())
-                .await
                 .map_err(|e| RenderError(e.to_string()))?;
             let r = BASE64_STANDARD.encode(r);
             Ok(format!("YENC_{}", r))

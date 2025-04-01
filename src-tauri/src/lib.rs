@@ -168,11 +168,11 @@ async fn cmd_grpc_reflect<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             &app_handle,
-            &WindowContext::from_window(&window),
+            &PluginWindowContext::new(&window),
             RenderPurpose::Send,
         ),
     )
-        .await?;
+    .await?;
 
     let uri = safe_uri(&req.url);
 
@@ -1219,12 +1219,11 @@ async fn cmd_delete_all_http_responses<R: Runtime>(
 #[tauri::command]
 async fn cmd_get_workspace_meta<R: Runtime>(
     app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
     workspace_id: &str,
 ) -> YaakResult<WorkspaceMeta> {
     let db = app_handle.db();
     let workspace = db.get_workspace(workspace_id)?;
-    Ok(db.get_or_create_workspace_meta(&workspace.id, &UpdateSource::from_window(&window))?)
+    Ok(db.get_or_create_workspace_meta(&workspace.id)?)
 }
 
 #[tauri::command]

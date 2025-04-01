@@ -26,7 +26,6 @@ impl<'a> DbContext<'a> {
     pub fn get_or_create_workspace_meta(
         &self,
         workspace_id: &str,
-        source: &UpdateSource,
     ) -> Result<WorkspaceMeta> {
         let workspace_meta = self.get_workspace_meta(workspace_id);
         if let Some(workspace_meta) = workspace_meta {
@@ -38,7 +37,7 @@ impl<'a> DbContext<'a> {
             ..Default::default()
         };
 
-        self.upsert_workspace_meta(&workspace_meta, source)
+        self.upsert_workspace_meta(&workspace_meta, &UpdateSource::Background)
     }
 
     pub fn upsert_workspace_meta(

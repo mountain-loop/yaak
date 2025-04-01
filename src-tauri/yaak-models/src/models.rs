@@ -3,10 +3,10 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::util::{generate_prefixed_id, UpdateSource};
+use crate::util::{UpdateSource, generate_prefixed_id};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
-use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};
+use sea_query::{IntoIden, IntoTableRef, SimpleExpr, enum_def};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -293,6 +293,13 @@ impl Workspace {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct EncryptedKey {
+    pub encrypted_key: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
@@ -304,6 +311,7 @@ pub struct WorkspaceMeta {
     pub workspace_id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub encryption_key: Option<EncryptedKey>,
     pub setting_sync_dir: Option<String>,
 }
 
@@ -333,6 +341,7 @@ impl UpsertModelInfo for WorkspaceMeta {
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (WorkspaceId, self.workspace_id.into()),
+            (EncryptionKey, self.encryption_key.map(|e| serde_json::to_string(&e).unwrap()).into()),
             (SettingSyncDir, self.setting_sync_dir.into()),
         ])
     }
@@ -340,6 +349,7 @@ impl UpsertModelInfo for WorkspaceMeta {
     fn update_columns() -> Vec<impl IntoIden> {
         vec![
             WorkspaceMetaIden::UpdatedAt,
+            WorkspaceMetaIden::EncryptionKey,
             WorkspaceMetaIden::SettingSyncDir,
         ]
     }
@@ -348,12 +358,14 @@ impl UpsertModelInfo for WorkspaceMeta {
     where
         Self: Sized,
     {
+        let encryption_key: Option<String> = row.get("encryption_key")?;
         Ok(Self {
             id: row.get("id")?,
             workspace_id: row.get("workspace_id")?,
             model: row.get("model")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
+            encryption_key: encryption_key.map(|e| serde_json::from_str(&e).unwrap()),
             setting_sync_dir: row.get("setting_sync_dir")?,
         })
     }
@@ -1919,13 +1931,18 @@ impl<'de> Deserialize<'de> for AnyModel {
             Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
             Some(m) if m == "plugin" => AnyModel::Plugin(fv(value).unwrap()),
             Some(m) if m == "settings" => AnyModel::Settings(fv(value).unwrap()),
-            Some(m) if m == "websocket_connection" => AnyModel::WebsocketConnection(fv(value).unwrap()),
+            Some(m) if m == "websocket_connection" => {
+                AnyModel::WebsocketConnection(fv(value).unwrap())
+            }
             Some(m) if m == "websocket_event" => AnyModel::WebsocketEvent(fv(value).unwrap()),
             Some(m) if m == "websocket_request" => AnyModel::WebsocketRequest(fv(value).unwrap()),
             Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
             Some(m) if m == "workspace_meta" => AnyModel::WorkspaceMeta(fv(value).unwrap()),
             Some(m) => {
-                return Err(serde::de::Error::custom(format!("Failed to deserialize AnyModel {}", m)));
+                return Err(serde::de::Error::custom(format!(
+                    "Failed to deserialize AnyModel {}",
+                    m
+                )));
             }
             None => {
                 return Err(serde::de::Error::custom("Missing or invalid model"));

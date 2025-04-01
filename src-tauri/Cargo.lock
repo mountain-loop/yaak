@@ -8063,12 +8063,8 @@ dependencies = [
  "base85",
  "keyring",
  "log",
- "md5",
- "serde",
- "serde_json",
  "tauri",
  "thiserror 2.0.12",
- "tokio",
  "yaak-models",
 ]
 
