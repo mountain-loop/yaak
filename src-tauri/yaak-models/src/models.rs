@@ -209,6 +209,7 @@ pub struct Workspace {
     pub updated_at: NaiveDateTime,
     pub name: String,
     pub description: String,
+    pub encryption_key_challenge: Option<String>,
 
     // Settings
     #[serde(default = "default_true")]
@@ -245,6 +246,7 @@ impl UpsertModelInfo for Workspace {
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (Name, self.name.trim().into()),
             (Description, self.description.into()),
+            (EncryptionKeyChallenge, self.encryption_key_challenge.into()),
             (SettingFollowRedirects, self.setting_follow_redirects.into()),
             (SettingRequestTimeout, self.setting_request_timeout.into()),
             (SettingValidateCertificates, self.setting_validate_certificates.into()),
@@ -256,6 +258,7 @@ impl UpsertModelInfo for Workspace {
             WorkspaceIden::UpdatedAt,
             WorkspaceIden::Name,
             WorkspaceIden::Description,
+            WorkspaceIden::EncryptionKeyChallenge,
             WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingFollowRedirects,
             WorkspaceIden::SettingRequestTimeout,
@@ -274,22 +277,11 @@ impl UpsertModelInfo for Workspace {
             updated_at: row.get("updated_at")?,
             name: row.get("name")?,
             description: row.get("description")?,
+            encryption_key_challenge: row.get("encryption_key_challenge")?,
             setting_follow_redirects: row.get("setting_follow_redirects")?,
             setting_request_timeout: row.get("setting_request_timeout")?,
             setting_validate_certificates: row.get("setting_validate_certificates")?,
         })
-    }
-}
-
-impl Workspace {
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            model: "workspace".to_string(),
-            setting_validate_certificates: true,
-            setting_follow_redirects: true,
-            ..Default::default()
-        }
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::db_context::DbContext;
+use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::util::ModelPayload;
 use r2d2::Pool;
@@ -96,9 +97,12 @@ impl QueryManager {
         func(&db_context)
     }
 
-    pub fn with_tx<F, T>(&self, func: F) -> Result<T>
+    pub fn with_tx<T, E>(
+        &self,
+        func: impl FnOnce(&DbContext) -> std::result::Result<T, E>,
+    ) -> std::result::Result<T, E>
     where
-        F: FnOnce(&DbContext) -> Result<T>,
+        E: From<crate::error::Error>,
     {
         let mut conn = self
             .pool
@@ -117,11 +121,13 @@ impl QueryManager {
 
         match func(&db_context) {
             Ok(val) => {
-                tx.commit()?;
+                tx.commit()
+                    .map_err(|e| GenericError(format!("Failed to commit transaction {e:?}")))?;
                 Ok(val)
             }
             Err(e) => {
-                tx.rollback()?;
+                tx.rollback()
+                    .map_err(|e| GenericError(format!("Failed to rollback transaction {e:?}")))?;
                 Err(e)
             }
         }

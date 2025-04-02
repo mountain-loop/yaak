@@ -76,6 +76,6 @@ export type WebsocketMessageType = "text" | "binary";
 
 export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
-export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
+export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
 
 export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, encryptionKey: EncryptedKey | null, settingSyncDir: string | null, };
