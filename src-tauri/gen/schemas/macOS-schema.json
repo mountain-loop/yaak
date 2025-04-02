@@ -5455,6 +5455,21 @@
         {
           "description": "Default permissions for the plugin",
           "type": "string",
+          "const": "yaak-crypto:default"
+        },
+        {
+          "description": "Enables the enable_encryption command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-crypto:allow-enable-encryption"
+        },
+        {
+          "description": "Denies the enable_encryption command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-crypto:deny-enable-encryption"
+        },
+        {
+          "description": "Default permissions for the plugin",
+          "type": "string",
           "const": "yaak-git:default"
         },
         {

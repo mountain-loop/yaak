@@ -1,9 +1,11 @@
 extern crate core;
 
+use crate::commands::enable_encryption;
 use crate::manager::EncryptionManager;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{generate_handler, Manager, Runtime};
 
+mod commands;
 pub mod encryption;
 pub mod error;
 pub mod manager;
@@ -12,7 +14,7 @@ mod workspace_key;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-crypto")
-        .invoke_handler(generate_handler![])
+        .invoke_handler(generate_handler![enable_encryption])
         .setup(|app, _api| {
             app.manage(EncryptionManager::new(app.app_handle()));
             Ok(())

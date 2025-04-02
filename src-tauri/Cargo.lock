@@ -8063,7 +8063,10 @@ dependencies = [
  "base85",
  "keyring",
  "log",
+ "serde",
+ "serde_json",
  "tauri",
+ "tauri-plugin",
  "thiserror 2.0.12",
  "yaak-models",
 ]

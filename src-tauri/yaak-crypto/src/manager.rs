@@ -1,10 +1,10 @@
-use crate::error::Error::GenericError;
+use crate::error::Error::{GenericError, MissingWorkspaceKey};
 use crate::error::Result;
 use crate::master_key::MasterKey;
 use crate::workspace_key::WorkspaceKey;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use log::info;
+use log::{info, warn};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, Runtime, State};
@@ -55,6 +55,34 @@ impl EncryptionManager {
         key.to_human()
     }
 
+    pub(crate) fn ensure_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceMeta> {
+        let db = self.query_manager.connect();
+        let workspace_meta = db.get_or_create_workspace_meta(workspace_id)?;
+
+        // Already exists
+        if let Some(_) = workspace_meta.encryption_key {
+            warn!("Tried to create workspace key when one already exists for {workspace_id}");
+            return Ok(workspace_meta);
+        }
+
+        let wkey = WorkspaceKey::create()?;
+
+        info!("Created workspace key for {workspace_id}");
+
+        let mut cache = self.cached_workspace_keys.lock().unwrap();
+        cache.insert(workspace_id.to_string(), wkey.clone());
+
+        let encrypted_key = BASE64_STANDARD.encode(self.get_master_key()?.encrypt(wkey.raw_key())?);
+        let encrypted_key = EncryptedKey { encrypted_key };
+        Ok(db.upsert_workspace_meta(
+            &WorkspaceMeta {
+                encryption_key: Some(encrypted_key.clone()),
+                ..workspace_meta
+            },
+            &UpdateSource::Background,
+        )?)
+    }
+
     fn get_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceKey> {
         {
             let cache = self.cached_workspace_keys.lock().unwrap();
@@ -67,33 +95,19 @@ impl EncryptionManager {
         let workspace_meta = db.get_or_create_workspace_meta(workspace_id)?;
 
         let key = match workspace_meta.encryption_key {
-            Some(k) => {
-                let mkey = self.get_master_key()?;
-                let decoded_key = BASE64_STANDARD
-                    .decode(k.encrypted_key)
-                    .map_err(|e| GenericError(format!("Failed to decode workspace key {e:?}")))?;
-                let raw_key = mkey.decrypt(decoded_key.as_slice())?;
-                info!("Got existing workspace key for {workspace_id}");
-                WorkspaceKey::from_raw_key(raw_key.as_slice())
-            }
-            None => {
-                let workspace_key = WorkspaceKey::create()?;
-                let encrypted_key = self.get_master_key()?.encrypt(workspace_key.raw_key())?;
-                let encrypted_key = BASE64_STANDARD.encode(encrypted_key);
-                let workspace_meta = WorkspaceMeta {
-                    encryption_key: Some(EncryptedKey { encrypted_key }),
-                    ..workspace_meta
-                };
-                db.upsert_workspace_meta(&workspace_meta, &UpdateSource::Background)?;
-                info!("Created workspace key for {workspace_id}");
-                workspace_key
-            }
+            None => return Err(MissingWorkspaceKey(workspace_id.to_string())),
+            Some(k) => k,
         };
 
-        let mut cache = self.cached_workspace_keys.lock().unwrap();
-        cache.insert(workspace_id.to_string(), key.clone());
+        let mkey = self.get_master_key()?;
+        let decoded_key = BASE64_STANDARD
+            .decode(key.encrypted_key)
+            .map_err(|e| GenericError(format!("Failed to decode workspace key {e:?}")))?;
+        let raw_key = mkey.decrypt(decoded_key.as_slice())?;
+        info!("Got existing workspace key for {workspace_id}");
+        let wkey = WorkspaceKey::from_raw_key(raw_key.as_slice());
 
-        Ok(key)
+        Ok(wkey)
     }
 
     fn get_master_key(&self) -> Result<MasterKey> {

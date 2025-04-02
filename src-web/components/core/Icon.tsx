@@ -134,7 +134,7 @@ export const Icon = memo(function Icon({
         size === 'xs' && 'h-3 w-3',
         size === '2xs' && 'h-2.5 w-2.5',
         color === 'default' && 'inherit',
-        color === 'danger' && 'text-danger',
+        color === 'danger' && 'text-danger!',
         color === 'warning' && 'text-warning',
         color === 'notice' && 'text-notice',
         color === 'info' && 'text-info',

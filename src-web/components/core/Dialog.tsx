@@ -75,6 +75,7 @@ export function Dialog({
             'relative bg-surface pointer-events-auto',
             'rounded-lg',
             'border border-border-subtle shadow-lg shadow-[rgba(0,0,0,0.1)]',
+            'min-h-[10rem]',
             'max-w-[calc(100vw-5rem)] max-h-[calc(100vh-5rem)]',
             size === 'sm' && 'w-[28rem]',
             size === 'md' && 'w-[45rem]',
