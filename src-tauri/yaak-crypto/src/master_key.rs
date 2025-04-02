@@ -11,6 +11,8 @@ pub(crate) struct MasterKey {
     key: Key<Aes256Gcm>,
 }
 
+const MASTER_KEY_ID: &str = "master";
+
 impl MasterKey {
     pub(crate) fn get_or_create(user: &str) -> Result<Self> {
         let entry = Entry::new("app.yaak.desktop.EncryptionKey", user)?;
@@ -36,11 +38,11 @@ impl MasterKey {
     }
 
     pub(crate) fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
-        encrypt_data(data, &self.key)
+        encrypt_data(data, &self.key, MASTER_KEY_ID)
     }
 
     pub(crate) fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
-        decrypt_data(data, &self.key)
+        decrypt_data(data, &self.key, MASTER_KEY_ID)
     }
 
     #[cfg(test)]

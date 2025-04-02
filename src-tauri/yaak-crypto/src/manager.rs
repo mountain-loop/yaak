@@ -65,7 +65,7 @@ impl EncryptionManager {
             return Ok(workspace_meta);
         }
 
-        let wkey = WorkspaceKey::create()?;
+        let wkey = WorkspaceKey::create(workspace_id)?;
 
         info!("Created workspace key for {workspace_id}");
 
@@ -95,7 +95,7 @@ impl EncryptionManager {
         let workspace_meta = db.get_or_create_workspace_meta(workspace_id)?;
 
         let key = match workspace_meta.encryption_key {
-            None => return Err(MissingWorkspaceKey(workspace_id.to_string())),
+            None => return Err(MissingWorkspaceKey),
             Some(k) => k,
         };
 
@@ -105,7 +105,7 @@ impl EncryptionManager {
             .map_err(|e| GenericError(format!("Failed to decode workspace key {e:?}")))?;
         let raw_key = mkey.decrypt(decoded_key.as_slice())?;
         info!("Got existing workspace key for {workspace_id}");
-        let wkey = WorkspaceKey::from_raw_key(raw_key.as_slice());
+        let wkey = WorkspaceKey::from_raw_key(workspace_id, raw_key.as_slice());
 
         Ok(wkey)
     }

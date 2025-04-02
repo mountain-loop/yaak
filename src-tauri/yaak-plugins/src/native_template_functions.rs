@@ -2,8 +2,8 @@ use crate::events::{
     FormInputBase, FormInputSecureText, FormInputTemplateFunction, PluginWindowContext,
     TemplateFunction, TemplateFunctionArg,
 };
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use std::collections::HashMap;
 use tauri::{AppHandle, Runtime};
 use yaak_crypto::manager::EncryptionManagerExt;
@@ -54,10 +54,13 @@ pub(crate) fn template_function_secure_run<R: Runtime>(
             };
 
             let value = BASE64_STANDARD.decode(&value).unwrap();
-            let r = app_handle
-                .crypto()
-                .decrypt(&wid, value.as_slice())
-                .map_err(|e| RenderError(e.to_string()))?;
+            let r = match app_handle.crypto().decrypt(&wid, value.as_slice()) {
+                Ok(r) => Ok(r),
+                Err(yaak_crypto::error::Error::InvalidKey) => {
+                    Err(RenderError("Can't decrypt data from a different workspace".into()))
+                }
+                Err(e) => Err(RenderError(e.to_string())),
+            }?;
             let r = String::from_utf8(r).map_err(|e| RenderError(e.to_string()))?;
             Ok(r)
         }

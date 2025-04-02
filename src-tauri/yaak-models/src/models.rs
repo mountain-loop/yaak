@@ -3,10 +3,10 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::util::{UpdateSource, generate_prefixed_id};
+use crate::util::{generate_prefixed_id, UpdateSource};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
-use sea_query::{IntoIden, IntoTableRef, SimpleExpr, enum_def};
+use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
