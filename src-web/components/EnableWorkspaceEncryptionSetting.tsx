@@ -9,13 +9,16 @@ import { InlineCode } from './core/InlineCode';
 import { HStack, VStack } from './core/Stacks';
 
 interface Props {
-  hide: () => void;
   workspaceMeta: WorkspaceMeta;
 }
 
-export function EnableWorkspaceEncryptionDialog({ workspaceMeta }: Props) {
+export function EnableWorkspaceEncryptionSetting({ workspaceMeta }: Props) {
   const [key, setKey] = useState<string | null>(null);
   const copy = useCopy({ disableToast: true });
+
+  if (workspaceMeta.encryptionKey) {
+    return <div>Encryption is enabled</div>
+  }
 
   return (
     <VStack space={3} alignItems="start">
@@ -36,7 +39,8 @@ export function EnableWorkspaceEncryptionDialog({ workspaceMeta }: Props) {
         </div>
       ) : (
         <Button
-          color="primary"
+          color="secondary"
+          size="sm"
           onClick={async () => {
             const newKey = await enableEncryption(workspaceMeta.workspaceId);
             setKey(newKey);

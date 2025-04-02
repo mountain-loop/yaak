@@ -48,7 +48,12 @@ export function SelectFile({
   return (
     <HStack className="group relative justify-stretch overflow-hidden">
       <Button
-        className={classNames(className, 'font-mono text-xs rtl mr-1.5', inline && 'w-full')}
+        className={classNames(
+          className,
+          'rtl mr-1.5',
+          inline && 'w-full',
+            filePath && inline && 'font-mono text-xs',
+        )}
         color="secondary"
         onClick={handleClick}
         size={size}
@@ -71,9 +76,10 @@ export function SelectFile({
           )}
           <div
             className={classNames(
-              'font-mono truncate rtl pl-1.5 pr-3 text-text',
-              size === 'xs' && 'text-xs',
-              size === 'sm' && 'text-sm',
+              'truncate rtl pl-1.5 pr-3 text-text',
+              filePath && 'font-mono',
+              size === 'xs' && filePath && 'text-xs',
+              size === 'sm' && filePath && 'text-sm',
             )}
           >
             {rtlEscapeChar}

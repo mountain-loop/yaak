@@ -344,7 +344,7 @@ function SetupSyncDropdown({ workspaceMeta }: { workspaceMeta: WorkspaceMeta }) 
           label: 'Open Workspace Settings',
           leftSlot: <Icon icon="settings" />,
           onSelect() {
-            openWorkspaceSettings.mutate({ openSyncMenu: true });
+            openWorkspaceSettings.mutate();
           },
         },
         { type: 'separator' },

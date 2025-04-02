@@ -105,8 +105,9 @@ pub struct WorkspaceExport {
     pub resources: BatchUpsertResult,
 }
 
-#[derive(Default, Debug, Deserialize, Serialize)]
+#[derive(Default, Debug, Deserialize, Serialize, TS)]
 #[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
 pub struct BatchUpsertResult {
     pub workspaces: Vec<Workspace>,
     pub environments: Vec<Environment>,

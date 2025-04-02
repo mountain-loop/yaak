@@ -78,9 +78,9 @@ struct AppMetaData {
 }
 
 #[tauri::command]
-async fn cmd_metadata(app_handle: AppHandle) -> Result<AppMetaData, ()> {
-    let app_data_dir = app_handle.path().app_data_dir().unwrap();
-    let app_log_dir = app_handle.path().app_log_dir().unwrap();
+async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
+    let app_data_dir = app_handle.path().app_data_dir()?;
+    let app_log_dir = app_handle.path().app_log_dir()?;
     Ok(AppMetaData {
         is_dev: is_dev(),
         version: app_handle.package_info().version.to_string(),
@@ -142,8 +142,8 @@ async fn cmd_dismiss_notification<R: Runtime>(
     window: WebviewWindow<R>,
     notification_id: &str,
     yaak_notifier: State<'_, Mutex<YaakNotifier>>,
-) -> Result<(), String> {
-    yaak_notifier.lock().await.seen(&window, notification_id).await
+) -> YaakResult<()> {
+    Ok(yaak_notifier.lock().await.seen(&window, notification_id).await?)
 }
 
 #[tauri::command]
@@ -753,7 +753,7 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_format_json(text: &str) -> Result<String, String> {
+async fn cmd_format_json(text: &str) -> YaakResult<String> {
     Ok(format_json(text, "  "))
 }
 
@@ -788,10 +788,10 @@ async fn cmd_filter_response<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_get_sse_events(file_path: &str) -> Result<Vec<ServerSentEvent>, String> {
-    let body = fs::read(file_path).map_err(|e| e.to_string())?;
+async fn cmd_get_sse_events(file_path: &str) -> YaakResult<Vec<ServerSentEvent>> {
+    let body = fs::read(file_path)?;
     let mut event_parser = EventParser::new();
-    event_parser.process_bytes(body.into()).map_err(|e| e.to_string())?;
+    event_parser.process_bytes(body.into())?;
 
     let mut events = Vec::new();
     while let Some(e) = event_parser.get_event() {
@@ -908,27 +908,24 @@ async fn cmd_import_data<R: Runtime>(
 async fn cmd_http_request_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> Result<Vec<GetHttpRequestActionsResponse>, String> {
-    plugin_manager.get_http_request_actions(&window).await.map_err(|e| e.to_string())
+) -> YaakResult<Vec<GetHttpRequestActionsResponse>> {
+    Ok(plugin_manager.get_http_request_actions(&window).await?)
 }
 
 #[tauri::command]
 async fn cmd_template_functions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> Result<Vec<GetTemplateFunctionsResponse>, String> {
-    plugin_manager.get_template_functions(&window).await.map_err(|e| e.to_string())
+) -> YaakResult<Vec<GetTemplateFunctionsResponse>> {
+    Ok(plugin_manager.get_template_functions(&window).await?)
 }
 
 #[tauri::command]
 async fn cmd_get_http_authentication_summaries<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> Result<Vec<GetHttpAuthenticationSummaryResponse>, String> {
-    let results = plugin_manager
-        .get_http_authentication_summaries(&window)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> YaakResult<Vec<GetHttpAuthenticationSummaryResponse>> {
+    let results = plugin_manager.get_http_authentication_summaries(&window).await?;
     Ok(results.into_iter().map(|(_, a)| a).collect())
 }
 
@@ -939,11 +936,10 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
     auth_name: &str,
     values: HashMap<String, JsonPrimitive>,
     request_id: &str,
-) -> Result<GetHttpAuthenticationConfigResponse, String> {
-    plugin_manager
+) -> YaakResult<GetHttpAuthenticationConfigResponse> {
+    Ok(plugin_manager
         .get_http_authentication_config(&window, auth_name, values, request_id)
-        .await
-        .map_err(|e| e.to_string())
+        .await?)
 }
 
 #[tauri::command]
@@ -951,8 +947,8 @@ async fn cmd_call_http_request_action<R: Runtime>(
     window: WebviewWindow<R>,
     req: CallHttpRequestActionRequest,
     plugin_manager: State<'_, PluginManager>,
-) -> Result<(), String> {
-    plugin_manager.call_http_request_action(&window, req).await.map_err(|e| e.to_string())
+) -> YaakResult<()> {
+    Ok(plugin_manager.call_http_request_action(&window, req).await?)
 }
 
 #[tauri::command]
@@ -963,11 +959,10 @@ async fn cmd_call_http_authentication_action<R: Runtime>(
     action_index: i32,
     values: HashMap<String, JsonPrimitive>,
     request_id: &str,
-) -> Result<(), String> {
-    plugin_manager
+) -> YaakResult<()> {
+    Ok(plugin_manager
         .call_http_authentication_action(&window, auth_name, action_index, values, request_id)
-        .await
-        .map_err(|e| e.to_string())
+        .await?)
 }
 
 #[tauri::command]
@@ -1156,11 +1151,8 @@ async fn cmd_reload_plugins<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> Result<(), String> {
-    plugin_manager
-        .initialize_all_plugins(&app_handle, &PluginWindowContext::new(&window))
-        .await
-        .map_err(|e| e.to_string())?;
+) -> YaakResult<()> {
+    plugin_manager.initialize_all_plugins(&app_handle, &PluginWindowContext::new(&window)).await?;
     Ok(())
 }
 
@@ -1233,13 +1225,13 @@ async fn cmd_new_child_window(
     label: &str,
     title: &str,
     inner_size: (f64, f64),
-) -> Result<(), String> {
+) -> YaakResult<()> {
     window::create_child_window(&parent_window, url, label, title, inner_size);
     Ok(())
 }
 
 #[tauri::command]
-async fn cmd_new_main_window(app_handle: AppHandle, url: &str) -> Result<(), String> {
+async fn cmd_new_main_window(app_handle: AppHandle, url: &str) -> YaakResult<()> {
     window::create_main_window(&app_handle, url);
     Ok(())
 }

@@ -14,7 +14,7 @@ import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import { HStack, VStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
-import { EnableWorkspaceEncryptionDialog } from './EnableWorkspaceEncryptionDialog';
+import { EnableWorkspaceEncryptionSetting } from './EnableWorkspaceEncryptionSetting';
 import { jotaiStore } from '../lib/jotai';
 import { ManageWorkspaceEncryptionDialog } from './ManageWorkspaceEncryptionDialog';
 
@@ -172,9 +172,7 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
                 showDialog({
                   id: 'enable-workspace-encryption',
                   title: 'Enable Workspace Encryption',
-                  render: ({ hide }) => (
-                    <EnableWorkspaceEncryptionDialog hide={hide} workspaceMeta={workspaceMeta} />
-                  ),
+                  render: () => <EnableWorkspaceEncryptionSetting workspaceMeta={workspaceMeta} />,
                 });
               }
             }}
