@@ -6,7 +6,8 @@ import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
-import { HStack } from './core/Stacks';
+import { Label } from './core/Label';
+import { HStack, VStack } from './core/Stacks';
 
 type Props = Omit<ButtonProps, 'type'> & {
   onChange: (value: { filePath: string | null; contentType: string | null }) => void;
@@ -15,6 +16,7 @@ type Props = Omit<ButtonProps, 'type'> & {
   inline?: boolean;
   noun?: string;
   help?: ReactNode;
+  label?: ReactNode;
 };
 
 // Special character to insert ltr text in rtl element
@@ -28,6 +30,7 @@ export function SelectFile({
   directory,
   noun,
   size = 'sm',
+  label,
   help,
   ...props
 }: Props) {
@@ -50,48 +53,55 @@ export function SelectFile({
   const selectOrChange = (filePath ? 'Change ' : 'Select ') + itemLabel;
 
   return (
-    <HStack className="group relative justify-stretch overflow-hidden">
-      <Button
-        className={classNames(
-          className,
-          'rtl mr-1.5',
-          inline && 'w-full',
-          filePath && inline && 'font-mono text-xs',
-        )}
-        color="secondary"
-        onClick={handleClick}
-        size={size}
-        {...props}
-      >
-        {rtlEscapeChar}
-        {inline ? filePath || selectOrChange : selectOrChange}
-      </Button>
-
-      {!inline && (
-        <>
-          {filePath && (
-            <IconButton
-              size={size}
-              variant="border"
-              icon="x"
-              title={'Unset ' + itemLabel}
-              onClick={handleClear}
-            />
-          )}
-          <div
-            className={classNames(
-              'truncate rtl pl-1.5 pr-3 text-text',
-              filePath && 'font-mono',
-              size === 'xs' && filePath && 'text-xs',
-              size === 'sm' && filePath && 'text-sm',
-            )}
-          >
-            {rtlEscapeChar}
-            {filePath ?? `No ${itemLabel.toLowerCase()} selected`}
-          </div>
-          {filePath == null && help && <IconTooltip content={help} />}
-        </>
+    <VStack space={1}>
+      {label && (
+        <Label htmlFor={null} help={help}>
+          {label}
+        </Label>
       )}
-    </HStack>
+      <HStack className="relative justify-stretch overflow-hidden">
+        <Button
+          className={classNames(
+            className,
+            'rtl mr-1.5',
+            inline && 'w-full',
+            filePath && inline && 'font-mono text-xs',
+          )}
+          color="secondary"
+          onClick={handleClick}
+          size={size}
+          {...props}
+        >
+          {rtlEscapeChar}
+          {inline ? filePath || selectOrChange : selectOrChange}
+        </Button>
+
+        {!inline && (
+          <>
+            {filePath && (
+              <IconButton
+                size={size}
+                variant="border"
+                icon="x"
+                title={'Unset ' + itemLabel}
+                onClick={handleClear}
+              />
+            )}
+            <div
+              className={classNames(
+                'truncate rtl pl-1.5 pr-3 text-text',
+                filePath && 'font-mono',
+                size === 'xs' && filePath && 'text-xs',
+                size === 'sm' && filePath && 'text-sm',
+              )}
+            >
+              {rtlEscapeChar}
+              {filePath ?? `No ${itemLabel.toLowerCase()} selected`}
+            </div>
+            {filePath == null && help && !label && <IconTooltip content={help} />}
+          </>
+        )}
+      </HStack>
+    </VStack>
   );
 }

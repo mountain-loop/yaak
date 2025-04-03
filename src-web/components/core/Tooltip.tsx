@@ -33,6 +33,7 @@ export function Tooltip({ children, content }: TooltipProps) {
     const styles: CSSProperties = {
       bottom: docRect.height - triggerRect.top,
       left: Math.max(0, triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2),
+      maxHeight: triggerRect.top,
     };
     setIsOpen(styles);
   };
@@ -73,16 +74,17 @@ export function Tooltip({ children, content }: TooltipProps) {
           aria-hidden={!isOpen}
           onMouseEnter={handleOpenImmediate}
           onMouseLeave={handleClose}
-          className="p-2 fixed z-50 text-sm transition-opacity"
+          className="p-2 fixed z-50 text-sm transition-opacity grid grid-rows-[minmax(0,1fr)]"
         >
-          <div className="bg-surface-highlight rounded-md px-3 py-2 z-50 border border-border relative max-w-xs">
-            <Triangle />
+          <div className="bg-surface-highlight rounded-md px-3 py-2 z-50 border border-border max-w-sm overflow-auto">
             {content}
           </div>
+          <Triangle className="text-border mb-2" />
         </div>
       </Portal>
       <button
         ref={triggerRef}
+        type="button"
         aria-describedby={isOpen ? id.current : undefined}
         className="flex-grow-0 inline-flex items-center"
         onClick={handleToggleImmediate}
@@ -98,15 +100,29 @@ export function Tooltip({ children, content }: TooltipProps) {
   );
 }
 
-function Triangle() {
+function Triangle({ className }: { className?: string }) {
   return (
-    <span
+    <svg
       aria-hidden
+      viewBox="0 0 30 10"
+      preserveAspectRatio="none"
+      shapeRendering="crispEdges"
       className={classNames(
-        'bg-surface-highlight absolute border-border border-t border-l',
-        '-bottom-1 left-[calc(50%-0.2rem)]',
-        'w-[0.4rem] h-[0.4rem] rotate-[225deg]',
+        className,
+        'absolute z-50 border-t-[2px] border-surface-highlight',
+        '-bottom-[calc(0.5rem-3px)] left-[calc(50%-0.4rem)]',
+        'h-[0.5rem] w-[0.8rem]',
       )}
-    />
+    >
+      <polygon className="fill-surface-highlight" points="0,0 30,0 15,10" />
+      <path
+          d="M0 0 L15 9 L30 0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeLinejoin="miter"
+          vectorEffect="non-scaling-stroke"
+      />
+    </svg>
   );
 }

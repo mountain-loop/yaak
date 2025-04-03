@@ -102,7 +102,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       },
       {
         key: 'websocket_request.create',
-        label: 'Create Web Socket Request',
+        label: 'Create Websocket Request',
         onSelect: () => createRequestAndNavigate({ model: 'websocket_request', workspaceId }),
       },
       {
@@ -264,7 +264,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     const requestGroup: CommandPaletteGroup = {
       key: 'requests',
-      label: 'Requests',
+      label: 'Switch Request',
       items: [],
     };
 
@@ -290,7 +290,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     const environmentGroup: CommandPaletteGroup = {
       key: 'environments',
-      label: 'Environments',
+      label: 'Switch Environment',
       items: [],
     };
 
@@ -307,7 +307,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     const workspaceGroup: CommandPaletteGroup = {
       key: 'workspaces',
-      label: 'Workspaces',
+      label: 'Switch Workspace',
       items: [],
     };
 

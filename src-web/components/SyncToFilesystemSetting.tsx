@@ -43,9 +43,9 @@ export function SyncToFilesystemSetting({
 
       <SelectFile
         directory
+        label="Local directory sync"
         size="xs"
         noun="Directory"
-        variant="border"
         help="Sync data to a folder for backup and Git integration."
         filePath={value.filePath}
         onChange={async ({ filePath }) => {

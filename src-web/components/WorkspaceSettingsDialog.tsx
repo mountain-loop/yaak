@@ -4,15 +4,13 @@ import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { router } from '../lib/router';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { Heading } from './core/Heading';
-import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
 import { Input } from './core/Input';
 import { Separator } from './core/Separator';
 import { VStack } from './core/Stacks';
-import { EnableWorkspaceEncryptionSetting } from './EnableWorkspaceEncryptionSetting';
 import { MarkdownEditor } from './MarkdownEditor';
 import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
+import { WorkspaceEncryptionSetting } from './WorkspaceEncryptionSetting';
 
 interface Props {
   workspaceId: string | null;
@@ -59,32 +57,19 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
       />
 
       <VStack space={3} className="mt-3 w-full" alignItems="start">
+        <WorkspaceEncryptionSetting size="xs" workspace={workspace} workspaceMeta={workspaceMeta} />
         <SyncToFilesystemSetting
           value={{ filePath: workspaceMeta.settingSyncDir }}
           onCreateNewWorkspace={hide}
           onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
         />
-        <VStack className="w-full" space={3}>
-          <Heading level={2}>
-            Encryption{' '}
-            <IconTooltip
-              content={
-                <>
-                  Use the <InlineCode>secure(...)</InlineCode> template function, or encrypt synced
-                  data and exports.
-                </>
-              }
-            />
-          </Heading>
-          <EnableWorkspaceEncryptionSetting workspace={workspace} workspaceMeta={workspaceMeta} />
-        </VStack>
         <Separator className="my-4" />
         <Button
           onClick={async () => {
             const didDelete = await deleteModelWithConfirm(workspace);
             if (didDelete) {
               hide(); // Only hide if actually deleted workspace
-              await router.navigate({ to: '/workspaces' });
+              await router.navigate({ to: '/' });
             }
           }}
           color="danger"

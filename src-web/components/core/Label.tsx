@@ -1,5 +1,6 @@
 import classNames from 'classnames';
-import type { HTMLAttributes } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
+import { IconTooltip } from './IconTooltip';
 
 export function Label({
   htmlFor,
@@ -8,16 +9,19 @@ export function Label({
   visuallyHidden,
   tags = [],
   required,
+  help,
   ...props
 }: HTMLAttributes<HTMLLabelElement> & {
-  htmlFor: string;
+  htmlFor: string | null;
   required?: boolean;
   tags?: string[];
   visuallyHidden?: boolean;
+  children: ReactNode;
+  help?: ReactNode;
 }) {
   return (
     <label
-      htmlFor={htmlFor}
+      htmlFor={htmlFor ?? undefined}
       className={classNames(
         className,
         visuallyHidden && 'sr-only',
@@ -35,6 +39,7 @@ export function Label({
           ({tag})
         </span>
       ))}
+      {help && <IconTooltip content={help} />}
     </label>
   );
 }

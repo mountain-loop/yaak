@@ -5,17 +5,22 @@ import { useEffect, useState } from 'react';
 import { createFastMutation } from '../hooks/useFastMutation';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { CopyIconButton } from './CopyIconButton';
+import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
+import { InlineCode } from './core/InlineCode';
+import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
+import { Prose } from './Prose';
 
 interface Props {
   workspaceMeta: WorkspaceMeta;
   workspace: Workspace;
+  size?: ButtonProps['size'];
 }
 
-export function EnableWorkspaceEncryptionSetting({ workspace, workspaceMeta }: Props) {
+export function WorkspaceEncryptionSetting({ workspace, workspaceMeta, size }: Props) {
   const [justEnabledEncryption, setJustEnabledEncryption] = useState<boolean>(false);
 
   if (workspace.encryptionKeyChallenge && workspaceMeta.encryptionKey == null) {
@@ -29,10 +34,38 @@ export function EnableWorkspaceEncryptionSetting({ workspace, workspaceMeta }: P
   }
 
   return (
-    <VStack space={3} alignItems="start">
+    <VStack space={1}>
+      <Label
+        htmlFor={null}
+        help={
+          <Prose>
+            <p>Enabling workspace encryption enabled the following features:</p>
+            <ul>
+              <li>
+                Use the <InlineCode>secure(...)</InlineCode> template function
+              </li>
+              <li>Store responses encrypted</li>
+              <li>Store cookies encrypted</li>
+              <li>Store auth tokens encrypted</li>
+              <li>
+                <span className="text-text-subtle">(optional)</span> Encrypt directory sync
+              </li>
+              <li>
+                <span className="text-text-subtle">(optional)</span> Encrypt data exports
+              </li>
+            </ul>
+            <p>
+              Encryption keys are unique per workspace and are stored encrypted, using a master key
+              from your OS keychain.
+            </p>
+          </Prose>
+        }
+      >
+        Workspace encryption
+      </Label>
       <Button
         color="secondary"
-        size="sm"
+        size={size}
         onClick={async () => {
           setJustEnabledEncryption(true);
           await enableEncryption(workspaceMeta.workspaceId);
