@@ -2,12 +2,13 @@ import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useMemo, useState } from 'react';
-import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateTokensToString } from '../hooks/useTemplateTokensToString';
 import { useToggle } from '../hooks/useToggle';
 import { showDialog } from '../lib/dialog';
+import { jotaiStore } from '../lib/jotai';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
@@ -15,8 +16,6 @@ import { InlineCode } from './core/InlineCode';
 import { HStack, VStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 import { WorkspaceEncryptionSetting } from './WorkspaceEncryptionSetting';
-import { jotaiStore } from '../lib/jotai';
-import { ManageWorkspaceEncryptionDialog } from './ManageWorkspaceEncryptionDialog';
 
 interface Props {
   templateFunction: TemplateFunction;
@@ -156,33 +155,21 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
             variant="border"
             color="secondary"
             onClick={async () => {
-              const workspace = jotaiStore.get(activeWorkspaceAtom);
               const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
-              if (workspaceMeta == null || workspace == null)
-                throw new Error('WorkspaceMeta does not exist');
+              if (workspaceMeta == null) throw new Error('WorkspaceMeta does not exist');
 
-              if (workspaceMeta.encryptionKey) {
-                showDialog({
-                  id: 'manage-workspace-encryption',
-                  title: 'Configure Workspace Encryption',
-                  size: 'sm',
-                  render: ({ hide }) => (
-                    <ManageWorkspaceEncryptionDialog hide={hide} workspaceMeta={workspaceMeta} />
-                  ),
-                });
-              } else if (workspaceMeta.encryptionKey == null) {
-                showDialog({
-                  id: 'enable-workspace-encryption',
-                  title: 'Enable Workspace Encryption',
-                  render: () => (
-                    <WorkspaceEncryptionSetting
-                      size="xs"
-                      workspace={workspace}
-                      workspaceMeta={workspaceMeta}
-                    />
-                  ),
-                });
-              }
+              showDialog({
+                id: 'workspace-encryption',
+                title: workspaceMeta.encryptionKey
+                  ? 'Workspace Encryption'
+                  : 'Setup Workspace Encryption',
+                size: 'sm',
+                render: () => (
+                  <div className="pb-2">
+                    <WorkspaceEncryptionSetting expanded />
+                  </div>
+                ),
+              });
             }}
           >
             Reveal Encryption Key

@@ -7,7 +7,7 @@ import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 import { Label } from './core/Label';
-import { HStack, VStack } from './core/Stacks';
+import { HStack } from './core/Stacks';
 
 type Props = Omit<ButtonProps, 'type'> & {
   onChange: (value: { filePath: string | null; contentType: string | null }) => void;
@@ -53,7 +53,7 @@ export function SelectFile({
   const selectOrChange = (filePath ? 'Change ' : 'Select ') + itemLabel;
 
   return (
-    <VStack space={1}>
+    <div>
       {label && (
         <Label htmlFor={null} help={help}>
           {label}
@@ -102,6 +102,6 @@ export function SelectFile({
           </>
         )}
       </HStack>
-    </VStack>
+    </div>
   );
 }
