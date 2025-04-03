@@ -1,6 +1,7 @@
 import classNames from 'classnames';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, ReactNode, KeyboardEvent } from 'react';
 import React, { useRef, useState } from 'react';
+import { generateId } from '../../lib/generateId';
 import { Portal } from '../Portal';
 import { Icon } from './Icon';
 
@@ -25,26 +26,42 @@ export function Tooltip({ children, content }: Props) {
 
   const handleOpenImmediate = () => {
     if (triggerRef.current == null || tooltipRef.current == null) return;
+    clearTimeout(showTimeout.current);
     setIsOpen(undefined);
     const triggerRect = triggerRef.current.getBoundingClientRect();
     const tooltipRect = tooltipRef.current.getBoundingClientRect();
     const docRect = document.documentElement.getBoundingClientRect();
     const styles: CSSProperties = {
       bottom: docRect.height - triggerRect.top,
-      left: triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2,
+      left: Math.max(0, triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2),
     };
     setIsOpen(styles);
   };
 
   const handleOpen = () => {
     clearTimeout(showTimeout.current);
-    showTimeout.current = setTimeout(handleOpenImmediate, 400);
+    showTimeout.current = setTimeout(handleOpenImmediate, 500);
   };
 
   const handleClose = () => {
-    clearTimeout(showTimeout.current)
+    clearTimeout(showTimeout.current);
     setIsOpen(undefined);
   };
+
+  const handleToggleImmediate = () => {
+    if (isOpen) handleClose();
+    else handleOpenImmediate();
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (isOpen && e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      handleClose();
+    }
+  };
+
+  const id = useRef(`tooltip-${generateId()}`);
 
   return (
     <>
@@ -52,12 +69,14 @@ export function Tooltip({ children, content }: Props) {
         <div
           ref={tooltipRef}
           style={isOpen ?? hiddenStyles}
+          id={id.current}
+          role="tooltip"
           aria-hidden={!isOpen}
           onMouseEnter={handleOpenImmediate}
           onMouseLeave={handleClose}
-          className="pb-2 fixed z-50 text-sm"
+          className="p-2 fixed z-50 text-sm"
         >
-          <div className="bg-surface-highlight rounded-md px-2 py-1 z-50 border border-border relative max-w-xs">
+          <div className="bg-surface-highlight rounded-md px-2 py-1 z-50 border border-border relative max-w-lg">
             <Triangle />
             {content}
           </div>
@@ -65,11 +84,14 @@ export function Tooltip({ children, content }: Props) {
       </Portal>
       <button
         ref={triggerRef}
+        aria-describedby={isOpen ? id.current : undefined}
         className="flex-grow-0 inline-flex items-center"
+        onClick={handleToggleImmediate}
         onMouseEnter={handleOpen}
         onMouseLeave={handleClose}
-        onFocus={handleOpen}
+        onFocus={handleOpenImmediate}
         onBlur={handleClose}
+        onKeyDown={handleKeyDown}
       >
         {children ?? <Icon icon="info" className="opacity-60 hover:opacity-100" />}
       </button>

@@ -4,7 +4,7 @@ import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
-import {Heading} from "./core/Heading";
+import { Heading } from './core/Heading';
 import { VStack } from './core/Stacks';
 import { Tooltip } from './core/Tooltip';
 import { SelectFile } from './SelectFile';
