@@ -5468,6 +5468,11 @@
           "const": "yaak-crypto:allow-reveal-workspace-key"
         },
         {
+          "description": "Enables the set_workspace_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-crypto:allow-set-workspace-key"
+        },
+        {
           "description": "Denies the enable_encryption command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-crypto:deny-enable-encryption"
@@ -5476,6 +5481,11 @@
           "description": "Denies the reveal_workspace_key command without any pre-configured scope.",
           "type": "string",
           "const": "yaak-crypto:deny-reveal-workspace-key"
+        },
+        {
+          "description": "Denies the set_workspace_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-crypto:deny-set-workspace-key"
         },
         {
           "description": "Default permissions for the plugin",

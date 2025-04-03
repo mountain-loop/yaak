@@ -1,5 +1,5 @@
 use crate::error::Error::{GenericError, MissingWorkspaceKey};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::master_key::MasterKey;
 use crate::workspace_key::WorkspaceKey;
 use base64::prelude::BASE64_STANDARD;
@@ -55,30 +55,21 @@ impl EncryptionManager {
         key.to_human()
     }
 
-    pub(crate) fn ensure_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceMeta> {
-        let r = self.query_manager.with_tx::<WorkspaceMeta, crate::error::Error>(|tx| {
+    pub(crate) fn set_workspace_key(
+        &self,
+        workspace_id: &str,
+        wkey: &WorkspaceKey,
+    ) -> Result<WorkspaceMeta> {
+        info!("Created workspace key for {workspace_id}");
+
+        let encrypted_key = BASE64_STANDARD.encode(self.get_master_key()?.encrypt(wkey.raw_key())?);
+        let encrypted_key = EncryptedKey { encrypted_key };
+        let encryption_key_challenge = wkey.encrypt(generate_id_of_length(50).as_bytes())?;
+        let encryption_key_challenge = Some(BASE64_STANDARD.encode(encryption_key_challenge));
+
+        let workspace_meta = self.query_manager.with_tx::<WorkspaceMeta, Error>(|tx| {
             let workspace = tx.get_workspace(workspace_id)?;
             let workspace_meta = tx.get_or_create_workspace_meta(workspace_id)?;
-
-            // Already exists
-            if let Some(_) = workspace_meta.encryption_key {
-                warn!("Tried to create workspace key when one already exists for {workspace_id}");
-                return Ok(workspace_meta);
-            }
-
-            let wkey = WorkspaceKey::create(workspace_id)?;
-
-            info!("Created workspace key for {workspace_id}");
-
-            let mut cache = self.cached_workspace_keys.lock().unwrap();
-            cache.insert(workspace_id.to_string(), wkey.clone());
-
-            let encrypted_key =
-                BASE64_STANDARD.encode(self.get_master_key()?.encrypt(wkey.raw_key())?);
-            let encrypted_key = EncryptedKey { encrypted_key };
-            let encryption_key_challenge = wkey.encrypt(generate_id_of_length(50).as_bytes())?;
-            let encryption_key_challenge = Some(BASE64_STANDARD.encode(encryption_key_challenge));
-
             tx.upsert_workspace(
                 &Workspace {
                     encryption_key_challenge,
@@ -87,18 +78,33 @@ impl EncryptionManager {
                 &UpdateSource::Background,
             )?;
 
-            let workspace_meta = tx.upsert_workspace_meta(
+            Ok(tx.upsert_workspace_meta(
                 &WorkspaceMeta {
                     encryption_key: Some(encrypted_key.clone()),
                     ..workspace_meta
                 },
                 &UpdateSource::Background,
-            )?;
-
-            Ok(workspace_meta)
+            )?)
         })?;
 
-        Ok(r)
+        let mut cache = self.cached_workspace_keys.lock().unwrap();
+        cache.insert(workspace_id.to_string(), wkey.clone());
+
+        Ok(workspace_meta)
+    }
+
+    pub(crate) fn ensure_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceMeta> {
+        let workspace_meta =
+            self.query_manager.connect().get_or_create_workspace_meta(workspace_id)?;
+
+        // Already exists
+        if let Some(_) = workspace_meta.encryption_key {
+            warn!("Tried to create workspace key when one already exists for {workspace_id}");
+            return Ok(workspace_meta);
+        }
+
+        let wkey = WorkspaceKey::create(workspace_id)?;
+        self.set_workspace_key(workspace_id, &wkey)
     }
 
     fn get_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceKey> {

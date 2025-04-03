@@ -4,6 +4,7 @@ Default permissions for the plugin
 
 - `allow-enable-encryption`
 - `allow-reveal-workspace-key`
+- `allow-set-workspace-key`
 
 ## Permission Table
 
@@ -62,6 +63,32 @@ Enables the reveal_workspace_key command without any pre-configured scope.
 <td>
 
 Denies the reveal_workspace_key command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-crypto:allow-set-workspace-key`
+
+</td>
+<td>
+
+Enables the set_workspace_key command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`yaak-crypto:deny-set-workspace-key`
+
+</td>
+<td>
+
+Denies the set_workspace_key command without any pre-configured scope.
 
 </td>
 </tr>

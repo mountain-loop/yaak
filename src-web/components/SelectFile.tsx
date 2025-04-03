@@ -1,9 +1,11 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import classNames from 'classnames';
 import mime from 'mime';
+import type { ReactNode } from 'react';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
+import { IconTooltip } from './core/IconTooltip';
 import { HStack } from './core/Stacks';
 
 type Props = Omit<ButtonProps, 'type'> & {
@@ -12,6 +14,7 @@ type Props = Omit<ButtonProps, 'type'> & {
   directory?: boolean;
   inline?: boolean;
   noun?: string;
+  help?: ReactNode;
 };
 
 // Special character to insert ltr text in rtl element
@@ -25,6 +28,7 @@ export function SelectFile({
   directory,
   noun,
   size = 'sm',
+  help,
   ...props
 }: Props) {
   const handleClick = async () => {
@@ -52,7 +56,7 @@ export function SelectFile({
           className,
           'rtl mr-1.5',
           inline && 'w-full',
-            filePath && inline && 'font-mono text-xs',
+          filePath && inline && 'font-mono text-xs',
         )}
         color="secondary"
         onClick={handleClick}
@@ -85,6 +89,7 @@ export function SelectFile({
             {rtlEscapeChar}
             {filePath ?? `No ${itemLabel.toLowerCase()} selected`}
           </div>
+          {filePath == null && help && <IconTooltip content={help} />}
         </>
       )}
     </HStack>

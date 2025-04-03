@@ -76,7 +76,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
               }
             />
           </Heading>
-          <EnableWorkspaceEncryptionSetting workspaceMeta={workspaceMeta} />
+          <EnableWorkspaceEncryptionSetting workspace={workspace} workspaceMeta={workspaceMeta} />
         </VStack>
         <Separator className="my-4" />
         <Button

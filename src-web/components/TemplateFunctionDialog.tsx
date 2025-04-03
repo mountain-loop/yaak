@@ -2,7 +2,7 @@ import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useMemo, useState } from 'react';
-import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateTokensToString } from '../hooks/useTemplateTokensToString';
@@ -156,8 +156,10 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
             variant="border"
             color="secondary"
             onClick={async () => {
+              const workspace = jotaiStore.get(activeWorkspaceAtom);
               const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
-              if (workspaceMeta == null) throw new Error('WorkspaceMeta does not exist');
+              if (workspaceMeta == null || workspace == null)
+                throw new Error('WorkspaceMeta does not exist');
 
               if (workspaceMeta.encryptionKey) {
                 showDialog({
@@ -172,7 +174,12 @@ export function TemplateFunctionDialog({ templateFunction, hide, initialTokens, 
                 showDialog({
                   id: 'enable-workspace-encryption',
                   title: 'Enable Workspace Encryption',
-                  render: () => <EnableWorkspaceEncryptionSetting workspaceMeta={workspaceMeta} />,
+                  render: () => (
+                    <EnableWorkspaceEncryptionSetting
+                      workspace={workspace}
+                      workspaceMeta={workspaceMeta}
+                    />
+                  ),
                 });
               }
             }}

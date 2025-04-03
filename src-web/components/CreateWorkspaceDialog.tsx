@@ -21,7 +21,6 @@ export function CreateWorkspaceDialog({ hide }: Props) {
     filePath: string | null;
     initGit?: boolean;
   }>({ filePath: null, initGit: false });
-
   return (
     <VStack
       as="form"
@@ -64,7 +63,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         onCreateNewWorkspace={hide}
         value={syncConfig}
       />
-      <Button type="submit" color="primary" className="ml-auto mt-3">
+      <Button type="submit" color="primary" className="w-full mt-3">
         Create Workspace
       </Button>
     </VStack>

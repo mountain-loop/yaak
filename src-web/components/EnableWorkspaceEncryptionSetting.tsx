@@ -1,19 +1,27 @@
-import { enableEncryption, revealWorkspaceKey } from '@yaakapp-internal/crypto';
-import type { WorkspaceMeta } from '@yaakapp-internal/models';
+import { enableEncryption, revealWorkspaceKey, setWorkspaceKey } from '@yaakapp-internal/crypto';
+import type { Workspace, WorkspaceMeta } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useEffect, useState } from 'react';
+import { createFastMutation } from '../hooks/useFastMutation';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { CopyIconButton } from './CopyIconButton';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
+import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
 
 interface Props {
   workspaceMeta: WorkspaceMeta;
+  workspace: Workspace;
 }
 
-export function EnableWorkspaceEncryptionSetting({ workspaceMeta }: Props) {
+export function EnableWorkspaceEncryptionSetting({ workspace, workspaceMeta }: Props) {
   const [justEnabledEncryption, setJustEnabledEncryption] = useState<boolean>(false);
+
+  if (workspace.encryptionKeyChallenge && workspaceMeta.encryptionKey == null) {
+    return <EnterWorkspaceKey workspaceMeta={workspaceMeta} />;
+  }
+
   if (workspaceMeta.encryptionKey) {
     return (
       <KeyRevealer defaultShow={justEnabledEncryption} workspaceId={workspaceMeta.workspaceId} />
@@ -33,6 +41,38 @@ export function EnableWorkspaceEncryptionSetting({ workspaceMeta }: Props) {
         Enable Encryption
       </Button>
     </VStack>
+  );
+}
+
+const setWorkspaceKeyMut = createFastMutation({
+  mutationKey: ['set-workspace-key'],
+  mutationFn: setWorkspaceKey,
+});
+
+function EnterWorkspaceKey({ workspaceMeta }: { workspaceMeta: WorkspaceMeta }) {
+  const [key, setKey] = useState<string>('');
+  return (
+    <div>
+      <HStack
+        as="form"
+        alignItems="end"
+        space={1.5}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setWorkspaceKeyMut.mutate({ workspaceId: workspaceMeta.workspaceId, key: key.trim() });
+        }}
+      >
+        <PlainInput
+          required
+          onChange={setKey}
+          label="Workspace encryption key"
+          placeholder="YK0000-111111-222222-333333-444444-AAAAAA-BBBBBB-CCCCCC-DDDDDD"
+        />
+        <Button variant="border" type="submit" color="secondary">
+          Submit
+        </Button>
+      </HStack>
+    </div>
   );
 }
 

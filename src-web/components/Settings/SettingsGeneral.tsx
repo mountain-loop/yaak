@@ -37,7 +37,7 @@ export function SettingsGeneral() {
           value={settings.updateChannel}
           onChange={(updateChannel) => patchModel(settings, { updateChannel })}
           options={[
-            { label: 'Stable (less frequent)', value: 'stable' },
+            { label: 'Stable', value: 'stable' },
             { label: 'Beta (more frequent)', value: 'beta' },
           ]}
         />
@@ -52,7 +52,7 @@ export function SettingsGeneral() {
       </div>
       <Select
         name="switchWorkspaceBehavior"
-        label="Switch Workspace Behavior"
+        label="Workspace Window Behavior"
         labelPosition="left"
         labelClassName="w-[14rem]"
         size="sm"
@@ -69,9 +69,9 @@ export function SettingsGeneral() {
           else await patchModel(settings, { openWorkspaceNewWindow: null });
         }}
         options={[
-          { label: 'Always Ask', value: 'ask' },
-          { label: 'Current Window', value: 'current' },
-          { label: 'New Window', value: 'new' },
+          { label: 'Always ask', value: 'ask' },
+          { label: 'Open in current window', value: 'current' },
+          { label: 'Open in new window', value: 'new' },
         ]}
       />
 
@@ -100,6 +100,7 @@ export function SettingsGeneral() {
 
         <Checkbox
           checked={workspace.settingValidateCertificates}
+          help="When disabled, skip validatation of server certificates, useful when interacting with self-signed certs."
           title="Validate TLS Certificates"
           onChange={(settingValidateCertificates) =>
             patchModel(workspace, { settingValidateCertificates })

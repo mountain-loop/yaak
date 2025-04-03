@@ -315,6 +315,16 @@
           "const": "deny-reveal-workspace-key"
         },
         {
+          "description": "Enables the set_workspace_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-workspace-key"
+        },
+        {
+          "description": "Denies the set_workspace_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-workspace-key"
+        },
+        {
           "description": "Default permissions for the plugin",
           "type": "string",
           "const": "default"
