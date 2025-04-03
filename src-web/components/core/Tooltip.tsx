@@ -1,12 +1,11 @@
 import classNames from 'classnames';
-import type { CSSProperties, ReactNode, KeyboardEvent } from 'react';
+import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import React, { useRef, useState } from 'react';
 import { generateId } from '../../lib/generateId';
 import { Portal } from '../Portal';
-import { Icon } from './Icon';
 
-interface Props {
-  children?: ReactNode;
+export interface TooltipProps {
+  children: ReactNode;
   content: ReactNode;
 }
 
@@ -18,7 +17,7 @@ const hiddenStyles: CSSProperties = {
   opacity: 0,
 };
 
-export function Tooltip({ children, content }: Props) {
+export function Tooltip({ children, content }: TooltipProps) {
   const [isOpen, setIsOpen] = useState<CSSProperties>();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -93,7 +92,7 @@ export function Tooltip({ children, content }: Props) {
         onBlur={handleClose}
         onKeyDown={handleKeyDown}
       >
-        {children ?? <Icon icon="info" className="opacity-60 hover:opacity-100" />}
+        {children}
       </button>
     </>
   );

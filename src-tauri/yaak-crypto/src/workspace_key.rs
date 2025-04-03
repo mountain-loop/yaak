@@ -28,7 +28,7 @@ impl WorkspaceKey {
             .join("-");
         Ok(with_separators)
     }
-
+    
     #[allow(dead_code)]
     pub(crate) fn from_human(workspace_id: &str, human_key: &str) -> Result<Self> {
         let without_prefix = human_key.strip_prefix(HUMAN_PREFIX).unwrap_or(human_key);
@@ -64,7 +64,7 @@ impl WorkspaceKey {
 
     #[cfg(test)]
     pub(crate) fn test_key(workspace_id: &str) -> Self {
-        Self::from_raw_key(workspace_id, "00000000000000000000000000000000".as_bytes())
+        Self::from_raw_key(workspace_id, "f1a2d4b3c8e799af1456be3478a4c3f2".as_bytes())
     }
 }
 
@@ -90,7 +90,7 @@ mod tests {
         assert_eq!(key.decrypt(encrypted.as_slice())?, "hello".as_bytes());
 
         let human = key.to_human()?;
-        assert_eq!(human, "YK60R3-0C1G60-R30C1G-60R30C-1G60R3-0C1G60-R30C1G-60R30C-1G60R0");
+        assert_eq!(human, "YKCRRP-2CK46H-H36RSR-CMVKJE-B1CRRK-8D9PC9-JK6D1Q-71GK8R-SKCRS0");
         assert_eq!(
             WorkspaceKey::from_human("wrk_1", &human)?.decrypt(encrypted.as_slice())?,
             "hello".as_bytes()

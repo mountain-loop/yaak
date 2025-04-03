@@ -10,3 +10,11 @@ pub(crate) async fn enable_encryption<R: Runtime>(
     window.crypto().ensure_workspace_key(workspace_id)?;
     Ok(window.crypto().reveal_workspace_key(workspace_id)?)
 }
+
+#[command]
+pub(crate) async fn reveal_workspace_key<R: Runtime>(
+    window: WebviewWindow<R>,
+    workspace_id: &str,
+) -> Result<String> {
+    Ok(window.crypto().reveal_workspace_key(workspace_id)?)
+}

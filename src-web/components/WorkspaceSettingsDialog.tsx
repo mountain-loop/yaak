@@ -5,11 +5,11 @@ import { router } from '../lib/router';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Heading } from './core/Heading';
+import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
 import { Input } from './core/Input';
 import { Separator } from './core/Separator';
 import { VStack } from './core/Stacks';
-import { Tooltip } from './core/Tooltip';
 import { EnableWorkspaceEncryptionSetting } from './EnableWorkspaceEncryptionSetting';
 import { MarkdownEditor } from './MarkdownEditor';
 import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
@@ -64,10 +64,10 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
           onCreateNewWorkspace={hide}
           onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
         />
-        <VStack space={3}>
+        <VStack className="w-full" space={3}>
           <Heading level={2}>
             Encryption{' '}
-            <Tooltip
+            <IconTooltip
               content={
                 <>
                   Use the <InlineCode>secure(...)</InlineCode> template function, or encrypt synced

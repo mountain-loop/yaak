@@ -305,6 +305,16 @@
           "const": "deny-enable-encryption"
         },
         {
+          "description": "Enables the reveal_workspace_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-reveal-workspace-key"
+        },
+        {
+          "description": "Denies the reveal_workspace_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-reveal-workspace-key"
+        },
+        {
           "description": "Default permissions for the plugin",
           "type": "string",
           "const": "default"

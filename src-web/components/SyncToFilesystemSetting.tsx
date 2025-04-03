@@ -5,8 +5,8 @@ import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { Heading } from './core/Heading';
+import { IconTooltip } from './core/IconTooltip';
 import { VStack } from './core/Stacks';
-import { Tooltip } from './core/Tooltip';
 import { SelectFile } from './SelectFile';
 
 export interface SyncToFilesystemSettingProps {
@@ -24,7 +24,8 @@ export function SyncToFilesystemSetting({
   return (
     <div className="w-full">
       <Heading level={2} className="text-auto select-auto">
-        Data directory <Tooltip content="Sync data to a folder for backup and Git integration." />
+        Data directory{' '}
+        <IconTooltip content="Sync data to a folder for backup and Git integration." />
       </Heading>
       <VStack className="my-2" space={3}>
         {isNonEmpty && (
