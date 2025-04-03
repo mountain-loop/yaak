@@ -6,9 +6,7 @@ import type {
   FormInputEditor,
   FormInputFile,
   FormInputHttpRequest,
-  FormInputSecureText,
   FormInputSelect,
-  FormInputTemplateFunction,
   FormInputText,
   JsonPrimitive,
 } from '@yaakapp-internal/plugins';
@@ -33,7 +31,7 @@ export const DYNAMIC_FORM_NULL_ARG = '__NULL__';
 const INPUT_SIZE = 'sm';
 
 interface Props<T> {
-  inputs: (FormInput | FormInputTemplateFunction)[] | undefined | null;
+  inputs: FormInput[] | undefined | null;
   onChange: (value: T) => void;
   data: T;
   autocompleteFunctions?: boolean;
@@ -119,18 +117,6 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 arg={input}
                 autocompleteFunctions={autocompleteFunctions || false}
                 autocompleteVariables={autocompleteVariables || false}
-                onChange={(v) => setDataAttr(input.name, v)}
-                value={
-                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')
-                }
-              />
-            );
-          case 'secure_text':
-            return (
-              <SecureTextArg
-                key={i}
-                stateKey={stateKey}
-                arg={input}
                 onChange={(v) => setDataAttr(input.name, v)}
                 value={
                   data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')
@@ -256,34 +242,6 @@ function TextArg({
       autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
       autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
-      stateKey={stateKey}
-      forceUpdateKey={stateKey}
-    />
-  );
-}
-
-function SecureTextArg({
-  arg,
-  onChange,
-  value,
-  stateKey,
-}: {
-  arg: FormInputSecureText;
-  value: string;
-  onChange: (v: string) => void;
-  stateKey: string;
-}) {
-  return (
-    <Input
-      name={arg.name}
-      onChange={onChange}
-      defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
-      required={!arg.optional}
-      disabled={arg.disabled}
-      type="password"
-      label={arg.label ?? arg.name}
-      size={INPUT_SIZE}
-      hideLabel={arg.label == null}
       stateKey={stateKey}
       forceUpdateKey={stateKey}
     />

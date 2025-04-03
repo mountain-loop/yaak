@@ -1,9 +1,9 @@
 use crate::events::{
-    FormInputBase, FormInputSecureText, FormInputTemplateFunction, PluginWindowContext,
-    TemplateFunction, TemplateFunctionArg,
+    FormInput, FormInputBase, FormInputText,
+    PluginWindowContext, TemplateFunction, TemplateFunctionArg,
 };
-use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use std::collections::HashMap;
 use tauri::{AppHandle, Runtime};
 use yaak_crypto::manager::EncryptionManagerExt;
@@ -13,21 +13,20 @@ use yaak_templates::error::Result;
 pub(crate) fn template_function_secure() -> TemplateFunction {
     TemplateFunction {
         name: "secure".to_string(),
-        description: Some("Securely store encrypted values".to_string()),
+        description: Some("Securely store encrypted text".to_string()),
         aliases: None,
-        args: vec![TemplateFunctionArg::Extra(
-            FormInputTemplateFunction::SecureText(FormInputSecureText {
+        args: vec![TemplateFunctionArg::FormInput(FormInput::Text(
+            FormInputText {
+                multi_line: Some(true),
+                password: Some(true),
                 base: FormInputBase {
                     name: "value".to_string(),
-                    hidden: None,
-                    optional: None,
                     label: Some("Value".to_string()),
-                    hide_label: None,
-                    default_value: None,
-                    disabled: None,
+                    ..Default::default()
                 },
-            }),
-        )],
+                ..Default::default()
+            },
+        ))],
     }
 }
 

@@ -6,12 +6,12 @@ import { keymap, placeholder as placeholderExt, tooltips } from '@codemirror/vie
 import { emacs } from '@replit/codemirror-emacs';
 import { vim } from '@replit/codemirror-vim';
 import { vscodeKeymap } from '@replit/codemirror-vscode-keymap';
-import type {EditorKeymap, EnvironmentVariable} from '@yaakapp-internal/models';
-import { settingsAtom} from '@yaakapp-internal/models';
+import type { EditorKeymap, EnvironmentVariable } from '@yaakapp-internal/models';
+import { settingsAtom } from '@yaakapp-internal/models';
 import type { EditorLanguage, TemplateFunction } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { EditorView } from 'codemirror';
-import {useAtomValue} from "jotai";
+import { useAtomValue } from 'jotai';
 import { md5 } from 'js-md5';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
@@ -26,11 +26,14 @@ import {
   useRef,
 } from 'react';
 import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
+import { activeWorkspaceMetaAtom } from '../../../hooks/useActiveWorkspace';
 import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { showDialog } from '../../../lib/dialog';
 import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
+import { jotaiStore } from '../../../lib/jotai';
+import { showSetupWorkspaceEncryptionDialog } from '../../../lib/showSetupWorkspaceEncryptionDialog';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
@@ -267,11 +270,16 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   const onClickFunction = useCallback(
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
       const initialTokens = await parseTemplate(tagValue);
+      const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
+      if (fn.name === 'secure' && workspaceMeta?.encryptionKey == null) {
+        return showSetupWorkspaceEncryptionDialog();
+      }
+
       showDialog({
-        id: 'template-function-'+Math.random(), // Allow multiple at once
+        id: 'template-function-' + Math.random(), // Allow multiple at once
         size: 'sm',
         title: <InlineCode>{fn.name}(…)</InlineCode>,
-          description: fn.description,
+        description: fn.description,
         render: ({ hide }) => (
           <TemplateFunctionDialog
             templateFunction={fn}

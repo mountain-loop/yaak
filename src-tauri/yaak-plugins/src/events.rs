@@ -516,7 +516,6 @@ pub struct TemplateFunction {
 #[ts(export, export_to = "gen_events.ts")]
 pub enum TemplateFunctionArg {
     FormInput(FormInput),
-    Extra(FormInputTemplateFunction),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -532,13 +531,6 @@ pub enum FormInput {
     Accordion(FormInputAccordion),
     Banner(FormInputBanner),
     Markdown(FormInputMarkdown),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case", tag = "type")]
-#[ts(export, export_to = "gen_events.ts")]
-pub enum FormInputTemplateFunction {
-    SecureText(FormInputSecureText),
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -571,14 +563,6 @@ pub struct FormInputBase {
 
     #[ts(optional)]
     pub disabled: Option<bool>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "gen_events.ts")]
-pub struct FormInputSecureText {
-    #[serde(flatten)]
-    pub base: FormInputBase,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

@@ -236,33 +236,6 @@ defaultValue?: string, disabled?: boolean, };
 
 export type FormInputMarkdown = { content: string, hidden?: boolean, };
 
-export type FormInputSecureText = { 
-/**
- * The name of the input. The value will be stored at this object attribute in the resulting data
- */
-name: string, 
-/**
- * Whether this input is visible for the given configuration. Use this to
- * make branching forms.
- */
-hidden?: boolean, 
-/**
- * Whether the user must fill in the argument
- */
-optional?: boolean, 
-/**
- * The label of the input
- */
-label?: string, 
-/**
- * Visually hide the label of the input
- */
-hideLabel?: boolean, 
-/**
- * The default value
- */
-defaultValue?: string, disabled?: boolean, };
-
 export type FormInputSelect = { 
 /**
  * The options that will be available in the select input
@@ -296,8 +269,6 @@ defaultValue?: string, disabled?: boolean, };
 
 export type FormInputSelectOption = { label: string, value: string, };
 
-export type FormInputTemplateFunction = { "type": "secure_text" } & FormInputSecureText;
-
 export type FormInputText = { 
 /**
  * Placeholder for the text input
@@ -310,7 +281,7 @@ password?: boolean,
 /**
  * Whether to allow newlines in the input, like a <textarea/>
  */
-multiLine?: boolean, completionOptions?: Array<GenericCompletionOption>, 
+multiLine?: boolean, completionOptions?: Array<GenericCompletionOption>, disableTemplating?: boolean, 
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
@@ -429,7 +400,7 @@ aliases?: Array<string>, args: Array<TemplateFunctionArg>, };
 /**
  * Similar to FormInput, but contains
  */
-export type TemplateFunctionArg = FormInput | FormInputTemplateFunction;
+export type TemplateFunctionArg = FormInput;
 
 export type TemplateRenderRequest = { data: JsonValue, purpose: RenderPurpose, };
 

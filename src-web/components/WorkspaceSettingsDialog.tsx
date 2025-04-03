@@ -57,7 +57,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
       />
 
       <VStack space={3} className="mt-3 w-full" alignItems="start">
-        <WorkspaceEncryptionSetting size="xs" workspace={workspace} workspaceMeta={workspaceMeta} />
+        <WorkspaceEncryptionSetting size="xs" />
         <SyncToFilesystemSetting
           value={{ filePath: workspaceMeta.settingSyncDir }}
           onCreateNewWorkspace={hide}
