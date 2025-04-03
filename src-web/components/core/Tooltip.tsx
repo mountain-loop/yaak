@@ -74,9 +74,9 @@ export function Tooltip({ children, content }: Props) {
           aria-hidden={!isOpen}
           onMouseEnter={handleOpenImmediate}
           onMouseLeave={handleClose}
-          className="p-2 fixed z-50 text-sm"
+          className="p-2 fixed z-50 text-sm transition-opacity"
         >
-          <div className="bg-surface-highlight rounded-md px-2 py-1 z-50 border border-border relative max-w-lg">
+          <div className="bg-surface-highlight rounded-md px-3 py-2 z-50 border border-border relative max-w-xs">
             <Triangle />
             {content}
           </div>
