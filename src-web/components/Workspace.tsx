@@ -24,7 +24,7 @@ import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
-import { duplicateRequestAndNavigate } from '../lib/deleteRequestAndNavigate';
+import { duplicateRequestAndNavigate } from '../lib/duplicateRequestAndNavigate';
 import { jotaiStore } from '../lib/jotai';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';

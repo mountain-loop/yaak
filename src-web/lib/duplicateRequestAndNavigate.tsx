@@ -7,7 +7,7 @@ import { router } from './router';
 export async function duplicateRequestAndNavigate(
   model: HttpRequest | GrpcRequest | WebsocketRequest | null,
 ) {
-  if (model == null ){
+  if (model == null) {
     throw new Error('Cannot duplicate null request');
   }
 
