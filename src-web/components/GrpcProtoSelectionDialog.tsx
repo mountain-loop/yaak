@@ -58,7 +58,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             await grpc.reflect.refetch();
           }}
         >
-          Add File
+          Add Proto File(s)
         </Button>
         <Button
           isLoading={grpc.reflect.isFetching}
@@ -109,15 +109,15 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             <thead>
               <tr>
                 <th className="text-text-subtlest">
-                  <span className="font-mono">*.proto</span> Files
+                  Added Files
                 </th>
-                <th></th>
+                <th/>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-highlight">
               {protoFiles.map((f, i) => (
                 <tr key={f + i} className="group">
-                  <td className="pl-1 font-mono">{f.split('/').pop()}</td>
+                  <td className="pl-1 font-mono text-sm" title={f}>{f.split('/').pop()}</td>
                   <td className="w-0 py-0.5">
                     <IconButton
                       title="Remove file"

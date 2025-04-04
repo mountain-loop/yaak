@@ -1,0 +1,7 @@
+[default]
+description = "Default permissions for the plugin"
+permissions = [
+    "allow-enable-encryption",
+    "allow-reveal-workspace-key",
+    "allow-set-workspace-key",
+]

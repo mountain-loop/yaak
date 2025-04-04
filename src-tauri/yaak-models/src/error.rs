@@ -20,7 +20,7 @@ pub enum Error {
 
     #[error("Model error: {0}")]
     GenericError(String),
-    
+
     #[error("Row not found")]
     RowNotFound,
 

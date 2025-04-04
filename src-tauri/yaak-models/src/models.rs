@@ -209,6 +209,7 @@ pub struct Workspace {
     pub updated_at: NaiveDateTime,
     pub name: String,
     pub description: String,
+    pub encryption_key_challenge: Option<String>,
 
     // Settings
     #[serde(default = "default_true")]
@@ -245,6 +246,7 @@ impl UpsertModelInfo for Workspace {
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (Name, self.name.trim().into()),
             (Description, self.description.into()),
+            (EncryptionKeyChallenge, self.encryption_key_challenge.into()),
             (SettingFollowRedirects, self.setting_follow_redirects.into()),
             (SettingRequestTimeout, self.setting_request_timeout.into()),
             (SettingValidateCertificates, self.setting_validate_certificates.into()),
@@ -256,6 +258,7 @@ impl UpsertModelInfo for Workspace {
             WorkspaceIden::UpdatedAt,
             WorkspaceIden::Name,
             WorkspaceIden::Description,
+            WorkspaceIden::EncryptionKeyChallenge,
             WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingFollowRedirects,
             WorkspaceIden::SettingRequestTimeout,
@@ -274,6 +277,7 @@ impl UpsertModelInfo for Workspace {
             updated_at: row.get("updated_at")?,
             name: row.get("name")?,
             description: row.get("description")?,
+            encryption_key_challenge: row.get("encryption_key_challenge")?,
             setting_follow_redirects: row.get("setting_follow_redirects")?,
             setting_request_timeout: row.get("setting_request_timeout")?,
             setting_validate_certificates: row.get("setting_validate_certificates")?,
@@ -281,16 +285,11 @@ impl UpsertModelInfo for Workspace {
     }
 }
 
-impl Workspace {
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            model: "workspace".to_string(),
-            setting_validate_certificates: true,
-            setting_follow_redirects: true,
-            ..Default::default()
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct EncryptedKey {
+    pub encrypted_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -304,6 +303,7 @@ pub struct WorkspaceMeta {
     pub workspace_id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub encryption_key: Option<EncryptedKey>,
     pub setting_sync_dir: Option<String>,
 }
 
@@ -333,6 +333,7 @@ impl UpsertModelInfo for WorkspaceMeta {
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (WorkspaceId, self.workspace_id.into()),
+            (EncryptionKey, self.encryption_key.map(|e| serde_json::to_string(&e).unwrap()).into()),
             (SettingSyncDir, self.setting_sync_dir.into()),
         ])
     }
@@ -340,6 +341,7 @@ impl UpsertModelInfo for WorkspaceMeta {
     fn update_columns() -> Vec<impl IntoIden> {
         vec![
             WorkspaceMetaIden::UpdatedAt,
+            WorkspaceMetaIden::EncryptionKey,
             WorkspaceMetaIden::SettingSyncDir,
         ]
     }
@@ -348,12 +350,14 @@ impl UpsertModelInfo for WorkspaceMeta {
     where
         Self: Sized,
     {
+        let encryption_key: Option<String> = row.get("encryption_key")?;
         Ok(Self {
             id: row.get("id")?,
             workspace_id: row.get("workspace_id")?,
             model: row.get("model")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
+            encryption_key: encryption_key.map(|e| serde_json::from_str(&e).unwrap()),
             setting_sync_dir: row.get("setting_sync_dir")?,
         })
     }
@@ -1919,13 +1923,18 @@ impl<'de> Deserialize<'de> for AnyModel {
             Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
             Some(m) if m == "plugin" => AnyModel::Plugin(fv(value).unwrap()),
             Some(m) if m == "settings" => AnyModel::Settings(fv(value).unwrap()),
-            Some(m) if m == "websocket_connection" => AnyModel::WebsocketConnection(fv(value).unwrap()),
+            Some(m) if m == "websocket_connection" => {
+                AnyModel::WebsocketConnection(fv(value).unwrap())
+            }
             Some(m) if m == "websocket_event" => AnyModel::WebsocketEvent(fv(value).unwrap()),
             Some(m) if m == "websocket_request" => AnyModel::WebsocketRequest(fv(value).unwrap()),
             Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
             Some(m) if m == "workspace_meta" => AnyModel::WorkspaceMeta(fv(value).unwrap()),
             Some(m) => {
-                return Err(serde::de::Error::custom(format!("Failed to deserialize AnyModel {}", m)));
+                return Err(serde::de::Error::custom(format!(
+                    "Failed to deserialize AnyModel {}",
+                    m
+                )));
             }
             None => {
                 return Err(serde::de::Error::custom("Missing or invalid model"));

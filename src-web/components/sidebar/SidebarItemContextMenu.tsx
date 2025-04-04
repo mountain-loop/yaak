@@ -12,9 +12,9 @@ import { useMoveToWorkspace } from '../../hooks/useMoveToWorkspace';
 import { useSendAnyHttpRequest } from '../../hooks/useSendAnyHttpRequest';
 import { useSendManyRequests } from '../../hooks/useSendManyRequests';
 import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
-import { duplicateRequestAndNavigate } from '../../lib/deleteRequestAndNavigate';
 
 import { showDialog } from '../../lib/dialog';
+import { duplicateRequestAndNavigate } from '../../lib/duplicateRequestAndNavigate';
 import { renameModelWithPrompt } from '../../lib/renameModelWithPrompt';
 import type { DropdownItem } from '../core/Dropdown';
 import { ContextMenu } from '../core/Dropdown';

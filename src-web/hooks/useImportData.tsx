@@ -1,10 +1,4 @@
-import type {
-  Environment,
-  Folder,
-  GrpcRequest,
-  HttpRequest,
-  Workspace,
-} from '@yaakapp-internal/models';
+import type { BatchUpsertResult } from '@yaakapp-internal/models';
 import { Button } from '../components/core/Button';
 import { FormattedError } from '../components/core/FormattedError';
 import { VStack } from '../components/core/Stacks';
@@ -21,13 +15,7 @@ import { useFastMutation } from './useFastMutation';
 export function useImportData() {
   const importData = async (filePath: string): Promise<boolean> => {
     const activeWorkspace = jotaiStore.get(activeWorkspaceAtom);
-    const imported: {
-      workspaces: Workspace[];
-      environments: Environment[];
-      folders: Folder[];
-      httpRequests: HttpRequest[];
-      grpcRequests: GrpcRequest[];
-    } = await invokeCmd('cmd_import_data', {
+    const imported = await invokeCmd<BatchUpsertResult>('cmd_import_data', {
       filePath,
       workspaceId: activeWorkspace?.id,
     });
@@ -40,15 +28,25 @@ export function useImportData() {
       size: 'sm',
       hideX: true,
       render: ({ hide }) => {
-        const { workspaces, environments, folders, httpRequests, grpcRequests } = imported;
         return (
           <VStack space={3} className="pb-4">
             <ul className="list-disc pl-6">
-              <li>{pluralizeCount('Workspace', workspaces.length)}</li>
-              <li>{pluralizeCount('Environment', environments.length)}</li>
-              <li>{pluralizeCount('Folder', folders.length)}</li>
-              <li>{pluralizeCount('HTTP Request', httpRequests.length)}</li>
-              <li>{pluralizeCount('GRPC Request', grpcRequests.length)}</li>
+              <li>{pluralizeCount('Workspace', imported.workspaces.length)}</li>
+              {imported.environments.length > 0 && (
+                <li>{pluralizeCount('Environment', imported.environments.length)}</li>
+              )}
+              {imported.folders.length > 0 && (
+                <li>{pluralizeCount('Folder', imported.folders.length)}</li>
+              )}
+              {imported.httpRequests.length > 0 && (
+                <li>{pluralizeCount('HTTP Request', imported.httpRequests.length)}</li>
+              )}
+              {imported.grpcRequests.length > 0 && (
+                <li>{pluralizeCount('GRPC Request', imported.grpcRequests.length)}</li>
+              )}
+              {imported.websocketRequests.length > 0 && (
+                <li>{pluralizeCount('Websocket Request', imported.websocketRequests.length)}</li>
+              )}
             </ul>
             <div>
               <Button className="ml-auto" onClick={hide} color="primary">

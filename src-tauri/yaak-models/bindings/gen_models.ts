@@ -12,6 +12,8 @@ export type CookieJar = { model: "cookie_jar", id: string, createdAt: string, up
 
 export type EditorKeymap = "default" | "vim" | "vscode" | "emacs";
 
+export type EncryptedKey = { encryptedKey: string, };
+
 export type Environment = { model: "environment", id: string, workspaceId: string, environmentId: string | null, createdAt: string, updatedAt: string, name: string, variables: Array<EnvironmentVariable>, };
 
 export type EnvironmentVariable = { enabled?: boolean, name: string, value: string, id?: string, };
@@ -56,11 +58,11 @@ export type ProxySetting = { "type": "enabled", http: string, https: string, aut
 
 export type ProxySettingAuth = { user: string, password: string, };
 
-export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, editorFontSize: number, editorSoftWrap: boolean, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, proxy: ProxySetting | null, theme: string, themeDark: string, themeLight: string, updateChannel: string, editorKeymap: EditorKeymap, };
+export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, editorFontSize: number, editorSoftWrap: boolean, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, proxy: ProxySetting | null, themeDark: string, themeLight: string, updateChannel: string, editorKeymap: EditorKeymap, };
 
 export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, relPath: string, syncDir: string, };
 
-export type UpdateSource = { "type": "sync" } | { "type": "window", label: string, } | { "type": "plugin" } | { "type": "background" } | { "type": "import" };
+export type UpdateSource = { "type": "background" } | { "type": "import" } | { "type": "plugin" } | { "type": "sync" } | { "type": "window", label: string, };
 
 export type WebsocketConnection = { model: "websocket_connection", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, elapsed: number, error: string | null, headers: Array<HttpResponseHeader>, state: WebsocketConnectionState, status: number, url: string, };
 
@@ -74,6 +76,6 @@ export type WebsocketMessageType = "text" | "binary";
 
 export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
-export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
+export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, name: string, description: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
 
-export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, settingSyncDir: string | null, };
+export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, encryptionKey: EncryptedKey | null, settingSyncDir: string | null, };

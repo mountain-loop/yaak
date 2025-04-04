@@ -1,15 +1,17 @@
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::db_context::DbContext;
+use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::util::ModelPayload;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::TransactionBehavior;
 use std::sync::{Arc, Mutex};
-use tauri::{Manager, Runtime};
+use tauri::{Manager, Runtime, State};
 use tokio::sync::mpsc;
 
 pub trait QueryManagerExt<'a, R> {
+    fn db_manager(&'a self) -> State<'a, QueryManager>;
     fn db(&'a self) -> DbContext<'a>;
     fn with_db<F, T>(&'a self, func: F) -> T
     where
@@ -20,6 +22,10 @@ pub trait QueryManagerExt<'a, R> {
 }
 
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
+    fn db_manager(&'a self) -> State<'a, QueryManager> {
+        self.state::<QueryManager>()
+    }
+
     fn db(&'a self) -> DbContext<'a> {
         let qm = self.state::<QueryManager>();
         qm.inner().connect()
@@ -42,7 +48,7 @@ impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct QueryManager {
     pool: Arc<Mutex<Pool<SqliteConnectionManager>>>,
     events_tx: mpsc::Sender<ModelPayload>,
@@ -91,9 +97,12 @@ impl QueryManager {
         func(&db_context)
     }
 
-    pub fn with_tx<F, T>(&self, func: F) -> Result<T>
+    pub fn with_tx<T, E>(
+        &self,
+        func: impl FnOnce(&DbContext) -> std::result::Result<T, E>,
+    ) -> std::result::Result<T, E>
     where
-        F: FnOnce(&DbContext) -> Result<T>,
+        E: From<crate::error::Error>,
     {
         let mut conn = self
             .pool
@@ -112,11 +121,13 @@ impl QueryManager {
 
         match func(&db_context) {
             Ok(val) => {
-                tx.commit()?;
+                tx.commit()
+                    .map_err(|e| GenericError(format!("Failed to commit transaction {e:?}")))?;
                 Ok(val)
             }
             Err(e) => {
-                tx.rollback()?;
+                tx.rollback()
+                    .map_err(|e| GenericError(format!("Failed to rollback transaction {e:?}")))?;
                 Err(e)
             }
         }

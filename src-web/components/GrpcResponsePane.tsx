@@ -73,10 +73,10 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
       minHeightPx={20}
       firstSlot={() =>
         activeConnection && (
-          <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] items-center">
-            <HStack className="pl-3 mb-1 font-mono text-sm text-text-subtle">
+          <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 items-center">
+            <HStack className="pl-3 mb-1 font-mono text-sm text-text-subtle overflow-x-auto hide-scrollbars">
               <HStack space={2}>
-                <span>{events.length} Messages</span>
+                <span className="whitespace-nowrap">{events.length} Messages</span>
                 {activeConnection.state !== 'closed' && (
                   <LoadingIcon size="sm" className="text-text-subtlest" />
                 )}

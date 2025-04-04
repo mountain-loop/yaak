@@ -117,7 +117,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 alignItems="center"
                 className={classNames(
                   'cursor-default select-none',
-                  'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm',
+                  'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars',
                 )}
               >
                 {activeResponse.state !== 'closed' && <LoadingIcon size="sm" />}

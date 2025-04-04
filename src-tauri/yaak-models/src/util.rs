@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use crate::error::Result;
 use crate::models::{AnyModel, Environment, Folder, GrpcRequest, HttpRequest, UpsertModelInfo, WebsocketRequest, Workspace, WorkspaceIden};
 use crate::query_manager::QueryManagerExt;
@@ -6,6 +5,7 @@ use chrono::{NaiveDateTime, Utc};
 use log::warn;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use tauri::{AppHandle, Listener, Runtime, WebviewWindow};
 use ts_rs::TS;
 
@@ -14,6 +14,10 @@ pub fn generate_prefixed_id(prefix: &str) -> String {
 }
 
 pub fn generate_id() -> String {
+    generate_id_of_length(10)
+}
+
+pub fn generate_id_of_length(n: usize) -> String {
     let alphabet: [char; 57] = [
         '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
         'k', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C',
@@ -21,7 +25,7 @@ pub fn generate_id() -> String {
         'X', 'Y', 'Z',
     ];
 
-    nanoid!(10, &alphabet)
+    nanoid!(n, &alphabet)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -101,8 +105,9 @@ pub struct WorkspaceExport {
     pub resources: BatchUpsertResult,
 }
 
-#[derive(Default, Debug, Deserialize, Serialize)]
+#[derive(Default, Debug, Deserialize, Serialize, TS)]
 #[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
 pub struct BatchUpsertResult {
     pub workspaces: Vec<Workspace>,
     pub environments: Vec<Environment>,

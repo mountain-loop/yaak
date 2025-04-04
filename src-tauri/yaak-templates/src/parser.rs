@@ -1,15 +1,16 @@
 use crate::error::Error::RenderError;
 use crate::error::Result;
+use crate::TemplateCallback;
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use ts_rs::TS;
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, TS)]
+#[derive(Default, Clone, PartialEq, Debug, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "parser.ts")]
 pub struct Tokens {
-    pub tokens: Vec<Token>,
+    pub(crate) tokens: Vec<Token>,
 }
 
 impl Display for Tokens {
@@ -92,6 +93,53 @@ impl Display for Token {
         };
         write!(f, "{}", str)
     }
+}
+
+async fn transform_val<T: TemplateCallback>(val: &Val, cb: &T) -> Result<Val> {
+    let val = match val {
+        Val::Fn {
+            name: fn_name,
+            args,
+        } => {
+            let mut new_args: Vec<FnArg> = Vec::new();
+            for arg in args {
+                let value = match arg.clone().value {
+                    Val::Str { text } => {
+                        let text = cb.transform_arg(&fn_name, &arg.name, &text).await?;
+                        Val::Str { text }
+                    }
+                    v => Box::pin(transform_val(&v, cb)).await?,
+                };
+
+                let arg_name = arg.name.clone();
+                new_args.push(FnArg {
+                    name: arg_name,
+                    value,
+                });
+            }
+            Val::Fn {
+                name: fn_name.clone(),
+                args: new_args,
+            }
+        }
+        _ => val.clone(),
+    };
+    Ok(val)
+}
+
+pub async fn transform_args<T: TemplateCallback>(tokens: Tokens, cb: &T) -> Result<Tokens> {
+    let mut new_tokens = Tokens::default();
+    for t in tokens.tokens.iter() {
+        new_tokens.tokens.push(match t {
+            Token::Tag { val } => {
+                let val = transform_val(val, cb).await?;
+                Token::Tag { val }
+            }
+            _ => t.clone(),
+        });
+    }
+
+    Ok(new_tokens)
 }
 
 // Template Syntax
