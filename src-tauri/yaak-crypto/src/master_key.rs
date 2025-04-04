@@ -1,14 +1,14 @@
 use crate::encryption::{decrypt_data, encrypt_data};
 use crate::error::Error::GenericError;
 use crate::error::Result;
-use aes_gcm::aead::OsRng;
-use aes_gcm::{Aes256Gcm, Key, KeyInit};
+use chacha20poly1305::aead::{Key, KeyInit, OsRng};
+use chacha20poly1305::XChaCha20Poly1305;
 use keyring::{Entry, Error};
 use log::info;
 
 #[derive(Debug, Clone)]
 pub(crate) struct MasterKey {
-    key: Key<Aes256Gcm>,
+    key: Key<XChaCha20Poly1305>,
 }
 
 const MASTER_KEY_ID: &str = "master";
@@ -21,12 +21,12 @@ impl MasterKey {
             Ok(encoded) => {
                 let key_bytes =
                     base85::decode(&encoded).map_err(|e| GenericError(e.to_string()))?;
-                let key: Key<Aes256Gcm> = Key::<Aes256Gcm>::clone_from_slice(key_bytes.as_slice());
+                let key = Key::<XChaCha20Poly1305>::clone_from_slice(key_bytes.as_slice());
                 key
             }
             Err(Error::NoEntry) => {
                 info!("Creating new master key");
-                let key = Aes256Gcm::generate_key(OsRng);
+                let key = XChaCha20Poly1305::generate_key(OsRng);
                 let encoded = base85::encode(key.as_slice());
                 entry.set_password(&encoded)?;
                 key
@@ -47,8 +47,9 @@ impl MasterKey {
 
     #[cfg(test)]
     pub(crate) fn test_key() -> Self {
-        let key: Key<Aes256Gcm> =
-            Key::<Aes256Gcm>::clone_from_slice("00000000000000000000000000000000".as_bytes());
+        let key: Key<XChaCha20Poly1305> = Key::<XChaCha20Poly1305>::clone_from_slice(
+            "00000000000000000000000000000000".as_bytes(),
+        );
         Self { key }
     }
 }

@@ -9,8 +9,8 @@ export function showSetupWorkspaceEncryptionDialog() {
 
   showDialog({
     id: 'workspace-encryption',
-    title: workspaceMeta.encryptionKey ? 'Workspace Encryption' : 'Setup Workspace Encryption',
-    size: 'sm',
+    title: 'Workspace Encryption',
+    size: 'md',
     render: () => (
       <div className="pb-2">
         <WorkspaceEncryptionSetting expanded />

@@ -10,6 +10,7 @@ type ViewMode = 'edit' | 'preview';
 interface Props extends Pick<EditorProps, 'heightMode' | 'stateKey' | 'forceUpdateKey'> {
   placeholder: string;
   className?: string;
+  editorClassName?: string;
   defaultValue: string;
   onChange: (value: string) => void;
   name: string;
@@ -17,6 +18,7 @@ interface Props extends Pick<EditorProps, 'heightMode' | 'stateKey' | 'forceUpda
 
 export function MarkdownEditor({
   className,
+  editorClassName,
   defaultValue,
   onChange,
   name,
@@ -31,7 +33,7 @@ export function MarkdownEditor({
     <Editor
       hideGutter
       wrapLines
-      className="[&_.cm-line]:!max-w-lg max-h-full"
+      className={classNames(editorClassName, '[&_.cm-line]:!max-w-lg max-h-full')}
       language="markdown"
       defaultValue={defaultValue}
       onChange={onChange}

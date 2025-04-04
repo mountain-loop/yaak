@@ -7,6 +7,7 @@ import { Portal } from '../Portal';
 export interface TooltipProps {
   children: ReactNode;
   content: ReactNode;
+  size?: 'md' | 'lg';
 }
 
 const hiddenStyles: CSSProperties = {
@@ -17,7 +18,7 @@ const hiddenStyles: CSSProperties = {
   opacity: 0,
 };
 
-export function Tooltip({ children, content }: TooltipProps) {
+export function Tooltip({ children, content, size = 'md' }: TooltipProps) {
   const [isOpen, setIsOpen] = useState<CSSProperties>();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -76,7 +77,13 @@ export function Tooltip({ children, content }: TooltipProps) {
           onMouseLeave={handleClose}
           className="p-2 fixed z-50 text-sm transition-opacity grid grid-rows-[minmax(0,1fr)]"
         >
-          <div className="bg-surface-highlight rounded-md px-3 py-2 z-50 border border-border max-w-sm overflow-auto">
+          <div
+            className={classNames(
+              'bg-surface-highlight rounded-md px-3 py-2 z-50 border border-border overflow-auto',
+              size === 'md' && 'max-w-sm',
+              size === 'lg' && 'max-w-md',
+            )}
+          >
             {content}
           </div>
           <Triangle className="text-border mb-2" />
@@ -116,12 +123,12 @@ function Triangle({ className }: { className?: string }) {
     >
       <polygon className="fill-surface-highlight" points="0,0 30,0 15,10" />
       <path
-          d="M0 0 L15 9 L30 0"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1"
-          strokeLinejoin="miter"
-          vectorEffect="non-scaling-stroke"
+        d="M0 0 L15 9 L30 0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinejoin="miter"
+        vectorEffect="non-scaling-stroke"
       />
     </svg>
   );

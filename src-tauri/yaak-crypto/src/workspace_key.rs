@@ -1,16 +1,14 @@
 use crate::encryption::{decrypt_data, encrypt_data};
 use crate::error::Error::InvalidEncryptionKey;
 use crate::error::Result;
-use aes_gcm::aead::consts::U12;
-use aes_gcm::aead::OsRng;
-use aes_gcm::aes::Aes256;
-use aes_gcm::{Aes256Gcm, AesGcm, Key, KeyInit};
 use base32::Alphabet;
+use chacha20poly1305::aead::{Key, KeyInit, OsRng};
+use chacha20poly1305::XChaCha20Poly1305;
 
 #[derive(Debug, Clone)]
 pub struct WorkspaceKey {
     workspace_id: String,
-    key: Key<AesGcm<Aes256, U12>>,
+    key: Key<XChaCha20Poly1305>,
 }
 
 const HUMAN_PREFIX: &str = "YK";
@@ -28,7 +26,7 @@ impl WorkspaceKey {
             .join("-");
         Ok(with_separators)
     }
-    
+
     #[allow(dead_code)]
     pub(crate) fn from_human(workspace_id: &str, human_key: &str) -> Result<Self> {
         let without_prefix = human_key.strip_prefix(HUMAN_PREFIX).unwrap_or(human_key);
@@ -41,7 +39,7 @@ impl WorkspaceKey {
     pub(crate) fn from_raw_key(workspace_id: &str, key: &[u8]) -> Self {
         Self {
             workspace_id: workspace_id.to_string(),
-            key: Key::<Aes256Gcm>::clone_from_slice(key),
+            key: Key::<XChaCha20Poly1305>::clone_from_slice(key),
         }
     }
 
@@ -50,7 +48,7 @@ impl WorkspaceKey {
     }
 
     pub(crate) fn create(workspace_id: &str) -> Result<Self> {
-        let key = Aes256Gcm::generate_key(OsRng);
+        let key = XChaCha20Poly1305::generate_key(OsRng);
         Ok(Self::from_raw_key(workspace_id, key.as_slice()))
     }
 

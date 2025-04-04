@@ -10,10 +10,8 @@ import { CopyIconButton } from './CopyIconButton';
 import { Banner } from './core/Banner';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
-import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
-import { InlineCode } from './core/InlineCode';
 import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
@@ -40,20 +38,21 @@ export function WorkspaceEncryptionSetting({ size, expanded }: Props) {
 
   if (workspaceMeta.encryptionKey) {
     const keyRevealer = (
-      <KeyRevealer defaultShow={justEnabledEncryption} workspaceId={workspaceMeta.workspaceId} />
+      <KeyRevealer
+        disableLabel={justEnabledEncryption}
+        defaultShow={justEnabledEncryption}
+        workspaceId={workspaceMeta.workspaceId}
+      />
     );
     return (
       <VStack space={2} className="w-full">
         {justEnabledEncryption && (
-          <Banner color="danger" className="flex flex-col gap-2">
-            <h2 className="font-bold flex items-center gap-1">
-              <Icon icon="circle_alert" className="inline-block" /> Keep this key safe
-            </h2>
+          <Banner color="success" className="flex flex-col gap-2">
             <p className="opacity-70">
-              This key is needed to decrypt this workspace on other devices, so store it securely
-              for access by your or your team later.
+              This workspace will use the following key for encryption. It is stored securely using
+              your OS keychain, but it is recommended to back it up. If you share this workspace
+              with others, you&apos;ll need to send them this key to decrypt any secure data.
             </p>
-            <p className="opacity-70">It will also be available in the workspace settings.</p>
           </Banner>
         )}
         {keyRevealer}
@@ -88,23 +87,19 @@ export function WorkspaceEncryptionSetting({ size, expanded }: Props) {
 
 const help = (
   <Prose>
-    <p>Workspace encryption enables the following.</p>
-    <ul>
-      <li>
-        Use the <InlineCode>secure(...)</InlineCode> template function
-      </li>
-      <li>Encrypt responses, cookies, and other credentials</li>
-      <li>
-        <span className="text-text-subtle">(optional)</span> Encrypted directory sync
-      </li>
-      <li>
-        <span className="text-text-subtle">(optional)</span> Encrypted data exports
-      </li>
-    </ul>
+    <h2 className="!text-lg font-bold">Keep your secrets safe</h2>
     <p>
-      Encryption keys are unique per workspace and are stored encrypted using a master key located
-      in your OS keychain.
+      Yaak helps keep your data safe by offering built-in encryption for the things that matter
+      most. You can choose to encrypt individual values like secrets or tokens, and Yaak will
+      automatically encrypt sensitive data like HTTP responses, cookies, and authentication
+      credentials behind the scenes.
     </p>
+    <p>
+      This also extends to syncing with the filesystem or Git—your encrypted data stays protected no
+      matter where it goes. And when you export or share a collection, encrypted items stay secure,
+      so you can collaborate without worry.
+    </p>
+    <p>It’s seamless, powerful encryption—without getting in your way.</p>
   </Prose>
 );
 
@@ -142,9 +137,11 @@ function EnterWorkspaceKey({ workspaceMeta }: { workspaceMeta: WorkspaceMeta }) 
 function KeyRevealer({
   workspaceId,
   defaultShow = false,
+  disableLabel = false,
 }: {
   workspaceId: string;
   defaultShow?: boolean;
+  disableLabel?: boolean;
 }) {
   const [key, setKey] = useState<string | null>(null);
   const [show, setShow] = useStateWithDeps<boolean>(defaultShow, [defaultShow]);
@@ -163,9 +160,11 @@ function KeyRevealer({
       )}
     >
       <VStack space={0.5}>
-        <span className="text-sm text-primary flex items-center gap-1">
-          workspace encryption key <IconTooltip size="sm" content={help} />
-        </span>
+        {!disableLabel && (
+          <span className="text-sm text-primary flex items-center gap-1">
+            workspace encryption key <IconTooltip size="sm" content={help} />
+          </span>
+        )}
         {key && <HighlightedKey keyText={key} show={show} />}
       </VStack>
       <HStack>
@@ -174,7 +173,7 @@ function KeyRevealer({
           title={show ? 'Hide' : 'Reveal' + 'workspace key'}
           icon={show ? 'eye_closed' : 'eye'}
           onClick={() => setShow((v) => !v)}
-        ></IconButton>
+        />
       </HStack>
     </div>
   );

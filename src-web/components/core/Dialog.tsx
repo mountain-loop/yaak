@@ -89,7 +89,7 @@ export function Dialog({
               {title}
             </Heading>
           ) : (
-            <span />
+            <span aria-hidden />
           )}
 
           {description ? (
@@ -97,7 +97,7 @@ export function Dialog({
               {description}
             </div>
           ) : (
-            <span />
+            <span aria-hidden />
           )}
 
           <div

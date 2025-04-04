@@ -6,7 +6,6 @@ edition = "2021"
 publish = false
 
 [dependencies]
-aes-gcm = { version = "0.10.3", features = ["std"] }
 base32 = "0.5.1" # For encoding human-readable key
 base64 = "0.22.1" # For encoding in the database
 base85 = "2.0.0" # For encoding the master key
@@ -17,6 +16,7 @@ serde = { workspace = true, features = ["derive"] }
 tauri = { workspace = true }
 thiserror = "2.0.12"
 yaak-models = { workspace = true }
+chacha20poly1305 = "0.10.1"
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }
