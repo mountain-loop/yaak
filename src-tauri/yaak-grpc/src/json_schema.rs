@@ -191,6 +191,7 @@ enum JsonType {
     Object,
     Array,
     Boolean,
+    Null,
     _UNKNOWN,
 }
 
@@ -211,6 +212,7 @@ impl serde::Serialize for JsonType {
             JsonType::Object => serializer.serialize_str("object"),
             JsonType::Array => serializer.serialize_str("array"),
             JsonType::Boolean => serializer.serialize_str("boolean"),
+            JsonType::Null => serializer.serialize_str("null"),
             JsonType::_UNKNOWN => serializer.serialize_str("unknown"),
         }
     }
