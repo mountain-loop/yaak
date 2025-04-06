@@ -12,7 +12,7 @@ pub enum Error {
 
     #[error("Missing workspace encryption key")]
     MissingWorkspaceKey,
-    
+
     #[error("Incorrect workspace key")]
     IncorrectWorkspaceKey,
 
@@ -28,11 +28,11 @@ pub enum Error {
     #[error("Invalid encrypted data")]
     InvalidEncryptedData,
 
-    #[error("The wrong key was used to decrypt data")]
-    InvalidKey,
+    #[error("Invalid key provided")]
+    InvalidHumanKey,
 
-    #[error("Invalid encryption key")]
-    InvalidEncryptionKey,
+    #[error("The wrong key was used to decrypt data")]
+    IncorrectKeyId,
 
     #[error("Encryption error: {0}")]
     GenericError(String),

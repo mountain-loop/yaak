@@ -8140,8 +8140,6 @@ dependencies = [
  "log",
  "objc",
  "rand 0.9.0",
- "serde",
- "serde_json",
  "tauri",
  "tauri-plugin",
 ]

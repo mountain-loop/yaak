@@ -19,9 +19,10 @@ import { HStack, VStack } from './core/Stacks';
 interface Props {
   size?: ButtonProps['size'];
   expanded?: boolean;
+  onDone?: () => void;
 }
 
-export function WorkspaceEncryptionSetting({ size, expanded }: Props) {
+export function WorkspaceEncryptionSetting({ size, expanded, onDone }: Props) {
   const [justEnabledEncryption, setJustEnabledEncryption] = useState<boolean>(false);
 
   const workspace = useAtomValue(activeWorkspaceAtom);
@@ -55,6 +56,11 @@ export function WorkspaceEncryptionSetting({ size, expanded }: Props) {
           </Banner>
         )}
         {keyRevealer}
+        {onDone && (
+          <Button color="secondary" onClick={onDone}>
+            Done
+          </Button>
+        )}
       </VStack>
     );
   }

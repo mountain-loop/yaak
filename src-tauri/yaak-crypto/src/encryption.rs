@@ -1,4 +1,6 @@
-use crate::error::Error::{DecryptionError, EncryptionError, InvalidEncryptedData, InvalidKey};
+use crate::error::Error::{
+    DecryptionError, EncryptionError, InvalidEncryptedData, IncorrectKeyId,
+};
 use crate::error::Result;
 use chacha20poly1305::aead::generic_array::typenum::Unsigned;
 use chacha20poly1305::aead::{Aead, AeadCore, Key, KeyInit, OsRng};
@@ -58,7 +60,7 @@ pub(crate) fn decrypt_data(
     let cipher = XChaCha20Poly1305::new(&key);
     match cipher.decrypt(nonce.into(), ciphered_data).map_err(|_| DecryptionError) {
         Ok(d) => Ok(d),
-        Err(_) if !key_id_check_passed => Err(InvalidKey),
+        Err(_) if !key_id_check_passed => Err(IncorrectKeyId),
         Err(e) => Err(e),
     }
 }
@@ -73,7 +75,7 @@ fn get_key_id_bytes(key_id: &str) -> [u8; ID_BYTES] {
 #[cfg(test)]
 mod test {
     use crate::encryption::{decrypt_data, encrypt_data};
-    use crate::error::Error::{InvalidEncryptedData, InvalidKey};
+    use crate::error::Error::{InvalidEncryptedData, IncorrectKeyId};
     use crate::error::Result;
     use chacha20poly1305::aead::OsRng;
     use chacha20poly1305::{KeyInit, XChaCha20Poly1305};
@@ -117,7 +119,7 @@ mod test {
         let key_b = XChaCha20Poly1305::generate_key(OsRng);
         let encrypted = encrypt_data("hello world".as_bytes(), &key_a, "key_1")?;
         let decrypted = decrypt_data(encrypted.as_slice(), &key_b, "key_2");
-        assert!(matches!(decrypted, Err(InvalidKey)));
+        assert!(matches!(decrypted, Err(IncorrectKeyId)));
         Ok(())
     }
 

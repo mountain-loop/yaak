@@ -1,3 +1,4 @@
+import { VStack } from '../components/core/Stacks';
 import { WorkspaceEncryptionSetting } from '../components/WorkspaceEncryptionSetting';
 import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { showDialog } from './dialog';
@@ -11,10 +12,10 @@ export function showSetupWorkspaceEncryptionDialog() {
     id: 'workspace-encryption',
     title: 'Workspace Encryption',
     size: 'md',
-    render: () => (
-      <div className="pb-2">
-        <WorkspaceEncryptionSetting expanded />
-      </div>
+    render: ({ hide }) => (
+      <VStack space={3} className="pb-2" alignItems="end">
+        <WorkspaceEncryptionSetting expanded onDone={hide} />
+      </VStack>
     ),
   });
 }
