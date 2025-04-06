@@ -12,6 +12,9 @@ pub enum Error {
 
     #[error("Missing workspace encryption key")]
     MissingWorkspaceKey,
+    
+    #[error("Incorrect workspace key")]
+    IncorrectWorkspaceKey,
 
     #[error("Crypto IO error: {0}")]
     IoError(#[from] io::Error),
@@ -24,7 +27,7 @@ pub enum Error {
 
     #[error("Invalid encrypted data")]
     InvalidEncryptedData,
-    
+
     #[error("The wrong key was used to decrypt data")]
     InvalidKey,
 

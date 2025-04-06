@@ -1,4 +1,4 @@
-use crate::error::Error::{GenericError, MissingWorkspaceKey};
+use crate::error::Error::{GenericError, IncorrectWorkspaceKey, MissingWorkspaceKey};
 use crate::error::{Error, Result};
 use crate::master_key::MasterKey;
 use crate::workspace_key::WorkspaceKey;
@@ -53,6 +53,27 @@ impl EncryptionManager {
     pub fn reveal_workspace_key(&self, workspace_id: &str) -> Result<String> {
         let key = self.get_workspace_key(workspace_id)?;
         key.to_human()
+    }
+
+    pub fn set_human_key(&self, workspace_id: &str, human_key: &str) -> Result<WorkspaceMeta> {
+        let wkey = WorkspaceKey::from_human(workspace_id, human_key)?;
+
+        let workspace = self.query_manager.connect().get_workspace(workspace_id)?;
+        let encryption_key_challenge = match workspace.encryption_key_challenge {
+            None => return self.set_workspace_key(workspace_id, &wkey),
+            Some(c) => c,
+        };
+
+        let encryption_key_challenge = match BASE64_STANDARD.decode(encryption_key_challenge) {
+            Ok(c) => c,
+            Err(_) => return Err(GenericError("Failed to decode workspace challenge".to_string())),
+        };
+
+        if let Err(_) = wkey.decrypt(encryption_key_challenge.as_slice()) {
+            return Err(IncorrectWorkspaceKey);
+        };
+
+        self.set_workspace_key(workspace_id, &wkey)
     }
 
     pub(crate) fn set_workspace_key(

@@ -1,6 +1,5 @@
 use crate::error::Result;
 use crate::manager::EncryptionManagerExt;
-use crate::workspace_key::WorkspaceKey;
 use tauri::{command, Runtime, WebviewWindow};
 
 #[command]
@@ -27,7 +26,6 @@ pub(crate) async fn set_workspace_key<R: Runtime>(
     workspace_id: &str,
     key: &str,
 ) -> Result<()> {
-    let wkey = WorkspaceKey::from_human(workspace_id, key)?;
-    window.crypto().set_workspace_key(workspace_id, &wkey)?;
+    window.crypto().set_human_key(workspace_id, key)?;
     Ok(())
 }

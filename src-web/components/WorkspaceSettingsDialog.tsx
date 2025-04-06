@@ -81,6 +81,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
       >
         Delete Workspace
       </Button>
+        <div className="select-auto">{workspace.id}</div>
     </VStack>
   );
 }

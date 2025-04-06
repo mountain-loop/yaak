@@ -15,7 +15,6 @@ import { IconTooltip } from './core/IconTooltip';
 import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
-import { Prose } from './Prose';
 
 interface Props {
   size?: ButtonProps['size'];
@@ -51,7 +50,7 @@ export function WorkspaceEncryptionSetting({ size, expanded }: Props) {
             <p className="opacity-70">
               This workspace will use the following key for encryption. It is stored securely using
               your OS keychain, but it is recommended to back it up. If you share this workspace
-              with others, you&apos;ll need to send them this key to decrypt any secure data.
+              with others, you&apos;ll need to send them this key to access any encrypted values.
             </p>
           </Banner>
         )}
@@ -86,21 +85,16 @@ export function WorkspaceEncryptionSetting({ size, expanded }: Props) {
 }
 
 const help = (
-  <Prose>
-    <h2 className="!text-lg font-bold">Keep your secrets safe</h2>
+  <VStack space={3}>
     <p>
-      Yaak helps keep your data safe by offering built-in encryption for the things that matter
-      most. You can choose to encrypt individual values like secrets or tokens, and Yaak will
-      automatically encrypt sensitive data like HTTP responses, cookies, and authentication
-      credentials behind the scenes.
+      Encrypt values like secrets and tokens. When enabled, Yaak will also encrypt HTTP responses,
+      cookies, and authentication credentials automatically.
     </p>
     <p>
-      This also extends to syncing with the filesystem or Git—your encrypted data stays protected no
-      matter where it goes. And when you export or share a collection, encrypted items stay secure,
-      so you can collaborate without worry.
+      Encrypted data remains secure when syncing to the filesystem or Git, and when exporting or
+      sharing with others.
     </p>
-    <p>It’s seamless, powerful encryption—without getting in your way.</p>
-  </Prose>
+  </VStack>
 );
 
 const setWorkspaceKeyMut = createFastMutation({
@@ -162,7 +156,7 @@ function KeyRevealer({
       <VStack space={0.5}>
         {!disableLabel && (
           <span className="text-sm text-primary flex items-center gap-1">
-            workspace encryption key <IconTooltip size="sm" content={help} />
+            workspace encryption key <IconTooltip iconSize="sm" size="lg" content={help} />
           </span>
         )}
         {key && <HighlightedKey keyText={key} show={show} />}
