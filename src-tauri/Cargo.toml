@@ -5,6 +5,7 @@ members = [
     "yaak-grpc",
     "yaak-http",
     "yaak-license",
+    "yaak-mac-window",
     "yaak-models",
     "yaak-plugins",
     "yaak-sse",
@@ -33,11 +34,6 @@ cargo-clippy = []
 
 [build-dependencies]
 tauri-build = { version = "2.1.0", features = [] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-hex_color = "3.0.0"
-objc = "0.2.7"
-cocoa = "0.26.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu installation to work
@@ -78,6 +74,7 @@ yaak-git = { path = "yaak-git" }
 yaak-grpc = { path = "yaak-grpc" }
 yaak-http = { workspace = true }
 yaak-license = { path = "yaak-license" }
+yaak-mac-window = { path = "yaak-mac-window" }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }

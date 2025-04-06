@@ -53,6 +53,7 @@
     "yaak-crypto:default",
     "yaak-git:default",
     "yaak-license:default",
+    "yaak-mac-window:default",
     "yaak-models:default",
     "yaak-sync:default",
     "yaak-ws:default"

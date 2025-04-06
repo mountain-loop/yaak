@@ -7989,15 +7989,12 @@ name = "yaak-app"
 version = "0.0.0"
 dependencies = [
  "chrono",
- "cocoa",
  "encoding_rs",
  "eventsource-client",
- "hex_color",
  "http",
  "log",
  "md5",
  "mime_guess",
- "objc",
  "openssl-sys",
  "rand 0.9.0",
  "reqwest",
@@ -8028,6 +8025,7 @@ dependencies = [
  "yaak-grpc",
  "yaak-http",
  "yaak-license",
+ "yaak-mac-window",
  "yaak-models",
  "yaak-plugins",
  "yaak-sse",
@@ -8131,6 +8129,21 @@ dependencies = [
  "thiserror 2.0.12",
  "ts-rs",
  "yaak-models",
+]
+
+[[package]]
+name = "yaak-mac-window"
+version = "0.1.0"
+dependencies = [
+ "cocoa",
+ "hex_color",
+ "log",
+ "objc",
+ "rand 0.9.0",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

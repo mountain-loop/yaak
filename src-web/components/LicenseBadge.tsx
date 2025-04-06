@@ -2,10 +2,10 @@ import type { LicenseCheckStatus } from '@yaakapp-internal/license';
 import { useLicense } from '@yaakapp-internal/license';
 import type { ReactNode } from 'react';
 import { openSettings } from '../commands/openSettings';
-import {appInfo} from "../hooks/useAppInfo";
+import { appInfo } from '../hooks/useAppInfo';
 import { useLicenseConfirmation } from '../hooks/useLicenseConfirmation';
+import { BadgeButton } from './core/BadgeButton';
 import type { ButtonProps } from './core/Button';
-import { Button } from './core/Button';
 import { SettingsTab } from './Settings/SettingsTab';
 
 const details: Record<
@@ -28,9 +28,9 @@ export function LicenseBadge() {
 
   if (check.error) {
     return (
-      <LicenseBadgeButton color="danger" onClick={() => openSettings.mutate(SettingsTab.License)}>
+      <BadgeButton color="danger" onClick={() => openSettings.mutate(SettingsTab.License)}>
         License Error
-      </LicenseBadgeButton>
+      </BadgeButton>
     );
   }
 
@@ -55,7 +55,7 @@ export function LicenseBadge() {
   }
 
   return (
-    <LicenseBadgeButton
+    <BadgeButton
       color={detail.color}
       onClick={async () => {
         if (check.data.type === 'trialing') {
@@ -68,10 +68,6 @@ export function LicenseBadge() {
       }}
     >
       {detail.label}
-    </LicenseBadgeButton>
+    </BadgeButton>
   );
-}
-
-function LicenseBadgeButton({ ...props }: ButtonProps) {
-  return <Button size="2xs" variant="border" className="!rounded-full mx-1" {...props} />;
 }

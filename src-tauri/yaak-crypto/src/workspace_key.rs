@@ -1,9 +1,9 @@
 use crate::encryption::{decrypt_data, encrypt_data};
-use crate::error::Error::InvalidEncryptionKey;
+use crate::error::Error::{InvalidEncryptionKey, InvalidKey};
 use crate::error::Result;
 use base32::Alphabet;
 use chacha20poly1305::aead::{Key, KeyInit, OsRng};
-use chacha20poly1305::XChaCha20Poly1305;
+use chacha20poly1305::{KeySizeUser, XChaCha20Poly1305};
 
 #[derive(Debug, Clone)]
 pub struct WorkspaceKey {
@@ -33,6 +33,9 @@ impl WorkspaceKey {
         let without_separators = without_prefix.replace("-", "");
         let key = base32::decode(Alphabet::Crockford {}, &without_separators)
             .ok_or(InvalidEncryptionKey)?;
+        if key.len() != XChaCha20Poly1305::key_size() {
+            return Err(InvalidKey);
+        }
         Ok(Self::from_raw_key(workspace_id, key.as_slice()))
     }
 
@@ -68,6 +71,7 @@ impl WorkspaceKey {
 
 #[cfg(test)]
 mod tests {
+    use crate::error::Error::InvalidKey;
     use crate::error::Result;
     use crate::workspace_key::WorkspaceKey;
 
@@ -93,6 +97,22 @@ mod tests {
             WorkspaceKey::from_human("wrk_1", &human)?.decrypt(encrypted.as_slice())?,
             "hello".as_bytes()
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_from_human_invalid() -> Result<()> {
+        assert!(matches!(
+            WorkspaceKey::from_human(
+                "wrk_1",
+                "YKCRRP-2CK46H-H36RSR-CMVKJE-B1CRRK-8D9PC9-JK6D1Q-71GK8R-SKCRS0-H3X38D",
+            ),
+            Err(InvalidKey)
+        ));
+
+        assert!(matches!(WorkspaceKey::from_human("wrk_1", "bad-key",), Err(InvalidKey)));
+        assert!(matches!(WorkspaceKey::from_human("wrk_1", "",), Err(InvalidKey)));
 
         Ok(())
     }

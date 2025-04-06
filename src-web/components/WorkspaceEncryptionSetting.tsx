@@ -105,26 +105,32 @@ const setWorkspaceKeyMut = createFastMutation({
 function EnterWorkspaceKey({ workspaceMeta }: { workspaceMeta: WorkspaceMeta }) {
   const [key, setKey] = useState<string>('');
   return (
-    <HStack
-      as="form"
-      alignItems="end"
-      className="w-full"
-      space={1.5}
-      onSubmit={(e) => {
-        e.preventDefault();
-        setWorkspaceKeyMut.mutate({ workspaceId: workspaceMeta.workspaceId, key: key.trim() });
-      }}
-    >
-      <PlainInput
-        required
-        onChange={setKey}
-        label="Workspace encryption key"
-        placeholder="YK0000-111111-222222-333333-444444-AAAAAA-BBBBBB-CCCCCC-DDDDDD"
-      />
-      <Button variant="border" type="submit" color="secondary">
-        Submit
-      </Button>
-    </HStack>
+    <VStack space={4}>
+      <Banner color="info">
+        This workspace contains encrypted values but no key is configured. Please enter the
+        workspace key to access the encrypted data.
+      </Banner>
+      <HStack
+        as="form"
+        alignItems="end"
+        className="w-full"
+        space={1.5}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setWorkspaceKeyMut.mutate({ workspaceId: workspaceMeta.workspaceId, key: key.trim() });
+        }}
+      >
+        <PlainInput
+          required
+          onChange={setKey}
+          label="Workspace encryption key"
+          placeholder="YK0000-111111-222222-333333-444444-AAAAAA-BBBBBB-CCCCCC-DDDDDD"
+        />
+        <Button variant="border" type="submit" color="secondary">
+          Submit
+        </Button>
+      </HStack>
+    </VStack>
   );
 }
 

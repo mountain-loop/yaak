@@ -5670,6 +5670,31 @@
         {
           "description": "Default permissions for the plugin",
           "type": "string",
+          "const": "yaak-mac-window:default"
+        },
+        {
+          "description": "Enables the set_theme command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-mac-window:allow-set-theme"
+        },
+        {
+          "description": "Enables the set_title command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-mac-window:allow-set-title"
+        },
+        {
+          "description": "Denies the set_theme command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-mac-window:deny-set-theme"
+        },
+        {
+          "description": "Denies the set_title command without any pre-configured scope.",
+          "type": "string",
+          "const": "yaak-mac-window:deny-set-title"
+        },
+        {
+          "description": "Default permissions for the plugin",
+          "type": "string",
           "const": "yaak-models:default"
         },
         {

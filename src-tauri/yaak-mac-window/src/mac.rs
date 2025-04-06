@@ -1,16 +1,6 @@
-use crate::window::MAIN_WINDOW_PREFIX;
 use hex_color::HexColor;
-use log::warn;
 use objc::{msg_send, sel, sel_impl};
-use rand::distr::Alphanumeric;
-use rand::Rng;
-use tauri::{
-    plugin::{Builder, TauriPlugin},
-    Emitter, Listener, Manager, Runtime, Window, WindowEvent,
-};
-
-const WINDOW_CONTROL_PAD_X: f64 = 13.0;
-const WINDOW_CONTROL_PAD_Y: f64 = 18.0;
+use tauri::{Emitter, Runtime, Window};
 
 struct UnsafeWindowHandle(*mut std::ffi::c_void);
 
@@ -18,65 +8,11 @@ unsafe impl Send for UnsafeWindowHandle {}
 
 unsafe impl Sync for UnsafeWindowHandle {}
 
-pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    Builder::new("mac_window")
-        .on_window_ready(|window| {
-            #[cfg(target_os = "macos")]
-            {
-                setup_traffic_light_positioner(&window);
-                let h = window.app_handle();
+const WINDOW_CONTROL_PAD_X: f64 = 13.0;
+const WINDOW_CONTROL_PAD_Y: f64 = 18.0;
+const MAIN_WINDOW_PREFIX: &str = "main_";
 
-                let window_for_theme = window.clone();
-                let id1 = h.listen("yaak_bg_changed", move |ev| {
-                    let color_str: String = match serde_json::from_str(ev.payload()) {
-                        Ok(color) => color,
-                        Err(err) => {
-                            warn!("Failed to JSON parse color '{}': {}", ev.payload(), err);
-                            return;
-                        }
-                    };
-
-                    match HexColor::parse_rgb(color_str.trim()) {
-                        Ok(color) => {
-                            update_window_theme(window_for_theme.clone(), color);
-                        }
-                        Err(err) => {
-                            warn!("Failed to parse background color '{}': {}", color_str, err)
-                        }
-                    }
-                });
-
-                let window_for_title = window.clone();
-                let id2 = h.listen("yaak_title_changed", move |ev| {
-                    let title: String = match serde_json::from_str(ev.payload()) {
-                        Ok(title) => title,
-                        Err(err) => {
-                            warn!("Failed to parse window title \"{}\": {}", ev.payload(), err);
-                            return;
-                        }
-                    };
-
-                    update_window_title(window_for_title.clone(), title);
-                });
-
-                let h = h.clone();
-                window.on_window_event(move |e| {
-                    match e {
-                        WindowEvent::Destroyed => {
-                            h.unlisten(id1);
-                            h.unlisten(id2);
-                        }
-                        _ => {}
-                    };
-                });
-            }
-            return;
-        })
-        .build()
-}
-
-#[cfg(target_os = "macos")]
-fn update_window_title<R: Runtime>(window: Window<R>, title: String) {
+pub(crate) fn update_window_title<R: Runtime>(window: Window<R>, title: String) {
     use cocoa::{appkit::NSWindow, base::nil, foundation::NSString};
 
     unsafe {
@@ -98,8 +34,7 @@ fn update_window_title<R: Runtime>(window: Window<R>, title: String) {
     }
 }
 
-#[cfg(target_os = "macos")]
-fn update_window_theme<R: Runtime>(window: Window<R>, color: HexColor) {
+pub(crate) fn update_window_theme<R: Runtime>(window: Window<R>, color: HexColor) {
     use cocoa::appkit::{
         NSAppearance, NSAppearanceNameVibrantDark, NSAppearanceNameVibrantLight, NSWindow,
     };
@@ -130,8 +65,12 @@ fn update_window_theme<R: Runtime>(window: Window<R>, color: HexColor) {
     }
 }
 
-#[cfg(target_os = "macos")]
-fn position_traffic_lights(ns_window_handle: UnsafeWindowHandle, x: f64, y: f64, label: String) {
+fn position_traffic_lights(
+    ns_window_handle: UnsafeWindowHandle,
+    x: f64,
+    y: f64,
+    label: String,
+) {
     if !label.starts_with(MAIN_WINDOW_PREFIX) {
         return;
     }
@@ -168,19 +107,19 @@ fn position_traffic_lights(ns_window_handle: UnsafeWindowHandle, x: f64, y: f64,
     }
 }
 
-#[cfg(target_os = "macos")]
 #[derive(Debug)]
 struct WindowState<R: Runtime> {
     window: Window<R>,
 }
 
-#[cfg(target_os = "macos")]
 pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
     use cocoa::appkit::NSWindow;
-    use cocoa::base::{id, BOOL};
+    use cocoa::base::{BOOL, id};
     use cocoa::delegate;
     use cocoa::foundation::NSUInteger;
     use objc::runtime::{Object, Sel};
+    use rand::Rng;
+    use rand::distr::Alphanumeric;
     use std::ffi::c_void;
 
     position_traffic_lights(

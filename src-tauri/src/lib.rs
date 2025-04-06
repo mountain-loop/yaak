@@ -1,6 +1,4 @@
 extern crate core;
-#[cfg(target_os = "macos")]
-extern crate objc;
 use crate::encoding::read_response_body;
 use crate::error::Error::GenericError;
 use crate::grpc::metadata_to_map;
@@ -60,8 +58,6 @@ mod http_request;
 mod notifications;
 mod plugin_events;
 mod render;
-#[cfg(target_os = "macos")]
-mod tauri_plugin_mac_window;
 mod updates;
 mod uri_scheme;
 mod window;
@@ -1293,17 +1289,13 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(yaak_license::init())
+        .plugin(yaak_mac_window::init())
         .plugin(yaak_models::init())
         .plugin(yaak_plugins::init())
         .plugin(yaak_crypto::init())
         .plugin(yaak_git::init())
         .plugin(yaak_ws::init())
         .plugin(yaak_sync::init());
-
-    #[cfg(target_os = "macos")]
-    {
-        builder = builder.plugin(tauri_plugin_mac_window::init());
-    }
 
     builder
         .setup(|app| {
