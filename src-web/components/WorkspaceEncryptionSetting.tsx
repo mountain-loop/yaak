@@ -48,11 +48,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone }: Props) {
       <VStack space={2} className="w-full">
         {justEnabledEncryption && (
           <Banner color="success" className="flex flex-col gap-2">
-            <p className="opacity-70">
-              This workspace will use the following key for encryption. It is stored securely using
-              your OS keychain, but it is recommended to back it up. If you share this workspace
-              with others, you&apos;ll need to send them this key to access any encrypted values.
-            </p>
+            {helpAfterEncryption}
           </Banner>
         )}
         {keyRevealer}
@@ -79,29 +75,16 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone }: Props) {
       </Button>
       {expanded ? (
         <Banner color="info" className="mb-6">
-          {help}
+          {helpBeforeEncryption}
         </Banner>
       ) : (
-        <Label htmlFor={null} help={help}>
+        <Label htmlFor={null} help={helpBeforeEncryption}>
           Workspace encryption
         </Label>
       )}
     </div>
   );
 }
-
-const help = (
-  <VStack space={3}>
-    <p>
-      Encrypt values like secrets and tokens. When enabled, Yaak will also encrypt HTTP responses,
-      cookies, and authentication credentials automatically.
-    </p>
-    <p>
-      Encrypted data remains secure when syncing to the filesystem or Git, and when exporting or
-      sharing with others.
-    </p>
-  </VStack>
-);
 
 const setWorkspaceKeyMut = createFastMutation({
   mutationKey: ['set-workspace-key'],
@@ -168,7 +151,8 @@ function KeyRevealer({
       <VStack space={0.5}>
         {!disableLabel && (
           <span className="text-sm text-primary flex items-center gap-1">
-            workspace encryption key <IconTooltip iconSize="sm" size="lg" content={help} />
+            workspace encryption key{' '}
+            <IconTooltip iconSize="sm" size="lg" content={helpAfterEncryption} />
           </span>
         )}
         {key && <HighlightedKey keyText={key} show={show} />}
@@ -208,3 +192,24 @@ function HighlightedKey({ keyText, show }: { keyText: string; show: boolean }) {
     </span>
   );
 }
+
+const helpBeforeEncryption = (
+  <VStack space={3}>
+    <p>
+      Encrypt values like secrets and tokens. When enabled, Yaak will also encrypt HTTP responses,
+      cookies, and authentication credentials automatically.
+    </p>
+    <p>
+      Encrypted data remains secure when syncing to the filesystem or Git, and when exporting or
+      sharing with others.
+    </p>
+  </VStack>
+);
+
+const helpAfterEncryption = (
+  <p>
+    this key is used for any encryption used for this workspace. It is stored securely using your OS
+    keychain, but it is recommended to back it up. If you share this workspace with others,
+    you&apos;ll need to send them this key to access any encrypted values.
+  </p>
+);

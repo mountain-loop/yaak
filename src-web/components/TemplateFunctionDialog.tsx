@@ -157,7 +157,15 @@ function InitializedTemplateFunctionDialog({
   }, [rendered.data]);
 
   return (
-    <VStack className="pb-3" space={4}>
+    <VStack
+      as="form"
+      className="pb-3"
+      space={4}
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleDone();
+      }}
+    >
       {templateFunction.name === 'secure' ? (
         <PlainInput
           required
@@ -222,7 +230,7 @@ function InitializedTemplateFunctionDialog({
             Reveal Encryption Key
           </Button>
         )}
-        <Button color="primary" onClick={handleDone}>
+        <Button type="submit" color="primary">
           Save
         </Button>
       </div>
