@@ -17,7 +17,7 @@ log = "0.4.22"
 serde_json = "1.0.132"
 hex = "0.4.3"
 sha1 = "0.10.6"
-tokio = { version = "1.42.0", features = ["fs", "sync", "macros"] }
+tokio = { version = "1.43.1", features = ["fs", "sync", "macros"] }
 notify = "7.0.0"
 
 [build-dependencies]
