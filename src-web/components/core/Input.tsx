@@ -200,7 +200,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
           containerClassName,
           fullHeight && 'h-full',
           'x-theme-input',
-          'relative w-full rounded-md text',
+          'relative w-full rounded-md text overflow-hidden',
           'border',
           focused && !disabled ? 'border-border-focus' : 'border-border',
           disabled && 'border-dotted',
@@ -210,6 +210,16 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
           size === 'xs' && 'min-h-xs',
         )}
       >
+        {/* Color password input based on whether it's encrypted */}
+        {type === 'password' && (
+          <div
+            className={classNames(
+              'absolute inset-0 opacity-5',
+              passwordFieldType === 'encrypted' && 'bg-info',
+              passwordFieldType !== 'encrypted' && 'bg-warning',
+            )}
+          />
+        )}
         {leftSlot}
         <HStack
           className={classNames(
@@ -260,7 +270,6 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
                   leftSlot: <Icon icon={showPasswordText ? 'eye_closed' : 'eye'} />,
                   onSelect() {
                     setShowPasswordText((v) => !v);
-                    console.log('DO IT');
                   },
                 },
               ]}
@@ -308,10 +317,10 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
                 size="xs"
                 iconSize="sm"
                 title="Configure secure input"
-                className={classNames('mr-0.5', disabled && 'opacity-disabled')}
+                className={classNames('mr-0.5 opacity-70', disabled && '!opacity-disabled')}
                 icon={passwordFieldType === 'encrypted' ? 'lock' : 'lock_open'}
                 iconClassName={classNames(
-                  passwordFieldType === 'encrypted' && '!text-text-subtle',
+                  passwordFieldType === 'encrypted' && '!text-info',
                   passwordFieldType !== 'encrypted' && '!text-warning',
                 )}
               >
