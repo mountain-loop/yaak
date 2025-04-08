@@ -3,10 +3,11 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::util::{generate_prefixed_id, UpdateSource};
+use crate::util::{UpdateSource, generate_prefixed_id};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
-use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};
+use sea_query::Order::Desc;
+use sea_query::{IntoColumnRef, IntoIden, IntoTableRef, Order, SimpleExpr, enum_def};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -124,6 +125,10 @@ impl UpsertModelInfo for Settings {
         panic!("Settings does not have unique IDs")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (SettingsIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -232,6 +237,10 @@ impl UpsertModelInfo for Workspace {
         generate_prefixed_id("wk")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WorkspaceIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -318,6 +327,10 @@ impl UpsertModelInfo for WorkspaceMeta {
 
     fn generate_id() -> String {
         generate_prefixed_id("wm")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WorkspaceMetaIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -417,6 +430,10 @@ impl UpsertModelInfo for CookieJar {
         generate_prefixed_id("cj")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (CookieJarIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -488,6 +505,10 @@ impl UpsertModelInfo for Environment {
 
     fn generate_id() -> String {
         generate_prefixed_id("ev")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (EnvironmentIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -577,6 +598,10 @@ impl UpsertModelInfo for Folder {
 
     fn generate_id() -> String {
         generate_prefixed_id("fl")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (FolderIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -677,7 +702,7 @@ pub struct HttpRequest {
     #[serde(default = "default_http_method")]
     pub method: String,
     pub name: String,
-    pub sort_priority: f32,
+    pub sort_priority: f64,
     pub url: String,
     pub url_parameters: Vec<HttpUrlParameter>,
 }
@@ -693,6 +718,10 @@ impl UpsertModelInfo for HttpRequest {
 
     fn generate_id() -> String {
         generate_prefixed_id("rq")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (HttpResponseIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -749,21 +778,21 @@ impl UpsertModelInfo for HttpRequest {
         Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
-            sort_priority: r.get("sort_priority")?,
             workspace_id: r.get("workspace_id")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
-            url: r.get("url")?,
-            url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
-            method: r.get("method")?,
+            authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
+            authentication_type: r.get("authentication_type")?,
             body: serde_json::from_str(body.as_str()).unwrap_or_default(),
             body_type: r.get("body_type")?,
             description: r.get("description")?,
-            authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
-            authentication_type: r.get("authentication_type")?,
-            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
             folder_id: r.get("folder_id")?,
+            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            method: r.get("method")?,
             name: r.get("name")?,
+            sort_priority: r.get("sort_priority")?,
+            url: r.get("url")?,
+            url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
         })
     }
 }
@@ -816,6 +845,10 @@ impl UpsertModelInfo for WebsocketConnection {
 
     fn generate_id() -> String {
         generate_prefixed_id("wc")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WebsocketConnectionIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -926,6 +959,10 @@ impl UpsertModelInfo for WebsocketRequest {
 
     fn generate_id() -> String {
         generate_prefixed_id("wr")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WebsocketRequestIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -1049,6 +1086,10 @@ impl UpsertModelInfo for WebsocketEvent {
         generate_prefixed_id("we")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WebsocketEventIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1160,6 +1201,10 @@ impl UpsertModelInfo for HttpResponse {
 
     fn generate_id() -> String {
         generate_prefixed_id("rs")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (HttpResponseIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -1290,6 +1335,10 @@ impl UpsertModelInfo for GrpcRequest {
         generate_prefixed_id("gr")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GrpcRequestIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1413,6 +1462,10 @@ impl UpsertModelInfo for GrpcConnection {
         generate_prefixed_id("gc")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GrpcConnectionIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1529,6 +1582,10 @@ impl UpsertModelInfo for GrpcEvent {
         generate_prefixed_id("ge")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GrpcEventIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1616,6 +1673,10 @@ impl UpsertModelInfo for Plugin {
         generate_prefixed_id("pg")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (PluginIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1692,6 +1753,10 @@ impl UpsertModelInfo for SyncState {
 
     fn generate_id() -> String {
         generate_prefixed_id("ss")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (SyncStateIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -1771,6 +1836,10 @@ impl UpsertModelInfo for KeyValue {
 
     fn generate_id() -> String {
         generate_prefixed_id("kv")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (KeyValueIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -1972,6 +2041,7 @@ pub trait UpsertModelInfo {
     fn table_name() -> impl IntoTableRef;
     fn id_column() -> impl IntoIden + Eq + Clone;
     fn generate_id() -> String;
+    fn order_by() -> (impl IntoColumnRef, Order);
     fn get_id(&self) -> String;
     fn insert_values(
         self,

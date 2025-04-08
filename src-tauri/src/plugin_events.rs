@@ -1,6 +1,6 @@
 use crate::http_request::send_http_request;
 use crate::render::{render_http_request, render_json_value};
-use crate::window::{create_window, CreateWindowConfig};
+use crate::window::{CreateWindowConfig, create_window};
 use crate::{
     call_frontend, cookie_jar_from_window, environment_from_window, get_window_from_window_context,
     workspace_from_window,
@@ -54,17 +54,14 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         InternalEventPayload::FindHttpResponsesRequest(req) => {
             let http_responses = app_handle
                 .db()
-                .list_http_responses_for_request(
-                    req.request_id.as_str(),
-                    req.limit.map(|l| l as u64),
-                )
+                .list_http_responses_for_request(&req.request_id, req.limit.map(|l| l as u64))
                 .unwrap_or_default();
             Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
                 http_responses,
             }))
         }
         InternalEventPayload::GetHttpRequestByIdRequest(req) => {
-            let http_request = app_handle.db().get_http_request(req.id.as_str()).ok();
+            let http_request = app_handle.db().get_http_request(&req.id).ok();
             Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
                 http_request,
             }))
