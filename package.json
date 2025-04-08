@@ -41,7 +41,7 @@
     "jotai": "^2.12.2"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.4.0",
+    "@tauri-apps/cli": "^2.4.1",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
     "@typescript-eslint/parser": "^8.27.0",
     "eslint": "^8",

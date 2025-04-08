@@ -6,4 +6,4 @@ publish = false
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
-ts-rs = { version = "10.0.0", features = ["serde-json-impl"] }
+ts-rs = { workspace = true, features = ["serde-json-impl"] }

@@ -26,7 +26,6 @@ type TauriCmd =
   | 'cmd_metadata'
   | 'cmd_new_child_window'
   | 'cmd_new_main_window'
-  | 'cmd_parse_template'
   | 'cmd_plugin_info'
   | 'cmd_reload_plugins'
   | 'cmd_render_template'

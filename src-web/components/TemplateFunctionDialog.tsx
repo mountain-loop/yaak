@@ -17,6 +17,7 @@ import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
+import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 
@@ -28,7 +29,9 @@ interface Props {
 }
 
 export function TemplateFunctionDialog({ initialTokens, templateFunction, ...props }: Props) {
-  const [initialArgValues, setInitialArgValues] = useState<Record<string, string | boolean> | null>(null);
+  const [initialArgValues, setInitialArgValues] = useState<Record<string, string | boolean> | null>(
+    null,
+  );
   useEffect(() => {
     if (initialArgValues != null) {
       return;
@@ -60,21 +63,28 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
         const workspaceId = jotaiStore.get(activeWorkspaceIdAtom) ?? 'n/a';
         const environmentId = jotaiStore.get(activeEnvironmentIdAtom) ?? null;
         // Kinda hacky, but render the tag to get the decrypted value, and replace the arg with that
-        initial.value = await renderTemplate({
+        const newValue = await renderTemplate({
           template: await templateTokensToString(initialTokens),
           workspaceId,
           environmentId,
         });
+        initial.value = newValue;
       }
 
       setInitialArgValues(initial);
     })().catch(console.error);
-  }, [initialArgValues, initialTokens, initialTokens.tokens, templateFunction.args, templateFunction.name]);
+  }, [
+    initialArgValues,
+    initialTokens,
+    initialTokens.tokens,
+    templateFunction.args,
+    templateFunction.name,
+  ]);
 
   if (initialArgValues == null) return null;
 
   return (
-    <TemplateFunctionDialog2
+    <InitializedTemplateFunctionDialog
       {...props}
       templateFunction={templateFunction}
       initialArgValues={initialArgValues}
@@ -82,7 +92,7 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
   );
 }
 
-function TemplateFunctionDialog2({
+function InitializedTemplateFunctionDialog({
   templateFunction,
   hide,
   initialArgValues,
@@ -148,14 +158,26 @@ function TemplateFunctionDialog2({
 
   return (
     <VStack className="pb-3" space={4}>
-      <DynamicForm
-        autocompleteVariables={enableDynamicFormVariables}
-        autocompleteFunctions={enableDynamicFormVariables}
-        inputs={templateFunction.args}
-        data={argValues}
-        onChange={setArgValues}
-        stateKey={`template_function.${templateFunction.name}`}
-      />
+      {templateFunction.name === 'secure' ? (
+        <PlainInput
+          required
+          label="Value"
+          name="value"
+          type="password"
+          placeholder="••••••••••••"
+          defaultValue={String(argValues['value'] ?? '')}
+          onChange={(value) => setArgValues({ ...argValues, value })}
+        />
+      ) : (
+        <DynamicForm
+          autocompleteVariables={enableDynamicFormVariables}
+          autocompleteFunctions={enableDynamicFormVariables}
+          inputs={templateFunction.args}
+          data={argValues}
+          onChange={setArgValues}
+          stateKey={`template_function.${templateFunction.name}`}
+        />
+      )}
       {enablePreview && (
         <VStack className="w-full" space={1}>
           <HStack space={0.5}>

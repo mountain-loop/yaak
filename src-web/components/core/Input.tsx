@@ -1,13 +1,22 @@
+import { parseTemplate } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import type { ReactNode } from 'react';
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { activeEnvironmentIdAtom } from '../../hooks/useActiveEnvironment';
+import { activeWorkspaceIdAtom } from '../../hooks/useActiveWorkspace';
+import { useRandomKey } from '../../hooks/useRandomKey';
+import { renderTemplate } from '../../hooks/useRenderTemplate';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
+import { templateTokensToString } from '../../hooks/useTemplateTokensToString';
 import { generateId } from '../../lib/generateId';
+import { jotaiStore } from '../../lib/jotai';
 import type { EditorProps } from './Editor/Editor';
 import { Editor } from './Editor/Editor';
 import { IconButton } from './IconButton';
 import { Label } from './Label';
+import type { RadioDropdownItem } from './RadioDropdown';
+import { RadioDropdown } from './RadioDropdown';
 import { HStack } from './Stacks';
 
 export type InputProps = Pick<
@@ -50,13 +59,15 @@ export type InputProps = Pick<
   stateKey: EditorProps['stateKey'];
 };
 
+type PasswordFieldType = 'password' | 'text' | 'encrypted';
+
 export const Input = forwardRef<EditorView, InputProps>(function Input(
   {
     className,
     containerClassName,
     inputWrapperClassName,
     defaultValue,
-    forceUpdateKey,
+    forceUpdateKey: providedForceUpdateKey,
     fullHeight,
     hideLabel,
     label,
@@ -83,11 +94,23 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
   }: InputProps,
   ref,
 ) {
-  const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
-  const [currentValue, setCurrentValue] = useState(defaultValue ?? '');
+  const [passwordFieldType, setPasswordFieldType] = useStateWithDeps<PasswordFieldType>(
+    defaultValue?.includes('${[ secure(value=') ? 'encrypted' : 'password',
+    [type, stateKey, providedForceUpdateKey],
+  );
   const [focused, setFocused] = useState(false);
-  const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [stateKey, forceUpdateKey]);
+  const [currentValue, setCurrentValue] = useStateWithDeps(defaultValue ?? '', [
+    stateKey,
+    providedForceUpdateKey,
+  ]);
+  const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [
+    stateKey,
+    providedForceUpdateKey,
+  ]);
+  const [localForceUpdateKey, regenerateLocalForceUpdateKey] = useRandomKey();
   const editorRef = useRef<EditorView | null>(null);
+  const forceUpdateKey = `${providedForceUpdateKey}:${localForceUpdateKey}`;
+
   useImperativeHandle<EditorView | null, EditorView | null>(ref, () => editorRef.current);
 
   const handleFocus = useCallback(() => {
@@ -128,7 +151,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
       onChange?.(value);
       setHasChanged(true);
     },
-    [onChange, setHasChanged],
+    [onChange, setCurrentValue, setHasChanged],
   );
 
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -200,8 +223,8 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
             wrapLines={wrapLines}
             heightMode="auto"
             onKeyDown={handleKeyDown}
-            type={type === 'password' && !obscured ? 'text' : type}
-            defaultValue={defaultValue}
+            type={type === 'password' && passwordFieldType !== 'password' ? 'text' : type}
+            defaultValue={currentValue}
             forceUpdateKey={forceUpdateKey}
             placeholder={placeholder}
             onChange={handleChange}
@@ -220,24 +243,82 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
           />
         </HStack>
         {type === 'password' && (
-          <IconButton
-            title={obscured ? `Show ${label}` : `Obscure ${label}`}
-            size="xs"
-            className={classNames(
-              'mr-0.5 group/obscure !h-auto my-0.5',
-              disabled && 'opacity-disabled',
-            )}
-            iconClassName="group-hover/obscure:text"
-            iconSize="sm"
-            icon={obscured ? 'eye' : 'eye_closed'}
-            onClick={() => setObscured((o) => !o)}
-          />
+          <HStack className="h-auto my-0.5">
+            <RadioDropdown
+              value={passwordFieldType}
+              items={passwordTypeItems}
+              onChange={async (newFieldType) => {
+                if (passwordFieldType !== 'encrypted' && newFieldType === 'encrypted') {
+                  const template = await templateTokensToString({
+                    tokens: [
+                      {
+                        type: 'tag',
+                        val: {
+                          type: 'fn',
+                          name: 'secure',
+                          args: [
+                            {
+                              name: 'value',
+                              value: { type: 'str', text: currentValue },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  });
+                  handleChange(template);
+                  regenerateLocalForceUpdateKey();
+                } else if (passwordFieldType === 'encrypted' && newFieldType !== 'encrypted') {
+                  // Kinda hacky, but render the tag to get the decrypted value, and replace the arg with that
+                  const tokens = parseTemplate(currentValue);
+                  const newValue = await renderTemplate({
+                    template: await templateTokensToString(tokens),
+                    workspaceId: jotaiStore.get(activeWorkspaceIdAtom) ?? 'n/a',
+                    environmentId: jotaiStore.get(activeEnvironmentIdAtom) ?? null,
+                  });
+                  handleChange(newValue);
+                  regenerateLocalForceUpdateKey();
+                }
+                // TODO: Modify the value
+                setPasswordFieldType(newFieldType);
+              }}
+            >
+              <IconButton
+                size="xs"
+                iconSize="sm"
+                title="Configure secure input"
+                className={classNames('mr-0.5', disabled && 'opacity-disabled')}
+                icon={passwordFieldType === 'encrypted' ? 'lock' : 'lock_open'}
+                iconClassName={classNames(
+                  passwordFieldType === 'encrypted' && '!text-text-subtle',
+                  passwordFieldType !== 'encrypted' && '!text-warning',
+                )}
+              >
+                Lock it
+              </IconButton>
+            </RadioDropdown>
+          </HStack>
         )}
         {rightSlot}
       </HStack>
     </div>
   );
 });
+
+const passwordTypeItems: RadioDropdownItem<PasswordFieldType>[] = [
+  {
+    label: 'Password',
+    value: 'password',
+  },
+  {
+    label: 'Plain Text',
+    value: 'text',
+  },
+  {
+    label: 'Encrypted',
+    value: 'encrypted',
+  },
+];
 
 function validateRequire(v: string) {
   return v.length > 0;

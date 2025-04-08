@@ -297,47 +297,56 @@
         {
           "description": "Enables the apply command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-apply"
+          "const": "allow-apply",
+          "markdownDescription": "Enables the apply command without any pre-configured scope."
         },
         {
           "description": "Denies the apply command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-apply"
+          "const": "deny-apply",
+          "markdownDescription": "Denies the apply command without any pre-configured scope."
         },
         {
           "description": "Enables the calculate command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-calculate"
+          "const": "allow-calculate",
+          "markdownDescription": "Enables the calculate command without any pre-configured scope."
         },
         {
           "description": "Denies the calculate command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-calculate"
+          "const": "deny-calculate",
+          "markdownDescription": "Denies the calculate command without any pre-configured scope."
         },
         {
           "description": "Enables the calculate_fs command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-calculate-fs"
+          "const": "allow-calculate-fs",
+          "markdownDescription": "Enables the calculate_fs command without any pre-configured scope."
         },
         {
           "description": "Denies the calculate_fs command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-calculate-fs"
+          "const": "deny-calculate-fs",
+          "markdownDescription": "Denies the calculate_fs command without any pre-configured scope."
         },
         {
           "description": "Enables the watch command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-watch"
+          "const": "allow-watch",
+          "markdownDescription": "Enables the watch command without any pre-configured scope."
         },
         {
           "description": "Denies the watch command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-watch"
+          "const": "deny-watch",
+          "markdownDescription": "Denies the watch command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-calculate`\n- `allow-calculate-fs`\n- `allow-apply`\n- `allow-watch`",
           "type": "string",
-          "const": "default"
+          "const": "default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-calculate`\n- `allow-calculate-fs`\n- `allow-apply`\n- `allow-watch`"
         }
       ]
     }

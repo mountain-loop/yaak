@@ -297,37 +297,44 @@
         {
           "description": "Enables the enable_encryption command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-enable-encryption"
+          "const": "allow-enable-encryption",
+          "markdownDescription": "Enables the enable_encryption command without any pre-configured scope."
         },
         {
           "description": "Denies the enable_encryption command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-enable-encryption"
+          "const": "deny-enable-encryption",
+          "markdownDescription": "Denies the enable_encryption command without any pre-configured scope."
         },
         {
           "description": "Enables the reveal_workspace_key command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-reveal-workspace-key"
+          "const": "allow-reveal-workspace-key",
+          "markdownDescription": "Enables the reveal_workspace_key command without any pre-configured scope."
         },
         {
           "description": "Denies the reveal_workspace_key command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-reveal-workspace-key"
+          "const": "deny-reveal-workspace-key",
+          "markdownDescription": "Denies the reveal_workspace_key command without any pre-configured scope."
         },
         {
           "description": "Enables the set_workspace_key command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-set-workspace-key"
+          "const": "allow-set-workspace-key",
+          "markdownDescription": "Enables the set_workspace_key command without any pre-configured scope."
         },
         {
           "description": "Denies the set_workspace_key command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-set-workspace-key"
+          "const": "deny-set-workspace-key",
+          "markdownDescription": "Denies the set_workspace_key command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-enable-encryption`\n- `allow-reveal-workspace-key`\n- `allow-set-workspace-key`",
           "type": "string",
-          "const": "default"
+          "const": "default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-enable-encryption`\n- `allow-reveal-workspace-key`\n- `allow-set-workspace-key`"
         }
       ]
     }

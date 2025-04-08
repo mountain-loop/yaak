@@ -11,12 +11,12 @@ hex = "0.4.3"
 log = "0.4.22"
 notify = "8.0.0"
 serde = { workspace = true, features = ["derive"] }
-serde_json = {workspace = true}
+serde_json = { workspace = true }
 serde_yaml = "0.9.34"
 sha1 = "0.10.6"
 tauri = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.42.0", features = ["fs", "sync", "macros"] }
+tokio = { workspace = true, features = ["fs", "sync", "macros"] }
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
 yaak-models = { workspace = true }
 

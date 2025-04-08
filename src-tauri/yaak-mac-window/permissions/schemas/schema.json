@@ -297,27 +297,32 @@
         {
           "description": "Enables the set_theme command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-set-theme"
+          "const": "allow-set-theme",
+          "markdownDescription": "Enables the set_theme command without any pre-configured scope."
         },
         {
           "description": "Denies the set_theme command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-set-theme"
+          "const": "deny-set-theme",
+          "markdownDescription": "Denies the set_theme command without any pre-configured scope."
         },
         {
           "description": "Enables the set_title command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-set-title"
+          "const": "allow-set-title",
+          "markdownDescription": "Enables the set_title command without any pre-configured scope."
         },
         {
           "description": "Denies the set_title command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-set-title"
+          "const": "deny-set-title",
+          "markdownDescription": "Denies the set_title command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-set-title`\n- `allow-set-theme`",
           "type": "string",
-          "const": "default"
+          "const": "default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-set-title`\n- `allow-set-theme`"
         }
       ]
     }

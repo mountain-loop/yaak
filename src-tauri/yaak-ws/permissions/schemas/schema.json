@@ -297,157 +297,188 @@
         {
           "description": "Enables the cancel command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-cancel"
+          "const": "allow-cancel",
+          "markdownDescription": "Enables the cancel command without any pre-configured scope."
         },
         {
           "description": "Denies the cancel command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-cancel"
+          "const": "deny-cancel",
+          "markdownDescription": "Denies the cancel command without any pre-configured scope."
         },
         {
           "description": "Enables the close command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-close"
+          "const": "allow-close",
+          "markdownDescription": "Enables the close command without any pre-configured scope."
         },
         {
           "description": "Denies the close command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-close"
+          "const": "deny-close",
+          "markdownDescription": "Denies the close command without any pre-configured scope."
         },
         {
           "description": "Enables the connect command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-connect"
+          "const": "allow-connect",
+          "markdownDescription": "Enables the connect command without any pre-configured scope."
         },
         {
           "description": "Denies the connect command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-connect"
+          "const": "deny-connect",
+          "markdownDescription": "Denies the connect command without any pre-configured scope."
         },
         {
           "description": "Enables the delete_connection command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-delete-connection"
+          "const": "allow-delete-connection",
+          "markdownDescription": "Enables the delete_connection command without any pre-configured scope."
         },
         {
           "description": "Denies the delete_connection command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-delete-connection"
+          "const": "deny-delete-connection",
+          "markdownDescription": "Denies the delete_connection command without any pre-configured scope."
         },
         {
           "description": "Enables the delete_connections command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-delete-connections"
+          "const": "allow-delete-connections",
+          "markdownDescription": "Enables the delete_connections command without any pre-configured scope."
         },
         {
           "description": "Denies the delete_connections command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-delete-connections"
+          "const": "deny-delete-connections",
+          "markdownDescription": "Denies the delete_connections command without any pre-configured scope."
         },
         {
           "description": "Enables the delete_request command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-delete-request"
+          "const": "allow-delete-request",
+          "markdownDescription": "Enables the delete_request command without any pre-configured scope."
         },
         {
           "description": "Denies the delete_request command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-delete-request"
+          "const": "deny-delete-request",
+          "markdownDescription": "Denies the delete_request command without any pre-configured scope."
         },
         {
           "description": "Enables the duplicate_request command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-duplicate-request"
+          "const": "allow-duplicate-request",
+          "markdownDescription": "Enables the duplicate_request command without any pre-configured scope."
         },
         {
           "description": "Denies the duplicate_request command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-duplicate-request"
+          "const": "deny-duplicate-request",
+          "markdownDescription": "Denies the duplicate_request command without any pre-configured scope."
         },
         {
           "description": "Enables the list_connections command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-list-connections"
+          "const": "allow-list-connections",
+          "markdownDescription": "Enables the list_connections command without any pre-configured scope."
         },
         {
           "description": "Denies the list_connections command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-list-connections"
+          "const": "deny-list-connections",
+          "markdownDescription": "Denies the list_connections command without any pre-configured scope."
         },
         {
           "description": "Enables the list_events command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-list-events"
+          "const": "allow-list-events",
+          "markdownDescription": "Enables the list_events command without any pre-configured scope."
         },
         {
           "description": "Denies the list_events command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-list-events"
+          "const": "deny-list-events",
+          "markdownDescription": "Denies the list_events command without any pre-configured scope."
         },
         {
           "description": "Enables the list_requests command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-list-requests"
+          "const": "allow-list-requests",
+          "markdownDescription": "Enables the list_requests command without any pre-configured scope."
         },
         {
           "description": "Denies the list_requests command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-list-requests"
+          "const": "deny-list-requests",
+          "markdownDescription": "Denies the list_requests command without any pre-configured scope."
         },
         {
           "description": "Enables the list_websocket_connections command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-list-websocket-connections"
+          "const": "allow-list-websocket-connections",
+          "markdownDescription": "Enables the list_websocket_connections command without any pre-configured scope."
         },
         {
           "description": "Denies the list_websocket_connections command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-list-websocket-connections"
+          "const": "deny-list-websocket-connections",
+          "markdownDescription": "Denies the list_websocket_connections command without any pre-configured scope."
         },
         {
           "description": "Enables the list_websocket_requests command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-list-websocket-requests"
+          "const": "allow-list-websocket-requests",
+          "markdownDescription": "Enables the list_websocket_requests command without any pre-configured scope."
         },
         {
           "description": "Denies the list_websocket_requests command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-list-websocket-requests"
+          "const": "deny-list-websocket-requests",
+          "markdownDescription": "Denies the list_websocket_requests command without any pre-configured scope."
         },
         {
           "description": "Enables the send command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-send"
+          "const": "allow-send",
+          "markdownDescription": "Enables the send command without any pre-configured scope."
         },
         {
           "description": "Denies the send command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-send"
+          "const": "deny-send",
+          "markdownDescription": "Denies the send command without any pre-configured scope."
         },
         {
           "description": "Enables the upsert_request command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-upsert-request"
+          "const": "allow-upsert-request",
+          "markdownDescription": "Enables the upsert_request command without any pre-configured scope."
         },
         {
           "description": "Denies the upsert_request command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-upsert-request"
+          "const": "deny-upsert-request",
+          "markdownDescription": "Denies the upsert_request command without any pre-configured scope."
         },
         {
           "description": "Enables the upsert_websocket_request command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-upsert-websocket-request"
+          "const": "allow-upsert-websocket-request",
+          "markdownDescription": "Enables the upsert_websocket_request command without any pre-configured scope."
         },
         {
           "description": "Denies the upsert_websocket_request command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-upsert-websocket-request"
+          "const": "deny-upsert-websocket-request",
+          "markdownDescription": "Denies the upsert_websocket_request command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-close`\n- `allow-connect`\n- `allow-delete-connection`\n- `allow-delete-connections`\n- `allow-delete-request`\n- `allow-duplicate-request`\n- `allow-list-connections`\n- `allow-list-events`\n- `allow-list-requests`\n- `allow-send`\n- `allow-upsert-request`",
           "type": "string",
-          "const": "default"
+          "const": "default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-close`\n- `allow-connect`\n- `allow-delete-connection`\n- `allow-delete-connections`\n- `allow-delete-request`\n- `allow-duplicate-request`\n- `allow-list-connections`\n- `allow-list-events`\n- `allow-list-requests`\n- `allow-send`\n- `allow-upsert-request`"
         }
       ]
     }

@@ -27,7 +27,6 @@ import {
 } from 'react';
 import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
 import { activeWorkspaceMetaAtom } from '../../../hooks/useActiveWorkspace';
-import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { showDialog } from '../../../lib/dialog';
@@ -48,6 +47,7 @@ import {
 } from './extensions';
 import type { GenericCompletionConfig } from './genericCompletion';
 import { singleLineExtensions } from './singleLine';
+import { parseTemplate } from '@yaakapp-internal/templates';
 
 // VSCode's Tab actions mess with the single-line editor tab actions, so remove it.
 const vsCodeWithoutTab = vscodeKeymap.filter((k) => k.key !== 'Tab');
@@ -269,7 +269,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   const onClickFunction = useCallback(
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
-      const initialTokens = await parseTemplate(tagValue);
+      const initialTokens = parseTemplate(tagValue);
       const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
       if (fn.name === 'secure' && workspaceMeta?.encryptionKey == null) {
         return showSetupWorkspaceEncryptionDialog();
@@ -299,7 +299,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   const onClickVariable = useCallback(
     async (_v: EnvironmentVariable, tagValue: string, startPos: number) => {
-      const initialTokens = await parseTemplate(tagValue);
+      const initialTokens = parseTemplate(tagValue);
       showDialog({
         size: 'dynamic',
         id: 'template-variable',
@@ -322,7 +322,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   const onClickMissingVariable = useCallback(
     async (_name: string, tagValue: string, startPos: number) => {
-      const initialTokens = await parseTemplate(tagValue);
+      const initialTokens = parseTemplate(tagValue);
       showDialog({
         size: 'dynamic',
         id: 'template-variable',

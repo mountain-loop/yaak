@@ -47,7 +47,7 @@ use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
-use yaak_templates::{Parser, Tokens, transform_args};
+use yaak_templates::{Tokens, transform_args};
 
 mod commands;
 mod encoding;
@@ -84,11 +84,6 @@ async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
         app_data_dir: app_data_dir.to_string_lossy().to_string(),
         app_log_dir: app_log_dir.to_string_lossy().to_string(),
     })
-}
-
-#[tauri::command]
-async fn cmd_parse_template(template: &str) -> YaakResult<Tokens> {
-    Ok(Parser::new(template).parse()?)
 }
 
 #[tauri::command]
@@ -1343,7 +1338,6 @@ pub fn run() {
             cmd_metadata,
             cmd_new_child_window,
             cmd_new_main_window,
-            cmd_parse_template,
             cmd_plugin_info,
             cmd_reload_plugins,
             cmd_render_template,

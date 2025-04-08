@@ -297,77 +297,92 @@
         {
           "description": "Enables the delete command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-delete"
+          "const": "allow-delete",
+          "markdownDescription": "Enables the delete command without any pre-configured scope."
         },
         {
           "description": "Denies the delete command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-delete"
+          "const": "deny-delete",
+          "markdownDescription": "Denies the delete command without any pre-configured scope."
         },
         {
           "description": "Enables the duplicate command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-duplicate"
+          "const": "allow-duplicate",
+          "markdownDescription": "Enables the duplicate command without any pre-configured scope."
         },
         {
           "description": "Denies the duplicate command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-duplicate"
+          "const": "deny-duplicate",
+          "markdownDescription": "Denies the duplicate command without any pre-configured scope."
         },
         {
           "description": "Enables the get_settings command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-get-settings"
+          "const": "allow-get-settings",
+          "markdownDescription": "Enables the get_settings command without any pre-configured scope."
         },
         {
           "description": "Denies the get_settings command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-get-settings"
+          "const": "deny-get-settings",
+          "markdownDescription": "Denies the get_settings command without any pre-configured scope."
         },
         {
           "description": "Enables the grpc_events command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-grpc-events"
+          "const": "allow-grpc-events",
+          "markdownDescription": "Enables the grpc_events command without any pre-configured scope."
         },
         {
           "description": "Denies the grpc_events command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-grpc-events"
+          "const": "deny-grpc-events",
+          "markdownDescription": "Denies the grpc_events command without any pre-configured scope."
         },
         {
           "description": "Enables the upsert command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-upsert"
+          "const": "allow-upsert",
+          "markdownDescription": "Enables the upsert command without any pre-configured scope."
         },
         {
           "description": "Denies the upsert command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-upsert"
+          "const": "deny-upsert",
+          "markdownDescription": "Denies the upsert command without any pre-configured scope."
         },
         {
           "description": "Enables the websocket_events command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-websocket-events"
+          "const": "allow-websocket-events",
+          "markdownDescription": "Enables the websocket_events command without any pre-configured scope."
         },
         {
           "description": "Denies the websocket_events command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-websocket-events"
+          "const": "deny-websocket-events",
+          "markdownDescription": "Denies the websocket_events command without any pre-configured scope."
         },
         {
           "description": "Enables the workspace_models command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-workspace-models"
+          "const": "allow-workspace-models",
+          "markdownDescription": "Enables the workspace_models command without any pre-configured scope."
         },
         {
           "description": "Denies the workspace_models command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-workspace-models"
+          "const": "deny-workspace-models",
+          "markdownDescription": "Denies the workspace_models command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-delete`\n- `allow-duplicate`\n- `allow-get-settings`\n- `allow-grpc-events`\n- `allow-upsert`\n- `allow-websocket-events`\n- `allow-workspace-models`",
           "type": "string",
-          "const": "default"
+          "const": "default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-delete`\n- `allow-duplicate`\n- `allow-get-settings`\n- `allow-grpc-events`\n- `allow-upsert`\n- `allow-websocket-events`\n- `allow-workspace-models`"
         }
       ]
     }

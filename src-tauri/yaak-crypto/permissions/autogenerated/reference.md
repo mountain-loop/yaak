@@ -2,6 +2,8 @@
 
 Default permissions for the plugin
 
+#### This default permission set includes the following:
+
 - `allow-enable-encryption`
 - `allow-reveal-workspace-key`
 - `allow-set-workspace-key`

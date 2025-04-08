@@ -297,37 +297,44 @@
         {
           "description": "Enables the activate command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-activate"
+          "const": "allow-activate",
+          "markdownDescription": "Enables the activate command without any pre-configured scope."
         },
         {
           "description": "Denies the activate command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-activate"
+          "const": "deny-activate",
+          "markdownDescription": "Denies the activate command without any pre-configured scope."
         },
         {
           "description": "Enables the check command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-check"
+          "const": "allow-check",
+          "markdownDescription": "Enables the check command without any pre-configured scope."
         },
         {
           "description": "Denies the check command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-check"
+          "const": "deny-check",
+          "markdownDescription": "Denies the check command without any pre-configured scope."
         },
         {
           "description": "Enables the deactivate command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-deactivate"
+          "const": "allow-deactivate",
+          "markdownDescription": "Enables the deactivate command without any pre-configured scope."
         },
         {
           "description": "Denies the deactivate command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-deactivate"
+          "const": "deny-deactivate",
+          "markdownDescription": "Denies the deactivate command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-check`\n- `allow-activate`\n- `allow-deactivate`",
           "type": "string",
-          "const": "default"
+          "const": "default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-check`\n- `allow-activate`\n- `allow-deactivate`"
         }
       ]
     }

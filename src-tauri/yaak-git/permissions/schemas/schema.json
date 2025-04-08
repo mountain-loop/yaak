@@ -297,147 +297,176 @@
         {
           "description": "Enables the add command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-add"
+          "const": "allow-add",
+          "markdownDescription": "Enables the add command without any pre-configured scope."
         },
         {
           "description": "Denies the add command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-add"
+          "const": "deny-add",
+          "markdownDescription": "Denies the add command without any pre-configured scope."
         },
         {
           "description": "Enables the branch command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-branch"
+          "const": "allow-branch",
+          "markdownDescription": "Enables the branch command without any pre-configured scope."
         },
         {
           "description": "Denies the branch command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-branch"
+          "const": "deny-branch",
+          "markdownDescription": "Denies the branch command without any pre-configured scope."
         },
         {
           "description": "Enables the checkout command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-checkout"
+          "const": "allow-checkout",
+          "markdownDescription": "Enables the checkout command without any pre-configured scope."
         },
         {
           "description": "Denies the checkout command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-checkout"
+          "const": "deny-checkout",
+          "markdownDescription": "Denies the checkout command without any pre-configured scope."
         },
         {
           "description": "Enables the checkout_remote command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-checkout-remote"
+          "const": "allow-checkout-remote",
+          "markdownDescription": "Enables the checkout_remote command without any pre-configured scope."
         },
         {
           "description": "Denies the checkout_remote command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-checkout-remote"
+          "const": "deny-checkout-remote",
+          "markdownDescription": "Denies the checkout_remote command without any pre-configured scope."
         },
         {
           "description": "Enables the commit command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-commit"
+          "const": "allow-commit",
+          "markdownDescription": "Enables the commit command without any pre-configured scope."
         },
         {
           "description": "Denies the commit command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-commit"
+          "const": "deny-commit",
+          "markdownDescription": "Denies the commit command without any pre-configured scope."
         },
         {
           "description": "Enables the delete_branch command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-delete-branch"
+          "const": "allow-delete-branch",
+          "markdownDescription": "Enables the delete_branch command without any pre-configured scope."
         },
         {
           "description": "Denies the delete_branch command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-delete-branch"
+          "const": "deny-delete-branch",
+          "markdownDescription": "Denies the delete_branch command without any pre-configured scope."
         },
         {
           "description": "Enables the fetch_all command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-fetch-all"
+          "const": "allow-fetch-all",
+          "markdownDescription": "Enables the fetch_all command without any pre-configured scope."
         },
         {
           "description": "Denies the fetch_all command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-fetch-all"
+          "const": "deny-fetch-all",
+          "markdownDescription": "Denies the fetch_all command without any pre-configured scope."
         },
         {
           "description": "Enables the initialize command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-initialize"
+          "const": "allow-initialize",
+          "markdownDescription": "Enables the initialize command without any pre-configured scope."
         },
         {
           "description": "Denies the initialize command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-initialize"
+          "const": "deny-initialize",
+          "markdownDescription": "Denies the initialize command without any pre-configured scope."
         },
         {
           "description": "Enables the log command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-log"
+          "const": "allow-log",
+          "markdownDescription": "Enables the log command without any pre-configured scope."
         },
         {
           "description": "Denies the log command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-log"
+          "const": "deny-log",
+          "markdownDescription": "Denies the log command without any pre-configured scope."
         },
         {
           "description": "Enables the merge_branch command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-merge-branch"
+          "const": "allow-merge-branch",
+          "markdownDescription": "Enables the merge_branch command without any pre-configured scope."
         },
         {
           "description": "Denies the merge_branch command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-merge-branch"
+          "const": "deny-merge-branch",
+          "markdownDescription": "Denies the merge_branch command without any pre-configured scope."
         },
         {
           "description": "Enables the pull command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-pull"
+          "const": "allow-pull",
+          "markdownDescription": "Enables the pull command without any pre-configured scope."
         },
         {
           "description": "Denies the pull command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-pull"
+          "const": "deny-pull",
+          "markdownDescription": "Denies the pull command without any pre-configured scope."
         },
         {
           "description": "Enables the push command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-push"
+          "const": "allow-push",
+          "markdownDescription": "Enables the push command without any pre-configured scope."
         },
         {
           "description": "Denies the push command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-push"
+          "const": "deny-push",
+          "markdownDescription": "Denies the push command without any pre-configured scope."
         },
         {
           "description": "Enables the status command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-status"
+          "const": "allow-status",
+          "markdownDescription": "Enables the status command without any pre-configured scope."
         },
         {
           "description": "Denies the status command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-status"
+          "const": "deny-status",
+          "markdownDescription": "Denies the status command without any pre-configured scope."
         },
         {
           "description": "Enables the unstage command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-unstage"
+          "const": "allow-unstage",
+          "markdownDescription": "Enables the unstage command without any pre-configured scope."
         },
         {
           "description": "Denies the unstage command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-unstage"
+          "const": "deny-unstage",
+          "markdownDescription": "Denies the unstage command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-add`\n- `allow-branch`\n- `allow-checkout`\n- `allow-commit`\n- `allow-delete-branch`\n- `allow-fetch-all`\n- `allow-initialize`\n- `allow-log`\n- `allow-merge-branch`\n- `allow-pull`\n- `allow-push`\n- `allow-status`\n- `allow-unstage`",
           "type": "string",
-          "const": "default"
+          "const": "default",
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-add`\n- `allow-branch`\n- `allow-checkout`\n- `allow-commit`\n- `allow-delete-branch`\n- `allow-fetch-all`\n- `allow-initialize`\n- `allow-log`\n- `allow-merge-branch`\n- `allow-pull`\n- `allow-push`\n- `allow-status`\n- `allow-unstage`"
         }
       ]
     }

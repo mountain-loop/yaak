@@ -2,6 +2,8 @@
 
 Default permissions for the plugin
 
+#### This default permission set includes the following:
+
 - `allow-check`
 - `allow-activate`
 - `allow-deactivate`
