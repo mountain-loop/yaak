@@ -68,7 +68,7 @@ tauri-plugin-single-instance = "2.2.2"
 tauri-plugin-updater = "2.6.1"
 tauri-plugin-window-state = "2.2.1"
 thiserror = { workspace = true }
-tokio = { version = "1.43.0", features = ["sync"] }
+tokio = { version = "1.43.1", features = ["sync"] }
 tokio-stream = "0.1.17"
 uuid = "1.12.1"
 yaak-common = { workspace = true }

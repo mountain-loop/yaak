@@ -9,5 +9,5 @@ base64 = "0.22.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.39.3", features = ["macros", "rt"] }
+tokio = { version = "1.43.1", features = ["macros", "rt"] }
 ts-rs = { version = "10.0.0" }

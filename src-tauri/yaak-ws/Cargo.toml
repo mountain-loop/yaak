@@ -14,7 +14,7 @@ rustls-platform-verifier = "0.5.0"
 serde = { version = "1.0.217", features = ["derive"] }
 tauri = { workspace = true }
 thiserror = "2.0.11"
-tokio = { version = "1.0", default-features = false, features = ["macros", "time", "test-util"] }
+tokio = { version = "1.43", default-features = false, features = ["macros", "time", "test-util"] }
 tokio-tungstenite = { version = "0.26.1", default-features = false, features = ["rustls-tls-native-roots", "connect"] }
 yaak-models = { workspace = true }
 yaak-http = { workspace = true }
