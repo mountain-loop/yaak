@@ -12,7 +12,7 @@ import {
 } from '../hooks/useTemplateTokensToString';
 import { useToggle } from '../hooks/useToggle';
 import { jotaiStore } from '../lib/jotai';
-import { showSetupWorkspaceEncryptionDialog } from '../lib/showSetupWorkspaceEncryptionDialog';
+import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
@@ -226,7 +226,7 @@ function InitializedTemplateFunctionDialog({
       )}
       <div className="flex justify-stretch w-full flex-grow gap-2 [&>*]:flex-1">
         {templateFunction.name === 'secure' && (
-          <Button variant="border" color="secondary" onClick={showSetupWorkspaceEncryptionDialog}>
+          <Button variant="border" color="secondary" onClick={setupOrConfigureEncryption}>
             Reveal Encryption Key
           </Button>
         )}

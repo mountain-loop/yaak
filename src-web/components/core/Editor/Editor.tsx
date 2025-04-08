@@ -9,6 +9,7 @@ import { vscodeKeymap } from '@replit/codemirror-vscode-keymap';
 import type { EditorKeymap, EnvironmentVariable } from '@yaakapp-internal/models';
 import { settingsAtom } from '@yaakapp-internal/models';
 import type { EditorLanguage, TemplateFunction } from '@yaakapp-internal/plugins';
+import { parseTemplate } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { EditorView } from 'codemirror';
 import { useAtomValue } from 'jotai';
@@ -26,13 +27,11 @@ import {
   useRef,
 } from 'react';
 import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
-import { activeWorkspaceMetaAtom } from '../../../hooks/useActiveWorkspace';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { showDialog } from '../../../lib/dialog';
 import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
-import { jotaiStore } from '../../../lib/jotai';
-import { showSetupWorkspaceEncryptionDialog } from '../../../lib/showSetupWorkspaceEncryptionDialog';
+import { withEncryptionEnabled } from '../../../lib/setupOrConfigureEncryption';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
@@ -47,7 +46,6 @@ import {
 } from './extensions';
 import type { GenericCompletionConfig } from './genericCompletion';
 import { singleLineExtensions } from './singleLine';
-import { parseTemplate } from '@yaakapp-internal/templates';
 
 // VSCode's Tab actions mess with the single-line editor tab actions, so remove it.
 const vsCodeWithoutTab = vscodeKeymap.filter((k) => k.key !== 'Tab');
@@ -270,29 +268,31 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   const onClickFunction = useCallback(
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
       const initialTokens = parseTemplate(tagValue);
-      const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
-      if (fn.name === 'secure' && workspaceMeta?.encryptionKey == null) {
-        return showSetupWorkspaceEncryptionDialog();
-      }
+      const show = () =>
+        showDialog({
+          id: 'template-function-' + Math.random(), // Allow multiple at once
+          size: 'sm',
+          title: <InlineCode>{fn.name}(…)</InlineCode>,
+          description: fn.description,
+          render: ({ hide }) => (
+            <TemplateFunctionDialog
+              templateFunction={fn}
+              hide={hide}
+              initialTokens={initialTokens}
+              onChange={(insert) => {
+                cm.current?.view.dispatch({
+                  changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
+                });
+              }}
+            />
+          ),
+        });
 
-      showDialog({
-        id: 'template-function-' + Math.random(), // Allow multiple at once
-        size: 'sm',
-        title: <InlineCode>{fn.name}(…)</InlineCode>,
-        description: fn.description,
-        render: ({ hide }) => (
-          <TemplateFunctionDialog
-            templateFunction={fn}
-            hide={hide}
-            initialTokens={initialTokens}
-            onChange={(insert) => {
-              cm.current?.view.dispatch({
-                changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
-              });
-            }}
-          />
-        ),
-      });
+      if (fn.name === 'secure') {
+        withEncryptionEnabled(show);
+      } else {
+        show();
+      }
     },
     [],
   );

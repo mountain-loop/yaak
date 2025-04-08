@@ -1,6 +1,6 @@
 import { useGitInit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
-import { createGlobalModel, patchModel } from '@yaakapp-internal/models';
+import { createGlobalModel, updateModel } from '@yaakapp-internal/models';
 import { useState } from 'react';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
@@ -37,7 +37,8 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         const workspaceMeta = await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', {
           workspaceId,
         });
-        await patchModel(workspaceMeta, {
+        await updateModel({
+          ...workspaceMeta,
           settingSyncDir: syncConfig.filePath,
         });
 

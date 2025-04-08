@@ -4,17 +4,28 @@ import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { showDialog } from './dialog';
 import { jotaiStore } from './jotai';
 
-export function showSetupWorkspaceEncryptionDialog() {
-  const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
-  if (workspaceMeta == null) throw new Error('WorkspaceMeta does not exist');
+export function setupOrConfigureEncryption() {
+  setupOrConfigure();
+}
 
+export function withEncryptionEnabled(callback?: () => void) {
+  const workspaceMeta = jotaiStore.get(activeWorkspaceMetaAtom);
+  if (workspaceMeta?.encryptionKey != null) {
+    callback?.(); // Already set up
+    return;
+  }
+
+  setupOrConfigure(callback);
+}
+
+function setupOrConfigure(onEnable?: () => void) {
   showDialog({
     id: 'workspace-encryption',
     title: 'Workspace Encryption',
     size: 'md',
     render: ({ hide }) => (
       <VStack space={3} className="pb-2" alignItems="end">
-        <WorkspaceEncryptionSetting expanded onDone={hide} />
+        <WorkspaceEncryptionSetting expanded onDone={hide} onEnabledEncryption={onEnable} />
       </VStack>
     ),
   });

@@ -102,7 +102,7 @@ export function patchModelById<M extends AnyModel['model'], T extends ExtractMod
   }
 
   const newModel = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch };
-  return invoke<string>('plugin:yaak-models|upsert', { model: newModel });
+  return updateModel(newModel);
 }
 
 export async function patchModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
@@ -110,6 +110,12 @@ export async function patchModel<M extends AnyModel['model'], T extends ExtractM
   patch: Partial<T>,
 ): Promise<string> {
   return patchModelById<M, T>(base.model, base.id, patch);
+}
+
+export async function updateModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+  model: T,
+): Promise<string> {
+  return invoke<string>('plugin:yaak-models|upsert', { model });
 }
 
 export async function deleteModelById<

@@ -3,7 +3,7 @@ import { useAtomValue } from 'jotai/index';
 import React, { memo } from 'react';
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
-import { showSetupWorkspaceEncryptionDialog } from '../lib/showSetupWorkspaceEncryptionDialog';
+import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
 import { BadgeButton } from './core/BadgeButton';
 import { Icon } from './core/Icon';
@@ -50,7 +50,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
       <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-1">
         <ImportCurlButton />
         {showEncryptionSetup ? (
-          <BadgeButton color="danger" onClick={showSetupWorkspaceEncryptionDialog}>
+          <BadgeButton color="danger" onClick={setupOrConfigureEncryption}>
             Enter Encryption Key
           </BadgeButton>
         ) : (

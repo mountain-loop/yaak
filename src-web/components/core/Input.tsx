@@ -11,8 +11,10 @@ import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { templateTokensToString } from '../../hooks/useTemplateTokensToString';
 import { generateId } from '../../lib/generateId';
 import { jotaiStore } from '../../lib/jotai';
+import { withEncryptionEnabled } from '../../lib/setupOrConfigureEncryption';
 import type { EditorProps } from './Editor/Editor';
 import { Editor } from './Editor/Editor';
+import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Label } from './Label';
 import type { RadioDropdownItem } from './RadioDropdown';
@@ -59,7 +61,7 @@ export type InputProps = Pick<
   stateKey: EditorProps['stateKey'];
 };
 
-type PasswordFieldType = 'password' | 'text' | 'encrypted';
+type PasswordFieldType = 'text' | 'encrypted';
 
 export const Input = forwardRef<EditorView, InputProps>(function Input(
   {
@@ -95,9 +97,13 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
   ref,
 ) {
   const [passwordFieldType, setPasswordFieldType] = useStateWithDeps<PasswordFieldType>(
-    defaultValue?.includes('${[ secure(value=') ? 'encrypted' : 'password',
+    isOnlySecureFn(defaultValue ?? '') ? 'encrypted' : 'text',
     [type, stateKey, providedForceUpdateKey],
   );
+
+  const [showPasswordText, setShowPasswordText] = useStateWithDeps<boolean>(false, [
+    passwordFieldType,
+  ]);
   const [focused, setFocused] = useState(false);
   const [currentValue, setCurrentValue] = useStateWithDeps(defaultValue ?? '', [
     stateKey,
@@ -223,7 +229,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
             wrapLines={wrapLines}
             heightMode="auto"
             onKeyDown={handleKeyDown}
-            type={type === 'password' && passwordFieldType !== 'password' ? 'text' : type}
+            type={type === 'password' && showPasswordText ? 'text' : type}
             defaultValue={currentValue}
             forceUpdateKey={forceUpdateKey}
             placeholder={placeholder}
@@ -247,28 +253,44 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
             <RadioDropdown
               value={passwordFieldType}
               items={passwordTypeItems}
+              extraItems={[
+                {
+                  label: showPasswordText ? 'Obscure text' : 'Reveal text',
+                  disabled: passwordFieldType === 'encrypted',
+                  leftSlot: <Icon icon={showPasswordText ? 'eye_closed' : 'eye'} />,
+                  onSelect() {
+                    setShowPasswordText((v) => !v);
+                    console.log('DO IT');
+                  },
+                },
+              ]}
               onChange={async (newFieldType) => {
-                if (passwordFieldType !== 'encrypted' && newFieldType === 'encrypted') {
-                  const template = await templateTokensToString({
-                    tokens: [
-                      {
-                        type: 'tag',
-                        val: {
-                          type: 'fn',
-                          name: 'secure',
-                          args: [
-                            {
-                              name: 'value',
-                              value: { type: 'str', text: currentValue },
-                            },
-                          ],
+                if (passwordFieldType === newFieldType) return;
+
+                if (newFieldType === 'encrypted') {
+                  withEncryptionEnabled(async () => {
+                    const template = await templateTokensToString({
+                      tokens: [
+                        {
+                          type: 'tag',
+                          val: {
+                            type: 'fn',
+                            name: 'secure',
+                            args: [
+                              {
+                                name: 'value',
+                                value: { type: 'str', text: currentValue },
+                              },
+                            ],
+                          },
                         },
-                      },
-                    ],
+                      ],
+                    });
+                    handleChange(template);
+                    regenerateLocalForceUpdateKey();
+                    setPasswordFieldType(newFieldType);
                   });
-                  handleChange(template);
-                  regenerateLocalForceUpdateKey();
-                } else if (passwordFieldType === 'encrypted' && newFieldType !== 'encrypted') {
+                } else {
                   // Kinda hacky, but render the tag to get the decrypted value, and replace the arg with that
                   const tokens = parseTemplate(currentValue);
                   const newValue = await renderTemplate({
@@ -278,9 +300,8 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
                   });
                   handleChange(newValue);
                   regenerateLocalForceUpdateKey();
+                  setPasswordFieldType(newFieldType);
                 }
-                // TODO: Modify the value
-                setPasswordFieldType(newFieldType);
               }}
             >
               <IconButton
@@ -307,10 +328,6 @@ export const Input = forwardRef<EditorView, InputProps>(function Input(
 
 const passwordTypeItems: RadioDropdownItem<PasswordFieldType>[] = [
   {
-    label: 'Password',
-    value: 'password',
-  },
-  {
     label: 'Plain Text',
     value: 'text',
   },
@@ -322,4 +339,19 @@ const passwordTypeItems: RadioDropdownItem<PasswordFieldType>[] = [
 
 function validateRequire(v: string) {
   return v.length > 0;
+}
+
+function isOnlySecureFn(text: string): boolean {
+  const tokens = parseTemplate(text).tokens;
+  let secureTags = 0;
+  let otherTags = 0;
+  for (const t of tokens) {
+    if (t.type === 'tag' && t.val.type === 'fn' && t.val.name === 'secure') {
+      secureTags++;
+    } else if (t.type !== 'eof') {
+      otherTags++;
+    }
+  }
+
+  return secureTags === 1 && otherTags === 0;
 }

@@ -20,9 +20,10 @@ interface Props {
   size?: ButtonProps['size'];
   expanded?: boolean;
   onDone?: () => void;
+  onEnabledEncryption?: () => void;
 }
 
-export function WorkspaceEncryptionSetting({ size, expanded, onDone }: Props) {
+export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEncryption }: Props) {
   const [justEnabledEncryption, setJustEnabledEncryption] = useState<boolean>(false);
 
   const workspace = useAtomValue(activeWorkspaceAtom);
@@ -33,7 +34,15 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone }: Props) {
   }
 
   if (workspace.encryptionKeyChallenge && workspaceMeta.encryptionKey == null) {
-    return <EnterWorkspaceKey workspaceMeta={workspaceMeta} />;
+    return (
+      <EnterWorkspaceKey
+        workspaceMeta={workspaceMeta}
+        onEnabled={() => {
+          onEnabledEncryption?.();
+          onDone?.();
+        }}
+      />
+    );
   }
 
   if (workspaceMeta.encryptionKey) {
@@ -69,6 +78,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone }: Props) {
         onClick={async () => {
           setJustEnabledEncryption(true);
           await enableEncryption(workspaceMeta.workspaceId);
+          onEnabledEncryption?.();
         }}
       >
         Enable Encryption
@@ -91,7 +101,13 @@ const setWorkspaceKeyMut = createFastMutation({
   mutationFn: setWorkspaceKey,
 });
 
-function EnterWorkspaceKey({ workspaceMeta }: { workspaceMeta: WorkspaceMeta }) {
+function EnterWorkspaceKey({
+  workspaceMeta,
+  onEnabled,
+}: {
+  workspaceMeta: WorkspaceMeta;
+  onEnabled?: () => void;
+}) {
   const [key, setKey] = useState<string>('');
   return (
     <VStack space={4}>
@@ -106,7 +122,12 @@ function EnterWorkspaceKey({ workspaceMeta }: { workspaceMeta: WorkspaceMeta }) 
         space={1.5}
         onSubmit={(e) => {
           e.preventDefault();
-          setWorkspaceKeyMut.mutate({ workspaceId: workspaceMeta.workspaceId, key: key.trim() });
+          setWorkspaceKeyMut
+            .mutateAsync({
+              workspaceId: workspaceMeta.workspaceId,
+              key: key.trim(),
+            })
+            .then(onEnabled);
         }}
       >
         <PlainInput
