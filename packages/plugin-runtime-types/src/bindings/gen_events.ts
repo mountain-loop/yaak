@@ -281,7 +281,7 @@ password?: boolean,
 /**
  * Whether to allow newlines in the input, like a <textarea/>
  */
-multiLine?: boolean, completionOptions?: Array<GenericCompletionOption>, disableTemplating?: boolean, 
+multiLine?: boolean, completionOptions?: Array<GenericCompletionOption>, 
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
