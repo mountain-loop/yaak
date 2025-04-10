@@ -30,7 +30,7 @@ pub(crate) fn template_function_secure() -> TemplateFunction {
     }
 }
 
-pub(crate) fn template_function_secure_run<R: Runtime>(
+pub fn template_function_secure_run<R: Runtime>(
     app_handle: &AppHandle<R>,
     args: HashMap<String, String>,
     window_context: &PluginWindowContext,

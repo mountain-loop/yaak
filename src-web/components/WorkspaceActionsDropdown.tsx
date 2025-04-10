@@ -33,9 +33,9 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const { mutate: deleteSendHistory } = useDeleteSendHistory();
 
-  const { workspaceItems, extraItems } = useMemo<{
+  const { workspaceItems, itemsAfter } = useMemo<{
     workspaceItems: RadioDropdownItem[];
-    extraItems: DropdownItem[];
+    itemsAfter: DropdownItem[];
   }>(() => {
     const workspaceItems: RadioDropdownItem[] = workspaces.map((w) => ({
       key: w.id,
@@ -44,7 +44,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       leftSlot: w.id === workspace?.id ? <Icon icon="check" /> : <Icon icon="empty" />,
     }));
 
-    const extraItems: DropdownItem[] = [
+    const itemsAfter: DropdownItem[] = [
       {
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
@@ -88,7 +88,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       },
     ];
 
-    return { workspaceItems, extraItems };
+    return { workspaceItems, itemsAfter };
   }, [workspaces, workspaceMeta, deleteSendHistory, createWorkspace, workspace?.id]);
 
   const handleSwitchWorkspace = useCallback(async (workspaceId: string | null) => {
@@ -114,7 +114,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   return (
     <RadioDropdown
       items={workspaceItems}
-      extraItems={extraItems}
+      itemsAfter={itemsAfter}
       onChange={handleSwitchWorkspace}
       value={workspace?.id ?? null}
     >

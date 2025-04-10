@@ -1,13 +1,13 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 
-interface Props {
+export interface BannerProps {
   children: ReactNode;
   className?: string;
   color?: 'primary' | 'secondary' | 'success' | 'notice' | 'warning' | 'danger' | 'info';
 }
 
-export function Banner({ children, className, color }: Props) {
+export function Banner({ children, className, color }: BannerProps) {
   return (
     <div className="w-full mb-auto grid grid-rows-1 max-h-full">
       <div

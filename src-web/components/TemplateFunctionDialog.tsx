@@ -2,16 +2,14 @@ import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
-import { activeEnvironmentIdAtom } from '../hooks/useActiveEnvironment';
-import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { renderTemplate, useRenderTemplate } from '../hooks/useRenderTemplate';
+import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import {
   templateTokensToString,
   useTemplateTokensToString,
 } from '../hooks/useTemplateTokensToString';
 import { useToggle } from '../hooks/useToggle';
-import { jotaiStore } from '../lib/jotai';
+import { convertTemplateToInsecure } from '../lib/encryption';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -60,15 +58,8 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
       // HACK: Replace the secure() function's encrypted `value` arg with the decrypted version so
       //  we can display it in the editor input.
       if (templateFunction.name === 'secure') {
-        const workspaceId = jotaiStore.get(activeWorkspaceIdAtom) ?? 'n/a';
-        const environmentId = jotaiStore.get(activeEnvironmentIdAtom) ?? null;
-        // Kinda hacky, but render the tag to get the decrypted value, and replace the arg with that
-        const newValue = await renderTemplate({
-          template: await templateTokensToString(initialTokens),
-          workspaceId,
-          environmentId,
-        });
-        initial.value = newValue;
+        const template = await templateTokensToString(initialTokens);
+        initial.value = await convertTemplateToInsecure(template);
       }
 
       setInitialArgValues(initial);
@@ -101,8 +92,6 @@ function InitializedTemplateFunctionDialog({
   initialArgValues: Record<string, string | boolean>;
 }) {
   const enablePreview = templateFunction.name !== 'secure';
-  const enableDynamicFormVariables = templateFunction.name !== 'secure';
-
   const [showSecretsInPreview, toggleShowSecretsInPreview] = useToggle(false);
   const [argValues, setArgValues] = useState<Record<string, string | boolean>>(initialArgValues);
 
@@ -178,8 +167,8 @@ function InitializedTemplateFunctionDialog({
         />
       ) : (
         <DynamicForm
-          autocompleteVariables={enableDynamicFormVariables}
-          autocompleteFunctions={enableDynamicFormVariables}
+          autocompleteVariables
+          autocompleteFunctions
           inputs={templateFunction.args}
           data={argValues}
           onChange={setArgValues}

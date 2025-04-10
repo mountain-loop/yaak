@@ -205,7 +205,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   useEffect(
     function configurePlaceholder() {
       if (cm.current === null) return;
-      const ext = placeholderExt(placeholderElFromText(placeholder, type));
+      const ext = placeholderExt(placeholderElFromText(placeholder));
       const effects = placeholderCompartment.current.reconfigure(ext);
       cm.current?.view.dispatch({ effects });
     },
@@ -407,9 +407,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
         const extensions = [
           languageCompartment.of(langExt),
-          placeholderCompartment.current.of(
-            placeholderExt(placeholderElFromText(placeholder, type)),
-          ),
+          placeholderCompartment.current.of(placeholderExt(placeholderElFromText(placeholder))),
           wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : emptyExtension),
           tabIndentCompartment.current.of(
             !disableTabIndent ? keymap.of([indentWithTab]) : emptyExtension,
@@ -648,17 +646,11 @@ function getExtensions({
   ];
 }
 
-const placeholderElFromText = (text: string | undefined, type: EditorProps['type']) => {
+const placeholderElFromText = (text: string | undefined) => {
   const el = document.createElement('div');
-  if (type === 'password') {
-    // Will be obscured (dots) so just needs to be something to take up space
-    el.innerHTML = 'something-cool';
-    el.setAttribute('aria-hidden', 'true');
-  } else {
-    // Default to <SPACE> because codemirror needs it for sizing. I'm not sure why, but probably something
-    // to do with how Yaak "hacks" it with CSS for single line input.
-    el.innerHTML = text ? text.replaceAll('\n', '<br/>') : ' ';
-  }
+  // Default to <SPACE> because codemirror needs it for sizing. I'm not sure why, but probably something
+  // to do with how Yaak "hacks" it with CSS for single line input.
+  el.innerHTML = text ? text.replaceAll('\n', '<br/>') : ' ';
   return el;
 };
 

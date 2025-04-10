@@ -1,8 +1,8 @@
+use crate::TemplateCallback;
 use crate::error::Error::RenderError;
 use crate::error::Result;
-use crate::TemplateCallback;
-use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use ts_rs::TS;
@@ -10,7 +10,7 @@ use ts_rs::TS;
 #[derive(Default, Clone, PartialEq, Debug, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "parser.ts")]
 pub struct Tokens {
-    pub(crate) tokens: Vec<Token>,
+    pub tokens: Vec<Token>,
 }
 
 impl Display for Tokens {
@@ -486,8 +486,8 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::error::Result;
     use crate::Val::Null;
+    use crate::error::Result;
     use crate::*;
 
     #[test]

@@ -32,7 +32,7 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
   onChange,
   className,
 }: Props) {
-  const extraItems = useMemo<DropdownItem[]>(
+  const itemsAfter = useMemo<DropdownItem[]>(
     () => [
       {
         key: 'custom',
@@ -57,7 +57,7 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
   );
 
   return (
-    <RadioDropdown value={method} items={radioItems} extraItems={extraItems} onChange={onChange}>
+    <RadioDropdown value={method} items={radioItems} itemsAfter={itemsAfter} onChange={onChange}>
       <Button size="xs" className={classNames(className, 'text-text-subtle hover:text')}>
         {method.toUpperCase()}
       </Button>

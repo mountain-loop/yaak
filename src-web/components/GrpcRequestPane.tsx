@@ -219,7 +219,7 @@ export function GrpcRequestPane({
               type: 'default',
               shortLabel: o.label,
             }))}
-            extraItems={[
+            itemsAfter={[
               {
                 label: 'Refresh',
                 type: 'default',

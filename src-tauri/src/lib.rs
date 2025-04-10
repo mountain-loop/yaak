@@ -1350,9 +1350,9 @@ pub fn run() {
             //
             //
             // Migrated commands
+            crate::commands::cmd_decrypt_template,
+            crate::commands::cmd_secure_template,
             crate::commands::cmd_show_workspace_key,
-            crate::commands::cmd_encrypt_input,
-            crate::commands::cmd_decrypt_input,
         ])
         .register_uri_scheme_protocol("yaak", handle_uri_scheme)
         .build(tauri::generate_context!())

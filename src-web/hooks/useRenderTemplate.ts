@@ -26,3 +26,15 @@ export async function renderTemplate({
 }): Promise<string> {
   return invokeCmd('cmd_render_template', { template, workspaceId, environmentId });
 }
+
+export async function decryptTemplate({
+  template,
+  workspaceId,
+  environmentId,
+}: {
+  template: string;
+  workspaceId: string;
+  environmentId: string | null;
+}): Promise<string> {
+  return invokeCmd('cmd_decrypt_template', { template, workspaceId, environmentId });
+}

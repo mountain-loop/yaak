@@ -7,6 +7,8 @@ type TauriCmd =
   | 'cmd_check_for_updates'
   | 'cmd_create_grpc_request'
   | 'cmd_curl_to_request'
+  | 'cmd_decrypt_template'
+  | 'cmd_secure_template'
   | 'cmd_delete_all_grpc_connections'
   | 'cmd_delete_all_http_responses'
   | 'cmd_delete_send_history'
@@ -32,9 +34,9 @@ type TauriCmd =
   | 'cmd_save_response'
   | 'cmd_send_ephemeral_request'
   | 'cmd_send_http_request'
+  | 'cmd_show_workspace_key'
   | 'cmd_template_functions'
   | 'cmd_template_tokens_to_string'
-  | 'cmd_show_workspace_key'
   | 'cmd_uninstall_plugin';
 
 export async function invokeCmd<T>(cmd: TauriCmd, args?: InvokeArgs): Promise<T> {

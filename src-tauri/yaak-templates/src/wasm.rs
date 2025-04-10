@@ -7,4 +7,4 @@ use wasm_bindgen::JsValue;
 pub fn parse_template(template: &str) -> Result<JsValue> {
     let tokens = Parser::new(template).parse()?;
     Ok(serde_wasm_bindgen::to_value(&tokens).unwrap())
-/**/}
+}

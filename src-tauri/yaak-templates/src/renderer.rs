@@ -111,16 +111,16 @@ async fn render_value<T: TemplateCallback>(
             }
             None => return Err(VariableNotFound(name)),
         },
-        Val::Bool { value } => value.to_string(),
         Val::Fn { name, args } => {
-            // let empty = "".to_string();
             let mut resolved_args: HashMap<String, String> = HashMap::new();
             for a in args {
                 let v = Box::pin(render_value(a.value, vars, cb, depth)).await?;
                 resolved_args.insert(a.name, v);
             }
-            cb.run(name.as_str(), resolved_args.clone()).await?
+            let result = cb.run(name.as_str(), resolved_args.clone()).await?;
+            Box::pin(parse_and_render_at_depth(&result, vars, cb, depth)).await?
         }
+        Val::Bool { value } => value.to_string(),
         Val::Null => "".into(),
     };
 
@@ -345,6 +345,35 @@ mod parse_and_render_tests {
         assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
         Ok(())
     }
+    
+    #[tokio::test]
+    async fn render_fn_return_template() -> Result<()> {
+        let mut vars = HashMap::new();
+        vars.insert("foo".to_string(), "bar".to_string());
+        let template = r#"${[ no_op(inner='${[ foo ]}') ]}"#;
+        let result = r#"bar"#;
+        struct CB {}
+        impl TemplateCallback for CB {
+            async fn run(&self, fn_name: &str, args: HashMap<String, String>) -> Result<String> {
+                Ok(match fn_name {
+                    "no_op" => args["inner"].to_string(),
+                    _ => "".to_string(),
+                })
+            }
+
+            async fn transform_arg(
+                &self,
+                _fn_name: &str,
+                _arg_name: &str,
+                _arg_value: &str,
+            ) -> Result<String> {
+                todo!()
+            }
+        }
+
+        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        Ok(())
+    }
 
     #[tokio::test]
     async fn render_nested_fn() -> Result<()> {
@@ -374,7 +403,7 @@ mod parse_and_render_tests {
         assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
         Ok(())
     }
-
+    
     #[tokio::test]
     async fn render_fn_err() -> Result<()> {
         let vars = HashMap::new();
@@ -407,7 +436,7 @@ mod parse_and_render_tests {
 #[cfg(test)]
 mod render_json_value_raw_tests {
     use crate::error::Result;
-    use crate::{render_json_value_raw, TemplateCallback};
+    use crate::{TemplateCallback, render_json_value_raw};
     use serde_json::json;
     use std::collections::HashMap;
 
