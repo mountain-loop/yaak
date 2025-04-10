@@ -44,6 +44,10 @@ export async function convertTemplateToSecure(template: string): Promise<string>
     return '';
   }
 
+  if (analyzeTemplateForEncryption(template).onlySecureTag) {
+    return template;
+  }
+
   const workspaceId = jotaiStore.get(activeWorkspaceIdAtom) ?? 'n/a';
   const environmentId = jotaiStore.get(activeEnvironmentIdAtom) ?? null;
   return invokeCmd<string>('cmd_secure_template', { template, workspaceId, environmentId });

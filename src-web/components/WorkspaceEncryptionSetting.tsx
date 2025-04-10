@@ -15,6 +15,7 @@ import { IconTooltip } from './core/IconTooltip';
 import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
+import { EncryptionHelp } from './EncryptionHelp';
 
 interface Props {
   size?: ButtonProps['size'];
@@ -85,10 +86,10 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
       </Button>
       {expanded ? (
         <Banner color="info" className="mb-6">
-          {helpBeforeEncryption}
+          <EncryptionHelp />
         </Banner>
       ) : (
-        <Label htmlFor={null} help={helpBeforeEncryption}>
+        <Label htmlFor={null} help={<EncryptionHelp />}>
           Workspace encryption
         </Label>
       )}
@@ -213,19 +214,6 @@ function HighlightedKey({ keyText, show }: { keyText: string; show: boolean }) {
     </span>
   );
 }
-
-const helpBeforeEncryption = (
-  <VStack space={3}>
-    <p>
-      Encrypt values like secrets and tokens. When enabled, Yaak will also encrypt HTTP responses,
-      cookies, and authentication credentials automatically.
-    </p>
-    <p>
-      Encrypted data remains secure when syncing to the filesystem or Git, and when exporting or
-      sharing with others.
-    </p>
-  </VStack>
-);
 
 const helpAfterEncryption = (
   <p>

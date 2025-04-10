@@ -1,5 +1,5 @@
 import type { Environment } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
+import { environmentsAtom, patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
@@ -10,9 +10,13 @@ import { useIsEncryptionEnabled } from '../hooks/useIsEncryptionEnabled';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { useRandomKey } from '../hooks/useRandomKey';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { convertTemplateToSecure, analyzeTemplateForEncryption } from '../lib/encryption';
+import { analyzeTemplateForEncryption, convertTemplateToSecure } from '../lib/encryption';
+import { jotaiStore } from '../lib/jotai';
 import { showPrompt } from '../lib/prompt';
-import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
+import {
+  setupOrConfigureEncryption,
+  withEncryptionEnabled,
+} from '../lib/setupOrConfigureEncryption';
 import { BadgeButton } from './core/BadgeButton';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -127,10 +131,11 @@ const EnvironmentEditor = function ({
   environment: Environment;
   className?: string;
 }) {
+  const activeWorkspaceId = activeEnvironment.workspaceId;
   const isEncryptionEnabled = useIsEncryptionEnabled();
   const valueVisibility = useKeyValue<boolean>({
     namespace: 'global',
-    key: 'environmentValueVisibility',
+    key: ['environmentValueVisibility', activeWorkspaceId],
     fallback: true,
   });
   const { allEnvironments } = useEnvironmentsBreakdown();
@@ -182,6 +187,18 @@ const EnvironmentEditor = function ({
     }
   }, [activeEnvironment.variables, isEncryptionEnabled]);
 
+  const encryptEnvironment = (environment: Environment) => {
+    withEncryptionEnabled(async () => {
+      const encryptedVariables: PairWithId[] = [];
+      for (const variable of environment.variables) {
+        const value = variable.value ? await convertTemplateToSecure(variable.value) : '';
+        encryptedVariables.push(ensurePairId({ ...variable, value }));
+      }
+      await handleChange(encryptedVariables);
+      regenerateForceUpdateKey();
+    });
+  };
+
   return (
     <VStack space={4} className={classNames(className, 'pl-4')}>
       <HStack space={2} className="justify-between">
@@ -192,47 +209,44 @@ const EnvironmentEditor = function ({
               Manage Encryption
             </BadgeButton>
           ) : (
-            <IconButton
-              size="sm"
-              icon={valueVisibility.value ? 'eye' : 'eye_closed'}
-              title={valueVisibility.value ? 'Hide Values' : 'Reveal Values'}
-              onClick={() => valueVisibility.set((v) => !v)}
-            />
+            <>
+              <BadgeButton
+                variant="border"
+                color="info"
+                onClick={() => jotaiStore.get(environmentsAtom).forEach(encryptEnvironment)}
+              >
+                Enable Encryption
+              </BadgeButton>
+              <IconButton
+                size="sm"
+                icon={valueVisibility.value ? 'eye' : 'eye_closed'}
+                title={valueVisibility.value ? 'Hide Values' : 'Reveal Values'}
+                onClick={() => valueVisibility.set((v) => !v)}
+              />
+            </>
           )}
         </Heading>
       </HStack>
       {promptToEncrypt && (
-        <DismissibleBanner
-          color="notice"
-          className="mr-3"
-          id={`encrypt-env-${activeEnvironment.id}`}
-        >
+        <DismissibleBanner color="notice" className="mr-3" id={`encrypt-env-${activeWorkspaceId}`}>
           <p className="mb-1.5">
-            This environment contains non-encrypted values, which may be exposed when exporting or
-            syncing this workspace. To ensure your secrets are secure, convert them to encrypted
-            values.
+            <strong>Unencrypted variables detected</strong>. Encrypt them before sharing this
+            workspace across devices or with your team.
           </p>
           <Button
             size="xs"
             variant="border"
             color="notice"
-            onClick={async () => {
-              const encryptedVariables: PairWithId[] = [];
-              for (const variable of activeEnvironment.variables) {
-                const value = variable.value ? await convertTemplateToSecure(variable.value) : '';
-                encryptedVariables.push(ensurePairId({ ...variable, value }));
-              }
-              await handleChange(encryptedVariables);
-              regenerateForceUpdateKey();
-            }}
+            onClick={() => encryptEnvironment(activeEnvironment)}
           >
-            Encrypt Variable Values
+            Encrypt Variables
           </Button>
         </DismissibleBanner>
       )}
       <div className="h-full pr-2 pb-2">
         <PairOrBulkEditor
           allowMultilineValues
+          defaultToEncryptedValue
           preferenceName="environment"
           nameAutocomplete={nameAutocomplete}
           namePlaceholder="VAR_NAME"

@@ -19,7 +19,7 @@ export function DismissibleBanner({
   if (dismissed) return null;
 
   return (
-    <Banner className={classNames(className, 'relative')} {...props}>
+    <Banner className={classNames(className, 'relative pr-8')} {...props}>
       <IconButton
         className="!absolute right-0 top-0"
         icon="x"

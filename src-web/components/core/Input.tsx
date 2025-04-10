@@ -68,6 +68,7 @@ export type InputProps = Pick<
   type?: 'text' | 'password';
   validate?: boolean | ((v: string) => boolean);
   wrapLines?: boolean;
+  defaultToEncryptedValue?: boolean;
 };
 
 export const Input = forwardRef<EditorView, InputProps>(function Input({ type, ...props }, ref) {
@@ -297,6 +298,7 @@ function EncryptionInput({
   onChange,
   autocompleteFunctions,
   autocompleteVariables,
+  defaultToEncryptedValue,
   forceUpdateKey: ogForceUpdateKey,
   ...props
 }: Omit<InputProps, 'type'>) {
@@ -305,12 +307,9 @@ function EncryptionInput({
     fieldType: PasswordFieldType;
     value: string | null;
     obscured: boolean;
-  }>({ fieldType: 'encrypted', value: null, obscured: true }, [
-    ogForceUpdateKey,
-    isEncryptionEnabled,
-  ]);
+  }>({ fieldType: 'encrypted', value: null, obscured: true }, [ogForceUpdateKey]);
 
-  const forceUpdateKey = `${ogForceUpdateKey}::${state?.fieldType}::${state.value === null}`;
+  const forceUpdateKey = `${ogForceUpdateKey}::${state.fieldType}::${state.value === null}`;
 
   const containsPlainText = useMemo(() => {
     if (state.fieldType === 'encrypted') {
@@ -331,14 +330,17 @@ function EncryptionInput({
       convertTemplateToInsecure(defaultValue ?? '').then((value) => {
         setState({ fieldType: 'encrypted', value, obscured: true });
       });
-    } else if (isEncryptionEnabled && !defaultValue) {
+    } else if (isEncryptionEnabled && !defaultValue && defaultToEncryptedValue) {
       // Default to encrypted field for new encrypted inputs
       setState({ fieldType: 'encrypted', value: '', obscured: true });
-    } else {
+    } else if (isEncryptionEnabled) {
       // Don't obscure plain text when encryption is enabled
       setState({ fieldType: 'text', value: defaultValue ?? '', obscured: false });
+    } else {
+      // Don't obscure plain text when encryption is enabled
+      setState({ fieldType: 'text', value: defaultValue ?? '', obscured: true });
     }
-  }, [defaultValue, isEncryptionEnabled, setState, state.value]);
+  }, [defaultToEncryptedValue, defaultValue, isEncryptionEnabled, setState, state.value]);
 
   const handleChange = useCallback(
     (value: string, fieldType: PasswordFieldType) => {
@@ -353,7 +355,7 @@ function EncryptionInput({
           // Obscure if we're going from text -> encrypted
           obscured = true;
         }
-        return { value, fieldType, obscured };
+        return { fieldType, value, obscured };
       });
     },
     [onChange, setState],
@@ -387,17 +389,17 @@ function EncryptionInput({
     () => [
       {
         label: state.obscured ? 'Reveal text' : 'Conceal text',
-        disabled: !isEncryptionEnabled || state.fieldType === 'text',
         leftSlot: <Icon icon={state.obscured ? 'eye' : 'eye_closed'} />,
         onSelect: () => setState((s) => ({ ...s, obscured: !s.obscured })),
       },
+      { type: 'separator' },
       {
         label: state.fieldType === 'text' ? 'Encrypt Value' : 'Decrypt Value',
         leftSlot: <Icon icon={state.fieldType === 'text' ? 'lock' : 'lock_open'} />,
         onSelect: () => handleFieldTypeChange(state.fieldType === 'text' ? 'encrypted' : 'text'),
       },
     ],
-    [handleFieldTypeChange, isEncryptionEnabled, setState, state.fieldType, state.obscured],
+    [handleFieldTypeChange, setState, state.fieldType, state.obscured],
   );
 
   let tint: InputProps['tint'];
@@ -419,7 +421,7 @@ function EncryptionInput({
             size="xs"
             iconSize="sm"
             title="Configure encryption"
-            icon={state.fieldType === 'encrypted' ? 'lock' : 'lock_open'}
+            icon={state.fieldType === 'encrypted' || !containsPlainText ? 'lock' : 'lock_open'}
             className={classNames(
               '!h-full mr-0.5 opacity-70',
               props.disabled && '!opacity-disabled',
@@ -433,13 +435,9 @@ function EncryptionInput({
         </Dropdown>
       </HStack>
     );
-  }, [dropdownItems, props.disabled, state.fieldType, tint]);
+  }, [containsPlainText, dropdownItems, props.disabled, state.fieldType, tint]);
 
-  const type = !isEncryptionEnabled
-    ? 'text'
-    : state.fieldType === 'encrypted' && state.obscured
-      ? 'password'
-      : 'text';
+  const type = state.obscured ? 'password' : 'text';
 
   return (
     <BaseInput

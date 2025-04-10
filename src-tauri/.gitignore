@@ -3,4 +3,5 @@
 target/
 
 vendored/*
+gen/*
 !vendored/plugins

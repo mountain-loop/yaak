@@ -2,12 +2,16 @@ import { useGitInit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import { createGlobalModel, updateModel } from '@yaakapp-internal/models';
 import { useState } from 'react';
+import { useIsEncryptionEnabled } from '../hooks/useIsEncryptionEnabled';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
 import { Button } from './core/Button';
+import { Checkbox } from './core/Checkbox';
+import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
+import { EncryptionHelp } from './EncryptionHelp';
 import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
 
 interface Props {
@@ -21,6 +25,11 @@ export function CreateWorkspaceDialog({ hide }: Props) {
     filePath: string | null;
     initGit?: boolean;
   }>({ filePath: null, initGit: false });
+  const isEncryptionEnabled = useIsEncryptionEnabled();
+  const [enableEncryption, setEnableEncryption] = useState<boolean>(
+    // Default setting to encryption enabled if they already use encryption
+    isEncryptionEnabled,
+  );
   return (
     <VStack
       as="form"
@@ -64,6 +73,16 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         onCreateNewWorkspace={hide}
         value={syncConfig}
       />
+      <div>
+        <Label htmlFor={null} help={<EncryptionHelp />}>
+          Workspace encryption
+        </Label>
+        <Checkbox
+          checked={enableEncryption}
+          onChange={setEnableEncryption}
+          title="Enable Encryption"
+        />
+      </div>
       <Button type="submit" color="primary" className="w-full mt-3">
         Create Workspace
       </Button>
