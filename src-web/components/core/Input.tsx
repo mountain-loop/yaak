@@ -411,43 +411,47 @@ function EncryptionInput({
     tint = 'warning';
   }
 
+  const rightSlot = useMemo(() => {
+    return (
+      <HStack className="h-auto my-0.5">
+        <Dropdown items={dropdownItems}>
+          <IconButton
+            size="xs"
+            iconSize="sm"
+            title="Configure encryption"
+            icon={state.fieldType === 'encrypted' ? 'lock' : 'lock_open'}
+            className={classNames(
+              '!h-full mr-0.5 opacity-70',
+              props.disabled && '!opacity-disabled',
+            )}
+            iconClassName={classNames(
+              tint === 'info' && '!text-info',
+              tint === 'warning' && '!text-warning',
+              tint === 'primary' && '!text-primary',
+            )}
+          />
+        </Dropdown>
+      </HStack>
+    );
+  }, [dropdownItems, props.disabled, state.fieldType, tint]);
+
+  const type = !isEncryptionEnabled
+    ? 'text'
+    : state.fieldType === 'encrypted' && state.obscured
+      ? 'password'
+      : 'text';
+
   return (
     <BaseInput
       disableObscureToggle
       autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
-      onChange={handleInputChange}
       defaultValue={state.value ?? ''}
-      tint={tint}
-      type={
-        !isEncryptionEnabled
-          ? 'text'
-          : state.fieldType === 'encrypted' && state.obscured
-            ? 'password'
-            : 'text'
-      }
       forceUpdateKey={forceUpdateKey}
-      rightSlot={
-        <HStack className="h-auto my-0.5">
-          <Dropdown items={dropdownItems}>
-            <IconButton
-              size="xs"
-              iconSize="sm"
-              title="Configure encryption"
-              icon={state.fieldType === 'encrypted' ? 'lock' : 'lock_open'}
-              className={classNames(
-                '!h-full mr-0.5 opacity-70',
-                props.disabled && '!opacity-disabled',
-              )}
-              iconClassName={classNames(
-                tint === 'info' && '!text-info',
-                tint === 'warning' && '!text-warning',
-                tint === 'primary' && '!text-primary',
-              )}
-            />
-          </Dropdown>
-        </HStack>
-      }
+      onChange={handleInputChange}
+      tint={tint}
+      type={type}
+      rightSlot={rightSlot}
       {...props}
     />
   );
