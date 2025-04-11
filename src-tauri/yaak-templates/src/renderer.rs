@@ -14,12 +14,7 @@ pub trait TemplateCallback {
         args: HashMap<String, String>,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    fn transform_arg(
-        &self,
-        fn_name: &str,
-        arg_name: &str,
-        arg_value: &str,
-    ) -> impl Future<Output = Result<String>> + Send;
+    fn transform_arg(&self, fn_name: &str, arg_name: &str, arg_value: &str) -> Result<String>;
 }
 
 pub async fn render_json_value_raw<T: TemplateCallback>(
@@ -142,7 +137,7 @@ mod parse_and_render_tests {
             todo!()
         }
 
-        async fn transform_arg(
+        fn transform_arg(
             &self,
             _fn_name: &str,
             _arg_name: &str,
@@ -245,7 +240,7 @@ mod parse_and_render_tests {
                 Ok(format!("{fn_name}: {}, {:?} {:?}", args.len(), args.get("a"), args.get("b")))
             }
 
-            async fn transform_arg(
+            fn transform_arg(
                 &self,
                 _fn_name: &str,
                 _arg_name: &str,
@@ -273,7 +268,7 @@ mod parse_and_render_tests {
                 })
             }
 
-            async fn transform_arg(
+            fn transform_arg(
                 &self,
                 _fn_name: &str,
                 _arg_name: &str,
@@ -302,7 +297,7 @@ mod parse_and_render_tests {
                 })
             }
 
-            async fn transform_arg(
+            fn transform_arg(
                 &self,
                 _fn_name: &str,
                 _arg_name: &str,
@@ -332,7 +327,7 @@ mod parse_and_render_tests {
                 })
             }
 
-            async fn transform_arg(
+            fn transform_arg(
                 &self,
                 _fn_name: &str,
                 _arg_name: &str,
@@ -345,7 +340,7 @@ mod parse_and_render_tests {
         assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
         Ok(())
     }
-    
+
     #[tokio::test]
     async fn render_fn_return_template() -> Result<()> {
         let mut vars = HashMap::new();
@@ -361,7 +356,7 @@ mod parse_and_render_tests {
                 })
             }
 
-            async fn transform_arg(
+            fn transform_arg(
                 &self,
                 _fn_name: &str,
                 _arg_name: &str,
@@ -390,7 +385,7 @@ mod parse_and_render_tests {
                 })
             }
 
-            async fn transform_arg(
+            fn transform_arg(
                 &self,
                 _fn_name: &str,
                 _arg_name: &str,
@@ -403,7 +398,7 @@ mod parse_and_render_tests {
         assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
         Ok(())
     }
-    
+
     #[tokio::test]
     async fn render_fn_err() -> Result<()> {
         let vars = HashMap::new();
@@ -415,7 +410,7 @@ mod parse_and_render_tests {
                 Err(RenderError("Failed to do it!".to_string()))
             }
 
-            async fn transform_arg(
+            fn transform_arg(
                 &self,
                 _fn_name: &str,
                 _arg_name: &str,
@@ -447,7 +442,7 @@ mod render_json_value_raw_tests {
             todo!()
         }
 
-        async fn transform_arg(
+        fn transform_arg(
             &self,
             _fn_name: &str,
             _arg_name: &str,

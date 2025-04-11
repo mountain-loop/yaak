@@ -1,14 +1,16 @@
 use crate::events::{
-    FormInput, FormInputBase, FormInputText,
-    PluginWindowContext, TemplateFunction, TemplateFunctionArg,
+    FormInput, FormInputBase, FormInputText, PluginWindowContext, RenderPurpose, TemplateFunction,
+    TemplateFunctionArg,
 };
-use base64::prelude::BASE64_STANDARD;
+use crate::template_callback::PluginTemplateCallback;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use std::collections::HashMap;
 use tauri::{AppHandle, Runtime};
 use yaak_crypto::manager::EncryptionManagerExt;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result;
+use yaak_templates::{FnArg, Parser, Token, Tokens, Val, transform_args};
 
 pub(crate) fn template_function_secure() -> TemplateFunction {
     TemplateFunction {
@@ -67,7 +69,7 @@ pub fn template_function_secure_run<R: Runtime>(
     }
 }
 
-pub(crate) fn template_function_secure_transform_arg<R: Runtime>(
+pub fn template_function_secure_transform_arg<R: Runtime>(
     app_handle: &AppHandle<R>,
     window_context: &PluginWindowContext,
     arg_name: &str,
@@ -100,4 +102,66 @@ pub(crate) fn template_function_secure_transform_arg<R: Runtime>(
         }
         _ => Err(RenderError("workspace_id missing from window context".to_string())),
     }
+}
+
+pub fn decrypt_secure_template_function<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    window_context: &PluginWindowContext,
+    template: &str,
+) -> Result<String> {
+    let mut parsed = Parser::new(template).parse()?;
+    let mut new_tokens: Vec<Token> = Vec::new();
+
+    for token in parsed.tokens.iter() {
+        match token {
+            Token::Tag {
+                val: Val::Fn { name, args },
+            } if name == "secure" => {
+                let mut args_map = HashMap::new();
+                for a in args {
+                    match a.clone().value {
+                        Val::Str { text } => {
+                            args_map.insert(a.name.to_string(), text);
+                        }
+                        _ => continue,
+                    }
+                }
+                new_tokens.push(Token::Raw {
+                    text: template_function_secure_run(app_handle, args_map, window_context)?,
+                });
+            }
+            t => {
+                new_tokens.push(t.clone());
+                continue;
+            }
+        };
+    }
+
+    parsed.tokens = new_tokens;
+    Ok(parsed.to_string())
+}
+
+pub fn encrypt_secure_template_function<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    window_context: &PluginWindowContext,
+    template: &str,
+) -> Result<String> {
+    let decrypted = decrypt_secure_template_function(&app_handle, window_context, template)?;
+    let tokens = Tokens {
+        tokens: vec![Token::Tag {
+            val: Val::Fn {
+                name: "secure".to_string(),
+                args: vec![FnArg {
+                    name: "value".to_string(),
+                    value: Val::Str { text: decrypted },
+                }],
+            },
+        }],
+    };
+
+    Ok(transform_args(
+        tokens,
+        &PluginTemplateCallback::new(app_handle, window_context, RenderPurpose::Preview),
+    )?
+    .to_string())
 }

@@ -97,7 +97,7 @@ async fn cmd_template_tokens_to_string<R: Runtime>(
         &PluginWindowContext::new(&window),
         RenderPurpose::Preview,
     );
-    let new_tokens = transform_args(tokens, &cb).await?;
+    let new_tokens = transform_args(tokens, &cb)?;
     Ok(new_tokens.to_string())
 }
 

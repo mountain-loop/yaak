@@ -51,7 +51,7 @@ impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
         Ok(resp)
     }
 
-    async fn transform_arg(
+    fn transform_arg(
         &self,
         fn_name: &str,
         arg_name: &str,

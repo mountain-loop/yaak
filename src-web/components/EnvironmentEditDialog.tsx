@@ -136,7 +136,7 @@ const EnvironmentEditor = function ({
   const valueVisibility = useKeyValue<boolean>({
     namespace: 'global',
     key: ['environmentValueVisibility', activeWorkspaceId],
-    fallback: true,
+    fallback: false,
   });
   const { allEnvironments } = useEnvironmentsBreakdown();
   const handleChange = useCallback(
@@ -212,7 +212,7 @@ const EnvironmentEditor = function ({
             <>
               <BadgeButton
                 variant="border"
-                color="info"
+                color="success"
                 onClick={() => jotaiStore.get(environmentsAtom).forEach(encryptEnvironment)}
               >
                 Enable Encryption

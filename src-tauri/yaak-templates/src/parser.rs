@@ -95,7 +95,7 @@ impl Display for Token {
     }
 }
 
-async fn transform_val<T: TemplateCallback>(val: &Val, cb: &T) -> Result<Val> {
+fn transform_val<T: TemplateCallback>(val: &Val, cb: &T) -> Result<Val> {
     let val = match val {
         Val::Fn {
             name: fn_name,
@@ -105,10 +105,10 @@ async fn transform_val<T: TemplateCallback>(val: &Val, cb: &T) -> Result<Val> {
             for arg in args {
                 let value = match arg.clone().value {
                     Val::Str { text } => {
-                        let text = cb.transform_arg(&fn_name, &arg.name, &text).await?;
+                        let text = cb.transform_arg(&fn_name, &arg.name, &text)?;
                         Val::Str { text }
                     }
-                    v => Box::pin(transform_val(&v, cb)).await?,
+                    v => transform_val(&v, cb)?,
                 };
 
                 let arg_name = arg.name.clone();
@@ -127,12 +127,12 @@ async fn transform_val<T: TemplateCallback>(val: &Val, cb: &T) -> Result<Val> {
     Ok(val)
 }
 
-pub async fn transform_args<T: TemplateCallback>(tokens: Tokens, cb: &T) -> Result<Tokens> {
+pub fn transform_args<T: TemplateCallback>(tokens: Tokens, cb: &T) -> Result<Tokens> {
     let mut new_tokens = Tokens::default();
     for t in tokens.tokens.iter() {
         new_tokens.tokens.push(match t {
             Token::Tag { val } => {
-                let val = transform_val(val, cb).await?;
+                let val = transform_val(val, cb)?;
                 Token::Tag { val }
             }
             _ => t.clone(),
