@@ -57,7 +57,6 @@ export type PairEditorProps = {
   valuePlaceholder?: string;
   valueType?: InputProps['type'] | ((pair: Pair) => InputProps['type']);
   valueValidate?: InputProps['validate'];
-  defaultToEncryptedValue?: InputProps['defaultToEncryptedValue'];
 };
 
 export type Pair = {
@@ -79,7 +78,6 @@ const MAX_INITIAL_PAIRS = 50;
 
 export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function PairEditor(
   {
-    defaultToEncryptedValue,
     allowFileValues,
     allowMultilineValues,
     className,
@@ -236,7 +234,6 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
             <PairEditorRow
               allowFileValues={allowFileValues}
               allowMultilineValues={allowMultilineValues}
-              defaultToEncryptedValue={defaultToEncryptedValue}
               className="py-1"
               forceFocusNamePairId={forceFocusNamePairId}
               forceFocusValuePairId={forceFocusValuePairId}
@@ -295,7 +292,6 @@ type PairEditorRowProps = {
   PairEditorProps,
   | 'allowFileValues'
   | 'allowMultilineValues'
-  | 'defaultToEncryptedValue'
   | 'forceUpdateKey'
   | 'nameAutocomplete'
   | 'nameAutocompleteVariables'
@@ -315,7 +311,6 @@ function PairEditorRow({
   allowFileValues,
   allowMultilineValues,
   className,
-  defaultToEncryptedValue,
   forceFocusNamePairId,
   forceFocusValuePairId,
   forceUpdateKey,
@@ -562,7 +557,6 @@ function PairEditorRow({
               onFocus={handleFocus}
               type={isLast ? 'text' : typeof valueType === 'function' ? valueType(pair) : valueType}
               placeholder={valuePlaceholder ?? 'value'}
-              defaultToEncryptedValue={defaultToEncryptedValue}
               autocomplete={valueAutocomplete?.(pair.name)}
               autocompleteFunctions={valueAutocompleteFunctions}
               autocompleteVariables={valueAutocompleteVariables}

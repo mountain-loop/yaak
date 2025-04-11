@@ -1,3 +1,4 @@
+import type { Color } from '@yaakapp/api';
 import classNames from 'classnames';
 import type { EditorView } from 'codemirror';
 import type { ReactNode } from 'react';
@@ -13,7 +14,7 @@ import {
 import { useIsEncryptionEnabled } from '../../hooks/useIsEncryptionEnabled';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import {
-  analyzeTemplateForEncryption,
+  analyzeTemplate,
   convertTemplateToInsecure,
   convertTemplateToSecure,
 } from '../../lib/encryption';
@@ -64,11 +65,10 @@ export type InputProps = Pick<
   rightSlot?: ReactNode;
   size?: 'xs' | 'sm' | 'md' | 'auto';
   stateKey: EditorProps['stateKey'];
-  tint?: 'primary' | 'info' | 'warning';
+  tint?: Color;
   type?: 'text' | 'password';
   validate?: boolean | ((v: string) => boolean);
   wrapLines?: boolean;
-  defaultToEncryptedValue?: boolean;
 };
 
 export const Input = forwardRef<EditorView, InputProps>(function Input({ type, ...props }, ref) {
@@ -218,9 +218,13 @@ const BaseInput = forwardRef<EditorView, InputProps>(function InputBase(
             aria-hidden
             className={classNames(
               'absolute inset-0 opacity-5 pointer-events-none',
-              tint === 'info' && 'bg-info',
-              tint === 'warning' && 'bg-warning',
               tint === 'primary' && 'bg-primary',
+              tint === 'secondary' && 'bg-secondary',
+              tint === 'info' && 'bg-info',
+              tint === 'success' && 'bg-success',
+              tint === 'notice' && 'bg-notice',
+              tint === 'warning' && 'bg-warning',
+              tint === 'danger' && 'bg-danger',
             )}
           />
         )}
@@ -272,9 +276,13 @@ const BaseInput = forwardRef<EditorView, InputProps>(function InputBase(
             )}
             iconClassName={classNames(
               'group-hover/obscure:text',
-              tint === 'info' && 'text-info',
-              tint === 'warning' && 'text-warning',
               tint === 'primary' && 'text-primary',
+              tint === 'secondary' && 'text-secondary',
+              tint === 'info' && 'text-info',
+              tint === 'success' && 'text-success',
+              tint === 'notice' && 'text-notice',
+              tint === 'warning' && 'text-warning',
+              tint === 'danger' && 'text-danger',
             )}
             iconSize="sm"
             icon={obscured ? 'eye' : 'eye_closed'}
@@ -298,7 +306,6 @@ function EncryptionInput({
   onChange,
   autocompleteFunctions,
   autocompleteVariables,
-  defaultToEncryptedValue,
   forceUpdateKey: ogForceUpdateKey,
   ...props
 }: Omit<InputProps, 'type'>) {
@@ -306,18 +313,11 @@ function EncryptionInput({
   const [state, setState] = useStateWithDeps<{
     fieldType: PasswordFieldType;
     value: string | null;
+    security: ReturnType<typeof analyzeTemplate> | null;
     obscured: boolean;
-  }>({ fieldType: 'encrypted', value: null, obscured: true }, [ogForceUpdateKey]);
+  }>({ fieldType: 'encrypted', value: null, security: null, obscured: true }, [ogForceUpdateKey]);
 
   const forceUpdateKey = `${ogForceUpdateKey}::${state.fieldType}::${state.value === null}`;
-
-  const containsPlainText = useMemo(() => {
-    if (state.fieldType === 'encrypted') {
-      return false;
-    } else {
-      return analyzeTemplateForEncryption(state.value ?? '').containsPlainText;
-    }
-  }, [state.fieldType, state.value]);
 
   useEffect(() => {
     if (state.value != null) {
@@ -325,22 +325,23 @@ function EncryptionInput({
       return;
     }
 
-    if (analyzeTemplateForEncryption(defaultValue ?? '').onlySecureTag) {
+    const security = analyzeTemplate(defaultValue ?? '');
+    if (analyzeTemplate(defaultValue ?? '') === 'global_secured') {
       // Lazily update value to decrypted representation
       convertTemplateToInsecure(defaultValue ?? '').then((value) => {
-        setState({ fieldType: 'encrypted', value, obscured: true });
+        setState({ fieldType: 'encrypted', security, value, obscured: true });
       });
-    } else if (isEncryptionEnabled && !defaultValue && defaultToEncryptedValue) {
+    } else if (isEncryptionEnabled && !defaultValue) {
       // Default to encrypted field for new encrypted inputs
-      setState({ fieldType: 'encrypted', value: '', obscured: true });
+      setState({ fieldType: 'encrypted', security, value: '', obscured: true });
     } else if (isEncryptionEnabled) {
       // Don't obscure plain text when encryption is enabled
-      setState({ fieldType: 'text', value: defaultValue ?? '', obscured: false });
+      setState({ fieldType: 'text', security, value: defaultValue ?? '', obscured: false });
     } else {
-      // Don't obscure plain text when encryption is enabled
-      setState({ fieldType: 'text', value: defaultValue ?? '', obscured: true });
+      // Don't obscure plain text when encryption is disabled
+      setState({ fieldType: 'text', security, value: defaultValue ?? '', obscured: true });
     }
-  }, [defaultToEncryptedValue, defaultValue, isEncryptionEnabled, setState, state.value]);
+  }, [defaultValue, isEncryptionEnabled, setState, state.value]);
 
   const handleChange = useCallback(
     (value: string, fieldType: PasswordFieldType) => {
@@ -350,12 +351,11 @@ function EncryptionInput({
         onChange?.(value);
       }
       setState((s) => {
-        let obscured = s.obscured;
-        if (s.fieldType !== fieldType && fieldType === 'encrypted') {
-          // Obscure if we're going from text -> encrypted
-          obscured = true;
-        }
-        return { fieldType, value, obscured };
+        // We can't analyze when encrypted because we don't have the raw value, so assume it's secured
+        const security = fieldType === 'encrypted' ? 'global_secured' : analyzeTemplate(value);
+        // Reset obscured value when the field type is being changed
+        const obscured = fieldType === s.fieldType ? s.obscured : fieldType !== 'text';
+        return { fieldType, value, security, obscured };
       });
     },
     [onChange, setState],
@@ -389,6 +389,7 @@ function EncryptionInput({
     () => [
       {
         label: state.obscured ? 'Reveal text' : 'Conceal text',
+        disabled: state.fieldType !== 'encrypted',
         leftSlot: <Icon icon={state.obscured ? 'eye' : 'eye_closed'} />,
         onSelect: () => setState((s) => ({ ...s, obscured: !s.obscured })),
       },
@@ -405,12 +406,12 @@ function EncryptionInput({
   let tint: InputProps['tint'];
   if (!isEncryptionEnabled) {
     tint = undefined;
-  } else if (isEncryptionEnabled && state.fieldType === 'encrypted') {
+  } else if (state.fieldType === 'encrypted') {
     tint = 'info';
-  } else if (!containsPlainText) {
-    tint = 'primary';
-  } else {
-    tint = 'warning';
+  } else if (state.security === 'local_secured') {
+    tint = 'secondary';
+  } else if (state.security === 'insecure') {
+    tint = 'notice';
   }
 
   const rightSlot = useMemo(() => {
@@ -421,21 +422,25 @@ function EncryptionInput({
             size="xs"
             iconSize="sm"
             title="Configure encryption"
-            icon={state.fieldType === 'encrypted' || !containsPlainText ? 'lock' : 'lock_open'}
+            icon={state.security === 'insecure' ? 'lock_open' : 'lock'}
             className={classNames(
               '!h-full mr-0.5 opacity-70',
               props.disabled && '!opacity-disabled',
             )}
             iconClassName={classNames(
-              tint === 'info' && '!text-info',
-              tint === 'warning' && '!text-warning',
               tint === 'primary' && '!text-primary',
+              tint === 'secondary' && '!text-secondary',
+              tint === 'info' && '!text-info',
+              tint === 'success' && '!text-success',
+              tint === 'notice' && '!text-notice',
+              tint === 'warning' && '!text-warning',
+              tint === 'danger' && '!text-danger',
             )}
           />
         </Dropdown>
       </HStack>
     );
-  }, [containsPlainText, dropdownItems, props.disabled, state.fieldType, tint]);
+  }, [dropdownItems, props.disabled, state.security, tint]);
 
   const type = state.obscured ? 'password' : 'text';
 

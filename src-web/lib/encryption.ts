@@ -4,12 +4,9 @@ import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { jotaiStore } from './jotai';
 import { invokeCmd } from './tauri';
 
-export function analyzeTemplateForEncryption(template: string): {
-  onlySecureTag: boolean;
-  containsPlainText: boolean;
-} {
+export function analyzeTemplate(template: string): 'global_secured' | 'local_secured' | 'insecure' {
   let secureTags = 0;
-  let plainTextTags = 0;
+  let insecureTags = 0;
   let totalTags = 0;
   for (const t of parseTemplate(template).tokens) {
     if (t.type === 'eof') continue;
@@ -19,14 +16,20 @@ export function analyzeTemplateForEncryption(template: string): {
       secureTags++;
     } else if (t.type === 'tag' && t.val.type === 'var') {
       // Variables are secure
+    } else if (t.type === 'tag' && t.val.type === 'bool') {
+      // Booleans are secure
     } else {
-      plainTextTags++;
+      insecureTags++;
     }
   }
 
-  const onlySecureTag = secureTags === 1 && totalTags === 1;
-  const containsPlainText = plainTextTags > 0;
-  return { onlySecureTag, containsPlainText };
+  if (secureTags === 1 && totalTags === 1) {
+    return 'global_secured';
+  } else if (insecureTags === 0) {
+    return 'local_secured';
+  } else {
+    return 'insecure';
+  }
 }
 
 export async function convertTemplateToInsecure(template: string) {
@@ -44,7 +47,7 @@ export async function convertTemplateToSecure(template: string): Promise<string>
     return '';
   }
 
-  if (analyzeTemplateForEncryption(template).onlySecureTag) {
+  if (analyzeTemplate(template) === 'global_secured') {
     return template;
   }
 

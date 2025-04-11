@@ -10,7 +10,7 @@ import { useIsEncryptionEnabled } from '../hooks/useIsEncryptionEnabled';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { useRandomKey } from '../hooks/useRandomKey';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { analyzeTemplateForEncryption, convertTemplateToSecure } from '../lib/encryption';
+import { analyzeTemplate, convertTemplateToSecure } from '../lib/encryption';
 import { jotaiStore } from '../lib/jotai';
 import { showPrompt } from '../lib/prompt';
 import {
@@ -182,7 +182,7 @@ const EnvironmentEditor = function ({
       return false;
     } else {
       return !activeEnvironment.variables.every(
-        (v) => v.value === '' || analyzeTemplateForEncryption(v.value).onlySecureTag,
+        (v) => v.value === '' || analyzeTemplate(v.value) !== 'insecure',
       );
     }
   }, [activeEnvironment.variables, isEncryptionEnabled]);
@@ -246,7 +246,6 @@ const EnvironmentEditor = function ({
       <div className="h-full pr-2 pb-2">
         <PairOrBulkEditor
           allowMultilineValues
-          defaultToEncryptedValue
           preferenceName="environment"
           nameAutocomplete={nameAutocomplete}
           namePlaceholder="VAR_NAME"
