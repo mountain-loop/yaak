@@ -28,6 +28,7 @@ import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Label } from './Label';
 import { HStack } from './Stacks';
+import { Button } from './Button';
 
 export type InputProps = Pick<
   EditorProps,
@@ -416,27 +417,30 @@ function EncryptionInput({
 
   const rightSlot = useMemo(() => {
     return (
-      <HStack className="h-auto my-0.5">
+      <HStack className="h-auto m-0.5">
         <Dropdown items={dropdownItems}>
-          <IconButton
+          <Button
             size="xs"
-            iconSize="sm"
-            title="Configure encryption"
-            icon={state.security === 'insecure' ? 'lock_open' : 'lock'}
-            className={classNames(
-              '!h-full mr-0.5 opacity-70',
-              props.disabled && '!opacity-disabled',
-            )}
-            iconClassName={classNames(
-              tint === 'primary' && '!text-primary',
-              tint === 'secondary' && '!text-secondary',
-              tint === 'info' && '!text-info',
-              tint === 'success' && '!text-success',
-              tint === 'notice' && '!text-notice',
-              tint === 'warning' && '!text-warning',
-              tint === 'danger' && '!text-danger',
-            )}
-          />
+            variant="border"
+            color={tint}
+            aria-label="Configure encryption"
+            className="flex items-center justify-center !h-full !px-1"
+          >
+            <HStack space={0.5}>
+              <Icon
+                size="xs"
+                title="Configure encryption"
+                icon={state.security === 'insecure' ? 'lock_open' : 'lock'}
+                className={classNames('opacity-70', props.disabled && '!opacity-disabled')}
+              />
+              <Icon
+                size="xs"
+                title="Configure encryption"
+                icon="chevron_down"
+                className={classNames('opacity-70', props.disabled && '!opacity-disabled')}
+              />
+            </HStack>
+          </Button>
         </Dropdown>
       </HStack>
     );
