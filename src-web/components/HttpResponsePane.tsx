@@ -94,7 +94,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         className,
         'x-theme-responsePane',
         'max-h-full h-full',
-        'bg-surface rounded-md border border-border-subtle',
+        'bg-surface rounded-md border border-border-subtle overflow-hidden',
         'relative',
       )}
     >
