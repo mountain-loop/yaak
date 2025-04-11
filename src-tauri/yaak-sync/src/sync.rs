@@ -430,7 +430,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                 }
             }
             SyncOp::DbDelete { model, state } => {
-                delete_model(app_handle, &model).await?;
+                delete_model(app_handle, &model)?;
                 SyncStateOp::Delete {
                     state: state.to_owned(),
                 }
@@ -438,8 +438,8 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
         });
     }
 
-    let upserted_models = app_handle.with_tx(|tx| {
-        tx.batch_upsert(
+    app_handle.with_tx(|tx| {
+        let upserted_models = tx.batch_upsert(
             workspaces_to_upsert,
             environments_to_upsert,
             folders_to_upsert,
@@ -447,41 +447,37 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
             grpc_requests_to_upsert,
             websocket_requests_to_upsert,
             &UpdateSource::Sync,
-        )
-    })?;
-
-    // Ensure we creat WorkspaceMeta models for each new workspace, with the appropriate sync dir
-    let sync_dir_string = sync_dir.to_string_lossy().to_string();
-    let db = app_handle.db();
-    for workspace in upserted_models.workspaces {
-        let r = match db.get_workspace_meta(&workspace.id) {
-            Some(m) => {
-                if m.setting_sync_dir == Some(sync_dir_string.clone()) {
-                    // We don't need to update if unchanged
-                    continue;
+        )?;
+        
+        // Ensure we create WorkspaceMeta models for each new workspace, with the appropriate sync dir
+        let sync_dir_string = sync_dir.to_string_lossy().to_string();
+        for workspace in upserted_models.workspaces {
+            match tx.get_workspace_meta(&workspace.id) {
+                Some(m) => {
+                    if m.setting_sync_dir == Some(sync_dir_string.clone()) {
+                        // We don't need to update if unchanged
+                        continue;
+                    }
+                    tx.upsert_workspace_meta(
+                        &WorkspaceMeta {
+                            setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
+                            ..m
+                        },
+                        &UpdateSource::Sync,
+                    )
                 }
-                db.upsert_workspace_meta(
+                None => tx.upsert_workspace_meta(
                     &WorkspaceMeta {
+                        workspace_id: workspace_id.to_string(),
                         setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
-                        ..m
+                        ..Default::default()
                     },
                     &UpdateSource::Sync,
-                )
-            }
-            None => db.upsert_workspace_meta(
-                &WorkspaceMeta {
-                    workspace_id: workspace_id.to_string(),
-                    setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
-                    ..Default::default()
-                },
-                &UpdateSource::Sync,
-            ),
-        };
-
-        if let Err(e) = r {
-            warn!("Failed to upsert workspace meta for synced workspace {e:?}");
+                ),
+            }?;
         }
-    }
+        Ok(())
+    })?;
 
     Ok(sync_state_ops)
 }
@@ -554,7 +550,7 @@ fn derive_model_filename(m: &SyncModel) -> PathBuf {
     Path::new(&rel).to_path_buf()
 }
 
-async fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) -> Result<()> {
+fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) -> Result<()> {
     let db = app_handle.db();
     match model {
         SyncModel::Workspace(m) => {

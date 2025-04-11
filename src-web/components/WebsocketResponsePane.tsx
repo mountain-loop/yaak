@@ -18,6 +18,7 @@ import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Editor } from './core/Editor/Editor';
+import { HotKeyList } from './core/HotKeyList';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { LoadingIcon } from './core/LoadingIcon';
@@ -71,7 +72,11 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
       defaultRatio={0.4}
       minHeightPx={20}
       firstSlot={() =>
-        activeConnection && (
+        activeConnection == null ? (
+          <HotKeyList
+            hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'url_bar.focus']}
+          />
+        ) : (
           <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] items-center">
             <HStack className="pl-3 mb-1 font-mono text-sm text-text-subtle">
               <HStack space={2}>
@@ -115,77 +120,78 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
         )
       }
       secondSlot={
-        activeEvent &&
-        (() => (
-          <div className="grid grid-rows-[auto_minmax(0,1fr)]">
-            <div className="pb-3 px-2">
-              <Separator />
-            </div>
-            <div className="mx-2 overflow-y-auto grid grid-rows-[auto_minmax(0,1fr)]">
-              <div className="h-xs mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center">
-                <div className="font-semibold">
-                  {activeEvent.messageType === 'close'
-                    ? 'Connection Closed'
-                    : activeEvent.messageType === 'open'
-                      ? 'Connection open'
-                      : `Message ${activeEvent.isServer ? 'Received' : 'Sent'}`}
+        activeEvent != null && activeConnection != null
+          ? () => (
+              <div className="grid grid-rows-[auto_minmax(0,1fr)]">
+                <div className="pb-3 px-2">
+                  <Separator />
                 </div>
-                {message != '' && (
-                  <HStack space={1}>
-                    <Button
-                      variant="border"
-                      size="xs"
-                      onClick={() => {
-                        if (activeEventId == null) return;
-                        setHexDumps({ ...hexDumps, [activeEventId]: !hexDump });
-                      }}
-                    >
-                      {hexDump ? 'Show Message' : 'Show Hexdump'}
-                    </Button>
-                    <IconButton
-                      title="Copy message"
-                      icon="copy"
-                      size="xs"
-                      onClick={() => copy(formattedMessage.data ?? '')}
-                    />
-                  </HStack>
-                )}
-              </div>
-              {!showLarge && activeEvent.message.length > 1000 * 1000 ? (
-                <VStack space={2} className="italic text-text-subtlest">
-                  Message previews larger than 1MB are hidden
-                  <div>
-                    <Button
-                      onClick={() => {
-                        setShowingLarge(true);
-                        setTimeout(() => {
-                          setShowLarge(true);
-                          setShowingLarge(false);
-                        }, 500);
-                      }}
-                      isLoading={showingLarge}
-                      color="secondary"
-                      variant="border"
-                      size="xs"
-                    >
-                      Try Showing
-                    </Button>
+                <div className="mx-2 overflow-y-auto grid grid-rows-[auto_minmax(0,1fr)]">
+                  <div className="h-xs mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center">
+                    <div className="font-semibold">
+                      {activeEvent.messageType === 'close'
+                        ? 'Connection Closed'
+                        : activeEvent.messageType === 'open'
+                          ? 'Connection open'
+                          : `Message ${activeEvent.isServer ? 'Received' : 'Sent'}`}
+                    </div>
+                    {message != '' && (
+                      <HStack space={1}>
+                        <Button
+                          variant="border"
+                          size="xs"
+                          onClick={() => {
+                            if (activeEventId == null) return;
+                            setHexDumps({ ...hexDumps, [activeEventId]: !hexDump });
+                          }}
+                        >
+                          {hexDump ? 'Show Message' : 'Show Hexdump'}
+                        </Button>
+                        <IconButton
+                          title="Copy message"
+                          icon="copy"
+                          size="xs"
+                          onClick={() => copy(formattedMessage.data ?? '')}
+                        />
+                      </HStack>
+                    )}
                   </div>
-                </VStack>
-              ) : activeEvent.message.length === 0 ? (
-                <EmptyStateText>No Content</EmptyStateText>
-              ) : (
-                <Editor
-                  language={language}
-                  defaultValue={formattedMessage.data ?? ''}
-                  wrapLines={false}
-                  readOnly={true}
-                  stateKey={null}
-                />
-              )}
-            </div>
-          </div>
-        ))
+                  {!showLarge && activeEvent.message.length > 1000 * 1000 ? (
+                    <VStack space={2} className="italic text-text-subtlest">
+                      Message previews larger than 1MB are hidden
+                      <div>
+                        <Button
+                          onClick={() => {
+                            setShowingLarge(true);
+                            setTimeout(() => {
+                              setShowLarge(true);
+                              setShowingLarge(false);
+                            }, 500);
+                          }}
+                          isLoading={showingLarge}
+                          color="secondary"
+                          variant="border"
+                          size="xs"
+                        >
+                          Try Showing
+                        </Button>
+                      </div>
+                    </VStack>
+                  ) : activeEvent.message.length === 0 ? (
+                    <EmptyStateText>No Content</EmptyStateText>
+                  ) : (
+                    <Editor
+                      language={language}
+                      defaultValue={formattedMessage.data ?? ''}
+                      wrapLines={false}
+                      readOnly={true}
+                      stateKey={null}
+                    />
+                  )}
+                </div>
+              </div>
+            )
+          : null
       }
     />
   );

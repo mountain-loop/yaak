@@ -50,8 +50,10 @@
     "opener:allow-open-url",
     "opener:allow-reveal-item-in-dir",
     "shell:allow-open",
+    "yaak-crypto:default",
     "yaak-git:default",
     "yaak-license:default",
+    "yaak-mac-window:default",
     "yaak-models:default",
     "yaak-sync:default",
     "yaak-ws:default"

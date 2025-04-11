@@ -144,7 +144,7 @@ export function SplitLayout({
   const containerQueryReady = size.width > 0 || size.height > 0;
 
   return (
-    <div ref={containerRef} style={styles} className={classNames(className, 'grid w-full h-full')}>
+    <div ref={containerRef} style={styles} className={classNames(className, 'grid w-full h-full overflow-hidden')}>
       {containerQueryReady && (
         <>
           {firstSlot({ style: areaL, orientation: vertical ? 'vertical' : 'horizontal' })}

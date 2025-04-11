@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 mod commands;
 
 mod connection_or_tx;
-mod db_context;
+pub mod db_context;
 pub mod error;
 pub mod models;
 pub mod queries;

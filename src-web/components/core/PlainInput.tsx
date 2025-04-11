@@ -12,6 +12,7 @@ export type PlainInputProps = Omit<InputProps, 'wrapLines' | 'onKeyDown' | 'type
     onFocusRaw?: HTMLAttributes<HTMLInputElement>['onFocus'];
     type?: 'text' | 'password' | 'number';
     step?: number;
+    hideObscureToggle?: boolean;
   };
 
 export function PlainInput({
@@ -31,8 +32,10 @@ export function PlainInput({
   onPaste,
   required,
   rightSlot,
+  hideObscureToggle,
   size = 'md',
   type = 'text',
+  tint,
   validate,
   autoSelect,
   placeholder,
@@ -115,6 +118,16 @@ export function PlainInput({
           size === 'xs' && 'min-h-xs',
         )}
       >
+        {tint != null && (
+          <div
+            aria-hidden
+            className={classNames(
+              'absolute inset-0 opacity-5 pointer-events-none',
+              tint === 'info' && 'bg-info',
+              tint === 'warning' && 'bg-warning',
+            )}
+          />
+        )}
         {leftSlot}
         <HStack
           className={classNames(
@@ -128,7 +141,7 @@ export function PlainInput({
             key={forceUpdateKey}
             id={id}
             type={type === 'password' && !obscured ? 'text' : type}
-            defaultValue={defaultValue}
+            defaultValue={defaultValue ?? undefined}
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"
@@ -143,7 +156,7 @@ export function PlainInput({
             onKeyDownCapture={onKeyDownCapture}
           />
         </HStack>
-        {type === 'password' && (
+        {type === 'password' && !hideObscureToggle && (
           <IconButton
             title={obscured ? `Show ${label}` : `Obscure ${label}`}
             size="xs"

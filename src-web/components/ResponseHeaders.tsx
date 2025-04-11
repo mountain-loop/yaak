@@ -1,4 +1,5 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
+import { useMemo } from 'react';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
 
 interface Props {
@@ -6,10 +7,14 @@ interface Props {
 }
 
 export function ResponseHeaders({ response }: Props) {
+  const sortedHeaders = useMemo(
+    () => [...response.headers].sort((a, b) => a.name.localeCompare(b.name)),
+    [response.headers],
+  );
   return (
     <div className="overflow-auto h-full pb-4">
       <KeyValueRows>
-        {response.headers.map((h, i) => (
+        {sortedHeaders.map((h, i) => (
           <KeyValueRow labelColor="primary" key={i} label={h.name}>
             {h.value}
           </KeyValueRow>

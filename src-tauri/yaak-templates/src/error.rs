@@ -1,5 +1,6 @@
 use serde::{Serialize, Serializer};
 use thiserror::Error;
+use wasm_bindgen::JsValue;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum Error {
@@ -19,6 +20,12 @@ impl Serialize for Error {
         S: Serializer,
     {
         serializer.serialize_str(self.to_string().as_ref())
+    }
+}
+
+impl Into<JsValue> for Error {
+    fn into(self) -> JsValue {
+        serde_wasm_bindgen::to_value(&self).unwrap()
     }
 }
 

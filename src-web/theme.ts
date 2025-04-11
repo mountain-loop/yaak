@@ -1,11 +1,12 @@
-import { emit, listen } from '@tauri-apps/api/event';
+import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { setWindowTheme } from '@yaakapp-internal/mac-window';
 import type { ModelPayload } from '@yaakapp-internal/models';
 import { getSettings } from './lib/settings';
 import type { Appearance } from './lib/theme/appearance';
 import { getCSSAppearance, subscribeToPreferredAppearance } from './lib/theme/appearance';
 import { getResolvedTheme } from './lib/theme/themes';
-import { addThemeStylesToDocument, setThemeOnDocument, type YaakTheme } from './lib/theme/window';
+import { addThemeStylesToDocument, setThemeOnDocument } from './lib/theme/window';
 
 // NOTE: CSS appearance isn't as accurate as getting it async from the window (next step), but we want
 //  a good appearance guess so we're not waiting too long
@@ -40,10 +41,7 @@ async function configureTheme() {
   );
   addThemeStylesToDocument(theme.active);
   setThemeOnDocument(theme.active);
-  emitBgChange(theme.active);
-}
-
-function emitBgChange(t: YaakTheme) {
-  if (t.surface == null) return;
-  emit('yaak_bg_changed', t.surface.hexNoAlpha()).catch(console.error);
+  if (theme.active.surface != null) {
+    setWindowTheme(theme.active.surface.hexNoAlpha());
+  }
 }

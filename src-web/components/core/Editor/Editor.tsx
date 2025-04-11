@@ -6,12 +6,13 @@ import { keymap, placeholder as placeholderExt, tooltips } from '@codemirror/vie
 import { emacs } from '@replit/codemirror-emacs';
 import { vim } from '@replit/codemirror-vim';
 import { vscodeKeymap } from '@replit/codemirror-vscode-keymap';
-import type {EditorKeymap, EnvironmentVariable} from '@yaakapp-internal/models';
-import { settingsAtom} from '@yaakapp-internal/models';
+import type { EditorKeymap, EnvironmentVariable } from '@yaakapp-internal/models';
+import { settingsAtom } from '@yaakapp-internal/models';
 import type { EditorLanguage, TemplateFunction } from '@yaakapp-internal/plugins';
+import { parseTemplate } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { EditorView } from 'codemirror';
-import {useAtomValue} from "jotai";
+import { useAtomValue } from 'jotai';
 import { md5 } from 'js-md5';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
@@ -26,14 +27,15 @@ import {
   useRef,
 } from 'react';
 import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
-import { parseTemplate } from '../../../hooks/useParseTemplate';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { showDialog } from '../../../lib/dialog';
 import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
+import { withEncryptionEnabled } from '../../../lib/setupOrConfigureEncryption';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
+import { InlineCode } from '../InlineCode';
 import { HStack } from '../Stacks';
 import './Editor.css';
 import {
@@ -203,7 +205,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   useEffect(
     function configurePlaceholder() {
       if (cm.current === null) return;
-      const ext = placeholderExt(placeholderElFromText(placeholder, type));
+      const ext = placeholderExt(placeholderElFromText(placeholder));
       const effects = placeholderCompartment.current.reconfigure(ext);
       cm.current?.view.dispatch({ effects });
     },
@@ -265,32 +267,39 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   const onClickFunction = useCallback(
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
-      const initialTokens = await parseTemplate(tagValue);
-      showDialog({
-        id: 'template-function-'+Math.random(), // Allow multiple at once
-        size: 'sm',
-        title: 'Configure Function',
-        description: fn.description,
-        render: ({ hide }) => (
-          <TemplateFunctionDialog
-            templateFunction={fn}
-            hide={hide}
-            initialTokens={initialTokens}
-            onChange={(insert) => {
-              cm.current?.view.dispatch({
-                changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
-              });
-            }}
-          />
-        ),
-      });
+      const initialTokens = parseTemplate(tagValue);
+      const show = () =>
+        showDialog({
+          id: 'template-function-' + Math.random(), // Allow multiple at once
+          size: 'sm',
+          title: <InlineCode>{fn.name}(…)</InlineCode>,
+          description: fn.description,
+          render: ({ hide }) => (
+            <TemplateFunctionDialog
+              templateFunction={fn}
+              hide={hide}
+              initialTokens={initialTokens}
+              onChange={(insert) => {
+                cm.current?.view.dispatch({
+                  changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
+                });
+              }}
+            />
+          ),
+        });
+
+      if (fn.name === 'secure') {
+        withEncryptionEnabled(show);
+      } else {
+        show();
+      }
     },
     [],
   );
 
   const onClickVariable = useCallback(
     async (_v: EnvironmentVariable, tagValue: string, startPos: number) => {
-      const initialTokens = await parseTemplate(tagValue);
+      const initialTokens = parseTemplate(tagValue);
       showDialog({
         size: 'dynamic',
         id: 'template-variable',
@@ -313,7 +322,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   const onClickMissingVariable = useCallback(
     async (_name: string, tagValue: string, startPos: number) => {
-      const initialTokens = await parseTemplate(tagValue);
+      const initialTokens = parseTemplate(tagValue);
       showDialog({
         size: 'dynamic',
         id: 'template-variable',
@@ -398,9 +407,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
         const extensions = [
           languageCompartment.of(langExt),
-          placeholderCompartment.current.of(
-            placeholderExt(placeholderElFromText(placeholder, type)),
-          ),
+          placeholderCompartment.current.of(placeholderExt(placeholderElFromText(placeholder))),
           wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : emptyExtension),
           tabIndentCompartment.current.of(
             !disableTabIndent ? keymap.of([indentWithTab]) : emptyExtension,
@@ -639,17 +646,11 @@ function getExtensions({
   ];
 }
 
-const placeholderElFromText = (text: string | undefined, type: EditorProps['type']) => {
+const placeholderElFromText = (text: string | undefined) => {
   const el = document.createElement('div');
-  if (type === 'password') {
-    // Will be obscured (dots) so just needs to be something to take up space
-    el.innerHTML = 'something-cool';
-    el.setAttribute('aria-hidden', 'true');
-  } else {
-    // Default to <SPACE> because codemirror needs it for sizing. I'm not sure why, but probably something
-    // to do with how Yaak "hacks" it with CSS for single line input.
-    el.innerHTML = text ? text.replaceAll('\n', '<br/>') : ' ';
-  }
+  // Default to <SPACE> because codemirror needs it for sizing. I'm not sure why, but probably something
+  // to do with how Yaak "hacks" it with CSS for single line input.
+  el.innerHTML = text ? text.replaceAll('\n', '<br/>') : ' ';
   return el;
 };
 

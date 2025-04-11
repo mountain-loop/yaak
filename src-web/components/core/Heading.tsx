@@ -11,7 +11,7 @@ export function Heading({ className, level = 1, ...props }: Props) {
     <Component
       className={classNames(
         className,
-        'font-semibold text',
+        'font-semibold text-text',
         level === 1 && 'text-2xl',
         level === 2 && 'text-xl',
         level === 3 && 'text-lg',

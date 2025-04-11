@@ -1,9 +1,11 @@
 [workspace]
 members = [
+    "yaak-crypto",
     "yaak-git",
     "yaak-grpc",
     "yaak-http",
     "yaak-license",
+    "yaak-mac-window",
     "yaak-models",
     "yaak-plugins",
     "yaak-sse",
@@ -31,12 +33,7 @@ strip = true  # Automatically strip symbols from the binary.
 cargo-clippy = []
 
 [build-dependencies]
-tauri-build = { version = "2.1.0", features = [] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-hex_color = "3.0.0"
-objc = "0.2.7"
-cocoa = "0.26.0"
+tauri-build = { version = "2.1.1", features = [] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu installation to work
@@ -68,14 +65,16 @@ tauri-plugin-single-instance = "2.2.2"
 tauri-plugin-updater = "2.6.1"
 tauri-plugin-window-state = "2.2.1"
 thiserror = { workspace = true }
-tokio = { version = "1.43.0", features = ["sync"] }
+tokio = { workspace = true, features = ["sync"] }
 tokio-stream = "0.1.17"
 uuid = "1.12.1"
 yaak-common = { workspace = true }
+yaak-crypto = { workspace = true }
 yaak-git = { path = "yaak-git" }
 yaak-grpc = { path = "yaak-grpc" }
 yaak-http = { workspace = true }
 yaak-license = { path = "yaak-license" }
+yaak-mac-window = { path = "yaak-mac-window" }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }
@@ -84,14 +83,15 @@ yaak-templates = { workspace = true }
 yaak-ws = { path = "yaak-ws" }
 
 [workspace.dependencies]
-reqwest = "0.12.12"
-serde = "1.0.215"
-serde_json = "1.0.132"
-tauri = "2.4.0"
-tauri-plugin = "2.1.0"
-tauri-plugin-shell = "2.2.0"
-thiserror = "2.0.3"
-ts-rs = "10.0.0"
+reqwest = "0.12.15"
+serde = "1.0.219"
+serde_json = "1.0.140"
+tauri = "2.4.1"
+tauri-plugin = "2.1.1"
+tauri-plugin-shell = "2.2.1"
+tokio = "1.44.2"
+thiserror = "2.0.12"
+ts-rs = "10.1.0"
 yaak-common = { path = "yaak-common" }
 yaak-http = { path = "yaak-http" }
 yaak-models = { path = "yaak-models" }
@@ -99,3 +99,4 @@ yaak-plugins = { path = "yaak-plugins" }
 yaak-sse = { path = "yaak-sse" }
 yaak-sync = { path = "yaak-sync" }
 yaak-templates = { path = "yaak-templates" }
+yaak-crypto = { path = "yaak-crypto" }

@@ -134,28 +134,29 @@
 .cm-searchMatch {
   @apply bg-transparent !important;
   @apply rounded-[2px] outline outline-1;
+
   &.cm-searchMatch-selected {
     @apply outline-text;
     @apply bg-text !important;
+
     &, * {
       @apply text-surface font-semibold !important;
     }
   }
 }
-/*.cm-searchMatch {*/
-/*  @apply bg-transparent !important;*/
-/*  @apply outline outline-[1.5px] outline-text-subtlest rounded-sm;*/
-/*  &.cm-searchMatch-selected {*/
-/*    @apply outline-text;*/
-/*    & * {*/
-/*      @apply text-text font-semibold;*/
-/*    }*/
-/*  }*/
-/*}*/
 
 /* Obscure text for password fields */
 .cm-wrapper.cm-obscure-text .cm-line {
   -webkit-text-security: disc;
+}
+
+/* Obscure text for password fields */
+.cm-wrapper.cm-obscure-text .cm-line {
+  -webkit-text-security: disc;
+
+  .cm-placeholder {
+    -webkit-text-security: none;
+  }
 }
 
 .cm-editor .cm-gutterElement {

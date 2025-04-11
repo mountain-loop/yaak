@@ -5,5 +5,5 @@ edition = "2024"
 publish = false
 
 [dependencies]
-serde = { version = "1.0.204", features = ["derive"] }
-ts-rs = { version = "10.0.0", features = ["serde-json-impl"] }
+serde = { workspace = true, features = ["derive"] }
+ts-rs = { workspace = true, features = ["serde-json-impl"] }

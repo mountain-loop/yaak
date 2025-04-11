@@ -26,6 +26,7 @@ import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
 import { EmptyStateText } from './EmptyStateText';
 import { RecentGrpcConnectionsDropdown } from './RecentGrpcConnectionsDropdown';
+import { HotKeyList } from './core/HotKeyList';
 
 interface Props {
   style?: CSSProperties;
@@ -72,11 +73,15 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
       defaultRatio={0.4}
       minHeightPx={20}
       firstSlot={() =>
-        activeConnection && (
-          <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] items-center">
-            <HStack className="pl-3 mb-1 font-mono text-sm text-text-subtle">
+        activeConnection == null ? (
+          <HotKeyList
+            hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'url_bar.focus']}
+          />
+        ) : (
+          <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 items-center">
+            <HStack className="pl-3 mb-1 font-mono text-sm text-text-subtle overflow-x-auto hide-scrollbars">
               <HStack space={2}>
-                <span>{events.length} Messages</span>
+                <span className="whitespace-nowrap">{events.length} Messages</span>
                 {activeConnection.state !== 'closed' && (
                   <LoadingIcon size="sm" className="text-text-subtlest" />
                 )}
@@ -114,84 +119,86 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
         )
       }
       secondSlot={
-        activeEvent &&
-        (() => (
-          <div className="grid grid-rows-[auto_minmax(0,1fr)]">
-            <div className="pb-3 px-2">
-              <Separator />
-            </div>
-            <div className="h-full pl-2 overflow-y-auto grid grid-rows-[auto_minmax(0,1fr)] ">
-              {activeEvent.eventType === 'client_message' ||
-              activeEvent.eventType === 'server_message' ? (
-                <>
-                  <div className="mb-2 select-text cursor-text grid grid-cols-[minmax(0,1fr)_auto] items-center">
-                    <div className="font-semibold">
-                      Message {activeEvent.eventType === 'client_message' ? 'Sent' : 'Received'}
-                    </div>
-                    <IconButton
-                      title="Copy message"
-                      icon="copy"
-                      size="xs"
-                      onClick={() => copy(activeEvent.content)}
-                    />
-                  </div>
-                  {!showLarge && activeEvent.content.length > 1000 * 1000 ? (
-                    <VStack space={2} className="italic text-text-subtlest">
-                      Message previews larger than 1MB are hidden
-                      <div>
-                        <Button
-                          onClick={() => {
-                            setShowingLarge(true);
-                            setTimeout(() => {
-                              setShowLarge(true);
-                              setShowingLarge(false);
-                            }, 500);
-                          }}
-                          isLoading={showingLarge}
-                          color="secondary"
-                          variant="border"
-                          size="xs"
-                        >
-                          Try Showing
-                        </Button>
-                      </div>
-                    </VStack>
-                  ) : (
-                    <JsonAttributeTree attrValue={JSON.parse(activeEvent?.content ?? '{}')} />
-                  )}
-                </>
-              ) : (
-                <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
-                  <div>
-                    <div className="select-text cursor-text font-semibold">
-                      {activeEvent.content}
-                    </div>
-                    {activeEvent.error && (
-                      <div className="select-text cursor-text text-sm font-mono py-1 text-warning">
-                        {activeEvent.error}
-                      </div>
-                    )}
-                  </div>
-                  <div className="py-2 h-full">
-                    {Object.keys(activeEvent.metadata).length === 0 ? (
-                      <EmptyStateText>
-                        No {activeEvent.eventType === 'connection_end' ? 'trailers' : 'metadata'}
-                      </EmptyStateText>
-                    ) : (
-                      <KeyValueRows>
-                        {Object.entries(activeEvent.metadata).map(([key, value]) => (
-                          <KeyValueRow key={key} label={key}>
-                            {value}
-                          </KeyValueRow>
-                        ))}
-                      </KeyValueRows>
-                    )}
-                  </div>
+        activeEvent != null && activeConnection != null
+          ? () => (
+              <div className="grid grid-rows-[auto_minmax(0,1fr)]">
+                <div className="pb-3 px-2">
+                  <Separator />
                 </div>
-              )}
-            </div>
-          </div>
-        ))
+                <div className="h-full pl-2 overflow-y-auto grid grid-rows-[auto_minmax(0,1fr)] ">
+                  {activeEvent.eventType === 'client_message' ||
+                  activeEvent.eventType === 'server_message' ? (
+                    <>
+                      <div className="mb-2 select-text cursor-text grid grid-cols-[minmax(0,1fr)_auto] items-center">
+                        <div className="font-semibold">
+                          Message {activeEvent.eventType === 'client_message' ? 'Sent' : 'Received'}
+                        </div>
+                        <IconButton
+                          title="Copy message"
+                          icon="copy"
+                          size="xs"
+                          onClick={() => copy(activeEvent.content)}
+                        />
+                      </div>
+                      {!showLarge && activeEvent.content.length > 1000 * 1000 ? (
+                        <VStack space={2} className="italic text-text-subtlest">
+                          Message previews larger than 1MB are hidden
+                          <div>
+                            <Button
+                              onClick={() => {
+                                setShowingLarge(true);
+                                setTimeout(() => {
+                                  setShowLarge(true);
+                                  setShowingLarge(false);
+                                }, 500);
+                              }}
+                              isLoading={showingLarge}
+                              color="secondary"
+                              variant="border"
+                              size="xs"
+                            >
+                              Try Showing
+                            </Button>
+                          </div>
+                        </VStack>
+                      ) : (
+                        <JsonAttributeTree attrValue={JSON.parse(activeEvent?.content ?? '{}')} />
+                      )}
+                    </>
+                  ) : (
+                    <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
+                      <div>
+                        <div className="select-text cursor-text font-semibold">
+                          {activeEvent.content}
+                        </div>
+                        {activeEvent.error && (
+                          <div className="select-text cursor-text text-sm font-mono py-1 text-warning">
+                            {activeEvent.error}
+                          </div>
+                        )}
+                      </div>
+                      <div className="py-2 h-full">
+                        {Object.keys(activeEvent.metadata).length === 0 ? (
+                          <EmptyStateText>
+                            No{' '}
+                            {activeEvent.eventType === 'connection_end' ? 'trailers' : 'metadata'}
+                          </EmptyStateText>
+                        ) : (
+                          <KeyValueRows>
+                            {Object.entries(activeEvent.metadata).map(([key, value]) => (
+                              <KeyValueRow key={key} label={key}>
+                                {value}
+                              </KeyValueRow>
+                            ))}
+                          </KeyValueRows>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          : null
       }
     />
   );

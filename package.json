@@ -10,8 +10,10 @@
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
     "packages/common-lib",
-    "src-tauri/yaak-license",
+    "src-tauri/yaak-crypto",
     "src-tauri/yaak-git",
+    "src-tauri/yaak-license",
+    "src-tauri/yaak-mac-window",
     "src-tauri/yaak-models",
     "src-tauri/yaak-plugins",
     "src-tauri/yaak-sse",
@@ -39,7 +41,7 @@
     "jotai": "^2.12.2"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.4.0",
+    "@tauri-apps/cli": "^2.4.1",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
     "@typescript-eslint/parser": "^8.27.0",
     "eslint": "^8",

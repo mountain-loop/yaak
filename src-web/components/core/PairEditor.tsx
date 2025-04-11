@@ -55,7 +55,7 @@ export type PairEditorProps = {
   valueAutocompleteFunctions?: boolean;
   valueAutocompleteVariables?: boolean;
   valuePlaceholder?: string;
-  valueType?: 'text' | 'password';
+  valueType?: InputProps['type'] | ((pair: Pair) => InputProps['type']);
   valueValidate?: InputProps['validate'];
 };
 
@@ -78,7 +78,6 @@ const MAX_INITIAL_PAIRS = 50;
 
 export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function PairEditor(
   {
-    stateKey,
     allowFileValues,
     allowMultilineValues,
     className,
@@ -91,6 +90,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
     noScroll,
     onChange,
     pairs: originalPairs,
+    stateKey,
     valueAutocomplete,
     valueAutocompleteFunctions,
     valueAutocompleteVariables,
@@ -124,7 +124,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
       const p = originalPairs[i];
       if (!p) continue; // Make TS happy
       if (isPairEmpty(p)) continue;
-      newPairs.push({ ...p, id: p.id ?? generateId() });
+      newPairs.push(ensurePairId(p));
     }
 
     // Add empty last pair if there is none
@@ -555,7 +555,7 @@ function PairEditorRow({
               name={`value[${index}]`}
               onChange={handleChangeValueText}
               onFocus={handleFocus}
-              type={isLast ? 'text' : valueType}
+              type={isLast ? 'text' : typeof valueType === 'function' ? valueType(pair) : valueType}
               placeholder={valuePlaceholder ?? 'value'}
               autocomplete={valueAutocomplete?.(pair.name)}
               autocompleteFunctions={valueAutocompleteFunctions}
@@ -615,7 +615,7 @@ function FileActionsDropdown({
     [onChangeFile, onChangeText],
   );
 
-  const extraItems = useMemo<DropdownItem[]>(
+  const itemsAfter = useMemo<DropdownItem[]>(
     () => [
       {
         label: 'Edit Multi-Line',
@@ -664,7 +664,7 @@ function FileActionsDropdown({
       value={pair.isFile ? 'file' : 'text'}
       onChange={onChange}
       items={fileItems}
-      extraItems={extraItems}
+      itemsAfter={itemsAfter}
     >
       <IconButton iconSize="sm" size="xs" icon="chevron_down" title="Select form data type" />
     </RadioDropdown>
@@ -672,12 +672,7 @@ function FileActionsDropdown({
 }
 
 function emptyPair(): PairWithId {
-  return {
-    enabled: true,
-    name: '',
-    value: '',
-    id: generateId(),
-  };
+  return ensurePairId({ enabled: true, name: '', value: '' });
 }
 
 function isPairEmpty(pair: Pair): boolean {
@@ -722,4 +717,13 @@ function MultilineEditDialog({
       </div>
     </div>
   );
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function ensurePairId(p: Pair): PairWithId {
+  if (typeof p.id === 'string') {
+    return p as PairWithId;
+  } else {
+    return { ...p, id: p.id ?? generateId() };
+  }
 }

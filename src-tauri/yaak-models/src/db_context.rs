@@ -53,9 +53,11 @@ impl<'a> DbContext<'a> {
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
+        let (order_by_col, order_by_dir) = M::order_by();
         let (sql, params) = Query::select()
             .from(M::table_name())
             .column(Asterisk)
+            .order_by(order_by_col, order_by_dir)
             .build_rusqlite(SqliteQueryBuilder);
         let mut stmt = self.conn.resolve().prepare(sql.as_str())?;
         let items = stmt.query_map(&*params.as_params(), M::from_row)?;
@@ -72,18 +74,21 @@ impl<'a> DbContext<'a> {
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
         // TODO: Figure out how to do this conditional builder better
+        let (order_by_col, order_by_dir) = M::order_by();
         let (sql, params) = if let Some(limit) = limit {
             Query::select()
                 .from(M::table_name())
                 .column(Asterisk)
                 .cond_where(Expr::col(col).eq(value))
                 .limit(limit)
+                .order_by(order_by_col, order_by_dir)
                 .build_rusqlite(SqliteQueryBuilder)
         } else {
             Query::select()
                 .from(M::table_name())
                 .column(Asterisk)
                 .cond_where(Expr::col(col).eq(value))
+                .order_by(order_by_col, order_by_dir)
                 .build_rusqlite(SqliteQueryBuilder)
         };
 

@@ -9,18 +9,18 @@ publish = false
 futures-util = "0.3.31"
 log = "0.4.20"
 md5 = "0.7.0"
-rustls = { version = "0.23.21", default-features = false, features = ["custom-provider", "ring"] }
-rustls-platform-verifier = "0.5.0"
-serde = { version = "1.0.217", features = ["derive"] }
+rustls = { version = "0.23.25", default-features = false, features = ["custom-provider", "ring"] }
+rustls-platform-verifier = "0.5.1"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tauri = { workspace = true }
 thiserror = "2.0.11"
-tokio = { version = "1.0", default-features = false, features = ["macros", "time", "test-util"] }
-tokio-tungstenite = { version = "0.26.1", default-features = false, features = ["rustls-tls-native-roots", "connect"] }
-yaak-models = { workspace = true }
+tokio = { workspace = true, features = ["macros", "time", "test-util"] }
+tokio-tungstenite = { version = "0.26.2", default-features = false, features = ["rustls-tls-native-roots", "connect"] }
 yaak-http = { workspace = true }
+yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-templates = { workspace = true }
-serde_json = "1.0.132"
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }

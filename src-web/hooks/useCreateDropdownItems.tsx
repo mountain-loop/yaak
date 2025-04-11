@@ -1,15 +1,14 @@
-import { createWorkspaceModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { useMemo } from 'react';
 import { createFolder } from '../commands/commands';
 import type { DropdownItem } from '../components/core/Dropdown';
 import { Icon } from '../components/core/Icon';
+import { createRequestAndNavigate } from '../lib/createRequestAndNavigate';
 import { generateId } from '../lib/generateId';
 import { jotaiStore } from '../lib/jotai';
 import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
 import { activeRequestAtom } from './useActiveRequest';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
-import { useCreateHttpRequest } from './useCreateHttpRequest';
 
 export function useCreateDropdownItems({
   hideFolder,
@@ -20,7 +19,6 @@ export function useCreateDropdownItems({
   hideIcons?: boolean;
   folderId?: string | null | 'active-folder';
 } = {}): DropdownItem[] {
-  const { mutate: createHttpRequest } = useCreateHttpRequest();
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
 
   const items = useMemo((): DropdownItem[] => {
@@ -33,15 +31,15 @@ export function useCreateDropdownItems({
       {
         label: 'HTTP',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-        onSelect: () => {
-          createHttpRequest({ folderId });
-        },
+        onSelect: () => createRequestAndNavigate({ model: 'http_request', workspaceId, folderId }),
       },
       {
         label: 'GraphQL',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
         onSelect: () =>
-          createHttpRequest({
+          createRequestAndNavigate({
+            model: 'http_request',
+            workspaceId,
             folderId,
             bodyType: BODY_TYPE_GRAPHQL,
             method: 'POST',
@@ -51,12 +49,13 @@ export function useCreateDropdownItems({
       {
         label: 'gRPC',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-        onSelect: () => createWorkspaceModel({ model: 'grpc_request', workspaceId, folderId }),
+        onSelect: () => createRequestAndNavigate({ model: 'grpc_request', workspaceId, folderId }),
       },
       {
         label: 'WebSocket',
         leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-        onSelect: () => createWorkspaceModel({ model: 'websocket_request', workspaceId, folderId }),
+        onSelect: () =>
+          createRequestAndNavigate({ model: 'websocket_request', workspaceId, folderId }),
       },
       ...((hideFolder
         ? []
@@ -69,7 +68,7 @@ export function useCreateDropdownItems({
             },
           ]) as DropdownItem[]),
     ];
-  }, [createHttpRequest, folderIdOption, hideFolder, hideIcons, workspaceId]);
+  }, [folderIdOption, hideFolder, hideIcons, workspaceId]);
 
   return items;
 }
