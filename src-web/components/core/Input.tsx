@@ -20,6 +20,7 @@ import {
 } from '../../lib/encryption';
 import { generateId } from '../../lib/generateId';
 import { withEncryptionEnabled } from '../../lib/setupOrConfigureEncryption';
+import { Button } from './Button';
 import type { DropdownItem } from './Dropdown';
 import { Dropdown } from './Dropdown';
 import type { EditorProps } from './Editor/Editor';
@@ -28,7 +29,6 @@ import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Label } from './Label';
 import { HStack } from './Stacks';
-import { Button } from './Button';
 
 export type InputProps = Pick<
   EditorProps,
@@ -415,36 +415,35 @@ function EncryptionInput({
     tint = 'notice';
   }
 
-  const rightSlot = useMemo(() => {
-    return (
+  const rightSlot = useMemo(
+    () => (
       <HStack className="h-auto m-0.5">
         <Dropdown items={dropdownItems}>
           <Button
-            size="xs"
+            size="sm"
             variant="border"
             color={tint}
             aria-label="Configure encryption"
-            className="flex items-center justify-center !h-full !px-1"
+            className={classNames(
+              'flex items-center justify-center !h-full !px-1',
+              'opacity-70', // Makes it a bit subtler
+              props.disabled && '!opacity-disabled',
+            )}
           >
             <HStack space={0.5}>
               <Icon
-                size="xs"
+                size="sm"
                 title="Configure encryption"
-                icon={state.security === 'insecure' ? 'lock_open' : 'lock'}
-                className={classNames('opacity-70', props.disabled && '!opacity-disabled')}
+                icon={state.security === 'insecure' ? 'shield_off' : 'shield_check'}
               />
-              <Icon
-                size="xs"
-                title="Configure encryption"
-                icon="chevron_down"
-                className={classNames('opacity-70', props.disabled && '!opacity-disabled')}
-              />
+              <Icon size="xs" title="Configure encryption" icon="chevron_down" />
             </HStack>
           </Button>
         </Dropdown>
       </HStack>
-    );
-  }, [dropdownItems, props.disabled, state.security, tint]);
+    ),
+    [dropdownItems, props.disabled, state.security, tint],
+  );
 
   const type = state.obscured ? 'password' : 'text';
 
