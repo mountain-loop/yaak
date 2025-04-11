@@ -25,6 +25,7 @@ import type { DropdownItem } from './Dropdown';
 import { Dropdown } from './Dropdown';
 import type { EditorProps } from './Editor/Editor';
 import { Editor } from './Editor/Editor';
+import type { IconProps } from './Icon';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Label } from './Label';
@@ -271,20 +272,17 @@ const BaseInput = forwardRef<EditorView, InputProps>(function InputBase(
           <IconButton
             title={obscured ? `Show ${label}` : `Obscure ${label}`}
             size="xs"
-            className={classNames(
-              'mr-0.5 group/obscure !h-auto my-0.5',
-              disabled && 'opacity-disabled',
-            )}
-            iconClassName={classNames(
-              'group-hover/obscure:text',
-              tint === 'primary' && 'text-primary',
-              tint === 'secondary' && 'text-secondary',
-              tint === 'info' && 'text-info',
-              tint === 'success' && 'text-success',
-              tint === 'notice' && 'text-notice',
-              tint === 'warning' && 'text-warning',
-              tint === 'danger' && 'text-danger',
-            )}
+            className={classNames('mr-0.5 !h-auto my-0.5', disabled && 'opacity-disabled')}
+            color={tint}
+            // iconClassName={classNames(
+            //   tint === 'primary' && 'text-primary',
+            //   tint === 'secondary' && 'text-secondary',
+            //   tint === 'info' && 'text-info',
+            //   tint === 'success' && 'text-success',
+            //   tint === 'notice' && 'text-notice',
+            //   tint === 'warning' && 'text-warning',
+            //   tint === 'danger' && 'text-danger',
+            // )}
             iconSize="sm"
             icon={obscured ? 'eye' : 'eye_closed'}
             onClick={() => setObscured((o) => !o)}
@@ -389,8 +387,8 @@ function EncryptionInput({
   const dropdownItems = useMemo<DropdownItem[]>(
     () => [
       {
-        label: state.obscured ? 'Reveal text' : 'Conceal text',
-        disabled: state.fieldType !== 'encrypted',
+        label: state.obscured ? 'Reveal value' : 'Conceal value',
+        disabled: isEncryptionEnabled && state.fieldType === 'text',
         leftSlot: <Icon icon={state.obscured ? 'eye' : 'eye_closed'} />,
         onSelect: () => setState((s) => ({ ...s, obscured: !s.obscured })),
       },
@@ -401,7 +399,7 @@ function EncryptionInput({
         onSelect: () => handleFieldTypeChange(state.fieldType === 'text' ? 'encrypted' : 'text'),
       },
     ],
-    [handleFieldTypeChange, setState, state.fieldType, state.obscured],
+    [handleFieldTypeChange, isEncryptionEnabled, setState, state.fieldType, state.obscured],
   );
 
   let tint: InputProps['tint'];
@@ -415,8 +413,14 @@ function EncryptionInput({
     tint = 'notice';
   }
 
-  const rightSlot = useMemo(
-    () => (
+  const rightSlot = useMemo(() => {
+    let icon: IconProps['icon'];
+    if (isEncryptionEnabled) {
+      icon = state.security === 'insecure' ? 'shield_off' : 'shield_check';
+    } else {
+      icon = state.obscured ? 'eye_closed' : 'eye';
+    }
+    return (
       <HStack className="h-auto m-0.5">
         <Dropdown items={dropdownItems}>
           <Button
@@ -431,19 +435,14 @@ function EncryptionInput({
             )}
           >
             <HStack space={0.5}>
-              <Icon
-                size="sm"
-                title="Configure encryption"
-                icon={state.security === 'insecure' ? 'shield_off' : 'shield_check'}
-              />
+              <Icon size="sm" title="Configure encryption" icon={icon} />
               <Icon size="xs" title="Configure encryption" icon="chevron_down" />
             </HStack>
           </Button>
         </Dropdown>
       </HStack>
-    ),
-    [dropdownItems, props.disabled, state.security, tint],
-  );
+    );
+  }, [dropdownItems, isEncryptionEnabled, props.disabled, state.obscured, state.security, tint]);
 
   const type = state.obscured ? 'password' : 'text';
 
