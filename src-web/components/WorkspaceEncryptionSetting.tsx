@@ -123,12 +123,13 @@ function EnterWorkspaceKey({
         space={1.5}
         onSubmit={(e) => {
           e.preventDefault();
-          setWorkspaceKeyMut
-            .mutateAsync({
+          setWorkspaceKeyMut.mutate(
+            {
               workspaceId: workspaceMeta.workspaceId,
               key: key.trim(),
-            })
-            .then(onEnabled);
+            },
+            { onSuccess: onEnabled },
+          );
         }}
       >
         <PlainInput
