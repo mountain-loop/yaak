@@ -141,7 +141,7 @@ export function PlainInput({
             key={forceUpdateKey}
             id={id}
             type={type === 'password' && !obscured ? 'text' : type}
-            defaultValue={defaultValue}
+            defaultValue={defaultValue ?? undefined}
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"

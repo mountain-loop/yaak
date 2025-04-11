@@ -1,5 +1,5 @@
 import type { Environment } from '@yaakapp-internal/models';
-import { environmentsAtom, patchModel } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
@@ -11,7 +11,6 @@ import { useKeyValue } from '../hooks/useKeyValue';
 import { useRandomKey } from '../hooks/useRandomKey';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { analyzeTemplate, convertTemplateToSecure } from '../lib/encryption';
-import { jotaiStore } from '../lib/jotai';
 import { showPrompt } from '../lib/prompt';
 import {
   setupOrConfigureEncryption,
@@ -20,7 +19,6 @@ import {
 import { BadgeButton } from './core/BadgeButton';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { DismissibleBanner } from './core/DismissibleBanner';
 import { ContextMenu } from './core/Dropdown';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import { Heading } from './core/Heading';
@@ -204,45 +202,24 @@ const EnvironmentEditor = function ({
       <HStack space={2} className="justify-between">
         <Heading className="w-full flex items-center gap-1">
           <div>{activeEnvironment?.name}</div>
-          {isEncryptionEnabled ? (
-            <BadgeButton color="info" onClick={setupOrConfigureEncryption}>
-              Manage Encryption
+          {promptToEncrypt ? (
+            <BadgeButton color="notice" onClick={() => encryptEnvironment(activeEnvironment)}>
+              Encrypt All Variables
+            </BadgeButton>
+          ) : isEncryptionEnabled ? (
+            <BadgeButton color="secondary" onClick={setupOrConfigureEncryption}>
+              Encryption Settings
             </BadgeButton>
           ) : (
-            <>
-              <BadgeButton
-                variant="border"
-                color="success"
-                onClick={() => jotaiStore.get(environmentsAtom).forEach(encryptEnvironment)}
-              >
-                Enable Encryption
-              </BadgeButton>
-              <IconButton
-                size="sm"
-                icon={valueVisibility.value ? 'eye' : 'eye_closed'}
-                title={valueVisibility.value ? 'Hide Values' : 'Reveal Values'}
-                onClick={() => valueVisibility.set((v) => !v)}
-              />
-            </>
+            <IconButton
+              size="sm"
+              icon={valueVisibility.value ? 'eye' : 'eye_closed'}
+              title={valueVisibility.value ? 'Hide Values' : 'Reveal Values'}
+              onClick={() => valueVisibility.set((v) => !v)}
+            />
           )}
         </Heading>
       </HStack>
-      {promptToEncrypt && (
-        <DismissibleBanner color="notice" className="mr-3" id={`encrypt-env-${activeWorkspaceId}`}>
-          <p className="mb-1.5">
-            <strong>Unencrypted variables detected</strong>. Encrypt them before sharing this
-            workspace across devices or with your team.
-          </p>
-          <Button
-            size="xs"
-            variant="border"
-            color="notice"
-            onClick={() => encryptEnvironment(activeEnvironment)}
-          >
-            Encrypt Variables
-          </Button>
-        </DismissibleBanner>
-      )}
       <div className="h-full pr-2 pb-2">
         <PairOrBulkEditor
           allowMultilineValues
