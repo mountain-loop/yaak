@@ -10,6 +10,7 @@ use tauri::{
 };
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
+    #[allow(unused)]
     Builder::new("yaak-mac-window")
         .invoke_handler(generate_handler![set_title, set_theme])
         .on_window_ready(|window| {
