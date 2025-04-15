@@ -2,7 +2,6 @@ import { useGitInit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import { createGlobalModel, updateModel } from '@yaakapp-internal/models';
 import { useState } from 'react';
-import { useIsEncryptionEnabled } from '../hooks/useIsEncryptionEnabled';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
@@ -25,11 +24,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
     filePath: string | null;
     initGit?: boolean;
   }>({ filePath: null, initGit: false });
-  const isEncryptionEnabled = useIsEncryptionEnabled();
-  const [enableEncryption, setEnableEncryption] = useState<boolean>(
-    // Default setting to encryption enabled if they already use encryption
-    isEncryptionEnabled,
-  );
+  const [enableEncryption, setEnableEncryption] = useState<boolean>(false);
   return (
     <VStack
       as="form"

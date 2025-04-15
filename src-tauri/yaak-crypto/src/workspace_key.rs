@@ -7,7 +7,6 @@ use chacha20poly1305::{KeySizeUser, XChaCha20Poly1305};
 
 #[derive(Debug, Clone)]
 pub struct WorkspaceKey {
-    workspace_id: String,
     key: Key<XChaCha20Poly1305>,
 }
 
@@ -28,19 +27,19 @@ impl WorkspaceKey {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn from_human(workspace_id: &str, human_key: &str) -> Result<Self> {
+    pub(crate) fn from_human(human_key: &str) -> Result<Self> {
         let without_prefix = human_key.strip_prefix(HUMAN_PREFIX).unwrap_or(human_key);
         let without_separators = without_prefix.replace("-", "");
-        let key = base32::decode(Alphabet::Crockford {}, &without_separators).ok_or(InvalidHumanKey)?;
+        let key =
+            base32::decode(Alphabet::Crockford {}, &without_separators).ok_or(InvalidHumanKey)?;
         if key.len() != XChaCha20Poly1305::key_size() {
             return Err(InvalidHumanKey);
         }
-        Ok(Self::from_raw_key(workspace_id, key.as_slice()))
+        Ok(Self::from_raw_key(key.as_slice()))
     }
 
-    pub(crate) fn from_raw_key(workspace_id: &str, key: &[u8]) -> Self {
+    pub(crate) fn from_raw_key(key: &[u8]) -> Self {
         Self {
-            workspace_id: workspace_id.to_string(),
             key: Key::<XChaCha20Poly1305>::clone_from_slice(key),
         }
     }
@@ -49,9 +48,9 @@ impl WorkspaceKey {
         self.key.as_slice()
     }
 
-    pub(crate) fn create(workspace_id: &str) -> Result<Self> {
+    pub(crate) fn create() -> Result<Self> {
         let key = XChaCha20Poly1305::generate_key(OsRng);
-        Ok(Self::from_raw_key(workspace_id, key.as_slice()))
+        Ok(Self::from_raw_key(key.as_slice()))
     }
 
     pub(crate) fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
@@ -63,8 +62,8 @@ impl WorkspaceKey {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_key(workspace_id: &str) -> Self {
-        Self::from_raw_key(workspace_id, "f1a2d4b3c8e799af1456be3478a4c3f2".as_bytes())
+    pub(crate) fn test_key() -> Self {
+        Self::from_raw_key("f1a2d4b3c8e799af1456be3478a4c3f2".as_bytes())
     }
 }
 
@@ -76,7 +75,7 @@ mod tests {
 
     #[test]
     fn test_persisted_key() -> Result<()> {
-        let key = WorkspaceKey::test_key("wrk");
+        let key = WorkspaceKey::test_key();
         let encrypted = key.encrypt("hello".as_bytes())?;
         assert_eq!(key.decrypt(encrypted.as_slice())?, "hello".as_bytes());
 
@@ -85,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_human_format() -> Result<()> {
-        let key = WorkspaceKey::test_key("wrk_1");
+        let key = WorkspaceKey::test_key();
 
         let encrypted = key.encrypt("hello".as_bytes())?;
         assert_eq!(key.decrypt(encrypted.as_slice())?, "hello".as_bytes());
@@ -93,7 +92,7 @@ mod tests {
         let human = key.to_human()?;
         assert_eq!(human, "YKCRRP-2CK46H-H36RSR-CMVKJE-B1CRRK-8D9PC9-JK6D1Q-71GK8R-SKCRS0");
         assert_eq!(
-            WorkspaceKey::from_human("wrk_1", &human)?.decrypt(encrypted.as_slice())?,
+            WorkspaceKey::from_human(&human)?.decrypt(encrypted.as_slice())?,
             "hello".as_bytes()
         );
 
@@ -104,14 +103,13 @@ mod tests {
     fn test_from_human_invalid() -> Result<()> {
         assert!(matches!(
             WorkspaceKey::from_human(
-                "wrk_1",
                 "YKCRRP-2CK46H-H36RSR-CMVKJE-B1CRRK-8D9PC9-JK6D1Q-71GK8R-SKCRS0-H3X38D",
             ),
             Err(InvalidHumanKey)
         ));
 
-        assert!(matches!(WorkspaceKey::from_human("wrk_1", "bad-key",), Err(InvalidHumanKey)));
-        assert!(matches!(WorkspaceKey::from_human("wrk_1", "",), Err(InvalidHumanKey)));
+        assert!(matches!(WorkspaceKey::from_human("bad-key",), Err(InvalidHumanKey)));
+        assert!(matches!(WorkspaceKey::from_human("",), Err(InvalidHumanKey)));
 
         Ok(())
     }

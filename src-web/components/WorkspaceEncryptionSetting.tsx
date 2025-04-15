@@ -39,8 +39,8 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
       <EnterWorkspaceKey
         workspaceMeta={workspaceMeta}
         onEnabled={() => {
-          onEnabledEncryption?.();
           onDone?.();
+          onEnabledEncryption?.();
         }}
       />
     );
@@ -63,7 +63,10 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         )}
         {keyRevealer}
         {onDone && (
-          <Button color="secondary" onClick={onDone}>
+          <Button color="secondary" onClick={() => {
+              onDone();
+              onEnabledEncryption?.();
+          }}>
             Done
           </Button>
         )}
@@ -79,7 +82,6 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         onClick={async () => {
           setJustEnabledEncryption(true);
           await enableEncryption(workspaceMeta.workspaceId);
-          onEnabledEncryption?.();
         }}
       >
         Enable Encryption

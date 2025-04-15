@@ -56,7 +56,7 @@ impl EncryptionManager {
     }
 
     pub fn set_human_key(&self, workspace_id: &str, human_key: &str) -> Result<WorkspaceMeta> {
-        let wkey = WorkspaceKey::from_human(workspace_id, human_key)?;
+        let wkey = WorkspaceKey::from_human(human_key)?;
 
         let workspace = self.query_manager.connect().get_workspace(workspace_id)?;
         let encryption_key_challenge = match workspace.encryption_key_challenge {
@@ -124,7 +124,7 @@ impl EncryptionManager {
             return Ok(workspace_meta);
         }
 
-        let wkey = WorkspaceKey::create(workspace_id)?;
+        let wkey = WorkspaceKey::create()?;
         self.set_workspace_key(workspace_id, &wkey)
     }
 
@@ -150,7 +150,7 @@ impl EncryptionManager {
             .map_err(|e| GenericError(format!("Failed to decode workspace key {e:?}")))?;
         let raw_key = mkey.decrypt(decoded_key.as_slice())?;
         info!("Got existing workspace key for {workspace_id}");
-        let wkey = WorkspaceKey::from_raw_key(workspace_id, raw_key.as_slice());
+        let wkey = WorkspaceKey::from_raw_key(raw_key.as_slice());
 
         Ok(wkey)
     }
