@@ -1,4 +1,3 @@
-use log::warn;
 use tauri::{Runtime, Window, command};
 
 #[command]
@@ -15,6 +14,7 @@ pub(crate) fn set_title<R: Runtime>(window: Window<R>, title: &str) {
 }
 
 #[command]
+#[allow(unused)]
 pub(crate) fn set_theme<R: Runtime>(window: Window<R>, bg_color: &str) {
     #[cfg(target_os = "macos")]
     {
@@ -23,7 +23,7 @@ pub(crate) fn set_theme<R: Runtime>(window: Window<R>, bg_color: &str) {
                 crate::mac::update_window_theme(window, color);
             }
             Err(err) => {
-                warn!("Failed to parse background color '{}': {}", bg_color, err)
+                log::warn!("Failed to parse background color '{}': {}", bg_color, err)
             }
         }
     }
