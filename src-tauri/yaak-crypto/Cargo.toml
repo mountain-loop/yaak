@@ -8,7 +8,6 @@ publish = false
 [dependencies]
 base32 = "0.5.1" # For encoding human-readable key
 base64 = "0.22.1" # For encoding in the database
-base85 = "2.0.0" # For encoding the master key
 keyring = { version = "4.0.0-alpha.1", features = ["vendored"] }
 log = "0.4.26"
 serde = { workspace = true, features = ["derive"] }

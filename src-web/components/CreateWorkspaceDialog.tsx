@@ -3,6 +3,7 @@ import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import { createGlobalModel, updateModel } from '@yaakapp-internal/models';
 import { useState } from 'react';
 import { router } from '../lib/router';
+import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
 import { Button } from './core/Button';
@@ -24,7 +25,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
     filePath: string | null;
     initGit?: boolean;
   }>({ filePath: null, initGit: false });
-  const [enableEncryption, setEnableEncryption] = useState<boolean>(false);
+  const [setupEncryption, setSetupEncryption] = useState<boolean>(false);
   return (
     <VStack
       as="form"
@@ -59,6 +60,10 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         });
 
         hide();
+
+        if (setupEncryption) {
+          setupOrConfigureEncryption();
+        }
       }}
     >
       <PlainInput required label="Name" defaultValue={name} onChange={setName} />
@@ -73,8 +78,8 @@ export function CreateWorkspaceDialog({ hide }: Props) {
           Workspace encryption
         </Label>
         <Checkbox
-          checked={enableEncryption}
-          onChange={setEnableEncryption}
+          checked={setupEncryption}
+          onChange={setSetupEncryption}
           title="Enable Encryption"
         />
       </div>

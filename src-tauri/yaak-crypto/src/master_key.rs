@@ -1,10 +1,13 @@
 use crate::encryption::{decrypt_data, encrypt_data};
 use crate::error::Error::GenericError;
 use crate::error::Result;
+use base32::Alphabet;
 use chacha20poly1305::aead::{Key, KeyInit, OsRng};
 use chacha20poly1305::XChaCha20Poly1305;
 use keyring::{Entry, Error};
 use log::info;
+
+const HUMAN_PREFIX: &str = "YKM_";
 
 #[derive(Debug, Clone)]
 pub(crate) struct MasterKey {
@@ -17,16 +20,17 @@ impl MasterKey {
 
         let key = match entry.get_password() {
             Ok(encoded) => {
-                let key_bytes =
-                    base85::decode(&encoded).map_err(|e| GenericError(e.to_string()))?;
-                let key = Key::<XChaCha20Poly1305>::clone_from_slice(key_bytes.as_slice());
-                key
+                let without_prefix = encoded.strip_prefix(HUMAN_PREFIX).unwrap_or(&encoded);
+                let key_bytes = base32::decode(Alphabet::Crockford {}, &without_prefix)
+                    .ok_or(GenericError("Failed to decode master key".to_string()))?;
+                Key::<XChaCha20Poly1305>::clone_from_slice(key_bytes.as_slice())
             }
             Err(Error::NoEntry) => {
                 info!("Creating new master key");
                 let key = XChaCha20Poly1305::generate_key(OsRng);
-                let encoded = base85::encode(key.as_slice());
-                entry.set_password(&encoded)?;
+                let encoded = base32::encode(Alphabet::Crockford {}, key.as_slice());
+                let with_prefix = format!("{HUMAN_PREFIX}{encoded}");
+                entry.set_password(&with_prefix)?;
                 key
             }
             Err(e) => return Err(GenericError(e.to_string())),
