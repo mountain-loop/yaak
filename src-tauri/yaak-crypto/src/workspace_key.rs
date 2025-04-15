@@ -55,11 +55,11 @@ impl WorkspaceKey {
     }
 
     pub(crate) fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
-        encrypt_data(data, &self.key, &self.workspace_id)
+        encrypt_data(data, &self.key)
     }
 
     pub(crate) fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
-        decrypt_data(data, &self.key, &self.workspace_id)
+        decrypt_data(data, &self.key)
     }
 
     #[cfg(test)]

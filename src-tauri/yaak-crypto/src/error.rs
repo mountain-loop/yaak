@@ -31,9 +31,6 @@ pub enum Error {
     #[error("Invalid key provided")]
     InvalidHumanKey,
 
-    #[error("The wrong key was used to decrypt data")]
-    IncorrectKeyId,
-
     #[error("Encryption error: {0}")]
     GenericError(String),
 }

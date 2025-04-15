@@ -57,9 +57,6 @@ pub fn template_function_secure_run<R: Runtime>(
             let value = BASE64_STANDARD.decode(&value).unwrap();
             let r = match app_handle.crypto().decrypt(&wid, value.as_slice()) {
                 Ok(r) => Ok(r),
-                Err(yaak_crypto::error::Error::IncorrectKeyId) => {
-                    Err(RenderError("Can't decrypt data from a different workspace".into()))
-                }
                 Err(e) => Err(RenderError(e.to_string())),
             }?;
             let r = String::from_utf8(r).map_err(|e| RenderError(e.to_string()))?;
