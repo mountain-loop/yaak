@@ -3,14 +3,14 @@ use crate::error::Result;
 use crate::render::render_http_request;
 use crate::response_err;
 use http::header::{ACCEPT, USER_AGENT};
-use http::{HeaderMap, HeaderName, HeaderValue, Uri};
+use http::{HeaderMap, HeaderName, HeaderValue};
 use log::{debug, error, warn};
 use mime_guess::Mime;
 use reqwest::redirect::Policy;
-use reqwest::{multipart, Proxy, Url};
 use reqwest::{Method, Response};
-use rustls::crypto::ring;
+use reqwest::{Proxy, Url, multipart};
 use rustls::ClientConfig;
+use rustls::crypto::ring;
 use rustls_platform_verifier::BuilderVerifierExt;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -20,18 +20,18 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs;
-use tokio::fs::{create_dir_all, File};
+use tokio::fs::{File, create_dir_all};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
-use tokio::sync::{oneshot, Mutex};
-use yaak_models::query_manager::QueryManagerExt;
+use tokio::sync::{Mutex, oneshot};
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
+use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
+    CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -46,10 +46,9 @@ pub async fn send_http_request<R: Runtime>(
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
-    let update_source = &UpdateSource::from_window(&window);
     let (settings, workspace) = {
         let db = window.db();
-        let settings = db.get_or_create_settings(update_source);
+        let settings = db.get_settings();
         let workspace = db.get_workspace(&unrendered_request.workspace_id)?;
         (settings, workspace)
     };
@@ -61,7 +60,7 @@ pub async fn send_http_request<R: Runtime>(
 
     let cb = PluginTemplateCallback::new(
         window.app_handle(),
-        &WindowContext::from_window(window),
+        &PluginWindowContext::new(window),
         RenderPurpose::Send,
     );
     let update_source = UpdateSource::from_window(window);
@@ -81,7 +80,7 @@ pub async fn send_http_request<R: Runtime>(
                 &*response.lock().await,
                 e.to_string(),
                 &update_source,
-            ))
+            ));
         }
     };
 
@@ -188,19 +187,7 @@ pub async fn send_http_request<R: Runtime>(
         query_params.push((p.name, p.value));
     }
 
-    let uri = match Uri::from_str(url_string.as_str()) {
-        Ok(u) => u,
-        Err(e) => {
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
-                &update_source,
-            ));
-        }
-    };
-    // Yes, we're parsing both URI and URL because they could return different errors
-    let url = match Url::from_str(uri.to_string().as_str()) {
+    let url = match Url::from_str(&url_string) {
         Ok(u) => u,
         Err(e) => {
             return Ok(response_err(
@@ -384,7 +371,7 @@ pub async fn send_http_request<R: Runtime>(
                                 };
                             }
 
-                            // Set file path if not empty
+                            // Set file path if it is not empty
                             if !file_path.is_empty() {
                                 let filename = PathBuf::from(file_path)
                                     .file_name()
@@ -443,7 +430,7 @@ pub async fn send_http_request<R: Runtime>(
                 })
                 .collect(),
         };
-        let auth_result = plugin_manager.call_http_authentication(window, &auth_name, req).await;
+        let auth_result = plugin_manager.call_http_authentication(&window, &auth_name, req).await;
         let plugin_result = match auth_result {
             Ok(r) => r,
             Err(e) => {
@@ -477,8 +464,10 @@ pub async fn send_http_request<R: Runtime>(
     let raw_response = tokio::select! {
         Ok(r) = resp_rx => r,
         _ = cancelled_rx.changed() => {
-            debug!("Request cancelled");
-            return Ok(response_err(&app_handle, &*response.lock().await, "Request was cancelled".to_string(), &update_source));
+            let mut r = response.lock().await;
+            r.elapsed_headers = start.elapsed().as_millis() as i32;
+            r.elapsed = start.elapsed().as_millis() as i32;
+            return Ok(response_err(&app_handle, &r, "Request was cancelled".to_string(), &update_source));
         }
     };
 
@@ -507,6 +496,7 @@ pub async fn send_http_request<R: Runtime>(
                         let mut r = response.lock().await;
                         r.body_path = Some(body_path.to_str().unwrap().to_string());
                         r.elapsed_headers = start.elapsed().as_millis() as i32;
+                        r.elapsed = start.elapsed().as_millis() as i32;
                         r.status = v.status().as_u16() as i32;
                         r.status_reason = v.status().canonical_reason().map(|s| s.to_string());
                         r.headers = response_headers
@@ -578,7 +568,7 @@ pub async fn send_http_request<R: Runtime>(
                         }
                     }
 
-                    // Set final content length
+                    // Set the final content length
                     {
                         let mut r = response.lock().await;
                         r.content_length = match content_length {
@@ -644,6 +634,8 @@ pub async fn send_http_request<R: Runtime>(
             match app_handle.with_db(|c| c.get_http_response(&response_id)) {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
+                    r.elapsed = start.elapsed().as_millis() as i32;
+                    r.elapsed_headers = start.elapsed().as_millis() as i32;
                     app_handle.db().update_http_response_if_id(&r, &UpdateSource::from_window(window))
                         .expect("Failed to update response")
                 },

@@ -1,12 +1,10 @@
 import { useSearch } from '@tanstack/react-router';
 import type { Environment } from '@yaakapp-internal/models';
+import { environmentsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { atom } from 'jotai/index';
 import { useEffect } from 'react';
 import { jotaiStore } from '../lib/jotai';
-import { environmentsAtom } from './useEnvironments';
-
-export const QUERY_ENVIRONMENT_ID = 'environment_id';
 
 export const activeEnvironmentIdAtom = atom<string>();
 

@@ -3,10 +3,11 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::util::{generate_prefixed_id, UpdateSource};
+use crate::util::{UpdateSource, generate_prefixed_id};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
-use sea_query::{enum_def, IntoIden, IntoTableRef, SimpleExpr};
+use sea_query::Order::Desc;
+use sea_query::{IntoColumnRef, IntoIden, IntoTableRef, Order, SimpleExpr, enum_def};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -105,7 +106,6 @@ pub struct Settings {
     pub interface_scale: f32,
     pub open_workspace_new_window: Option<bool>,
     pub proxy: Option<ProxySetting>,
-    pub theme: String,
     pub theme_dark: String,
     pub theme_light: String,
     pub update_channel: String,
@@ -123,6 +123,10 @@ impl UpsertModelInfo for Settings {
 
     fn generate_id() -> String {
         panic!("Settings does not have unique IDs")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (SettingsIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -148,7 +152,6 @@ impl UpsertModelInfo for Settings {
             (InterfaceFontSize, self.interface_font_size.into()),
             (InterfaceScale, self.interface_scale.into()),
             (OpenWorkspaceNewWindow, self.open_workspace_new_window.into()),
-            (Theme, self.theme.as_str().into()),
             (ThemeDark, self.theme_dark.as_str().into()),
             (ThemeLight, self.theme_light.as_str().into()),
             (UpdateChannel, self.update_channel.into()),
@@ -167,7 +170,6 @@ impl UpsertModelInfo for Settings {
             SettingsIden::InterfaceScale,
             SettingsIden::OpenWorkspaceNewWindow,
             SettingsIden::Proxy,
-            SettingsIden::Theme,
             SettingsIden::ThemeDark,
             SettingsIden::ThemeLight,
             SettingsIden::UpdateChannel,
@@ -193,7 +195,6 @@ impl UpsertModelInfo for Settings {
             interface_scale: row.get("interface_scale")?,
             open_workspace_new_window: row.get("open_workspace_new_window")?,
             proxy: proxy.map(|p| -> ProxySetting { serde_json::from_str(p.as_str()).unwrap() }),
-            theme: row.get("theme")?,
             theme_dark: row.get("theme_dark")?,
             theme_light: row.get("theme_light")?,
             update_channel: row.get("update_channel")?,
@@ -213,6 +214,7 @@ pub struct Workspace {
     pub updated_at: NaiveDateTime,
     pub name: String,
     pub description: String,
+    pub encryption_key_challenge: Option<String>,
 
     // Settings
     #[serde(default = "default_true")]
@@ -235,6 +237,10 @@ impl UpsertModelInfo for Workspace {
         generate_prefixed_id("wk")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WorkspaceIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -249,6 +255,7 @@ impl UpsertModelInfo for Workspace {
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (Name, self.name.trim().into()),
             (Description, self.description.into()),
+            (EncryptionKeyChallenge, self.encryption_key_challenge.into()),
             (SettingFollowRedirects, self.setting_follow_redirects.into()),
             (SettingRequestTimeout, self.setting_request_timeout.into()),
             (SettingValidateCertificates, self.setting_validate_certificates.into()),
@@ -260,6 +267,7 @@ impl UpsertModelInfo for Workspace {
             WorkspaceIden::UpdatedAt,
             WorkspaceIden::Name,
             WorkspaceIden::Description,
+            WorkspaceIden::EncryptionKeyChallenge,
             WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingFollowRedirects,
             WorkspaceIden::SettingRequestTimeout,
@@ -278,6 +286,7 @@ impl UpsertModelInfo for Workspace {
             updated_at: row.get("updated_at")?,
             name: row.get("name")?,
             description: row.get("description")?,
+            encryption_key_challenge: row.get("encryption_key_challenge")?,
             setting_follow_redirects: row.get("setting_follow_redirects")?,
             setting_request_timeout: row.get("setting_request_timeout")?,
             setting_validate_certificates: row.get("setting_validate_certificates")?,
@@ -285,16 +294,11 @@ impl UpsertModelInfo for Workspace {
     }
 }
 
-impl Workspace {
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            model: "workspace".to_string(),
-            setting_validate_certificates: true,
-            setting_follow_redirects: true,
-            ..Default::default()
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct EncryptedKey {
+    pub encrypted_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -308,6 +312,7 @@ pub struct WorkspaceMeta {
     pub workspace_id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub encryption_key: Option<EncryptedKey>,
     pub setting_sync_dir: Option<String>,
 }
 
@@ -324,6 +329,10 @@ impl UpsertModelInfo for WorkspaceMeta {
         generate_prefixed_id("wm")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WorkspaceMetaIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -337,6 +346,7 @@ impl UpsertModelInfo for WorkspaceMeta {
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (WorkspaceId, self.workspace_id.into()),
+            (EncryptionKey, self.encryption_key.map(|e| serde_json::to_string(&e).unwrap()).into()),
             (SettingSyncDir, self.setting_sync_dir.into()),
         ])
     }
@@ -344,6 +354,7 @@ impl UpsertModelInfo for WorkspaceMeta {
     fn update_columns() -> Vec<impl IntoIden> {
         vec![
             WorkspaceMetaIden::UpdatedAt,
+            WorkspaceMetaIden::EncryptionKey,
             WorkspaceMetaIden::SettingSyncDir,
         ]
     }
@@ -352,12 +363,14 @@ impl UpsertModelInfo for WorkspaceMeta {
     where
         Self: Sized,
     {
+        let encryption_key: Option<String> = row.get("encryption_key")?;
         Ok(Self {
             id: row.get("id")?,
             workspace_id: row.get("workspace_id")?,
             model: row.get("model")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
+            encryption_key: encryption_key.map(|e| serde_json::from_str(&e).unwrap()),
             setting_sync_dir: row.get("setting_sync_dir")?,
         })
     }
@@ -415,6 +428,10 @@ impl UpsertModelInfo for CookieJar {
 
     fn generate_id() -> String {
         generate_prefixed_id("cj")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (CookieJarIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -488,6 +505,10 @@ impl UpsertModelInfo for Environment {
 
     fn generate_id() -> String {
         generate_prefixed_id("ev")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (EnvironmentIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -577,6 +598,10 @@ impl UpsertModelInfo for Folder {
 
     fn generate_id() -> String {
         generate_prefixed_id("fl")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (FolderIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -677,7 +702,7 @@ pub struct HttpRequest {
     #[serde(default = "default_http_method")]
     pub method: String,
     pub name: String,
-    pub sort_priority: f32,
+    pub sort_priority: f64,
     pub url: String,
     pub url_parameters: Vec<HttpUrlParameter>,
 }
@@ -693,6 +718,10 @@ impl UpsertModelInfo for HttpRequest {
 
     fn generate_id() -> String {
         generate_prefixed_id("rq")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (HttpResponseIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -749,21 +778,21 @@ impl UpsertModelInfo for HttpRequest {
         Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
-            sort_priority: r.get("sort_priority")?,
             workspace_id: r.get("workspace_id")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
-            url: r.get("url")?,
-            url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
-            method: r.get("method")?,
+            authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
+            authentication_type: r.get("authentication_type")?,
             body: serde_json::from_str(body.as_str()).unwrap_or_default(),
             body_type: r.get("body_type")?,
             description: r.get("description")?,
-            authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
-            authentication_type: r.get("authentication_type")?,
-            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
             folder_id: r.get("folder_id")?,
+            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            method: r.get("method")?,
             name: r.get("name")?,
+            sort_priority: r.get("sort_priority")?,
+            url: r.get("url")?,
+            url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
         })
     }
 }
@@ -816,6 +845,10 @@ impl UpsertModelInfo for WebsocketConnection {
 
     fn generate_id() -> String {
         generate_prefixed_id("wc")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WebsocketConnectionIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -926,6 +959,10 @@ impl UpsertModelInfo for WebsocketRequest {
 
     fn generate_id() -> String {
         generate_prefixed_id("wr")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WebsocketRequestIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -1049,6 +1086,10 @@ impl UpsertModelInfo for WebsocketEvent {
         generate_prefixed_id("we")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WebsocketEventIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1160,6 +1201,10 @@ impl UpsertModelInfo for HttpResponse {
 
     fn generate_id() -> String {
         generate_prefixed_id("rs")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (HttpResponseIden::CreatedAt, Desc)
     }
 
     fn get_id(&self) -> String {
@@ -1290,6 +1335,10 @@ impl UpsertModelInfo for GrpcRequest {
         generate_prefixed_id("gr")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GrpcRequestIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1413,6 +1462,10 @@ impl UpsertModelInfo for GrpcConnection {
         generate_prefixed_id("gc")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GrpcConnectionIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1529,6 +1582,10 @@ impl UpsertModelInfo for GrpcEvent {
         generate_prefixed_id("ge")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GrpcEventIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1616,6 +1673,10 @@ impl UpsertModelInfo for Plugin {
         generate_prefixed_id("pg")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (PluginIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1694,6 +1755,10 @@ impl UpsertModelInfo for SyncState {
         generate_prefixed_id("ss")
     }
 
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (SyncStateIden::CreatedAt, Desc)
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -1751,6 +1816,7 @@ impl UpsertModelInfo for SyncState {
 pub struct KeyValue {
     #[ts(type = "\"key_value\"")]
     pub model: String,
+    pub id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 
@@ -1759,17 +1825,57 @@ pub struct KeyValue {
     pub value: String,
 }
 
-impl<'s> TryFrom<&Row<'s>> for KeyValue {
-    type Error = rusqlite::Error;
+impl UpsertModelInfo for KeyValue {
+    fn table_name() -> impl IntoTableRef {
+        KeyValueIden::Table
+    }
 
-    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        KeyValueIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("kv")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (KeyValueIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use KeyValueIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (Namespace, self.namespace.clone().into()),
+            (Key, self.key.clone().into()),
+            (Value, self.value.clone().into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![KeyValueIden::UpdatedAt, KeyValueIden::Value]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            namespace: r.get("namespace")?,
-            key: r.get("key")?,
-            value: r.get("value")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            namespace: row.get("namespace")?,
+            key: row.get("key")?,
+            value: row.get("value")?,
         })
     }
 }
@@ -1876,18 +1982,28 @@ impl<'de> Deserialize<'de> for AnyModel {
         use serde_json::from_value as fv;
 
         let model = match model.get("model") {
-            Some(m) if m == "http_request" => AnyModel::HttpRequest(fv(value).unwrap()),
-            Some(m) if m == "grpc_request" => AnyModel::GrpcRequest(fv(value).unwrap()),
-            Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
+            Some(m) if m == "cookie_jar" => AnyModel::CookieJar(fv(value).unwrap()),
             Some(m) if m == "environment" => AnyModel::Environment(fv(value).unwrap()),
             Some(m) if m == "folder" => AnyModel::Folder(fv(value).unwrap()),
-            Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
             Some(m) if m == "grpc_connection" => AnyModel::GrpcConnection(fv(value).unwrap()),
             Some(m) if m == "grpc_event" => AnyModel::GrpcEvent(fv(value).unwrap()),
-            Some(m) if m == "cookie_jar" => AnyModel::CookieJar(fv(value).unwrap()),
+            Some(m) if m == "grpc_request" => AnyModel::GrpcRequest(fv(value).unwrap()),
+            Some(m) if m == "http_request" => AnyModel::HttpRequest(fv(value).unwrap()),
+            Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
             Some(m) if m == "plugin" => AnyModel::Plugin(fv(value).unwrap()),
+            Some(m) if m == "settings" => AnyModel::Settings(fv(value).unwrap()),
+            Some(m) if m == "websocket_connection" => {
+                AnyModel::WebsocketConnection(fv(value).unwrap())
+            }
+            Some(m) if m == "websocket_event" => AnyModel::WebsocketEvent(fv(value).unwrap()),
+            Some(m) if m == "websocket_request" => AnyModel::WebsocketRequest(fv(value).unwrap()),
+            Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
+            Some(m) if m == "workspace_meta" => AnyModel::WorkspaceMeta(fv(value).unwrap()),
             Some(m) => {
-                return Err(serde::de::Error::custom(format!("Unknown model {}", m)));
+                return Err(serde::de::Error::custom(format!(
+                    "Failed to deserialize AnyModel {}",
+                    m
+                )));
             }
             None => {
                 return Err(serde::de::Error::custom("Missing or invalid model"));
@@ -1905,11 +2021,7 @@ impl AnyModel {
                 return name.to_string();
             }
             let without_variables = url.replace(r"\$\{\[\s*([^\]\s]+)\s*]}", "$1");
-            if without_variables.is_empty() {
-                fallback.to_string()
-            } else {
-                without_variables
-            }
+            if without_variables.is_empty() { fallback.to_string() } else { without_variables }
         };
 
         match self.clone() {
@@ -1929,6 +2041,7 @@ pub trait UpsertModelInfo {
     fn table_name() -> impl IntoTableRef;
     fn id_column() -> impl IntoIden + Eq + Clone;
     fn generate_id() -> String;
+    fn order_by() -> (impl IntoColumnRef, Order);
     fn get_id(&self) -> String;
     fn insert_values(
         self,

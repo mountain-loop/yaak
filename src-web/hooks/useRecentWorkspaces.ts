@@ -1,16 +1,17 @@
+import { workspacesAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { useEffect, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useKeyValue } from './useKeyValue';
-import { useWorkspaces } from './useWorkspaces';
 
 const kvKey = () => 'recent_workspaces';
 const namespace = 'global';
 const fallback: string[] = [];
 
 export function useRecentWorkspaces() {
-  const workspaces = useWorkspaces();
+  const workspaces = useAtomValue(workspacesAtom);
   const { value, isLoading } = useKeyValue<string[]>({ key: kvKey(), namespace, fallback });
 
   const onlyValidIds = useMemo(
@@ -31,7 +32,7 @@ export function useSubscribeRecentWorkspaces() {
 
       const key = kvKey();
 
-      const recentIds = await getKeyValue<string[]>({ namespace, key, fallback });
+      const recentIds = getKeyValue<string[]>({ namespace, key, fallback });
       if (recentIds[0] === activeWorkspaceId) return; // Short-circuit
 
       const withoutActiveId = recentIds.filter((id) => id !== activeWorkspaceId);

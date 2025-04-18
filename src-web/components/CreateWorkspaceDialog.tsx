@@ -1,14 +1,17 @@
 import { useGitInit } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
+import { createGlobalModel, updateModel } from '@yaakapp-internal/models';
 import { useState } from 'react';
-import { upsertWorkspace } from '../commands/upsertWorkspace';
-import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
 import { router } from '../lib/router';
+import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
 import { Button } from './core/Button';
+import { Checkbox } from './core/Checkbox';
+import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
+import { EncryptionHelp } from './EncryptionHelp';
 import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
 
 interface Props {
@@ -22,7 +25,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
     filePath: string | null;
     initGit?: boolean;
   }>({ filePath: null, initGit: false });
-
+  const [setupEncryption, setSetupEncryption] = useState<boolean>(false);
   return (
     <VStack
       as="form"
@@ -31,15 +34,15 @@ export function CreateWorkspaceDialog({ hide }: Props) {
       className="pb-3 max-h-[50vh]"
       onSubmit={async (e) => {
         e.preventDefault();
-        const workspace = await upsertWorkspace.mutateAsync({ name });
-        if (workspace == null) return;
+        const workspaceId = await createGlobalModel({ model: 'workspace', name });
+        if (workspaceId == null) return;
 
         // Do getWorkspaceMeta instead of naively creating one because it might have
         // been created already when the store refreshes the workspace meta after
         const workspaceMeta = await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', {
-          workspaceId: workspace.id,
+          workspaceId,
         });
-        await upsertWorkspaceMeta.mutateAsync({
+        await updateModel({
           ...workspaceMeta,
           settingSyncDir: syncConfig.filePath,
         });
@@ -53,10 +56,14 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         // Navigate to workspace
         await router.navigate({
           to: '/workspaces/$workspaceId',
-          params: { workspaceId: workspace.id },
+          params: { workspaceId },
         });
 
         hide();
+
+        if (setupEncryption) {
+          setupOrConfigureEncryption();
+        }
       }}
     >
       <PlainInput required label="Name" defaultValue={name} onChange={setName} />
@@ -66,7 +73,17 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         onCreateNewWorkspace={hide}
         value={syncConfig}
       />
-      <Button type="submit" color="primary" className="ml-auto mt-3">
+      <div>
+        <Label htmlFor={null} help={<EncryptionHelp />}>
+          Workspace encryption
+        </Label>
+        <Checkbox
+          checked={setupEncryption}
+          onChange={setSetupEncryption}
+          title="Enable Encryption"
+        />
+      </div>
+      <Button type="submit" color="primary" className="w-full mt-3">
         Create Workspace
       </Button>
     </VStack>

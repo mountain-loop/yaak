@@ -1,7 +1,11 @@
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai/index';
 import React, { memo } from 'react';
+import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
+import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
+import { BadgeButton } from './core/BadgeButton';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
@@ -19,6 +23,10 @@ interface Props {
 
 export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Props) {
   const togglePalette = useToggleCommandPalette();
+  const workspace = useAtomValue(activeWorkspaceAtom);
+  const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
+  const showEncryptionSetup =
+    workspace?.encryptionKeyChallenge != null && workspaceMeta?.encryptionKey == null;
 
   return (
     <div
@@ -41,7 +49,13 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
       </div>
       <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-1">
         <ImportCurlButton />
-        <LicenseBadge />
+        {showEncryptionSetup ? (
+          <BadgeButton color="danger" onClick={setupOrConfigureEncryption}>
+            Enter Encryption Key
+          </BadgeButton>
+        ) : (
+          <LicenseBadge />
+        )}
         <IconButton
           icon="search"
           title="Search or execute a command"

@@ -1,8 +1,8 @@
 [package]
 name = "yaak-common"
 version = "0.1.0"
-publish = false
 edition = "2024"
+publish = false
 
 [dependencies]
 tauri = { workspace = true }

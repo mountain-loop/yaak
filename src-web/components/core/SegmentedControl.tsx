@@ -10,9 +10,15 @@ interface Props<T extends string> {
   onChange: (value: T) => void;
   value: T;
   name: string;
+  className?: string;
 }
 
-export function SegmentedControl<T extends string>({ value, onChange, options }: Props<T>) {
+export function SegmentedControl<T extends string>({
+  value,
+  onChange,
+  options,
+  className,
+}: Props<T>) {
   const [selectedValue, setSelectedValue] = useStateWithDeps<T>(value, [value]);
   const containerRef = useRef<HTMLDivElement>(null);
   return (
@@ -21,7 +27,12 @@ export function SegmentedControl<T extends string>({ value, onChange, options }:
       role="group"
       dir="ltr"
       space={0.5}
-      className="bg-surface-highlight rounded-md mb-auto opacity-0 group-focus-within/markdown:opacity-100 group-hover/markdown:opacity-100 transition-opacity transform-gpu"
+      className={classNames(
+        className,
+        'bg-surface-highlight rounded-md mb-auto opacity-0',
+        'transition-opacity transform-gpu',
+        'group-focus-within/markdown:opacity-100 group-hover/markdown:opacity-100',
+      )}
       onKeyDown={(e) => {
         const selectedIndex = options.findIndex((o) => o.value === selectedValue);
         if (e.key === 'ArrowRight') {

@@ -1,5 +1,7 @@
+import { workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { fuzzyFilter } from 'fuzzbunny';
+import { useAtomValue } from 'jotai/index';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createFolder } from '../commands/commands';
@@ -8,26 +10,25 @@ import { switchWorkspace } from '../commands/switchWorkspace';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useActiveRequest } from '../hooks/useActiveRequest';
+import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
+import { useAllRequests } from '../hooks/useAllRequests';
 import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
-import { useCreateGrpcRequest } from '../hooks/useCreateGrpcRequest';
-import { useCreateHttpRequest } from '../hooks/useCreateHttpRequest';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDebouncedState } from '../hooks/useDebouncedState';
-import { useDeleteAnyRequest } from '../hooks/useDeleteAnyRequest';
-import { useEnvironments } from '../hooks/useEnvironments';
+import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import type { HotkeyAction } from '../hooks/useHotKey';
 import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { useRecentRequests } from '../hooks/useRecentRequests';
 import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
-import { useRenameRequest } from '../hooks/useRenameRequest';
-import { useRequests } from '../hooks/useRequests';
 import { useScrollIntoView } from '../hooks/useScrollIntoView';
 import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
-import { useWorkspaces } from '../hooks/useWorkspaces';
+import { createRequestAndNavigate } from '../lib/createRequestAndNavigate';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { showDialog, toggleDialog } from '../lib/dialog';
+import { renameModelWithPrompt } from '../lib/renameModelWithPrompt';
 import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
@@ -60,25 +61,23 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const activeEnvironment = useActiveEnvironment();
   const httpRequestActions = useHttpRequestActions();
-  const workspaces = useWorkspaces();
-  const { subEnvironments } = useEnvironments();
+  const workspaceId = useAtomValue(activeWorkspaceIdAtom);
+  const workspaces = useAtomValue(workspacesAtom);
+  const { baseEnvironment, subEnvironments } = useEnvironmentsBreakdown();
   const createWorkspace = useCreateWorkspace();
   const recentEnvironments = useRecentEnvironments();
   const recentWorkspaces = useRecentWorkspaces();
-  const requests = useRequests();
+  const requests = useAllRequests();
   const activeRequest = useActiveRequest();
   const activeCookieJar = useActiveCookieJar();
   const [recentRequests] = useRecentRequests();
   const [, setSidebarHidden] = useSidebarHidden();
-  const { baseEnvironment } = useEnvironments();
-  const { mutate: createHttpRequest } = useCreateHttpRequest();
-  const { mutate: createGrpcRequest } = useCreateGrpcRequest();
   const { mutate: createEnvironment } = useCreateEnvironment();
   const { mutate: sendRequest } = useSendAnyHttpRequest();
-  const { mutate: renameRequest } = useRenameRequest(activeRequest?.id ?? null);
-  const { mutate: deleteRequest } = useDeleteAnyRequest();
 
   const workspaceCommands = useMemo<CommandPaletteItem[]>(() => {
+    if (workspaceId == null) return [];
+
     const commands: CommandPaletteItem[] = [
       {
         key: 'settings.open',
@@ -94,7 +93,17 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       {
         key: 'http_request.create',
         label: 'Create HTTP Request',
-        onSelect: () => createHttpRequest({}),
+        onSelect: () => createRequestAndNavigate({ model: 'http_request', workspaceId }),
+      },
+      {
+        key: 'grpc_request.create',
+        label: 'Create GRPC Request',
+        onSelect: () => createRequestAndNavigate({ model: 'grpc_request', workspaceId }),
+      },
+      {
+        key: 'websocket_request.create',
+        label: 'Create Websocket Request',
+        onSelect: () => createRequestAndNavigate({ model: 'websocket_request', workspaceId }),
       },
       {
         key: 'folder.create',
@@ -112,11 +121,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
             render: () => <CookieDialog cookieJarId={activeCookieJar?.id ?? null} />,
           });
         },
-      },
-      {
-        key: 'grpc_request.create',
-        label: 'Create GRPC Request',
-        onSelect: () => createGrpcRequest({}),
       },
       {
         key: 'environment.edit',
@@ -166,13 +170,13 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       commands.push({
         key: 'http_request.rename',
         label: 'Rename Request',
-        onSelect: renameRequest,
+        onSelect: () => renameModelWithPrompt(activeRequest),
       });
 
       commands.push({
-        key: 'http_request.delete',
+        key: 'sidebar.delete_selected_item',
         label: 'Delete Request',
-        onSelect: () => deleteRequest(activeRequest.id),
+        onSelect: () => deleteModelWithConfirm(activeRequest),
       });
     }
 
@@ -187,14 +191,11 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     activeRequest,
     baseEnvironment,
     createEnvironment,
-    createGrpcRequest,
-    createHttpRequest,
     createWorkspace,
-    deleteRequest,
     httpRequestActions,
-    renameRequest,
     sendRequest,
     setSidebarHidden,
+    workspaceId,
   ]);
 
   const sortedRequests = useMemo(() => {
@@ -263,7 +264,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     const requestGroup: CommandPaletteGroup = {
       key: 'requests',
-      label: 'Requests',
+      label: 'Switch Request',
       items: [],
     };
 
@@ -289,7 +290,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     const environmentGroup: CommandPaletteGroup = {
       key: 'environments',
-      label: 'Environments',
+      label: 'Switch Environment',
       items: [],
     };
 
@@ -306,7 +307,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     const workspaceGroup: CommandPaletteGroup = {
       key: 'workspaces',
-      label: 'Workspaces',
+      label: 'Switch Workspace',
       items: [],
     };
 

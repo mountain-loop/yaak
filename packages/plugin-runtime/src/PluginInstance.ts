@@ -1,3 +1,4 @@
+import { PluginWindowContext, TemplateFunctionArg } from '@yaakapp-internal/plugins';
 import type {
   BootRequest,
   Context,
@@ -17,7 +18,6 @@ import type {
   SendHttpRequestResponse,
   TemplateFunction,
   TemplateRenderResponse,
-  WindowContext,
 } from '@yaakapp/api';
 import console from 'node:console';
 import { readFileSync, type Stats, statSync, watch } from 'node:fs';
@@ -45,12 +45,12 @@ export class PluginInstance {
     this.#appToPluginEvents = new EventChannel();
 
     // Forward incoming events to onMessage()
-    this.#appToPluginEvents.listen(async event => {
+    this.#appToPluginEvents.listen(async (event) => {
       await this.#onMessage(event);
-    })
+    });
 
     // Reload plugin if the JS or package.json changes
-    const windowContextNone: WindowContext = { type: 'none' };
+    const windowContextNone: PluginWindowContext = { type: 'none' };
     const fileChangeCallback = async () => {
       this.#importModule();
       return this.#sendPayload(windowContextNone, { type: 'reload_response' }, null);
@@ -261,10 +261,10 @@ export class PluginInstance {
         payload.type === 'call_template_function_request' &&
         Array.isArray(this.#mod?.templateFunctions)
       ) {
-        const action = this.#mod.templateFunctions.find((a) => a.name === payload.name);
-        if (typeof action?.onRender === 'function') {
-          applyFormInputDefaults(action.args, payload.args.values);
-          const result = await action.onRender(ctx, payload.args);
+        const fn = this.#mod.templateFunctions.find((a) => a.name === payload.name);
+        if (typeof fn?.onRender === 'function') {
+          applyFormInputDefaults(fn.args, payload.args.values);
+          const result = await fn.onRender(ctx, payload.args);
           this.#sendPayload(
             windowContext,
             {
@@ -317,7 +317,7 @@ export class PluginInstance {
   }
 
   #buildEventToSend(
-    windowContext: WindowContext,
+    windowContext: PluginWindowContext,
     payload: InternalEventPayload,
     replyId: string | null = null,
   ): InternalEvent {
@@ -332,7 +332,7 @@ export class PluginInstance {
   }
 
   #sendPayload(
-    windowContext: WindowContext,
+    windowContext: PluginWindowContext,
     payload: InternalEventPayload,
     replyId: string | null,
   ): string {
@@ -348,12 +348,12 @@ export class PluginInstance {
     this.#pluginToAppEvents.emit(event);
   }
 
-  #sendEmpty(windowContext: WindowContext, replyId: string | null = null): string {
+  #sendEmpty(windowContext: PluginWindowContext, replyId: string | null = null): string {
     return this.#sendPayload(windowContext, { type: 'empty_response' }, replyId);
   }
 
   #sendAndWaitForReply<T extends Omit<InternalEventPayload, 'type'>>(
-    windowContext: WindowContext,
+    windowContext: PluginWindowContext,
     payload: InternalEventPayload,
   ): Promise<T> {
     // 1. Build event to send
@@ -379,7 +379,7 @@ export class PluginInstance {
   }
 
   #sendAndListenForEvents(
-    windowContext: WindowContext,
+    windowContext: PluginWindowContext,
     payload: InternalEventPayload,
     onEvent: (event: InternalEventPayload) => void,
   ): void {
@@ -551,7 +551,7 @@ function genId(len = 5): string {
 
 /** Recursively apply form input defaults to a set of values */
 function applyFormInputDefaults(
-  inputs: FormInput[],
+  inputs: TemplateFunctionArg[],
   values: { [p: string]: JsonPrimitive | undefined },
 ) {
   for (const input of inputs) {
@@ -580,18 +580,3 @@ function watchFile(filepath: string, cb: (filepath: string) => void) {
     watchedFiles[filepath] = stat;
   });
 }
-
-// function prefixStdout(s: string) {
-//   if (!s.includes('%s')) {
-//     throw new Error('Console prefix must contain a "%s" replacer');
-//   }
-//   interceptStdout((text: string) => {
-//     const lines = text.split(/\n/);
-//     let newText = '';
-//     for (let i = 0; i < lines.length; i++) {
-//       if (lines[i] == '') continue;
-//       newText += util.format(s, lines[i]) + '\n';
-//     }
-//     return newText.trimEnd();
-//   });
-// }

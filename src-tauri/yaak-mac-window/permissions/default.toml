@@ -1,0 +1,6 @@
+[default]
+description = "Default permissions for the plugin"
+permissions = [
+    "allow-set-title",
+    "allow-set-theme",
+]

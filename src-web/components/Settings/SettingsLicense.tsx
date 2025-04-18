@@ -118,8 +118,8 @@ export function SettingsLicense() {
           className="max-w-sm"
           onSubmit={async (e) => {
             e.preventDefault();
+            await activate.mutateAsync({ licenseKey: key });
             toggleActivateFormVisible();
-            activate.mutate({ licenseKey: key });
           }}
         >
           <PlainInput

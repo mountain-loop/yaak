@@ -1,8 +1,11 @@
+import {
+  grpcConnectionsAtom,
+  httpResponsesAtom,
+  websocketConnectionsAtom,
+} from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai/index';
 import React, { Fragment, memo } from 'react';
-import { useGrpcConnections } from '../../hooks/useGrpcConnections';
-import { useHttpResponses } from '../../hooks/useHttpResponses';
-import { useWebsocketConnections } from '../../hooks/useWebsocketConnections';
 import { VStack } from '../core/Stacks';
 import { DropMarker } from '../DropMarker';
 import type { SidebarTreeNode } from './Sidebar';
@@ -33,9 +36,9 @@ export const SidebarItems = memo(function SidebarItems({
   handleMove,
   handleDragStart,
 }: SidebarItemsProps) {
-  const httpResponses = useHttpResponses();
-  const grpcConnections = useGrpcConnections();
-  const websocketConnections = useWebsocketConnections();
+  const httpResponses = useAtomValue(httpResponsesAtom);
+  const grpcConnections = useAtomValue(grpcConnectionsAtom);
+  const websocketConnections = useAtomValue(websocketConnectionsAtom);
 
   return (
     <VStack

@@ -16,7 +16,7 @@ use yaak_models::models::{
 };
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
+    CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -96,7 +96,7 @@ pub(crate) async fn list_connections<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketConnection>> {
-    Ok(app_handle.db().list_websocket_connections_for_workspace(workspace_id)?)
+    Ok(app_handle.db().list_websocket_connections(workspace_id)?)
 }
 
 #[tauri::command]
@@ -125,7 +125,7 @@ pub(crate) async fn send<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             &app_handle,
-            &WindowContext::from_window(&window),
+            &PluginWindowContext::new(&window),
             RenderPurpose::Send,
         ),
     )
@@ -200,7 +200,7 @@ pub(crate) async fn connect<R: Runtime>(
         environment.as_ref(),
         &PluginTemplateCallback::new(
             &app_handle,
-            &WindowContext::from_window(&window),
+            &PluginWindowContext::new(&window),
             RenderPurpose::Send,
         ),
     )

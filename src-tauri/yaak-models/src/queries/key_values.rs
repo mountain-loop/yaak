@@ -1,20 +1,19 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{KeyValue, KeyValueIden};
-use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
+use crate::models::{KeyValue, KeyValueIden, UpsertModelInfo};
+use crate::util::UpdateSource;
 use log::error;
-use sea_query::Keyword::CurrentTimestamp;
-use sea_query::{Asterisk, Cond, Expr, OnConflict, Query, SqliteQueryBuilder};
+use sea_query::{Asterisk, Cond, Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 
 impl<'a> DbContext<'a> {
-    pub fn list_key_values_raw(&self) -> Result<Vec<KeyValue>> {
+    pub fn list_key_values(&self) -> Result<Vec<KeyValue>> {
         let (sql, params) = Query::select()
             .from(KeyValueIden::Table)
             .column(Asterisk)
             .build_rusqlite(SqliteQueryBuilder);
         let mut stmt = self.conn.prepare(sql.as_str())?;
-        let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
+        let items = stmt.query_map(&*params.as_params(), KeyValue::from_row)?;
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
@@ -60,7 +59,7 @@ impl<'a> DbContext<'a> {
                     .add(Expr::col(KeyValueIden::Key).eq(key)),
             )
             .build_rusqlite(SqliteQueryBuilder);
-        self.conn.resolve().query_row(sql.as_str(), &*params.as_params(), |row| row.try_into()).ok()
+        self.conn.resolve().query_row(sql.as_str(), &*params.as_params(), KeyValue::from_row).ok()
     }
 
     pub fn set_key_value_string(
@@ -125,43 +124,7 @@ impl<'a> DbContext<'a> {
         key_value: &KeyValue,
         source: &UpdateSource,
     ) -> Result<KeyValue> {
-        let (sql, params) = Query::insert()
-            .into_table(KeyValueIden::Table)
-            .columns([
-                KeyValueIden::CreatedAt,
-                KeyValueIden::UpdatedAt,
-                KeyValueIden::Namespace,
-                KeyValueIden::Key,
-                KeyValueIden::Value,
-            ])
-            .values_panic([
-                CurrentTimestamp.into(),
-                CurrentTimestamp.into(),
-                key_value.namespace.clone().into(),
-                key_value.key.clone().into(),
-                key_value.value.clone().into(),
-            ])
-            .on_conflict(
-                OnConflict::new()
-                    .update_columns([KeyValueIden::UpdatedAt, KeyValueIden::Value])
-                    .to_owned(),
-            )
-            .returning_all()
-            .build_rusqlite(SqliteQueryBuilder);
-
-        let mut stmt = self.conn.prepare(sql.as_str()).expect("Failed to prepare KeyValue upsert");
-        let m: KeyValue = stmt
-            .query_row(&*params.as_params(), |row| row.try_into())
-            .expect("Failed to upsert KeyValue");
-
-        let payload = ModelPayload {
-            model: m.clone().into(),
-            update_source: source.clone(),
-            change: ModelChangeEvent::Upsert,
-        };
-        self.tx.try_send(payload).unwrap();
-
-        Ok(m)
+        self.upsert(key_value, source)
     }
 
     pub fn delete_key_value(
@@ -175,21 +138,7 @@ impl<'a> DbContext<'a> {
             Some(m) => m,
         };
 
-        let (sql, params) = Query::delete()
-            .from_table(KeyValueIden::Table)
-            .cond_where(
-                Cond::all()
-                    .add(Expr::col(KeyValueIden::Namespace).eq(namespace))
-                    .add(Expr::col(KeyValueIden::Key).eq(key)),
-            )
-            .build_rusqlite(SqliteQueryBuilder);
-        self.conn.execute(sql.as_str(), &*params.as_params())?;
-        let payload = ModelPayload {
-            model: kv.clone().into(),
-            update_source: source.clone(),
-            change: ModelChangeEvent::Delete,
-        };
-        self.tx.try_send(payload).unwrap();
+        self.delete(&kv, source)?;
         Ok(())
     }
 }

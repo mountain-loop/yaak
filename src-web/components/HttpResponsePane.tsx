@@ -9,7 +9,7 @@ import { getContentTypeFromHeaders } from '../lib/model_util';
 import { ConfirmLargeResponse } from './ConfirmLargeResponse';
 import { Banner } from './core/Banner';
 import { CountBadge } from './core/CountBadge';
-import { DurationTag } from './core/DurationTag';
+import { HttpResponseDurationTag } from './core/HttpResponseDurationTag';
 import { HotKeyList } from './core/HotKeyList';
 import { LoadingIcon } from './core/LoadingIcon';
 import { SizeTag } from './core/SizeTag';
@@ -94,7 +94,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         className,
         'x-theme-responsePane',
         'max-h-full h-full',
-        'bg-surface rounded-md border border-border-subtle',
+        'bg-surface rounded-md border border-border-subtle overflow-hidden',
         'relative',
       )}
     >
@@ -117,15 +117,14 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 alignItems="center"
                 className={classNames(
                   'cursor-default select-none',
-                  'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm',
+                  'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars',
                 )}
               >
                 {activeResponse.state !== 'closed' && <LoadingIcon size="sm" />}
                 <HttpStatusTag showReason response={activeResponse} />
                 <span>&bull;</span>
-                <DurationTag
-                  headers={activeResponse.elapsedHeaders}
-                  total={activeResponse.elapsed}
+                <HttpResponseDurationTag
+                  response={activeResponse}
                 />
                 <span>&bull;</span>
                 <SizeTag contentLength={activeResponse.contentLength ?? 0} />

@@ -1,11 +1,10 @@
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai/index';
 import React from 'react';
-import { upsertWorkspace } from '../../commands/upsertWorkspace';
-import { useActiveWorkspace } from '../../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useAppInfo } from '../../hooks/useAppInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
-import { useSettings } from '../../hooks/useSettings';
-import { useUpdateSettings } from '../../hooks/useUpdateSettings';
 import { revealInFinderText } from '../../lib/reveal';
 import { Checkbox } from '../core/Checkbox';
 import { Heading } from '../core/Heading';
@@ -17,9 +16,8 @@ import { Separator } from '../core/Separator';
 import { VStack } from '../core/Stacks';
 
 export function SettingsGeneral() {
-  const workspace = useActiveWorkspace();
-  const settings = useSettings();
-  const updateSettings = useUpdateSettings();
+  const workspace = useAtomValue(activeWorkspaceAtom);
+  const settings = useAtomValue(settingsAtom);
   const appInfo = useAppInfo();
   const checkForUpdates = useCheckForUpdates();
 
@@ -37,9 +35,9 @@ export function SettingsGeneral() {
           labelClassName="w-[14rem]"
           size="sm"
           value={settings.updateChannel}
-          onChange={(updateChannel) => updateSettings.mutate({ updateChannel })}
+          onChange={(updateChannel) => patchModel(settings, { updateChannel })}
           options={[
-            { label: 'Stable (less frequent)', value: 'stable' },
+            { label: 'Stable', value: 'stable' },
             { label: 'Beta (more frequent)', value: 'beta' },
           ]}
         />
@@ -54,7 +52,7 @@ export function SettingsGeneral() {
       </div>
       <Select
         name="switchWorkspaceBehavior"
-        label="Switch Workspace Behavior"
+        label="Workspace Window Behavior"
         labelPosition="left"
         labelClassName="w-[14rem]"
         size="sm"
@@ -65,15 +63,15 @@ export function SettingsGeneral() {
               ? 'current'
               : 'ask'
         }
-        onChange={(v) => {
-          if (v === 'current') updateSettings.mutate({ openWorkspaceNewWindow: false });
-          else if (v === 'new') updateSettings.mutate({ openWorkspaceNewWindow: true });
-          else updateSettings.mutate({ openWorkspaceNewWindow: null });
+        onChange={async (v) => {
+          if (v === 'current') await patchModel(settings, { openWorkspaceNewWindow: false });
+          else if (v === 'new') await patchModel(settings, { openWorkspaceNewWindow: true });
+          else await patchModel(settings, { openWorkspaceNewWindow: null });
         }}
         options={[
-          { label: 'Always Ask', value: 'ask' },
-          { label: 'Current Window', value: 'current' },
-          { label: 'New Window', value: 'new' },
+          { label: 'Always ask', value: 'ask' },
+          { label: 'Open in current window', value: 'current' },
+          { label: 'Open in new window', value: 'new' },
         ]}
       />
 
@@ -96,17 +94,16 @@ export function SettingsGeneral() {
           labelPosition="left"
           defaultValue={`${workspace.settingRequestTimeout}`}
           validate={(value) => parseInt(value) >= 0}
-          onChange={(v) =>
-            upsertWorkspace.mutate({ ...workspace, settingRequestTimeout: parseInt(v) || 0 })
-          }
+          onChange={(v) => patchModel(workspace, { settingRequestTimeout: parseInt(v) || 0 })}
           type="number"
         />
 
         <Checkbox
           checked={workspace.settingValidateCertificates}
+          help="When disabled, skip validatation of server certificates, useful when interacting with self-signed certs."
           title="Validate TLS Certificates"
           onChange={(settingValidateCertificates) =>
-            upsertWorkspace.mutate({ ...workspace, settingValidateCertificates })
+            patchModel(workspace, { settingValidateCertificates })
           }
         />
 
@@ -114,8 +111,7 @@ export function SettingsGeneral() {
           checked={workspace.settingFollowRedirects}
           title="Follow Redirects"
           onChange={(settingFollowRedirects) =>
-            upsertWorkspace.mutate({
-              ...workspace,
+            patchModel(workspace, {
               settingFollowRedirects,
             })
           }

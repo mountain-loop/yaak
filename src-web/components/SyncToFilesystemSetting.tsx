@@ -11,71 +11,64 @@ export interface SyncToFilesystemSettingProps {
   onChange: (args: { filePath: string | null; initGit?: boolean }) => void;
   onCreateNewWorkspace: () => void;
   value: { filePath: string | null; initGit?: boolean };
-  forceOpen?: boolean;
 }
 
 export function SyncToFilesystemSetting({
   onChange,
   onCreateNewWorkspace,
   value,
-  forceOpen,
 }: SyncToFilesystemSettingProps) {
   const [isNonEmpty, setIsNonEmpty] = useState<string | null>(null);
   return (
-    <details open={forceOpen || !!value.filePath} className="w-full">
-      <summary>Data directory</summary>
-      <VStack className="my-2" space={3}>
-        {isNonEmpty ? (
-          <Banner color="notice" className="flex flex-col gap-1.5">
-            <p>The selected directory must be empty. Did you want to open it instead?</p>
-            <div>
-              <Button
-                variant="border"
-                color="notice"
-                size="xs"
-                type="button"
-                onClick={() => {
-                  openWorkspaceFromSyncDir.mutate(isNonEmpty);
-                  onCreateNewWorkspace();
-                }}
-              >
-                Open Workspace
-              </Button>
-            </div>
-          </Banner>
-        ) : !value.filePath ? (
-          <Banner color="info">
-            Sync data to a folder for backup and Git integration.
-          </Banner>
-        ) : null}
+    <VStack className="w-full my-2" space={3}>
+      {isNonEmpty && (
+        <Banner color="notice" className="flex flex-col gap-1.5">
+          <p>Directory is not empty. Do you want to open it instead?</p>
+          <div>
+            <Button
+              variant="border"
+              color="notice"
+              size="xs"
+              type="button"
+              onClick={() => {
+                openWorkspaceFromSyncDir.mutate(isNonEmpty);
+                onCreateNewWorkspace();
+              }}
+            >
+              Open Workspace
+            </Button>
+          </div>
+        </Banner>
+      )}
 
-        <SelectFile
-          directory
-          size="xs"
-          noun="Directory"
-          filePath={value.filePath}
-          onChange={async ({ filePath }) => {
-            if (filePath != null) {
-              const files = await readDir(filePath);
-              if (files.length > 0) {
-                setIsNonEmpty(filePath);
-                return;
-              }
+      <SelectFile
+        directory
+        label="Local directory sync"
+        size="xs"
+        noun="Directory"
+        help="Sync data to a folder for backup and Git integration."
+        filePath={value.filePath}
+        onChange={async ({ filePath }) => {
+          if (filePath != null) {
+            const files = await readDir(filePath);
+            if (files.length > 0) {
+              setIsNonEmpty(filePath);
+              return;
             }
+          }
 
-            setIsNonEmpty(null);
-            onChange({ ...value, filePath });
-          }}
+          setIsNonEmpty(null);
+          onChange({ ...value, filePath });
+        }}
+      />
+
+      {value.filePath && typeof value.initGit === 'boolean' && (
+        <Checkbox
+          checked={value.initGit}
+          onChange={(initGit) => onChange({ ...value, initGit })}
+          title="Initialize Git Repo"
         />
-
-        {value.filePath && typeof value.initGit === 'boolean' && (
-          <Checkbox
-            checked={value.initGit}
-            onChange={(initGit) => onChange({ ...value, initGit })}
-            title="Initialize Git Repo"
-          />
-        )}
-      </VStack>
-    </details>
+      )}
+    </VStack>
   );
 }

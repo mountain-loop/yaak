@@ -6,7 +6,8 @@ import { encodings } from '../lib/data/encodings';
 import { headerNames } from '../lib/data/headerNames';
 import { mimeTypes } from '../lib/data/mimetypes';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
-import type { PairEditorProps } from './core/PairEditor';
+import type { InputProps } from './core/Input';
+import type { Pair, PairEditorProps } from './core/PairEditor';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 
 type Props = {
@@ -19,19 +20,20 @@ type Props = {
 export function HeadersEditor({ stateKey, headers, onChange, forceUpdateKey }: Props) {
   return (
     <PairOrBulkEditor
-      preferenceName="headers"
-      stateKey={stateKey}
-      valueAutocompleteFunctions
-      valueAutocompleteVariables
+      forceUpdateKey={forceUpdateKey}
+      nameAutocomplete={nameAutocomplete}
       nameAutocompleteFunctions
       nameAutocompleteVariables
-      pairs={headers}
-      onChange={onChange}
-      forceUpdateKey={forceUpdateKey}
-      nameValidate={validateHttpHeader}
-      nameAutocomplete={nameAutocomplete}
-      valueAutocomplete={valueAutocomplete}
       namePlaceholder="Header-Name"
+      nameValidate={validateHttpHeader}
+      onChange={onChange}
+      pairs={headers}
+      preferenceName="headers"
+      stateKey={stateKey}
+      valueType={valueType}
+      valueAutocomplete={valueAutocomplete}
+      valueAutocompleteFunctions
+      valueAutocompleteVariables
     />
   );
 }
@@ -44,6 +46,24 @@ const headerOptionsMap: Record<string, string[]> = {
   'accept-encoding': encodings,
   connection: connections,
   'accept-charset': charsets,
+};
+
+const valueType = (pair: Pair): InputProps['type'] => {
+  const name = pair.name.toLowerCase().trim();
+  if (
+      name.includes('authorization') ||
+      name.includes('api-key') ||
+      name.includes('access-token') ||
+      name.includes('auth') ||
+      name.includes('secret') ||
+      name.includes('token') ||
+      name === 'cookie' ||
+      name === 'set-cookie'
+  ) {
+    return 'password';
+  } else {
+    return 'text';
+  }
 };
 
 const valueAutocomplete = (headerName: string): GenericCompletionConfig | undefined => {

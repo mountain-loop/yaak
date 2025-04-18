@@ -1,9 +1,10 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { useEffect } from 'react';
-import { useSettings } from './useSettings';
 
 export function useSyncFontSizeSetting() {
-  const settings = useSettings();
+  const settings = useAtomValue(settingsAtom);
   useEffect(() => {
     if (settings == null) {
       return;

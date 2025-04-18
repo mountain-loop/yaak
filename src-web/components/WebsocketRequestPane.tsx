@@ -1,11 +1,11 @@
 import type { HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo } from 'react';
-import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
 import { getActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { getActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
@@ -13,11 +13,10 @@ import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
+import { activeWebsocketConnectionAtom } from '../hooks/usePinnedWebsocketConnection';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import { requestsAtom } from '../hooks/useRequests';
+import {allRequestsAtom} from "../hooks/useAllRequests";
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
-import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
-import { useLatestWebsocketConnection } from '../hooks/useWebsocketConnections';
 import { deepEqualAtom } from '../lib/atoms';
 import { languageFromContentType } from '../lib/contentType';
 import { generateId } from '../lib/generateId';
@@ -52,10 +51,11 @@ const TAB_DESCRIPTION = 'description';
 
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
-  const requests = get(requestsAtom);
-  return requests
+  const requests = get(allRequestsAtom);
+  const urls = requests
     .filter((r) => r.id !== activeRequestId)
     .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url }));
+  return urls;
 });
 
 const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
@@ -67,7 +67,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
     key: 'websocketRequestActiveTabs',
     fallback: {},
   });
-  const { updateKey: forceUpdateKey } = useRequestUpdateKey(activeRequest.id ?? null);
+  const forceUpdateKey = useRequestUpdateKey(activeRequest.id);
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const authentication = useHttpAuthenticationSummaries();
 
@@ -89,17 +89,6 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   }, [activeRequest.url, activeRequest.urlParameters]);
 
   const tabs = useMemo<TabItem[]>(() => {
-    // const options: Omit<RadioDropdownProps<WebsocketMessageType>, 'children'> = {
-    //   value: activeRequest.messageType ?? 'text',
-    //   items: [
-    //     { label: 'Text', value: 'text' },
-    //     { label: 'Binary', value: 'binary' },
-    //   ],
-    //   onChange: async (messageType) => {
-    //     if (messageType === activeRequest.messageType) return;
-    //     upsertWebsocketRequest.mutate({ ...activeRequest, messageType });
-    //   },
-    // };
     return [
       {
         value: TAB_MESSAGE,
@@ -136,8 +125,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 // Reset auth if changing types
               };
             }
-            upsertWebsocketRequest.mutate({
-              ...activeRequest,
+            await patchModel(activeRequest, {
               authenticationType,
               authentication,
             });
@@ -153,9 +141,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
 
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
-  const { mutate: updateRequest } = useUpdateAnyHttpRequest();
-  const { updateKey } = useRequestUpdateKey(activeRequestId);
-  const connection = useLatestWebsocketConnection(activeRequestId);
+  const connection = useAtomValue(activeWebsocketConnectionAtom);
 
   const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(
@@ -207,17 +193,17 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   }, [connection]);
 
   const handleUrlChange = useCallback(
-    (url: string) => upsertWebsocketRequest.mutate({ ...activeRequest, url }),
+    (url: string) => patchModel(activeRequest, { url }),
     [activeRequest],
   );
 
   const handlePaste = useCallback(
-    (e: ClipboardEvent, text: string) => {
-      const data = prepareImportQuerystring(text);
-      if (data != null) {
+    async (e: ClipboardEvent, text: string) => {
+      const patch = prepareImportQuerystring(text);
+      if (patch != null) {
         e.preventDefault(); // Prevent input onChange
 
-        updateRequest({ id: activeRequestId, update: data });
+        await patchModel(activeRequest, patch);
         focusParamsTab();
 
         // Wait for request to update, then refresh the UI
@@ -228,7 +214,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
         }, 100);
       }
     },
-    [activeRequestId, focusParamsTab, forceParamsRefresh, forceUrlRefresh, updateRequest],
+    [activeRequest, focusParamsTab, forceParamsRefresh, forceUrlRefresh],
   );
 
   const messageLanguage = languageFromContentType(null, activeRequest.message);
@@ -266,7 +252,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
               onSend={isLoading ? handleSend : handleConnect}
               onCancel={cancelResponse}
               onUrlChange={handleUrlChange}
-              forceUpdateKey={updateKey}
+              forceUpdateKey={forceUpdateKey}
               isLoading={activeResponse != null && activeResponse.state !== 'closed'}
               method={null}
             />
@@ -287,7 +273,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 forceUpdateKey={forceUpdateKey}
                 headers={activeRequest.headers}
                 stateKey={`headers.${activeRequest.id}`}
-                onChange={(headers) => upsertWebsocketRequest.mutate({ ...activeRequest, headers })}
+                onChange={(headers) => patchModel(activeRequest, { headers })}
               />
             </TabContent>
             <TabContent value={TAB_PARAMS}>
@@ -295,9 +281,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 stateKey={`params.${activeRequest.id}`}
                 forceUpdateKey={forceUpdateKey + urlParametersKey}
                 pairs={urlParameterPairs}
-                onChange={(urlParameters) =>
-                  upsertWebsocketRequest.mutate({ ...activeRequest, urlParameters })
-                }
+                onChange={(urlParameters) => patchModel(activeRequest, { urlParameters })}
               />
             </TabContent>
             <TabContent value={TAB_MESSAGE}>
@@ -309,7 +293,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 heightMode={fullHeight ? 'full' : 'auto'}
                 defaultValue={activeRequest.message}
                 language={messageLanguage}
-                onChange={(message) => upsertWebsocketRequest.mutate({ ...activeRequest, message })}
+                onChange={(message) => patchModel(activeRequest, { message })}
                 stateKey={`json.${activeRequest.id}`}
               />
             </TabContent>
@@ -318,22 +302,20 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 <PlainInput
                   label="Request Name"
                   hideLabel
-                  forceUpdateKey={updateKey}
+                  forceUpdateKey={forceUpdateKey}
                   defaultValue={activeRequest.name}
                   className="font-sans !text-xl !px-0"
                   containerClassName="border-0"
                   placeholder={resolvedModelName(activeRequest)}
-                  onChange={(name) => upsertWebsocketRequest.mutate({ ...activeRequest, name })}
+                  onChange={(name) => patchModel(activeRequest, { name })}
                 />
                 <MarkdownEditor
                   name="request-description"
                   placeholder="Request description"
                   defaultValue={activeRequest.description}
                   stateKey={`description.${activeRequest.id}`}
-                  forceUpdateKey={updateKey}
-                  onChange={(description) =>
-                    upsertWebsocketRequest.mutate({ ...activeRequest, description })
-                  }
+                  forceUpdateKey={forceUpdateKey}
+                  onChange={(description) => patchModel(activeRequest, { description })}
                 />
               </div>
             </TabContent>

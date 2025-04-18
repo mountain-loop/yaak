@@ -1,6 +1,7 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
-import { buildClientSchema, getIntrospectionQuery, type IntrospectionQuery } from 'graphql';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { GraphQLSchema, IntrospectionQuery } from 'graphql';
+import { buildClientSchema, getIntrospectionQuery } from 'graphql';
+import { useCallback, useEffect, useState } from 'react';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { getResponseBodyText } from '../lib/responseBody';
 import { sendEphemeralRequest } from '../lib/sendEphemeralRequest';
@@ -17,12 +18,13 @@ export function useIntrospectGraphQL(
   baseRequest: HttpRequest,
   options: { disabled?: boolean } = {},
 ) {
-  // Debounce the request because it can change rapidly and we don't
+  // Debounce the request because it can change rapidly, and we don't
   // want to send so too many requests.
   const request = useDebouncedValue(baseRequest);
   const activeEnvironment = useActiveEnvironment();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>();
+  const [schema, setSchema] = useState<GraphQLSchema | null>(null);
 
   const { value: introspection, set: setIntrospection } = useKeyValue<IntrospectionQuery | null>({
     key: ['graphql_introspection', baseRequest.id],
@@ -51,7 +53,9 @@ export function useIntrospectGraphQL(
 
       const bodyText = await getResponseBodyText(response);
       if (response.status < 200 || response.status >= 300) {
-        return setError(`Request failed with status ${response.status}.\nThe response body is:\n\n${bodyText}`);
+        return setError(
+          `Request failed with status ${response.status}.\nThe response text is:\n\n${bodyText}`,
+        );
       }
 
       if (bodyText === null) {
@@ -84,12 +88,14 @@ export function useIntrospectGraphQL(
     await setIntrospection(null);
   }, [setIntrospection]);
 
-  const schema = useMemo(() => {
+  useEffect(() => {
     if (introspection == null) {
-      return introspection;
+      return;
     }
+
     try {
-      return buildClientSchema(introspection);
+      const schema = buildClientSchema(introspection);
+      setSchema(schema);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       setError('message' in e ? e.message : String(e));

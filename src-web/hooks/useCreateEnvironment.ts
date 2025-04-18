@@ -1,19 +1,24 @@
 import type { Environment } from '@yaakapp-internal/models';
+import { createWorkspaceModel } from '@yaakapp-internal/models';
+import { jotaiStore } from '../lib/jotai';
 import { showPrompt } from '../lib/prompt';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
-import { invokeCmd } from '../lib/tauri';
-import { getActiveWorkspaceId } from './useActiveWorkspace';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 
 export function useCreateEnvironment() {
-  return useFastMutation<Environment | null, unknown, Environment | null>({
+  return useFastMutation<string, unknown, Environment | null>({
     mutationKey: ['create_environment'],
     mutationFn: async (baseEnvironment) => {
       if (baseEnvironment == null) {
         throw new Error('No base environment passed');
       }
 
-      const workspaceId = getActiveWorkspaceId();
+      const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+      if (workspaceId == null) {
+        throw new Error('Cannot create environment when no active workspace');
+      }
+
       const name = await showPrompt({
         id: 'new-environment',
         title: 'New Environment',
@@ -23,18 +28,18 @@ export function useCreateEnvironment() {
         defaultValue: 'My Environment',
         confirmText: 'Create',
       });
-      if (name == null) return null;
+      if (name == null) throw new Error('No name provided to create environment');
 
-      return invokeCmd('cmd_create_environment', {
+      return createWorkspaceModel({
+        model: 'environment',
         name,
         variables: [],
         workspaceId,
         environmentId: baseEnvironment.id,
       });
     },
-    onSuccess: async (environment) => {
-      if (environment == null) return;
-      setWorkspaceSearchParams({ environment_id: environment.id });
+    onSuccess: async (environmentId) => {
+      setWorkspaceSearchParams({ environment_id: environmentId });
     },
   });
 }

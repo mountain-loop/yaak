@@ -2,9 +2,11 @@ import './main.css';
 import { RouterProvider } from '@tanstack/react-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { type } from '@tauri-apps/plugin-os';
+import { changeModelStoreWorkspace, initModelStore } from '@yaakapp-internal/models';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { initSync } from './init/sync';
+import { jotaiStore } from './lib/jotai';
 import { router } from './lib/router';
 
 import('react-pdf').then(({ pdfjs }) => {
@@ -41,6 +43,8 @@ window.addEventListener('keydown', (e) => {
 
 // Initialize a bunch of watchers
 initSync();
+initModelStore(jotaiStore);
+await changeModelStoreWorkspace(null); // Load global models
 
 console.log('Creating React root');
 createRoot(document.getElementById('root') as HTMLElement).render(

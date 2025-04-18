@@ -10,6 +10,7 @@ type ViewMode = 'edit' | 'preview';
 interface Props extends Pick<EditorProps, 'heightMode' | 'stateKey' | 'forceUpdateKey'> {
   placeholder: string;
   className?: string;
+  editorClassName?: string;
   defaultValue: string;
   onChange: (value: string) => void;
   name: string;
@@ -17,6 +18,7 @@ interface Props extends Pick<EditorProps, 'heightMode' | 'stateKey' | 'forceUpda
 
 export function MarkdownEditor({
   className,
+  editorClassName,
   defaultValue,
   onChange,
   name,
@@ -31,7 +33,7 @@ export function MarkdownEditor({
     <Editor
       hideGutter
       wrapLines
-      className="max-w-2xl max-h-full"
+      className={classNames(editorClassName, '[&_.cm-line]:!max-w-lg max-h-full')}
       language="markdown"
       defaultValue={defaultValue}
       onChange={onChange}
@@ -44,9 +46,9 @@ export function MarkdownEditor({
     defaultValue.length === 0 ? (
       <p className="text-text-subtlest">No description</p>
     ) : (
-      <Markdown className="max-w-xl overflow-y-auto max-h-full [&_*]:cursor-auto [&_*]:select-auto">
-        {defaultValue}
-      </Markdown>
+      <div className="overflow-y-auto max-h-full [&_*]:cursor-auto [&_*]:select-auto">
+        <Markdown className="max-w-lg">{defaultValue}</Markdown>
+      </div>
     );
 
   const contents = viewMode === 'preview' ? preview : editor;
@@ -56,20 +58,22 @@ export function MarkdownEditor({
       ref={containerRef}
       className={classNames(
         'group/markdown',
-        'w-full h-full pt-1.5 rounded-md grid grid-cols-[minmax(0,1fr)_auto] grid-rows-1 gap-x-1.5',
+        'relative w-full h-full pt-1.5 rounded-md gap-x-1.5',
         className,
       )}
     >
       <div className="h-full w-full">{contents}</div>
-      <SegmentedControl
-        name={name}
-        onChange={setViewMode}
-        value={viewMode}
-        options={[
-          { icon: 'eye', label: 'Preview mode', value: 'preview' },
-          { icon: 'pencil', label: 'Edit mode', value: 'edit' },
-        ]}
-      />
+      <div className="absolute top-0 right-0 pt-1.5 pr-1.5">
+        <SegmentedControl
+          name={name}
+          onChange={setViewMode}
+          value={viewMode}
+          options={[
+            { icon: 'eye', label: 'Preview mode', value: 'preview' },
+            { icon: 'pencil', label: 'Edit mode', value: 'edit' },
+          ]}
+        />
+      </div>
     </div>
   );
 }

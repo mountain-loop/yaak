@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-anyhow = "1.0.79"
+anyhow = "1.0.97"
 async-recursion = "1.1.1"
 dunce = "1.0.4"
 hyper = "1.5.2"
@@ -18,11 +18,11 @@ md5 = "0.7.0"
 prost = "0.13.4"
 prost-reflect = { version = "0.14.4", default-features = false, features = ["serde", "derive"] }
 prost-types = "0.13.4"
-serde = { version = "1.0.196", features = ["derive"] }
-serde_json = "1.0.113"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tauri = { workspace = true }
 tauri-plugin-shell = { workspace = true }
-tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "fs"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
 tokio-stream = "0.1.14"
 tonic = { version = "0.12.3", default-features = false, features = ["transport"] }
 tonic-reflection = "0.12.3"

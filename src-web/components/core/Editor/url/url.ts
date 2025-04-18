@@ -3,17 +3,17 @@ import {LRParser} from "@lezer/lr"
 import {highlight} from "./highlight"
 export const parser = LRParser.deserialize({
   version: 14,
-  states: "#SOQOPOOQYOPOOOTOPOOOeOQO'#CeOmOPO'#CaOxOSO'#CdQOOOOOQ`OPOOQ]OPOOOOOO,59P,59POOOO-E6c-E6cO}OPO,59OO!VOSO'#CfO![OPO1G.jOOOO,59Q,59QOOOO-E6d-E6d",
-  stateData: "!j~OQQORPO~OSWO[RO]TO~OUXOVXO~O[ROZTX]TX~O^ZO~O_[OZWa~O^^O~O_[OZWi~OQRUVU~",
-  goto: "rZPPPPP[PP`elTVPWVUPVWSSPWRYSQ]ZR_]",
-  nodeNames: "⚠ url Protocol Host Port Path Placeholder PathSegment Query",
-  maxTerm: 15,
+  states: "!|OQOPOOQYOPOOOTOPOOObOQO'#CdOjOPO'#C`OuOSO'#CcQOOOOOQ]OPOOOOOO,59O,59OOOOO-E6b-E6bOzOPO,58}O!SOSO'#CeO!XOPO1G.iOOOO,59P,59POOOO-E6c-E6c",
+  stateData: "!g~OQQORPO~OZRO[TO~OTWOUWO~OZROYSX[SX~O]YO~O^ZOYVa~O]]O~O^ZOYVi~OQRTUT~",
+  goto: "nYPPPPZPP^bhRVPTUPVQSPRXSQ[YR^[",
+  nodeNames: "⚠ url Protocol Host Path Placeholder PathSegment Query",
+  maxTerm: 14,
   propSources: [highlight],
   skippedNodes: [0],
   repeatNodeCount: 2,
-  tokenData: "+U~RdOs!atv!avw#Ow}!a}!O#i!O!P#i!P!Q$o!Q![$t![!]&|!]!a!a!a!b(w!b!c!a!c!}(|!}#R!a#R#S#i#S#T!a#T#o(|#o;'S!a;'S;=`!x<%lO!aQ!fUVQOs!at!P!a!Q!a!a!b;'S!a;'S;=`!x<%lO!aQ!{P;=`<%l!aR#VU_PVQOs!at!P!a!Q!a!a!b;'S!a;'S;=`!x<%lO!aR#p_RPVQOs!at}!a}!O#i!O!P#i!Q![#i![!a!a!b!c!a!c!}#i!}#R!a#R#S#i#S#T!a#T#o#i#o;'S!a;'S;=`!x<%lO!a~$tO[~V$}a^SRPVQOs!at}!a}!O#i!O!P#i!Q![$t![!_!a!_!`&S!`!a!a!b!c!a!c!}$t!}#R!a#R#S#i#S#T!a#T#o$t#o;'S!a;'S;=`!x<%lO!aU&ZZ^SVQOs!at!P!a!Q![&S![!a!a!b!c!a!c!}&S!}#T!a#T#o&S#o;'S!a;'S;=`!x<%lO!aR'RVVQOs'ht!P'h!Q![(X![!a'h!b;'S'h;'S;=`(R<%lO'hQ'oUUQVQOs'ht!P'h!Q!a'h!b;'S'h;'S;=`(R<%lO'hQ(UP;=`<%l'hR(bVSPUQVQOs'ht!P'h!Q![(X![!a'h!b;'S'h;'S;=`(R<%lO'h~(|O]~V)Vb^SRPVQOs!at}!a}!O#i!O!P#i!Q![$t![!]*_!]!_!a!_!`&S!`!a!a!b!c!a!c!}(|!}#R!a#R#S#i#S#T!a#T#o(|#o;'S!a;'S;=`!x<%lO!aR*dVVQOs!at!P!a!P!Q*y!Q!a!a!b;'S!a;'S;=`!x<%lO!aP*|P!P!Q+PP+UOQP",
+  tokenData: ".i~RgOs!jtv!jvw#Xw}!j}!O#r!O!P#r!P!Q%U!Q![%Z![!]'o!]!a!j!a!b+W!b!c!j!c!}+]!}#O#r#O#P!j#P#Q#r#Q#R!j#R#S#r#S#T!j#T#o+]#o;'S!j;'S;=`#R<%lO!jQ!oUUQOs!jt!P!j!Q!a!j!b;'S!j;'S;=`#R<%lO!jQ#UP;=`<%l!jR#`U^PUQOs!jt!P!j!Q!a!j!b;'S!j;'S;=`#R<%lO!jR#ycRPUQOs!jt}!j}!O#r!O!P#r!Q![#r![!]#r!]!a!j!b!c!j!c!}#r!}#O#r#O#P!j#P#Q#r#Q#R!j#R#S#r#S#T!j#T#o#r#o;'S!j;'S;=`#R<%lO!j~%ZOZ~V%de]SRPUQOs!jt}!j}!O#r!O!P#r!Q![%Z![!]#r!]!_!j!_!`&u!`!a!j!b!c!j!c!}%Z!}#O#r#O#P!j#P#Q#r#Q#R!j#R#S#r#S#T!j#T#o%Z#o;'S!j;'S;=`#R<%lO!jU&|Z]SUQOs!jt!P!j!Q![&u![!a!j!b!c!j!c!}&u!}#T!j#T#o&u#o;'S!j;'S;=`#R<%lO!jR'vcRPUQOs)Rt})R}!O)r!O!P)r!Q![)r![!])r!]!a)R!b!c)R!c!})r!}#O)r#O#P)R#P#Q)r#Q#R)R#R#S)r#S#T)R#T#o)r#o;'S)R;'S;=`)l<%lO)RQ)YUTQUQOs)Rt!P)R!Q!a)R!b;'S)R;'S;=`)l<%lO)RQ)oP;=`<%l)RR){cRPTQUQOs)Rt})R}!O)r!O!P)r!Q![)r![!])r!]!a)R!b!c)R!c!})r!}#O)r#O#P)R#P#Q)r#Q#R)R#R#S)r#S#T)R#T#o)r#o;'S)R;'S;=`)l<%lO)R~+]O[~V+fe]SRPUQOs!jt}!j}!O#r!O!P#r!Q![%Z![!],w!]!_!j!_!`&u!`!a!j!b!c!j!c!}+]!}#O#r#O#P!j#P#Q#r#Q#R!j#R#S#r#S#T!j#T#o+]#o;'S!j;'S;=`#R<%lO!jR-OdRPUQOs!jt}!j}!O#r!O!P#r!P!Q.^!Q![#r![!]#r!]!a!j!b!c!j!c!}#r!}#O#r#O#P!j#P#Q#r#Q#R!j#R#S#r#S#T!j#T#o#r#o;'S!j;'S;=`#R<%lO!jP.aP!P!Q.dP.iOQP",
   tokenizers: [0, 1, 2],
   topRules: {"url":[0,1]},
-  tokenPrec: 66,
-  termNames: {"0":"⚠","1":"@top","2":"Protocol","3":"Host","4":"Port","5":"Path","6":"Placeholder","7":"PathSegment","8":"Query","9":"(\"/\" (Placeholder | PathSegment))+","10":"(\"&\" queryPair)+","11":"␄","12":"\"/\"","13":"\"?\"","14":"queryPair","15":"\"&\""}
+  tokenPrec: 63
 })
+

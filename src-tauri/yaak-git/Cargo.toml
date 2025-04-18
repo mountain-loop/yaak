@@ -9,8 +9,8 @@ publish = false
 chrono = { version = "0.4.38", features = ["serde"] }
 git2 = { version = "0.20.0", features = ["vendored-libgit2", "vendored-openssl"] }
 log = "0.4.22"
-serde = { version = "1.0.215", features = ["derive"] }
-serde_json = "1.0.132"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 serde_yaml = "0.9.34"
 tauri = { workspace = true }
 thiserror = { workspace = true }

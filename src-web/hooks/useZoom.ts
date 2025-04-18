@@ -1,28 +1,27 @@
+import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { useCallback } from 'react';
-import { useSettings } from './useSettings';
-import { useUpdateSettings } from './useUpdateSettings';
 
 export function useZoom() {
-  const settings = useSettings();
-  const updateSettings = useUpdateSettings();
+  const settings = useAtomValue(settingsAtom);
 
-  const zoomIn = useCallback(() => {
+  const zoomIn = useCallback(async () => {
     if (!settings) return;
-    updateSettings.mutate({
+    await patchModel(settings, {
       interfaceScale: Math.min(1.8, settings.interfaceScale * 1.1),
     });
-  }, [settings, updateSettings]);
+  }, [settings]);
 
-  const zoomOut = useCallback(() => {
+  const zoomOut = useCallback(async () => {
     if (!settings) return;
-    updateSettings.mutate({
+    await patchModel(settings, {
       interfaceScale: Math.max(0.4, settings.interfaceScale * 0.9),
     });
-  }, [settings, updateSettings]);
+  }, [settings]);
 
-  const zoomReset = useCallback(() => {
-    updateSettings.mutate({ ...settings, interfaceScale: 1 });
-  }, [settings, updateSettings]);
+  const zoomReset = useCallback(async () => {
+    await patchModel(settings, { interfaceScale: 1 });
+  }, [settings]);
 
   return { zoomIn, zoomOut, zoomReset };
 }

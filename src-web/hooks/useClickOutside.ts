@@ -13,21 +13,27 @@ export function useClickOutside(
   ignored?: RefObject<HTMLElement | null>,
 ) {
   const savedCallback = useRef(onClickAway);
+
   useEffect(() => {
     savedCallback.current = onClickAway;
   }, [onClickAway]);
+
   useEffect(() => {
     const handler = (event: MouseEvent) => {
-      if (ref.current == null || !(event.target instanceof HTMLElement)) return;
+      if (ref.current == null || !(event.target instanceof HTMLElement)) {
+        return;
+      }
       const isIgnored = ignored?.current?.contains(event.target);
       const clickedOutside = !ref.current.contains(event.target);
       if (!isIgnored && clickedOutside) {
         savedCallback.current(event);
       }
     };
-    document.addEventListener('click', handler);
+    document.addEventListener('click', handler, { capture: true });
+    document.addEventListener('contextmenu', handler, { capture: true });
     return () => {
       document.removeEventListener('click', handler);
+      document.removeEventListener('contextmenu', handler);
     };
   }, [ignored, ref]);
 }

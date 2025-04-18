@@ -1,5 +1,6 @@
 use std::time::SystemTime;
 
+use crate::error::Result;
 use crate::history::{get_num_launches, get_os};
 use chrono::{DateTime, Duration, Utc};
 use log::debug;
@@ -44,16 +45,12 @@ impl YaakNotifier {
         }
     }
 
-    pub async fn seen<R: Runtime>(
-        &mut self,
-        window: &WebviewWindow<R>,
-        id: &str,
-    ) -> Result<(), String> {
+    pub async fn seen<R: Runtime>(&mut self, window: &WebviewWindow<R>, id: &str) -> Result<()> {
         let app_handle = window.app_handle();
         let mut seen = get_kv(app_handle).await?;
         seen.push(id.to_string());
         debug!("Marked notification as seen {}", id);
-        let seen_json = serde_json::to_string(&seen).map_err(|e| e.to_string())?;
+        let seen_json = serde_json::to_string(&seen)?;
         window.db().set_key_value_raw(
             KV_NAMESPACE,
             KV_KEY,
@@ -63,7 +60,7 @@ impl YaakNotifier {
         Ok(())
     }
 
-    pub async fn check<R: Runtime>(&mut self, window: &WebviewWindow<R>) -> Result<(), String> {
+    pub async fn check<R: Runtime>(&mut self, window: &WebviewWindow<R>) -> Result<()> {
         let app_handle = window.app_handle();
         let ignore_check = self.last_check.elapsed().unwrap().as_secs() < MAX_UPDATE_CHECK_SECONDS;
 
@@ -82,13 +79,13 @@ impl YaakNotifier {
                 ("launches", num_launches.to_string().as_str()),
                 ("platform", get_os()),
             ]);
-        let resp = req.send().await.map_err(|e| e.to_string())?;
+        let resp = req.send().await?;
         if resp.status() != 200 {
             debug!("Skipping notification status code {}", resp.status());
             return Ok(());
         }
 
-        let result = resp.json::<Value>().await.map_err(|e| e.to_string())?;
+        let result = resp.json::<Value>().await?;
 
         // Support both single and multiple notifications.
         // TODO: Remove support for single after April 2025
@@ -117,9 +114,9 @@ impl YaakNotifier {
     }
 }
 
-async fn get_kv<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<String>, String> {
+async fn get_kv<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<String>> {
     match app_handle.db().get_key_value_raw("notifications", "seen") {
         None => Ok(Vec::new()),
-        Some(v) => serde_json::from_str(&v.value).map_err(|e| e.to_string()),
+        Some(v) => Ok(serde_json::from_str(&v.value)?),
     }
 }

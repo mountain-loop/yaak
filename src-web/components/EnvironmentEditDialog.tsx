@@ -1,14 +1,22 @@
 import type { Environment } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
-import { useDeleteEnvironment } from '../hooks/useDeleteEnvironment';
-import { useEnvironments } from '../hooks/useEnvironments';
+import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
+import { useIsEncryptionEnabled } from '../hooks/useIsEncryptionEnabled';
 import { useKeyValue } from '../hooks/useKeyValue';
-import { useUpdateEnvironment } from '../hooks/useUpdateEnvironment';
+import { useRandomKey } from '../hooks/useRandomKey';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
+import { analyzeTemplate, convertTemplateToSecure } from '../lib/encryption';
 import { showPrompt } from '../lib/prompt';
+import {
+  setupOrConfigureEncryption,
+  withEncryptionEnabled,
+} from '../lib/setupOrConfigureEncryption';
+import { BadgeButton } from './core/BadgeButton';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { ContextMenu } from './core/Dropdown';
@@ -17,7 +25,8 @@ import { Heading } from './core/Heading';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
-import type { PairEditorProps } from './core/PairEditor';
+import type { PairWithId } from './core/PairEditor';
+import { ensurePairId } from './core/PairEditor';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
@@ -29,8 +38,7 @@ interface Props {
 
 export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
   const createEnvironment = useCreateEnvironment();
-  const { baseEnvironment, subEnvironments, allEnvironments } = useEnvironments();
-
+  const { baseEnvironment, subEnvironments, allEnvironments } = useEnvironmentsBreakdown();
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(
     initialEnvironment?.id ?? null,
   );
@@ -42,9 +50,8 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
 
   const handleCreateEnvironment = async () => {
     if (baseEnvironment == null) return;
-    const e = await createEnvironment.mutateAsync(baseEnvironment);
-    if (e == null) return;
-    setSelectedEnvironmentId(e.id);
+    const id = await createEnvironment.mutateAsync(baseEnvironment);
+    setSelectedEnvironmentId(id);
   };
 
   return (
@@ -122,17 +129,19 @@ const EnvironmentEditor = function ({
   environment: Environment;
   className?: string;
 }) {
+  const activeWorkspaceId = activeEnvironment.workspaceId;
+  const isEncryptionEnabled = useIsEncryptionEnabled();
   const valueVisibility = useKeyValue<boolean>({
     namespace: 'global',
-    key: 'environmentValueVisibility',
-    fallback: true,
+    key: ['environmentValueVisibility', activeWorkspaceId],
+    fallback: false,
   });
-  const { allEnvironments } = useEnvironments();
-  const updateEnvironment = useUpdateEnvironment(activeEnvironment?.id ?? null);
-  const handleChange = useCallback<PairEditorProps['onChange']>(
-    (variables) => updateEnvironment.mutate({ variables }),
-    [updateEnvironment],
+  const { allEnvironments } = useEnvironmentsBreakdown();
+  const handleChange = useCallback(
+    (variables: PairWithId[]) => patchModel(activeEnvironment, { variables }),
+    [activeEnvironment],
   );
+  const [forceUpdateKey, regenerateForceUpdateKey] = useRandomKey();
 
   // Gather a list of env names from other environments, to help the user get them aligned
   const nameAutocomplete = useMemo<GenericCompletionConfig>(() => {
@@ -165,19 +174,50 @@ const EnvironmentEditor = function ({
     return name.match(/^[a-z_][a-z0-9_-]*$/i) != null;
   }, []);
 
+  const valueType = !isEncryptionEnabled && valueVisibility.value ? 'text' : 'password';
+  const promptToEncrypt = useMemo(() => {
+    if (!isEncryptionEnabled) {
+      return false;
+    } else {
+      return !activeEnvironment.variables.every(
+        (v) => v.value === '' || analyzeTemplate(v.value) !== 'insecure',
+      );
+    }
+  }, [activeEnvironment.variables, isEncryptionEnabled]);
+
+  const encryptEnvironment = (environment: Environment) => {
+    withEncryptionEnabled(async () => {
+      const encryptedVariables: PairWithId[] = [];
+      for (const variable of environment.variables) {
+        const value = variable.value ? await convertTemplateToSecure(variable.value) : '';
+        encryptedVariables.push(ensurePairId({ ...variable, value }));
+      }
+      await handleChange(encryptedVariables);
+      regenerateForceUpdateKey();
+    });
+  };
+
   return (
     <VStack space={4} className={classNames(className, 'pl-4')}>
       <HStack space={2} className="justify-between">
         <Heading className="w-full flex items-center gap-1">
           <div>{activeEnvironment?.name}</div>
-          <IconButton
-            size="sm"
-            icon={valueVisibility.value ? 'eye' : 'eye_closed'}
-            title={valueVisibility.value ? 'Hide Values' : 'Reveal Values'}
-            onClick={() => {
-              return valueVisibility.set((v) => !v);
-            }}
-          />
+          {promptToEncrypt ? (
+            <BadgeButton color="notice" onClick={() => encryptEnvironment(activeEnvironment)}>
+              Encrypt All Variables
+            </BadgeButton>
+          ) : isEncryptionEnabled ? (
+            <BadgeButton color="secondary" onClick={setupOrConfigureEncryption}>
+              Encryption Settings
+            </BadgeButton>
+          ) : (
+            <IconButton
+              size="sm"
+              icon={valueVisibility.value ? 'eye' : 'eye_closed'}
+              title={valueVisibility.value ? 'Hide Values' : 'Reveal Values'}
+              onClick={() => valueVisibility.set((v) => !v)}
+            />
+          )}
         </Heading>
       </HStack>
       <div className="h-full pr-2 pb-2">
@@ -187,10 +227,10 @@ const EnvironmentEditor = function ({
           nameAutocomplete={nameAutocomplete}
           namePlaceholder="VAR_NAME"
           nameValidate={validateName}
-          valueType={valueVisibility.value ? 'text' : 'password'}
+          valueType={valueType}
           valueAutocompleteVariables
           valueAutocompleteFunctions
-          forceUpdateKey={activeEnvironment.id}
+          forceUpdateKey={`${activeEnvironment.id}::${forceUpdateKey}`}
           pairs={activeEnvironment.variables}
           onChange={handleChange}
           stateKey={`environment.${activeEnvironment.id}`}
@@ -217,8 +257,6 @@ function SidebarButton({
   rightSlot?: ReactNode;
   environment: Environment | null;
 }) {
-  const updateEnvironment = useUpdateEnvironment(environment?.id ?? null);
-  const deleteEnvironment = useDeleteEnvironment(environment);
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
     y: number;
@@ -277,17 +315,16 @@ function SidebarButton({
                   defaultValue: environment.name,
                 });
                 if (name == null) return;
-                updateEnvironment.mutate({ name });
+                await patchModel(environment, { name });
               },
             },
             {
               color: 'danger',
               label: 'Delete',
               leftSlot: <Icon icon="trash" size="sm" />,
-              onSelect: () => {
-                deleteEnvironment.mutate(undefined, {
-                  onSuccess: onDelete,
-                });
+              onSelect: async () => {
+                await deleteModelWithConfirm(environment);
+                onDelete?.();
               },
             },
           ]}

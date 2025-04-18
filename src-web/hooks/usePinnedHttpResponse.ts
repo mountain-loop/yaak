@@ -1,5 +1,6 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
-import { useHttpResponses } from './useHttpResponses';
+import type { HttpResponse} from '@yaakapp-internal/models';
+import { httpResponsesAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai/index';
 import { useKeyValue } from './useKeyValue';
 import { useLatestHttpResponse } from './useLatestHttpResponse';
 
@@ -11,7 +12,7 @@ export function usePinnedHttpResponse(activeRequestId: string) {
     fallback: null,
     namespace: 'global',
   });
-  const allResponses = useHttpResponses();
+  const allResponses = useAtomValue(httpResponsesAtom);
   const responses = allResponses.filter((r) => r.requestId === activeRequestId);
   const activeResponse: HttpResponse | null =
     responses.find((r) => r.id === pinnedResponseId) ?? latestResponse;

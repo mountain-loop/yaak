@@ -1,18 +1,65 @@
-import type { WebsocketConnection, WebsocketRequest } from '@yaakapp-internal/models';
-import { useKeyValue } from './useKeyValue';
-import { useLatestWebsocketConnection, useWebsocketConnections } from './useWebsocketConnections';
+import { invoke } from '@tauri-apps/api/core';
+import type { WebsocketConnection, WebsocketEvent } from '@yaakapp-internal/models';
+import {
+  replaceModelsInStore,
+  websocketConnectionsAtom,
+  websocketEventsAtom,
+} from '@yaakapp-internal/models';
+import { atom, useAtomValue } from 'jotai/index';
+import { useEffect } from 'react';
+import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
+import { jotaiStore } from '../lib/jotai';
+import { activeRequestIdAtom } from './useActiveRequestId';
 
-export function usePinnedWebsocketConnection(activeRequest: WebsocketRequest) {
-  const latestConnection = useLatestWebsocketConnection(activeRequest.id);
-  const { set: setPinnedConnectionId, value: pinnedConnectionId } = useKeyValue<string | null>({
-    // Key on latest connection instead of activeRequest because connections change out of band of active request
-    key: ['pinned_websocket_connection_id', latestConnection?.id ?? 'n/a'],
-    fallback: null,
-    namespace: 'global',
+const pinnedWebsocketConnectionIdAtom = atomWithKVStorage<Record<string, string | null>>(
+  'pinned-websocket-connection-ids',
+  {},
+);
+
+function recordKey(activeRequestId: string | null, latestConnection: WebsocketConnection | null) {
+  return activeRequestId + '-' + (latestConnection?.id ?? 'none');
+}
+
+export const activeWebsocketConnectionsAtom = atom<WebsocketConnection[]>((get) => {
+  const activeRequestId = get(activeRequestIdAtom) ?? 'n/a';
+  return get(websocketConnectionsAtom).filter((c) => c.requestId === activeRequestId) ?? [];
+});
+
+export const activeWebsocketConnectionAtom = atom<WebsocketConnection | null>((get) => {
+  const activeRequestId = get(activeRequestIdAtom) ?? 'n/a';
+  const activeConnections = get(activeWebsocketConnectionsAtom);
+  const latestConnection = activeConnections[0] ?? null;
+  const pinnedConnectionId = get(pinnedWebsocketConnectionIdAtom)[
+    recordKey(activeRequestId, latestConnection)
+  ];
+  return activeConnections.find((c) => c.id === pinnedConnectionId) ?? activeConnections[0] ?? null;
+});
+
+export const activeWebsocketEventsAtom = atom(async (get) => {
+  const connection = get(activeWebsocketConnectionAtom);
+  return invoke<WebsocketEvent[]>('plugin:yaak-models|websocket_events', {
+    connectionId: connection?.id ?? 'n/a',
   });
-  const connections = useWebsocketConnections().filter((c) => c.requestId === activeRequest.id);
-  const activeConnection: WebsocketConnection | null =
-    connections.find((r) => r.id === pinnedConnectionId) ?? latestConnection;
+});
 
-  return { activeConnection, setPinnedConnectionId, pinnedConnectionId, connections } as const;
+export function setPinnedWebsocketConnectionId(id: string | null) {
+  const activeRequestId = jotaiStore.get(activeRequestIdAtom);
+  const activeConnections = jotaiStore.get(activeWebsocketConnectionsAtom);
+  const latestConnection = activeConnections[0] ?? null;
+  if (activeRequestId == null) return;
+  jotaiStore.set(pinnedWebsocketConnectionIdAtom, (prev) => {
+    return { ...prev, [recordKey(activeRequestId, latestConnection)]: id };
+  });
+}
+
+export function useWebsocketEvents(connectionId: string | null) {
+  const events = useAtomValue(websocketEventsAtom);
+
+  useEffect(() => {
+    invoke<WebsocketEvent[]>('plugin:yaak-models|websocket_events', { connectionId }).then(
+      (events) => replaceModelsInStore('websocket_event', events),
+    );
+  }, [connectionId]);
+
+  return events;
 }

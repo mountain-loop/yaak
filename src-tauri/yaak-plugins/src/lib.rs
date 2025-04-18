@@ -7,10 +7,11 @@ use tauri::{Manager, RunEvent, Runtime, State};
 pub mod error;
 pub mod events;
 pub mod manager;
-pub mod plugin_handle;
-pub mod template_callback;
+pub mod native_template_functions;
 mod nodejs;
+pub mod plugin_handle;
 mod server_ws;
+pub mod template_callback;
 mod util;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
@@ -18,7 +19,6 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .setup(|app_handle, _| {
             let manager = PluginManager::new(app_handle.clone());
             app_handle.manage(manager.clone());
-
             Ok(())
         })
         .on_event(|app, e| match e {

@@ -50,7 +50,6 @@ export const syntaxHighlightStyle = HighlightStyle.define([
   {
     tag: [t.documentMeta, t.blockComment, t.lineComment, t.docComment, t.comment],
     color: 'var(--textSubtlest)',
-    fontStyle: 'italic',
   },
   {
     tag: [t.emphasis],

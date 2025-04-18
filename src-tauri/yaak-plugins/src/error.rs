@@ -5,6 +5,12 @@ use tokio::sync::mpsc::error::SendError;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error(transparent)]
+    CryptoErr(#[from] yaak_crypto::error::Error),
+
+    #[error(transparent)]
+    TemplateErr(#[from] yaak_templates::error::Error),
+    
     #[error("IO error: {0}")]
     IoErr(#[from] io::Error),
 
