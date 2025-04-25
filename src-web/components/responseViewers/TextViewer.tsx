@@ -116,11 +116,13 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
     body = formattedBody.data;
   }
 
+  const bodyText = unescape(body.replace(/\\u/g, '%u')) || body;
+
   return (
     <Editor
       readOnly
       className={className}
-      defaultValue={body}
+      defaultValue={bodyText}
       language={language}
       actions={actions}
       extraExtensions={extraExtensions}
@@ -128,3 +130,4 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
     />
   );
 }
+
