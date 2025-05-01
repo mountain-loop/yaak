@@ -457,6 +457,7 @@ function EncryptionInput({
       tint={tint}
       type={type}
       rightSlot={rightSlot}
+      className="pr-1.5" // To account for encryption dropdown
       {...props}
     />
   );
