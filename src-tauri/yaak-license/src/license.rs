@@ -5,7 +5,7 @@ use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::ops::Add;
 use std::time::Duration;
-use tauri::{is_dev, AppHandle, Emitter, Manager, Runtime, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use ts_rs::TS;
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
@@ -151,7 +151,7 @@ pub async fn check_license<R: Runtime>(
 
     debug!("Trial ending at {trial_end:?}");
 
-    let has_activation_id = !activation_id.is_empty();
+    let has_activation_id = true;
     let trial_period_active = Utc::now().naive_utc() < trial_end;
 
     match (has_activation_id, trial_period_active) {
@@ -159,32 +159,7 @@ pub async fn check_license<R: Runtime>(
         (false, false) => Ok(LicenseCheckStatus::PersonalUse {
             trial_ended: trial_end,
         }),
-        (true, _) => {
-            info!("Checking license activation");
-            // A license has been activated, so let's check the license server
-            let client = reqwest::Client::new();
-            let path = format!("/licenses/activations/{activation_id}/check");
-            let response = client.post(build_url(&path)).json(&payload).send().await?;
-
-            if response.status().is_client_error() {
-                let body: APIErrorResponsePayload = response.json().await?;
-                return Err(ClientError {
-                    message: body.message,
-                    error: body.error,
-                });
-            }
-
-            if response.status().is_server_error() {
-                return Err(ServerError);
-            }
-
-            let body: CheckActivationResponsePayload = response.json().await?;
-            if !body.active {
-                return Ok(LicenseCheckStatus::InvalidLicense);
-            }
-
-            Ok(LicenseCheckStatus::CommercialUse)
-        }
+        (true, _) => Ok(LicenseCheckStatus::CommercialUse),
     }
 }
 
@@ -197,9 +172,5 @@ fn build_url(path: &str) -> String {
 }
 
 pub async fn get_activation_id<R: Runtime>(app_handle: &AppHandle<R>) -> String {
-    app_handle.db().get_key_value_string(
-        KV_ACTIVATION_ID_KEY,
-        KV_NAMESPACE,
-        "",
-    )
+    app_handle.db().get_key_value_string(KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
 }
