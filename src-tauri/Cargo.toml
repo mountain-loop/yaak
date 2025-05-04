@@ -4,7 +4,6 @@ members = [
     "yaak-git",
     "yaak-grpc",
     "yaak-http",
-    "yaak-license",
     "yaak-mac-window",
     "yaak-models",
     "yaak-plugins",
@@ -16,7 +15,7 @@ members = [
 
 [package]
 name = "yaak-app"
-version = "0.0.0"
+version = "2.0.7"
 edition = "2024"
 authors = ["Gregory Schier"]
 publish = false
@@ -73,7 +72,6 @@ yaak-crypto = { workspace = true }
 yaak-git = { path = "yaak-git" }
 yaak-grpc = { path = "yaak-grpc" }
 yaak-http = { workspace = true }
-yaak-license = { path = "yaak-license" }
 yaak-mac-window = { path = "yaak-mac-window" }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }

@@ -10,7 +10,6 @@ import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { HeaderSize } from '../HeaderSize';
 import { SettingsAppearance } from './SettingsAppearance';
 import { SettingsGeneral } from './SettingsGeneral';
-import { SettingsLicense } from './SettingsLicense';
 import { SettingsPlugins } from './SettingsPlugins';
 import { SettingsProxy } from './SettingsProxy';
 import { SettingsTab } from './SettingsTab';
@@ -24,7 +23,6 @@ const tabs = [
   SettingsTab.Appearance,
   SettingsTab.Proxy,
   SettingsTab.Plugins,
-  SettingsTab.License,
 ];
 
 export default function Settings({ hide }: Props) {
@@ -85,9 +83,6 @@ export default function Settings({ hide }: Props) {
         </TabContent>
         <TabContent value={SettingsTab.Proxy} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsProxy />
-        </TabContent>
-        <TabContent value={SettingsTab.License} className="pt-3 overflow-y-auto h-full px-4">
-          <SettingsLicense />
         </TabContent>
       </Tabs>
     </div>

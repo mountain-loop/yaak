@@ -11,7 +11,6 @@ import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
 import { EnvironmentActionsDropdown } from './EnvironmentActionsDropdown';
 import { ImportCurlButton } from './ImportCurlButton';
-import { LicenseBadge } from './LicenseBadge';
 import { RecentRequestsDropdown } from './RecentRequestsDropdown';
 import { SettingsDropdown } from './SettingsDropdown';
 import { SidebarActions } from './sidebar/SidebarActions';
@@ -49,13 +48,6 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
       </div>
       <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-1">
         <ImportCurlButton />
-        {showEncryptionSetup ? (
-          <BadgeButton color="danger" onClick={setupOrConfigureEncryption}>
-            Enter Encryption Key
-          </BadgeButton>
-        ) : (
-          <LicenseBadge />
-        )}
         <IconButton
           icon="search"
           title="Search or execute a command"

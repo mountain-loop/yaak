@@ -1,5 +1,5 @@
-use std::io;
 use serde::{Serialize, Serializer};
+use std::io;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -12,7 +12,7 @@ pub enum Error {
 
     #[error(transparent)]
     SyncError(#[from] yaak_sync::error::Error),
-    
+
     #[error(transparent)]
     CryptoError(#[from] yaak_crypto::error::Error),
 
@@ -23,23 +23,20 @@ pub enum Error {
     WebsocketError(#[from] yaak_ws::error::Error),
 
     #[error(transparent)]
-    LicenseError(#[from] yaak_license::error::Error),
-
-    #[error(transparent)]
     PluginError(#[from] yaak_plugins::error::Error),
 
     #[error("Updater error: {0}")]
     UpdaterError(#[from] tauri_plugin_updater::Error),
-    
+
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::error::Error),
-    
+
     #[error("Tauri error: {0}")]
     TauriError(#[from] tauri::Error),
-    
+
     #[error("Event source error: {0}")]
     EventSourceError(#[from] eventsource_client::Error),
-    
+
     #[error("I/O error: {0}")]
     IOError(#[from] io::Error),
 

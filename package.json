@@ -12,7 +12,6 @@
     "packages/common-lib",
     "src-tauri/yaak-crypto",
     "src-tauri/yaak-git",
-    "src-tauri/yaak-license",
     "src-tauri/yaak-mac-window",
     "src-tauri/yaak-models",
     "src-tauri/yaak-plugins",
