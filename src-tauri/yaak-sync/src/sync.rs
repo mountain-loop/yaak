@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::models::SyncModel;
 use chrono::Utc;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -164,13 +164,6 @@ pub(crate) async fn get_fs_candidates(dir: &Path) -> Result<Vec<FsCandidate>> {
 
         let path = dir_entry.path();
         let (model, checksum) = match SyncModel::from_file(&path) {
-            // TODO: Remove this once we have logic to handle environments. This it to clean
-            //  any existing ones from the sync dir that resulted from the 2025.1 betas.
-            Ok(Some((SyncModel::Environment(e), _))) => {
-                fs::remove_file(path).await?;
-                info!("Cleaned up synced environment {}", e.id);
-                continue;
-            }
             Ok(Some(m)) => m,
             Ok(None) => continue,
             Err(e) => {
@@ -212,18 +205,10 @@ pub(crate) fn compute_sync_ops(
             let op = match (db_map.get(k), fs_map.get(k)) {
                 (None, None) => return None, // Can never happen
                 (None, Some(fs)) => SyncOp::DbCreate { fs: fs.to_owned() },
-                (Some(DbCandidate::Unmodified(model, sync_state)), None) => {
-                    // TODO: Remove this once we have logic to handle environments. This it to
-                    //  ignore the cleaning we did above of any environments that were written
-                    //  to disk in the 2025.1 betas.
-                    if let SyncModel::Environment(_) = model {
-                        return None;
-                    }
-                    SyncOp::DbDelete {
-                        model: model.to_owned(),
-                        state: sync_state.to_owned(),
-                    }
-                }
+                (Some(DbCandidate::Unmodified(model, sync_state)), None) => SyncOp::DbDelete {
+                    model: model.to_owned(),
+                    state: sync_state.to_owned(),
+                },
                 (Some(DbCandidate::Modified(model, sync_state)), None) => SyncOp::FsUpdate {
                     model: model.to_owned(),
                     state: sync_state.to_owned(),
@@ -231,13 +216,11 @@ pub(crate) fn compute_sync_ops(
                 (Some(DbCandidate::Added(model)), None) => SyncOp::FsCreate {
                     model: model.to_owned(),
                 },
-                (Some(DbCandidate::Deleted(sync_state)), None) => {
-                    // Already deleted on FS, but sending it so the SyncState gets dealt with
-                    SyncOp::FsDelete {
-                        state: sync_state.to_owned(),
-                        fs: None,
-                    }
-                }
+                // Already deleted on FS, but sending it so the SyncState gets dealt with
+                (Some(DbCandidate::Deleted(sync_state)), None) => SyncOp::FsDelete {
+                    state: sync_state.to_owned(),
+                    fs: None,
+                },
                 (Some(DbCandidate::Unmodified(_, sync_state)), Some(fs_candidate)) => {
                     if sync_state.checksum == fs_candidate.checksum {
                         return None;
@@ -334,7 +317,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
     );
     let mut sync_state_ops = Vec::new();
     let mut workspaces_to_upsert = Vec::new();
-    let environments_to_upsert = Vec::new();
+    let mut environments_to_upsert = Vec::new();
     let mut folders_to_upsert = Vec::new();
     let mut http_requests_to_upsert = Vec::new();
     let mut grpc_requests_to_upsert = Vec::new();
@@ -395,14 +378,12 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                 // Push updates to arrays so we can do them all in a single
                 // batch upsert to make foreign keys happy
                 match fs.model {
-                    SyncModel::Workspace(m) => workspaces_to_upsert.push(m),
+                    SyncModel::Environment(m) => environments_to_upsert.push(m),
                     SyncModel::Folder(m) => folders_to_upsert.push(m),
-                    SyncModel::HttpRequest(m) => http_requests_to_upsert.push(m),
                     SyncModel::GrpcRequest(m) => grpc_requests_to_upsert.push(m),
+                    SyncModel::HttpRequest(m) => http_requests_to_upsert.push(m),
                     SyncModel::WebsocketRequest(m) => websocket_requests_to_upsert.push(m),
-
-                    // TODO: Handle environments in sync
-                    SyncModel::Environment(_) => {}
+                    SyncModel::Workspace(m) => workspaces_to_upsert.push(m),
                 };
                 SyncStateOp::Create {
                     model_id,
@@ -414,14 +395,12 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                 // Push updates to arrays so we can do them all in a single
                 // batch upsert to make foreign keys happy
                 match fs.model {
-                    SyncModel::Workspace(m) => workspaces_to_upsert.push(m),
+                    SyncModel::Environment(m) => environments_to_upsert.push(m),
                     SyncModel::Folder(m) => folders_to_upsert.push(m),
-                    SyncModel::HttpRequest(m) => http_requests_to_upsert.push(m),
                     SyncModel::GrpcRequest(m) => grpc_requests_to_upsert.push(m),
+                    SyncModel::HttpRequest(m) => http_requests_to_upsert.push(m),
                     SyncModel::WebsocketRequest(m) => websocket_requests_to_upsert.push(m),
-
-                    // TODO: Handle environments in sync
-                    SyncModel::Environment(_) => {}
+                    SyncModel::Workspace(m) => workspaces_to_upsert.push(m),
                 }
                 SyncStateOp::Update {
                     state: state.to_owned(),

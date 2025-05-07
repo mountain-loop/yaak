@@ -16,13 +16,16 @@ pub enum Error {
     #[error("Incorrect workspace key")]
     IncorrectWorkspaceKey,
 
+    #[error("Failed to decrypt workspace key: {0}")]
+    WorkspaceKeyDecryptionError(String),
+
     #[error("Crypto IO error: {0}")]
     IoError(#[from] io::Error),
 
-    #[error("Failed to encrypt")]
+    #[error("Failed to encrypt data")]
     EncryptionError,
 
-    #[error("Failed to decrypt")]
+    #[error("Failed to decrypt data")]
     DecryptionError,
 
     #[error("Invalid encrypted data")]

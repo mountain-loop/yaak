@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useCopy } from '../../hooks/useCopy';
 import { useIsEncryptionEnabled } from '../../hooks/useIsEncryptionEnabled';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import {
@@ -309,6 +310,7 @@ function EncryptionInput({
   ...props
 }: Omit<InputProps, 'type'>) {
   const isEncryptionEnabled = useIsEncryptionEnabled();
+  const copy = useCopy();
   const [state, setState] = useStateWithDeps<{
     fieldType: PasswordFieldType;
     value: string | null;
@@ -387,19 +389,33 @@ function EncryptionInput({
   const dropdownItems = useMemo<DropdownItem[]>(
     () => [
       {
-        label: state.obscured ? 'Reveal value' : 'Conceal value',
+        label: state.obscured ? 'Reveal' : 'Conceal',
         disabled: isEncryptionEnabled && state.fieldType === 'text',
         leftSlot: <Icon icon={state.obscured ? 'eye' : 'eye_closed'} />,
         onSelect: () => setState((s) => ({ ...s, obscured: !s.obscured })),
       },
+      {
+        label: 'Copy',
+        leftSlot: <Icon icon="copy" />,
+        hidden: !state.value,
+        onSelect: () => copy(state.value ?? ''),
+      },
       { type: 'separator' },
       {
-        label: state.fieldType === 'text' ? 'Encrypt Value' : 'Decrypt Value',
+        label: state.fieldType === 'text' ? 'Encrypt Field' : 'Decrypt Field',
         leftSlot: <Icon icon={state.fieldType === 'text' ? 'lock' : 'lock_open'} />,
         onSelect: () => handleFieldTypeChange(state.fieldType === 'text' ? 'encrypted' : 'text'),
       },
     ],
-    [handleFieldTypeChange, isEncryptionEnabled, setState, state.fieldType, state.obscured],
+    [
+      copy,
+      handleFieldTypeChange,
+      isEncryptionEnabled,
+      setState,
+      state.fieldType,
+      state.obscured,
+      state.value,
+    ],
   );
 
   let tint: InputProps['tint'];

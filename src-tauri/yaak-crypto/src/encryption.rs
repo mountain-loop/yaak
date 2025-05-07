@@ -38,7 +38,7 @@ pub(crate) fn decrypt_data(cipher_data: &[u8], key: &Key<XChaCha20Poly1305>) -> 
     let (nonce, ciphered_data) = rest.split_at_checked(nonce_bytes).ok_or(InvalidEncryptedData)?;
 
     let cipher = XChaCha20Poly1305::new(&key);
-    cipher.decrypt(nonce.into(), ciphered_data).map_err(|_| DecryptionError)
+    cipher.decrypt(nonce.into(), ciphered_data).map_err(|_e| DecryptionError)
 }
 
 #[cfg(test)]

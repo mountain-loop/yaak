@@ -3,9 +3,14 @@ import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { useEffect, useState } from 'react';
-import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
+import {
+  activeWorkspaceAtom,
+  activeWorkspaceIdAtom,
+  activeWorkspaceMetaAtom,
+} from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
+import { jotaiStore } from '../lib/jotai';
 import { CopyIconButton } from './CopyIconButton';
 import { Banner } from './core/Banner';
 import type { ButtonProps } from './core/Button';
@@ -29,15 +34,33 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
 
   const workspace = useAtomValue(activeWorkspaceAtom);
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
+  const [key, setKey] = useState<{ key: string | null; error: string | null } | null>(null);
 
-  if (workspace == null || workspaceMeta == null) {
+  useEffect(() => {
+    const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+    if (workspaceId == null) return;
+    revealWorkspaceKey(workspaceId).then(
+      (key) => {
+        setKey({ key, error: null });
+      },
+      (err) => {
+        setKey({ key: null, error: `${err}` });
+      },
+    );
+  }, [setKey, workspaceMeta?.encryptionKey]);
+
+  if (key == null || workspace == null || workspaceMeta == null) {
     return null;
   }
 
-  if (workspace.encryptionKeyChallenge && workspaceMeta.encryptionKey == null) {
+  if (
+    key.key == null ||
+    (workspace.encryptionKeyChallenge && workspaceMeta.encryptionKey == null)
+  ) {
     return (
       <EnterWorkspaceKey
         workspaceMeta={workspaceMeta}
+        error={key.error}
         onEnabled={() => {
           onDone?.();
           onEnabledEncryption?.();
@@ -51,7 +74,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
       <KeyRevealer
         disableLabel={justEnabledEncryption}
         defaultShow={justEnabledEncryption}
-        workspaceId={workspaceMeta.workspaceId}
+        encryptionKey={key.key}
       />
     );
     return (
@@ -63,10 +86,13 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         )}
         {keyRevealer}
         {onDone && (
-          <Button color="secondary" onClick={() => {
+          <Button
+            color="secondary"
+            onClick={() => {
               onDone();
               onEnabledEncryption?.();
-          }}>
+            }}
+          >
             Done
           </Button>
         )}
@@ -107,17 +133,23 @@ const setWorkspaceKeyMut = createFastMutation({
 function EnterWorkspaceKey({
   workspaceMeta,
   onEnabled,
+  error,
 }: {
   workspaceMeta: WorkspaceMeta;
   onEnabled?: () => void;
+  error?: string | null;
 }) {
   const [key, setKey] = useState<string>('');
   return (
-    <VStack space={4}>
-      <Banner color="info">
-        This workspace contains encrypted values but no key is configured. Please enter the
-        workspace key to access the encrypted data.
-      </Banner>
+    <VStack space={4} className="w-full">
+      {error ? (
+        <Banner color="danger">{error}</Banner>
+      ) : (
+        <Banner color="info">
+          This workspace contains encrypted values but no key is configured. Please enter the
+          workspace key to access the encrypted data.
+        </Banner>
+      )}
       <HStack
         as="form"
         alignItems="end"
@@ -149,22 +181,15 @@ function EnterWorkspaceKey({
 }
 
 function KeyRevealer({
-  workspaceId,
   defaultShow = false,
   disableLabel = false,
+  encryptionKey,
 }: {
-  workspaceId: string;
   defaultShow?: boolean;
   disableLabel?: boolean;
+  encryptionKey: string;
 }) {
-  const [key, setKey] = useState<string | null>(null);
   const [show, setShow] = useStateWithDeps<boolean>(defaultShow, [defaultShow]);
-
-  useEffect(() => {
-    revealWorkspaceKey(workspaceId).then(setKey);
-  }, [setKey, workspaceId]);
-
-  if (key == null) return null;
 
   return (
     <div
@@ -180,10 +205,10 @@ function KeyRevealer({
             <IconTooltip iconSize="sm" size="lg" content={helpAfterEncryption} />
           </span>
         )}
-        {key && <HighlightedKey keyText={key} show={show} />}
+        {encryptionKey && <HighlightedKey keyText={encryptionKey} show={show} />}
       </VStack>
       <HStack>
-        {key && <CopyIconButton text={key} title="Copy workspace key" />}
+        {encryptionKey && <CopyIconButton text={encryptionKey} title="Copy workspace key" />}
         <IconButton
           title={show ? 'Hide' : 'Reveal' + 'workspace key'}
           icon={show ? 'eye_closed' : 'eye'}

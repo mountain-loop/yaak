@@ -1,4 +1,6 @@
-use crate::error::Error::{GenericError, IncorrectWorkspaceKey, MissingWorkspaceKey};
+use crate::error::Error::{
+    GenericError, IncorrectWorkspaceKey, MissingWorkspaceKey, WorkspaceKeyDecryptionError,
+};
 use crate::error::{Error, Result};
 use crate::master_key::MasterKey;
 use crate::workspace_key::WorkspaceKey;
@@ -149,8 +151,10 @@ impl EncryptionManager {
         let mkey = self.get_master_key()?;
         let decoded_key = BASE64_STANDARD
             .decode(key.encrypted_key)
-            .map_err(|e| GenericError(format!("Failed to decode workspace key {e:?}")))?;
-        let raw_key = mkey.decrypt(decoded_key.as_slice())?;
+            .map_err(|e| WorkspaceKeyDecryptionError(e.to_string()))?;
+        let raw_key = mkey
+            .decrypt(decoded_key.as_slice())
+            .map_err(|e| WorkspaceKeyDecryptionError(e.to_string()))?;
         info!("Got existing workspace key for {workspace_id}");
         let wkey = WorkspaceKey::from_raw_key(raw_key.as_slice());
 
