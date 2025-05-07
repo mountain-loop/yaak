@@ -1,10 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { WebsocketConnection, WebsocketEvent } from '@yaakapp-internal/models';
-import {
-  replaceModelsInStore,
-  websocketConnectionsAtom,
-  websocketEventsAtom,
-} from '@yaakapp-internal/models';
+import { replaceModelsInStore , websocketConnectionsAtom, websocketEventsAtom } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import { useEffect } from 'react';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
@@ -33,13 +29,6 @@ export const activeWebsocketConnectionAtom = atom<WebsocketConnection | null>((g
     recordKey(activeRequestId, latestConnection)
   ];
   return activeConnections.find((c) => c.id === pinnedConnectionId) ?? activeConnections[0] ?? null;
-});
-
-export const activeWebsocketEventsAtom = atom(async (get) => {
-  const connection = get(activeWebsocketConnectionAtom);
-  return invoke<WebsocketEvent[]>('plugin:yaak-models|websocket_events', {
-    connectionId: connection?.id ?? 'n/a',
-  });
 });
 
 export function setPinnedWebsocketConnectionId(id: string | null) {

@@ -11,7 +11,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useCopy } from '../../hooks/useCopy';
 import { useIsEncryptionEnabled } from '../../hooks/useIsEncryptionEnabled';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import {
@@ -31,6 +30,7 @@ import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Label } from './Label';
 import { HStack } from './Stacks';
+import { copyToClipboard } from '../../lib/copy';
 
 export type InputProps = Pick<
   EditorProps,
@@ -310,7 +310,6 @@ function EncryptionInput({
   ...props
 }: Omit<InputProps, 'type'>) {
   const isEncryptionEnabled = useIsEncryptionEnabled();
-  const copy = useCopy();
   const [state, setState] = useStateWithDeps<{
     fieldType: PasswordFieldType;
     value: string | null;
@@ -398,7 +397,7 @@ function EncryptionInput({
         label: 'Copy',
         leftSlot: <Icon icon="copy" />,
         hidden: !state.value,
-        onSelect: () => copy(state.value ?? ''),
+        onSelect: () => copyToClipboard(state.value ?? ''),
       },
       { type: 'separator' },
       {
@@ -408,7 +407,6 @@ function EncryptionInput({
       },
     ],
     [
-      copy,
       handleFieldTypeChange,
       isEncryptionEnabled,
       setState,

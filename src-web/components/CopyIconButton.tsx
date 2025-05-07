@@ -1,5 +1,5 @@
-import { useCopy } from '../hooks/useCopy';
 import { useTimedBoolean } from '../hooks/useTimedBoolean';
+import { copyToClipboard } from '../lib/copy';
 import { showToast } from '../lib/toast';
 import type { IconButtonProps } from './core/IconButton';
 import { IconButton } from './core/IconButton';
@@ -9,7 +9,6 @@ interface Props extends Omit<IconButtonProps, 'onClick' | 'icon'> {
 }
 
 export function CopyIconButton({ text, ...props }: Props) {
-  const copy = useCopy({ disableToast: true });
   const [copied, setCopied] = useTimedBoolean();
   return (
     <IconButton
@@ -25,7 +24,7 @@ export function CopyIconButton({ text, ...props }: Props) {
             message: 'Failed to copy',
           });
         } else {
-          copy(content);
+          copyToClipboard(content, { disableToast: true });
           setCopied();
         }
       }}
