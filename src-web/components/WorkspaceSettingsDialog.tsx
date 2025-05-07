@@ -7,7 +7,7 @@ import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
 import { PlainInput } from './core/PlainInput';
 import { Separator } from './core/Separator';
-import { VStack } from './core/Stacks';
+import { HStack, VStack } from './core/Stacks';
 import { MarkdownEditor } from './MarkdownEditor';
 import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
 import { WorkspaceEncryptionSetting } from './WorkspaceEncryptionSetting';
@@ -67,20 +67,23 @@ export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
 
       <Separator className="my-4" />
 
-      <Button
-        onClick={async () => {
-          const didDelete = await deleteModelWithConfirm(workspace);
-          if (didDelete) {
-            hide(); // Only hide if actually deleted workspace
-            await router.navigate({ to: '/' });
-          }
-        }}
-        color="danger"
-        variant="border"
-        size="xs"
-      >
-        Delete Workspace
-      </Button>
+      <HStack alignItems="center" justifyContent="between" className="w-full">
+        <Button
+          onClick={async () => {
+            const didDelete = await deleteModelWithConfirm(workspace);
+            if (didDelete) {
+              hide(); // Only hide if actually deleted workspace
+              await router.navigate({ to: '/' });
+            }
+          }}
+          color="danger"
+          variant="border"
+          size="xs"
+        >
+          Delete Workspace
+        </Button>
+        <InlineCode className="select-text cursor-text">{workspaceId}</InlineCode>
+      </HStack>
     </VStack>
   );
 }

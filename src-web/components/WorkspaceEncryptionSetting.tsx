@@ -3,14 +3,9 @@ import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { useEffect, useState } from 'react';
-import {
-  activeWorkspaceAtom,
-  activeWorkspaceIdAtom,
-  activeWorkspaceMetaAtom,
-} from '../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
-import { jotaiStore } from '../lib/jotai';
 import { CopyIconButton } from './CopyIconButton';
 import { Banner } from './core/Banner';
 import type { ButtonProps } from './core/Button';
@@ -37,9 +32,16 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
   const [key, setKey] = useState<{ key: string | null; error: string | null } | null>(null);
 
   useEffect(() => {
-    const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-    if (workspaceId == null) return;
-    revealWorkspaceKey(workspaceId).then(
+    if (workspaceMeta == null) {
+      return;
+    }
+
+    if (workspaceMeta?.encryptionKey == null) {
+      setKey({ key: null, error: null });
+      return;
+    }
+
+    revealWorkspaceKey(workspaceMeta.workspaceId).then(
       (key) => {
         setKey({ key, error: null });
       },
@@ -47,14 +49,15 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         setKey({ key: null, error: `${err}` });
       },
     );
-  }, [setKey, workspaceMeta?.encryptionKey]);
+  }, [setKey, workspaceMeta, workspaceMeta?.encryptionKey]);
 
   if (key == null || workspace == null || workspaceMeta == null) {
     return null;
   }
 
+  // Prompt for key if it doesn't exist or could not be decrypted
   if (
-    key.key == null ||
+    key.error != null ||
     (workspace.encryptionKeyChallenge && workspaceMeta.encryptionKey == null)
   ) {
     return (
@@ -69,7 +72,8 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
     );
   }
 
-  if (workspaceMeta.encryptionKey) {
+  // Show the key if it exists
+  if (workspaceMeta.encryptionKey && key.key != null) {
     const keyRevealer = (
       <KeyRevealer
         disableLabel={justEnabledEncryption}
@@ -100,6 +104,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
     );
   }
 
+  // Show button to enable encryption
   return (
     <div className="mb-auto flex flex-col-reverse">
       <Button
