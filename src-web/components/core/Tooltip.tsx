@@ -7,6 +7,7 @@ import { Portal } from '../Portal';
 export interface TooltipProps {
   children: ReactNode;
   content: ReactNode;
+  tabIndex?: number,
   size?: 'md' | 'lg';
 }
 
@@ -18,7 +19,7 @@ const hiddenStyles: CSSProperties = {
   opacity: 0,
 };
 
-export function Tooltip({ children, content, size = 'md' }: TooltipProps) {
+export function Tooltip({ children, content, tabIndex, size = 'md' }: TooltipProps) {
   const [isOpen, setIsOpen] = useState<CSSProperties>();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -89,11 +90,12 @@ export function Tooltip({ children, content, size = 'md' }: TooltipProps) {
           <Triangle className="text-border mb-2" />
         </div>
       </Portal>
-      <button
+      <span
         ref={triggerRef}
-        type="button"
+        role="button"
         aria-describedby={isOpen ? id.current : undefined}
-        className="flex-grow-0 inline-flex items-center"
+        tabIndex={tabIndex ?? 0}
+        className="flex-grow-0 flex items-center"
         onClick={handleToggleImmediate}
         onMouseEnter={handleOpen}
         onMouseLeave={handleClose}
@@ -102,7 +104,7 @@ export function Tooltip({ children, content, size = 'md' }: TooltipProps) {
         onKeyDown={handleKeyDown}
       >
         {children}
-      </button>
+      </span>
     </>
   );
 }

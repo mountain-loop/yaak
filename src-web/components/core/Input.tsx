@@ -36,6 +36,7 @@ export type InputProps = Pick<
   EditorProps,
   | 'language'
   | 'autocomplete'
+  | 'forcedEnvironmentId'
   | 'forceUpdateKey'
   | 'disabled'
   | 'autoFocus'

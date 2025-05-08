@@ -31,7 +31,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
       as="form"
       space={3}
       alignItems="start"
-      className="pb-3 max-h-[50vh]"
+      className="pb-3"
       onSubmit={async (e) => {
         e.preventDefault();
         const workspaceId = await createGlobalModel({ model: 'workspace', name });

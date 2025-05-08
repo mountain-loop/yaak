@@ -41,6 +41,9 @@ pub(crate) enum SyncOp {
         model: SyncModel,
         state: SyncState,
     },
+    IgnorePrivate {
+        model: SyncModel,
+    },
 }
 
 impl SyncOp {
@@ -52,6 +55,7 @@ impl SyncOp {
             SyncOp::FsCreate { model } => model.workspace_id(),
             SyncOp::FsDelete { state, .. } => state.workspace_id.clone(),
             SyncOp::FsUpdate { state, .. } => state.workspace_id.clone(),
+            SyncOp::IgnorePrivate { model } => model.workspace_id(),
         }
     }
 }
@@ -66,6 +70,7 @@ impl Display for SyncOp {
                 SyncOp::DbCreate { fs } => format!("db_create({})", fs.model.id()),
                 SyncOp::DbUpdate { fs, .. } => format!("db_update({})", fs.model.id()),
                 SyncOp::DbDelete { model, .. } => format!("db_delete({})", model.id()),
+                SyncOp::IgnorePrivate { model } => format!("ignore_private({})", model.id()),
             }
             .as_str(),
         )
@@ -118,20 +123,42 @@ pub(crate) fn get_db_candidates<R: Runtime>(
     // 1. Add candidates for models (created/modified/unmodified)
     let mut candidates: Vec<DbCandidate> = models
         .values()
-        .map(|model| {
-            let existing_sync_state = match sync_states.get(&model.id()) {
-                Some(s) => s,
-                None => {
-                    // No sync state yet, so the model was just added
-                    return DbCandidate::Added(model.to_owned());
-                }
-            };
+        .filter_map(|model| {
+            match sync_states.get(&model.id()) {
+                Some(existing_sync_state) => {
+                    // If a sync state exists but the model is now private, treat it as a deletion
+                    match model {
+                        SyncModel::Environment(e) if !e.public => {
+                            return Some(DbCandidate::Deleted(existing_sync_state.to_owned()));
+                        }
+                        _ => {}
+                    };
 
-            let updated_since_flush = model.updated_at() > existing_sync_state.flushed_at;
-            if updated_since_flush {
-                DbCandidate::Modified(model.to_owned(), existing_sync_state.to_owned())
-            } else {
-                DbCandidate::Unmodified(model.to_owned(), existing_sync_state.to_owned())
+                    let updated_since_flush = model.updated_at() > existing_sync_state.flushed_at;
+                    if updated_since_flush {
+                        Some(DbCandidate::Modified(
+                            model.to_owned(),
+                            existing_sync_state.to_owned(),
+                        ))
+                    } else {
+                        Some(DbCandidate::Unmodified(
+                            model.to_owned(),
+                            existing_sync_state.to_owned(),
+                        ))
+                    }
+                }
+                None => {
+                    return match model {
+                        SyncModel::Environment(e) if !e.public => {
+                            // No sync state yet, so ignore the model
+                            None
+                        }
+                        _ => {
+                            // No sync state yet, so the model was just added
+                            Some(DbCandidate::Added(model.to_owned()))
+                        }
+                    };
+                }
             }
         })
         .collect();
@@ -289,7 +316,15 @@ fn workspace_models<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_id: &str,
 ) -> Result<Vec<SyncModel>> {
-    let resources = get_workspace_export_resources(app_handle, vec![workspace_id], true)?.resources;
+    // We want to include private environments here so that we can take them into account during
+    // the sync process. Otherwise, they would be treated as deleted.
+    let include_private_environments = true;
+    let resources = get_workspace_export_resources(
+        app_handle,
+        vec![workspace_id],
+        include_private_environments,
+    )?
+    .resources;
     let workspace = resources.workspaces.iter().find(|w| w.id == workspace_id);
 
     let workspace = match workspace {
@@ -432,6 +467,7 @@ pub(crate) fn apply_sync_ops<R: Runtime>(
                     state: state.to_owned(),
                 }
             }
+            SyncOp::IgnorePrivate { .. } => SyncStateOp::NoOp,
         });
     }
 
@@ -494,6 +530,7 @@ pub(crate) enum SyncStateOp {
     Delete {
         state: SyncState,
     },
+    NoOp,
 }
 
 pub(crate) fn apply_sync_state_ops<R: Runtime>(
@@ -536,6 +573,9 @@ pub(crate) fn apply_sync_state_ops<R: Runtime>(
             }
             SyncStateOp::Delete { state } => {
                 app_handle.db().delete_sync_state(&state)?;
+            }
+            SyncStateOp::NoOp => {
+                // Nothing
             }
         }
     }

@@ -1,20 +1,21 @@
 import type { Environment } from '@yaakapp-internal/models';
 import { createWorkspaceModel } from '@yaakapp-internal/models';
-import { jotaiStore } from '../lib/jotai';
+import { useAtomValue } from 'jotai';
 import { showPrompt } from '../lib/prompt';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
 
 export function useCreateEnvironment() {
-  return useFastMutation<string, unknown, Environment | null>({
-    mutationKey: ['create_environment'],
+  const workspaceId = useAtomValue(activeWorkspaceIdAtom);
+
+  return useFastMutation<string | null, unknown, Environment | null>({
+    mutationKey: ['create_environment', workspaceId],
     mutationFn: async (baseEnvironment) => {
       if (baseEnvironment == null) {
         throw new Error('No base environment passed');
       }
 
-      const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
       if (workspaceId == null) {
         throw new Error('Cannot create environment when no active workspace');
       }
@@ -28,17 +29,21 @@ export function useCreateEnvironment() {
         defaultValue: 'My Environment',
         confirmText: 'Create',
       });
-      if (name == null) throw new Error('No name provided to create environment');
+      if (name == null) return null;
 
       return createWorkspaceModel({
         model: 'environment',
         name,
         variables: [],
         workspaceId,
-        environmentId: baseEnvironment.id,
+        base: false,
       });
     },
     onSuccess: async (environmentId) => {
+      if (environmentId == null) {
+        return; // Was not created
+      }
+
       setWorkspaceSearchParams({ environment_id: environmentId });
     },
   });

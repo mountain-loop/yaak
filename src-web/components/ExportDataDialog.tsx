@@ -1,5 +1,5 @@
 import { save } from '@tauri-apps/plugin-dialog';
-import type { Workspace} from '@yaakapp-internal/models';
+import type { Workspace } from '@yaakapp-internal/models';
 import { workspacesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { useCallback, useMemo, useState } from 'react';
@@ -41,12 +41,12 @@ function ExportDataDialogContent({
   allWorkspaces: Workspace[];
   activeWorkspace: Workspace;
 }) {
-  const [includeEnvironments, setIncludeEnvironments] = useState<boolean>(false);
+  const [includePrivateEnvironments, setIncludePrivateEnvironments] = useState<boolean>(false);
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<Record<string, boolean>>({
     [activeWorkspace.id]: true,
   });
 
-  // Put active workspace first
+  // Put the active workspace first
   const workspaces = useMemo(
     () => [activeWorkspace, ...allWorkspaces.filter((w) => w.id !== activeWorkspace.id)],
     [activeWorkspace, allWorkspaces],
@@ -73,11 +73,11 @@ function ExportDataDialogContent({
     await invokeCmd('cmd_export_data', {
       workspaceIds: ids,
       exportPath,
-      includeEnvironments: includeEnvironments,
+      includePrivateEnvironments: includePrivateEnvironments,
     });
     onHide();
     onSuccess(exportPath);
-  }, [includeEnvironments, onHide, onSuccess, selectedWorkspaces, workspaces]);
+  }, [includePrivateEnvironments, onHide, onSuccess, selectedWorkspaces, workspaces]);
 
   const allSelected = workspaces.every((w) => selectedWorkspaces[w.id]);
   const numSelected = Object.values(selectedWorkspaces).filter(Boolean).length;
@@ -129,9 +129,10 @@ function ExportDataDialogContent({
           <summary className="px-3 py-2">Extra Settings</summary>
           <div className="px-3 pb-2">
             <Checkbox
-              checked={includeEnvironments}
-              onChange={setIncludeEnvironments}
-              title="Include environments"
+              checked={includePrivateEnvironments}
+              onChange={setIncludePrivateEnvironments}
+              title="Include private environments"
+              help='Environments marked as "sharable" will be exported by default'
             />
           </div>
         </details>

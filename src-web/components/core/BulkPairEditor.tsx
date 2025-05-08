@@ -11,6 +11,7 @@ export function BulkPairEditor({
   namePlaceholder,
   valuePlaceholder,
   forceUpdateKey,
+  forcedEnvironmentId,
   stateKey,
 }: Props) {
   const pairsText = useMemo(() => {
@@ -36,6 +37,7 @@ export function BulkPairEditor({
       autocompleteFunctions
       autocompleteVariables
       stateKey={`bulk_pair.${stateKey}`}
+      forcedEnvironmentId={forcedEnvironmentId}
       forceUpdateKey={forceUpdateKey}
       placeholder={`${namePlaceholder ?? 'name'}: ${valuePlaceholder ?? 'value'}`}
       defaultValue={pairsText}

@@ -7372,7 +7372,7 @@ function importEnvironment(e, workspaceId) {
     createdAt: e.created ? new Date(e.created).toISOString().replace("Z", "") : void 0,
     updatedAt: e.updated ? new Date(e.updated).toISOString().replace("Z", "") : void 0,
     workspaceId: convertId(workspaceId),
-    environmentId: e.parentId === workspaceId ? null : convertId(e.parentId),
+    base: e.parentId === workspaceId ? true : false,
     model: "environment",
     name: e.name,
     variables: Object.entries(e.data).map(([name, value]) => ({

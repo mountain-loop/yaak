@@ -74,13 +74,13 @@ export function SettingsDropdown() {
         {
           label: 'Feedback',
           leftSlot: <Icon icon="chat" />,
-          rightSlot: <Icon icon="external_link" />,
+          rightSlot: <Icon icon="external_link" color="secondary" />,
           onSelect: () => openUrl('https://yaak.app/feedback'),
         },
         {
           label: 'Changelog',
           leftSlot: <Icon icon="cake" />,
-          rightSlot: <Icon icon="external_link" />,
+          rightSlot: <Icon icon="external_link" color="secondary" />,
           onSelect: () => openUrl(`https://yaak.app/changelog/${appInfo.version}`),
         },
       ]}
