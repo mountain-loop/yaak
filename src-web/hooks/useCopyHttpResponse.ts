@@ -5,7 +5,7 @@ import { useFastMutation } from './useFastMutation';
 
 export function useCopyHttpResponse(response: HttpResponse) {
   return useFastMutation({
-    mutationKey: ['copy_http_response'],
+    mutationKey: ['copy_http_response', response.id],
     async mutationFn() {
       const body = await getResponseBodyText(response);
       copyToClipboard(body);
