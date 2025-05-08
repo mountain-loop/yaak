@@ -117,7 +117,7 @@ pub struct BatchUpsertResult {
     pub websocket_requests: Vec<WebsocketRequest>,
 }
 
-pub async fn get_workspace_export_resources<R: Runtime>(
+pub fn get_workspace_export_resources<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_ids: Vec<&str>,
     include_environments: bool,

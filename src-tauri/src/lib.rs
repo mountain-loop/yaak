@@ -988,7 +988,7 @@ async fn cmd_export_data<R: Runtime>(
     include_environments: bool,
 ) -> YaakResult<()> {
     let export_data =
-        get_workspace_export_resources(&app_handle, workspace_ids, include_environments).await?;
+        get_workspace_export_resources(&app_handle, workspace_ids, include_environments)?;
     let f = File::options()
         .create(true)
         .truncate(true)

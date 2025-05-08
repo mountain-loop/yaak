@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::sync::{
-    apply_sync_ops, apply_sync_state_ops, compute_sync_ops, get_db_candidates, get_fs_candidates,
-    FsCandidate, SyncOp,
+    apply_sync_ops, apply_sync_state_ops, compute_sync_ops, get_db_candidates, get_fs_candidates, FsCandidate,
+    SyncOp,
 };
 use crate::watch::{watch_directory, WatchEvent};
 use chrono::Utc;
@@ -19,9 +19,8 @@ pub async fn calculate<R: Runtime>(
     workspace_id: &str,
     sync_dir: &Path,
 ) -> Result<Vec<SyncOp>> {
-    let db_candidates = get_db_candidates(&app_handle, workspace_id, sync_dir).await?;
-    let fs_candidates = get_fs_candidates(sync_dir)
-        .await?
+    let db_candidates = get_db_candidates(&app_handle, workspace_id, sync_dir)?;
+    let fs_candidates = get_fs_candidates(sync_dir)?
         .into_iter()
         // Only keep items in the same workspace
         .filter(|fs| fs.model.workspace_id() == workspace_id)
@@ -34,7 +33,7 @@ pub async fn calculate<R: Runtime>(
 #[command]
 pub async fn calculate_fs(dir: &Path) -> Result<Vec<SyncOp>> {
     let db_candidates = Vec::new();
-    let fs_candidates = get_fs_candidates(dir).await?;
+    let fs_candidates = get_fs_candidates(dir)?;
     Ok(compute_sync_ops(db_candidates, fs_candidates))
 }
 
@@ -45,8 +44,8 @@ pub async fn apply<R: Runtime>(
     sync_dir: &Path,
     workspace_id: &str,
 ) -> Result<()> {
-    let sync_state_ops = apply_sync_ops(&app_handle, &workspace_id, sync_dir, sync_ops).await?;
-    apply_sync_state_ops(&app_handle, workspace_id, sync_dir, sync_state_ops).await
+    let sync_state_ops = apply_sync_ops(&app_handle, &workspace_id, sync_dir, sync_ops)?;
+    apply_sync_state_ops(&app_handle, workspace_id, sync_dir, sync_state_ops)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

@@ -1,15 +1,15 @@
 use crate::error::Result;
 use crate::models::SyncModel;
 use chrono::Utc;
-use log::{debug, warn};
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Runtime};
-use tokio::fs;
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
 use ts_rs::TS;
 use yaak_models::models::{SyncState, WorkspaceMeta};
 use yaak_models::query_manager::QueryManagerExt;
@@ -46,12 +46,12 @@ pub(crate) enum SyncOp {
 impl SyncOp {
     fn workspace_id(&self) -> String {
         match self {
-            SyncOp::FsCreate { model } => model.workspace_id(),
-            SyncOp::FsUpdate { state, .. } => state.workspace_id.clone(),
-            SyncOp::FsDelete { state, .. } => state.workspace_id.clone(),
             SyncOp::DbCreate { fs } => fs.model.workspace_id(),
-            SyncOp::DbUpdate { state, .. } => state.workspace_id.clone(),
             SyncOp::DbDelete { model, .. } => model.workspace_id(),
+            SyncOp::DbUpdate { state, .. } => state.workspace_id.clone(),
+            SyncOp::FsCreate { model } => model.workspace_id(),
+            SyncOp::FsDelete { state, .. } => state.workspace_id.clone(),
+            SyncOp::FsUpdate { state, .. } => state.workspace_id.clone(),
         }
     }
 }
@@ -76,8 +76,8 @@ impl Display for SyncOp {
 #[serde(rename_all = "snake_case")]
 pub(crate) enum DbCandidate {
     Added(SyncModel),
-    Modified(SyncModel, SyncState),
     Deleted(SyncState),
+    Modified(SyncModel, SyncState),
     Unmodified(SyncModel, SyncState),
 }
 
@@ -85,8 +85,8 @@ impl DbCandidate {
     fn model_id(&self) -> String {
         match &self {
             DbCandidate::Added(m) => m.id(),
-            DbCandidate::Modified(m, _) => m.id(),
             DbCandidate::Deleted(s) => s.model_id.clone(),
+            DbCandidate::Modified(m, _) => m.id(),
             DbCandidate::Unmodified(m, _) => m.id(),
         }
     }
@@ -101,16 +101,13 @@ pub(crate) struct FsCandidate {
     pub(crate) checksum: String,
 }
 
-pub(crate) async fn get_db_candidates<R: Runtime>(
+pub(crate) fn get_db_candidates<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_id: &str,
     sync_dir: &Path,
 ) -> Result<Vec<DbCandidate>> {
-    let models: HashMap<_, _> = workspace_models(app_handle, workspace_id)
-        .await?
-        .into_iter()
-        .map(|m| (m.id(), m))
-        .collect();
+    let models: HashMap<_, _> =
+        workspace_models(app_handle, workspace_id)?.into_iter().map(|m| (m.id(), m)).collect();
     let sync_states: HashMap<_, _> = app_handle
         .db()
         .list_sync_states_for_workspace(workspace_id, sync_dir)?
@@ -125,7 +122,7 @@ pub(crate) async fn get_db_candidates<R: Runtime>(
             let existing_sync_state = match sync_states.get(&model.id()) {
                 Some(s) => s,
                 None => {
-                    // No sync state yet, so model was just added
+                    // No sync state yet, so the model was just added
                     return DbCandidate::Added(model.to_owned());
                 }
             };
@@ -151,14 +148,19 @@ pub(crate) async fn get_db_candidates<R: Runtime>(
     Ok(candidates)
 }
 
-pub(crate) async fn get_fs_candidates(dir: &Path) -> Result<Vec<FsCandidate>> {
+pub(crate) fn get_fs_candidates(dir: &Path) -> Result<Vec<FsCandidate>> {
     // Ensure the root directory exists
-    fs::create_dir_all(dir).await?;
+    fs::create_dir_all(dir)?;
 
     let mut candidates = Vec::new();
-    let mut entries = fs::read_dir(dir).await?;
-    while let Some(dir_entry) = entries.next_entry().await? {
-        if !dir_entry.file_type().await?.is_file() {
+    let entries = fs::read_dir(dir)?;
+    for dir_entry in entries {
+        let dir_entry = match dir_entry {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        if !dir_entry.file_type()?.is_file() {
             continue;
         };
 
@@ -167,7 +169,7 @@ pub(crate) async fn get_fs_candidates(dir: &Path) -> Result<Vec<FsCandidate>> {
             Ok(Some(m)) => m,
             Ok(None) => continue,
             Err(e) => {
-                warn!("Failed to read sync file {e}");
+                warn!("Failed to parse sync file {e}");
                 return Err(e);
             }
         };
@@ -205,22 +207,32 @@ pub(crate) fn compute_sync_ops(
             let op = match (db_map.get(k), fs_map.get(k)) {
                 (None, None) => return None, // Can never happen
                 (None, Some(fs)) => SyncOp::DbCreate { fs: fs.to_owned() },
+
+                // DB unchanged <-> FS missing
                 (Some(DbCandidate::Unmodified(model, sync_state)), None) => SyncOp::DbDelete {
                     model: model.to_owned(),
                     state: sync_state.to_owned(),
                 },
+
+                // DB modified <-> FS missing
                 (Some(DbCandidate::Modified(model, sync_state)), None) => SyncOp::FsUpdate {
                     model: model.to_owned(),
                     state: sync_state.to_owned(),
                 },
+
+                // DB added <-> FS missing
                 (Some(DbCandidate::Added(model)), None) => SyncOp::FsCreate {
                     model: model.to_owned(),
                 },
-                // Already deleted on FS, but sending it so the SyncState gets dealt with
+
+                // DB deleted <-> FS missing
+                //   Already deleted on FS, but sending it so the SyncState gets dealt with
                 (Some(DbCandidate::Deleted(sync_state)), None) => SyncOp::FsDelete {
                     state: sync_state.to_owned(),
                     fs: None,
                 },
+
+                // DB unchanged <-> FS exists
                 (Some(DbCandidate::Unmodified(_, sync_state)), Some(fs_candidate)) => {
                     if sync_state.checksum == fs_candidate.checksum {
                         return None;
@@ -231,6 +243,8 @@ pub(crate) fn compute_sync_ops(
                         }
                     }
                 }
+
+                // DB modified <-> FS exists
                 (Some(DbCandidate::Modified(model, sync_state)), Some(fs_candidate)) => {
                     if sync_state.checksum == fs_candidate.checksum {
                         SyncOp::FsUpdate {
@@ -238,25 +252,29 @@ pub(crate) fn compute_sync_ops(
                             state: sync_state.to_owned(),
                         }
                     } else if model.updated_at() < fs_candidate.model.updated_at() {
-                        // CONFLICT! Write to DB if fs model is newer
+                        // CONFLICT! Write to DB if the fs model is newer
                         SyncOp::DbUpdate {
                             state: sync_state.to_owned(),
                             fs: fs_candidate.to_owned(),
                         }
                     } else {
-                        // CONFLICT! Write to FS if db model is newer
+                        // CONFLICT! Write to FS if the db model is newer
                         SyncOp::FsUpdate {
                             model: model.to_owned(),
                             state: sync_state.to_owned(),
                         }
                     }
                 }
+
+                // DB added <-> FS anything
                 (Some(DbCandidate::Added(model)), Some(_)) => {
                     // This would be super rare (impossible?), so let's follow the user's intention
                     SyncOp::FsCreate {
                         model: model.to_owned(),
                     }
                 }
+
+                // DB deleted <-> FS exists
                 (Some(DbCandidate::Deleted(sync_state)), Some(fs_candidate)) => SyncOp::FsDelete {
                     state: sync_state.to_owned(),
                     fs: Some(fs_candidate.to_owned()),
@@ -267,12 +285,11 @@ pub(crate) fn compute_sync_ops(
         .collect()
 }
 
-async fn workspace_models<R: Runtime>(
+fn workspace_models<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_id: &str,
 ) -> Result<Vec<SyncModel>> {
-    let resources =
-        get_workspace_export_resources(app_handle, vec![workspace_id], true).await?.resources;
+    let resources = get_workspace_export_resources(app_handle, vec![workspace_id], true)?.resources;
     let workspace = resources.workspaces.iter().find(|w| w.id == workspace_id);
 
     let workspace = match workspace {
@@ -301,7 +318,7 @@ async fn workspace_models<R: Runtime>(
     Ok(sync_models)
 }
 
-pub(crate) async fn apply_sync_ops<R: Runtime>(
+pub(crate) fn apply_sync_ops<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_id: &str,
     sync_dir: &Path,
@@ -311,10 +328,11 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
         return Ok(Vec::new());
     }
 
-    debug!(
+    info!(
         "Applying sync ops {}",
         sync_ops.iter().map(|op| op.to_string()).collect::<Vec<String>>().join(", ")
     );
+
     let mut sync_state_ops = Vec::new();
     let mut workspaces_to_upsert = Vec::new();
     let mut environments_to_upsert = Vec::new();
@@ -334,8 +352,8 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                 let rel_path = derive_model_filename(&model);
                 let abs_path = sync_dir.join(rel_path.clone());
                 let (content, checksum) = model.to_file_contents(&rel_path)?;
-                let mut f = File::create(&abs_path).await?;
-                f.write_all(&content).await?;
+                let mut f = File::create(&abs_path)?;
+                f.write_all(&content)?;
                 SyncStateOp::Create {
                     model_id: model.id(),
                     checksum,
@@ -347,8 +365,8 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                 let rel_path = Path::new(&state.rel_path);
                 let abs_path = Path::new(&state.sync_dir).join(&rel_path);
                 let (content, checksum) = model.to_file_contents(&rel_path)?;
-                let mut f = File::create(&abs_path).await?;
-                f.write_all(&content).await?;
+                let mut f = File::create(&abs_path)?;
+                f.write_all(&content)?;
                 SyncStateOp::Update {
                     state: state.to_owned(),
                     checksum,
@@ -366,7 +384,7 @@ pub(crate) async fn apply_sync_ops<R: Runtime>(
                     // Always delete the existing path
                     let rel_path = Path::new(&state.rel_path);
                     let abs_path = Path::new(&state.sync_dir).join(&rel_path);
-                    fs::remove_file(&abs_path).await?;
+                    fs::remove_file(&abs_path)?;
                     SyncStateOp::Delete {
                         state: state.to_owned(),
                     }
@@ -478,7 +496,7 @@ pub(crate) enum SyncStateOp {
     },
 }
 
-pub(crate) async fn apply_sync_state_ops<R: Runtime>(
+pub(crate) fn apply_sync_state_ops<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_id: &str,
     sync_dir: &Path,
