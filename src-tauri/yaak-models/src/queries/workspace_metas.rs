@@ -2,6 +2,7 @@ use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{WorkspaceMeta, WorkspaceMetaIden};
 use crate::util::UpdateSource;
+use log::info;
 
 impl<'a> DbContext<'a> {
     pub fn get_workspace_meta(&self, workspace_id: &str) -> Option<WorkspaceMeta> {
@@ -23,10 +24,7 @@ impl<'a> DbContext<'a> {
         Ok(workspace_metas)
     }
 
-    pub fn get_or_create_workspace_meta(
-        &self,
-        workspace_id: &str,
-    ) -> Result<WorkspaceMeta> {
+    pub fn get_or_create_workspace_meta(&self, workspace_id: &str) -> Result<WorkspaceMeta> {
         let workspace_meta = self.get_workspace_meta(workspace_id);
         if let Some(workspace_meta) = workspace_meta {
             return Ok(workspace_meta);
@@ -36,6 +34,8 @@ impl<'a> DbContext<'a> {
             workspace_id: workspace_id.to_string(),
             ..Default::default()
         };
+
+        info!("Creating WorkspaceMeta for {workspace_id}");
 
         self.upsert_workspace_meta(&workspace_meta, &UpdateSource::Background)
     }

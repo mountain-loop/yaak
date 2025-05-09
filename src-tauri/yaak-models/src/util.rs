@@ -1,5 +1,8 @@
 use crate::error::Result;
-use crate::models::{AnyModel, Environment, Folder, GrpcRequest, HttpRequest, UpsertModelInfo, WebsocketRequest, Workspace, WorkspaceIden};
+use crate::models::{
+    AnyModel, Environment, Folder, GrpcRequest, HttpRequest, UpsertModelInfo, WebsocketRequest,
+    Workspace, WorkspaceIden,
+};
 use crate::query_manager::QueryManagerExt;
 use chrono::{NaiveDateTime, Utc};
 use log::warn;
@@ -117,14 +120,14 @@ pub struct BatchUpsertResult {
     pub websocket_requests: Vec<WebsocketRequest>,
 }
 
-pub async fn get_workspace_export_resources<R: Runtime>(
+pub fn get_workspace_export_resources<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_ids: Vec<&str>,
-    include_environments: bool,
+    include_private_environments: bool,
 ) -> Result<WorkspaceExport> {
     let mut data = WorkspaceExport {
         yaak_version: app_handle.package_info().version.clone().to_string(),
-        yaak_schema: 3,
+        yaak_schema: 4,
         timestamp: Utc::now().naive_utc(),
         resources: BatchUpsertResult {
             workspaces: Vec::new(),
@@ -139,16 +142,17 @@ pub async fn get_workspace_export_resources<R: Runtime>(
     let db = app_handle.db();
     for workspace_id in workspace_ids {
         data.resources.workspaces.push(db.find_one(WorkspaceIden::Id, workspace_id)?);
-        data.resources.environments.append(&mut db.list_environments(workspace_id)?);
+        data.resources.environments.append(
+            &mut db
+                .list_environments_ensure_base(workspace_id)?
+                .into_iter()
+                .filter(|e| include_private_environments || e.public)
+                .collect(),
+        );
         data.resources.folders.append(&mut db.list_folders(workspace_id)?);
         data.resources.http_requests.append(&mut db.list_http_requests(workspace_id)?);
         data.resources.grpc_requests.append(&mut db.list_grpc_requests(workspace_id)?);
         data.resources.websocket_requests.append(&mut db.list_websocket_requests(workspace_id)?);
-    }
-
-    // Nuke environments if we don't want them
-    if !include_environments {
-        data.resources.environments.clear();
     }
 
     Ok(data)

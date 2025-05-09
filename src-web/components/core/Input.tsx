@@ -30,11 +30,13 @@ import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Label } from './Label';
 import { HStack } from './Stacks';
+import { copyToClipboard } from '../../lib/copy';
 
 export type InputProps = Pick<
   EditorProps,
   | 'language'
   | 'autocomplete'
+  | 'forcedEnvironmentId'
   | 'forceUpdateKey'
   | 'disabled'
   | 'autoFocus'
@@ -387,19 +389,32 @@ function EncryptionInput({
   const dropdownItems = useMemo<DropdownItem[]>(
     () => [
       {
-        label: state.obscured ? 'Reveal value' : 'Conceal value',
+        label: state.obscured ? 'Reveal' : 'Conceal',
         disabled: isEncryptionEnabled && state.fieldType === 'text',
         leftSlot: <Icon icon={state.obscured ? 'eye' : 'eye_closed'} />,
         onSelect: () => setState((s) => ({ ...s, obscured: !s.obscured })),
       },
+      {
+        label: 'Copy',
+        leftSlot: <Icon icon="copy" />,
+        hidden: !state.value,
+        onSelect: () => copyToClipboard(state.value ?? ''),
+      },
       { type: 'separator' },
       {
-        label: state.fieldType === 'text' ? 'Encrypt Value' : 'Decrypt Value',
+        label: state.fieldType === 'text' ? 'Encrypt Field' : 'Decrypt Field',
         leftSlot: <Icon icon={state.fieldType === 'text' ? 'lock' : 'lock_open'} />,
         onSelect: () => handleFieldTypeChange(state.fieldType === 'text' ? 'encrypted' : 'text'),
       },
     ],
-    [handleFieldTypeChange, isEncryptionEnabled, setState, state.fieldType, state.obscured],
+    [
+      handleFieldTypeChange,
+      isEncryptionEnabled,
+      setState,
+      state.fieldType,
+      state.obscured,
+      state.value,
+    ],
   );
 
   let tint: InputProps['tint'];

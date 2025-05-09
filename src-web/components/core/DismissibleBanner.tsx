@@ -2,7 +2,7 @@ import classNames from 'classnames';
 import { useKeyValue } from '../../hooks/useKeyValue';
 import type { BannerProps } from './Banner';
 import { Banner } from './Banner';
-import { IconButton } from './IconButton';
+import { Button } from './Button';
 
 export function DismissibleBanner({
   children,
@@ -19,14 +19,17 @@ export function DismissibleBanner({
   if (dismissed) return null;
 
   return (
-    <Banner className={classNames(className, 'relative pr-8')} {...props}>
-      <IconButton
-        className="!absolute right-0 top-0"
-        icon="x"
+    <Banner className={classNames(className, 'relative grid grid-cols-[1fr_auto] gap-3')} {...props}>
+      {children}
+      <Button
+        variant="border"
+        color={props.color}
+        size="xs"
         onClick={() => setDismissed((d) => !d)}
         title="Dismiss message"
-      />
-      {children}
+      >
+        Dismiss
+      </Button>
     </Banner>
   );
 }

@@ -1,15 +1,14 @@
-import { useFastMutation } from './useFastMutation';
 import type { HttpResponse } from '@yaakapp-internal/models';
-import { useCopy } from './useCopy';
+import { copyToClipboard } from '../lib/copy';
 import { getResponseBodyText } from '../lib/responseBody';
+import { useFastMutation } from './useFastMutation';
 
 export function useCopyHttpResponse(response: HttpResponse) {
-  const copy = useCopy();
   return useFastMutation({
-    mutationKey: ['copy_http_response'],
+    mutationKey: ['copy_http_response', response.id],
     async mutationFn() {
       const body = await getResponseBodyText(response);
-      copy(body);
+      copyToClipboard(body);
     },
   });
 }

@@ -831,7 +831,6 @@ async fn cmd_import_data<R: Runtime>(
         .map(|mut v| {
             v.id = maybe_gen_id::<Environment>(v.id.as_str(), &mut id_map);
             v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
-            v.environment_id = maybe_gen_id_opt::<Environment>(v.environment_id, &mut id_map);
             v
         })
         .collect();
@@ -985,10 +984,10 @@ async fn cmd_export_data<R: Runtime>(
     app_handle: AppHandle<R>,
     export_path: &str,
     workspace_ids: Vec<&str>,
-    include_environments: bool,
+    include_private_environments: bool,
 ) -> YaakResult<()> {
     let export_data =
-        get_workspace_export_resources(&app_handle, workspace_ids, include_environments).await?;
+        get_workspace_export_resources(&app_handle, workspace_ids, include_private_environments)?;
     let f = File::options()
         .create(true)
         .truncate(true)

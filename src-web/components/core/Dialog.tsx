@@ -2,7 +2,6 @@ import classNames from 'classnames';
 import * as m from 'motion/react-m';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
-import { useKey } from 'react-use';
 import { Overlay } from '../Overlay';
 import { Heading } from './Heading';
 import { IconButton } from './IconButton';
@@ -42,18 +41,9 @@ export function Dialog({
     [description],
   );
 
-  useKey(
-    'Escape',
-    () => {
-      if (!open) return;
-      onClose?.();
-    },
-    {},
-    [open],
-  );
-
   return (
     <Overlay open={open} onClose={disableBackdropClose ? undefined : onClose} portalName="dialog">
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         role="dialog"
         className={classNames(
@@ -64,6 +54,16 @@ export function Dialog({
         )}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          // NOTE: We handle Escape on the element itself so that it doesn't close multiple
+          //   dialogs and can be intercepted by children if needed.
+          if (e.key === 'Escape') {
+            onClose?.();
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        }}
       >
         <m.div
           initial={{ top: 5, scale: 0.97 }}

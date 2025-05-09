@@ -41,6 +41,7 @@ export type PairEditorProps = {
   allowFileValues?: boolean;
   allowMultilineValues?: boolean;
   className?: string;
+  forcedEnvironmentId?: string;
   forceUpdateKey?: string;
   nameAutocomplete?: GenericCompletionConfig;
   nameAutocompleteFunctions?: boolean;
@@ -81,6 +82,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
     allowFileValues,
     allowMultilineValues,
     className,
+    forcedEnvironmentId,
     forceUpdateKey,
     nameAutocomplete,
     nameAutocompleteFunctions,
@@ -235,6 +237,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
               allowFileValues={allowFileValues}
               allowMultilineValues={allowMultilineValues}
               className="py-1"
+              forcedEnvironmentId={forcedEnvironmentId}
               forceFocusNamePairId={forceFocusNamePairId}
               forceFocusValuePairId={forceFocusValuePairId}
               forceUpdateKey={forceUpdateKey}
@@ -292,6 +295,7 @@ type PairEditorRowProps = {
   PairEditorProps,
   | 'allowFileValues'
   | 'allowMultilineValues'
+  | 'forcedEnvironmentId'
   | 'forceUpdateKey'
   | 'nameAutocomplete'
   | 'nameAutocompleteVariables'
@@ -311,6 +315,7 @@ function PairEditorRow({
   allowFileValues,
   allowMultilineValues,
   className,
+  forcedEnvironmentId,
   forceFocusNamePairId,
   forceFocusValuePairId,
   forceUpdateKey,
@@ -502,6 +507,7 @@ function PairEditorRow({
             size="sm"
             required={!isLast && !!pair.enabled && !!pair.value}
             validate={nameValidate}
+            forcedEnvironmentId={forcedEnvironmentId}
             forceUpdateKey={forceUpdateKey}
             containerClassName={classNames(isLast && 'border-dashed')}
             defaultValue={pair.name}
@@ -549,6 +555,7 @@ function PairEditorRow({
               size="sm"
               containerClassName={classNames(isLast && 'border-dashed')}
               validate={valueValidate}
+              forcedEnvironmentId={forcedEnvironmentId}
               forceUpdateKey={forceUpdateKey}
               defaultValue={pair.value}
               label="Value"

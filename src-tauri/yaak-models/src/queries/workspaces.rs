@@ -1,8 +1,8 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{
-    Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestIden,
-    WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden,
+    EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestIden, WebsocketRequestIden, Workspace,
+    WorkspaceIden,
 };
 use crate::util::UpdateSource;
 
@@ -34,24 +34,26 @@ impl<'a> DbContext<'a> {
         workspace: &Workspace,
         source: &UpdateSource,
     ) -> Result<Workspace> {
-        for m in self.find_many::<HttpRequest>(HttpRequestIden::WorkspaceId, &workspace.id, None)? {
+        for m in self.find_many(HttpRequestIden::WorkspaceId, &workspace.id, None)? {
             self.delete_http_request(&m, source)?;
         }
-        
-        for m in self.find_many::<GrpcRequest>(GrpcRequestIden::WorkspaceId, &workspace.id, None)? {
+
+        for m in self.find_many(GrpcRequestIden::WorkspaceId, &workspace.id, None)? {
             self.delete_grpc_request(&m, source)?;
         }
-        
-        for m in
-            self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, &workspace.id, None)?
-        {
+
+        for m in self.find_many(WebsocketRequestIden::FolderId, &workspace.id, None)? {
             self.delete_websocket_request(&m, source)?;
         }
-        
-        for folder in self.find_many::<Folder>(FolderIden::WorkspaceId, &workspace.id, None)? {
-            self.delete_folder(&folder, source)?;
+
+        for m in self.find_many(FolderIden::WorkspaceId, &workspace.id, None)? {
+            self.delete_folder(&m, source)?;
         }
-        
+
+        for m in self.find_many(EnvironmentIden::WorkspaceId, &workspace.id, None)? {
+            self.delete_environment(&m, source)?;
+        }
+
         self.delete(workspace, source)
     }
 

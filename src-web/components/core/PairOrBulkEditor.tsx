@@ -8,6 +8,7 @@ import { PairEditor } from './PairEditor';
 
 interface Props extends PairEditorProps {
   preferenceName: string;
+  forcedEnvironmentId?: string;
 }
 
 export const PairOrBulkEditor = forwardRef<PairEditorRef, Props>(function PairOrBulkEditor(

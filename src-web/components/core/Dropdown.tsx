@@ -1,6 +1,6 @@
 import classNames from 'classnames';
-import * as m from 'motion/react-m';
 import { atom } from 'jotai';
+import * as m from 'motion/react-m';
 import type {
   CSSProperties,
   FocusEvent as ReactFocusEvent,
@@ -34,9 +34,9 @@ import { Overlay } from '../Overlay';
 import { Button } from './Button';
 import { HotKey } from './HotKey';
 import { Icon } from './Icon';
+import { LoadingIcon } from './LoadingIcon';
 import { Separator } from './Separator';
 import { HStack, VStack } from './Stacks';
-import { LoadingIcon } from './LoadingIcon';
 
 export type DropdownItemSeparator = {
   type: 'separator';

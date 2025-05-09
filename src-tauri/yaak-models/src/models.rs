@@ -486,11 +486,12 @@ pub struct Environment {
     pub model: String,
     pub id: String,
     pub workspace_id: String,
-    pub environment_id: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 
     pub name: String,
+    pub public: bool,
+    pub base: bool,
     pub variables: Vec<EnvironmentVariable>,
 }
 
@@ -523,9 +524,10 @@ impl UpsertModelInfo for Environment {
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
-            (EnvironmentId, self.environment_id.into()),
             (WorkspaceId, self.workspace_id.into()),
+            (Base, self.base.into()),
             (Name, self.name.trim().into()),
+            (Public, self.public.into()),
             (Variables, serde_json::to_string(&self.variables)?.into()),
         ])
     }
@@ -533,7 +535,9 @@ impl UpsertModelInfo for Environment {
     fn update_columns() -> Vec<impl IntoIden> {
         vec![
             EnvironmentIden::UpdatedAt,
+            EnvironmentIden::Base,
             EnvironmentIden::Name,
+            EnvironmentIden::Public,
             EnvironmentIden::Variables,
         ]
     }
@@ -547,10 +551,11 @@ impl UpsertModelInfo for Environment {
             id: row.get("id")?,
             model: row.get("model")?,
             workspace_id: row.get("workspace_id")?,
-            environment_id: row.get("environment_id")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
+            base: row.get("base")?,
             name: row.get("name")?,
+            public: row.get("public")?,
             variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
         })
     }

@@ -26,7 +26,8 @@ import {
   useMemo,
   useRef,
 } from 'react';
-import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
+import { activeEnvironmentIdAtom } from '../../../hooks/useActiveEnvironment';
+import { useEnvironmentVariables } from '../../../hooks/useEnvironmentVariables';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { showDialog } from '../../../lib/dialog';
@@ -69,6 +70,7 @@ export interface EditorProps {
   disableTabIndent?: boolean;
   disabled?: boolean;
   extraExtensions?: Extension[];
+  forcedEnvironmentId?: string;
   forceUpdateKey?: string | number;
   format?: (v: string) => Promise<string>;
   heightMode?: 'auto' | 'full';
@@ -108,6 +110,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     disableTabIndent,
     disabled,
     extraExtensions,
+    forcedEnvironmentId,
     forceUpdateKey,
     format,
     heightMode,
@@ -130,7 +133,9 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 ) {
   const settings = useAtomValue(settingsAtom);
 
-  const allEnvironmentVariables = useActiveEnvironmentVariables();
+  const activeEnvironmentId = useAtomValue(activeEnvironmentIdAtom);
+  const environmentId = forcedEnvironmentId ?? activeEnvironmentId ?? null;
+  const allEnvironmentVariables = useEnvironmentVariables(environmentId);
   const environmentVariables = autocompleteVariables ? allEnvironmentVariables : emptyVariables;
   const useTemplating = !!(autocompleteFunctions || autocompleteVariables || autocomplete);
 

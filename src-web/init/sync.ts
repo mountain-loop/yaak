@@ -68,7 +68,7 @@ function isModelRelevant(m: AnyModel) {
   if (
     m.model !== 'workspace' &&
     m.model !== 'folder' &&
-    // m.model !== 'environment' && // Not synced anymore
+    m.model !== 'environment' &&
     m.model !== 'http_request' &&
     m.model !== 'grpc_request' &&
     m.model !== 'websocket_request'

@@ -109,7 +109,7 @@ pub(crate) fn workspace_models<R: Runtime>(
     // Add the workspace children
     if let Some(wid) = workspace_id {
         l.append(&mut db.list_cookie_jars(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_environments(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_environments_ensure_base(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_folders(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_grpc_connections(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_grpc_requests(wid)?.into_iter().map(Into::into).collect());

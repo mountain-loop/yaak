@@ -7,13 +7,25 @@ import { Tooltip } from './Tooltip';
 type Props = Omit<TooltipProps, 'children'> & {
   icon?: IconProps['icon'];
   iconSize?: IconProps['size'];
+  iconColor?: IconProps['color'];
   className?: string;
 };
 
-export function IconTooltip({ content, icon = 'info', iconSize, ...tooltipProps }: Props) {
+export function IconTooltip({
+  content,
+  icon = 'info',
+  iconColor,
+  iconSize,
+  ...tooltipProps
+}: Props) {
   return (
     <Tooltip content={content} {...tooltipProps}>
-      <Icon className="opacity-60 hover:opacity-100" icon={icon} size={iconSize} />
+      <Icon
+        className="opacity-60 hover:opacity-100"
+        icon={icon}
+        size={iconSize}
+        color={iconColor}
+      />
     </Tooltip>
   );
 }
