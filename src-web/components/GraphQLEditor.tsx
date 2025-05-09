@@ -16,6 +16,8 @@ import { Editor } from './core/Editor/Editor';
 import { FormattedError } from './core/FormattedError';
 import { Icon } from './core/Icon';
 import { Separator } from './core/Separator';
+import { useAtom } from "jotai";
+import { graphqlSchemaAtom } from "../atoms/graphqlSchemaAtom";
 
 type Props = Pick<EditorProps, 'heightMode' | 'className' | 'forceUpdateKey'> & {
   baseRequest: HttpRequest;
@@ -45,6 +47,7 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
 
     return { query: request.body.query ?? '', variables: request.body.variables ?? '' };
   }, [extraEditorProps.forceUpdateKey]);
+  const [, setGraphqlSchemaAtomValue] = useAtom(graphqlSchemaAtom);
 
   const handleChangeQuery = (query: string) => {
     const newBody = { query, variables: currentBody.variables || undefined };
@@ -62,7 +65,8 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
   useEffect(() => {
     if (editorViewRef.current === null) return;
     updateSchema(editorViewRef.current, schema ?? undefined);
-  }, [schema]);
+    setGraphqlSchemaAtomValue(schema);
+  }, [schema, setGraphqlSchemaAtomValue]);
 
   const actions = useMemo<EditorProps['actions']>(
     () => [
