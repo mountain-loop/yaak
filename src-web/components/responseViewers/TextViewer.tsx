@@ -116,11 +116,14 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
     body = formattedBody.data;
   }
 
+  // Decode unicode sequences in the text to readable characters  
+  const decodedBodyText = unescape(body.replace(/\\u/g, '%u')) || body;
+
   return (
     <Editor
       readOnly
       className={className}
-      defaultValue={body}
+      defaultValue={decodedBodyText}
       language={language}
       actions={actions}
       extraExtensions={extraExtensions}
@@ -128,3 +131,4 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
     />
   );
 }
+
