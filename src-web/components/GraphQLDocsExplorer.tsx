@@ -3,17 +3,40 @@ import {
 } from 'jotai';
 import { graphqlSchemaAtom } from "../atoms/graphqlSchemaAtom";
 import { Input } from "./core/Input";
-import { GraphQLSchema } from "graphql";
+import type {
+	GraphQLSchema,
+	GraphQLOutputType,
+	GraphQLScalarType,
+	GraphQLField,
+	GraphQLList,
+	GraphQLArgument,
+	GraphQLInputType,
+	GraphQLNonNull
+} from "graphql";
+import { isNonNullType, isListType } from "graphql";
 import { Button } from "./core/Button";
 import { useState } from 'react';
 import { IconButton } from "./core/IconButton";
 
 function getRootTypes(graphqlSchema: GraphQLSchema) {
-	return {
-		query: graphqlSchema.getQueryType(),
-		mutation: graphqlSchema.getMutationType(),
-		subscription: graphqlSchema.getSubscriptionType(),
-	}
+	return ([
+		graphqlSchema.getQueryType(),
+		graphqlSchema.getMutationType(),
+		graphqlSchema.getSubscriptionType(),
+	]
+		.filter(Boolean) as NonNullable<ReturnType<GraphQLSchema['getQueryType']>>[])
+		.reduce(
+			(
+				prev,
+				curr
+			) => {
+				return {
+					...prev,
+					[curr.name]: curr,
+				};
+			},
+			{} as Record<string, NonNullable<ReturnType<GraphQLSchema['getQueryType']>>>
+		)
 }
 
 type Field = NonNullable<ReturnType<GraphQLSchema['getQueryType']>>;
@@ -23,9 +46,8 @@ function DocsExplorer({
 						  graphqlSchema
 					  }: { graphqlSchema: GraphQLSchema }) {
 	const rootTypes = getRootTypes(graphqlSchema);
-	const [schemaPath, setSchemaPath] = useState('');
-	const [schemaPointer, setSchemaPointer] = useState<Field | null>(null);
-	const [history, setHistory] = useState<Field[]>([]);
+	const [schemaPointer, setSchemaPointer] = useState<Field | GraphQLOutputType | GraphQLInputType | null>(null);
+	const [history, setHistory] = useState<(Field | GraphQLInputType)[]>([]);
 
 	const goBack = () => {
 		if (history.length === 0) {
@@ -38,7 +60,7 @@ function DocsExplorer({
 		setSchemaPointer(newPointer!);
 	}
 
-	const addToHistory = (pointer: Field) => {
+	const addToHistory = (pointer: Field | GraphQLInputType) => {
 		setHistory([...history, pointer]);
 	}
 
@@ -47,34 +69,77 @@ function DocsExplorer({
 		setSchemaPointer(null);
 	}
 
-	const onFieldClick = (field: Field) => {
-		setSchemaPointer(field);
-		addToHistory(field);
-	}
-
 	const renderRootTypes = () => {
 		return (
-			<div>
-				<div>
-					{ rootTypes.query
-						? <Button
-							onClick={ () => {
-								setSchemaPath('query');
-								setSchemaPointer(rootTypes.query!);
-								addToHistory(rootTypes.query!);
-							} }
-						>Query</Button>
-						: null }
-				</div>
-				<div>{ rootTypes.mutation ? 'Mutation' : null }</div>
-				<div>{ rootTypes.subscription ? 'Subscription' : null }</div>
+			<div
+				className="mt-5 flex flex-col gap-3"
+			>
+				{
+					Object
+						.values(rootTypes)
+						.map(
+							(x) => (
+								<button
+									key={ x.name }
+									className="block text-primary cursor-pointer w-fit"
+									onClick={
+										() => {
+											addToHistory(x);
+											setSchemaPointer(x);
+										}
+									}
+								>
+									{ x.name }
+								</button>
+							)
+						)
+				}
 			</div>
 		);
 	}
 
+	const onTypeClick = (
+		type: GraphQLField<never, never>['type']
+	) => {
+		console.log(type);
+		// check if non-null
+		if (isNonNullType(type)) {
+			onTypeClick((type as GraphQLNonNull<GraphQLOutputType>).ofType)
+
+			return;
+		}
+
+		// check if list
+		if (isListType(type)) {
+			onTypeClick((type as GraphQLList<GraphQLOutputType>).ofType);
+
+			return;
+		}
+
+		setSchemaPointer(type);
+		addToHistory(type as Field);
+	};
+
+	const onArgumentClick = (
+		arg: GraphQLArgument
+	) => {
+		// extract type of argument
+		const type = isNonNullType(arg.type) ? arg.type.ofType : arg.type;
+
+		if (isListType(type)) {
+			setSchemaPointer((type as GraphQLList<GraphQLInputType>).ofType);
+			addToHistory(type.ofType);
+			return;
+		}
+
+		setSchemaPointer(type);
+		addToHistory(type);
+	};
+
 	const renderSubFieldRecord = (
 		field: FieldsMap[string]
 	) => {
+
 		return (
 			<div
 				className="flex flex-row justify-start items-center"
@@ -84,34 +149,36 @@ function DocsExplorer({
 					<span>
 						{ " " }
 					</span>
-						<span
-							className="text-primary cursor-pointer"
-						>
+					<span
+						className="text-primary cursor-pointer"
+					>
 						{ field.name }
 					</span>
-						{
-							field.args.length > 0
-								? (
-									<>
+					{/* Arguments block */}
+					{
+						field.args && field.args.length > 0
+							? (
+								<>
 								<span>
 									{ " " }
 									(
 									{ " " }
 								</span>
-										{
-											field.args.map(
-												(x, i, array) => (
-													<>
-												<span
-													key={ x.name }
+									{
+										field.args.map(
+											(arg, i, array) => (
+												<>
+												<button
+													key={ arg.name }
+													onClick={() => onArgumentClick(arg)}
 												>
 													<span
 														className="text-primary"
-													>{ x.name }</span>
+													>{ arg.name }</span>
 													<span>{ " " }</span>
 													<span
 														className="text-success underline cursor-pointer"
-													>{ x.type.toString() }</span>
+													>{ arg.type.toString() }</span>
 													{
 														i < array.length - 1
 															? (
@@ -123,26 +190,38 @@ function DocsExplorer({
 															)
 															: null
 													}
-												</span>
-														<span>{ " " }</span>
-													</>
-												)
+												</button>
+													<span>{ " " }</span>
+												</>
 											)
-										}
-										<span>
+										)
+									}
+									<span>
 									)
 								</span>
-									</>
-								)
-								: null
-						}
-						<span>{ " " }</span>
-						<span
-							className="text-success underline cursor-pointer"
-						>
+								</>
+							)
+							: null
+					}
+					{/* End of Arguments Block */}
+					<span>{ " " }</span>
+					<button
+						className="text-success underline cursor-pointer"
+						onClick={() => onTypeClick(field.type)}
+					>
 						{ field.type.toString() }
-					</span>
+					</button>
 				</div>
+			</div>
+		);
+	};
+
+	const renderScalarField = () => {
+		const scalarField = schemaPointer as GraphQLScalarType;
+
+		return (
+			<div>
+				{ scalarField.toConfig().description }
 			</div>
 		);
 	};
@@ -150,6 +229,13 @@ function DocsExplorer({
 	const renderSubFields = () => {
 		if (!schemaPointer) {
 			return null;
+		}
+
+		if (
+			!(schemaPointer as Field).getFields
+		) {
+			// Scalar field
+			return renderScalarField();
 		}
 
 		if (!schemaPointer.getFields()) {
@@ -206,35 +292,39 @@ function DocsExplorer({
 				>
 					Back
 				</Button>
-				<Button
+				<IconButton
 					onClick={ goHome }
-				>
-					Root
-				</Button>
+					icon="house"
+					title="Go to beginning"
+				/>
 			</div>
 		);
 	};
 
-	return <div>
+	return (
 		<div
-			className="min-h-8"
+			className="overflow-y-auto"
 		>
-			{
-				history.length > 0
-					? renderTopBar()
-					: null
-			}
+			<div
+				className="min-h-8"
+			>
+				{
+					history.length > 0
+						? renderTopBar()
+						: null
+				}
+			</div>
+			<Input
+				label="Search docs"
+				stateKey="search_graphql_docs"
+				placeholder="Search docs"
+				hideLabel
+			/>
+			<div>
+				{ renderExplorerView() }
+			</div>
 		</div>
-		<Input
-			label="Search docs"
-			stateKey="search_graphql_docs"
-			placeholder="Search docs"
-			hideLabel
-		/>
-		<div>
-			{ renderExplorerView() }
-		</div>
-	</div>;
+	);
 }
 
 export function GraphQLDocsExplorer() {
