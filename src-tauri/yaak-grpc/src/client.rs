@@ -1,13 +1,15 @@
+use crate::manager::decorate_req;
 use crate::transport::get_transport;
 use async_recursion::async_recursion;
 use hyper_rustls::HttpsConnector;
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::connect::HttpConnector;
 use log::debug;
+use std::collections::BTreeMap;
 use tokio_stream::StreamExt;
+use tonic::Request;
 use tonic::body::BoxBody;
 use tonic::transport::Uri;
-use tonic::Request;
 use tonic_reflection::pb::v1::server_reflection_request::MessageRequest;
 use tonic_reflection::pb::v1::server_reflection_response::MessageResponse;
 use tonic_reflection::pb::v1::{
@@ -44,6 +46,7 @@ impl AutoReflectionClient {
     pub async fn send_reflection_request(
         &mut self,
         message: MessageRequest,
+        metadata: &BTreeMap<String, String>,
     ) -> Result<MessageResponse, String> {
         let reflection_request = ServerReflectionRequest {
             host: "".into(), // Doesn't matter
@@ -51,7 +54,9 @@ impl AutoReflectionClient {
         };
 
         if self.use_v1alpha {
-            let request = Request::new(tokio_stream::once(to_v1alpha_request(reflection_request)));
+            let mut request = Request::new(tokio_stream::once(to_v1alpha_request(reflection_request)));
+            decorate_req(metadata, &mut request).map_err(|e| e.to_string())?;
+
             self.client_v1alpha
                 .server_reflection_info(request)
                 .await
@@ -70,7 +75,9 @@ impl AutoReflectionClient {
                 .ok_or("No reflection response".to_string())
                 .map(|resp| to_v1_msg_response(resp))
         } else {
-            let request = Request::new(tokio_stream::once(reflection_request));
+            let mut request = Request::new(tokio_stream::once(reflection_request));
+            decorate_req(metadata, &mut request).map_err(|e| e.to_string())?;
+
             let resp = self.client_v1.server_reflection_info(request).await;
             match resp {
                 Ok(r) => Ok(r),
@@ -79,7 +86,7 @@ impl AutoReflectionClient {
                         // If v1 fails, change to v1alpha and try again
                         debug!("gRPC schema reflection falling back to v1alpha");
                         self.use_v1alpha = true;
-                        return self.send_reflection_request(message).await;
+                        return self.send_reflection_request(message, metadata).await;
                     }
                     _ => Err(e),
                 },

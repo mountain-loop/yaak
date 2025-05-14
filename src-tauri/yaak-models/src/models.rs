@@ -31,6 +31,9 @@ macro_rules! impl_model {
 #[ts(export, export_to = "gen_models.ts")]
 pub enum ProxySetting {
     Enabled {
+        #[serde(default)]
+        // This was added after on so give it a default to be able to deserialize older values
+        disabled: bool,
         http: String,
         https: String,
         auth: Option<ProxySettingAuth>,

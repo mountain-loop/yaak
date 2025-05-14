@@ -24,6 +24,7 @@ export function SettingsProxy() {
           } else if (v === 'enabled') {
             await patchModel(settings, {
               proxy: {
+                disabled: false,
                 type: 'enabled',
                 http: '',
                 https: '',
@@ -42,16 +43,42 @@ export function SettingsProxy() {
       />
       {settings.proxy?.type === 'enabled' && (
         <VStack space={1.5}>
-          <HStack space={1.5} className="mt-3">
+          <Checkbox
+            className="my-3"
+            checked={!settings.proxy.disabled}
+            title="Enable proxy"
+            help="Use this to temporarily disable the proxy without losing the configuration"
+            onChange={async (enabled) => {
+              const { proxy } = settings;
+              const http = proxy?.type === 'enabled' ? proxy.http : '';
+              const https = proxy?.type === 'enabled' ? proxy.https : '';
+              const auth = proxy?.type === 'enabled' ? proxy.auth : null;
+              const disabled = !enabled;
+              await patchModel(settings, {
+                proxy: { type: 'enabled', http, https, auth, disabled },
+              });
+            }}
+          />
+          <HStack space={1.5}>
             <PlainInput
               size="sm"
               label="HTTP"
               placeholder="localhost:9090"
               defaultValue={settings.proxy?.http}
               onChange={async (http) => {
-                const https = settings.proxy?.type === 'enabled' ? settings.proxy.https : '';
-                const auth = settings.proxy?.type === 'enabled' ? settings.proxy.auth : null;
-                await patchModel(settings, { proxy: { type: 'enabled', http, https, auth } });
+                const { proxy } = settings;
+                const https = proxy?.type === 'enabled' ? proxy.https : '';
+                const auth = proxy?.type === 'enabled' ? proxy.auth : null;
+                const disabled = proxy?.type === 'enabled' ? proxy.disabled : false;
+                await patchModel(settings, {
+                  proxy: {
+                    type: 'enabled',
+                    http,
+                    https,
+                    auth,
+                    disabled,
+                  },
+                });
               }}
             />
             <PlainInput
@@ -60,9 +87,13 @@ export function SettingsProxy() {
               placeholder="localhost:9090"
               defaultValue={settings.proxy?.https}
               onChange={async (https) => {
-                const http = settings.proxy?.type === 'enabled' ? settings.proxy.http : '';
-                const auth = settings.proxy?.type === 'enabled' ? settings.proxy.auth : null;
-                await patchModel(settings, { proxy: { type: 'enabled', http, https, auth } });
+                const { proxy } = settings;
+                const http = proxy?.type === 'enabled' ? proxy.http : '';
+                const auth = proxy?.type === 'enabled' ? proxy.auth : null;
+                const disabled = proxy?.type === 'enabled' ? proxy.disabled : false;
+                await patchModel(settings, {
+                  proxy: { type: 'enabled', http, https, auth, disabled },
+                });
               }}
             />
           </HStack>
@@ -71,10 +102,14 @@ export function SettingsProxy() {
             checked={settings.proxy.auth != null}
             title="Enable authentication"
             onChange={async (enabled) => {
-              const http = settings.proxy?.type === 'enabled' ? settings.proxy.http : '';
-              const https = settings.proxy?.type === 'enabled' ? settings.proxy.https : '';
+              const { proxy } = settings;
+              const http = proxy?.type === 'enabled' ? proxy.http : '';
+              const https = proxy?.type === 'enabled' ? proxy.https : '';
+              const disabled = proxy?.type === 'enabled' ? proxy.disabled : false;
               const auth = enabled ? { user: '', password: '' } : null;
-              await patchModel(settings, { proxy: { type: 'enabled', http, https, auth } });
+              await patchModel(settings, {
+                proxy: { type: 'enabled', http, https, auth, disabled },
+              });
             }}
           />
 
@@ -87,12 +122,15 @@ export function SettingsProxy() {
                 placeholder="myUser"
                 defaultValue={settings.proxy.auth.user}
                 onChange={async (user) => {
-                  const https = settings.proxy?.type === 'enabled' ? settings.proxy.https : '';
-                  const http = settings.proxy?.type === 'enabled' ? settings.proxy.http : '';
-                  const password =
-                    settings.proxy?.type === 'enabled' ? (settings.proxy.auth?.password ?? '') : '';
+                  const { proxy } = settings;
+                  const http = proxy?.type === 'enabled' ? proxy.http : '';
+                  const https = proxy?.type === 'enabled' ? proxy.https : '';
+                  const disabled = proxy?.type === 'enabled' ? proxy.disabled : false;
+                  const password = proxy?.type === 'enabled' ? (proxy.auth?.password ?? '') : '';
                   const auth = { user, password };
-                  await patchModel(settings, { proxy: { type: 'enabled', http, https, auth } });
+                  await patchModel(settings, {
+                    proxy: { type: 'enabled', http, https, auth, disabled },
+                  });
                 }}
               />
               <PlainInput
@@ -102,12 +140,15 @@ export function SettingsProxy() {
                 placeholder="s3cretPassw0rd"
                 defaultValue={settings.proxy.auth.password}
                 onChange={async (password) => {
-                  const https = settings.proxy?.type === 'enabled' ? settings.proxy.https : '';
-                  const http = settings.proxy?.type === 'enabled' ? settings.proxy.http : '';
-                  const user =
-                    settings.proxy?.type === 'enabled' ? (settings.proxy.auth?.user ?? '') : '';
+                  const { proxy } = settings;
+                  const http = proxy?.type === 'enabled' ? proxy.http : '';
+                  const https = proxy?.type === 'enabled' ? proxy.https : '';
+                  const disabled = proxy?.type === 'enabled' ? proxy.disabled : false;
+                  const user = proxy?.type === 'enabled' ? (proxy.auth?.user ?? '') : '';
                   const auth = { user, password };
-                  await patchModel(settings, { proxy: { type: 'enabled', http, https, auth } });
+                  await patchModel(settings, {
+                    proxy: { type: 'enabled', http, https, auth, disabled },
+                  });
                 }}
               />
             </HStack>

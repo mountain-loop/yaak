@@ -37,6 +37,7 @@ import { Icon } from './Icon';
 import { LoadingIcon } from './LoadingIcon';
 import { Separator } from './Separator';
 import { HStack, VStack } from './Stacks';
+import { ErrorBoundary } from '../ErrorBoundary';
 
 export type DropdownItemSeparator = {
   type: 'separator';
@@ -202,17 +203,19 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   return (
     <>
       {child}
-      <Menu
-        ref={menuRef}
-        showTriangle
-        triggerRef={buttonRef}
-        fullWidth={fullWidth}
-        defaultSelectedIndex={defaultSelectedIndex}
-        items={items}
-        triggerShape={triggerRect ?? null}
-        onClose={() => setIsOpen(false)}
-        isOpen={isOpen}
-      />
+      <ErrorBoundary name={`Dropdown Menu`}>
+        <Menu
+          ref={menuRef}
+          showTriangle
+          triggerRef={buttonRef}
+          fullWidth={fullWidth}
+          defaultSelectedIndex={defaultSelectedIndex}
+          items={items}
+          triggerShape={triggerRect ?? null}
+          onClose={() => setIsOpen(false)}
+          isOpen={isOpen}
+        />
+      </ErrorBoundary>
     </>
   );
 });

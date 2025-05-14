@@ -5,15 +5,15 @@ use log::{info, warn};
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
 use tauri::{AppHandle, Runtime, State, Url, WebviewWindow};
-use tokio::sync::{mpsc, Mutex};
-use tokio_tungstenite::tungstenite::http::HeaderValue;
+use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::http::HeaderValue;
 use yaak_http::apply_path_placeholders;
-use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
     WebsocketEventType, WebsocketRequest,
 };
+use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
@@ -257,12 +257,16 @@ pub(crate) async fn connect<R: Runtime>(
     // Add URL parameters to URL
     let mut url = Url::parse(&url).unwrap();
     {
-        let mut query_pairs = url.query_pairs_mut();
-        for p in url_parameters.clone() {
-            if !p.enabled || p.name.is_empty() {
-                continue;
+        let valid_query_pairs = url_parameters
+            .into_iter()
+            .filter(|p| p.enabled && !p.name.is_empty())
+            .collect::<Vec<_>>();
+        // NOTE: Only mutate query pairs if there are any, or it will append an empty `?` to the URL
+        if !valid_query_pairs.is_empty() {
+            let mut query_pairs = url.query_pairs_mut();
+            for p in valid_query_pairs {
+                query_pairs.append_pair(p.name.as_str(), p.value.as_str());
             }
-            query_pairs.append_pair(p.name.as_str(), p.value.as_str());
         }
     }
 

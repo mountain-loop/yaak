@@ -54,7 +54,7 @@ export type Plugin = { model: "plugin", id: string, createdAt: string, updatedAt
 
 export type PluginKeyValue = { model: "plugin_key_value", createdAt: string, updatedAt: string, pluginName: string, key: string, value: string, };
 
-export type ProxySetting = { "type": "enabled", http: string, https: string, auth: ProxySettingAuth | null, } | { "type": "disabled" };
+export type ProxySetting = { "type": "enabled", disabled: boolean, http: string, https: string, auth: ProxySettingAuth | null, } | { "type": "disabled" };
 
 export type ProxySettingAuth = { user: string, password: string, };
 

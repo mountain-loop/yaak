@@ -7296,35 +7296,48 @@ __export(src_exports, {
 });
 module.exports = __toCommonJS(src_exports);
 var import_yaml = __toESM(require_dist());
-var plugin = {
-  importer: {
-    name: "Insomnia",
-    description: "Import Insomnia workspaces",
-    onImport(_ctx, args) {
-      return convertInsomnia(args.text);
-    }
+
+// src/common.ts
+function convertSyntax(variable) {
+  if (!isJSString(variable)) return variable;
+  return variable.replaceAll(/{{\s*(_\.)?([^}]+)\s*}}/g, "${[$2]}");
+}
+function isJSObject(obj) {
+  return Object.prototype.toString.call(obj) === "[object Object]";
+}
+function isJSString(obj) {
+  return Object.prototype.toString.call(obj) === "[object String]";
+}
+function convertId(id) {
+  if (id.startsWith("GENERATE_ID::")) {
+    return id;
   }
-};
-function convertInsomnia(contents) {
-  let parsed;
-  try {
-    parsed = JSON.parse(contents);
-  } catch (e) {
+  return `GENERATE_ID::${id}`;
+}
+function deleteUndefinedAttrs(obj) {
+  if (Array.isArray(obj) && obj != null) {
+    return obj.map(deleteUndefinedAttrs);
+  } else if (typeof obj === "object" && obj != null) {
+    return Object.fromEntries(
+      Object.entries(obj).filter(([, v]) => v !== void 0).map(([k, v]) => [k, deleteUndefinedAttrs(v)])
+    );
+  } else {
+    return obj;
   }
-  try {
-    parsed = parsed ?? import_yaml.default.parse(contents);
-  } catch (e) {
-  }
-  if (!isJSObject(parsed)) return;
-  if (!Array.isArray(parsed.resources)) return;
+}
+
+// src/v4.ts
+function convertInsomniaV4(parsed) {
+  if (!Array.isArray(parsed.resources)) return null;
   const resources = {
-    workspaces: [],
-    httpRequests: [],
-    grpcRequests: [],
     environments: [],
-    folders: []
+    folders: [],
+    grpcRequests: [],
+    httpRequests: [],
+    websocketRequests: [],
+    workspaces: []
   };
-  const workspacesToImport = parsed.resources.filter(isWorkspace);
+  const workspacesToImport = parsed.resources.filter((r) => isJSObject(r) && r._type === "workspace");
   for (const w of workspacesToImport) {
     resources.workspaces.push({
       id: convertId(w._id),
@@ -7335,25 +7348,25 @@ function convertInsomnia(contents) {
       description: w.description || void 0
     });
     const environmentsToImport = parsed.resources.filter(
-      (r) => isEnvironment(r)
+      (r) => isJSObject(r) && r._type === "environment"
     );
     resources.environments.push(
       ...environmentsToImport.map((r) => importEnvironment(r, w._id))
     );
     const nextFolder = (parentId) => {
       const children = parsed.resources.filter((r) => r.parentId === parentId);
-      let sortPriority = 0;
       for (const child of children) {
-        if (isRequestGroup(child)) {
+        if (!isJSObject(child)) continue;
+        if (child._type === "request_group") {
           resources.folders.push(importFolder(child, w._id));
           nextFolder(child._id);
-        } else if (isHttpRequest(child)) {
+        } else if (child._type === "request") {
           resources.httpRequests.push(
-            importHttpRequest(child, w._id, sortPriority++)
+            importHttpRequest(child, w._id)
           );
-        } else if (isGrpcRequest(child)) {
+        } else if (child._type === "grpc_request") {
           resources.grpcRequests.push(
-            importGrpcRequest(child, w._id, sortPriority++)
+            importGrpcRequest(child, w._id)
           );
         }
       }
@@ -7364,62 +7377,9 @@ function convertInsomnia(contents) {
   resources.grpcRequests = resources.grpcRequests.filter(Boolean);
   resources.environments = resources.environments.filter(Boolean);
   resources.workspaces = resources.workspaces.filter(Boolean);
-  return { resources: deleteUndefinedAttrs(resources) };
+  return { resources };
 }
-function importEnvironment(e, workspaceId) {
-  return {
-    id: convertId(e._id),
-    createdAt: e.created ? new Date(e.created).toISOString().replace("Z", "") : void 0,
-    updatedAt: e.updated ? new Date(e.updated).toISOString().replace("Z", "") : void 0,
-    workspaceId: convertId(workspaceId),
-    base: e.parentId === workspaceId ? true : false,
-    model: "environment",
-    name: e.name,
-    variables: Object.entries(e.data).map(([name, value]) => ({
-      enabled: true,
-      name,
-      value: `${value}`
-    }))
-  };
-}
-function importFolder(f, workspaceId) {
-  return {
-    id: convertId(f._id),
-    createdAt: f.created ? new Date(f.created).toISOString().replace("Z", "") : void 0,
-    updatedAt: f.updated ? new Date(f.updated).toISOString().replace("Z", "") : void 0,
-    folderId: f.parentId === workspaceId ? null : convertId(f.parentId),
-    workspaceId: convertId(workspaceId),
-    description: f.description || void 0,
-    model: "folder",
-    name: f.name
-  };
-}
-function importGrpcRequest(r, workspaceId, sortPriority = 0) {
-  const parts = r.protoMethodName.split("/").filter((p) => p !== "");
-  const service = parts[0] ?? null;
-  const method = parts[1] ?? null;
-  return {
-    id: convertId(r._id),
-    createdAt: r.created ? new Date(r.created).toISOString().replace("Z", "") : void 0,
-    updatedAt: r.updated ? new Date(r.updated).toISOString().replace("Z", "") : void 0,
-    workspaceId: convertId(workspaceId),
-    folderId: r.parentId === workspaceId ? null : convertId(r.parentId),
-    model: "grpc_request",
-    sortPriority,
-    name: r.name,
-    description: r.description || void 0,
-    url: convertSyntax(r.url),
-    service,
-    method,
-    message: r.body?.text ?? "",
-    metadata: (r.metadata ?? []).map((h) => ({
-      enabled: !h.disabled,
-      name: h.name ?? "",
-      value: h.value ?? ""
-    })).filter(({ name, value }) => name !== "" || value !== "")
-  };
-}
-function importHttpRequest(r, workspaceId, sortPriority = 0) {
+function importHttpRequest(r, workspaceId) {
   let bodyType = null;
   let body = {};
   if (r.body.mimeType === "application/octet-stream") {
@@ -7466,13 +7426,13 @@ function importHttpRequest(r, workspaceId, sortPriority = 0) {
     };
   }
   return {
-    id: convertId(r._id),
+    id: convertId(r.meta?.id ?? r._id),
     createdAt: r.created ? new Date(r.created).toISOString().replace("Z", "") : void 0,
-    updatedAt: r.updated ? new Date(r.updated).toISOString().replace("Z", "") : void 0,
+    updatedAt: r.modified ? new Date(r.modified).toISOString().replace("Z", "") : void 0,
     workspaceId: convertId(workspaceId),
     folderId: r.parentId === workspaceId ? null : convertId(r.parentId),
     model: "http_request",
-    sortPriority,
+    sortPriority: r.metaSortKey,
     name: r.name,
     description: r.description || void 0,
     url: convertSyntax(r.url),
@@ -7488,47 +7448,309 @@ function importHttpRequest(r, workspaceId, sortPriority = 0) {
     })).filter(({ name, value }) => name !== "" || value !== "")
   };
 }
-function convertSyntax(variable) {
-  if (!isJSString(variable)) return variable;
-  return variable.replaceAll(/{{\s*(_\.)?([^}]+)\s*}}/g, "${[$2]}");
+function importGrpcRequest(r, workspaceId) {
+  const parts = r.protoMethodName.split("/").filter((p) => p !== "");
+  const service = parts[0] ?? null;
+  const method = parts[1] ?? null;
+  return {
+    id: convertId(r.meta?.id ?? r._id),
+    createdAt: r.created ? new Date(r.created).toISOString().replace("Z", "") : void 0,
+    updatedAt: r.modified ? new Date(r.modified).toISOString().replace("Z", "") : void 0,
+    workspaceId: convertId(workspaceId),
+    folderId: r.parentId === workspaceId ? null : convertId(r.parentId),
+    model: "grpc_request",
+    sortPriority: r.metaSortKey,
+    name: r.name,
+    description: r.description || void 0,
+    url: convertSyntax(r.url),
+    service,
+    method,
+    message: r.body?.text ?? "",
+    metadata: (r.metadata ?? []).map((h) => ({
+      enabled: !h.disabled,
+      name: h.name ?? "",
+      value: h.value ?? ""
+    })).filter(({ name, value }) => name !== "" || value !== "")
+  };
 }
-function isWorkspace(obj) {
-  return isJSObject(obj) && obj._type === "workspace";
+function importFolder(f, workspaceId) {
+  return {
+    id: convertId(f._id),
+    createdAt: f.created ? new Date(f.created).toISOString().replace("Z", "") : void 0,
+    updatedAt: f.modified ? new Date(f.modified).toISOString().replace("Z", "") : void 0,
+    folderId: f.parentId === workspaceId ? null : convertId(f.parentId),
+    workspaceId: convertId(workspaceId),
+    description: f.description || void 0,
+    model: "folder",
+    name: f.name
+  };
 }
-function isRequestGroup(obj) {
-  return isJSObject(obj) && obj._type === "request_group";
+function importEnvironment(e, workspaceId, isParent) {
+  return {
+    id: convertId(e._id),
+    createdAt: e.created ? new Date(e.created).toISOString().replace("Z", "") : void 0,
+    updatedAt: e.modified ? new Date(e.modified).toISOString().replace("Z", "") : void 0,
+    workspaceId: convertId(workspaceId),
+    // @ts-ignore
+    sortPriority: e.metaSortKey,
+    // Will be added to Yaak later
+    base: isParent ?? e.parentId === workspaceId,
+    model: "environment",
+    name: e.name,
+    variables: Object.entries(e.data).map(([name, value]) => ({
+      enabled: true,
+      name,
+      value: `${value}`
+    }))
+  };
 }
-function isHttpRequest(obj) {
-  return isJSObject(obj) && obj._type === "request";
+
+// src/v5.ts
+function convertInsomniaV5(parsed) {
+  if (!Array.isArray(parsed.collection)) return null;
+  const resources = {
+    environments: [],
+    folders: [],
+    grpcRequests: [],
+    httpRequests: [],
+    websocketRequests: [],
+    workspaces: []
+  };
+  const meta = parsed.meta ?? {};
+  resources.workspaces.push({
+    id: convertId(meta.id ?? "collection"),
+    createdAt: meta.created ? new Date(meta.created).toISOString().replace("Z", "") : void 0,
+    updatedAt: meta.modified ? new Date(meta.modified).toISOString().replace("Z", "") : void 0,
+    model: "workspace",
+    name: parsed.name,
+    description: meta.description || void 0
+  });
+  resources.environments.push(
+    importEnvironment2(parsed.environments, meta.id, true),
+    ...(parsed.environments.subEnvironments ?? []).map((r) => importEnvironment2(r, meta.id))
+  );
+  const nextFolder = (children, parentId) => {
+    for (const child of children ?? []) {
+      if (!isJSObject(child)) continue;
+      if (Array.isArray(child.children)) {
+        resources.folders.push(importFolder2(child, meta.id, parentId));
+        nextFolder(child.children, child.meta.id);
+      } else if (child.method) {
+        resources.httpRequests.push(
+          importHttpRequest2(child, meta.id, parentId)
+        );
+      } else if (child.protoFileId) {
+        resources.grpcRequests.push(
+          importGrpcRequest2(child, meta.id, parentId)
+        );
+      } else if (child.url) {
+        resources.websocketRequests.push(
+          importWebsocketRequest(child, meta.id, parentId)
+        );
+      }
+    }
+  };
+  nextFolder(parsed.collection ?? [], meta.id);
+  resources.httpRequests = resources.httpRequests.filter(Boolean);
+  resources.grpcRequests = resources.grpcRequests.filter(Boolean);
+  resources.environments = resources.environments.filter(Boolean);
+  resources.workspaces = resources.workspaces.filter(Boolean);
+  return { resources };
 }
-function isGrpcRequest(obj) {
-  return isJSObject(obj) && obj._type === "grpc_request";
-}
-function isEnvironment(obj) {
-  return isJSObject(obj) && obj._type === "environment";
-}
-function isJSObject(obj) {
-  return Object.prototype.toString.call(obj) === "[object Object]";
-}
-function isJSString(obj) {
-  return Object.prototype.toString.call(obj) === "[object String]";
-}
-function convertId(id) {
-  if (id.startsWith("GENERATE_ID::")) {
-    return id;
+function importHttpRequest2(r, workspaceId, parentId) {
+  const id = r.meta?.id ?? r._id;
+  const created = r.meta?.created ?? r.created;
+  const updated = r.meta?.modified ?? r.updated;
+  const sortKey = r.meta?.sortKey ?? r.sortKey;
+  let bodyType = null;
+  let body = {};
+  if (r.body.mimeType === "application/octet-stream") {
+    bodyType = "binary";
+    body = { filePath: r.body.fileName ?? "" };
+  } else if (r.body?.mimeType === "application/x-www-form-urlencoded") {
+    bodyType = "application/x-www-form-urlencoded";
+    body = {
+      form: (r.body.params ?? []).map((p) => ({
+        enabled: !p.disabled,
+        name: p.name ?? "",
+        value: p.value ?? ""
+      }))
+    };
+  } else if (r.body?.mimeType === "multipart/form-data") {
+    bodyType = "multipart/form-data";
+    body = {
+      form: (r.body.params ?? []).map((p) => ({
+        enabled: !p.disabled,
+        name: p.name ?? "",
+        value: p.value ?? "",
+        file: p.fileName ?? null
+      }))
+    };
+  } else if (r.body?.mimeType === "application/graphql") {
+    bodyType = "graphql";
+    body = { text: convertSyntax(r.body.text ?? "") };
+  } else if (r.body?.mimeType === "application/json") {
+    bodyType = "application/json";
+    body = { text: convertSyntax(r.body.text ?? "") };
   }
-  return `GENERATE_ID::${id}`;
+  return {
+    id: convertId(id),
+    workspaceId: convertId(workspaceId),
+    createdAt: created ? new Date(created).toISOString().replace("Z", "") : void 0,
+    updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : void 0,
+    folderId: parentId === workspaceId ? null : convertId(parentId),
+    sortPriority: sortKey,
+    model: "http_request",
+    name: r.name,
+    description: r.meta?.description || void 0,
+    url: convertSyntax(r.url),
+    body,
+    bodyType,
+    method: r.method,
+    ...importHeaders(r),
+    ...importAuthentication(r)
+  };
 }
-function deleteUndefinedAttrs(obj) {
-  if (Array.isArray(obj) && obj != null) {
-    return obj.map(deleteUndefinedAttrs);
-  } else if (typeof obj === "object" && obj != null) {
-    return Object.fromEntries(
-      Object.entries(obj).filter(([, v]) => v !== void 0).map(([k, v]) => [k, deleteUndefinedAttrs(v)])
-    );
-  } else {
-    return obj;
+function importGrpcRequest2(r, workspaceId, parentId) {
+  const id = r.meta?.id ?? r._id;
+  const created = r.meta?.created ?? r.created;
+  const updated = r.meta?.modified ?? r.updated;
+  const sortKey = r.meta?.sortKey ?? r.sortKey;
+  const parts = r.protoMethodName.split("/").filter((p) => p !== "");
+  const service = parts[0] ?? null;
+  const method = parts[1] ?? null;
+  return {
+    model: "grpc_request",
+    id: convertId(id),
+    workspaceId: convertId(workspaceId),
+    createdAt: created ? new Date(created).toISOString().replace("Z", "") : void 0,
+    updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : void 0,
+    folderId: parentId === workspaceId ? null : convertId(parentId),
+    sortPriority: sortKey,
+    name: r.name,
+    description: r.description || void 0,
+    url: convertSyntax(r.url),
+    service,
+    method,
+    message: r.body?.text ?? "",
+    metadata: (r.metadata ?? []).map((h) => ({
+      enabled: !h.disabled,
+      name: h.name ?? "",
+      value: h.value ?? ""
+    })).filter(({ name, value }) => name !== "" || value !== "")
+  };
+}
+function importWebsocketRequest(r, workspaceId, parentId) {
+  const id = r.meta?.id ?? r._id;
+  const created = r.meta?.created ?? r.created;
+  const updated = r.meta?.modified ?? r.updated;
+  const sortKey = r.meta?.sortKey ?? r.sortKey;
+  return {
+    model: "websocket_request",
+    id: convertId(id),
+    workspaceId: convertId(workspaceId),
+    createdAt: created ? new Date(created).toISOString().replace("Z", "") : void 0,
+    updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : void 0,
+    folderId: parentId === workspaceId ? null : convertId(parentId),
+    sortPriority: sortKey,
+    name: r.name,
+    description: r.description || void 0,
+    url: convertSyntax(r.url),
+    message: r.body?.text ?? "",
+    ...importHeaders(r),
+    ...importAuthentication(r)
+  };
+}
+function importHeaders(r) {
+  const headers = (r.headers ?? []).map((h) => ({
+    enabled: !h.disabled,
+    name: h.name ?? "",
+    value: h.value ?? ""
+  })).filter(({ name, value }) => name !== "" || value !== "");
+  return { headers };
+}
+function importAuthentication(r) {
+  let authenticationType = null;
+  let authentication = {};
+  if (r.authentication?.type === "bearer") {
+    authenticationType = "bearer";
+    authentication = {
+      token: convertSyntax(r.authentication.token)
+    };
+  } else if (r.authentication?.type === "basic") {
+    authenticationType = "basic";
+    authentication = {
+      username: convertSyntax(r.authentication.username),
+      password: convertSyntax(r.authentication.password)
+    };
   }
+  return { authenticationType, authentication };
+}
+function importFolder2(f, workspaceId, parentId) {
+  const id = f.meta?.id ?? f._id;
+  const created = f.meta?.created ?? f.created;
+  const updated = f.meta?.modified ?? f.updated;
+  const sortKey = f.meta?.sortKey ?? f.sortKey;
+  return {
+    model: "folder",
+    id: convertId(id),
+    createdAt: created ? new Date(created).toISOString().replace("Z", "") : void 0,
+    updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : void 0,
+    folderId: parentId === workspaceId ? null : convertId(parentId),
+    sortPriority: sortKey,
+    workspaceId: convertId(workspaceId),
+    description: f.description || void 0,
+    name: f.name
+  };
+}
+function importEnvironment2(e, workspaceId, isParent) {
+  const id = e.meta?.id ?? e._id;
+  const created = e.meta?.created ?? e.created;
+  const updated = e.meta?.modified ?? e.updated;
+  const sortKey = e.meta?.sortKey ?? e.sortKey;
+  return {
+    id: convertId(id),
+    createdAt: created ? new Date(created).toISOString().replace("Z", "") : void 0,
+    updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : void 0,
+    workspaceId: convertId(workspaceId),
+    public: !e.isPrivate,
+    // @ts-ignore
+    sortPriority: sortKey,
+    // Will be added to Yaak later
+    base: isParent ?? e.parentId === workspaceId,
+    model: "environment",
+    name: e.name,
+    variables: Object.entries(e.data).map(([name, value]) => ({
+      enabled: true,
+      name,
+      value: `${value}`
+    }))
+  };
+}
+
+// src/index.ts
+var plugin = {
+  importer: {
+    name: "Insomnia",
+    description: "Import Insomnia workspaces",
+    async onImport(_ctx, args) {
+      return convertInsomnia(args.text);
+    }
+  }
+};
+function convertInsomnia(contents) {
+  let parsed;
+  try {
+    parsed = JSON.parse(contents);
+  } catch (e) {
+  }
+  try {
+    parsed = parsed ?? import_yaml.default.parse(contents);
+  } catch (e) {
+  }
+  if (!isJSObject(parsed)) return null;
+  const result = convertInsomniaV5(parsed) ?? convertInsomniaV4(parsed);
+  return deleteUndefinedAttrs(result);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

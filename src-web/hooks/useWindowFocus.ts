@@ -5,15 +5,13 @@ export function useWindowFocus() {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    let unsub: undefined | (() => void) = undefined;
-    getCurrentWebviewWindow()
-      .onFocusChanged((e) => {
-        setVisible(e.payload);
-      })
-      .then((fn) => {
-        unsub = fn;
-      });
-    return () => unsub?.();
+    const unlisten = getCurrentWebviewWindow().onFocusChanged((e) => {
+      setVisible(e.payload);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   return visible;

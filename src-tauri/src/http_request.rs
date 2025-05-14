@@ -123,7 +123,12 @@ pub async fn send_http_request<R: Runtime>(
 
     match settings.proxy {
         Some(ProxySetting::Disabled) => client_builder = client_builder.no_proxy(),
-        Some(ProxySetting::Enabled { http, https, auth }) => {
+        Some(ProxySetting::Enabled {
+            http,
+            https,
+            auth,
+            disabled,
+        }) if !disabled => {
             debug!("Using proxy http={http} https={https}");
             let mut proxy = Proxy::custom(move |url| {
                 let http = if http.is_empty() { None } else { Some(http.to_owned()) };
@@ -143,7 +148,7 @@ pub async fn send_http_request<R: Runtime>(
 
             client_builder = client_builder.proxy(proxy);
         }
-        None => {} // Nothing to do for this one, as it is the default
+        _ => {} // Nothing to do for this one, as it is the default
     }
 
     // Add cookie store if specified
@@ -393,6 +398,15 @@ pub async fn send_http_request<R: Runtime>(
             request_builder = request_builder.body(body.to_owned());
         } else {
             warn!("Unsupported body type: {}", body_type);
+        }
+    } else {
+        // No body set
+        let method = request.method.to_ascii_lowercase();
+        let is_body_method = method == "post" || method == "put" || method == "patch";
+        // Add Content-Length for methods that commonly accept a body because some servers
+        // will error if they don't receive it.
+        if is_body_method && !headers.contains_key("content-length") {
+            headers.insert("Content-Length", HeaderValue::from_static("0"));
         }
     }
 

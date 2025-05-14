@@ -1,7 +1,7 @@
 extern crate core;
 use crate::encoding::read_response_body;
 use crate::error::Error::GenericError;
-use crate::grpc::metadata_to_map;
+use crate::grpc::{build_metadata, metadata_to_map};
 use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
@@ -38,9 +38,9 @@ use yaak_models::util::{
     BatchUpsertResult, UpdateSource, get_workspace_export_resources, maybe_gen_id, maybe_gen_id_opt,
 };
 use yaak_plugins::events::{
-    BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
+    BootResponse, CallHttpRequestActionRequest, FilterResponse,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, HttpHeader, InternalEvent,
+    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, InternalEvent,
     InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
@@ -166,6 +166,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
     .await?;
 
     let uri = safe_uri(&req.url);
+    let metadata = build_metadata(&window, &req).await?;
 
     Ok(grpc_handle
         .lock()
@@ -174,6 +175,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &req.id,
             &uri,
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
+            &metadata,
         )
         .await
         .map_err(|e| GenericError(e.to_string()))?)
@@ -186,7 +188,6 @@ async fn cmd_grpc_go<R: Runtime>(
     proto_files: Vec<String>,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<String> {
     let environment = match environment_id {
@@ -208,42 +209,7 @@ async fn cmd_grpc_go<R: Runtime>(
     )
     .await?;
 
-    let mut metadata = BTreeMap::new();
-
-    // Add the rest of metadata
-    for h in request.clone().metadata {
-        if h.name.is_empty() && h.value.is_empty() {
-            continue;
-        }
-
-        if !h.enabled {
-            continue;
-        }
-
-        metadata.insert(h.name, h.value);
-    }
-
-    if let Some(auth_name) = request.authentication_type.clone() {
-        let auth = request.authentication.clone();
-        let plugin_req = CallHttpAuthenticationRequest {
-            context_id: format!("{:x}", md5::compute(request_id.to_string())),
-            values: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
-            method: "POST".to_string(),
-            url: request.url.clone(),
-            headers: metadata
-                .iter()
-                .map(|(name, value)| HttpHeader {
-                    name: name.to_string(),
-                    value: value.to_string(),
-                })
-                .collect(),
-        };
-        let plugin_result =
-            plugin_manager.call_http_authentication(&window, &auth_name, plugin_req).await?;
-        for header in plugin_result.set_headers {
-            metadata.insert(header.name, header.value);
-        }
-    }
+    let metadata = build_metadata(&window, &request).await?;
 
     let conn = app_handle.db().upsert_grpc_connection(
         &GrpcConnection {
@@ -291,6 +257,7 @@ async fn cmd_grpc_go<R: Runtime>(
             &request.clone().id,
             uri.as_str(),
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
+            &metadata,
         )
         .await;
 
@@ -448,7 +415,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 match (method_desc.is_client_streaming(), method_desc.is_server_streaming()) {
                     (true, true) => (
                         Some(
-                            connection.streaming(&service, &method, in_msg_stream, metadata).await,
+                            connection.streaming(&service, &method, in_msg_stream, &metadata).await,
                         ),
                         None,
                     ),
@@ -456,16 +423,16 @@ async fn cmd_grpc_go<R: Runtime>(
                         None,
                         Some(
                             connection
-                                .client_streaming(&service, &method, in_msg_stream, metadata)
+                                .client_streaming(&service, &method, in_msg_stream, &metadata)
                                 .await,
                         ),
                     ),
                     (false, true) => (
-                        Some(connection.server_streaming(&service, &method, &msg, metadata).await),
+                        Some(connection.server_streaming(&service, &method, &msg, &metadata).await),
                         None,
                     ),
                     (false, false) => {
-                        (None, Some(connection.unary(&service, &method, &msg, metadata).await))
+                        (None, Some(connection.unary(&service, &method, &msg, &metadata).await))
                     }
                 };
 

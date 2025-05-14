@@ -250,8 +250,8 @@ function HighlightedKey({ keyText, show }: { keyText: string; show: boolean }) {
 
 const helpAfterEncryption = (
   <p>
-    this key is used for any encryption used for this workspace. It is stored securely using your OS
-    keychain, but it is recommended to back it up. If you share this workspace with others,
-    you&apos;ll need to send them this key to access any encrypted values.
+    The following key is used for encryption operations within this workspace. It is stored securely
+    using your OS keychain, but it is recommended to back it up. If you share this workspace with
+    others, you&apos;ll need to send them this key to access any encrypted values.
   </p>
 );

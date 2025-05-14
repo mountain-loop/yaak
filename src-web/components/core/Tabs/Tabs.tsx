@@ -5,6 +5,7 @@ import { Icon } from '../Icon';
 import type { RadioDropdownProps } from '../RadioDropdown';
 import { RadioDropdown } from '../RadioDropdown';
 import { HStack } from '../Stacks';
+import { ErrorBoundary } from '../../ErrorBoundary';
 
 export type TabItem =
   | {
@@ -153,12 +154,14 @@ export const TabContent = memo(function TabContent({
   className,
 }: TabContentProps) {
   return (
-    <div
-      tabIndex={-1}
-      data-tab={value}
-      className={classNames(className, 'tab-content', 'hidden w-full h-full')}
-    >
-      {children}
-    </div>
+    <ErrorBoundary name={`Tab ${value}`}>
+      <div
+        tabIndex={-1}
+        data-tab={value}
+        className={classNames(className, 'tab-content', 'hidden w-full h-full')}
+      >
+        {children}
+      </div>
+    </ErrorBoundary>
   );
 });

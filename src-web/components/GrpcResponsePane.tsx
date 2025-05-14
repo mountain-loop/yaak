@@ -25,6 +25,7 @@ import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
 import { EmptyStateText } from './EmptyStateText';
+import { ErrorBoundary } from './ErrorBoundary';
 import { RecentGrpcConnectionsDropdown } from './RecentGrpcConnectionsDropdown';
 
 interface Props {
@@ -92,27 +93,29 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
                 />
               </div>
             </HStack>
-            <AutoScroller
-              data={events}
-              header={
-                activeConnection.error && (
-                  <Banner color="danger" className="m-3">
-                    {activeConnection.error}
-                  </Banner>
-                )
-              }
-              render={(event) => (
-                <EventRow
-                  key={event.id}
-                  event={event}
-                  isActive={event.id === activeEventId}
-                  onClick={() => {
-                    if (event.id === activeEventId) setActiveEventId(null);
-                    else setActiveEventId(event.id);
-                  }}
-                />
-              )}
-            />
+            <ErrorBoundary name="GRPC Events">
+              <AutoScroller
+                data={events}
+                header={
+                  activeConnection.error && (
+                    <Banner color="danger" className="m-3">
+                      {activeConnection.error}
+                    </Banner>
+                  )
+                }
+                render={(event) => (
+                  <EventRow
+                    key={event.id}
+                    event={event}
+                    isActive={event.id === activeEventId}
+                    onClick={() => {
+                      if (event.id === activeEventId) setActiveEventId(null);
+                      else setActiveEventId(event.id);
+                    }}
+                  />
+                )}
+              />
+            </ErrorBoundary>
           </div>
         )
       }

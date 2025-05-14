@@ -65,6 +65,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
       autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
       data={data}
+      className="pb-4" // Pad the bottom to look nice
     />
   );
 }
@@ -77,15 +78,17 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
   setDataAttr,
   data,
   disabled,
+  className,
 }: Pick<
   Props<T>,
   'inputs' | 'autocompleteFunctions' | 'autocompleteVariables' | 'stateKey' | 'data'
 > & {
   setDataAttr: (name: string, value: JsonPrimitive) => void;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
-    <VStack space={3} className="h-full overflow-auto">
+    <VStack space={3} className={classNames(className, 'h-full overflow-auto')}>
       {inputs?.map((input, i) => {
         if ('hidden' in input && input.hidden) {
           return null;

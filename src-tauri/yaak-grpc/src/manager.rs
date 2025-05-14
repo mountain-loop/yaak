@@ -69,7 +69,7 @@ impl GrpcConnection {
         service: &str,
         method: &str,
         message: &str,
-        metadata: BTreeMap<String, String>,
+        metadata: &BTreeMap<String, String>,
     ) -> Result<Response<DynamicMessage>, StreamError> {
         let method = &self.method(&service, &method)?;
         let input_message = method.input();
@@ -96,7 +96,7 @@ impl GrpcConnection {
         service: &str,
         method: &str,
         stream: ReceiverStream<DynamicMessage>,
-        metadata: BTreeMap<String, String>,
+        metadata: &BTreeMap<String, String>,
     ) -> Result<Response<Streaming<DynamicMessage>>, StreamError> {
         let method = &self.method(&service, &method)?;
         let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
@@ -116,7 +116,7 @@ impl GrpcConnection {
         service: &str,
         method: &str,
         stream: ReceiverStream<DynamicMessage>,
-        metadata: BTreeMap<String, String>,
+        metadata: &BTreeMap<String, String>,
     ) -> Result<Response<DynamicMessage>, StreamError> {
         let method = &self.method(&service, &method)?;
         let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
@@ -137,7 +137,7 @@ impl GrpcConnection {
         service: &str,
         method: &str,
         message: &str,
-        metadata: BTreeMap<String, String>,
+        metadata: &BTreeMap<String, String>,
     ) -> Result<Response<Streaming<DynamicMessage>>, StreamError> {
         let method = &self.method(&service, &method)?;
         let input_message = method.input();
@@ -180,10 +180,11 @@ impl GrpcHandle {
         id: &str,
         uri: &str,
         proto_files: &Vec<PathBuf>,
+        metadata: &BTreeMap<String, String>,
     ) -> Result<(), String> {
         let pool = if proto_files.is_empty() {
             let full_uri = uri_from_str(uri)?;
-            fill_pool_from_reflection(&full_uri).await
+            fill_pool_from_reflection(&full_uri, metadata).await
         } else {
             fill_pool_from_files(&self.app_handle, proto_files).await
         }?;
@@ -197,9 +198,10 @@ impl GrpcHandle {
         id: &str,
         uri: &str,
         proto_files: &Vec<PathBuf>,
+        metadata: &BTreeMap<String, String>,
     ) -> Result<Vec<ServiceDefinition>, String> {
         // Ensure reflection is up-to-date
-        self.reflect(id, uri, proto_files).await?;
+        self.reflect(id, uri, proto_files, metadata).await?;
 
         let pool = self.get_pool(id, uri, proto_files).ok_or("Failed to get pool".to_string())?;
         Ok(self.services_from_pool(&pool))
@@ -235,8 +237,9 @@ impl GrpcHandle {
         id: &str,
         uri: &str,
         proto_files: &Vec<PathBuf>,
+        metadata: &BTreeMap<String, String>,
     ) -> Result<GrpcConnection, String> {
-        self.reflect(id, uri, proto_files).await?;
+        self.reflect(id, uri, proto_files, metadata).await?;
         let pool = self.get_pool(id, uri, proto_files).ok_or("Failed to get pool")?;
 
         let uri = uri_from_str(uri)?;
@@ -254,7 +257,10 @@ impl GrpcHandle {
     }
 }
 
-fn decorate_req<T>(metadata: BTreeMap<String, String>, req: &mut Request<T>) -> Result<(), String> {
+pub(crate) fn decorate_req<T>(
+    metadata: &BTreeMap<String, String>,
+    req: &mut Request<T>,
+) -> Result<(), String> {
     for (k, v) in metadata {
         req.metadata_mut().insert(
             MetadataKey::from_str(k.as_str()).map_err(|e| e.to_string())?,

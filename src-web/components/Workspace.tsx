@@ -41,6 +41,7 @@ import { Sidebar } from './sidebar/Sidebar';
 import { SidebarActions } from './sidebar/SidebarActions';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
+import { ErrorBoundary } from './ErrorBoundary';
 
 const side = { gridArea: 'side' };
 const head = { gridArea: 'head' };
@@ -149,13 +150,17 @@ export function Workspace() {
             <HeaderSize size="lg" className="border-transparent">
               <SidebarActions />
             </HeaderSize>
-            <Sidebar />
+            <ErrorBoundary name="Sidebar (Floating)">
+              <Sidebar />
+            </ErrorBoundary>
           </m.div>
         </Overlay>
       ) : (
         <>
           <div style={side} className={classNames('x-theme-sidebar', 'overflow-hidden bg-surface')}>
-            <Sidebar className="border-r border-border-subtle" />
+            <ErrorBoundary name="Sidebar">
+              <Sidebar className="border-r border-border-subtle" />
+            </ErrorBoundary>
           </div>
           <ResizeHandle
             className="-translate-x-3"
@@ -175,7 +180,9 @@ export function Workspace() {
       >
         <WorkspaceHeader className="pointer-events-none" />
       </HeaderSize>
-      <WorkspaceBody />
+      <ErrorBoundary name="Workspace Body">
+        <WorkspaceBody />
+      </ErrorBoundary>
     </div>
   );
 }

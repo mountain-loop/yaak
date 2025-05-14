@@ -258,7 +258,11 @@ const EnvironmentEditor = function ({
         )}
       </Heading>
       {activeEnvironment.public && promptToEncrypt && (
-        <DismissibleBanner id={activeEnvironment.id} color="notice" className="mr-3">
+        <DismissibleBanner
+          id={`warn-unencrypted-${activeEnvironment.id}`}
+          color="notice"
+          className="mr-3"
+        >
           This environment is sharable. Ensure variable values are encrypted to avoid accidental
           leaking of secrets during directory sync or data export.
         </DismissibleBanner>

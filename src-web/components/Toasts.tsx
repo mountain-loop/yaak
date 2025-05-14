@@ -4,6 +4,7 @@ import React, { type ReactNode } from 'react';
 import { hideToast, toastsAtom } from '../lib/toast';
 import { Toast, type ToastProps } from './core/Toast';
 import { Portal } from './Portal';
+import { ErrorBoundary } from './ErrorBoundary';
 
 export type ToastInstance = {
   id: string;
@@ -22,16 +23,17 @@ export const Toasts = () => {
           {toasts.map((toast: ToastInstance) => {
             const { message, uniqueKey, ...props } = toast;
             return (
-              <Toast
-                key={uniqueKey}
-                open
-                {...props}
-                // We call onClose inside actions.hide instead of passing to toast so that
-                // it gets called from external close calls as well
-                onClose={() => hideToast(toast)}
-              >
-                {message}
-              </Toast>
+              <ErrorBoundary key={uniqueKey} name={`Toast ${uniqueKey}`}>
+                <Toast
+                  open
+                  {...props}
+                  // We call onClose inside actions.hide instead of passing to toast so that
+                  // it gets called from external close calls as well
+                  onClose={() => hideToast(toast)}
+                >
+                  {message}
+                </Toast>
+              </ErrorBoundary>
             );
           })}
         </AnimatePresence>

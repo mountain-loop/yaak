@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { useIsEncryptionEnabled } from '../../hooks/useIsEncryptionEnabled';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
+import { copyToClipboard } from '../../lib/copy';
 import {
   analyzeTemplate,
   convertTemplateToInsecure,
@@ -30,7 +31,6 @@ import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Label } from './Label';
 import { HStack } from './Stacks';
-import { copyToClipboard } from '../../lib/copy';
 
 export type InputProps = Pick<
   EditorProps,
@@ -127,13 +127,29 @@ const BaseInput = forwardRef<EditorView, InputProps>(function InputBase(
 
   useImperativeHandle<EditorView | null, EditorView | null>(ref, () => editorRef.current);
 
+  const lastWindowFocus = useRef<number>(0);
+  useEffect(() => {
+    const fn = () => (lastWindowFocus.current = Date.now());
+    window.addEventListener('focus', fn);
+    return () => {
+      window.removeEventListener('focus', fn);
+    };
+  }, []);
+
   const handleFocus = useCallback(() => {
     if (readOnly) return;
+
+    // Select all text of input when it's focused to match standard browser behavior.
+    // This should not, however, select when the input is focused due to a window focus event, so
+    // we handle that case as well.
+    const windowJustFocused = Date.now() - lastWindowFocus.current < 200;
+    if (!windowJustFocused) {
+      editorRef.current?.dispatch({
+        selection: { anchor: 0, head: editorRef.current.state.doc.length },
+      });
+    }
+
     setFocused(true);
-    // Select all text on focus
-    editorRef.current?.dispatch({
-      selection: { anchor: 0, head: editorRef.current.state.doc.length },
-    });
     onFocus?.();
   }, [onFocus, readOnly]);
 

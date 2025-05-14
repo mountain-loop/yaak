@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::env::temp_dir;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -89,11 +90,14 @@ pub async fn fill_pool_from_files(
     Ok(pool)
 }
 
-pub async fn fill_pool_from_reflection(uri: &Uri) -> Result<DescriptorPool, String> {
+pub async fn fill_pool_from_reflection(
+    uri: &Uri,
+    metadata: &BTreeMap<String, String>,
+) -> Result<DescriptorPool, String> {
     let mut pool = DescriptorPool::new();
     let mut client = AutoReflectionClient::new(uri);
 
-    for service in list_services(&mut client).await? {
+    for service in list_services(&mut client, metadata).await? {
         if service == "grpc.reflection.v1alpha.ServerReflection" {
             continue;
         }
@@ -101,14 +105,18 @@ pub async fn fill_pool_from_reflection(uri: &Uri) -> Result<DescriptorPool, Stri
             // TODO: update reflection client to use v1
             continue;
         }
-        file_descriptor_set_from_service_name(&service, &mut pool, &mut client).await;
+        file_descriptor_set_from_service_name(&service, &mut pool, &mut client, metadata).await;
     }
 
     Ok(pool)
 }
 
-async fn list_services(client: &mut AutoReflectionClient) -> Result<Vec<String>, String> {
-    let response = client.send_reflection_request(MessageRequest::ListServices("".into())).await?;
+async fn list_services(
+    client: &mut AutoReflectionClient,
+    metadata: &BTreeMap<String, String>,
+) -> Result<Vec<String>, String> {
+    let response =
+        client.send_reflection_request(MessageRequest::ListServices("".into()), metadata).await?;
 
     let list_services_response = match response {
         MessageResponse::ListServicesResponse(resp) => resp,
@@ -122,9 +130,13 @@ async fn file_descriptor_set_from_service_name(
     service_name: &str,
     pool: &mut DescriptorPool,
     client: &mut AutoReflectionClient,
+    metadata: &BTreeMap<String, String>,
 ) {
     let response = match client
-        .send_reflection_request(MessageRequest::FileContainingSymbol(service_name.into()))
+        .send_reflection_request(
+            MessageRequest::FileContainingSymbol(service_name.into()),
+            metadata,
+        )
         .await
     {
         Ok(resp) => resp,
@@ -139,8 +151,13 @@ async fn file_descriptor_set_from_service_name(
         _ => panic!("Expected a FileDescriptorResponse variant"),
     };
 
-    add_file_descriptors_to_pool(file_descriptor_response.file_descriptor_proto, pool, client)
-        .await;
+    add_file_descriptors_to_pool(
+        file_descriptor_response.file_descriptor_proto,
+        pool,
+        client,
+        metadata,
+    )
+    .await;
 }
 
 #[async_recursion]
@@ -148,6 +165,7 @@ async fn add_file_descriptors_to_pool(
     fds: Vec<Vec<u8>>,
     pool: &mut DescriptorPool,
     client: &mut AutoReflectionClient,
+    metadata: &BTreeMap<String, String>,
 ) {
     let mut topo_sort = topology::SimpleTopoSort::new();
     let mut fd_mapping = std::collections::HashMap::with_capacity(fds.len());
@@ -165,7 +183,7 @@ async fn add_file_descriptors_to_pool(
                 if let Some(fdp) = fd_mapping.remove(&node) {
                     pool.add_file_descriptor_proto(fdp).expect("add file descriptor proto");
                 } else {
-                    file_descriptor_set_by_filename(node.as_str(), pool, client).await;
+                    file_descriptor_set_by_filename(node.as_str(), pool, client, metadata).await;
                 }
             }
             Err(_) => panic!("proto file got cycle!"),
@@ -177,6 +195,7 @@ async fn file_descriptor_set_by_filename(
     filename: &str,
     pool: &mut DescriptorPool,
     client: &mut AutoReflectionClient,
+    metadata: &BTreeMap<String, String>,
 ) {
     // We already fetched this file
     if let Some(_) = pool.get_file_by_name(filename) {
@@ -184,7 +203,7 @@ async fn file_descriptor_set_by_filename(
     }
 
     let msg = MessageRequest::FileByFilename(filename.into());
-    let response = client.send_reflection_request(msg).await;
+    let response = client.send_reflection_request(msg, metadata).await;
     let file_descriptor_response = match response {
         Ok(MessageResponse::FileDescriptorResponse(resp)) => resp,
         Ok(_) => {
@@ -196,8 +215,13 @@ async fn file_descriptor_set_by_filename(
         }
     };
 
-    add_file_descriptors_to_pool(file_descriptor_response.file_descriptor_proto, pool, client)
-        .await;
+    add_file_descriptors_to_pool(
+        file_descriptor_response.file_descriptor_proto,
+        pool,
+        client,
+        metadata,
+    )
+    .await;
 }
 
 pub fn method_desc_to_path(md: &MethodDescriptor) -> PathAndQuery {
