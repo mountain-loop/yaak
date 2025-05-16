@@ -1,11 +1,11 @@
+import { workspacesAtom } from '@yaakapp-internal/models';
 import { ExportDataDialog } from '../components/ExportDataDialog';
 import { showAlert } from '../lib/alert';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { showToast } from '../lib/toast';
-import { getActiveWorkspace } from './useActiveWorkspace';
+import { activeWorkspaceAtom } from './useActiveWorkspace';
 import { useFastMutation } from './useFastMutation';
-import { workspacesAtom } from './useWorkspaces';
 
 export function useExportData() {
   return useFastMutation({
@@ -14,7 +14,7 @@ export function useExportData() {
       showAlert({ id: 'export-failed', title: 'Export Failed', body: err });
     },
     mutationFn: async () => {
-      const activeWorkspace = getActiveWorkspace();
+      const activeWorkspace = jotaiStore.get(activeWorkspaceAtom);
       const workspaces = jotaiStore.get(workspacesAtom);
 
       if (activeWorkspace == null || workspaces.length === 0) return;

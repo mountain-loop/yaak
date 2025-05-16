@@ -2,7 +2,6 @@ import classNames from 'classnames';
 import * as m from 'motion/react-m';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
-import { useKey } from 'react-use';
 import { Overlay } from '../Overlay';
 import { Heading } from './Heading';
 import { IconButton } from './IconButton';
@@ -42,18 +41,9 @@ export function Dialog({
     [description],
   );
 
-  useKey(
-    'Escape',
-    () => {
-      if (!open) return;
-      onClose?.();
-    },
-    {},
-    [open],
-  );
-
   return (
     <Overlay open={open} onClose={disableBackdropClose ? undefined : onClose} portalName="dialog">
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         role="dialog"
         className={classNames(
@@ -64,6 +54,16 @@ export function Dialog({
         )}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          // NOTE: We handle Escape on the element itself so that it doesn't close multiple
+          //   dialogs and can be intercepted by children if needed.
+          if (e.key === 'Escape') {
+            onClose?.();
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        }}
       >
         <m.div
           initial={{ top: 5, scale: 0.97 }}
@@ -75,6 +75,7 @@ export function Dialog({
             'relative bg-surface pointer-events-auto',
             'rounded-lg',
             'border border-border-subtle shadow-lg shadow-[rgba(0,0,0,0.1)]',
+            'min-h-[10rem]',
             'max-w-[calc(100vw-5rem)] max-h-[calc(100vh-5rem)]',
             size === 'sm' && 'w-[28rem]',
             size === 'md' && 'w-[45rem]',
@@ -88,15 +89,15 @@ export function Dialog({
               {title}
             </Heading>
           ) : (
-            <span />
+            <span aria-hidden />
           )}
 
           {description ? (
-            <div className="px-6 text-text-subtle" id={descriptionId}>
+            <div className="px-6 text-text-subtle mb-3" id={descriptionId}>
               {description}
             </div>
           ) : (
-            <span />
+            <span aria-hidden />
           )}
 
           <div

@@ -1,17 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import { httpResponsesAtom } from '@yaakapp-internal/models';
 import type { GetHttpAuthenticationConfigResponse, JsonPrimitive } from '@yaakapp-internal/plugins';
+import { useAtomValue } from 'jotai';
 import { md5 } from 'js-md5';
 import { useState } from 'react';
 import { invokeCmd } from '../lib/tauri';
-import { useHttpResponses } from './useHttpResponses';
 
 export function useHttpAuthenticationConfig(
   authName: string | null,
   values: Record<string, JsonPrimitive>,
   requestId: string,
 ) {
-  const responses = useHttpResponses();
+  const responses = useAtomValue(httpResponsesAtom);
   const [forceRefreshCounter, setForceRefreshCounter] = useState<number>(0);
 
   // Some auth handlers like OAuth 2.0 show the current token after a successful request. To

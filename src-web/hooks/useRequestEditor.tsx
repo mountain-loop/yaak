@@ -1,6 +1,5 @@
 import EventEmitter from 'eventemitter3';
-import { atom } from 'jotai';
-import { useAtom } from 'jotai/index';
+import { atom , useAtom } from 'jotai';
 import type { DependencyList } from 'react';
 import { useCallback, useEffect } from 'react';
 

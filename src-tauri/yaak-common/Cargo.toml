@@ -1,0 +1,9 @@
+[package]
+name = "yaak-common"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+tauri = { workspace = true }
+regex = "1.11.0"

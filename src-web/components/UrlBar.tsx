@@ -1,6 +1,6 @@
+import type { EditorView } from '@codemirror/view';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import type { EditorView } from 'codemirror';
 import type { FormEvent, ReactNode } from 'react';
 import { memo, useRef, useState } from 'react';
 import { useHotKey } from '../hooks/useHotKey';
@@ -8,7 +8,7 @@ import type { IconProps } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import type { InputProps } from './core/Input';
 import { Input } from './core/Input';
-import {HStack} from "./core/Stacks";
+import { HStack } from './core/Stacks';
 import { RequestMethodDropdown } from './RequestMethodDropdown';
 
 type Props = Pick<HttpRequest, 'url'> & {
@@ -68,12 +68,12 @@ export const UrlBar = memo(function UrlBar({
     <form onSubmit={handleSubmit} className={classNames('x-theme-urlBar', className)}>
       <Input
         ref={inputRef}
+        autocompleteFunctions
         autocompleteVariables
         stateKey={stateKey}
         size="sm"
         wrapLines={isFocused}
         hideLabel
-        useTemplating
         language="url"
         className="px-1.5 py-0.5"
         label="Enter URL"

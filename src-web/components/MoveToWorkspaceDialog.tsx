@@ -1,9 +1,13 @@
-import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import type {
+  GrpcRequest,
+  HttpRequest,
+  WebsocketRequest} from '@yaakapp-internal/models';
+import {
+  patchModel,
+  workspacesAtom,
+} from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import React, { useState } from 'react';
-import { upsertWebsocketRequest } from '../commands/upsertWebsocketRequest';
-import { useUpdateAnyGrpcRequest } from '../hooks/useUpdateAnyGrpcRequest';
-import { useUpdateAnyHttpRequest } from '../hooks/useUpdateAnyHttpRequest';
-import { useWorkspaces } from '../hooks/useWorkspaces';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
 import { showToast } from '../lib/toast';
@@ -19,9 +23,7 @@ interface Props {
 }
 
 export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Props) {
-  const workspaces = useWorkspaces();
-  const updateHttpRequest = useUpdateAnyHttpRequest();
-  const updateGrpcRequest = useUpdateAnyGrpcRequest();
+  const workspaces = useAtomValue(workspacesAtom);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(activeWorkspaceId);
 
   return (
@@ -40,18 +42,12 @@ export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Pr
         color="primary"
         disabled={selectedWorkspaceId === activeWorkspaceId}
         onClick={async () => {
-          const update = {
+          const patch = {
             workspaceId: selectedWorkspaceId,
             folderId: null,
           };
 
-          if (request.model === 'http_request') {
-            await updateHttpRequest.mutateAsync({ id: request.id, update });
-          } else if (request.model === 'grpc_request') {
-            await updateGrpcRequest.mutateAsync({ id: request.id, update });
-          } else if (request.model === 'websocket_request') {
-            await upsertWebsocketRequest.mutateAsync({ ...request, ...update });
-          }
+          await patchModel(request, patch);
 
           // Hide after a moment, to give time for request to disappear
           setTimeout(onDone, 100);

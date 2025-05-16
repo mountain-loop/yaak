@@ -34,7 +34,7 @@ export interface Context {
     openUrl(
       args: OpenWindowRequest & {
         onNavigate?: (args: { url: string }) => void;
-        onClose: () => void;
+        onClose?: () => void;
       },
     ): Promise<{ close: () => void }>;
   };

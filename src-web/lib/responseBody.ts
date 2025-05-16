@@ -5,18 +5,14 @@ import { getCharsetFromContentType } from './model_util';
 import { invokeCmd } from './tauri';
 
 export async function getResponseBodyText(response: HttpResponse): Promise<string | null> {
-  if (!response.bodyPath) return null;
+  if (!response.bodyPath) {
+    return null;
+  }
 
   const bytes = await readFile(response.bodyPath);
   const charset = getCharsetFromContentType(response.headers);
 
-  try {
-    return new TextDecoder(charset ?? 'utf-8', { fatal: true }).decode(bytes);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (err) {
-    // Failed to decode as text, so return null
-    return null;
-  }
+  return new TextDecoder(charset ?? 'utf-8', { fatal: false }).decode(bytes);
 }
 
 export async function getResponseBodyBlob(response: HttpResponse): Promise<Uint8Array | null> {

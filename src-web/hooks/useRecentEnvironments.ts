@@ -1,9 +1,10 @@
+import { useAtomValue } from 'jotai';
 import { useEffect, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
 import { activeEnvironmentIdAtom } from './useActiveEnvironment';
-import { activeWorkspaceIdAtom, useActiveWorkspace } from './useActiveWorkspace';
-import { useEnvironments } from './useEnvironments';
+import { activeWorkspaceAtom, activeWorkspaceIdAtom } from './useActiveWorkspace';
+import { useEnvironmentsBreakdown } from './useEnvironmentsBreakdown';
 import { useKeyValue } from './useKeyValue';
 
 const kvKey = (workspaceId: string) => 'recent_environments::' + workspaceId;
@@ -11,8 +12,8 @@ const namespace = 'global';
 const fallback: string[] = [];
 
 export function useRecentEnvironments() {
-  const { subEnvironments } = useEnvironments();
-  const activeWorkspace = useActiveWorkspace();
+  const { subEnvironments } = useEnvironmentsBreakdown();
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const kv = useKeyValue<string[]>({
     key: kvKey(activeWorkspace?.id ?? 'n/a'),
     namespace,
@@ -37,7 +38,7 @@ export function useSubscribeRecentEnvironments() {
 
       const key = kvKey(activeWorkspaceId);
 
-      const recentIds = await getKeyValue<string[]>({ namespace, key, fallback });
+      const recentIds = getKeyValue<string[]>({ namespace, key, fallback });
       if (recentIds[0] === activeEnvironmentId) return; // Short-circuit
 
       const withoutActiveId = recentIds.filter((id) => id !== activeEnvironmentId);

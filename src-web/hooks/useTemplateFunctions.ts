@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { GetTemplateFunctionsResponse, TemplateFunction } from '@yaakapp-internal/plugins';
-import { atom, useAtomValue } from 'jotai';
-import { useSetAtom } from 'jotai/index';
+import { atom, useAtomValue , useSetAtom } from 'jotai';
 import { useMemo, useState } from 'react';
 import type { TwigCompletionOption } from '../components/core/Editor/twig/completion';
 import { invokeCmd } from '../lib/tauri';
@@ -11,9 +10,13 @@ const templateFunctionsAtom = atom<TemplateFunction[]>([]);
 
 export function useTemplateFunctionCompletionOptions(
   onClick: (fn: TemplateFunction, ragTag: string, pos: number) => void,
+  enabled: boolean,
 ) {
   const templateFunctions = useAtomValue(templateFunctionsAtom);
   return useMemo<TwigCompletionOption[]>(() => {
+    if (!enabled) {
+      return [];
+    }
     return (
       templateFunctions.map((fn) => {
         const NUM_ARGS = 2;
@@ -35,7 +38,7 @@ export function useTemplateFunctionCompletionOptions(
         };
       }) ?? []
     );
-  }, [onClick, templateFunctions]);
+  }, [enabled, onClick, templateFunctions]);
 }
 
 export function useSubscribeTemplateFunctions() {

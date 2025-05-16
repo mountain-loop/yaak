@@ -1,14 +1,16 @@
+use crate::error::Error::GenericError;
+use crate::error::Result;
 use crate::render::render_http_request;
 use crate::response_err;
 use http::header::{ACCEPT, USER_AGENT};
-use http::{HeaderMap, HeaderName, HeaderValue, Uri};
+use http::{HeaderMap, HeaderName, HeaderValue};
 use log::{debug, error, warn};
 use mime_guess::Mime;
 use reqwest::redirect::Policy;
-use reqwest::{multipart, Proxy, Url};
 use reqwest::{Method, Response};
-use rustls::crypto::ring;
+use reqwest::{Proxy, Url, multipart};
 use rustls::ClientConfig;
+use rustls::crypto::ring;
 use rustls_platform_verifier::BuilderVerifierExt;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -18,20 +20,18 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs;
-use tokio::fs::{create_dir_all, File};
+use tokio::fs::{File, create_dir_all};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::queries::{
-    get_base_environment, get_http_response, get_or_create_settings, get_workspace,
-    update_response_if_id, upsert_cookie_jar, UpdateSource,
-};
+use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, RenderPurpose, WindowContext,
+    CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -43,27 +43,46 @@ pub async fn send_http_request<R: Runtime>(
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
     cancelled_rx: &mut Receiver<bool>,
-) -> Result<HttpResponse, String> {
-    let plugin_manager = window.state::<PluginManager>();
-    let workspace = get_workspace(window, &unrendered_request.workspace_id)
-        .await
-        .expect("Failed to get Workspace");
-    let base_environment = get_base_environment(window, &unrendered_request.workspace_id)
-        .await
-        .expect("Failed to get base environment");
-    let settings = get_or_create_settings(window).await;
-    let cb = PluginTemplateCallback::new(
-        window.app_handle(),
-        &WindowContext::from_window(window),
-        RenderPurpose::Send,
-    );
+) -> Result<HttpResponse> {
+    let app_handle = window.app_handle().clone();
+    let plugin_manager = app_handle.state::<PluginManager>();
+    let (settings, workspace) = {
+        let db = window.db();
+        let settings = db.get_settings();
+        let workspace = db.get_workspace(&unrendered_request.workspace_id)?;
+        (settings, workspace)
+    };
+    let base_environment =
+        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
 
     let response_id = og_response.id.clone();
     let response = Arc::new(Mutex::new(og_response.clone()));
 
-    let request =
-        render_http_request(&unrendered_request, &base_environment, environment.as_ref(), &cb)
-            .await;
+    let cb = PluginTemplateCallback::new(
+        window.app_handle(),
+        &PluginWindowContext::new(window),
+        RenderPurpose::Send,
+    );
+    let update_source = UpdateSource::from_window(window);
+
+    let request = match render_http_request(
+        &unrendered_request,
+        &base_environment,
+        environment.as_ref(),
+        &cb,
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(response_err(
+                &app_handle,
+                &*response.lock().await,
+                e.to_string(),
+                &update_source,
+            ));
+        }
+    };
 
     let mut url_string = request.url;
 
@@ -104,7 +123,12 @@ pub async fn send_http_request<R: Runtime>(
 
     match settings.proxy {
         Some(ProxySetting::Disabled) => client_builder = client_builder.no_proxy(),
-        Some(ProxySetting::Enabled { http, https, auth }) => {
+        Some(ProxySetting::Enabled {
+            http,
+            https,
+            auth,
+            disabled,
+        }) if !disabled => {
             debug!("Using proxy http={http} https={https}");
             let mut proxy = Proxy::custom(move |url| {
                 let http = if http.is_empty() { None } else { Some(http.to_owned()) };
@@ -124,7 +148,7 @@ pub async fn send_http_request<R: Runtime>(
 
             client_builder = client_builder.proxy(proxy);
         }
-        None => {} // Nothing to do for this one, as it is the default
+        _ => {} // Nothing to do for this one, as it is the default
     }
 
     // Add cookie store if specified
@@ -139,10 +163,9 @@ pub async fn send_http_request<R: Runtime>(
                     serde_json::from_value(json_cookie).expect("Failed to deserialize cookie")
                 })
                 .map(|c| Ok(c))
-                .collect::<Vec<Result<_, ()>>>();
+                .collect::<Vec<Result<_>>>();
 
-            let store = reqwest_cookie_store::CookieStore::from_cookies(cookies, true)
-                .expect("Failed to create cookie store");
+            let store = reqwest_cookie_store::CookieStore::from_cookies(cookies, true)?;
             let cookie_store = reqwest_cookie_store::CookieStoreMutex::new(store);
             let cookie_store = Arc::new(cookie_store);
             client_builder = client_builder.cookie_provider(Arc::clone(&cookie_store));
@@ -158,7 +181,7 @@ pub async fn send_http_request<R: Runtime>(
         ));
     }
 
-    let client = client_builder.build().expect("Failed to build client");
+    let client = client_builder.build()?;
 
     // Render query parameters
     let mut query_params = Vec::new();
@@ -169,32 +192,20 @@ pub async fn send_http_request<R: Runtime>(
         query_params.push((p.name, p.value));
     }
 
-    let uri = match Uri::from_str(url_string.as_str()) {
+    let url = match Url::from_str(&url_string) {
         Ok(u) => u,
         Err(e) => {
             return Ok(response_err(
+                &app_handle,
                 &*response.lock().await,
                 format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
-                window,
-            )
-            .await);
-        }
-    };
-    // Yes, we're parsing both URI and URL because they could return different errors
-    let url = match Url::from_str(uri.to_string().as_str()) {
-        Ok(u) => u,
-        Err(e) => {
-            return Ok(response_err(
-                &*response.lock().await,
-                format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
-                window,
-            )
-            .await);
+                &update_source,
+            ));
         }
     };
 
-    let m = Method::from_bytes(request.method.to_uppercase().as_bytes())
-        .expect("Failed to create method");
+    let m = Method::from_str(&request.method.to_uppercase())
+        .map_err(|e| GenericError(e.to_string()))?;
     let mut request_builder = client.request(m, url).query(&query_params);
 
     let mut headers = HeaderMap::new();
@@ -282,7 +293,7 @@ pub async fn send_http_request<R: Runtime>(
         } else if body_type == "binary" && request_body.contains_key("filePath") {
             let file_path = request_body
                 .get("filePath")
-                .ok_or("filePath not set")?
+                .ok_or(GenericError("filePath not set".to_string()))?
                 .as_str()
                 .unwrap_or_default();
 
@@ -291,7 +302,12 @@ pub async fn send_http_request<R: Runtime>(
                     request_builder = request_builder.body(f);
                 }
                 Err(e) => {
-                    return Ok(response_err(&*response.lock().await, e, window).await);
+                    return Ok(response_err(
+                        &app_handle,
+                        &*response.lock().await,
+                        e,
+                        &update_source,
+                    ));
                 }
             }
         } else if body_type == "multipart/form-data" && request_body.contains_key("form") {
@@ -318,11 +334,11 @@ pub async fn send_http_request<R: Runtime>(
                                     Ok(f) => multipart::Part::bytes(f),
                                     Err(e) => {
                                         return Ok(response_err(
+                                            &app_handle,
                                             &*response.lock().await,
                                             e.to_string(),
-                                            window,
-                                        )
-                                        .await);
+                                            &update_source,
+                                        ));
                                     }
                                 }
                             };
@@ -335,11 +351,11 @@ pub async fn send_http_request<R: Runtime>(
                                     Ok(p) => p,
                                     Err(e) => {
                                         return Ok(response_err(
+                                            &app_handle,
                                             &*response.lock().await,
                                             format!("Invalid mime for multi-part entry {e:?}"),
-                                            window,
-                                        )
-                                        .await);
+                                            &update_source,
+                                        ));
                                     }
                                 };
                             } else if !file_path.is_empty() {
@@ -351,16 +367,16 @@ pub async fn send_http_request<R: Runtime>(
                                     Ok(p) => p,
                                     Err(e) => {
                                         return Ok(response_err(
+                                            &app_handle,
                                             &*response.lock().await,
                                             format!("Invalid mime for multi-part entry {e:?}"),
-                                            window,
-                                        )
-                                        .await);
+                                            &update_source,
+                                        ));
                                     }
                                 };
                             }
 
-                            // Set file path if not empty
+                            // Set file path if it is not empty
                             if !file_path.is_empty() {
                                 let filename = PathBuf::from(file_path)
                                     .file_name()
@@ -383,6 +399,15 @@ pub async fn send_http_request<R: Runtime>(
         } else {
             warn!("Unsupported body type: {}", body_type);
         }
+    } else {
+        // No body set
+        let method = request.method.to_ascii_lowercase();
+        let is_body_method = method == "post" || method == "put" || method == "patch";
+        // Add Content-Length for methods that commonly accept a body because some servers
+        // will error if they don't receive it.
+        if is_body_method && !headers.contains_key("content-length") {
+            headers.insert("Content-Length", HeaderValue::from_static("0"));
+        }
     }
 
     // Add headers last, because previous steps may modify them
@@ -392,7 +417,12 @@ pub async fn send_http_request<R: Runtime>(
         Ok(r) => r,
         Err(e) => {
             warn!("Failed to build request builder {e:?}");
-            return Ok(response_err(&*response.lock().await, e.to_string(), window).await);
+            return Ok(response_err(
+                &app_handle,
+                &*response.lock().await,
+                e.to_string(),
+                &update_source,
+            ));
         }
     };
 
@@ -414,11 +444,16 @@ pub async fn send_http_request<R: Runtime>(
                 })
                 .collect(),
         };
-        let auth_result = plugin_manager.call_http_authentication(window, &auth_name, req).await;
+        let auth_result = plugin_manager.call_http_authentication(&window, &auth_name, req).await;
         let plugin_result = match auth_result {
             Ok(r) => r,
             Err(e) => {
-                return Ok(response_err(&*response.lock().await, e.to_string(), window).await);
+                return Ok(response_err(
+                    &app_handle,
+                    &*response.lock().await,
+                    e.to_string(),
+                    &update_source,
+                ));
             }
         };
 
@@ -431,7 +466,7 @@ pub async fn send_http_request<R: Runtime>(
         }
     }
 
-    let (resp_tx, resp_rx) = oneshot::channel::<Result<Response, reqwest::Error>>();
+    let (resp_tx, resp_rx) = oneshot::channel::<std::result::Result<Response, reqwest::Error>>();
     let (done_tx, done_rx) = oneshot::channel::<HttpResponse>();
 
     let start = std::time::Instant::now();
@@ -443,22 +478,26 @@ pub async fn send_http_request<R: Runtime>(
     let raw_response = tokio::select! {
         Ok(r) = resp_rx => r,
         _ = cancelled_rx.changed() => {
-            debug!("Request cancelled");
-            return Ok(response_err(&*response.lock().await, "Request was cancelled".to_string(), window).await);
+            let mut r = response.lock().await;
+            r.elapsed_headers = start.elapsed().as_millis() as i32;
+            r.elapsed = start.elapsed().as_millis() as i32;
+            return Ok(response_err(&app_handle, &r, "Request was cancelled".to_string(), &update_source));
         }
     };
 
     {
+        let app_handle = app_handle.clone();
         let window = window.clone();
         let cancelled_rx = cancelled_rx.clone();
         let response_id = response_id.clone();
         let response = response.clone();
+        let update_source = update_source.clone();
         tokio::spawn(async move {
             match raw_response {
                 Ok(mut v) => {
                     let content_length = v.content_length();
                     let response_headers = v.headers().clone();
-                    let dir = window.app_handle().path().app_data_dir().unwrap();
+                    let dir = app_handle.path().app_data_dir().unwrap();
                     let base_dir = dir.join("responses");
                     create_dir_all(base_dir.clone()).await.expect("Failed to create responses dir");
                     let body_path = if response_id.is_empty() {
@@ -471,6 +510,7 @@ pub async fn send_http_request<R: Runtime>(
                         let mut r = response.lock().await;
                         r.body_path = Some(body_path.to_str().unwrap().to_string());
                         r.elapsed_headers = start.elapsed().as_millis() as i32;
+                        r.elapsed = start.elapsed().as_millis() as i32;
                         r.status = v.status().as_u16() as i32;
                         r.status_reason = v.status().canonical_reason().map(|s| s.to_string());
                         r.headers = response_headers
@@ -492,8 +532,9 @@ pub async fn send_http_request<R: Runtime>(
                         };
 
                         r.state = HttpResponseState::Connected;
-                        update_response_if_id(&window, &r, &UpdateSource::Window)
-                            .await
+                        app_handle
+                            .db()
+                            .update_http_response_if_id(&r, &update_source)
                             .expect("Failed to update response after connected");
                     }
 
@@ -521,21 +562,27 @@ pub async fn send_http_request<R: Runtime>(
                                 f.flush().await.expect("Failed to flush file");
                                 written_bytes += bytes.len();
                                 r.content_length = Some(written_bytes as i32);
-                                update_response_if_id(&window, &r, &UpdateSource::Window)
-                                    .await
+                                app_handle
+                                    .db()
+                                    .update_http_response_if_id(&r, &update_source)
                                     .expect("Failed to update response");
                             }
                             Ok(None) => {
                                 break;
                             }
                             Err(e) => {
-                                response_err(&*response.lock().await, e.to_string(), &window).await;
+                                response_err(
+                                    &app_handle,
+                                    &*response.lock().await,
+                                    e.to_string(),
+                                    &update_source,
+                                );
                                 break;
                             }
                         }
                     }
 
-                    // Set final content length
+                    // Set the final content length
                     {
                         let mut r = response.lock().await;
                         r.content_length = match content_length {
@@ -543,8 +590,9 @@ pub async fn send_http_request<R: Runtime>(
                             None => Some(written_bytes as i32),
                         };
                         r.state = HttpResponseState::Closed;
-                        update_response_if_id(&window, &r, &UpdateSource::Window)
-                            .await
+                        app_handle
+                            .db()
+                            .update_http_response_if_id(&r, &UpdateSource::from_window(&window))
                             .expect("Failed to update response");
                     };
 
@@ -569,8 +617,9 @@ pub async fn send_http_request<R: Runtime>(
                             })
                             .collect::<Vec<_>>();
                         cookie_jar.cookies = json_cookies;
-                        if let Err(e) =
-                            upsert_cookie_jar(&window, &cookie_jar, &UpdateSource::Window).await
+                        if let Err(e) = app_handle
+                            .db()
+                            .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))
                         {
                             error!("Failed to update cookie jar: {}", e);
                         };
@@ -578,7 +627,12 @@ pub async fn send_http_request<R: Runtime>(
                 }
                 Err(e) => {
                     warn!("Failed to execute request {e}");
-                    response_err(&*response.lock().await, format!("{e} → {e:?}"), &window).await;
+                    response_err(
+                        &app_handle,
+                        &*response.lock().await,
+                        format!("{e} → {e:?}"),
+                        &update_source,
+                    );
                 }
             };
 
@@ -587,16 +641,20 @@ pub async fn send_http_request<R: Runtime>(
         });
     };
 
+    let app_handle = app_handle.clone();
     Ok(tokio::select! {
         Ok(r) = done_rx => r,
         _ = cancelled_rx.changed() => {
-            match get_http_response(window, response_id.as_str()).await {
+            match app_handle.with_db(|c| c.get_http_response(&response_id)) {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
-                    update_response_if_id(&window, &r, &UpdateSource::Window).await.expect("Failed to update response")
+                    r.elapsed = start.elapsed().as_millis() as i32;
+                    r.elapsed_headers = start.elapsed().as_millis() as i32;
+                    app_handle.db().update_http_response_if_id(&r, &UpdateSource::from_window(window))
+                        .expect("Failed to update response")
                 },
                 _ => {
-                    response_err(&*response.lock().await, "Ephemeral request was cancelled".to_string(), &window).await
+                    response_err(&app_handle, &*response.lock().await, "Ephemeral request was cancelled".to_string(), &update_source)
                 }.clone(),
             }
         }

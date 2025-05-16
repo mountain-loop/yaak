@@ -1,28 +1,25 @@
-import { upsertWorkspace } from '../commands/upsertWorkspace';
-import { upsertWorkspaceMeta } from '../commands/upsertWorkspaceMeta';
-import { useDeleteActiveWorkspace } from '../hooks/useDeleteActiveWorkspace';
-import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
-import { useWorkspaces } from '../hooks/useWorkspaces';
+import { patchModel, workspaceMetasAtom, workspacesAtom } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
+import { router } from '../lib/router';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
-import { Input } from './core/Input';
+import { PlainInput } from './core/PlainInput';
 import { Separator } from './core/Separator';
-import { VStack } from './core/Stacks';
+import { HStack, VStack } from './core/Stacks';
 import { MarkdownEditor } from './MarkdownEditor';
 import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
+import { WorkspaceEncryptionSetting } from './WorkspaceEncryptionSetting';
 
 interface Props {
   workspaceId: string | null;
   hide: () => void;
-  openSyncMenu?: boolean;
 }
 
-export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Props) {
-  const workspaces = useWorkspaces();
-  const workspace = workspaces.find((w) => w.id === workspaceId);
-  const workspaceMeta = useWorkspaceMeta();
-  const { mutateAsync: deleteActiveWorkspace } = useDeleteActiveWorkspace();
+export function WorkspaceSettingsDialog({ workspaceId, hide }: Props) {
+  const workspace = useAtomValue(workspacesAtom).find((w) => w.id === workspaceId);
+  const workspaceMeta = useAtomValue(workspaceMetasAtom).find((m) => m.workspaceId === workspaceId);
 
   if (workspace == null) {
     return (
@@ -40,40 +37,43 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Pro
     );
 
   return (
-    <VStack space={3} alignItems="start" className="pb-3 h-full">
-      <Input
+    <VStack space={4} alignItems="start" className="pb-3 h-full">
+      <PlainInput
         required
+        hideLabel
+        placeholder="Workspace Name"
         label="Name"
         defaultValue={workspace.name}
-        onChange={(name) => upsertWorkspace.mutate({ ...workspace, name })}
-        stateKey={`name.${workspace.id}`}
+        className="!text-base font-sans"
+        onChange={(name) => patchModel(workspace, { name })}
       />
 
       <MarkdownEditor
         name="workspace-description"
         placeholder="Workspace description"
-        className="min-h-[10rem] max-h-[25rem] border border-border px-2"
+        className="min-h-[3rem] max-h-[25rem] border border-border px-2"
         defaultValue={workspace.description}
         stateKey={`description.${workspace.id}`}
-        onChange={(description) => upsertWorkspace.mutate({ ...workspace, description })}
+        onChange={(description) => patchModel(workspace, { description })}
         heightMode="auto"
       />
 
-      <VStack space={6} className="mt-3 w-full" alignItems="start">
-        <SyncToFilesystemSetting
-          value={{ filePath: workspaceMeta.settingSyncDir }}
-          forceOpen={openSyncMenu}
-          onCreateNewWorkspace={hide}
-          onChange={({ filePath }) => {
-            upsertWorkspaceMeta.mutate({ ...workspaceMeta, settingSyncDir: filePath });
-          }}
-        />
-        <Separator />
+      <SyncToFilesystemSetting
+        value={{ filePath: workspaceMeta.settingSyncDir }}
+        onCreateNewWorkspace={hide}
+        onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
+      />
+      <WorkspaceEncryptionSetting size="xs" />
+
+      <Separator className="my-4" />
+
+      <HStack alignItems="center" justifyContent="between" className="w-full">
         <Button
           onClick={async () => {
-            const workspace = await deleteActiveWorkspace();
-            if (workspace) {
+            const didDelete = await deleteModelWithConfirm(workspace);
+            if (didDelete) {
               hide(); // Only hide if actually deleted workspace
+              await router.navigate({ to: '/' });
             }
           }}
           color="danger"
@@ -82,7 +82,8 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, openSyncMenu }: Pro
         >
           Delete Workspace
         </Button>
-      </VStack>
+        <InlineCode className="select-text cursor-text">{workspaceId}</InlineCode>
+      </HStack>
     </VStack>
   );
 }

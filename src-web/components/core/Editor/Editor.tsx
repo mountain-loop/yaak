@@ -2,14 +2,17 @@ import { defaultKeymap, historyField, indentWithTab } from '@codemirror/commands
 import { foldState, forceParsing } from '@codemirror/language';
 import type { EditorStateConfig, Extension } from '@codemirror/state';
 import { Compartment, EditorState } from '@codemirror/state';
-import { keymap, placeholder as placeholderExt, tooltips } from '@codemirror/view';
+import { EditorView, keymap, placeholder as placeholderExt, tooltips } from '@codemirror/view';
 import { emacs } from '@replit/codemirror-emacs';
 import { vim } from '@replit/codemirror-vim';
+
 import { vscodeKeymap } from '@replit/codemirror-vscode-keymap';
 import type { EditorKeymap, EnvironmentVariable } from '@yaakapp-internal/models';
+import { settingsAtom } from '@yaakapp-internal/models';
 import type { EditorLanguage, TemplateFunction } from '@yaakapp-internal/plugins';
+import { parseTemplate } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
-import { EditorView } from 'codemirror';
+import { useAtomValue } from 'jotai';
 import { md5 } from 'js-md5';
 import type { MutableRefObject, ReactNode } from 'react';
 import {
@@ -23,16 +26,17 @@ import {
   useMemo,
   useRef,
 } from 'react';
-import { useActiveEnvironmentVariables } from '../../../hooks/useActiveEnvironmentVariables';
-import { parseTemplate } from '../../../hooks/useParseTemplate';
+import { activeEnvironmentIdAtom } from '../../../hooks/useActiveEnvironment';
+import { useEnvironmentVariables } from '../../../hooks/useEnvironmentVariables';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
-import { useSettings } from '../../../hooks/useSettings';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { showDialog } from '../../../lib/dialog';
 import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
+import { withEncryptionEnabled } from '../../../lib/setupOrConfigureEncryption';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
+import { InlineCode } from '../InlineCode';
 import { HStack } from '../Stacks';
 import './Editor.css';
 import {
@@ -55,36 +59,37 @@ const keymapExtensions: Record<EditorKeymap, Extension> = {
 };
 
 export interface EditorProps {
-  id?: string;
-  readOnly?: boolean;
-  disabled?: boolean;
-  type?: 'text' | 'password';
-  className?: string;
-  heightMode?: 'auto' | 'full';
-  language?: EditorLanguage | 'pairs' | 'url';
-  forceUpdateKey?: string | number;
+  actions?: ReactNode;
   autoFocus?: boolean;
   autoSelect?: boolean;
+  autocomplete?: GenericCompletionConfig;
+  autocompleteFunctions?: boolean;
+  autocompleteVariables?: boolean;
+  className?: string;
   defaultValue?: string | null;
-  placeholder?: string;
-  tooltipContainer?: HTMLElement;
-  useTemplating?: boolean;
+  disableTabIndent?: boolean;
+  disabled?: boolean;
+  extraExtensions?: Extension[];
+  forcedEnvironmentId?: string;
+  forceUpdateKey?: string | number;
+  format?: (v: string) => Promise<string>;
+  heightMode?: 'auto' | 'full';
+  hideGutter?: boolean;
+  id?: string;
+  language?: EditorLanguage | 'pairs' | 'url';
+  onBlur?: () => void;
   onChange?: (value: string) => void;
+  onFocus?: () => void;
+  onKeyDown?: (e: KeyboardEvent) => void;
   onPaste?: (value: string) => void;
   onPasteOverwrite?: (e: ClipboardEvent, value: string) => void;
-  onFocus?: () => void;
-  onBlur?: () => void;
-  onKeyDown?: (e: KeyboardEvent) => void;
+  placeholder?: string;
+  readOnly?: boolean;
   singleLine?: boolean;
-  wrapLines?: boolean;
-  disableTabIndent?: boolean;
-  format?: (v: string) => Promise<string>;
-  autocomplete?: GenericCompletionConfig;
-  autocompleteVariables?: boolean;
-  extraExtensions?: Extension[];
-  actions?: ReactNode;
-  hideGutter?: boolean;
   stateKey: string | null;
+  tooltipContainer?: HTMLElement;
+  type?: 'text' | 'password';
+  wrapLines?: boolean;
 }
 
 const stateFields = { history: historyField, folds: foldState };
@@ -94,41 +99,45 @@ const emptyExtension: Extension = [];
 
 export const Editor = forwardRef<EditorView | undefined, EditorProps>(function Editor(
   {
-    readOnly,
-    type,
-    heightMode,
-    language,
+    actions,
     autoFocus,
     autoSelect,
-    placeholder,
-    useTemplating,
+    autocomplete,
+    autocompleteFunctions,
+    autocompleteVariables,
+    className,
     defaultValue,
+    disableTabIndent,
+    disabled,
+    extraExtensions,
+    forcedEnvironmentId,
     forceUpdateKey,
+    format,
+    heightMode,
+    hideGutter,
+    language,
+    onBlur,
     onChange,
+    onFocus,
+    onKeyDown,
     onPaste,
     onPasteOverwrite,
-    onFocus,
-    onBlur,
-    onKeyDown,
-    className,
-    disabled,
+    placeholder,
+    readOnly,
     singleLine,
-    format,
-    autocomplete,
-    extraExtensions,
-    autocompleteVariables,
-    actions,
-    wrapLines,
-    disableTabIndent,
-    hideGutter,
     stateKey,
+    type,
+    wrapLines,
   }: EditorProps,
   ref,
 ) {
-  const settings = useSettings();
+  const settings = useAtomValue(settingsAtom);
 
-  const allEnvironmentVariables = useActiveEnvironmentVariables();
+  const activeEnvironmentId = useAtomValue(activeEnvironmentIdAtom);
+  const environmentId = forcedEnvironmentId ?? activeEnvironmentId ?? null;
+  const allEnvironmentVariables = useEnvironmentVariables(environmentId);
   const environmentVariables = autocompleteVariables ? allEnvironmentVariables : emptyVariables;
+  const useTemplating = !!(autocompleteFunctions || autocompleteVariables || autocomplete);
 
   if (settings && wrapLines === undefined) {
     wrapLines = settings.editorSoftWrap;
@@ -201,7 +210,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   useEffect(
     function configurePlaceholder() {
       if (cm.current === null) return;
-      const ext = placeholderExt(placeholderElFromText(placeholder, type));
+      const ext = placeholderExt(placeholderElFromText(placeholder));
       const effects = placeholderCompartment.current.reconfigure(ext);
       cm.current?.view.dispatch({ effects });
     },
@@ -263,32 +272,39 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   const onClickFunction = useCallback(
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
-      const initialTokens = await parseTemplate(tagValue);
-      showDialog({
-        id: 'template-function',
-        size: 'sm',
-        title: 'Configure Function',
-        description: fn.description,
-        render: ({ hide }) => (
-          <TemplateFunctionDialog
-            templateFunction={fn}
-            hide={hide}
-            initialTokens={initialTokens}
-            onChange={(insert) => {
-              cm.current?.view.dispatch({
-                changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
-              });
-            }}
-          />
-        ),
-      });
+      const initialTokens = parseTemplate(tagValue);
+      const show = () =>
+        showDialog({
+          id: 'template-function-' + Math.random(), // Allow multiple at once
+          size: 'sm',
+          title: <InlineCode>{fn.name}(…)</InlineCode>,
+          description: fn.description,
+          render: ({ hide }) => (
+            <TemplateFunctionDialog
+              templateFunction={fn}
+              hide={hide}
+              initialTokens={initialTokens}
+              onChange={(insert) => {
+                cm.current?.view.dispatch({
+                  changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
+                });
+              }}
+            />
+          ),
+        });
+
+      if (fn.name === 'secure') {
+        withEncryptionEnabled(show);
+      } else {
+        show();
+      }
     },
     [],
   );
 
   const onClickVariable = useCallback(
     async (_v: EnvironmentVariable, tagValue: string, startPos: number) => {
-      const initialTokens = await parseTemplate(tagValue);
+      const initialTokens = parseTemplate(tagValue);
       showDialog({
         size: 'dynamic',
         id: 'template-variable',
@@ -311,7 +327,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   const onClickMissingVariable = useCallback(
     async (_name: string, tagValue: string, startPos: number) => {
-      const initialTokens = await parseTemplate(tagValue);
+      const initialTokens = parseTemplate(tagValue);
       showDialog({
         size: 'dynamic',
         id: 'template-variable',
@@ -340,16 +356,19 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     [focusParamValue],
   );
 
-  const completionOptions = useTemplateFunctionCompletionOptions(onClickFunction);
+  const completionOptions = useTemplateFunctionCompletionOptions(
+    onClickFunction,
+    !!autocompleteFunctions,
+  );
 
   // Update the language extension when the language changes
   useEffect(() => {
     if (cm.current === null) return;
     const { view, languageCompartment } = cm.current;
     const ext = getLanguageExtension({
+      useTemplating,
       language,
       environmentVariables,
-      useTemplating,
       autocomplete,
       completionOptions,
       onClickVariable,
@@ -360,13 +379,13 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   }, [
     language,
     autocomplete,
-    useTemplating,
     environmentVariables,
     onClickFunction,
     onClickVariable,
     onClickMissingVariable,
     onClickPathParameter,
     completionOptions,
+    useTemplating,
   ]);
 
   // Initialize the editor when ref mounts
@@ -381,8 +400,8 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       try {
         const languageCompartment = new Compartment();
         const langExt = getLanguageExtension({
-          language,
           useTemplating,
+          language,
           completionOptions,
           autocomplete,
           environmentVariables,
@@ -390,12 +409,9 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
           onClickMissingVariable,
           onClickPathParameter,
         });
-
         const extensions = [
           languageCompartment.of(langExt),
-          placeholderCompartment.current.of(
-            placeholderExt(placeholderElFromText(placeholder, type)),
-          ),
+          placeholderCompartment.current.of(placeholderExt(placeholderElFromText(placeholder))),
           wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : emptyExtension),
           tabIndentCompartment.current.of(
             !disableTabIndent ? keymap.of([indentWithTab]) : emptyExtension,
@@ -634,17 +650,11 @@ function getExtensions({
   ];
 }
 
-const placeholderElFromText = (text: string | undefined, type: EditorProps['type']) => {
+const placeholderElFromText = (text: string | undefined) => {
   const el = document.createElement('div');
-  if (type === 'password') {
-    // Will be obscured (dots) so just needs to be something to take up space
-    el.innerHTML = 'something-cool';
-    el.setAttribute('aria-hidden', 'true');
-  } else {
-    // Default to <SPACE> because codemirror needs it for sizing. I'm not sure why, but probably something
-    // to do with how Yaak "hacks" it with CSS for single line input.
-    el.innerHTML = text ? text.replaceAll('\n', '<br/>') : ' ';
-  }
+  // Default to <SPACE> because codemirror needs it for sizing. I'm not sure why, but probably something
+  // to do with how Yaak "hacks" it with CSS for single line input.
+  el.innerHTML = text ? text.replaceAll('\n', '<br/>') : ' ';
   return el;
 };
 

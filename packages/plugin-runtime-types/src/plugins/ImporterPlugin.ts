@@ -1,15 +1,21 @@
-import { Environment, Folder, GrpcRequest, HttpRequest, Workspace } from '../bindings/gen_models';
-import type { AtLeast } from '../helpers';
+import { ImportResources } from '../bindings/gen_events';
+import { AtLeast } from '../helpers';
 import type { Context } from './Context';
 
-type ImportPluginResponse = null | {
-  resources: {
-    workspaces: AtLeast<Workspace, 'name' | 'id' | 'model'>[];
-    environments: AtLeast<Environment, 'name' | 'id' | 'model' | 'workspaceId'>[];
-    folders: AtLeast<Folder, 'name' | 'id' | 'model' | 'workspaceId'>[];
-    httpRequests: AtLeast<HttpRequest, 'name' | 'id' | 'model' | 'workspaceId'>[];
-    grpcRequests: AtLeast<GrpcRequest, 'name' | 'id' | 'model' | 'workspaceId'>[];
-  };
+type RootFields = 'name' | 'id' | 'model';
+type CommonFields = RootFields | 'workspaceId';
+
+export type PartialImportResources = {
+  workspaces: Array<AtLeast<ImportResources['workspaces'][0], RootFields>>;
+  environments: Array<AtLeast<ImportResources['environments'][0], CommonFields>>;
+  folders: Array<AtLeast<ImportResources['folders'][0], CommonFields>>;
+  httpRequests: Array<AtLeast<ImportResources['httpRequests'][0], CommonFields>>;
+  grpcRequests: Array<AtLeast<ImportResources['grpcRequests'][0], CommonFields>>;
+  websocketRequests: Array<AtLeast<ImportResources['websocketRequests'][0], CommonFields>>;
+};
+
+export type ImportPluginResponse = null | {
+  resources: PartialImportResources;
 };
 
 export type ImporterPlugin = {

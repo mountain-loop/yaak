@@ -1,14 +1,14 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
+import { deleteModel } from '@yaakapp-internal/models';
 import { useCopyHttpResponse } from '../hooks/useCopyHttpResponse';
-import { useDeleteHttpResponse } from '../hooks/useDeleteHttpResponse';
 import { useDeleteHttpResponses } from '../hooks/useDeleteHttpResponses';
 import { useSaveResponse } from '../hooks/useSaveResponse';
 import { pluralize } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
+import { HttpStatusTag } from './core/HttpStatusTag';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
-import { StatusTag } from './core/StatusTag';
 
 interface Props {
   responses: HttpResponse[];
@@ -22,7 +22,6 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
   responses,
   onPinnedResponseId,
 }: Props) {
-  const deleteResponse = useDeleteHttpResponse(activeResponse?.id ?? null);
   const deleteAllResponses = useDeleteHttpResponses(activeResponse?.requestId);
   const latestResponseId = responses[0]?.id ?? 'n/a';
   const saveResponse = useSaveResponse(activeResponse);
@@ -48,7 +47,7 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
         {
           label: 'Delete',
           leftSlot: <Icon icon="trash" />,
-          onSelect: deleteResponse.mutate,
+          onSelect: () => deleteModel(activeResponse),
         },
         {
           label: 'Unpin Response',
@@ -68,7 +67,7 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
         ...responses.map((r: HttpResponse) => ({
           label: (
             <HStack space={2}>
-              <StatusTag className="text-sm" response={r} />
+              <HttpStatusTag className="text-sm" response={r} />
               <span className="text-text-subtle">&rarr;</span>{' '}
               <span className="font-mono text-sm">{r.elapsed >= 0 ? `${r.elapsed}ms` : 'n/a'}</span>
             </HStack>

@@ -1,12 +1,21 @@
 [package]
 name = "yaak-templates"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 publish = false
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false # Causes errors in CI (haven't figured out why yet)
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
-log = "0.4.22"
-serde = { version = "1.0.208", features = ["derive"] }
-ts-rs = { version = "10.0.0" }
-tokio = { version = "1.39.3", features = ["macros", "rt"] }
-serde_json = "1.0.132"
+base64 = "0.22.1"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+ts-rs = { workspace = true }
+wasm-bindgen = { version = "0.2.100", features = ["serde-serialize"] }
+serde-wasm-bindgen = "0.6.5"

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 /**
  * Like useState, except it will update the value when the default value changes
  */
-export function useStateWithDeps<T>(defaultValue: T, deps: DependencyList) {
+export function useStateWithDeps<T>(defaultValue: T | (() => T), deps: DependencyList) {
   const [value, setValue] = useState(defaultValue);
   useEffect(() => {
     setValue(defaultValue);

@@ -40,9 +40,12 @@ export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props
 
   return (
     <PairEditor
+      valueAutocompleteFunctions
       valueAutocompleteVariables
       nameAutocompleteVariables
+      nameAutocompleteFunctions
       allowFileValues
+      allowMultilineValues
       pairs={pairs}
       onChange={handleChange}
       forceUpdateKey={forceUpdateKey}

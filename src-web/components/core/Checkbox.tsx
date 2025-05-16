@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import { type ReactNode } from 'react';
 import { Icon } from './Icon';
+import { IconTooltip } from './IconTooltip';
 import { HStack } from './Stacks';
 
 export interface CheckboxProps {
@@ -12,6 +13,7 @@ export interface CheckboxProps {
   inputWrapperClassName?: string;
   hideLabel?: boolean;
   fullWidth?: boolean;
+  help?: ReactNode;
 }
 
 export function Checkbox({
@@ -23,9 +25,15 @@ export function Checkbox({
   title,
   hideLabel,
   fullWidth,
+  help,
 }: CheckboxProps) {
   return (
-    <HStack as="label" space={2} className={classNames(className, 'text-text mr-auto')}>
+    <HStack
+      as="label"
+      alignItems="center"
+      space={3}
+      className={classNames(className, 'text-text mr-auto')}
+    >
       <div className={classNames(inputWrapperClassName, 'x-theme-input', 'relative flex')}>
         <input
           aria-hidden
@@ -48,9 +56,12 @@ export function Checkbox({
           />
         </div>
       </div>
-      <div className={classNames(fullWidth && 'w-full', disabled && 'opacity-disabled')}>
-        {!hideLabel && title}
-      </div>
+      {!hideLabel && (
+        <div className={classNames(fullWidth && 'w-full', disabled && 'opacity-disabled')}>
+          {title}
+        </div>
+      )}
+      {help && <IconTooltip content={help} />}
     </HStack>
   );
 }

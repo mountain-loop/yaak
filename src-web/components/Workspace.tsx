@@ -1,18 +1,17 @@
+import { workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import {duplicateWebsocketRequest} from "../commands/duplicateWebsocketRequest";
 import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
 } from '../hooks/useActiveCookieJar';
 import { useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
-import { getActiveRequest, useActiveRequest } from '../hooks/useActiveRequest';
+import { activeRequestAtom } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
-import { useDuplicateGrpcRequest } from '../hooks/useDuplicateGrpcRequest';
-import { useDuplicateHttpRequest } from '../hooks/useDuplicateHttpRequest';
+import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
 import { useHotKey } from '../hooks/useHotKey';
 import { useImportData } from '../hooks/useImportData';
@@ -25,7 +24,8 @@ import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
-import { useWorkspaces } from '../hooks/useWorkspaces';
+import { duplicateRequestAndNavigate } from '../lib/duplicateRequestAndNavigate';
+import { jotaiStore } from '../lib/jotai';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { HotKeyList } from './core/HotKeyList';
@@ -41,6 +41,7 @@ import { Sidebar } from './sidebar/Sidebar';
 import { SidebarActions } from './sidebar/SidebarActions';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
+import { ErrorBoundary } from './ErrorBoundary';
 
 const side = { gridArea: 'side' };
 const head = { gridArea: 'head' };
@@ -51,7 +52,7 @@ export function Workspace() {
   // First, subscribe to some things applicable to workspaces
   useGlobalWorkspaceHooks();
 
-  const workspaces = useWorkspaces();
+  const workspaces = useAtomValue(workspacesAtom);
   const { setWidth, width, resetWidth } = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
@@ -149,16 +150,20 @@ export function Workspace() {
             <HeaderSize size="lg" className="border-transparent">
               <SidebarActions />
             </HeaderSize>
-            <Sidebar />
+            <ErrorBoundary name="Sidebar (Floating)">
+              <Sidebar />
+            </ErrorBoundary>
           </m.div>
         </Overlay>
       ) : (
         <>
           <div style={side} className={classNames('x-theme-sidebar', 'overflow-hidden bg-surface')}>
-            <Sidebar className="border-r border-border-subtle" />
+            <ErrorBoundary name="Sidebar">
+              <Sidebar className="border-r border-border-subtle" />
+            </ErrorBoundary>
           </div>
           <ResizeHandle
-            className="-translate-x-3"
+            className="-translate-x-0.5"
             justify="end"
             side="right"
             isResizing={isResizing}
@@ -175,24 +180,32 @@ export function Workspace() {
       >
         <WorkspaceHeader className="pointer-events-none" />
       </HeaderSize>
-      <WorkspaceBody />
+      <ErrorBoundary name="Workspace Body">
+        <WorkspaceBody />
+      </ErrorBoundary>
     </div>
   );
 }
 
 function WorkspaceBody() {
-  const activeRequest = useActiveRequest();
-  const activeWorkspace = useActiveWorkspace();
+  const activeRequest = useAtomValue(activeRequestAtom);
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
   const importData = useImportData();
 
   if (activeWorkspace == null) {
     return (
-      <div className="m-auto">
+      <m.div
+        className="m-auto"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        // Delay the entering because the workspaces might load after a slight delay
+        transition={{ delay: 0.5 }}
+      >
         <Banner color="warning" className="max-w-[30rem]">
           The active workspace was not found. Select a workspace from the header menu or report this
           bug to <FeedbackLink />
         </Banner>
-      </div>
+      </m.div>
     );
   }
 
@@ -242,29 +255,7 @@ function useGlobalWorkspaceHooks() {
   const toggleCommandPalette = useToggleCommandPalette();
   useHotKey('command_palette.toggle', toggleCommandPalette);
 
-  const activeRequest = useActiveRequest();
-  const duplicateHttpRequest = useDuplicateHttpRequest({
-    id: activeRequest?.id ?? null,
-    navigateAfter: true,
-  });
-  const duplicateGrpcRequest = useDuplicateGrpcRequest({
-    id: activeRequest?.id ?? null,
-    navigateAfter: true,
-  });
-
-  useHotKey('http_request.duplicate', async () => {
-    const activeRequest = getActiveRequest();
-    if (activeRequest == null) {
-      // Nothing
-    } else if (activeRequest.model === 'http_request') {
-      await duplicateHttpRequest.mutateAsync();
-    } else if (activeRequest.model === 'grpc_request') {
-      await duplicateGrpcRequest.mutateAsync();
-    } else if (activeRequest.model === 'websocket_request') {
-      await duplicateWebsocketRequest.mutateAsync(activeRequest.id);
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      throw new Error('Failed to duplicate invalid request model: ' + (activeRequest as any).model);
-    }
-  });
+  useHotKey('http_request.duplicate', () =>
+    duplicateRequestAndNavigate(jotaiStore.get(activeRequestAtom)),
+  );
 }

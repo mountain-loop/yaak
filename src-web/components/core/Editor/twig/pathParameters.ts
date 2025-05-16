@@ -1,8 +1,7 @@
 import { syntaxTree } from '@codemirror/language';
 import type { Range } from '@codemirror/state';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, ViewPlugin, WidgetType } from '@codemirror/view';
-import { EditorView } from 'codemirror';
+import { Decoration, ViewPlugin, WidgetType, EditorView } from '@codemirror/view';
 
 class PathPlaceholderWidget extends WidgetType {
   readonly #clickListenerCallback: () => void;

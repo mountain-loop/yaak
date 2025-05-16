@@ -36,6 +36,9 @@ var require_quote = __commonJS({
     "use strict";
     module2.exports = function quote(xs) {
       return xs.map(function(s) {
+        if (s === "") {
+          return "''";
+        }
         if (s && typeof s === "object") {
           return s.op.replace(/(.)/g, "\\$1");
         }

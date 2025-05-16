@@ -1,6 +1,13 @@
-use chrono::NaiveDateTime;
+use crate::error::Result;
+use crate::models::HttpRequestIden::{
+    Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
+    Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
+};
+use crate::util::{UpdateSource, generate_prefixed_id};
+use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
-use sea_query::Iden;
+use sea_query::Order::Desc;
+use sea_query::{IntoColumnRef, IntoIden, IntoTableRef, Order, SimpleExpr, enum_def};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -8,11 +15,25 @@ use std::fmt::Display;
 use std::str::FromStr;
 use ts_rs::TS;
 
+#[macro_export]
+macro_rules! impl_model {
+    ($t:ty, $variant:ident) => {
+        impl $crate::Model for $t {
+            fn into_any(self) -> $crate::AnyModel {
+                $crate::AnyModel::$variant(self)
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum ProxySetting {
     Enabled {
+        #[serde(default)]
+        // This was added after on so give it a default to be able to deserialize older values
+        disabled: bool,
         http: String,
         https: String,
         auth: Option<ProxySettingAuth>,
@@ -39,9 +60,9 @@ pub enum EditorKeymap {
 }
 
 impl FromStr for EditorKeymap {
-    type Err = ();
+    type Err = crate::error::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "default" => Ok(Self::Default),
             "vscode" => Ok(Self::Vscode),
@@ -73,6 +94,7 @@ impl Default for EditorKeymap {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "settings")]
 pub struct Settings {
     #[ts(type = "\"settings\"")]
     pub model: String,
@@ -88,61 +110,101 @@ pub struct Settings {
     pub interface_scale: f32,
     pub open_workspace_new_window: Option<bool>,
     pub proxy: Option<ProxySetting>,
-    pub theme: String,
     pub theme_dark: String,
     pub theme_light: String,
     pub update_channel: String,
     pub editor_keymap: EditorKeymap,
 }
 
-#[derive(Iden)]
-pub enum SettingsIden {
-    #[iden = "settings"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
+impl UpsertModelInfo for Settings {
+    fn table_name() -> impl IntoTableRef {
+        SettingsIden::Table
+    }
 
-    Appearance,
-    EditorFontSize,
-    EditorKeymap,
-    EditorSoftWrap,
-    InterfaceFontSize,
-    InterfaceScale,
-    OpenWorkspaceNewWindow,
-    Proxy,
-    Theme,
-    ThemeDark,
-    ThemeLight,
-    HideWindowControls,
-    UpdateChannel,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        SettingsIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for Settings {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        panic!("Settings does not have unique IDs")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let proxy: Option<String> = r.get("proxy")?;
-        let editor_keymap: String = r.get("editor_keymap")?;
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (SettingsIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use SettingsIden::*;
+        let proxy = match self.proxy {
+            None => None,
+            Some(p) => Some(serde_json::to_string(&p)?),
+        };
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (Appearance, self.appearance.as_str().into()),
+            (EditorFontSize, self.editor_font_size.into()),
+            (EditorKeymap, self.editor_keymap.to_string().into()),
+            (EditorSoftWrap, self.editor_soft_wrap.into()),
+            (InterfaceFontSize, self.interface_font_size.into()),
+            (InterfaceScale, self.interface_scale.into()),
+            (HideWindowControls, self.hide_window_controls.into()),
+            (OpenWorkspaceNewWindow, self.open_workspace_new_window.into()),
+            (ThemeDark, self.theme_dark.as_str().into()),
+            (ThemeLight, self.theme_light.as_str().into()),
+            (UpdateChannel, self.update_channel.into()),
+            (Proxy, proxy.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            SettingsIden::UpdatedAt,
+            SettingsIden::Appearance,
+            SettingsIden::EditorFontSize,
+            SettingsIden::EditorKeymap,
+            SettingsIden::EditorSoftWrap,
+            SettingsIden::InterfaceFontSize,
+            SettingsIden::InterfaceScale,
+            SettingsIden::HideWindowControls,
+            SettingsIden::OpenWorkspaceNewWindow,
+            SettingsIden::Proxy,
+            SettingsIden::ThemeDark,
+            SettingsIden::ThemeLight,
+            SettingsIden::UpdateChannel,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let proxy: Option<String> = row.get("proxy")?;
+        let editor_keymap: String = row.get("editor_keymap")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            appearance: r.get("appearance")?,
-            editor_font_size: r.get("editor_font_size")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            appearance: row.get("appearance")?,
+            editor_font_size: row.get("editor_font_size")?,
             editor_keymap: EditorKeymap::from_str(editor_keymap.as_str()).unwrap(),
-            editor_soft_wrap: r.get("editor_soft_wrap")?,
-            interface_font_size: r.get("interface_font_size")?,
-            interface_scale: r.get("interface_scale")?,
-            open_workspace_new_window: r.get("open_workspace_new_window")?,
+            editor_soft_wrap: row.get("editor_soft_wrap")?,
+            interface_font_size: row.get("interface_font_size")?,
+            interface_scale: row.get("interface_scale")?,
+            open_workspace_new_window: row.get("open_workspace_new_window")?,
             proxy: proxy.map(|p| -> ProxySetting { serde_json::from_str(p.as_str()).unwrap() }),
-            theme: r.get("theme")?,
-            theme_dark: r.get("theme_dark")?,
-            theme_light: r.get("theme_light")?,
+            theme_dark: row.get("theme_dark")?,
+            theme_light: row.get("theme_light")?,
             hide_window_controls: r.get("hide_window_controls")?,
-            update_channel: r.get("update_channel")?,
+            update_channel: row.get("update_channel")?,
         })
     }
 }
@@ -150,6 +212,7 @@ impl<'s> TryFrom<&Row<'s>> for Settings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "workspaces")]
 pub struct Workspace {
     #[ts(type = "\"workspace\"")]
     pub model: String,
@@ -158,6 +221,7 @@ pub struct Workspace {
     pub updated_at: NaiveDateTime,
     pub name: String,
     pub description: String,
+    pub encryption_key_challenge: Option<String>,
 
     // Settings
     #[serde(default = "default_true")]
@@ -167,55 +231,87 @@ pub struct Workspace {
     pub setting_request_timeout: i32,
 }
 
-#[derive(Iden)]
-pub enum WorkspaceIden {
-    #[iden = "workspaces"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
+impl UpsertModelInfo for Workspace {
+    fn table_name() -> impl IntoTableRef {
+        WorkspaceIden::Table
+    }
 
-    Description,
-    Name,
-    SettingFollowRedirects,
-    SettingRequestTimeout,
-    SettingValidateCertificates,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        WorkspaceIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for Workspace {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("wk")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WorkspaceIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use WorkspaceIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (Name, self.name.trim().into()),
+            (Description, self.description.into()),
+            (EncryptionKeyChallenge, self.encryption_key_challenge.into()),
+            (SettingFollowRedirects, self.setting_follow_redirects.into()),
+            (SettingRequestTimeout, self.setting_request_timeout.into()),
+            (SettingValidateCertificates, self.setting_validate_certificates.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            WorkspaceIden::UpdatedAt,
+            WorkspaceIden::Name,
+            WorkspaceIden::Description,
+            WorkspaceIden::EncryptionKeyChallenge,
+            WorkspaceIden::SettingRequestTimeout,
+            WorkspaceIden::SettingFollowRedirects,
+            WorkspaceIden::SettingRequestTimeout,
+            WorkspaceIden::SettingValidateCertificates,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            name: r.get("name")?,
-            description: r.get("description")?,
-            setting_follow_redirects: r.get("setting_follow_redirects")?,
-            setting_request_timeout: r.get("setting_request_timeout")?,
-            setting_validate_certificates: r.get("setting_validate_certificates")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            name: row.get("name")?,
+            description: row.get("description")?,
+            encryption_key_challenge: row.get("encryption_key_challenge")?,
+            setting_follow_redirects: row.get("setting_follow_redirects")?,
+            setting_request_timeout: row.get("setting_request_timeout")?,
+            setting_validate_certificates: row.get("setting_validate_certificates")?,
         })
     }
 }
 
-impl Workspace {
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            model: "workspace".to_string(),
-            setting_validate_certificates: true,
-            setting_follow_redirects: true,
-            ..Default::default()
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct EncryptedKey {
+    pub encrypted_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "workspace_metas")]
 pub struct WorkspaceMeta {
     #[ts(type = "\"workspace_meta\"")]
     pub model: String,
@@ -223,33 +319,66 @@ pub struct WorkspaceMeta {
     pub workspace_id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub encryption_key: Option<EncryptedKey>,
     pub setting_sync_dir: Option<String>,
 }
 
-#[derive(Iden)]
-pub enum WorkspaceMetaIden {
-    #[iden = "workspace_metas"]
-    Table,
-    Model,
-    Id,
-    WorkspaceId,
-    CreatedAt,
-    UpdatedAt,
+impl UpsertModelInfo for WorkspaceMeta {
+    fn table_name() -> impl IntoTableRef {
+        WorkspaceMetaIden::Table
+    }
 
-    SettingSyncDir,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        WorkspaceMetaIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for WorkspaceMeta {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("wm")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WorkspaceMetaIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use WorkspaceMetaIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (EncryptionKey, self.encryption_key.map(|e| serde_json::to_string(&e).unwrap()).into()),
+            (SettingSyncDir, self.setting_sync_dir.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            WorkspaceMetaIden::UpdatedAt,
+            WorkspaceMetaIden::EncryptionKey,
+            WorkspaceMetaIden::SettingSyncDir,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let encryption_key: Option<String> = row.get("encryption_key")?;
         Ok(Self {
-            id: r.get("id")?,
-            workspace_id: r.get("workspace_id")?,
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            setting_sync_dir: r.get("setting_sync_dir")?,
+            id: row.get("id")?,
+            workspace_id: row.get("workspace_id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            encryption_key: encryption_key.map(|e| serde_json::from_str(&e).unwrap()),
+            setting_sync_dir: row.get("setting_sync_dir")?,
         })
     }
 }
@@ -282,6 +411,7 @@ pub struct Cookie {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "cookie_jars")]
 pub struct CookieJar {
     #[ts(type = "\"cookie_jar\"")]
     pub model: String,
@@ -294,32 +424,61 @@ pub struct CookieJar {
     pub name: String,
 }
 
-#[derive(Iden)]
-pub enum CookieJarIden {
-    #[iden = "cookie_jars"]
-    Table,
-    Id,
-    Model,
-    WorkspaceId,
-    CreatedAt,
-    UpdatedAt,
+impl UpsertModelInfo for CookieJar {
+    fn table_name() -> impl IntoTableRef {
+        CookieJarIden::Table
+    }
 
-    Cookies,
-    Name,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        CookieJarIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for CookieJar {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("cj")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let cookies: String = r.get("cookies")?;
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (CookieJarIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use CookieJarIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (Name, self.name.trim().into()),
+            (Cookies, serde_json::to_string(&self.cookies)?.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            CookieJarIden::UpdatedAt,
+            CookieJarIden::Name,
+            CookieJarIden::Cookies,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let cookies: String = row.get("cookies")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            name: r.get("name")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            name: row.get("name")?,
             cookies: serde_json::from_str(cookies.as_str()).unwrap_or_default(),
         })
     }
@@ -328,47 +487,82 @@ impl<'s> TryFrom<&Row<'s>> for CookieJar {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "environments")]
 pub struct Environment {
     #[ts(type = "\"environment\"")]
     pub model: String,
     pub id: String,
     pub workspace_id: String,
-    pub environment_id: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 
     pub name: String,
+    pub public: bool,
+    pub base: bool,
     pub variables: Vec<EnvironmentVariable>,
 }
 
-#[derive(Iden)]
-pub enum EnvironmentIden {
-    #[iden = "environments"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    EnvironmentId,
-    WorkspaceId,
+impl UpsertModelInfo for Environment {
+    fn table_name() -> impl IntoTableRef {
+        EnvironmentIden::Table
+    }
 
-    Name,
-    Variables,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        EnvironmentIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for Environment {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("ev")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let variables: String = r.get("variables")?;
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (EnvironmentIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use EnvironmentIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (Base, self.base.into()),
+            (Name, self.name.trim().into()),
+            (Public, self.public.into()),
+            (Variables, serde_json::to_string(&self.variables)?.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            EnvironmentIden::UpdatedAt,
+            EnvironmentIden::Base,
+            EnvironmentIden::Name,
+            EnvironmentIden::Public,
+            EnvironmentIden::Variables,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let variables: String = row.get("variables")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            environment_id: r.get("environment_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            name: r.get("name")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            base: row.get("base")?,
+            name: row.get("name")?,
+            public: row.get("public")?,
             variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
         })
     }
@@ -390,6 +584,7 @@ pub struct EnvironmentVariable {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "folders")]
 pub struct Folder {
     #[ts(type = "\"folder\"")]
     pub model: String,
@@ -404,36 +599,67 @@ pub struct Folder {
     pub sort_priority: f32,
 }
 
-#[derive(Iden)]
-pub enum FolderIden {
-    #[iden = "folders"]
-    Table,
-    Id,
-    Model,
-    WorkspaceId,
-    FolderId,
-    CreatedAt,
-    UpdatedAt,
+impl UpsertModelInfo for Folder {
+    fn table_name() -> impl IntoTableRef {
+        FolderIden::Table
+    }
 
-    Name,
-    Description,
-    SortPriority,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        FolderIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for Folder {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("fl")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (FolderIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use FolderIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (FolderId, self.folder_id.into()),
+            (Name, self.name.trim().into()),
+            (Description, self.description.into()),
+            (SortPriority, self.sort_priority.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            FolderIden::UpdatedAt,
+            FolderIden::Name,
+            FolderIden::Description,
+            FolderIden::FolderId,
+            FolderIden::SortPriority,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            sort_priority: r.get("sort_priority")?,
-            workspace_id: r.get("workspace_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            folder_id: r.get("folder_id")?,
-            name: r.get("name")?,
-            description: r.get("description")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            sort_priority: row.get("sort_priority")?,
+            workspace_id: row.get("workspace_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            folder_id: row.get("folder_id")?,
+            name: row.get("name")?,
+            description: row.get("description")?,
         })
     }
 }
@@ -467,6 +693,7 @@ pub struct HttpUrlParameter {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "http_requests")]
 pub struct HttpRequest {
     #[ts(type = "\"http_request\"")]
     pub model: String,
@@ -487,39 +714,75 @@ pub struct HttpRequest {
     #[serde(default = "default_http_method")]
     pub method: String,
     pub name: String,
-    pub sort_priority: f32,
+    pub sort_priority: f64,
     pub url: String,
     pub url_parameters: Vec<HttpUrlParameter>,
 }
 
-#[derive(Iden)]
-pub enum HttpRequestIden {
-    #[iden = "http_requests"]
-    Table,
-    Id,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    FolderId,
+impl UpsertModelInfo for HttpRequest {
+    fn table_name() -> impl IntoTableRef {
+        HttpRequestIden::Table
+    }
 
-    Authentication,
-    AuthenticationType,
-    Body,
-    BodyType,
-    Description,
-    Headers,
-    Method,
-    Name,
-    SortPriority,
-    Url,
-    UrlParameters,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        HttpRequestIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for HttpRequest {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("rq")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (HttpResponseIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.to_string()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (FolderId, self.folder_id.into()),
+            (Name, self.name.trim().into()),
+            (Description, self.description.into()),
+            (Url, self.url.into()),
+            (UrlParameters, serde_json::to_string(&self.url_parameters)?.into()),
+            (Method, self.method.into()),
+            (Body, serde_json::to_string(&self.body)?.into()),
+            (BodyType, self.body_type.into()),
+            (Authentication, serde_json::to_string(&self.authentication)?.into()),
+            (AuthenticationType, self.authentication_type.into()),
+            (Headers, serde_json::to_string(&self.headers)?.into()),
+            (SortPriority, self.sort_priority.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            UpdatedAt,
+            WorkspaceId,
+            Name,
+            Description,
+            FolderId,
+            Method,
+            Headers,
+            Body,
+            BodyType,
+            Authentication,
+            AuthenticationType,
+            Url,
+            UrlParameters,
+            SortPriority,
+        ]
+    }
+
+    fn from_row(r: &Row) -> rusqlite::Result<Self> {
         let url_parameters: String = r.get("url_parameters")?;
         let body: String = r.get("body")?;
         let authentication: String = r.get("authentication")?;
@@ -527,21 +790,21 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
         Ok(Self {
             id: r.get("id")?,
             model: r.get("model")?,
-            sort_priority: r.get("sort_priority")?,
             workspace_id: r.get("workspace_id")?,
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
-            url: r.get("url")?,
-            url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
-            method: r.get("method")?,
+            authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
+            authentication_type: r.get("authentication_type")?,
             body: serde_json::from_str(body.as_str()).unwrap_or_default(),
             body_type: r.get("body_type")?,
             description: r.get("description")?,
-            authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
-            authentication_type: r.get("authentication_type")?,
-            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
             folder_id: r.get("folder_id")?,
+            headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            method: r.get("method")?,
             name: r.get("name")?,
+            sort_priority: r.get("sort_priority")?,
+            url: r.get("url")?,
+            url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
         })
     }
 }
@@ -552,6 +815,7 @@ impl<'s> TryFrom<&Row<'s>> for HttpRequest {
 pub enum WebsocketConnectionState {
     Initialized,
     Connected,
+    Closing,
     Closed,
 }
 
@@ -564,6 +828,7 @@ impl Default for WebsocketConnectionState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "websocket_connections")]
 pub struct WebsocketConnection {
     #[ts(type = "\"websocket_connection\"")]
     pub model: String,
@@ -581,44 +846,77 @@ pub struct WebsocketConnection {
     pub url: String,
 }
 
-#[derive(Iden)]
-pub enum WebsocketConnectionIden {
-    #[iden = "websocket_connections"]
-    Table,
-    Id,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
+impl UpsertModelInfo for WebsocketConnection {
+    fn table_name() -> impl IntoTableRef {
+        WebsocketConnectionIden::Table
+    }
 
-    Elapsed,
-    Error,
-    Headers,
-    State,
-    Status,
-    Url,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        WebsocketConnectionIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for WebsocketConnection {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("wc")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let headers: String = r.get("headers")?;
-        let state: String = r.get("state")?;
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WebsocketConnectionIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use WebsocketConnectionIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (RequestId, self.request_id.into()),
+            (Elapsed, self.elapsed.into()),
+            (Error, self.error.into()),
+            (Headers, serde_json::to_string(&self.headers)?.into()),
+            (State, serde_json::to_value(&self.state)?.as_str().into()),
+            (Status, self.status.into()),
+            (Url, self.url.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            WebsocketConnectionIden::UpdatedAt,
+            WebsocketConnectionIden::Elapsed,
+            WebsocketConnectionIden::Error,
+            WebsocketConnectionIden::Headers,
+            WebsocketConnectionIden::State,
+            WebsocketConnectionIden::Status,
+            WebsocketConnectionIden::Url,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let headers: String = row.get("headers")?;
+        let state: String = row.get("state")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            request_id: r.get("request_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            url: r.get("url")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            request_id: row.get("request_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            url: row.get("url")?,
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
-            elapsed: r.get("elapsed")?,
-            error: r.get("error")?,
+            elapsed: row.get("elapsed")?,
+            error: row.get("error")?,
             state: serde_json::from_str(format!(r#""{state}""#).as_str()).unwrap(),
-            status: r.get("status")?,
+            status: row.get("status")?,
         })
     }
 }
@@ -640,6 +938,7 @@ impl Default for WebsocketMessageType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "websocket_requests")]
 pub struct WebsocketRequest {
     #[ts(type = "\"websocket_request\"")]
     pub model: String,
@@ -661,51 +960,89 @@ pub struct WebsocketRequest {
     pub url_parameters: Vec<HttpUrlParameter>,
 }
 
-#[derive(Iden)]
-pub enum WebsocketRequestIden {
-    #[iden = "websocket_requests"]
-    Table,
-    Id,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    FolderId,
+impl UpsertModelInfo for WebsocketRequest {
+    fn table_name() -> impl IntoTableRef {
+        WebsocketRequestIden::Table
+    }
 
-    Authentication,
-    AuthenticationType,
-    Message,
-    Description,
-    Headers,
-    Name,
-    SortPriority,
-    Url,
-    UrlParameters,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        WebsocketRequestIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for WebsocketRequest {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("wr")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let url_parameters: String = r.get("url_parameters")?;
-        let authentication: String = r.get("authentication")?;
-        let headers: String = r.get("headers")?;
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WebsocketRequestIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use WebsocketRequestIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (FolderId, self.folder_id.as_ref().map(|s| s.as_str()).into()),
+            (Authentication, serde_json::to_string(&self.authentication)?.into()),
+            (AuthenticationType, self.authentication_type.as_ref().map(|s| s.as_str()).into()),
+            (Description, self.description.into()),
+            (Headers, serde_json::to_string(&self.headers)?.into()),
+            (Message, self.message.into()),
+            (Name, self.name.trim().into()),
+            (SortPriority, self.sort_priority.into()),
+            (Url, self.url.into()),
+            (UrlParameters, serde_json::to_string(&self.url_parameters)?.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            WebsocketRequestIden::UpdatedAt,
+            WebsocketRequestIden::WorkspaceId,
+            WebsocketRequestIden::FolderId,
+            WebsocketRequestIden::Authentication,
+            WebsocketRequestIden::AuthenticationType,
+            WebsocketRequestIden::Description,
+            WebsocketRequestIden::Headers,
+            WebsocketRequestIden::Message,
+            WebsocketRequestIden::Name,
+            WebsocketRequestIden::SortPriority,
+            WebsocketRequestIden::Url,
+            WebsocketRequestIden::UrlParameters,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let url_parameters: String = row.get("url_parameters")?;
+        let authentication: String = row.get("authentication")?;
+        let headers: String = row.get("headers")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            sort_priority: r.get("sort_priority")?,
-            workspace_id: r.get("workspace_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            url: r.get("url")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            sort_priority: row.get("sort_priority")?,
+            workspace_id: row.get("workspace_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            url: row.get("url")?,
             url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
-            message: r.get("message")?,
-            description: r.get("description")?,
+            message: row.get("message")?,
+            description: row.get("description")?,
             authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
-            authentication_type: r.get("authentication_type")?,
+            authentication_type: row.get("authentication_type")?,
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
-            folder_id: r.get("folder_id")?,
-            name: r.get("name")?,
+            folder_id: row.get("folder_id")?,
+            name: row.get("name")?,
         })
     }
 }
@@ -717,6 +1054,7 @@ pub enum WebsocketEventType {
     Binary,
     Close,
     Frame,
+    Open,
     Ping,
     Pong,
     Text,
@@ -731,6 +1069,7 @@ impl Default for WebsocketEventType {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "websocket_events")]
 pub struct WebsocketEvent {
     #[ts(type = "\"websocket_event\"")]
     pub model: String,
@@ -746,38 +1085,68 @@ pub struct WebsocketEvent {
     pub message_type: WebsocketEventType,
 }
 
-#[derive(Iden)]
-pub enum WebsocketEventIden {
-    #[iden = "websocket_events"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
-    ConnectionId,
-    IsServer,
+impl UpsertModelInfo for WebsocketEvent {
+    fn table_name() -> impl IntoTableRef {
+        WebsocketEventIden::Table
+    }
 
-    MessageType,
-    Message,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        WebsocketEventIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for WebsocketEvent {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("we")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let message_type: String = r.get("message_type")?;
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (WebsocketEventIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use WebsocketEventIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (ConnectionId, self.connection_id.into()),
+            (RequestId, self.request_id.into()),
+            (MessageType, serde_json::to_string(&self.message_type)?.into()),
+            (IsServer, self.is_server.into()),
+            (Message, self.message.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            WebsocketEventIden::UpdatedAt,
+            WebsocketEventIden::MessageType,
+            WebsocketEventIden::IsServer,
+            WebsocketEventIden::Message,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let message_type: String = row.get("message_type")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            request_id: r.get("request_id")?,
-            connection_id: r.get("connection_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            message: r.get("message")?,
-            is_server: r.get("is_server")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            request_id: row.get("request_id")?,
+            connection_id: row.get("connection_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            message: row.get("message")?,
+            is_server: row.get("is_server")?,
             message_type: serde_json::from_str(message_type.as_str()).unwrap_or_default(),
         })
     }
@@ -809,6 +1178,7 @@ impl Default for HttpResponseState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "http_responses")]
 pub struct HttpResponse {
     #[ts(type = "\"http_response\"")]
     pub model: String,
@@ -832,35 +1202,74 @@ pub struct HttpResponse {
     pub version: Option<String>,
 }
 
-#[derive(Iden)]
-pub enum HttpResponseIden {
-    #[iden = "http_responses"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
+impl UpsertModelInfo for HttpResponse {
+    fn table_name() -> impl IntoTableRef {
+        HttpResponseIden::Table
+    }
 
-    BodyPath,
-    ContentLength,
-    Elapsed,
-    ElapsedHeaders,
-    Error,
-    Headers,
-    RemoteAddr,
-    Status,
-    StatusReason,
-    State,
-    Url,
-    Version,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        HttpResponseIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for HttpResponse {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("rs")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (HttpResponseIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use HttpResponseIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (RequestId, self.request_id.into()),
+            (WorkspaceId, self.workspace_id.into()),
+            (BodyPath, self.body_path.into()),
+            (ContentLength, self.content_length.into()),
+            (Elapsed, self.elapsed.into()),
+            (ElapsedHeaders, self.elapsed_headers.into()),
+            (Error, self.error.into()),
+            (Headers, serde_json::to_string(&self.headers)?.into()),
+            (RemoteAddr, self.remote_addr.into()),
+            (State, serde_json::to_value(self.state)?.as_str().into()),
+            (Status, self.status.into()),
+            (StatusReason, self.status_reason.into()),
+            (Url, self.url.into()),
+            (Version, self.version.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            HttpResponseIden::UpdatedAt,
+            HttpResponseIden::BodyPath,
+            HttpResponseIden::ContentLength,
+            HttpResponseIden::Elapsed,
+            HttpResponseIden::ElapsedHeaders,
+            HttpResponseIden::Error,
+            HttpResponseIden::Headers,
+            HttpResponseIden::RemoteAddr,
+            HttpResponseIden::State,
+            HttpResponseIden::Status,
+            HttpResponseIden::StatusReason,
+            HttpResponseIden::Url,
+            HttpResponseIden::Version,
+        ]
+    }
+
+    fn from_row(r: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         let headers: String = r.get("headers")?;
         let state: String = r.get("state")?;
         Ok(Self {
@@ -886,15 +1295,6 @@ impl<'s> TryFrom<&Row<'s>> for HttpResponse {
     }
 }
 
-impl HttpResponse {
-    pub fn new() -> Self {
-        Self {
-            model: "http_response".to_string(),
-            ..Default::default()
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
@@ -911,6 +1311,7 @@ pub struct GrpcMetadataEntry {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "grpc_requests")]
 pub struct GrpcRequest {
     #[ts(type = "\"grpc_request\"")]
     pub model: String,
@@ -933,51 +1334,90 @@ pub struct GrpcRequest {
     pub url: String,
 }
 
-#[derive(Iden)]
-pub enum GrpcRequestIden {
-    #[iden = "grpc_requests"]
-    Table,
-    Id,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    FolderId,
+impl UpsertModelInfo for GrpcRequest {
+    fn table_name() -> impl IntoTableRef {
+        GrpcRequestIden::Table
+    }
 
-    Authentication,
-    AuthenticationType,
-    Description,
-    Message,
-    Metadata,
-    Method,
-    Name,
-    Service,
-    SortPriority,
-    Url,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        GrpcRequestIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for GrpcRequest {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("gr")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let authentication: String = r.get("authentication")?;
-        let metadata: String = r.get("metadata")?;
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GrpcRequestIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use GrpcRequestIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (Name, self.name.trim().into()),
+            (Description, self.description.into()),
+            (WorkspaceId, self.workspace_id.into()),
+            (FolderId, self.folder_id.into()),
+            (SortPriority, self.sort_priority.into()),
+            (Url, self.url.into()),
+            (Service, self.service.into()),
+            (Method, self.method.into()),
+            (Message, self.message.into()),
+            (AuthenticationType, self.authentication_type.into()),
+            (Authentication, serde_json::to_string(&self.authentication)?.into()),
+            (Metadata, serde_json::to_string(&self.metadata)?.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            GrpcRequestIden::UpdatedAt,
+            GrpcRequestIden::WorkspaceId,
+            GrpcRequestIden::Name,
+            GrpcRequestIden::Description,
+            GrpcRequestIden::FolderId,
+            GrpcRequestIden::SortPriority,
+            GrpcRequestIden::Url,
+            GrpcRequestIden::Service,
+            GrpcRequestIden::Method,
+            GrpcRequestIden::Message,
+            GrpcRequestIden::AuthenticationType,
+            GrpcRequestIden::Authentication,
+            GrpcRequestIden::Metadata,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let authentication: String = row.get("authentication")?;
+        let metadata: String = row.get("metadata")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            folder_id: r.get("folder_id")?,
-            name: r.get("name")?,
-            description: r.get("description")?,
-            service: r.get("service")?,
-            method: r.get("method")?,
-            message: r.get("message")?,
-            authentication_type: r.get("authentication_type")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            folder_id: row.get("folder_id")?,
+            name: row.get("name")?,
+            description: row.get("description")?,
+            service: row.get("service")?,
+            method: row.get("method")?,
+            message: row.get("message")?,
+            authentication_type: row.get("authentication_type")?,
             authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
-            url: r.get("url")?,
-            sort_priority: r.get("sort_priority")?,
+            url: row.get("url")?,
+            sort_priority: row.get("sort_priority")?,
             metadata: serde_json::from_str(metadata.as_str()).unwrap_or_default(),
         })
     }
@@ -1001,6 +1441,7 @@ impl Default for GrpcConnectionState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "grpc_connections")]
 pub struct GrpcConnection {
     #[ts(type = "\"grpc_connection\"")]
     pub model: String,
@@ -1020,47 +1461,82 @@ pub struct GrpcConnection {
     pub url: String,
 }
 
-#[derive(Iden)]
-pub enum GrpcConnectionIden {
-    #[iden = "grpc_connections"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
+impl UpsertModelInfo for GrpcConnection {
+    fn table_name() -> impl IntoTableRef {
+        GrpcConnectionIden::Table
+    }
 
-    Elapsed,
-    Error,
-    Method,
-    Service,
-    State,
-    Status,
-    Trailers,
-    Url,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        GrpcConnectionIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for GrpcConnection {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("gc")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let trailers: String = r.get("trailers")?;
-        let state: String = r.get("state")?;
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GrpcConnectionIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use GrpcConnectionIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (RequestId, self.request_id.into()),
+            (Service, self.service.into()),
+            (Method, self.method.into()),
+            (Elapsed, self.elapsed.into()),
+            (State, serde_json::to_value(&self.state)?.as_str().into()),
+            (Status, self.status.into()),
+            (Error, self.error.as_ref().map(|s| s.as_str()).into()),
+            (Trailers, serde_json::to_string(&self.trailers)?.into()),
+            (Url, self.url.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            GrpcConnectionIden::UpdatedAt,
+            GrpcConnectionIden::Service,
+            GrpcConnectionIden::Method,
+            GrpcConnectionIden::Elapsed,
+            GrpcConnectionIden::Status,
+            GrpcConnectionIden::State,
+            GrpcConnectionIden::Error,
+            GrpcConnectionIden::Trailers,
+            GrpcConnectionIden::Url,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let trailers: String = row.get("trailers")?;
+        let state: String = row.get("state")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            request_id: r.get("request_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            service: r.get("service")?,
-            method: r.get("method")?,
-            elapsed: r.get("elapsed")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            request_id: row.get("request_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            service: row.get("service")?,
+            method: row.get("method")?,
+            elapsed: row.get("elapsed")?,
             state: serde_json::from_str(format!(r#""{state}""#).as_str()).unwrap(),
-            status: r.get("status")?,
-            url: r.get("url")?,
-            error: r.get("error")?,
+            status: row.get("status")?,
+            url: row.get("url")?,
+            error: row.get("error")?,
             trailers: serde_json::from_str(trailers.as_str()).unwrap_or_default(),
         })
     }
@@ -1087,6 +1563,7 @@ impl Default for GrpcEventType {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "grpc_events")]
 pub struct GrpcEvent {
     #[ts(type = "\"grpc_event\"")]
     pub model: String,
@@ -1104,44 +1581,76 @@ pub struct GrpcEvent {
     pub status: Option<i32>,
 }
 
-#[derive(Iden)]
-pub enum GrpcEventIden {
-    #[iden = "grpc_events"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
-    WorkspaceId,
-    RequestId,
-    ConnectionId,
+impl UpsertModelInfo for GrpcEvent {
+    fn table_name() -> impl IntoTableRef {
+        GrpcEventIden::Table
+    }
 
-    Content,
-    Error,
-    EventType,
-    Metadata,
-    Status,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        GrpcEventIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for GrpcEvent {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("ge")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
-        let event_type: String = r.get("event_type")?;
-        let metadata: String = r.get("metadata")?;
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GrpcEventIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use GrpcEventIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (RequestId, self.request_id.into()),
+            (ConnectionId, self.connection_id.into()),
+            (Content, self.content.into()),
+            (EventType, serde_json::to_string(&self.event_type)?.into()),
+            (Metadata, serde_json::to_string(&self.metadata)?.into()),
+            (Status, self.status.into()),
+            (Error, self.error.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            GrpcEventIden::UpdatedAt,
+            GrpcEventIden::Content,
+            GrpcEventIden::EventType,
+            GrpcEventIden::Metadata,
+            GrpcEventIden::Status,
+            GrpcEventIden::Error,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let event_type: String = row.get("event_type")?;
+        let metadata: String = row.get("metadata")?;
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            workspace_id: r.get("workspace_id")?,
-            request_id: r.get("request_id")?,
-            connection_id: r.get("connection_id")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            content: r.get("content")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            workspace_id: row.get("workspace_id")?,
+            request_id: row.get("request_id")?,
+            connection_id: row.get("connection_id")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            content: row.get("content")?,
             event_type: serde_json::from_str(event_type.as_str()).unwrap_or_default(),
             metadata: serde_json::from_str(metadata.as_str()).unwrap_or_default(),
-            status: r.get("status")?,
-            error: r.get("error")?,
+            status: row.get("status")?,
+            error: row.get("error")?,
         })
     }
 }
@@ -1149,6 +1658,7 @@ impl<'s> TryFrom<&Row<'s>> for GrpcEvent {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "plugins")]
 pub struct Plugin {
     #[ts(type = "\"plugin\"")]
     pub model: String,
@@ -1162,34 +1672,65 @@ pub struct Plugin {
     pub url: Option<String>,
 }
 
-#[derive(Iden)]
-pub enum PluginIden {
-    #[iden = "plugins"]
-    Table,
-    Model,
-    Id,
-    CreatedAt,
-    UpdatedAt,
+impl UpsertModelInfo for Plugin {
+    fn table_name() -> impl IntoTableRef {
+        PluginIden::Table
+    }
 
-    CheckedAt,
-    Directory,
-    Enabled,
-    Url,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        PluginIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for Plugin {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("pg")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (PluginIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use PluginIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (CheckedAt, self.checked_at.into()),
+            (Directory, self.directory.into()),
+            (Url, self.url.into()),
+            (Enabled, self.enabled.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            PluginIden::UpdatedAt,
+            PluginIden::CheckedAt,
+            PluginIden::Directory,
+            PluginIden::Url,
+            PluginIden::Enabled,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            id: r.get("id")?,
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            checked_at: r.get("checked_at")?,
-            url: r.get("url")?,
-            directory: r.get("directory")?,
-            enabled: r.get("enabled")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            checked_at: row.get("checked_at")?,
+            url: row.get("url")?,
+            directory: row.get("directory")?,
+            enabled: row.get("enabled")?,
         })
     }
 }
@@ -1197,6 +1738,7 @@ impl<'s> TryFrom<&Row<'s>> for Plugin {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "sync_states")]
 pub struct SyncState {
     #[ts(type = "\"sync_state\"")]
     pub model: String,
@@ -1212,54 +1754,69 @@ pub struct SyncState {
     pub sync_dir: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "gen_models.ts")]
-pub struct SyncHistory {
-    #[ts(type = "\"sync_history\"")]
-    pub model: String,
-    pub id: String,
-    pub workspace_id: String,
-    pub created_at: NaiveDateTime,
+impl UpsertModelInfo for SyncState {
+    fn table_name() -> impl IntoTableRef {
+        SyncStateIden::Table
+    }
 
-    pub states: Vec<SyncState>,
-    pub checksum: String,
-    pub rel_path: String,
-    pub sync_dir: String,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        SyncStateIden::Id
+    }
 
-#[derive(Iden)]
-pub enum SyncStateIden {
-    #[iden = "sync_states"]
-    Table,
-    Model,
-    Id,
-    WorkspaceId,
-    CreatedAt,
-    UpdatedAt,
+    fn generate_id() -> String {
+        generate_prefixed_id("ss")
+    }
 
-    Checksum,
-    FlushedAt,
-    ModelId,
-    RelPath,
-    SyncDir,
-}
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (SyncStateIden::CreatedAt, Desc)
+    }
 
-impl<'s> TryFrom<&Row<'s>> for SyncState {
-    type Error = rusqlite::Error;
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use SyncStateIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (FlushedAt, self.flushed_at.into()),
+            (Checksum, self.checksum.into()),
+            (ModelId, self.model_id.into()),
+            (RelPath, self.rel_path.into()),
+            (SyncDir, self.sync_dir.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            SyncStateIden::UpdatedAt,
+            SyncStateIden::FlushedAt,
+            SyncStateIden::Checksum,
+            SyncStateIden::RelPath,
+            SyncStateIden::SyncDir,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            id: r.get("id")?,
-            workspace_id: r.get("workspace_id")?,
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            flushed_at: r.get("flushed_at")?,
-            checksum: r.get("checksum")?,
-            model_id: r.get("model_id")?,
-            sync_dir: r.get("sync_dir")?,
-            rel_path: r.get("rel_path")?,
+            id: row.get("id")?,
+            workspace_id: row.get("workspace_id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            flushed_at: row.get("flushed_at")?,
+            checksum: row.get("checksum")?,
+            model_id: row.get("model_id")?,
+            sync_dir: row.get("sync_dir")?,
+            rel_path: row.get("rel_path")?,
         })
     }
 }
@@ -1267,9 +1824,11 @@ impl<'s> TryFrom<&Row<'s>> for SyncState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "key_values")]
 pub struct KeyValue {
     #[ts(type = "\"key_value\"")]
     pub model: String,
+    pub id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 
@@ -1278,30 +1837,57 @@ pub struct KeyValue {
     pub value: String,
 }
 
-#[derive(Iden)]
-pub enum KeyValueIden {
-    #[iden = "key_values"]
-    Table,
-    Model,
-    CreatedAt,
-    UpdatedAt,
+impl UpsertModelInfo for KeyValue {
+    fn table_name() -> impl IntoTableRef {
+        KeyValueIden::Table
+    }
 
-    Key,
-    Namespace,
-    Value,
-}
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        KeyValueIden::Id
+    }
 
-impl<'s> TryFrom<&Row<'s>> for KeyValue {
-    type Error = rusqlite::Error;
+    fn generate_id() -> String {
+        generate_prefixed_id("kv")
+    }
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (KeyValueIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use KeyValueIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (Namespace, self.namespace.clone().into()),
+            (Key, self.key.clone().into()),
+            (Value, self.value.clone().into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![KeyValueIden::UpdatedAt, KeyValueIden::Value]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(Self {
-            model: r.get("model")?,
-            created_at: r.get("created_at")?,
-            updated_at: r.get("updated_at")?,
-            namespace: r.get("namespace")?,
-            key: r.get("key")?,
-            value: r.get("value")?,
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            namespace: row.get("namespace")?,
+            key: row.get("key")?,
+            value: row.get("value")?,
         })
     }
 }
@@ -1309,6 +1895,7 @@ impl<'s> TryFrom<&Row<'s>> for KeyValue {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "plugin_key_values")]
 pub struct PluginKeyValue {
     #[ts(type = "\"plugin_key_value\"")]
     pub model: String,
@@ -1320,23 +1907,10 @@ pub struct PluginKeyValue {
     pub value: String,
 }
 
-#[derive(Iden)]
-pub enum PluginKeyValueIden {
-    #[iden = "plugin_key_values"]
-    Table,
-    Model,
-    CreatedAt,
-    UpdatedAt,
-
-    PluginName,
-    Key,
-    Value,
-}
-
 impl<'s> TryFrom<&Row<'s>> for PluginKeyValue {
     type Error = rusqlite::Error;
 
-    fn try_from(r: &Row<'s>) -> Result<Self, Self::Error> {
+    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
         Ok(Self {
             model: r.get("model")?,
             created_at: r.get("created_at")?,
@@ -1356,106 +1930,93 @@ fn default_http_method() -> String {
     "GET".to_string()
 }
 
-pub enum ModelType {
-    TypeCookieJar,
-    TypeEnvironment,
-    TypeFolder,
-    TypeGrpcConnection,
-    TypeGrpcEvent,
-    TypeGrpcRequest,
-    TypeHttpRequest,
-    TypeHttpResponse,
-    TypePlugin,
-    TypeSyncState,
-    TypeWebSocketConnection,
-    TypeWebSocketEvent,
-    TypeWebsocketRequest,
-    TypeWorkspace,
-    TypeWorkspaceMeta,
-}
-
-impl ModelType {
-    pub fn id_prefix(&self) -> String {
-        match self {
-            ModelType::TypeCookieJar => "cj",
-            ModelType::TypeEnvironment => "ev",
-            ModelType::TypeFolder => "fl",
-            ModelType::TypeGrpcConnection => "gc",
-            ModelType::TypeGrpcEvent => "ge",
-            ModelType::TypeGrpcRequest => "gr",
-            ModelType::TypeHttpRequest => "rq",
-            ModelType::TypeHttpResponse => "rs",
-            ModelType::TypePlugin => "pg",
-            ModelType::TypeWorkspace => "wk",
-            ModelType::TypeWorkspaceMeta => "wm",
-            ModelType::TypeSyncState => "ss",
-            ModelType::TypeWebSocketConnection => "wc",
-            ModelType::TypeWebSocketEvent => "we",
-            ModelType::TypeWebsocketRequest => "wr",
+#[macro_export]
+macro_rules! define_any_model {
+    ($($type:ident),* $(,)?) => {
+        #[derive(Debug, Clone, Serialize, TS)]
+        #[serde(rename_all = "camelCase", untagged)]
+        #[ts(export, export_to = "gen_models.ts")]
+        pub enum AnyModel {
+            $(
+                $type($type),
+            )*
         }
-        .to_string()
-    }
+
+        $(
+            impl From<$type> for AnyModel {
+                fn from(value: $type) -> Self {
+                    AnyModel::$type(value)
+                }
+            }
+
+            impl From<AnyModel> for $type {
+                fn from(value: AnyModel) -> $type {
+                    match value {
+                        AnyModel::$type(inner) => inner,
+                        _ => panic!( // Should never happen because this macro also generates the enum variant
+                            "Tried to convert AnyModel into `{}`, but found a different variant",
+                            stringify!($type)
+                        ),
+                    }
+                }
+            }
+        )*
+    };
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
-#[serde(rename_all = "camelCase", untagged)]
-#[ts(export, export_to = "gen_models.ts")]
-pub enum AnyModel {
-    CookieJar(CookieJar),
-    Environment(Environment),
-    Folder(Folder),
-    GrpcConnection(GrpcConnection),
-    GrpcEvent(GrpcEvent),
-    GrpcRequest(GrpcRequest),
-    HttpRequest(HttpRequest),
-    HttpResponse(HttpResponse),
-    Plugin(Plugin),
-    Settings(Settings),
-    KeyValue(KeyValue),
-    Workspace(Workspace),
-    WorkspaceMeta(WorkspaceMeta),
-    WebsocketConnection(WebsocketConnection),
-    WebsocketEvent(WebsocketEvent),
-    WebsocketRequest(WebsocketRequest),
+define_any_model! {
+    CookieJar,
+    Environment,
+    Folder,
+    GrpcConnection,
+    GrpcEvent,
+    GrpcRequest,
+    HttpRequest,
+    HttpResponse,
+    KeyValue,
+    Plugin,
+    Settings,
+    SyncState,
+    WebsocketConnection,
+    WebsocketEvent,
+    WebsocketRequest,
+    Workspace,
+    WorkspaceMeta,
 }
 
 impl<'de> Deserialize<'de> for AnyModel {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let value = Value::deserialize(deserializer)?;
         let model = value.as_object().unwrap();
+        use serde_json::from_value as fv;
 
         let model = match model.get("model") {
-            Some(m) if m == "http_request" => {
-                AnyModel::HttpRequest(serde_json::from_value(value).unwrap())
+            Some(m) if m == "cookie_jar" => AnyModel::CookieJar(fv(value).unwrap()),
+            Some(m) if m == "environment" => AnyModel::Environment(fv(value).unwrap()),
+            Some(m) if m == "folder" => AnyModel::Folder(fv(value).unwrap()),
+            Some(m) if m == "grpc_connection" => AnyModel::GrpcConnection(fv(value).unwrap()),
+            Some(m) if m == "grpc_event" => AnyModel::GrpcEvent(fv(value).unwrap()),
+            Some(m) if m == "grpc_request" => AnyModel::GrpcRequest(fv(value).unwrap()),
+            Some(m) if m == "http_request" => AnyModel::HttpRequest(fv(value).unwrap()),
+            Some(m) if m == "http_response" => AnyModel::HttpResponse(fv(value).unwrap()),
+            Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
+            Some(m) if m == "plugin" => AnyModel::Plugin(fv(value).unwrap()),
+            Some(m) if m == "settings" => AnyModel::Settings(fv(value).unwrap()),
+            Some(m) if m == "websocket_connection" => {
+                AnyModel::WebsocketConnection(fv(value).unwrap())
             }
-            Some(m) if m == "grpc_request" => {
-                AnyModel::GrpcRequest(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "workspace" => {
-                AnyModel::Workspace(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "environment" => {
-                AnyModel::Environment(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "folder" => AnyModel::Folder(serde_json::from_value(value).unwrap()),
-            Some(m) if m == "key_value" => {
-                AnyModel::KeyValue(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "grpc_connection" => {
-                AnyModel::GrpcConnection(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "grpc_event" => {
-                AnyModel::GrpcEvent(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "cookie_jar" => {
-                AnyModel::CookieJar(serde_json::from_value(value).unwrap())
-            }
-            Some(m) if m == "plugin" => AnyModel::Plugin(serde_json::from_value(value).unwrap()),
+            Some(m) if m == "websocket_event" => AnyModel::WebsocketEvent(fv(value).unwrap()),
+            Some(m) if m == "websocket_request" => AnyModel::WebsocketRequest(fv(value).unwrap()),
+            Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
+            Some(m) if m == "workspace_meta" => AnyModel::WorkspaceMeta(fv(value).unwrap()),
             Some(m) => {
-                return Err(serde::de::Error::custom(format!("Unknown model {}", m)));
+                return Err(serde::de::Error::custom(format!(
+                    "Failed to deserialize AnyModel {}",
+                    m
+                )));
             }
             None => {
                 return Err(serde::de::Error::custom("Missing or invalid model"));
@@ -1463,5 +2024,62 @@ impl<'de> Deserialize<'de> for AnyModel {
         };
 
         Ok(model)
+    }
+}
+
+impl AnyModel {
+    pub fn resolved_name(&self) -> String {
+        let compute_name = |name: &str, url: &str, fallback: &str| -> String {
+            if !name.is_empty() {
+                return name.to_string();
+            }
+            let without_variables = url.replace(r"\$\{\[\s*([^\]\s]+)\s*]}", "$1");
+            if without_variables.is_empty() { fallback.to_string() } else { without_variables }
+        };
+
+        match self.clone() {
+            AnyModel::CookieJar(v) => v.name,
+            AnyModel::Environment(v) => v.name,
+            AnyModel::Folder(v) => v.name,
+            AnyModel::GrpcRequest(v) => compute_name(&v.name, &v.url, "gRPC Request"),
+            AnyModel::HttpRequest(v) => compute_name(&v.name, &v.url, "HTTP Request"),
+            AnyModel::WebsocketRequest(v) => compute_name(&v.name, &v.url, "WebSocket Request"),
+            AnyModel::Workspace(v) => v.name,
+            _ => "No Name".to_string(),
+        }
+    }
+}
+
+pub trait UpsertModelInfo {
+    fn table_name() -> impl IntoTableRef;
+    fn id_column() -> impl IntoIden + Eq + Clone;
+    fn generate_id() -> String;
+    fn order_by() -> (impl IntoColumnRef, Order);
+    fn get_id(&self) -> String;
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>>;
+    fn update_columns() -> Vec<impl IntoIden>;
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized;
+}
+
+// Generate the created_at or updated_at timestamps for an upsert operation, depending on the ID
+// provided.
+fn upsert_date(update_source: &UpdateSource, dt: NaiveDateTime) -> SimpleExpr {
+    match update_source {
+        // Sync and import operations always preserve timestamps
+        UpdateSource::Sync | UpdateSource::Import => {
+            if dt.and_utc().timestamp() == 0 {
+                // Sometimes data won't have timestamps (partial data)
+                Utc::now().naive_utc().into()
+            } else {
+                dt.into()
+            }
+        }
+        // Other sources will always update to the latest time
+        _ => Utc::now().naive_utc().into(),
     }
 }

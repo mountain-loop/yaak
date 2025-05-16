@@ -11,6 +11,7 @@ export const openWorkspaceFromSyncDir = createFastMutation<void, void, string>({
     const workspace = ops
       .map((o) => (o.type === 'dbCreate' && o.fs.model.type === 'workspace' ? o.fs.model : null))
       .filter((m) => m)[0];
+
     if (workspace == null) {
       showSimpleAlert('Failed to Open', 'No workspace found in directory');
       return;

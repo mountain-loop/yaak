@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { GetHttpAuthenticationSummaryResponse } from '@yaakapp-internal/plugins';
-import { useAtomValue } from 'jotai';
-import { atom } from 'jotai/index';
+import { useAtomValue , atom } from 'jotai';
 import { useState } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { invokeCmd } from '../lib/tauri';

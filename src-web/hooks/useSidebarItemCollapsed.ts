@@ -1,8 +1,9 @@
+import { keyValuesAtom } from '@yaakapp-internal/models';
 import { useCallback, useEffect, useState } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { setKeyValue } from '../lib/keyValueStore';
-import { getActiveWorkspaceId } from './useActiveWorkspace';
-import { getKeyValue, keyValuesAtom } from './useKeyValue';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
+import { getKeyValue } from './useKeyValue';
 
 function kvKey(workspaceId: string | null) {
   return ['sidebar_collapsed', workspaceId ?? 'n/a'];
@@ -22,7 +23,7 @@ export function useSidebarItemCollapsed(itemId: string) {
 
   const toggle = useCallback(() => {
     setKeyValue({
-      key: kvKey(getActiveWorkspaceId()),
+      key: kvKey(jotaiStore.get(activeWorkspaceIdAtom)),
       namespace: 'no_sync',
       value: { ...getSidebarCollapsedMap(), [itemId]: !isCollapsed },
     }).catch(console.error);
@@ -32,11 +33,8 @@ export function useSidebarItemCollapsed(itemId: string) {
 }
 
 export function getSidebarCollapsedMap() {
-  const activeWorkspaceId = getActiveWorkspaceId();
-  if (activeWorkspaceId == null) return {};
-
   const value = getKeyValue<Record<string, boolean>>({
-    key: kvKey(activeWorkspaceId),
+    key: kvKey(jotaiStore.get(activeWorkspaceIdAtom)),
     fallback: {},
     namespace: 'no_sync',
   });

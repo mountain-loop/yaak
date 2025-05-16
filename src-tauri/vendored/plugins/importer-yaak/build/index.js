@@ -69,6 +69,12 @@ function migrateImport(contents) {
       }
     }
   }
+  for (const environment of parsed.resources.environments ?? []) {
+    if ("environmentId" in environment) {
+      environment.base = environment.environmentId == null;
+      delete environment.environmentId;
+    }
+  }
   return { resources: parsed.resources };
 }
 function isJSObject(obj) {

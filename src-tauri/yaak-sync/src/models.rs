@@ -126,6 +126,7 @@ impl TryFrom<AnyModel> for SyncModel {
             AnyModel::WebsocketConnection(m) => return Err(UnknownModel(m.model)),
             AnyModel::WebsocketEvent(m) => return Err(UnknownModel(m.model)),
             AnyModel::WorkspaceMeta(m) => return Err(UnknownModel(m.model)),
+            AnyModel::SyncState(m) => return Err(UnknownModel(m.model)),
         };
         Ok(m)
     }

@@ -2,7 +2,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { useLicense } from '@yaakapp-internal/license';
 import { useRef } from 'react';
 import { openSettings } from '../commands/openSettings';
-import { useAppInfo } from '../hooks/useAppInfo';
+import { appInfo } from '../lib/appInfo';
 import { useCheckForUpdates } from '../hooks/useCheckForUpdates';
 import { useExportData } from '../hooks/useExportData';
 import { useImportData } from '../hooks/useImportData';
@@ -13,12 +13,10 @@ import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
-import { SettingsTab } from './Settings/SettingsTab';
 
 export function SettingsDropdown() {
   const importData = useImportData();
   const exportData = useExportData();
-  const appInfo = useAppInfo();
   const dropdownRef = useRef<DropdownRef>(null);
   const checkForUpdates = useCheckForUpdates();
   const { check } = useLicense();
@@ -64,7 +62,7 @@ export function SettingsDropdown() {
           color: 'success',
           hidden: check.data == null || check.data.type === 'commercial_use',
           leftSlot: <Icon icon="circle_dollar_sign" />,
-          onSelect: () => openSettings.mutate(SettingsTab.License),
+          onSelect: () => openSettings.mutate('license'),
         },
         {
           label: 'Check for Updates',
@@ -74,13 +72,13 @@ export function SettingsDropdown() {
         {
           label: 'Feedback',
           leftSlot: <Icon icon="chat" />,
-          rightSlot: <Icon icon="external_link" />,
+          rightSlot: <Icon icon="external_link" color="secondary" />,
           onSelect: () => openUrl('https://yaak.app/feedback'),
         },
         {
           label: 'Changelog',
           leftSlot: <Icon icon="cake" />,
-          rightSlot: <Icon icon="external_link" />,
+          rightSlot: <Icon icon="external_link" color="secondary" />,
           onSelect: () => openUrl(`https://yaak.app/changelog/${appInfo.version}`),
         },
       ]}

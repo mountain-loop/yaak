@@ -1,4 +1,4 @@
-import { atom } from 'jotai/index';
+import { atom } from 'jotai';
 import type { ToastInstance } from '../components/Toasts';
 import { generateId } from './generateId';
 import { jotaiStore } from './jotai';

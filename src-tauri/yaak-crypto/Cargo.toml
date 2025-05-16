@@ -1,0 +1,20 @@
+[package]
+name = "yaak-crypto"
+links = "yaak-crypto"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+base32 = "0.5.1" # For encoding human-readable key
+base64 = "0.22.1" # For encoding in the database
+chacha20poly1305 = "0.10.1"
+keyring = { version = "4.0.0-rc.1" }
+log = "0.4.26"
+serde = { workspace = true, features = ["derive"] }
+tauri = { workspace = true }
+thiserror = "2.0.12"
+yaak-models = { workspace = true }
+
+[build-dependencies]
+tauri-plugin = { workspace = true, features = ["build"] }

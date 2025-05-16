@@ -1,6 +1,5 @@
-import { formatSize } from '@yaakapp-internal/lib/formatSize';
+import type { EditorView } from '@codemirror/view';
 import classNames from 'classnames';
-import type { EditorView } from 'codemirror';
 import {
   forwardRef,
   Fragment,
@@ -24,7 +23,6 @@ import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import type { DropdownItem } from './Dropdown';
 import { Dropdown } from './Dropdown';
-import type { EditorProps } from './Editor/Editor';
 import { Editor } from './Editor/Editor';
 import type { GenericCompletionConfig } from './Editor/genericCompletion';
 import { Icon } from './Icon';
@@ -41,9 +39,12 @@ export interface PairEditorRef {
 
 export type PairEditorProps = {
   allowFileValues?: boolean;
+  allowMultilineValues?: boolean;
   className?: string;
+  forcedEnvironmentId?: string;
   forceUpdateKey?: string;
   nameAutocomplete?: GenericCompletionConfig;
+  nameAutocompleteFunctions?: boolean;
   nameAutocompleteVariables?: boolean;
   namePlaceholder?: string;
   nameValidate?: InputProps['validate'];
@@ -52,9 +53,10 @@ export type PairEditorProps = {
   pairs: Pair[];
   stateKey: InputProps['stateKey'];
   valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
+  valueAutocompleteFunctions?: boolean;
   valueAutocompleteVariables?: boolean;
   valuePlaceholder?: string;
-  valueType?: 'text' | 'password';
+  valueType?: InputProps['type'] | ((pair: Pair) => InputProps['type']);
   valueValidate?: InputProps['validate'];
 };
 
@@ -77,18 +79,22 @@ const MAX_INITIAL_PAIRS = 50;
 
 export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function PairEditor(
   {
-    stateKey,
     allowFileValues,
+    allowMultilineValues,
     className,
+    forcedEnvironmentId,
     forceUpdateKey,
     nameAutocomplete,
+    nameAutocompleteFunctions,
     nameAutocompleteVariables,
     namePlaceholder,
     nameValidate,
     noScroll,
     onChange,
     pairs: originalPairs,
+    stateKey,
     valueAutocomplete,
+    valueAutocompleteFunctions,
     valueAutocompleteVariables,
     valuePlaceholder,
     valueType,
@@ -120,7 +126,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
       const p = originalPairs[i];
       if (!p) continue; // Make TS happy
       if (isPairEmpty(p)) continue;
-      newPairs.push({ ...p, id: p.id ?? generateId() });
+      newPairs.push(ensurePairId(p));
     }
 
     // Add empty last pair if there is none
@@ -215,7 +221,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
         'pb-2 mb-auto h-full',
         !noScroll && 'overflow-y-auto max-h-full',
         // Move over the width of the drag handle
-        '-ml-3 -mr-2 pr-2',
+        '-mr-2 pr-2',
         // Pad to make room for the drag divider
         'pt-0.5',
       )}
@@ -229,13 +235,16 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
             {hoveredIndex === i && <DropMarker />}
             <PairEditorRow
               allowFileValues={allowFileValues}
+              allowMultilineValues={allowMultilineValues}
               className="py-1"
+              forcedEnvironmentId={forcedEnvironmentId}
               forceFocusNamePairId={forceFocusNamePairId}
               forceFocusValuePairId={forceFocusValuePairId}
               forceUpdateKey={forceUpdateKey}
               index={i}
               isLast={isLast}
               nameAutocomplete={nameAutocomplete}
+              nameAutocompleteFunctions={nameAutocompleteFunctions}
               nameAutocompleteVariables={nameAutocompleteVariables}
               namePlaceholder={namePlaceholder}
               nameValidate={nameValidate}
@@ -247,6 +256,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
               pair={p}
               stateKey={stateKey}
               valueAutocomplete={valueAutocomplete}
+              valueAutocompleteFunctions={valueAutocompleteFunctions}
               valueAutocompleteVariables={valueAutocompleteVariables}
               valuePlaceholder={valuePlaceholder}
               valueType={valueType}
@@ -256,12 +266,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
         );
       })}
       {!showAll && pairs.length > MAX_INITIAL_PAIRS && (
-        <Button
-          onClick={toggleShowAll}
-          variant="border"
-          className="m-2"
-          size="xs"
-        >
+        <Button onClick={toggleShowAll} variant="border" className="m-2" size="xs">
           Show {pairs.length - MAX_INITIAL_PAIRS} More
         </Button>
       )}
@@ -289,13 +294,17 @@ type PairEditorRowProps = {
 } & Pick<
   PairEditorProps,
   | 'allowFileValues'
+  | 'allowMultilineValues'
+  | 'forcedEnvironmentId'
   | 'forceUpdateKey'
   | 'nameAutocomplete'
   | 'nameAutocompleteVariables'
   | 'namePlaceholder'
   | 'nameValidate'
+  | 'nameAutocompleteFunctions'
   | 'stateKey'
   | 'valueAutocomplete'
+  | 'valueAutocompleteFunctions'
   | 'valueAutocompleteVariables'
   | 'valuePlaceholder'
   | 'valueType'
@@ -304,16 +313,19 @@ type PairEditorRowProps = {
 
 function PairEditorRow({
   allowFileValues,
+  allowMultilineValues,
   className,
+  forcedEnvironmentId,
   forceFocusNamePairId,
   forceFocusValuePairId,
   forceUpdateKey,
   index,
   isLast,
   nameAutocomplete,
-  nameAutocompleteVariables,
   namePlaceholder,
   nameValidate,
+  nameAutocompleteFunctions,
+  nameAutocompleteVariables,
   onChange,
   onDelete,
   onEnd,
@@ -322,6 +334,7 @@ function PairEditorRow({
   pair,
   stateKey,
   valueAutocomplete,
+  valueAutocompleteFunctions,
   valueAutocompleteVariables,
   valuePlaceholder,
   valueType,
@@ -330,7 +343,6 @@ function PairEditorRow({
   const ref = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<EditorView>(null);
   const valueInputRef = useRef<EditorView>(null);
-  const valueLanguage = languageFromContentType(pair.contentType ?? null);
 
   useEffect(() => {
     if (forceFocusNamePairId === pair.id) {
@@ -346,17 +358,6 @@ function PairEditorRow({
 
   const handleFocus = useCallback(() => onFocus?.(pair), [onFocus, pair]);
   const handleDelete = useCallback(() => onDelete?.(pair, false), [onDelete, pair]);
-
-  const deleteItems = useMemo(
-    (): DropdownItem[] => [
-      {
-        label: 'Delete',
-        onSelect: handleDelete,
-        color: 'danger',
-      },
-    ],
-    [handleDelete],
-  );
 
   const handleChangeEnabled = useMemo(
     () => (enabled: boolean) => onChange({ ...pair, enabled }),
@@ -396,11 +397,27 @@ function PairEditorRow({
             hide={hide}
             onChange={handleChangeValueText}
             defaultValue={pair.value}
-            language={valueLanguage}
+            contentType={pair.contentType ?? null}
           />
         ),
       }),
-    [handleChangeValueText, pair.name, pair.value, valueLanguage],
+    [handleChangeValueText, pair.contentType, pair.name, pair.value],
+  );
+
+  const defaultItems = useMemo(
+    (): DropdownItem[] => [
+      {
+        label: 'Edit Multi-line',
+        onSelect: handleEditMultiLineValue,
+        hidden: !allowMultilineValues,
+      },
+      {
+        label: 'Delete',
+        onSelect: handleDelete,
+        color: 'danger',
+      },
+    ],
+    [allowMultilineValues, handleDelete, handleEditMultiLineValue],
   );
 
   const [, connectDrop] = useDrop<Pair>(
@@ -441,26 +458,26 @@ function PairEditorRow({
         !pair.enabled && 'opacity-60',
       )}
     >
+      <Checkbox
+        hideLabel
+        title={pair.enabled ? 'Disable item' : 'Enable item'}
+        disabled={isLast}
+        checked={isLast ? false : !!pair.enabled}
+        className={classNames(isLast && '!opacity-disabled')}
+        onChange={handleChangeEnabled}
+      />
       {!isLast ? (
         <div
           className={classNames(
-            'py-2 h-7 w-3 flex items-center',
+            'py-2 h-7 w-4 flex items-center',
             'justify-center opacity-0 group-hover:opacity-70',
           )}
         >
           <Icon size="sm" icon="grip_vertical" className="pointer-events-none" />
         </div>
       ) : (
-        <span className="w-3" />
+        <span className="w-4" />
       )}
-      <Checkbox
-        hideLabel
-        title={pair.enabled ? 'Disable item' : 'Enable item'}
-        disabled={isLast}
-        checked={isLast ? false : !!pair.enabled}
-        className={classNames('pr-2', isLast && '!opacity-disabled')}
-        onChange={handleChangeEnabled}
-      />
       <div
         className={classNames(
           'grid items-center',
@@ -484,13 +501,13 @@ function PairEditorRow({
           <Input
             ref={nameInputRef}
             hideLabel
-            useTemplating
             stateKey={`name.${pair.id}.${stateKey}`}
             wrapLines={false}
             readOnly={pair.readOnlyName}
             size="sm"
             required={!isLast && !!pair.enabled && !!pair.value}
             validate={nameValidate}
+            forcedEnvironmentId={forcedEnvironmentId}
             forceUpdateKey={forceUpdateKey}
             containerClassName={classNames(isLast && 'border-dashed')}
             defaultValue={pair.name}
@@ -501,6 +518,7 @@ function PairEditorRow({
             placeholder={namePlaceholder ?? 'name'}
             autocomplete={nameAutocomplete}
             autocompleteVariables={nameAutocompleteVariables}
+            autocompleteFunctions={nameAutocompleteFunctions}
           />
         )}
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
@@ -524,29 +542,30 @@ function PairEditorRow({
               size="sm"
               onClick={handleEditMultiLineValue}
               title={pair.value}
+              className="text-xs font-mono"
             >
-              Edit {formatSize(pair.value.length)}
+              {pair.value.split('\n').join(' ')}
             </Button>
           ) : (
             <Input
               ref={valueInputRef}
               hideLabel
-              useTemplating
               stateKey={`value.${pair.id}.${stateKey}`}
               wrapLines={false}
               size="sm"
               containerClassName={classNames(isLast && 'border-dashed')}
               validate={valueValidate}
-              language={valueLanguage}
+              forcedEnvironmentId={forcedEnvironmentId}
               forceUpdateKey={forceUpdateKey}
               defaultValue={pair.value}
               label="Value"
               name={`value[${index}]`}
               onChange={handleChangeValueText}
               onFocus={handleFocus}
-              type={isLast ? 'text' : valueType}
+              type={isLast ? 'text' : typeof valueType === 'function' ? valueType(pair) : valueType}
               placeholder={valuePlaceholder ?? 'value'}
               autocomplete={valueAutocomplete?.(pair.name)}
+              autocompleteFunctions={valueAutocompleteFunctions}
               autocompleteVariables={valueAutocompleteVariables}
             />
           )}
@@ -562,7 +581,7 @@ function PairEditorRow({
           editMultiLine={handleEditMultiLineValue}
         />
       ) : (
-        <Dropdown items={deleteItems}>
+        <Dropdown items={defaultItems}>
           <IconButton
             iconSize="sm"
             size="xs"
@@ -603,7 +622,7 @@ function FileActionsDropdown({
     [onChangeFile, onChangeText],
   );
 
-  const extraItems = useMemo<DropdownItem[]>(
+  const itemsAfter = useMemo<DropdownItem[]>(
     () => [
       {
         label: 'Edit Multi-Line',
@@ -641,6 +660,7 @@ function FileActionsDropdown({
         onSelect: onDelete,
         variant: 'danger',
         leftSlot: <Icon icon="trash" />,
+        color: 'danger',
       },
     ],
     [editMultiLine, onChangeContentType, onChangeFile, onDelete, pair.contentType, pair.isFile],
@@ -651,7 +671,7 @@ function FileActionsDropdown({
       value={pair.isFile ? 'file' : 'text'}
       onChange={onChange}
       items={fileItems}
-      extraItems={extraItems}
+      itemsAfter={itemsAfter}
     >
       <IconButton iconSize="sm" size="xs" icon="chevron_down" title="Select form data type" />
     </RadioDropdown>
@@ -659,12 +679,7 @@ function FileActionsDropdown({
 }
 
 function emptyPair(): PairWithId {
-  return {
-    enabled: true,
-    name: '',
-    value: '',
-    id: generateId(),
-  };
+  return ensurePairId({ enabled: true, name: '', value: '' });
 }
 
 function isPairEmpty(pair: Pair): boolean {
@@ -673,16 +688,17 @@ function isPairEmpty(pair: Pair): boolean {
 
 function MultilineEditDialog({
   defaultValue,
-  language,
+  contentType,
   onChange,
   hide,
 }: {
   defaultValue: string;
-  language: EditorProps['language'];
+  contentType: string | null;
   onChange: (value: string) => void;
   hide: () => void;
 }) {
   const [value, setValue] = useState<string>(defaultValue);
+  const language = languageFromContentType(contentType, value);
   return (
     <div className="w-[100vw] max-w-[40rem] h-[50vh] max-h-full grid grid-rows-[minmax(0,1fr)_auto]">
       <Editor
@@ -691,6 +707,8 @@ function MultilineEditDialog({
         language={language}
         onChange={setValue}
         stateKey={null}
+        autocompleteFunctions
+        autocompleteVariables
       />
       <div>
         <Button
@@ -706,4 +724,13 @@ function MultilineEditDialog({
       </div>
     </div>
   );
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function ensurePairId(p: Pair): PairWithId {
+  if (typeof p.id === 'string') {
+    return p as PairWithId;
+  } else {
+    return { ...p, id: p.id ?? generateId() };
+  }
 }

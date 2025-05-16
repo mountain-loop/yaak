@@ -60,3 +60,10 @@ Run the app to apply the migrations.
 If nothing happens, try `cargo clean` and run the app again.
 
 _Note: Development builds use a separate database location from production builds._
+
+## Lezer Grammer Generation
+
+```sh
+# Example
+lezer-generator components/core/Editor/<LANG>/<LANG>.grammar > components/core/Editor/<LANG>/<LANG>.ts
+```

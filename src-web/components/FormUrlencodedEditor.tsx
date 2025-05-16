@@ -29,8 +29,11 @@ export function FormUrlencodedEditor({ request, forceUpdateKey, onChange }: Prop
 
   return (
     <PairOrBulkEditor
+      allowMultilineValues
       preferenceName="form_urlencoded"
+      valueAutocompleteFunctions
       valueAutocompleteVariables
+      nameAutocompleteFunctions
       nameAutocompleteVariables
       namePlaceholder="entry_name"
       valuePlaceholder="Value"

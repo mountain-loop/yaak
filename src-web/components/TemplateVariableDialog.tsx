@@ -38,6 +38,7 @@ export function TemplateVariableDialog({ hide, onChange, initialTokens }: Props)
   }, [selectedVariableName, variables]);
 
   const tagText = useTemplateTokensToString(tokens);
+
   const handleDone = useCallback(async () => {
     if (tagText.data != null) {
       onChange(tagText.data);

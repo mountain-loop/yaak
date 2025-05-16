@@ -2,5 +2,12 @@
   "name": "@yaakapp-internal/templates",
   "private": true,
   "version": "1.0.0",
-  "main": "index.ts"
+  "main": "index.ts",
+  "scripts": {
+    "bootstrap": "npm run build",
+    "build": "wasm-pack build --target bundler"
+  },
+  "devDependencies": {
+    "wasm-pack": "^0.13.1"
+  }
 }

@@ -1,6 +1,6 @@
 import classNames from 'classnames';
-import * as m from 'motion/react-m';
 import { atom } from 'jotai';
+import * as m from 'motion/react-m';
 import type {
   CSSProperties,
   FocusEvent as ReactFocusEvent,
@@ -34,9 +34,10 @@ import { Overlay } from '../Overlay';
 import { Button } from './Button';
 import { HotKey } from './HotKey';
 import { Icon } from './Icon';
+import { LoadingIcon } from './LoadingIcon';
 import { Separator } from './Separator';
 import { HStack, VStack } from './Stacks';
-import { LoadingIcon } from './LoadingIcon';
+import { ErrorBoundary } from '../ErrorBoundary';
 
 export type DropdownItemSeparator = {
   type: 'separator';
@@ -202,17 +203,19 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   return (
     <>
       {child}
-      <Menu
-        ref={menuRef}
-        showTriangle
-        triggerRef={buttonRef}
-        fullWidth={fullWidth}
-        defaultSelectedIndex={defaultSelectedIndex}
-        items={items}
-        triggerShape={triggerRect ?? null}
-        onClose={() => setIsOpen(false)}
-        isOpen={isOpen}
-      />
+      <ErrorBoundary name={`Dropdown Menu`}>
+        <Menu
+          ref={menuRef}
+          showTriangle
+          triggerRef={buttonRef}
+          fullWidth={fullWidth}
+          defaultSelectedIndex={defaultSelectedIndex}
+          items={items}
+          triggerShape={triggerRect ?? null}
+          onClose={() => setIsOpen(false)}
+          isOpen={isOpen}
+        />
+      </ErrorBoundary>
     </>
   );
 });
@@ -530,7 +533,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                 className={classNames(
                   className,
                   'h-auto bg-surface rounded-md shadow-lg py-1.5 border',
-                  'border-border-subtle overflow-auto mx-0.5',
+                  'border-border-subtle overflow-y-auto overflow-x-hidden mx-0.5',
                 )}
               >
                 {filter && (
@@ -558,7 +561,15 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                   }
                   if (item.type === 'content') {
                     return (
-                      <div key={i} className={classNames('my-1.5 mx-2 max-w-xs')}>
+                      // eslint-disable-next-line jsx-a11y/no-static-element-interactions,jsx-a11y/click-events-have-key-events
+                      <div
+                        key={i}
+                        className={classNames('my-1 mx-2 max-w-xs')}
+                        onClick={() => {
+                          // Ensure the dropdown is closed when anything in the content is clicked
+                          onClose();
+                        }}
+                      >
                         {item.label}
                       </div>
                     );

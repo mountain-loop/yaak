@@ -5,16 +5,17 @@ import React, { useCallback, useMemo } from 'react';
 import { useLocalStorage } from 'react-use';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useResponseViewMode } from '../hooks/useResponseViewMode';
+import { getMimeTypeFromContentType } from '../lib/contentType';
 import { getContentTypeFromHeaders } from '../lib/model_util';
 import { ConfirmLargeResponse } from './ConfirmLargeResponse';
 import { Banner } from './core/Banner';
 import { CountBadge } from './core/CountBadge';
-import { DurationTag } from './core/DurationTag';
+import { HttpResponseDurationTag } from './core/HttpResponseDurationTag';
 import { HotKeyList } from './core/HotKeyList';
 import { LoadingIcon } from './core/LoadingIcon';
 import { SizeTag } from './core/SizeTag';
 import { HStack } from './core/Stacks';
-import { StatusTag } from './core/StatusTag';
+import { HttpStatusTag } from './core/HttpStatusTag';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
@@ -29,6 +30,7 @@ import { ImageViewer } from './responseViewers/ImageViewer';
 import { PdfViewer } from './responseViewers/PdfViewer';
 import { SvgViewer } from './responseViewers/SvgViewer';
 import { VideoViewer } from './responseViewers/VideoViewer';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface Props {
   style?: CSSProperties;
@@ -48,6 +50,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     {},
   );
   const contentType = getContentTypeFromHeaders(activeResponse?.headers ?? null);
+  const mimeType = contentType == null ? null : getMimeTypeFromContentType(contentType).essence;
 
   const tabs = useMemo<TabItem[]>(
     () => [
@@ -59,7 +62,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
           onChange: setViewMode,
           items: [
             { label: 'Pretty', value: 'pretty' },
-            ...(contentType?.startsWith('image') ? [] : [{ label: 'Raw', value: 'raw' }]),
+            ...(mimeType?.startsWith('image') ? [] : [{ label: 'Raw', value: 'raw' }]),
           ],
         },
       },
@@ -77,7 +80,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         label: 'Info',
       },
     ],
-    [activeResponse?.headers, contentType, setViewMode, viewMode],
+    [activeResponse?.headers, mimeType, setViewMode, viewMode],
   );
   const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(
@@ -94,7 +97,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         className,
         'x-theme-responsePane',
         'max-h-full h-full',
-        'bg-surface rounded-md border border-border-subtle',
+        'bg-surface rounded-md border border-border-subtle overflow-hidden',
         'relative',
       )}
     >
@@ -117,16 +120,13 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 alignItems="center"
                 className={classNames(
                   'cursor-default select-none',
-                  'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm',
+                  'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars',
                 )}
               >
                 {activeResponse.state !== 'closed' && <LoadingIcon size="sm" />}
-                <StatusTag showReason response={activeResponse} />
+                <HttpStatusTag showReason response={activeResponse} />
                 <span>&bull;</span>
-                <DurationTag
-                  headers={activeResponse.elapsedHeaders}
-                  total={activeResponse.elapsed}
-                />
+                <HttpResponseDurationTag response={activeResponse} />
                 <span>&bull;</span>
                 <SizeTag contentLength={activeResponse.contentLength ?? 0} />
 
@@ -156,37 +156,37 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
               tabListClassName="mt-1.5"
             >
               <TabContent value={TAB_BODY}>
-                <ConfirmLargeResponse response={activeResponse}>
-                  {activeResponse.state === 'initialized' ? (
-                    <EmptyStateText>
-                      <LoadingIcon size="xl" className="text-text-subtlest" />
-                    </EmptyStateText>
-                  ) : activeResponse.state === 'closed' && activeResponse.contentLength === 0 ? (
-                    <EmptyStateText>Empty </EmptyStateText>
-                  ) : contentType?.match(/^text\/event-stream$/i) && viewMode === 'pretty' ? (
-                    <EventStreamViewer response={activeResponse} />
-                  ) : contentType?.match(/^image\/svg/) ? (
-                    <SvgViewer response={activeResponse} />
-                  ) : contentType?.match(/^image/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={ImageViewer} />
-                  ) : contentType?.match(/^audio/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={AudioViewer} />
-                  ) : contentType?.match(/^video/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={VideoViewer} />
-                  ) : contentType?.match(/pdf/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={PdfViewer} />
-                  ) : contentType?.match(/csv|tab-separated/i) ? (
-                    <CsvViewer className="pb-2" response={activeResponse} />
-                  ) : (
-                    // ) : viewMode === 'pretty' && contentType?.includes('json') ? (
-                    //   <JsonAttributeTree attrValue={activeResponse} />
-                    <HTMLOrTextViewer
-                      textViewerClassName="-mr-2 bg-surface" // Pull to the right
-                      response={activeResponse}
-                      pretty={viewMode === 'pretty'}
-                    />
-                  )}
-                </ConfirmLargeResponse>
+                <ErrorBoundary name="Http Response Viewer">
+                  <ConfirmLargeResponse response={activeResponse}>
+                    {activeResponse.state === 'initialized' ? (
+                      <EmptyStateText>
+                        <LoadingIcon size="xl" className="text-text-subtlest" />
+                      </EmptyStateText>
+                    ) : activeResponse.state === 'closed' && activeResponse.contentLength === 0 ? (
+                      <EmptyStateText>Empty </EmptyStateText>
+                    ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
+                      <EventStreamViewer response={activeResponse} />
+                    ) : mimeType?.match(/^image\/svg/) ? (
+                      <SvgViewer response={activeResponse} />
+                    ) : mimeType?.match(/^image/i) ? (
+                      <EnsureCompleteResponse response={activeResponse} render={ImageViewer} />
+                    ) : mimeType?.match(/^audio/i) ? (
+                      <EnsureCompleteResponse response={activeResponse} render={AudioViewer} />
+                    ) : mimeType?.match(/^video/i) ? (
+                      <EnsureCompleteResponse response={activeResponse} render={VideoViewer} />
+                    ) : mimeType?.match(/pdf/i) ? (
+                      <EnsureCompleteResponse response={activeResponse} render={PdfViewer} />
+                    ) : mimeType?.match(/csv|tab-separated/i) ? (
+                      <CsvViewer className="pb-2" response={activeResponse} />
+                    ) : (
+                      <HTMLOrTextViewer
+                        textViewerClassName="-mr-2 bg-surface" // Pull to the right
+                        response={activeResponse}
+                        pretty={viewMode === 'pretty'}
+                      />
+                    )}
+                  </ConfirmLargeResponse>
+                </ErrorBoundary>
               </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />

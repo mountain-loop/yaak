@@ -8,7 +8,7 @@ use tauri::{
 mod branch;
 mod callbacks;
 mod commands;
-mod error;
+pub mod error;
 mod fetch;
 mod git;
 mod merge;

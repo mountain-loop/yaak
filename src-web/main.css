@@ -9,8 +9,18 @@
     @apply w-full h-full overflow-hidden text-text bg-surface;
   }
 
-  * {
+  /* Never show ligatures */
+  :root {
     font-variant-ligatures: none;
+  }
+
+  /* The following fixes weird font rendering issues on Linux */
+  html[data-platform="linux"] {
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
   }
 
   ::selection {
@@ -45,43 +55,34 @@
     @apply text-left;
   }
 
-  .hide-scrollbars {
-    &::-webkit-scrollbar-corner,
-    &::-webkit-scrollbar {
-      display: NONE !important;
-    }
-  }
-
-  /* Style the scrollbars */
-  * {
-    ::-webkit-scrollbar-corner,
-    ::-webkit-scrollbar {
-      @apply w-1.5 h-1.5;
+  :not(iframe) {
+    &::-webkit-scrollbar,
+    &::-webkit-scrollbar-corner {
+      @apply w-[8px] h-[8px] bg-transparent;
     }
 
-    .scrollbar-track,
-    ::-webkit-scrollbar-corner,
-    ::-webkit-scrollbar {
+    &::-webkit-scrollbar-track {
       @apply bg-transparent;
     }
 
-    &:hover {
-      &.scrollbar-thumb,
-      &::-webkit-scrollbar-thumb {
-        @apply bg-surface-highlight hover:bg-surface-highlight rounded-full;
-      }
+    &::-webkit-scrollbar-thumb {
+      @apply bg-text-subtlest rounded-[4px] opacity-20;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      @apply opacity-40 !important;
+    }
+  }
+
+  .hide-scrollbars {
+    &::-webkit-scrollbar-corner,
+    &::-webkit-scrollbar {
+      @apply hidden !important;
     }
   }
 
   .rtl {
     direction: rtl;
-  }
-
-  iframe {
-    &::-webkit-scrollbar-corner,
-    &::-webkit-scrollbar {
-      @apply bg-surface-highlight !important;
-    }
   }
 
   :root {

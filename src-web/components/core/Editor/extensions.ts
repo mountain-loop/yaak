@@ -6,9 +6,7 @@ import {
 } from '@codemirror/autocomplete';
 import { history, historyKeymap } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
-import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
-import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
 import {
   codeFolding,
@@ -20,13 +18,14 @@ import {
 } from '@codemirror/language';
 import { lintKeymap } from '@codemirror/lint';
 
-import { searchKeymap } from '@codemirror/search';
+import { search, searchKeymap } from '@codemirror/search';
 import type { Extension } from '@codemirror/state';
 import { EditorState } from '@codemirror/state';
 import {
   crosshairCursor,
   drawSelection,
   dropCursor,
+  EditorView,
   highlightActiveLineGutter,
   highlightSpecialChars,
   keymap,
@@ -36,21 +35,21 @@ import {
 import { tags as t } from '@lezer/highlight';
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import { graphql } from 'cm6-graphql';
-import { EditorView } from 'codemirror';
 import { pluralizeCount } from '../../../lib/pluralize';
 import type { EditorProps } from './Editor';
-import { pairs } from './pairs/extension';
 import { text } from './text/extension';
 import type { TwigCompletionOption } from './twig/completion';
 import { twig } from './twig/extension';
 import { pathParametersPlugin } from './twig/pathParameters';
+import { json } from '@codemirror/lang-json';
+import { xml } from '@codemirror/lang-xml';
+import { pairs } from './pairs/extension';
 import { url } from './url/extension';
 
 export const syntaxHighlightStyle = HighlightStyle.define([
   {
     tag: [t.documentMeta, t.blockComment, t.lineComment, t.docComment, t.comment],
     color: 'var(--textSubtlest)',
-    fontStyle: 'italic',
   },
   {
     tag: [t.emphasis],
@@ -74,25 +73,29 @@ export const syntaxHighlightStyle = HighlightStyle.define([
 
 const syntaxTheme = EditorView.theme({}, { dark: true });
 
-const closeBracketsExts: Extension = [closeBrackets(), keymap.of([...closeBracketsKeymap])];
+const closeBracketsExtensions: Extension = [closeBrackets(), keymap.of([...closeBracketsKeymap])];
 
-const syntaxExtensions: Record<NonNullable<EditorProps['language']>, LanguageSupport | null> = {
+const syntaxExtensions: Record<
+  NonNullable<EditorProps['language']>,
+  null | (() => LanguageSupport)
+> = {
   graphql: null,
-  json: json(),
-  javascript: javascript(),
-  html: xml(), // HTML as XML because HTML is oddly slow
-  xml: xml(),
-  url: url(),
-  pairs: pairs(),
-  text: text(),
-  markdown: markdown(),
+  json: json,
+  javascript: javascript,
+  // HTML as XML because HTML is oddly slow
+  html: xml,
+  xml: xml,
+  url: url,
+  pairs: pairs,
+  text: text,
+  markdown: markdown,
 };
 
-const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ['json', 'javascript'];
+const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ['json', 'javascript', 'graphql'];
 
 export function getLanguageExtension({
-  language,
-  useTemplating = false,
+  useTemplating,
+  language = 'text',
   environmentVariables,
   autocomplete,
   onClickVariable,
@@ -100,27 +103,34 @@ export function getLanguageExtension({
   onClickPathParameter,
   completionOptions,
 }: {
+  useTemplating: boolean;
   environmentVariables: EnvironmentVariable[];
   onClickVariable: (option: EnvironmentVariable, tagValue: string, startPos: number) => void;
   onClickMissingVariable: (name: string, tagValue: string, startPos: number) => void;
   onClickPathParameter: (name: string) => void;
   completionOptions: TwigCompletionOption[];
-} & Pick<EditorProps, 'language' | 'useTemplating' | 'autocomplete'>) {
-  if (language === 'graphql') {
-    return graphql();
-  }
+} & Pick<EditorProps, 'language' | 'autocomplete'>) {
+  const extraExtensions: Extension[] = [];
 
-  const base = syntaxExtensions[language ?? 'text'] ?? text();
-  if (!useTemplating) {
-    return base;
+  if (language === 'url') {
+    extraExtensions.push(pathParametersPlugin(onClickPathParameter));
   }
-
-  const extraExtensions: Extension[] =
-    language === 'url' ? [pathParametersPlugin(onClickPathParameter)] : [];
 
   // Only close brackets on languages that need it
   if (language && closeBracketsFor.includes(language)) {
-    extraExtensions.push(closeBracketsExts);
+    extraExtensions.push(closeBracketsExtensions);
+  }
+
+  // GraphQL is a special exception
+  if (language === 'graphql') {
+    return [graphql(), extraExtensions];
+  }
+
+  const base_ = syntaxExtensions[language ?? 'text'] ?? text();
+  const base = typeof base_ === 'function' ? base_() : text();
+
+  if (!useTemplating) {
+    return [base, extraExtensions];
   }
 
   return twig({
@@ -159,6 +169,7 @@ export const readonlyExtensions = [
 ];
 
 export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) => [
+  search({ top: true }),
   hideGutter
     ? []
     : [

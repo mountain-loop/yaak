@@ -1,16 +1,15 @@
-import {open} from "@tauri-apps/plugin-dialog";
+import { open } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { getModel, settingsAtom, workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import { memo, useCallback, useMemo } from 'react';
 import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
 import { switchWorkspace } from '../commands/switchWorkspace';
-import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
+import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
-import { settingsAtom } from '../hooks/useSettings';
-import { useWorkspaceMeta } from '../hooks/useWorkspaceMeta';
-import { getWorkspace, useWorkspaces } from '../hooks/useWorkspaces';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { revealInFinderText } from '../lib/reveal';
@@ -28,15 +27,15 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   className,
   ...buttonProps
 }: Props) {
-  const workspaces = useWorkspaces();
-  const workspace = useActiveWorkspace();
+  const workspaces = useAtomValue(workspacesAtom);
+  const workspace = useAtomValue(activeWorkspaceAtom);
   const createWorkspace = useCreateWorkspace();
-  const workspaceMeta = useWorkspaceMeta();
+  const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const { mutate: deleteSendHistory } = useDeleteSendHistory();
 
-  const { workspaceItems, extraItems } = useMemo<{
+  const { workspaceItems, itemsAfter } = useMemo<{
     workspaceItems: RadioDropdownItem[];
-    extraItems: DropdownItem[];
+    itemsAfter: DropdownItem[];
   }>(() => {
     const workspaceItems: RadioDropdownItem[] = workspaces.map((w) => ({
       key: w.id,
@@ -45,12 +44,12 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       leftSlot: w.id === workspace?.id ? <Icon icon="check" /> : <Icon icon="empty" />,
     }));
 
-    const extraItems: DropdownItem[] = [
+    const itemsAfter: DropdownItem[] = [
       {
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
         hotKeyAction: 'workspace_settings.show',
-        onSelect: () => openWorkspaceSettings.mutate({}),
+        onSelect: () => openWorkspaceSettings.mutate(),
       },
       {
         label: revealInFinderText,
@@ -89,10 +88,10 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       },
     ];
 
-    return { workspaceItems, extraItems };
+    return { workspaceItems, itemsAfter };
   }, [workspaces, workspaceMeta, deleteSendHistory, createWorkspace, workspace?.id]);
 
-  const handleChangeWorkspace = useCallback(async (workspaceId: string | null) => {
+  const handleSwitchWorkspace = useCallback(async (workspaceId: string | null) => {
     if (workspaceId == null) return;
 
     const settings = jotaiStore.get(settingsAtom);
@@ -101,7 +100,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       return;
     }
 
-    const workspace = getWorkspace(workspaceId);
+    const workspace = getModel('workspace', workspaceId);
     if (workspace == null) return;
 
     showDialog({
@@ -115,8 +114,8 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   return (
     <RadioDropdown
       items={workspaceItems}
-      extraItems={extraItems}
-      onChange={handleChangeWorkspace}
+      itemsAfter={itemsAfter}
+      onChange={handleSwitchWorkspace}
       value={workspace?.id ?? null}
     >
       <Button

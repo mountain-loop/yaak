@@ -3,7 +3,7 @@ import { FormattedError } from './core/FormattedError';
 import { Heading } from './core/Heading';
 import { VStack } from './core/Stacks';
 
-export default function RouteError({ error }: { error: unknown; reset: () => void }) {
+export default function RouteError({ error }: { error: unknown }) {
   console.log('Error', error);
   const stringified = JSON.stringify(error);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

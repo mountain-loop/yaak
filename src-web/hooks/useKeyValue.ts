@@ -1,24 +1,13 @@
+import deepEqual from '@gilbarbara/deep-equal';
 import { useMutation } from '@tanstack/react-query';
-import type { KeyValue } from '@yaakapp-internal/models';
+import { keyValuesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { atom } from 'jotai/index';
+import { selectAtom } from 'jotai/utils';
 import { useCallback, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { buildKeyValueKey, extractKeyValueOrFallback, setKeyValue } from '../lib/keyValueStore';
 
 const DEFAULT_NAMESPACE = 'global';
-
-export const keyValuesAtom = atom<KeyValue[] | null>(null);
-
-export function keyValueQueryKey({
-  namespace = DEFAULT_NAMESPACE,
-  key,
-}: {
-  namespace?: string;
-  key: string | string[];
-}) {
-  return ['key_value', { namespace, key: buildKeyValueKey(key) }];
-}
 
 export function useKeyValue<T extends object | boolean | number | string | null>({
   namespace = DEFAULT_NAMESPACE,
@@ -29,11 +18,26 @@ export function useKeyValue<T extends object | boolean | number | string | null>
   key: string | string[];
   fallback: T;
 }) {
-  const keyValues = useAtomValue(keyValuesAtom);
-  const keyValue =
-    keyValues?.find((kv) => buildKeyValueKey(kv.key) === buildKeyValueKey(key)) ?? null;
-  const value = keyValues == null ? null : extractKeyValueOrFallback(keyValue, fallback);
-  const isLoading = keyValues == null;
+  const { value, isLoading } = useAtomValue(
+    useMemo(
+      () =>
+        selectAtom(
+          keyValuesAtom,
+          (keyValues) => {
+            const keyValue =
+              keyValues?.find((kv) => buildKeyValueKey(kv.key) === buildKeyValueKey(key)) ?? null;
+            const value = keyValues == null ? null : extractKeyValueOrFallback(keyValue, fallback);
+            const isLoading = keyValues == null;
+            return { value, isLoading };
+          },
+          (a, b) => deepEqual(a, b),
+        ),
+      // Only create a new atom when the key changes. Fallback might not be a stable reference, so
+      // we don't want to refresh on that.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [buildKeyValueKey(key)],
+    ),
+  );
 
   const { mutateAsync } = useMutation<void, unknown, T>({
     mutationKey: ['set_key_value', namespace, key],

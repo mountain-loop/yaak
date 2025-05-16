@@ -1,13 +1,16 @@
-import remarkGfm from 'remark-gfm';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { ErrorBoundary } from './ErrorBoundary';
 import { Prose } from './Prose';
 
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
     <Prose className={className}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-        {children}
-      </ReactMarkdown>
+      <ErrorBoundary name="Markdown">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {children}
+        </ReactMarkdown>
+      </ErrorBoundary>
     </Prose>
   );
 }

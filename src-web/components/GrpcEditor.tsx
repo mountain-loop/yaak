@@ -1,8 +1,8 @@
 import { jsonLanguage } from '@codemirror/lang-json';
 import { linter } from '@codemirror/lint';
+import type { EditorView } from '@codemirror/view';
 import type { GrpcRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import type { EditorView } from 'codemirror';
 import {
   handleRefresh,
   jsonCompletion,
@@ -21,7 +21,7 @@ import { Editor } from './core/Editor/Editor';
 import { FormattedError } from './core/FormattedError';
 import { InlineCode } from './core/InlineCode';
 import { VStack } from './core/Stacks';
-import { GrpcProtoSelection } from './GrpcProtoSelection';
+import { GrpcProtoSelectionDialog } from './GrpcProtoSelectionDialog';
 
 type Props = Pick<EditorProps, 'heightMode' | 'onChange' | 'className' | 'forceUpdateKey'> & {
   services: ReflectResponseService[] | null;
@@ -143,13 +143,7 @@ export function GrpcEditor({
               title: 'Configure Schema',
               size: 'md',
               id: 'reflection-failed',
-              render: ({ hide }) => {
-                return (
-                  <VStack space={6} className="pb-5">
-                    <GrpcProtoSelection onDone={hide} requestId={request.id} />
-                  </VStack>
-                );
-              },
+              render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
             });
           }}
         >
@@ -167,22 +161,15 @@ export function GrpcEditor({
         </Button>
       </div>,
     ],
-    [
-      protoFiles.length,
-      reflectionError,
-      reflectionLoading,
-      reflectionUnavailable,
-      request.id,
-      services,
-    ],
+    [protoFiles.length, reflectionError, reflectionLoading, reflectionUnavailable, services],
   );
 
   return (
     <div className="h-full w-full grid grid-cols-1 grid-rows-[minmax(0,100%)_auto_auto_minmax(0,auto)]">
       <Editor
         language="json"
+        autocompleteFunctions
         autocompleteVariables
-        useTemplating
         forceUpdateKey={request.id}
         defaultValue={request.message}
         heightMode="auto"

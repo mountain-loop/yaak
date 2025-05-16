@@ -1,9 +1,8 @@
 import { syntaxTree } from '@codemirror/language';
 import type { Range } from '@codemirror/state';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, ViewPlugin, WidgetType } from '@codemirror/view';
+import { Decoration, ViewPlugin, WidgetType, EditorView } from '@codemirror/view';
 import type { SyntaxNodeRef } from '@lezer/common';
-import { EditorView } from 'codemirror';
 import type { TwigCompletionOption } from './completion';
 
 class TemplateTagWidget extends WidgetType {

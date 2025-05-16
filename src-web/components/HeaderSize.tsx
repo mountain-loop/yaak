@@ -1,8 +1,9 @@
+import { settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import type { HTMLAttributes, ReactNode } from 'react';
 import React from 'react';
 import { useOsInfo } from '../hooks/useOsInfo';
-import { useSettings } from '../hooks/useSettings';
 import { useStoplightsVisible } from '../hooks/useStoplightsVisible';
 import { HEADER_SIZE_LG, HEADER_SIZE_MD, WINDOW_CONTROLS_WIDTH } from '../lib/constants';
 import { WindowControls } from './WindowControls';
@@ -23,7 +24,7 @@ export function HeaderSize({
   children,
 }: HeaderSizeProps) {
   const osInfo = useOsInfo();
-  const settings = useSettings();
+  const settings = useAtomValue(settingsAtom);
   const stoplightsVisible = useStoplightsVisible();
   return (
     <div
@@ -33,8 +34,8 @@ export function HeaderSize({
         // Add padding for macOS stoplights, but keep it the same width (account for the interface scale)
         paddingLeft:
           stoplightsVisible && !ignoreControlsSpacing ? 72 / settings.interfaceScale : undefined,
-        ...(size === 'md' ? { height: HEADER_SIZE_MD } : {}),
-        ...(size === 'lg' ? { height: HEADER_SIZE_LG } : {}),
+        ...(size === 'md' ? { minHeight: HEADER_SIZE_MD } : {}),
+        ...(size === 'lg' ? { minHeight: HEADER_SIZE_LG } : {}),
         ...(osInfo.osType === 'macos' || ignoreControlsSpacing
           ? { paddingRight: '2px' }
           : { paddingLeft: '2px', paddingRight: settings.hideWindowControls ? '0px' : WINDOW_CONTROLS_WIDTH }),

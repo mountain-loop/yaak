@@ -1,6 +1,6 @@
-import type { Cookie } from '@yaakapp-internal/models';
-import { useCookieJars } from '../hooks/useCookieJars';
-import { useUpdateCookieJar } from '../hooks/useUpdateCookieJar';
+import type { Cookie} from '@yaakapp-internal/models';
+import { cookieJarsAtom, patchModel } from '@yaakapp-internal/models';
+import { useAtomValue } from 'jotai';
 import { cookieDomain } from '../lib/model_util';
 import { Banner } from './core/Banner';
 import { IconButton } from './core/IconButton';
@@ -11,8 +11,7 @@ interface Props {
 }
 
 export const CookieDialog = function ({ cookieJarId }: Props) {
-  const updateCookieJar = useUpdateCookieJar(cookieJarId ?? null);
-  const cookieJars = useCookieJars();
+  const cookieJars = useAtomValue(cookieJarsAtom);
   const cookieJar = cookieJars?.find((c) => c.id === cookieJarId);
 
   if (cookieJar == null) {
@@ -39,7 +38,7 @@ export const CookieDialog = function ({ cookieJarId }: Props) {
         </thead>
         <tbody className="divide-y divide-surface-highlight">
           {cookieJar?.cookies.map((c: Cookie) => (
-            <tr key={c.domain + c.raw_cookie}>
+            <tr key={c.domain + c.raw_cookie + c.path + c.expires}>
               <td className="py-2 select-text cursor-text font-mono font-semibold max-w-0">
                 {cookieDomain(c)}
               </td>
@@ -53,12 +52,11 @@ export const CookieDialog = function ({ cookieJarId }: Props) {
                   iconSize="sm"
                   title="Delete"
                   className="ml-auto"
-                  onClick={async () => {
-                    await updateCookieJar.mutateAsync({
-                      ...cookieJar,
+                  onClick={() =>
+                    patchModel(cookieJar, {
                       cookies: cookieJar.cookies.filter((c2: Cookie) => c2 !== c),
-                    });
-                  }}
+                    })
+                  }
                 />
               </td>
             </tr>

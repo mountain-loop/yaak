@@ -130,7 +130,7 @@ async function getOrRefreshAccessToken(ctx, contextId, {
   if (token == null) {
     return null;
   }
-  const now = Date.now() / 1e3;
+  const now = Date.now();
   const isExpired = token.expiresAt && now > token.expiresAt;
   if (!isExpired && !forceRefresh) {
     return token;

@@ -12,7 +12,7 @@ pub async fn render_template<T: TemplateCallback>(
     base_environment: &Environment,
     environment: Option<&Environment>,
     cb: &T,
-) -> String {
+) -> yaak_templates::error::Result<String> {
     let vars = &make_vars_hashmap(base_environment, environment);
     render(template, vars, cb).await
 }
@@ -22,7 +22,7 @@ pub async fn render_json_value<T: TemplateCallback>(
     base_environment: &Environment,
     environment: Option<&Environment>,
     cb: &T,
-) -> Value {
+) -> yaak_templates::error::Result<Value> {
     let vars = &make_vars_hashmap(base_environment, environment);
     render_json_value_raw(value, vars, cb).await
 }
@@ -32,32 +32,32 @@ pub async fn render_grpc_request<T: TemplateCallback>(
     base_environment: &Environment,
     environment: Option<&Environment>,
     cb: &T,
-) -> GrpcRequest {
+) -> yaak_templates::error::Result<GrpcRequest> {
     let vars = &make_vars_hashmap(base_environment, environment);
 
     let mut metadata = Vec::new();
     for p in r.metadata.clone() {
         metadata.push(GrpcMetadataEntry {
             enabled: p.enabled,
-            name: render(p.name.as_str(), vars, cb).await,
-            value: render(p.value.as_str(), vars, cb).await,
+            name: render(p.name.as_str(), vars, cb).await?,
+            value: render(p.value.as_str(), vars, cb).await?,
             id: p.id,
         })
     }
 
     let mut authentication = BTreeMap::new();
     for (k, v) in r.authentication.clone() {
-        authentication.insert(k, render_json_value_raw(v, vars, cb).await);
+        authentication.insert(k, render_json_value_raw(v, vars, cb).await?);
     }
 
-    let url = render(r.url.as_str(), vars, cb).await;
+    let url = render(r.url.as_str(), vars, cb).await?;
 
-    GrpcRequest {
+    Ok(GrpcRequest {
         url,
         metadata,
         authentication,
         ..r.to_owned()
-    }
+    })
 }
 
 pub async fn render_http_request<T: TemplateCallback>(
@@ -65,15 +65,15 @@ pub async fn render_http_request<T: TemplateCallback>(
     base_environment: &Environment,
     environment: Option<&Environment>,
     cb: &T,
-) -> HttpRequest {
+) -> yaak_templates::error::Result<HttpRequest> {
     let vars = &make_vars_hashmap(base_environment, environment);
 
     let mut url_parameters = Vec::new();
     for p in r.url_parameters.clone() {
         url_parameters.push(HttpUrlParameter {
             enabled: p.enabled,
-            name: render(p.name.as_str(), vars, cb).await,
-            value: render(p.value.as_str(), vars, cb).await,
+            name: render(p.name.as_str(), vars, cb).await?,
+            value: render(p.value.as_str(), vars, cb).await?,
             id: p.id,
         })
     }
@@ -82,41 +82,41 @@ pub async fn render_http_request<T: TemplateCallback>(
     for p in r.headers.clone() {
         headers.push(HttpRequestHeader {
             enabled: p.enabled,
-            name: render(p.name.as_str(), vars, cb).await,
-            value: render(p.value.as_str(), vars, cb).await,
+            name: render(p.name.as_str(), vars, cb).await?,
+            value: render(p.value.as_str(), vars, cb).await?,
             id: p.id,
         })
     }
 
     let mut body = BTreeMap::new();
     for (k, v) in r.body.clone() {
-        body.insert(k, render_json_value_raw(v, vars, cb).await);
+        body.insert(k, render_json_value_raw(v, vars, cb).await?);
     }
 
     let mut authentication = BTreeMap::new();
     for (k, v) in r.authentication.clone() {
-        authentication.insert(k, render_json_value_raw(v, vars, cb).await);
+        authentication.insert(k, render_json_value_raw(v, vars, cb).await?);
     }
 
-    let url = render(r.url.clone().as_str(), vars, cb).await;
+    let url = render(r.url.clone().as_str(), vars, cb).await?;
 
     // This doesn't fit perfectly with the concept of "rendering" but it kind of does
     let (url, url_parameters) = apply_path_placeholders(&url, url_parameters);
 
-    HttpRequest {
+    Ok(HttpRequest {
         url,
         url_parameters,
         headers,
         body,
         authentication,
         ..r.to_owned()
-    }
+    })
 }
 
 pub async fn render<T: TemplateCallback>(
     template: &str,
     vars: &HashMap<String, String>,
     cb: &T,
-) -> String {
+) -> yaak_templates::error::Result<String> {
     parse_and_render(template, vars, cb).await
 }

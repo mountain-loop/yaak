@@ -1,6 +1,7 @@
 import { Link as RouterLink } from '@tanstack/react-router';
 import classNames from 'classnames';
 import type { HTMLAttributes } from 'react';
+import { appInfo } from '../../lib/appInfo';
 import { Icon } from './Icon';
 
 interface Props extends HTMLAttributes<HTMLAnchorElement> {
@@ -13,9 +14,15 @@ export function Link({ href, children, className, ...other }: Props) {
   className = classNames(className, 'relative underline hover:text-violet-600');
 
   if (isExternal) {
+    let finalHref = href;
+    if (href.startsWith('https://yaak.app')) {
+      const url = new URL(href);
+      url.searchParams.set('ref', appInfo.identifier);
+      finalHref = url.toString();
+    }
     return (
       <a
-        href={href}
+        href={finalHref}
         target="_blank"
         rel="noopener noreferrer"
         className={classNames(className, 'pr-4 inline-flex items-center')}

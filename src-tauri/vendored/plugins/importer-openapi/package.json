@@ -7,7 +7,7 @@
     "dev": "yaakcli dev ./src/index.js"
   },
   "dependencies": {
-    "openapi-to-postmanv2": "^4.23.1",
+    "openapi-to-postmanv2": "^5.0.0",
     "yaml": "^2.4.2"
   },
   "devDependencies": {

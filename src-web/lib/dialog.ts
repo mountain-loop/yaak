@@ -1,4 +1,4 @@
-import { atom } from 'jotai/index';
+import { atom } from 'jotai';
 import type { DialogInstance } from '../components/Dialogs';
 import { jotaiStore } from './jotai';
 
