@@ -1,4 +1,4 @@
-import { type GrpcMetadataEntry, type GrpcRequest, patchModel } from '@yaakapp-internal/models';
+import { type HttpRequestHeader, type GrpcRequest, patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useRef } from 'react';
@@ -177,7 +177,7 @@ export function GrpcRequestPane({
   );
 
   const handleMetadataChange = useCallback(
-    (metadata: GrpcMetadataEntry[]) => patchModel(activeRequest, { metadata }),
+    (metadata: HttpRequestHeader[]) => patchModel(activeRequest, { metadata }),
     [activeRequest],
   );
 

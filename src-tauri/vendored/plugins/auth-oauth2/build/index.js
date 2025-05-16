@@ -32,6 +32,7 @@ var import_node_fs = require("node:fs");
 async function getAccessToken(ctx, {
   accessTokenUrl,
   scope,
+  audience,
   params,
   grantType,
   credentialsInBody,
@@ -56,6 +57,7 @@ async function getAccessToken(ctx, {
     ]
   };
   if (scope) httpRequest.body.form.push({ name: "scope", value: scope });
+  if (scope) httpRequest.body.form.push({ name: "audience", value: audience });
   if (credentialsInBody) {
     httpRequest.body.form.push({ name: "client_id", value: clientId });
     httpRequest.body.form.push({ name: "client_secret", value: clientSecret });
@@ -64,10 +66,10 @@ async function getAccessToken(ctx, {
     httpRequest.headers.push({ name: "Authorization", value });
   }
   const resp = await ctx.httpRequest.send({ httpRequest });
+  const body = resp.bodyPath ? (0, import_node_fs.readFileSync)(resp.bodyPath, "utf8") : "";
   if (resp.status < 200 || resp.status >= 300) {
-    throw new Error("Failed to fetch access token with status=" + resp.status);
+    throw new Error("Failed to fetch access token with status=" + resp.status + " and body=" + body);
   }
-  const body = (0, import_node_fs.readFileSync)(resp.bodyPath ?? "", "utf8");
   let response;
   try {
     response = JSON.parse(body);
@@ -168,10 +170,10 @@ async function getOrRefreshAccessToken(ctx, contextId, {
     await deleteToken(ctx, contextId);
     return null;
   }
+  const body = resp.bodyPath ? (0, import_node_fs2.readFileSync)(resp.bodyPath, "utf8") : "";
   if (resp.status < 200 || resp.status >= 300) {
-    throw new Error("Failed to fetch access token with status=" + resp.status);
+    throw new Error("Failed to refresh access token with status=" + resp.status + " and body=" + body);
   }
-  const body = (0, import_node_fs2.readFileSync)(resp.bodyPath ?? "", "utf8");
   let response;
   try {
     response = JSON.parse(body);
@@ -201,6 +203,7 @@ async function getAuthorizationCode(ctx, contextId, {
   redirectUri,
   scope,
   state,
+  audience,
   credentialsInBody,
   pkce
 }) {
@@ -220,6 +223,7 @@ async function getAuthorizationCode(ctx, contextId, {
   if (redirectUri) authorizationUrl.searchParams.set("redirect_uri", redirectUri);
   if (scope) authorizationUrl.searchParams.set("scope", scope);
   if (state) authorizationUrl.searchParams.set("state", state);
+  if (audience) authorizationUrl.searchParams.set("audience", audience);
   if (pkce) {
     const verifier = pkce.codeVerifier || createPkceCodeVerifier();
     const challengeMethod = pkce.challengeMethod || DEFAULT_PKCE_METHOD;
@@ -256,6 +260,7 @@ async function getAuthorizationCode(ctx, contextId, {
           clientId,
           clientSecret,
           scope,
+          audience,
           credentialsInBody,
           params: [
             { name: "code", value: code },
@@ -291,6 +296,7 @@ async function getClientCredentials(ctx, contextId, {
   clientId,
   clientSecret,
   scope,
+  audience,
   credentialsInBody
 }) {
   const token = await getToken(ctx, contextId);
@@ -299,6 +305,7 @@ async function getClientCredentials(ctx, contextId, {
   const response = await getAccessToken(ctx, {
     grantType: "client_credentials",
     accessTokenUrl,
+    audience,
     clientId,
     clientSecret,
     scope,
@@ -315,7 +322,8 @@ function getImplicit(ctx, contextId, {
   clientId,
   redirectUri,
   scope,
-  state
+  state,
+  audience
 }) {
   return new Promise(async (resolve, reject) => {
     const token = await getToken(ctx, contextId);
@@ -327,6 +335,7 @@ function getImplicit(ctx, contextId, {
     if (redirectUri) authorizationUrl.searchParams.set("redirect_uri", redirectUri);
     if (scope) authorizationUrl.searchParams.set("scope", scope);
     if (state) authorizationUrl.searchParams.set("state", state);
+    if (audience) authorizationUrl.searchParams.set("audience", audience);
     if (responseType.includes("id_token")) {
       authorizationUrl.searchParams.set("nonce", String(Math.floor(Math.random() * 9999999999999) + 1));
     }
@@ -366,6 +375,7 @@ async function getPassword(ctx, contextId, {
   username,
   password,
   credentialsInBody,
+  audience,
   scope
 }) {
   const token = await getOrRefreshAccessToken(ctx, contextId, {
@@ -383,6 +393,7 @@ async function getPassword(ctx, contextId, {
     clientId,
     clientSecret,
     scope,
+    audience,
     grantType: "password",
     credentialsInBody,
     params: [
@@ -531,6 +542,12 @@ var plugin = {
         dynamic: hiddenIfNot(["authorization_code", "implicit"])
       },
       {
+        type: "text",
+        name: "audience",
+        label: "Audience",
+        optional: true
+      },
+      {
         type: "checkbox",
         name: "usePkce",
         label: "Use PKCE",
@@ -635,6 +652,7 @@ var plugin = {
           clientSecret: stringArg(values, "clientSecret"),
           redirectUri: stringArgOrNull(values, "redirectUri"),
           scope: stringArgOrNull(values, "scope"),
+          audience: stringArgOrNull(values, "audience"),
           state: stringArgOrNull(values, "state"),
           credentialsInBody,
           pkce: values.usePkce ? {
@@ -650,6 +668,7 @@ var plugin = {
           redirectUri: stringArgOrNull(values, "redirectUri"),
           responseType: stringArg(values, "responseType"),
           scope: stringArgOrNull(values, "scope"),
+          audience: stringArgOrNull(values, "audience"),
           state: stringArgOrNull(values, "state")
         });
       } else if (grantType === "client_credentials") {
@@ -659,6 +678,7 @@ var plugin = {
           clientId: stringArg(values, "clientId"),
           clientSecret: stringArg(values, "clientSecret"),
           scope: stringArgOrNull(values, "scope"),
+          audience: stringArgOrNull(values, "audience"),
           credentialsInBody
         });
       } else if (grantType === "password") {
@@ -670,6 +690,7 @@ var plugin = {
           username: stringArg(values, "username"),
           password: stringArg(values, "password"),
           scope: stringArgOrNull(values, "scope"),
+          audience: stringArgOrNull(values, "audience"),
           credentialsInBody
         });
       } else {

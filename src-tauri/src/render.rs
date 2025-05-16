@@ -2,7 +2,7 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use yaak_http::apply_path_placeholders;
 use yaak_models::models::{
-    Environment, GrpcMetadataEntry, GrpcRequest, HttpRequest, HttpRequestHeader, HttpUrlParameter,
+    Environment, GrpcRequest, HttpRequest, HttpRequestHeader, HttpUrlParameter,
 };
 use yaak_models::render::make_vars_hashmap;
 use yaak_templates::{parse_and_render, render_json_value_raw, TemplateCallback};
@@ -37,7 +37,7 @@ pub async fn render_grpc_request<T: TemplateCallback>(
 
     let mut metadata = Vec::new();
     for p in r.metadata.clone() {
-        metadata.push(GrpcMetadataEntry {
+        metadata.push(HttpRequestHeader {
             enabled: p.enabled,
             name: render(p.name.as_str(), vars, cb).await?,
             value: render(p.value.as_str(), vars, cb).await?,
