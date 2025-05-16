@@ -12,6 +12,10 @@ interface Props {
 }
 
 export function HttpRequestLayout({ activeRequest, style }: Props) {
+    const {
+        bodyType,
+    } = activeRequest;
+
   return (
     <SplitLayout
       name="http_layout"
@@ -25,19 +29,23 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
         />
       )}
       secondSlot={
-        () => <>
-            <SplitLayout
-                name="http_response_layout"
-                className="gap-1.5"
-                firstSlot={
-                    ({ style }) => <HttpResponsePane activeRequestId={activeRequest.id} style={style} />
-                }
-                secondSlot={
-                    () => <GraphQLDocsExplorer />
-                }
-            />
-        </>
-    }
+            bodyType === 'graphql'
+            ? () => (
+                    <SplitLayout
+                        name="http_response_layout"
+                        className="gap-1.5"
+                        firstSlot={
+                            ({ style }) => <HttpResponsePane activeRequestId={activeRequest.id} style={style} />
+                        }
+                        secondSlot={
+                            () => <GraphQLDocsExplorer />
+                        }
+                    />
+                )
+            : (
+                ({ style }) => <HttpResponsePane activeRequestId={activeRequest.id} style={style} />
+            )
+        }
     />
   );
 }

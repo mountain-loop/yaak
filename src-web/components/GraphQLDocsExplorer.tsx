@@ -139,78 +139,92 @@ function DocsExplorer({
 	const renderSubFieldRecord = (
 		field: FieldsMap[string]
 	) => {
-
 		return (
 			<div
 				className="flex flex-row justify-start items-center"
 			>
 				<IconButton size="sm" icon="plus_circle" iconColor="secondary" title="Add to query"/>
-				<div>
+				<div
+					className="flex flex-col"
+				>
+					<div>
 					<span>
 						{ " " }
 					</span>
-					<span
-						className="text-primary cursor-pointer"
-					>
+						<span
+							className="text-primary"
+						>
 						{ field.name }
 					</span>
-					{/* Arguments block */}
-					{
-						field.args && field.args.length > 0
-							? (
-								<>
+						{/* Arguments block */ }
+						{
+							field.args && field.args.length > 0
+								? (
+									<>
 								<span>
 									{ " " }
 									(
 									{ " " }
 								</span>
-									{
-										field.args.map(
-											(arg, i, array) => (
-												<>
-												<button
-													key={ arg.name }
-													onClick={() => onArgumentClick(arg)}
-												>
-													<span
-														className="text-primary"
-													>{ arg.name }</span>
-													<span>{ " " }</span>
-													<span
-														className="text-success underline cursor-pointer"
-													>{ arg.type.toString() }</span>
-													{
-														i < array.length - 1
-															? (
-																<>
+										{
+											field.args.map(
+												(arg, i, array) => (
+													<>
+														<button
+															key={ arg.name }
+															onClick={ () => onArgumentClick(arg) }
+														>
+															<span
+																className="text-primary cursor-pointer"
+															>
+																{ arg.name }
+															</span>
 																	<span>{ " " }</span>
-																	<span> , </span>
-																	<span>{ " " }</span>
-																</>
-															)
-															: null
-													}
-												</button>
-													<span>{ " " }</span>
-												</>
+																	<span
+																		className="text-success underline cursor-pointer"
+																	>{ arg.type.toString() }</span>
+																	{
+																		i < array.length - 1
+																			? (
+																				<>
+																					<span>{ " " }</span>
+																					<span> , </span>
+																					<span>{ " " }</span>
+																				</>
+																			)
+																			: null
+																	}
+														</button>
+														<span>{ " " }</span>
+													</>
+												)
 											)
-										)
-									}
-									<span>
+										}
+										<span>
 									)
 								</span>
-								</>
+									</>
+								)
+								: null
+						}
+						{/* End of Arguments Block */ }
+						<span>{ " " }</span>
+						<button
+							className="text-success underline cursor-pointer"
+							onClick={ () => onTypeClick(field.type) }
+						>
+							{ field.type.toString() }
+						</button>
+					</div>
+					{
+						field.description
+							? (
+								<div>
+									{ field.description }
+								</div>
 							)
 							: null
 					}
-					{/* End of Arguments Block */}
-					<span>{ " " }</span>
-					<button
-						className="text-success underline cursor-pointer"
-						onClick={() => onTypeClick(field.type)}
-					>
-						{ field.type.toString() }
-					</button>
 				</div>
 			</div>
 		);
