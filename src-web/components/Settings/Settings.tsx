@@ -1,9 +1,9 @@
 import { useSearch } from '@tanstack/react-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import React, { useState } from 'react';
 import { useKeyPressEvent } from 'react-use';
-import { useOsInfo } from '../../hooks/useOsInfo';
 import { capitalize } from '../../lib/capitalize';
 import { HStack } from '../core/Stacks';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
@@ -27,7 +27,6 @@ const tabs = [TAB_GENERAL, TAB_APPEARANCE, TAB_PROXY, TAB_PLUGINS, TAB_LICENSE] 
 export type SettingsTab = (typeof tabs)[number];
 
 export default function Settings({ hide }: Props) {
-  const osInfo = useOsInfo();
   const { tab: tabFromQuery } = useSearch({ from: '/workspaces/$workspaceId/settings' });
   const [tab, setTab] = useState<string | undefined>(tabFromQuery);
 
@@ -60,9 +59,7 @@ export default function Settings({ hide }: Props) {
             justifyContent="center"
             className="w-full h-full grid grid-cols-[1fr_auto] pointer-events-none"
           >
-            <div className={classNames(osInfo?.osType === 'macos' ? 'text-center' : 'pl-2')}>
-              Settings
-            </div>
+            <div className={classNames(type() === 'macos' ? 'text-center' : 'pl-2')}>Settings</div>
           </HStack>
         </HeaderSize>
       )}

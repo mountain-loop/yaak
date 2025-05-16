@@ -1,12 +1,12 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { type } from '@tauri-apps/plugin-os';
 import { settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import React, { useState } from 'react';
-import { useOsInfo } from '../hooks/useOsInfo';
-import {WINDOW_CONTROLS_WIDTH} from "../lib/constants";
+import { WINDOW_CONTROLS_WIDTH } from '../lib/constants';
 import { Button } from './core/Button';
 import { HStack } from './core/Stacks';
-import { useAtomValue } from 'jotai';
 
 interface Props {
   className?: string;
@@ -16,10 +16,9 @@ interface Props {
 
 export function WindowControls({ className, onlyX }: Props) {
   const [maximized, setMaximized] = useState<boolean>(false);
-  const osInfo = useOsInfo();
   const settings = useAtomValue(settingsAtom);
   // Never show controls on macOS or if hideWindowControls is true
-  if (osInfo.osType === 'macos' || settings.hideWindowControls) {
+  if (type() === 'macos' || settings.hideWindowControls) {
     return null;
   }
 

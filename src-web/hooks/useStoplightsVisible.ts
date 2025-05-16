@@ -1,9 +1,8 @@
+import { type } from '@tauri-apps/plugin-os';
 import { useIsFullscreen } from './useIsFullscreen';
-import { useOsInfo } from './useOsInfo';
 
 export function useStoplightsVisible() {
-  const platform = useOsInfo();
   const fullscreen = useIsFullscreen();
-  const stoplightsVisible = platform?.osType === 'macos' && !fullscreen;
+  const stoplightsVisible = type() === 'macos' && !fullscreen;
   return stoplightsVisible;
 }
