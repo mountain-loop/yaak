@@ -203,7 +203,7 @@ impl UpsertModelInfo for Settings {
             proxy: proxy.map(|p| -> ProxySetting { serde_json::from_str(p.as_str()).unwrap() }),
             theme_dark: row.get("theme_dark")?,
             theme_light: row.get("theme_light")?,
-            hide_window_controls: r.get("hide_window_controls")?,
+            hide_window_controls: row.get("hide_window_controls")?,
             update_channel: row.get("update_channel")?,
         })
     }

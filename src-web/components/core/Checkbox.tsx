@@ -31,10 +31,10 @@ export function Checkbox({
     <HStack
       as="label"
       alignItems="center"
-      space={3}
+      space={2}
       className={classNames(className, 'text-text mr-auto')}
     >
-      <div className={classNames(inputWrapperClassName, 'x-theme-input', 'relative flex')}>
+      <div className={classNames(inputWrapperClassName, 'x-theme-input', 'relative flex mr-0.5')}>
         <input
           aria-hidden
           className={classNames(
