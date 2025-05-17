@@ -1204,6 +1204,75 @@ async fn cmd_check_for_updates<R: Runtime>(
     Ok(yaak_updater.lock().await.check_now(&window, update_mode, UpdateTrigger::User).await?)
 }
 
+#[tauri::command]
+async fn get_linux_theme() -> YaakResult<String> {
+    if cfg!(target_os = "linux") {
+        let output = std::process::Command::new("gsettings")
+            .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+            .output()
+            .map_err(|e| GenericError(e.to_string()))?;
+        let theme = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        // The output format is "'prefer-dark'" or "'default'"
+        Ok(match theme.as_str() {
+            "'prefer-dark'" => "dark".to_string(),
+            _ => "light".to_string(),
+        })
+    } else {
+        Ok("light".to_string())
+    }
+}
+
+#[tauri::command]
+async fn watch_linux_theme<R: Runtime>(window: WebviewWindow<R>) -> YaakResult<()> {
+    if cfg!(target_os = "linux") {
+        let window_clone = window.clone();
+        
+        std::thread::spawn(move || {
+            let mut child = match std::process::Command::new("gsettings")
+                .args(["monitor", "org.gnome.desktop.interface", "color-scheme"])
+                .stdout(std::process::Stdio::piped())
+                .spawn() 
+            {
+                Ok(child) => child,
+                Err(e) => {
+                    error!("Failed to start gsettings monitor: {}", e);
+                    return;
+                }
+            };
+
+            if let Some(stdout) = child.stdout.take() {
+                use std::io::{BufRead, BufReader};
+                let reader = BufReader::new(stdout);
+                
+                for line in reader.lines() {
+                    match line {
+                        Ok(line) => {
+                            let theme = if line.contains("prefer-dark") {
+                                "dark"
+                            } else {
+                                "light"
+                            };
+                            if let Err(e) = window_clone.emit("theme-changed", theme) {
+                                error!("Failed to emit theme-changed event: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            error!("Error reading gsettings output: {}", e);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Clean up the child process if it's still running
+            if let Err(e) = child.kill() {
+                error!("Failed to kill gsettings monitor: {}", e);
+            }
+        });
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -1315,6 +1384,8 @@ pub fn run() {
             cmd_template_functions,
             cmd_template_tokens_to_string,
             cmd_uninstall_plugin,
+            get_linux_theme,
+            watch_linux_theme,
             //
             //
             // Migrated commands

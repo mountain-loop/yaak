@@ -1,4 +1,10 @@
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { platform } from '@tauri-apps/plugin-os';
+import { getSettings } from '../settings';
+import { getResolvedTheme } from './themes';
+import { addThemeStylesToDocument, setThemeOnDocument } from './window';
 
 export type Appearance = 'light' | 'dark';
 
@@ -7,6 +13,17 @@ export function getCSSAppearance(): Appearance {
 }
 
 export async function getWindowAppearance(): Promise<Appearance> {
+  const currentPlatform = await platform();
+  if (currentPlatform === 'linux') {
+    try {
+      const theme = await invoke<string>('get_linux_theme');
+      // Start watching for theme changes on Linux
+      await invoke('watch_linux_theme');
+      return theme === 'dark' ? 'dark' : 'light';
+    } catch (error) {
+      console.error('Failed to get Linux theme:', error);
+    }
+  }
   const a = await getCurrentWebviewWindow().theme();
   return a ?? getCSSAppearance();
 }
@@ -46,3 +63,24 @@ export function subscribeToPreferredAppearance(cb: (a: Appearance) => void) {
   getWindowAppearance().then(cb);
   subscribeToWindowAppearanceChange(cb);
 }
+
+// Listen for theme changes from Linux
+listen('theme-changed', (event) => {
+  const theme = event.payload as string;
+  
+  getSettings().then(settings => {
+    const resolvedTheme = getResolvedTheme(
+      theme as Appearance,
+      'system', // Use system setting since this is a system theme change
+      settings.themeLight,
+      settings.themeDark
+    );
+    
+    addThemeStylesToDocument(resolvedTheme.active);
+    setThemeOnDocument(resolvedTheme.active);
+  }).catch(error => {
+    console.error('Failed to get settings:', error);
+    // Fallback to basic theme if settings fail
+    document.documentElement.setAttribute('data-theme', theme);
+  });
+});
