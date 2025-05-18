@@ -9,14 +9,15 @@ import type {
 	GraphQLScalarType,
 	GraphQLField,
 	GraphQLList,
-	GraphQLArgument,
 	GraphQLInputType,
-	GraphQLNonNull
+	GraphQLNonNull,
+	GraphQLObjectType
 } from "graphql";
 import { isNonNullType, isListType } from "graphql";
 import { Button } from "./core/Button";
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { IconButton } from "./core/IconButton";
+import { fuzzyFilter } from 'fuzzbunny';
 
 function getRootTypes(graphqlSchema: GraphQLSchema) {
 	return ([
@@ -39,15 +40,141 @@ function getRootTypes(graphqlSchema: GraphQLSchema) {
 		)
 }
 
+function getTypeIndices(type: GraphQLAnyType): SearchIndexRecord[] {
+	const indices: SearchIndexRecord[] = [];
+
+	if (!(type as GraphQLObjectType).name) {
+		return indices;
+	}
+
+	indices.push({
+		name: (type as GraphQLObjectType).name,
+		type: 'type',
+	});
+
+	if ((type as GraphQLObjectType).getFields) {
+		indices.push(
+			...getFieldsIndices((type as GraphQLObjectType).getFields())
+		)
+	}
+
+	// remove duplicates from index
+	return indices.filter(
+		(x, i, array) => array.findIndex(
+			(y) => y.name === x.name
+		) === i
+	);
+}
+
+function getFieldsIndices(fieldMap: FieldsMap): SearchIndexRecord[] {
+	const indices: SearchIndexRecord[] = [];
+
+	Object.values(fieldMap)
+		.forEach(
+			(field) => {
+				if (!field.name) {
+					return;
+				}
+
+				indices.push({
+					name: field.name,
+					type: 'field',
+				});
+
+				if (field.type) {
+					indices.push(
+						...getTypeIndices(field.type)
+					)
+				}
+			}
+		);
+
+	// remove duplicates from index
+	return indices.filter(
+		(x, i, array) => array.findIndex(
+			(y) => y.name === x.name
+		) === i
+	);
+}
+
 type Field = NonNullable<ReturnType<GraphQLSchema['getQueryType']>>;
 type FieldsMap = ReturnType<Field['getFields']>;
+type GraphQLAnyType = FieldsMap[string]['type'];
+
+type SearchIndexRecord = {
+	name: string,
+	type: 'field' | 'type' | 'query' | 'mutation' | 'subscription',
+};
+
+type SchemaPointer = Field | GraphQLOutputType | GraphQLInputType | null;
 
 function DocsExplorer({
 						  graphqlSchema
 					  }: { graphqlSchema: GraphQLSchema }) {
-	const rootTypes = getRootTypes(graphqlSchema);
-	const [schemaPointer, setSchemaPointer] = useState<Field | GraphQLOutputType | GraphQLInputType | null>(null);
+	const [rootTypes, setRootTypes] = useState(getRootTypes(graphqlSchema));
+	const [schemaPointer, setSchemaPointer] = useState<SchemaPointer>(null);
 	const [history, setHistory] = useState<(Field | GraphQLInputType)[]>([]);
+	const [searchIndex, setSearchIndex] = useState<SearchIndexRecord[]>([]);
+	const [searchQuery, setSearchQuery] = useState<string>('');
+	const [searchResults, setSearchResults] = useState<SearchIndexRecord[]>([]);
+	const [viewMode, setViewMode] = useState<'explorer' | 'search' | 'field'>('explorer');
+
+	useEffect(() => {
+		setRootTypes(getRootTypes(graphqlSchema));
+	}, [graphqlSchema]);
+
+	useEffect(() => {
+		const typeMap = graphqlSchema.getTypeMap();
+
+		const index: SearchIndexRecord[] = Object.values(typeMap)
+			.filter(
+				(x) => !x.name.startsWith('__')
+			)
+			.map(
+				(x) => ({
+					name: x.name,
+					type: 'type',
+				})
+			);
+
+		Object.values(rootTypes)
+			.forEach(
+				(type) => {
+					index.push(
+						...getFieldsIndices(type.getFields())
+					)
+				}
+			)
+
+		setSearchIndex(
+			index
+				.filter(
+					(x, i, array) => array.findIndex(
+						(y) => y.name === x.name
+					) === i
+				)
+		);
+	}, [graphqlSchema, rootTypes]);
+
+	useEffect(
+		() => {
+			if (!searchQuery) {
+				setSearchResults([]);
+				return;
+			}
+
+			const results = fuzzyFilter(
+				searchIndex,
+				searchQuery,
+				{ fields: ['name'] }
+			)
+				.sort((a, b) => b.score - a.score)
+				.map((v) => v.item);
+
+			setSearchResults(results);
+		},
+		[searchIndex, searchQuery]
+	);
 
 	const goBack = () => {
 		if (history.length === 0) {
@@ -99,7 +226,7 @@ function DocsExplorer({
 	}
 
 	const onTypeClick = (
-		type: GraphQLField<never, never>['type']
+		type: GraphQLField<never, never>['type'] | GraphQLInputType
 	) => {
 		console.log(type);
 		// check if non-null
@@ -120,20 +247,8 @@ function DocsExplorer({
 		addToHistory(type as Field);
 	};
 
-	const onArgumentClick = (
-		arg: GraphQLArgument
-	) => {
-		// extract type of argument
-		const type = isNonNullType(arg.type) ? arg.type.ofType : arg.type;
-
-		if (isListType(type)) {
-			setSchemaPointer((type as GraphQLList<GraphQLInputType>).ofType);
-			addToHistory(type.ofType);
-			return;
-		}
-
-		setSchemaPointer(type);
-		addToHistory(type);
+	const onFieldClick = (field: GraphQLField<any, any>) => {
+		
 	};
 
 	const renderSubFieldRecord = (
@@ -151,11 +266,12 @@ function DocsExplorer({
 					<span>
 						{ " " }
 					</span>
-						<span
-							className="text-primary"
+						<button
+							className="cursor-pointer text-primary"
+							onClick={ () => onFieldClick(field) }
 						>
-						{ field.name }
-					</span>
+							{ field.name }
+						</button>
 						{/* Arguments block */ }
 						{
 							field.args && field.args.length > 0
@@ -172,7 +288,7 @@ function DocsExplorer({
 													<>
 														<button
 															key={ arg.name }
-															onClick={ () => onArgumentClick(arg) }
+															onClick={ () => onTypeClick(arg.type) }
 														>
 															<span
 																className="text-primary cursor-pointer"
@@ -252,11 +368,11 @@ function DocsExplorer({
 			return renderScalarField();
 		}
 
-		if (!schemaPointer.getFields()) {
+		if (!(schemaPointer as Field).getFields()) {
 			return null;
 		}
 
-		return Object.values(schemaPointer.getFields())
+		return Object.values((schemaPointer as Field).getFields())
 			.map(
 				(x) => renderSubFieldRecord(x)
 			)
@@ -272,7 +388,7 @@ function DocsExplorer({
 				<div
 					className="text-primary mt-4"
 				>
-					{ schemaPointer.name }
+					{ (schemaPointer as Field).name }
 				</div>
 				<div
 					className="my-3"
@@ -328,12 +444,59 @@ function DocsExplorer({
 						: null
 				}
 			</div>
-			<Input
-				label="Search docs"
-				stateKey="search_graphql_docs"
-				placeholder="Search docs"
-				hideLabel
-			/>
+			{/* Search bar */}
+			<div
+				className="relative"
+			>
+				<Input
+					label="Search docs"
+					stateKey="search_graphql_docs"
+					placeholder="Search docs"
+					hideLabel
+					onChange={
+						(value) => {
+							setSearchQuery(value);
+						}
+					}
+				/>
+				{
+					searchResults.length > 0
+						? (
+							<div
+								className="flex flex-col gap-2 absolute top-[45px] w-full rounded-md bg-surface-highlight py-3"
+							>
+								{
+									searchResults
+										// get first 8 items
+										.slice(0, 8)
+										.map(
+											(x) => (
+												<button
+													key={ x.name }
+													onClick={ () => {
+														const type = graphqlSchema.getType(x.name);
+														if (type) {
+															setSchemaPointer(type);
+														}
+													} }
+													className="flex flex-row justify-between cursor-pointer border border-border-subtle enabled:hocus:border-border rounded mx-2 py-1"
+												>
+													<div>
+														{ x.name }
+													</div>
+													<div>
+														{ x.type }
+													</div>
+												</button>
+										)
+									)
+								}
+							</div>
+						)
+						: null
+				}
+			</div>
+			{/* End of search bar */}
 			<div>
 				{ renderExplorerView() }
 			</div>
