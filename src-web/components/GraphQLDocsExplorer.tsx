@@ -108,16 +108,20 @@ type SearchIndexRecord = {
 
 type SchemaPointer = Field | GraphQLOutputType | GraphQLInputType | null;
 
+type ViewMode = 'explorer' | 'search' | 'field';
+
+type HistoryRecord = { schemaPointer: SchemaPointer, viewMode: ViewMode };
+
 function DocsExplorer({
 						  graphqlSchema
 					  }: { graphqlSchema: GraphQLSchema }) {
 	const [rootTypes, setRootTypes] = useState(getRootTypes(graphqlSchema));
 	const [schemaPointer, setSchemaPointer] = useState<SchemaPointer>(null);
-	const [history, setHistory] = useState<(Field | GraphQLInputType)[]>([]);
+	const [history, setHistory] = useState<HistoryRecord[]>([]);
 	const [searchIndex, setSearchIndex] = useState<SearchIndexRecord[]>([]);
 	const [searchQuery, setSearchQuery] = useState<string>('');
 	const [searchResults, setSearchResults] = useState<SearchIndexRecord[]>([]);
-	const [viewMode, setViewMode] = useState<'explorer' | 'search' | 'field'>('explorer');
+	const [viewMode, setViewMode] = useState<ViewMode>('explorer');
 
 	useEffect(() => {
 		setRootTypes(getRootTypes(graphqlSchema));
@@ -182,18 +186,29 @@ function DocsExplorer({
 		}
 
 		const newHistory = history.slice(0, history.length - 1);
-		const newPointer = newHistory[newHistory.length - 1];
-		setHistory(newHistory);
-		setSchemaPointer(newPointer!);
+
+		const prevHistoryRecord = newHistory[newHistory.length - 1];
+
+		if (prevHistoryRecord) {
+			const { schemaPointer: newPointer, viewMode } = prevHistoryRecord;
+			setHistory(newHistory);
+			setSchemaPointer(newPointer!);
+			setViewMode(viewMode);
+
+			return;
+		}
+
+		goHome();
 	}
 
-	const addToHistory = (pointer: Field | GraphQLInputType) => {
-		setHistory([...history, pointer]);
+	const addToHistory = (historyRecord: HistoryRecord) => {
+		setHistory([...history, historyRecord]);
 	}
 
 	const goHome = () => {
 		setHistory([]);
 		setSchemaPointer(null);
+		setViewMode('explorer');
 	}
 
 	const renderRootTypes = () => {
@@ -211,7 +226,10 @@ function DocsExplorer({
 									className="block text-primary cursor-pointer w-fit"
 									onClick={
 										() => {
-											addToHistory(x);
+											addToHistory({
+												schemaPointer: x,
+												viewMode: 'explorer',
+											});
 											setSchemaPointer(x);
 										}
 									}
@@ -228,7 +246,6 @@ function DocsExplorer({
 	const onTypeClick = (
 		type: GraphQLField<never, never>['type'] | GraphQLInputType
 	) => {
-		console.log(type);
 		// check if non-null
 		if (isNonNullType(type)) {
 			onTypeClick((type as GraphQLNonNull<GraphQLOutputType>).ofType)
@@ -244,28 +261,46 @@ function DocsExplorer({
 		}
 
 		setSchemaPointer(type);
-		addToHistory(type as Field);
+		addToHistory({
+			schemaPointer: type as Field,
+			viewMode: 'explorer',
+		});
+		setViewMode('explorer');
 	};
 
 	const onFieldClick = (field: GraphQLField<any, any>) => {
-		
+		setSchemaPointer(field as unknown as Field);
+		setViewMode('field');
+		addToHistory({
+			schemaPointer: field as unknown as Field,
+			viewMode: 'field',
+		});
 	};
 
 	const renderSubFieldRecord = (
-		field: FieldsMap[string]
+		field: FieldsMap[string],
+		options?: {
+			addable?: boolean,
+		}
 	) => {
 		return (
 			<div
 				className="flex flex-row justify-start items-center"
 			>
-				<IconButton size="sm" icon="plus_circle" iconColor="secondary" title="Add to query"/>
+				{
+					options?.addable
+						? (
+							<IconButton size="sm" icon="plus_circle" iconColor="secondary" title="Add to query"/>
+						)
+						: null
+				}
 				<div
 					className="flex flex-col"
 				>
 					<div>
-					<span>
-						{ " " }
-					</span>
+						<span>
+							{ " " }
+						</span>
 						<button
 							className="cursor-pointer text-primary"
 							onClick={ () => onFieldClick(field) }
@@ -374,7 +409,7 @@ function DocsExplorer({
 
 		return Object.values((schemaPointer as Field).getFields())
 			.map(
-				(x) => renderSubFieldRecord(x)
+				(x) => renderSubFieldRecord(x, { addable: true })
 			)
 	};
 
@@ -390,11 +425,17 @@ function DocsExplorer({
 				>
 					{ (schemaPointer as Field).name }
 				</div>
-				<div
-					className="my-3"
-				>
-					Fields
-				</div>
+				{
+					(schemaPointer as Field).getFields
+						? (
+							<div
+								className="my-3"
+							>
+								Fields
+							</div>
+						)
+						: null
+				}
 				<div
 					className="flex flex-col gap-7"
 				>
@@ -410,6 +451,118 @@ function DocsExplorer({
 		}
 
 		return renderFieldDocView()
+	};
+
+	const renderFieldView = () => {
+		if (!schemaPointer) {
+			return null;
+		}
+
+		const field = schemaPointer as GraphQLField<any, any>;
+
+		return (
+			<div>
+				<div
+					className="text-primary mt-10"
+				>
+					{ field.name }
+				</div>
+				{/*  Arguments */}
+				{
+					field.args && field.args.length > 0
+						? (
+							<div
+								className="mt-8"
+							>
+								<div>
+									Arguments
+								</div>
+								<div
+									className="mt-2"
+								>
+									<div>
+										{
+											field.args.map(
+												(arg, i, array) => (
+													<>
+														<button
+															key={ arg.name }
+															onClick={ () => onTypeClick(arg.type) }
+														>
+															<span
+																className="text-primary cursor-pointer"
+															>
+																{ arg.name }
+															</span>
+															<span>{ " " }</span>
+															<span
+																className="text-success underline cursor-pointer"
+															>{ arg.type.toString() }</span>
+															{
+																i < array.length - 1
+																	? (
+																		<>
+																			<span>{ " " }</span>
+																			<span> , </span>
+																			<span>{ " " }</span>
+																		</>
+																	)
+																	: null
+															}
+														</button>
+														<span>{ " " }</span>
+													</>
+												)
+											)
+										}
+									</div>
+								</div>
+							</div>
+						)
+						: null
+				}
+				{/* End of Arguments */}
+				{/* Return type	*/}
+				<div
+					className="mt-8"
+				>
+					<div>
+						Type
+					</div>
+					<div
+						className="text-primary mt-2"
+					>
+						{ field.type.name }
+					</div>
+				</div>
+				{/* End of Return type	*/}
+				{/* Fields */}
+				{
+					(field.type as GraphQLObjectType).getFields && Object.values((field.type as GraphQLObjectType).getFields()).length > 0
+						? (
+							<div
+								className="mt-8"
+							>
+								<div>
+									Fields
+								</div>
+								<div
+									className="flex flex-col gap-3 mt-2"
+								>
+									{
+										Object.values((field.type as GraphQLObjectType).getFields())
+											.map(
+												(x) => renderSubFieldRecord(x)
+											)
+									}
+								</div>
+							</div>
+						)
+						: null
+				}
+				{/* End of Fields */}
+			</div>
+		);
 	};
 
 	const renderTopBar = () => {
@@ -429,6 +582,14 @@ function DocsExplorer({
 				/>
 			</div>
 		);
+	};
+
+	const renderView = () => {
+		if (viewMode === 'field') {
+			return renderFieldView();
+		}
+
+		return renderExplorerView();
 	};
 
 	return (
@@ -498,7 +659,7 @@ function DocsExplorer({
 			</div>
 			{/* End of search bar */}
 			<div>
-				{ renderExplorerView() }
+				{ renderView() }
 			</div>
 		</div>
 	);
