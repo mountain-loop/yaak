@@ -70,8 +70,6 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
       allEntries.push(entry);
       if (entry.next == null && entry.prev == null) {
         externalEntries.push(entry);
-      } else if (entry.next?.model === 'environment' || entry.prev?.model === 'environment') {
-        externalEntries.push(entry);
       } else {
         yaakEntries.push(entry);
       }
