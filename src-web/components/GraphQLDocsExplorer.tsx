@@ -61,7 +61,7 @@ function getTypeIndices(type: GraphQLAnyType): SearchIndexRecord[] {
 	// remove duplicates from index
 	return indices.filter(
 		(x, i, array) => array.findIndex(
-			(y) => y.name === x.name
+			(y) => y.name === x.name && y.type === x.type
 		) === i
 	);
 }
@@ -92,7 +92,7 @@ function getFieldsIndices(fieldMap: FieldsMap): SearchIndexRecord[] {
 	// remove duplicates from index
 	return indices.filter(
 		(x, i, array) => array.findIndex(
-			(y) => y.name === x.name
+			(y) => y.name === x.name && y.type === x.type
 		) === i
 	);
 }
@@ -122,6 +122,7 @@ function DocsExplorer({
 	const [searchQuery, setSearchQuery] = useState<string>('');
 	const [searchResults, setSearchResults] = useState<SearchIndexRecord[]>([]);
 	const [viewMode, setViewMode] = useState<ViewMode>('explorer');
+	const [isSearchDropdownOpen, setSearchDropdownOpen] = useState(false);
 
 	useEffect(() => {
 		setRootTypes(getRootTypes(graphqlSchema));
@@ -154,7 +155,7 @@ function DocsExplorer({
 			index
 				.filter(
 					(x, i, array) => array.findIndex(
-						(y) => y.name === x.name
+						(y) => y.name === x.name && y.type === x.type
 					) === i
 				)
 		);
@@ -241,6 +242,17 @@ function DocsExplorer({
 				}
 			</div>
 		);
+	}
+
+	const extractActualType = (
+		type: GraphQLField<never, never>['type'] | GraphQLInputType
+	) => {
+		// check if non-null
+		if (isNonNullType(type) || isListType(type)) {
+			return extractActualType((type as GraphQLNonNull<GraphQLOutputType>).ofType)
+		}
+
+		return type;
 	}
 
 	const onTypeClick = (
@@ -421,7 +433,7 @@ function DocsExplorer({
 		return (
 			<div>
 				<div
-					className="text-primary mt-4"
+					className="text-primary mt-5"
 				>
 					{ (schemaPointer as Field).name }
 				</div>
@@ -459,6 +471,7 @@ function DocsExplorer({
 		}
 
 		const field = schemaPointer as GraphQLField<any, any>;
+		const returnType = extractActualType(field.type);
 
 		return (
 			<div>
@@ -532,13 +545,13 @@ function DocsExplorer({
 					<div
 						className="text-primary mt-2"
 					>
-						{ field.type.name }
+						{ returnType.name }
 					</div>
 				</div>
 				{/* End of Return type	*/}
 				{/* Fields */}
 				{
-					(field.type as GraphQLObjectType).getFields && Object.values((field.type as GraphQLObjectType).getFields()).length > 0
+					(returnType as GraphQLObjectType).getFields && Object.values((returnType as GraphQLObjectType).getFields()).length > 0
 						? (
 							<div
 								className="mt-8"
@@ -550,7 +563,7 @@ function DocsExplorer({
 									className="flex flex-col gap-3 mt-2"
 								>
 									{
-										Object.values((field.type as GraphQLObjectType).getFields())
+										Object.values((returnType as GraphQLObjectType).getFields())
 											.map(
 												(x) => renderSubFieldRecord(x)
 											)
@@ -584,9 +597,47 @@ function DocsExplorer({
 		);
 	};
 
+	const renderSearchView = () => {
+		return (
+			<div>
+				<div
+					className="mt-5 text-primary"
+				>
+					Search results
+				</div>
+				<div
+					className="mt-4 flex flex-col gap-3"
+				>
+					{
+						searchResults
+							.map(
+								(result) => (
+									<div
+										key={`${result.name}-${result.type}`}
+										className="flex flex-row justify-between"
+									>
+										<div>
+											{ result.name }
+										</div>
+										<div>
+											{ result.type }
+										</div>
+									</div>
+								)
+							)
+					}
+				</div>
+			</div>
+		);
+	};
+
 	const renderView = () => {
 		if (viewMode === 'field') {
 			return renderFieldView();
+		}
+
+		if (viewMode === 'search') {
+			return renderSearchView();
 		}
 
 		return renderExplorerView();
@@ -594,13 +645,13 @@ function DocsExplorer({
 
 	return (
 		<div
-			className="overflow-y-auto"
+			className="overflow-y-auto pe-3"
 		>
 			<div
-				className="min-h-8"
+				className="min-h-[35px]"
 			>
 				{
-					history.length > 0
+					history.length > 0 || viewMode === 'search'
 						? renderTopBar()
 						: null
 				}
@@ -614,48 +665,27 @@ function DocsExplorer({
 					stateKey="search_graphql_docs"
 					placeholder="Search docs"
 					hideLabel
+					defaultValue={searchQuery}
 					onChange={
 						(value) => {
 							setSearchQuery(value);
+							setSearchDropdownOpen(true);
+						}
+					}
+					onKeyDown={
+						(e) => {
+							// check if enter
+							if (e.key === 'Enter') {
+								addToHistory({
+									schemaPointer: null,
+									viewMode: 'search',
+								})
+								setViewMode('search');
+								setSearchDropdownOpen(false);
+							}
 						}
 					}
 				/>
-				{
-					searchResults.length > 0
-						? (
-							<div
-								className="flex flex-col gap-2 absolute top-[45px] w-full rounded-md bg-surface-highlight py-3"
-							>
-								{
-									searchResults
-										// get first 8 items
-										.slice(0, 8)
-										.map(
-											(x) => (
-												<button
-													key={ x.name }
-													onClick={ () => {
-														const type = graphqlSchema.getType(x.name);
-														if (type) {
-															setSchemaPointer(type);
-														}
-													} }
-													className="flex flex-row justify-between cursor-pointer border border-border-subtle enabled:hocus:border-border rounded mx-2 py-1"
-												>
-													<div>
-														{ x.name }
-													</div>
-													<div>
-														{ x.type }
-													</div>
-												</button>
-										)
-									)
-								}
-							</div>
-						)
-						: null
-				}
 			</div>
 			{/* End of search bar */}
 			<div>
