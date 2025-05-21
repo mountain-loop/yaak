@@ -65,10 +65,10 @@ export function FolderSettingsDialog({ folderId }: Props) {
             },
           },
         },
-        // {
-        //   value: TAB_HEADERS,
-        //   label: 'Headers',
-        // },
+        {
+          value: TAB_HEADERS,
+          label: 'Headers',
+        },
       ]}
     >
       <TabContent value={TAB_AUTH} className="pt-3 overflow-y-auto h-full px-4">

@@ -1,6 +1,6 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{HttpRequest, HttpRequestIden};
+use crate::models::{HttpRequest, HttpRequestHeader, HttpRequestIden};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -66,5 +66,27 @@ impl<'a> DbContext<'a> {
 
         let workspace = self.get_workspace(&http_request.workspace_id)?;
         Ok(self.resolve_auth_for_workspace(workspace))
+    }
+
+    pub fn resolve_headers_for_http_request(
+        &self,
+        http_request: &HttpRequest,
+    ) -> Result<Vec<HttpRequestHeader>> {
+        let workspace = self.get_workspace(&http_request.workspace_id)?;
+
+        // Resolved headers should be from furthest to closest ancestor, to override logically.
+        let mut headers = Vec::new();
+
+        headers.append(&mut workspace.headers.clone());
+
+        if let Some(folder_id) = http_request.folder_id.clone() {
+            let parent_folder = self.get_folder(&folder_id)?;
+            let mut folder_headers = self.resolve_headers_for_folder(&parent_folder)?;
+            headers.append(&mut folder_headers);
+        }
+
+        headers.append(&mut http_request.headers.clone());
+
+        Ok(headers)
     }
 }

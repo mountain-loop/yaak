@@ -1,6 +1,6 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{GrpcRequest, GrpcRequestIden};
+use crate::models::{GrpcRequest, GrpcRequestIden, HttpRequestHeader};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -66,5 +66,27 @@ impl<'a> DbContext<'a> {
 
         let workspace = self.get_workspace(&grpc_request.workspace_id)?;
         Ok(self.resolve_auth_for_workspace(workspace))
+    }
+
+    pub fn resolve_metadata_for_grpc_request(
+        &self,
+        grpc_request: &GrpcRequest,
+    ) -> Result<Vec<HttpRequestHeader>> {
+        let workspace = self.get_workspace(&grpc_request.workspace_id)?;
+
+        // Resolved headers should be from furthest to closest ancestor, to override logically.
+        let mut metadata = Vec::new();
+
+        metadata.append(&mut workspace.headers.clone());
+
+        if let Some(folder_id) = grpc_request.folder_id.clone() {
+            let parent_folder = self.get_folder(&folder_id)?;
+            let mut folder_headers = self.resolve_headers_for_folder(&parent_folder)?;
+            metadata.append(&mut folder_headers);
+        }
+
+        metadata.append(&mut grpc_request.metadata.clone());
+
+        Ok(metadata)
     }
 }

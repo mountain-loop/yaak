@@ -28,7 +28,8 @@ pub(crate) async fn build_metadata<R: Runtime>(
     let mut metadata = BTreeMap::new();
 
     // Add the rest of metadata
-    for h in request.clone().metadata {
+    let resolved_metadata = window.db().resolve_metadata_for_grpc_request(&request)?;
+    for h in resolved_metadata {
         if h.name.is_empty() && h.value.is_empty() {
             continue;
         }

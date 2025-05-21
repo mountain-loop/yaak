@@ -227,7 +227,9 @@ pub async fn send_http_request<R: Runtime>(
     //     );
     // }
 
-    for h in request.headers.clone() {
+    let resolved_headers = window.db().resolve_headers_for_http_request(&request)?;
+
+    for h in resolved_headers {
         if h.name.is_empty() && h.value.is_empty() {
             continue;
         }

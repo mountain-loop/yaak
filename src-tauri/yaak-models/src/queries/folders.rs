@@ -2,8 +2,8 @@ use crate::connection_or_tx::ConnectionOrTx;
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{
-    Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestIden,
-    WebsocketRequest, WebsocketRequestIden,
+    Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestHeader,
+    HttpRequestIden, WebsocketRequest, WebsocketRequestIden,
 };
 use crate::util::UpdateSource;
 use serde_json::Value;
@@ -128,5 +128,21 @@ impl<'a> DbContext<'a> {
 
         let workspace = self.get_workspace(&folder.workspace_id)?;
         Ok(self.resolve_auth_for_workspace(workspace))
+    }
+
+    pub fn resolve_headers_for_folder(&self, folder: &Folder) -> Result<Vec<HttpRequestHeader>> {
+        let workspace = self.get_workspace(&folder.workspace_id)?;
+        let mut headers = workspace.headers.clone();
+
+        if let Some(folder_id) = folder.folder_id.clone() {
+            let parent_folder = self.get_folder(&folder_id)?;
+            let mut folder_headers = self.resolve_headers_for_folder(&parent_folder)?;
+            // NOTE: Add parent headers first, so overrides are logical
+            headers.append(&mut folder_headers);
+        }
+
+        headers.append(&mut folder.headers.clone());
+
+        Ok(headers)
     }
 }
