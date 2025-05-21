@@ -84,7 +84,7 @@ pub async fn send_http_request<R: Runtime>(
         }
     };
 
-    let mut url_string = request.url;
+    let mut url_string = request.url.clone();
 
     url_string = ensure_proto(&url_string);
     if !url_string.starts_with("http://") && !url_string.starts_with("https://") {
@@ -255,7 +255,7 @@ pub async fn send_http_request<R: Runtime>(
     }
 
     let request_body = request.body.clone();
-    if let Some(body_type) = &request.body_type {
+    if let Some(body_type) = &request.body_type.clone() {
         if body_type == "graphql" {
             let query = get_str_h(&request_body, "query");
             let variables = get_str_h(&request_body, "variables");
@@ -376,7 +376,7 @@ pub async fn send_http_request<R: Runtime>(
                                 };
                             }
 
-                            // Set file path if it is not empty
+                            // Set a file path if it is not empty
                             if !file_path.is_empty() {
                                 let filename = PathBuf::from(file_path)
                                     .file_name()
@@ -426,55 +426,53 @@ pub async fn send_http_request<R: Runtime>(
         }
     };
 
-    // Apply authentication
-    // TODO: Resolve multiple ancestors until one is found
-    let parent_folder = match request.folder_id {
-        Some(folder_id) => window.db().get_folder(&folder_id).ok(),
-        None => None,
-    };
+    let (authentication_type, authentication) =
+        window.db().resolve_auth_for_http_request(&request)?;
 
-    let (authentication, authentication_type) = match parent_folder {
-        None => (request.authentication.clone(), request.authentication_type.clone()),
-        Some(f) => (
-            f.default_authentication.authentication.clone(),
-            f.default_authentication.authentication_type.clone(),
-        ),
-    };
+    match authentication_type {
+        None => {
+            // No authentication found. Not even inherited
+        }
+        Some(authentication_type) if authentication_type == "none" => {
+            // Explicitly no authentication
+        }
+        Some(authentication_type) => {
+            let req = CallHttpAuthenticationRequest {
+                context_id: format!("{:x}", md5::compute(request.id)),
+                values: serde_json::from_value(serde_json::to_value(&authentication).unwrap())
+                    .unwrap(),
+                url: sendable_req.url().to_string(),
+                method: sendable_req.method().to_string(),
+                headers: sendable_req
+                    .headers()
+                    .iter()
+                    .map(|(name, value)| HttpHeader {
+                        name: name.to_string(),
+                        value: value.to_str().unwrap_or_default().to_string(),
+                    })
+                    .collect(),
+            };
+            let auth_result =
+                plugin_manager.call_http_authentication(&window, &authentication_type, req).await;
+            let plugin_result = match auth_result {
+                Ok(r) => r,
+                Err(e) => {
+                    return Ok(response_err(
+                        &app_handle,
+                        &*response.lock().await,
+                        e.to_string(),
+                        &update_source,
+                    ));
+                }
+            };
 
-    if let Some(auth_name) = authentication_type.to_owned() {
-        let req = CallHttpAuthenticationRequest {
-            context_id: format!("{:x}", md5::compute(request.id)),
-            values: serde_json::from_value(serde_json::to_value(&authentication).unwrap()).unwrap(),
-            url: sendable_req.url().to_string(),
-            method: sendable_req.method().to_string(),
-            headers: sendable_req
-                .headers()
-                .iter()
-                .map(|(name, value)| HttpHeader {
-                    name: name.to_string(),
-                    value: value.to_str().unwrap_or_default().to_string(),
-                })
-                .collect(),
-        };
-        let auth_result = plugin_manager.call_http_authentication(&window, &auth_name, req).await;
-        let plugin_result = match auth_result {
-            Ok(r) => r,
-            Err(e) => {
-                return Ok(response_err(
-                    &app_handle,
-                    &*response.lock().await,
-                    e.to_string(),
-                    &update_source,
-                ));
+            let headers = sendable_req.headers_mut();
+            for header in plugin_result.set_headers {
+                headers.insert(
+                    HeaderName::from_str(&header.name).unwrap(),
+                    HeaderValue::from_str(&header.value).unwrap(),
+                );
             }
-        };
-
-        let headers = sendable_req.headers_mut();
-        for header in plugin_result.set_headers {
-            headers.insert(
-                HeaderName::from_str(&header.name).unwrap(),
-                HeaderValue::from_str(&header.value).unwrap(),
-            );
         }
     }
 

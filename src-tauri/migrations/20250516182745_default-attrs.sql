@@ -1,11 +1,15 @@
 -- Auth
 ALTER TABLE workspaces
-    ADD COLUMN default_authentication TEXT NOT NULL DEFAULT '{}';
+    ADD COLUMN authentication TEXT NOT NULL DEFAULT '{}';
 ALTER TABLE folders
-    ADD COLUMN default_authentication TEXT NOT NULL DEFAULT '{}';
+    ADD COLUMN authentication TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE workspaces
+    ADD COLUMN authentication_type TEXT;
+ALTER TABLE folders
+    ADD COLUMN authentication_type TEXT;
 
 -- Headers
 ALTER TABLE workspaces
-    ADD COLUMN default_headers TEXT NOT NULL DEFAULT '[]';
+    ADD COLUMN headers TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE folders
-    ADD COLUMN default_headers TEXT NOT NULL DEFAULT '[]';
+    ADD COLUMN headers TEXT NOT NULL DEFAULT '[]';

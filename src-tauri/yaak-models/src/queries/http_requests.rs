@@ -2,6 +2,8 @@ use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{HttpRequest, HttpRequestIden};
 use crate::util::UpdateSource;
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 impl<'a> DbContext<'a> {
     pub fn get_http_request(&self, id: &str) -> Result<HttpRequest> {
@@ -47,5 +49,22 @@ impl<'a> DbContext<'a> {
         source: &UpdateSource,
     ) -> Result<HttpRequest> {
         self.upsert(http_request, source)
+    }
+
+    pub fn resolve_auth_for_http_request(
+        &self,
+        http_request: &HttpRequest,
+    ) -> Result<(Option<String>, BTreeMap<String, Value>)> {
+        if let Some(at) = http_request.authentication_type.clone() {
+            return Ok((Some(at), http_request.authentication.clone()));
+        }
+
+        if let Some(folder_id) = http_request.folder_id.clone() {
+            let folder = self.get_folder(&folder_id)?;
+            return self.resolve_auth_for_folder(folder);
+        }
+
+        let workspace = self.get_workspace(&http_request.workspace_id)?;
+        Ok(self.resolve_auth_for_workspace(workspace))
     }
 }

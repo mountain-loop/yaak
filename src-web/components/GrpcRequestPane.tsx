@@ -142,7 +142,8 @@ export function GrpcRequestPane({
               value: a.name,
             })),
             { type: 'separator' },
-            { label: 'No Authentication', shortLabel: 'Auth', value: null },
+            { label: 'Inherit from Parent', shortLabel: 'Auth', value: null },
+            { label: 'No Auth', shortLabel: 'No Auth', value: 'none' },
           ],
           onChange: async (authenticationType) => {
             let authentication: GrpcRequest['authentication'] = activeRequest.authentication;

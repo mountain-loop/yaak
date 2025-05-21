@@ -231,7 +231,8 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
               value: a.name,
             })),
             { type: 'separator' },
-            { label: 'No Authentication', shortLabel: 'Auth', value: null },
+            { label: 'Inherit from Parent', shortLabel: 'Auth', value: null },
+            { label: 'No Auth', shortLabel: 'No Auth', value: 'none' },
           ],
           onChange: async (authenticationType) => {
             let authentication: HttpRequest['authentication'] = activeRequest.authentication;

@@ -2,6 +2,8 @@ use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{GrpcRequest, GrpcRequestIden};
 use crate::util::UpdateSource;
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 impl<'a> DbContext<'a> {
     pub fn get_grpc_request(&self, id: &str) -> Result<GrpcRequest> {
@@ -47,5 +49,22 @@ impl<'a> DbContext<'a> {
         source: &UpdateSource,
     ) -> Result<GrpcRequest> {
         self.upsert(grpc_request, source)
+    }
+
+    pub fn resolve_auth_for_grpc_request(
+        &self,
+        grpc_request: &GrpcRequest,
+    ) -> Result<(Option<String>, BTreeMap<String, Value>)> {
+        if let Some(at) = grpc_request.authentication_type.clone() {
+            return Ok((Some(at), grpc_request.authentication.clone()));
+        }
+
+        if let Some(folder_id) = grpc_request.folder_id.clone() {
+            let folder = self.get_folder(&folder_id)?;
+            return self.resolve_auth_for_folder(folder);
+        }
+
+        let workspace = self.get_workspace(&grpc_request.workspace_id)?;
+        Ok(self.resolve_auth_for_workspace(workspace))
     }
 }

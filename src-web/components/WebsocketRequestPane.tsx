@@ -15,7 +15,7 @@ import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { activeWebsocketConnectionAtom } from '../hooks/usePinnedWebsocketConnection';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import {allRequestsAtom} from "../hooks/useAllRequests";
+import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { deepEqualAtom } from '../lib/atoms';
 import { languageFromContentType } from '../lib/contentType';
@@ -116,7 +116,8 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
               value: a.name,
             })),
             { type: 'separator' },
-            { label: 'No Authentication', shortLabel: 'Auth', value: null },
+            { label: 'Inherit from Parent', shortLabel: 'Auth', value: null },
+            { label: 'No Auth', shortLabel: 'No Auth', value: 'none' },
           ],
           onChange: async (authenticationType) => {
             let authentication: HttpRequest['authentication'] = activeRequest.authentication;

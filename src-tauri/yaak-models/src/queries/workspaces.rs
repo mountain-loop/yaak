@@ -5,6 +5,8 @@ use crate::models::{
     WorkspaceIden,
 };
 use crate::util::UpdateSource;
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 impl<'a> DbContext<'a> {
     pub fn get_workspace(&self, id: &str) -> Result<Workspace> {
@@ -64,5 +66,12 @@ impl<'a> DbContext<'a> {
 
     pub fn upsert_workspace(&self, w: &Workspace, source: &UpdateSource) -> Result<Workspace> {
         self.upsert(w, source)
+    }
+
+    pub fn resolve_auth_for_workspace(
+        &self,
+        workspace: Workspace,
+    ) -> (Option<String>, BTreeMap<String, Value>) {
+        (workspace.authentication_type, workspace.authentication)
     }
 }

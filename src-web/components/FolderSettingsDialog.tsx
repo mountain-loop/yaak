@@ -32,7 +32,7 @@ export function FolderSettingsDialog({ folderId }: Props) {
       value={activeTab}
       onChangeValue={setActiveTab}
       label="Folder Settings"
-      className="px-1.5 pb-2 h-full"
+      className="px-1.5 pb-2"
       addBorders
       tabs={[
         {
@@ -43,7 +43,7 @@ export function FolderSettingsDialog({ folderId }: Props) {
           value: TAB_AUTH,
           label: 'Auth',
           options: {
-            value: folder.defaultAuthentication.authenticationType,
+            value: folder.authenticationType,
             items: [
               ...authentication.map((a) => ({
                 label: a.label || 'UNKNOWN',
@@ -51,26 +51,24 @@ export function FolderSettingsDialog({ folderId }: Props) {
                 value: a.name,
               })),
               { type: 'separator' },
-              { label: 'No Authentication', shortLabel: 'No Auth', value: null },
+              { label: 'Inherit from Parent', shortLabel: 'Auth', value: null },
+              { label: 'No Auth', shortLabel: 'No Auth', value: 'none' },
             ],
             onChange: async (authenticationType) => {
-              let authentication: Folder['defaultAuthentication']['authentication'] =
-                folder.defaultAuthentication.authentication;
-              if (folder.defaultAuthentication.authenticationType !== authenticationType) {
+              let authentication: Folder['authentication'] = folder.authentication;
+              if (folder.authenticationType !== authenticationType) {
                 authentication = {
                   // Reset auth if changing types
                 };
               }
-              await patchModel(folder, {
-                defaultAuthentication: { authenticationType, authentication },
-              });
+              await patchModel(folder, { authentication, authenticationType });
             },
           },
         },
-        {
-          value: TAB_HEADERS,
-          label: 'Headers',
-        },
+        // {
+        //   value: TAB_HEADERS,
+        //   label: 'Headers',
+        // },
       ]}
     >
       <TabContent value={TAB_AUTH} className="pt-3 overflow-y-auto h-full px-4">
@@ -98,8 +96,8 @@ export function FolderSettingsDialog({ folderId }: Props) {
       <TabContent value={TAB_HEADERS} className="pt-3 overflow-y-auto h-full px-4">
         <HeadersEditor
           forceUpdateKey={folder.id}
-          headers={folder.defaultHeaders}
-          onChange={(headers) => patchModel(folder, { defaultHeaders: headers })}
+          headers={folder.headers}
+          onChange={(headers) => patchModel(folder, { headers })}
           stateKey={`headers.${folder.id}`}
         />
       </TabContent>

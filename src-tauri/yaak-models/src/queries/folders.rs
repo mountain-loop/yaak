@@ -6,6 +6,8 @@ use crate::models::{
     WebsocketRequest, WebsocketRequestIden,
 };
 use crate::util::UpdateSource;
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 impl<'a> DbContext<'a> {
     pub fn get_folder(&self, id: &str) -> Result<Folder> {
@@ -109,5 +111,22 @@ impl<'a> DbContext<'a> {
         }
 
         Ok(new_folder)
+    }
+
+    pub fn resolve_auth_for_folder(
+        &self,
+        folder: Folder,
+    ) -> Result<(Option<String>, BTreeMap<String, Value>)> {
+        if let Some(at) = folder.authentication_type {
+            return Ok((Some(at), folder.authentication));
+        }
+
+        if let Some(folder_id) = folder.folder_id {
+            let folder = self.get_folder(&folder_id)?;
+            return self.resolve_auth_for_folder(folder);
+        }
+
+        let workspace = self.get_workspace(&folder.workspace_id)?;
+        Ok(self.resolve_auth_for_workspace(workspace))
     }
 }

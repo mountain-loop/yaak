@@ -5,6 +5,7 @@ use KeyAndValueRef::{Ascii, Binary};
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak_grpc::{KeyAndValueRef, MetadataMap};
 use yaak_models::models::GrpcRequest;
+use yaak_models::query_manager::QueryManagerExt;
 use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader};
 use yaak_plugins::manager::PluginManager;
 
@@ -39,8 +40,11 @@ pub(crate) async fn build_metadata<R: Runtime>(
         metadata.insert(h.name, h.value);
     }
 
-    if let Some(auth_name) = request.authentication_type.clone() {
-        let auth = request.authentication.clone();
+    let (authentication_type, authentication) =
+        window.db().resolve_auth_for_grpc_request(&request)?;
+
+    if let Some(auth_name) = authentication_type.clone() {
+        let auth = authentication.clone();
         let plugin_req = CallHttpAuthenticationRequest {
             context_id: format!("{:x}", md5::compute(request.id.clone())),
             values: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),

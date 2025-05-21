@@ -206,9 +206,12 @@ pub(crate) async fn connect<R: Runtime>(
     )
     .await?;
 
+    let (authentication_type, authentication) =
+        window.db().resolve_auth_for_websocket_request(&request)?;
+    
     let mut headers = HeaderMap::new();
-    if let Some(auth_name) = request.authentication_type.clone() {
-        let auth = request.authentication.clone();
+    if let Some(auth_name) = authentication_type.clone() {
+        let auth = authentication.clone();
         let plugin_req = CallHttpAuthenticationRequest {
             context_id: format!("{:x}", md5::compute(request_id.to_string())),
             values: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
