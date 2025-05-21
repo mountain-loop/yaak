@@ -537,7 +537,7 @@ impl PluginManager {
         auth_name: &str,
         action_index: i32,
         values: HashMap<String, JsonPrimitive>,
-        request_id: &str,
+        model_id: &str,
     ) -> Result<()> {
         let results = self.get_http_authentication_summaries(window).await?;
         let plugin = results
@@ -545,7 +545,7 @@ impl PluginManager {
             .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
             .ok_or(PluginNotFoundErr(auth_name.into()))?;
 
-        let context_id = format!("{:x}", md5::compute(request_id.to_string()));
+        let context_id = format!("{:x}", md5::compute(model_id.to_string()));
         self.send_to_plugin_and_wait(
             &PluginWindowContext::new(window),
             &plugin,

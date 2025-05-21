@@ -917,10 +917,10 @@ async fn cmd_call_http_authentication_action<R: Runtime>(
     auth_name: &str,
     action_index: i32,
     values: HashMap<String, JsonPrimitive>,
-    request_id: &str,
+    model_id: &str,
 ) -> YaakResult<()> {
     Ok(plugin_manager
-        .call_http_authentication_action(&window, auth_name, action_index, values, request_id)
+        .call_http_authentication_action(&window, auth_name, action_index, values, model_id)
         .await?)
 }
 

@@ -1,5 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import type {
+  Folder,
+  GrpcRequest,
+  HttpRequest,
+  WebsocketRequest,
+  Workspace,
+} from '@yaakapp-internal/models';
 import { httpResponsesAtom } from '@yaakapp-internal/models';
 import type { GetHttpAuthenticationConfigResponse, JsonPrimitive } from '@yaakapp-internal/plugins';
 import { useAtomValue } from 'jotai';
@@ -49,13 +55,15 @@ export function useHttpAuthenticationConfig(
         ...config,
         actions: config.actions?.map((a, i) => ({
           ...a,
-          call: async ({ id: requestId }: HttpRequest | GrpcRequest | WebsocketRequest) => {
+          call: async ({
+            id: modelId,
+          }: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace) => {
             await invokeCmd('cmd_call_http_authentication_action', {
               pluginRefId: config.pluginRefId,
               actionIndex: i,
               authName,
               values,
-              requestId,
+              modelId,
             });
 
             // Ensure the config is refreshed after the action is done

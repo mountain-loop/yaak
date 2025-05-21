@@ -1,4 +1,10 @@
-import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import type {
+  Folder,
+  GrpcRequest,
+  HttpRequest,
+  WebsocketRequest,
+  Workspace,
+} from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import React, { useCallback } from 'react';
 import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
@@ -12,23 +18,28 @@ import { DynamicForm } from './DynamicForm';
 import { EmptyStateText } from './EmptyStateText';
 
 interface Props {
-  request: HttpRequest | GrpcRequest | WebsocketRequest;
+  model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace;
 }
 
-export function HttpAuthenticationEditor({ request }: Props) {
-  const authConfig = useHttpAuthenticationConfig(
-    request.authenticationType,
-    request.authentication,
-    request.id,
-  );
+export function HttpAuthenticationEditor({ model }: Props) {
+  const { authentication, authenticationType } =
+    'defaultAuthentication' in model ? model.defaultAuthentication : model;
+
+  const authConfig = useHttpAuthenticationConfig(authenticationType, authentication, model.id);
 
   const handleChange = useCallback(
-    (authentication: Record<string, boolean>) => patchModel(request, { authentication }),
-    [request],
+    async (authentication: Record<string, boolean>) => {
+      if ('defaultAuthentication' in model) {
+        await patchModel(model, { defaultAuthentication: { authenticationType, authentication } });
+      } else {
+        await patchModel(model, { authentication });
+      }
+    },
+    [authenticationType, model],
   );
 
   if (authConfig.data == null) {
-    return <EmptyStateText>No Authentication {request.authenticationType}</EmptyStateText>;
+    return <EmptyStateText>No Authentication {authenticationType}</EmptyStateText>;
   }
 
   return (
@@ -36,8 +47,8 @@ export function HttpAuthenticationEditor({ request }: Props) {
       <HStack space={2} className="mb-2" alignItems="center">
         <Checkbox
           className="w-full"
-          checked={!request.authentication.disabled}
-          onChange={(disabled) => handleChange({ ...request.authentication, disabled: !disabled })}
+          checked={!authentication.disabled}
+          onChange={(disabled) => handleChange({ ...authentication, disabled: !disabled })}
           title="Enabled"
         />
         {authConfig.data.actions && authConfig.data.actions.length > 0 && (
@@ -46,7 +57,7 @@ export function HttpAuthenticationEditor({ request }: Props) {
               (a): DropdownItem => ({
                 label: a.label,
                 leftSlot: a.icon ? <Icon icon={a.icon} /> : null,
-                onSelect: () => a.call(request),
+                onSelect: () => a.call(model),
               }),
             )}
           >
@@ -55,12 +66,12 @@ export function HttpAuthenticationEditor({ request }: Props) {
         )}
       </HStack>
       <DynamicForm
-        disabled={request.authentication.disabled}
+        disabled={authentication.disabled}
         autocompleteVariables
         autocompleteFunctions
-        stateKey={`auth.${request.id}.${request.authenticationType}`}
+        stateKey={`auth.${model.id}.${authenticationType}`}
         inputs={authConfig.data.args}
-        data={request.authentication}
+        data={authentication}
         onChange={handleChange}
       />
     </div>

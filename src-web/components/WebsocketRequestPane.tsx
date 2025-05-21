@@ -266,7 +266,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             tabListClassName="mt-2 !mb-1.5"
           >
             <TabContent value={TAB_AUTH}>
-              <HttpAuthenticationEditor request={activeRequest} />
+              <HttpAuthenticationEditor model={activeRequest} />
             </TabContent>
             <TabContent value={TAB_HEADERS}>
               <HeadersEditor

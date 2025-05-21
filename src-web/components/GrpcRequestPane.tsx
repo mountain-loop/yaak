@@ -307,7 +307,7 @@ export function GrpcRequestPane({
           />
         </TabContent>
         <TabContent value={TAB_AUTH}>
-          <HttpAuthenticationEditor request={activeRequest} />
+          <HttpAuthenticationEditor model={activeRequest} />
         </TabContent>
         <TabContent value={TAB_METADATA}>
           <PairOrBulkEditor

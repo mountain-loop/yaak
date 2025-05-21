@@ -427,12 +427,24 @@ pub async fn send_http_request<R: Runtime>(
     };
 
     // Apply authentication
+    // TODO: Resolve multiple ancestors until one is found
+    let parent_folder = match request.folder_id {
+        Some(folder_id) => window.db().get_folder(&folder_id).ok(),
+        None => None,
+    };
 
-    if let Some(auth_name) = request.authentication_type.to_owned() {
+    let (authentication, authentication_type) = match parent_folder {
+        None => (request.authentication.clone(), request.authentication_type.clone()),
+        Some(f) => (
+            f.default_authentication.authentication.clone(),
+            f.default_authentication.authentication_type.clone(),
+        ),
+    };
+
+    if let Some(auth_name) = authentication_type.to_owned() {
         let req = CallHttpAuthenticationRequest {
             context_id: format!("{:x}", md5::compute(request.id)),
-            values: serde_json::from_value(serde_json::to_value(&request.authentication).unwrap())
-                .unwrap(),
+            values: serde_json::from_value(serde_json::to_value(&authentication).unwrap()).unwrap(),
             url: sendable_req.url().to_string(),
             method: sendable_req.method().to_string(),
             headers: sendable_req

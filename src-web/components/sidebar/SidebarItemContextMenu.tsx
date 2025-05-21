@@ -48,7 +48,8 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
             showDialog({
               id: 'folder-settings',
               title: 'Folder Settings',
-              size: 'md',
+              size: 'lg',
+              noPadding: true,
               render: () => <FolderSettingsDialog folderId={child.id} />,
             }),
         },
