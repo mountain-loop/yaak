@@ -1,13 +1,13 @@
 import classNames from 'classnames';
 import type { CSSProperties, ReactNode } from 'react';
 import { useState } from 'react';
-import { useOsInfo } from '../../hooks/useOsInfo';
 import type { ButtonProps } from './Button';
 import { Button } from './Button';
 import { Label } from './Label';
 import type { RadioDropdownItem } from './RadioDropdown';
 import { RadioDropdown } from './RadioDropdown';
 import { HStack } from './Stacks';
+import { type } from '@tauri-apps/plugin-os';
 
 export interface SelectProps<T extends string> {
   name: string;
@@ -40,7 +40,6 @@ export function Select<T extends string>({
   defaultValue,
   size = 'md',
 }: SelectProps<T>) {
-  const osInfo = useOsInfo();
   const [focused, setFocused] = useState<boolean>(false);
   const id = `input-${name}`;
   const isInvalidSelection = options.find((o) => 'value' in o && o.value === value) == null;
@@ -63,7 +62,7 @@ export function Select<T extends string>({
       <Label htmlFor={id} visuallyHidden={hideLabel} className={labelClassName}>
         {label}
       </Label>
-      {osInfo?.osType === 'macos' ? (
+      {type() === 'macos' ? (
         <HStack
           space={2}
           className={classNames(

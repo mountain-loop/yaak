@@ -23,6 +23,7 @@ impl<'a> DbContext<'a> {
             editor_soft_wrap: true,
             interface_font_size: 15,
             interface_scale: 1.0,
+            hide_window_controls: false,
             open_workspace_new_window: None,
             proxy: None,
             theme_dark: "yaak-dark".to_string(),

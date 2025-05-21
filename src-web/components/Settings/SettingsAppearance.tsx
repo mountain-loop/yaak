@@ -18,6 +18,7 @@ import type { SelectProps } from '../core/Select';
 import { Select } from '../core/Select';
 import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';
+import { type } from '@tauri-apps/plugin-os';
 
 const fontSizeOptions = [
   8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
@@ -121,6 +122,15 @@ export function SettingsAppearance() {
         title="Wrap Editor Lines"
         onChange={(editorSoftWrap) => patchModel(settings, { editorSoftWrap })}
       />
+
+      {type() !== 'macos' && (
+        <Checkbox
+          checked={settings.hideWindowControls}
+          title="Hide Window Controls"
+          help="Hide the close/maximize/minimize controls on Windows or Linux"
+          onChange={(hideWindowControls) => patchModel(settings, { hideWindowControls })}
+        />
+      )}
 
       <Separator className="my-4" />
 

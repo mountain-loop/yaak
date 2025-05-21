@@ -5,7 +5,7 @@ use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::ops::Add;
 use std::time::Duration;
-use tauri::{is_dev, AppHandle, Emitter, Manager, Runtime, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use ts_rs::TS;
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
@@ -63,10 +63,15 @@ pub struct APIErrorResponsePayload {
 
 pub async fn activate_license<R: Runtime>(
     window: &WebviewWindow<R>,
-    p: ActivateLicenseRequestPayload,
+    license_key: &str,
 ) -> Result<()> {
     let client = reqwest::Client::new();
-    let response = client.post(build_url("/licenses/activate")).json(&p).send().await?;
+    let payload = ActivateLicenseRequestPayload {
+        license_key: license_key.to_string(),
+        app_platform: crate::get_os().to_string(),
+        app_version: window.app_handle().package_info().version.to_string(),
+    };
+    let response = client.post(build_url("/licenses/activate")).json(&payload).send().await?;
 
     if response.status().is_client_error() {
         let body: APIErrorResponsePayload = response.json().await?;
@@ -95,16 +100,17 @@ pub async fn activate_license<R: Runtime>(
     Ok(())
 }
 
-pub async fn deactivate_license<R: Runtime>(
-    window: &WebviewWindow<R>,
-    p: DeactivateLicenseRequestPayload,
-) -> Result<()> {
+pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<()> {
     let app_handle = window.app_handle();
     let activation_id = get_activation_id(app_handle).await;
 
     let client = reqwest::Client::new();
     let path = format!("/licenses/activations/{}/deactivate", activation_id);
-    let response = client.post(build_url(&path)).json(&p).send().await?;
+    let payload = DeactivateLicenseRequestPayload {
+        app_platform: crate::get_os().to_string(),
+        app_version: window.app_handle().package_info().version.to_string(),
+    };
+    let response = client.post(build_url(&path)).json(&payload).send().await?;
 
     if response.status().is_client_error() {
         let body: APIErrorResponsePayload = response.json().await?;
@@ -141,10 +147,11 @@ pub enum LicenseCheckStatus {
     Trialing { end: NaiveDateTime },
 }
 
-pub async fn check_license<R: Runtime>(
-    window: &WebviewWindow<R>,
-    payload: CheckActivationRequestPayload,
-) -> Result<LicenseCheckStatus> {
+pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<LicenseCheckStatus> {
+    let payload = CheckActivationRequestPayload {
+        app_platform: crate::get_os().to_string(),
+        app_version: window.package_info().version.to_string(),
+    };
     let activation_id = get_activation_id(window.app_handle()).await;
     let settings = window.db().get_settings();
     let trial_end = settings.created_at.add(Duration::from_secs(TRIAL_SECONDS));
@@ -197,9 +204,5 @@ fn build_url(path: &str) -> String {
 }
 
 pub async fn get_activation_id<R: Runtime>(app_handle: &AppHandle<R>) -> String {
-    app_handle.db().get_key_value_string(
-        KV_ACTIVATION_ID_KEY,
-        KV_NAMESPACE,
-        "",
-    )
+    app_handle.db().get_key_value_string(KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
 }

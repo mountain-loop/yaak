@@ -1,9 +1,4 @@
-import {
-  deleteModelById,
-  duplicateModelById,
-  getModel,
-  workspacesAtom,
-} from '@yaakapp-internal/models';
+import { duplicateModelById, getModel, workspacesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import React, { useMemo } from 'react';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
@@ -134,7 +129,9 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
           hotKeyAction: 'sidebar.delete_selected_item',
           hotKeyLabelOnly: true,
           leftSlot: <Icon icon="trash" />,
-          onSelect: async () => deleteModelById(child.model, child.id),
+          onSelect: async () => {
+            await deleteModelWithConfirm(getModel(child.model, child.id));
+          },
         },
       ];
     }

@@ -11,9 +11,9 @@ import { Dialogs } from '../components/Dialogs';
 import { GlobalHooks } from '../components/GlobalHooks';
 import RouteError from '../components/RouteError';
 import { Toasts } from '../components/Toasts';
-import { useOsInfo } from '../hooks/useOsInfo';
 import { jotaiStore } from '../lib/jotai';
 import { queryClient } from '../lib/queryClient';
+import { type } from '@tauri-apps/plugin-os';
 
 export const Route = createRootRoute({
   component: RouteComponent,
@@ -21,7 +21,6 @@ export const Route = createRootRoute({
 });
 
 function RouteComponent() {
-  const osInfo = useOsInfo();
   return (
     <JotaiProvider store={jotaiStore}>
       <QueryClientProvider client={queryClient}>
@@ -36,7 +35,7 @@ function RouteComponent() {
                   <div
                     className={classNames(
                       'w-full h-full',
-                      osInfo?.osType === 'linux' && 'border border-border-subtle',
+                      type() === 'linux' && 'border border-border-subtle',
                     )}
                   >
                     <Outlet />

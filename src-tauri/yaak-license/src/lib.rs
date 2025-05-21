@@ -16,3 +16,15 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(generate_handler![check, activate, deactivate])
         .build()
 }
+
+pub(crate) fn get_os() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        "unknown"
+    }
+}

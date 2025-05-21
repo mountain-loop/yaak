@@ -62,6 +62,11 @@ export function useGrpcEvents(connectionId: string | null) {
   const events = useAtomValue(grpcEventsAtom);
 
   useEffect(() => {
+    if (connectionId == null) {
+      replaceModelsInStore('grpc_event', []);
+      return;
+    }
+
     invoke<GrpcEvent[]>('plugin:yaak-models|grpc_events', { connectionId }).then((events) => {
       replaceModelsInStore('grpc_event', events);
     });

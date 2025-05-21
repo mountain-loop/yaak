@@ -116,6 +116,7 @@ export function PlainInput({
           size === 'md' && 'min-h-md',
           size === 'sm' && 'min-h-sm',
           size === 'xs' && 'min-h-xs',
+          size === '2xs' && 'min-h-2xs',
         )}
       >
         {tint != null && (

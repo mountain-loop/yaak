@@ -12,7 +12,7 @@ export type ButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, 'color' | 'onC
   color?: Color | 'custom' | 'default';
   variant?: 'border' | 'solid';
   isLoading?: boolean;
-  size?: '2xs' | 'xs' | 'sm' | 'md';
+  size?: '2xs' | 'xs' | 'sm' | 'md' | 'auto';
   justify?: 'start' | 'center';
   type?: 'button' | 'submit';
   forDropdown?: boolean;
@@ -114,7 +114,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...props}
     >
       {isLoading ? (
-        <LoadingIcon size={size} className="mr-1" />
+        <LoadingIcon size={size === 'auto' ? 'md' : size} className="mr-1" />
       ) : leftSlot ? (
         <div className="mr-2">{leftSlot}</div>
       ) : null}
@@ -128,7 +128,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         {children}
       </div>
       {rightSlot && <div className="ml-1">{rightSlot}</div>}
-      {forDropdown && <Icon icon="chevron_down" size={size} className="ml-1 -mr-1" />}
+      {forDropdown && (
+        <Icon icon="chevron_down" size={size === 'auto' ? 'md' : size} className="ml-1 -mr-1" />
+      )}
     </button>
   );
 });

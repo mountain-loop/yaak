@@ -11,7 +11,7 @@ export function languageFromContentType(
   } else if (justContentType.includes('xml')) {
     return 'xml';
   } else if (justContentType.includes('html')) {
-    const detected = detectFromContent(content, 'html');
+    const detected = detectFromContent(content);
     if (detected === 'xml') {
       // If it's detected as XML, but is already HTML, don't change it
       return 'html';
@@ -19,7 +19,8 @@ export function languageFromContentType(
       return detected;
     }
   } else if (justContentType.includes('javascript')) {
-    return 'javascript';
+    // Sometimes `application/javascript` returns JSON, so try detecting that
+    return detectFromContent(content, 'javascript');
   }
 
   return detectFromContent(content, 'text');
@@ -27,7 +28,7 @@ export function languageFromContentType(
 
 function detectFromContent(
   content: string | null,
-  fallback: EditorProps['language'],
+  fallback?: EditorProps['language'],
 ): EditorProps['language'] {
   if (content == null) return 'text';
 

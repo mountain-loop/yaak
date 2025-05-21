@@ -80,6 +80,10 @@ function templateTags(
           const inner = rawTag.replace(/^\$\{\[\s*/, '').replace(/\s*]}$/, '');
           let name = inner.match(/([\w.]+)[(]/)?.[1] ?? inner;
 
+          if (inner.includes('\n')) {
+            return;
+          }
+
           // The beta named the function `Response` but was changed in stable.
           // Keep this here for a while because there's no easy way to migrate
           if (name === 'Response') {

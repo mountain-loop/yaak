@@ -11,7 +11,7 @@ export async function deleteModelWithConfirm(model: AnyModel | null): Promise<bo
   }
 
   const confirmed = await showConfirmDelete({
-    id: 'delete-model-' + model.model,
+    id: 'delete-model-' + model.id,
     title: 'Delete ' + modelTypeLabel(model),
     description: (
       <>

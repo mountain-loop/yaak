@@ -105,6 +105,7 @@ pub struct Settings {
     pub appearance: String,
     pub editor_font_size: i32,
     pub editor_soft_wrap: bool,
+    pub hide_window_controls: bool,
     pub interface_font_size: i32,
     pub interface_scale: f32,
     pub open_workspace_new_window: Option<bool>,
@@ -154,6 +155,7 @@ impl UpsertModelInfo for Settings {
             (EditorSoftWrap, self.editor_soft_wrap.into()),
             (InterfaceFontSize, self.interface_font_size.into()),
             (InterfaceScale, self.interface_scale.into()),
+            (HideWindowControls, self.hide_window_controls.into()),
             (OpenWorkspaceNewWindow, self.open_workspace_new_window.into()),
             (ThemeDark, self.theme_dark.as_str().into()),
             (ThemeLight, self.theme_light.as_str().into()),
@@ -171,6 +173,7 @@ impl UpsertModelInfo for Settings {
             SettingsIden::EditorSoftWrap,
             SettingsIden::InterfaceFontSize,
             SettingsIden::InterfaceScale,
+            SettingsIden::HideWindowControls,
             SettingsIden::OpenWorkspaceNewWindow,
             SettingsIden::Proxy,
             SettingsIden::ThemeDark,
@@ -200,6 +203,7 @@ impl UpsertModelInfo for Settings {
             proxy: proxy.map(|p| -> ProxySetting { serde_json::from_str(p.as_str()).unwrap() }),
             theme_dark: row.get("theme_dark")?,
             theme_light: row.get("theme_light")?,
+            hide_window_controls: row.get("hide_window_controls")?,
             update_channel: row.get("update_channel")?,
         })
     }
