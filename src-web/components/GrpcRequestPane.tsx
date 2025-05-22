@@ -1,10 +1,10 @@
-import { type HttpRequestHeader, type GrpcRequest, patchModel } from '@yaakapp-internal/models';
+import { type GrpcRequest, type HttpRequestHeader, patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useRef } from 'react';
+import { useAuthTab } from '../hooks/useAuthTab';
 import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
-import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { resolvedModelName } from '../lib/resolvedModelName';
@@ -64,7 +64,7 @@ export function GrpcRequestPane({
   onCancel,
   onSend,
 }: Props) {
-  const authentication = useHttpAuthenticationSummaries();
+  const authTab = useAuthTab(TAB_AUTH, activeRequest);
   const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
     namespace: 'no_sync',
     key: 'grpcRequestActiveTabs',
@@ -130,35 +130,7 @@ export function GrpcRequestPane({
   const tabs: TabItem[] = useMemo(
     () => [
       { value: TAB_MESSAGE, label: 'Message' },
-      {
-        value: TAB_AUTH,
-        label: 'Auth',
-        options: {
-          value: activeRequest.authenticationType,
-          items: [
-            ...authentication.map((a) => ({
-              label: a.label || 'UNKNOWN',
-              shortLabel: a.shortLabel,
-              value: a.name,
-            })),
-            { type: 'separator' },
-            { label: 'Inherit from Parent', shortLabel: 'Auth', value: null },
-            { label: 'No Auth', shortLabel: 'No Auth', value: 'none' },
-          ],
-          onChange: async (authenticationType) => {
-            let authentication: GrpcRequest['authentication'] = activeRequest.authentication;
-            if (activeRequest.authenticationType !== authenticationType) {
-              authentication = {
-                // Reset auth if changing types
-              };
-            }
-            await patchModel(activeRequest, {
-              authenticationType,
-              authentication,
-            });
-          },
-        },
-      },
+      ...authTab,
       { value: TAB_METADATA, label: 'Metadata' },
       {
         value: TAB_DESCRIPTION,
@@ -166,7 +138,7 @@ export function GrpcRequestPane({
         rightSlot: activeRequest.description && <CountBadge count={true} />,
       },
     ],
-    [activeRequest, authentication],
+    [activeRequest.description, authTab],
   );
 
   const activeTab = activeTabs?.[activeRequest.id];

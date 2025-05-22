@@ -1,6 +1,7 @@
 import { duplicateModelById, getModel, workspacesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import React, { useMemo } from 'react';
+import { openFolderSettings } from '../../commands/openFolderSettings';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
 import { useHttpRequestActions } from '../../hooks/useHttpRequestActions';
 import { useMoveToWorkspace } from '../../hooks/useMoveToWorkspace';
@@ -8,13 +9,11 @@ import { useSendAnyHttpRequest } from '../../hooks/useSendAnyHttpRequest';
 import { useSendManyRequests } from '../../hooks/useSendManyRequests';
 import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
 
-import { showDialog } from '../../lib/dialog';
 import { duplicateRequestAndNavigate } from '../../lib/duplicateRequestAndNavigate';
 import { renameModelWithPrompt } from '../../lib/renameModelWithPrompt';
 import type { DropdownItem } from '../core/Dropdown';
 import { ContextMenu } from '../core/Dropdown';
 import { Icon } from '../core/Icon';
-import { FolderSettingsDialog } from '../FolderSettingsDialog';
 import type { SidebarTreeNode } from './Sidebar';
 
 interface Props {
@@ -44,15 +43,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         {
           label: 'Settings',
           leftSlot: <Icon icon="settings" />,
-          onSelect: () =>
-            showDialog({
-              id: 'folder-settings',
-              title: 'Folder Settings',
-              size: 'lg',
-              className: "h-[50rem]",
-              noPadding: true,
-              render: () => <FolderSettingsDialog folderId={child.id} />,
-            }),
+          onSelect: () => openFolderSettings(child.id),
         },
         {
           label: 'Duplicate',

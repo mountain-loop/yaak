@@ -7,13 +7,16 @@ import type {
 } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import React, { useCallback } from 'react';
+import { openFolderSettings } from '../commands/openFolderSettings';
+import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
 import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
+import { useInheritedAuthentication } from '../hooks/useInheritedAuthentication';
+import { resolvedModelName } from '../lib/resolvedModelName';
 import { Checkbox } from './core/Checkbox';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
-import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
 import { HStack } from './core/Stacks';
 import { DynamicForm } from './DynamicForm';
@@ -24,6 +27,7 @@ interface Props {
 }
 
 export function HttpAuthenticationEditor({ model }: Props) {
+  const inheritedAuth = useInheritedAuthentication(model);
   const authConfig = useHttpAuthenticationConfig(
     model.authenticationType,
     model.authentication,
@@ -35,23 +39,44 @@ export function HttpAuthenticationEditor({ model }: Props) {
     [model],
   );
 
-  if (model.authenticationType === null) {
-    return (
-      <EmptyStateText className="flex items-center gap-1">
-        Inherited authentication{' '}
-        <IconTooltip content="Authentication will be inherited from parent folder or workspace, if defined." />
-      </EmptyStateText>
-    );
-  }
-
   if (model.authenticationType === 'none') {
     return <EmptyStateText>No authentication</EmptyStateText>;
   }
 
-  if (authConfig.data == null) {
+  if (model.authenticationType != null && authConfig.data == null) {
     return (
       <EmptyStateText>
         Unknown authentication <InlineCode>{authConfig.data}</InlineCode>
+      </EmptyStateText>
+    );
+  }
+
+  if (inheritedAuth == null) {
+    return <EmptyStateText>Authentication not configured</EmptyStateText>;
+  }
+
+  if (inheritedAuth.authenticationType === 'none') {
+    return <EmptyStateText>No authentication</EmptyStateText>;
+  }
+
+  const wasAuthInherited = inheritedAuth?.id !== model.id;
+  if (wasAuthInherited) {
+    const name = resolvedModelName(inheritedAuth);
+    const cta = inheritedAuth.model === 'workspace' ? 'Workspace' : name;
+    return (
+      <EmptyStateText>
+        <p>
+          Inherited from{' '}
+          <button
+            className="underline hover:text-text"
+            onClick={() => {
+              if (inheritedAuth.model === 'folder') openFolderSettings(inheritedAuth.id, 'auth');
+              else openWorkspaceSettings('auth');
+            }}
+          >
+            {cta}
+          </button>
+        </p>
       </EmptyStateText>
     );
   }
@@ -65,7 +90,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
           onChange={(disabled) => handleChange({ ...model.authentication, disabled: !disabled })}
           title="Enabled"
         />
-        {authConfig.data.actions && authConfig.data.actions.length > 0 && (
+        {authConfig.data?.actions && authConfig.data.actions.length > 0 && (
           <Dropdown
             items={authConfig.data.actions.map(
               (a): DropdownItem => ({
@@ -84,7 +109,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
         autocompleteVariables
         autocompleteFunctions
         stateKey={`auth.${model.id}.${model.authenticationType}`}
-        inputs={authConfig.data.args}
+        inputs={authConfig.data?.args ?? []}
         data={model.authentication}
         onChange={handleChange}
       />

@@ -8,7 +8,7 @@ export type RadioDropdownItem<T = string | null> =
   | {
       type?: 'default';
       label: ReactNode;
-      shortLabel?: string;
+      shortLabel?: ReactNode;
       value: T;
       rightSlot?: ReactNode;
     }

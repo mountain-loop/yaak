@@ -1,10 +1,10 @@
-import type { Folder } from '@yaakapp-internal/models';
 import { foldersAtom, patchModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { useState } from 'react';
-import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
+import { useMemo, useState } from 'react';
+import { useAuthTab } from '../hooks/useAuthTab';
 import { Input } from './core/Input';
 import { VStack } from './core/Stacks';
+import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { HeadersEditor } from './HeadersEditor';
 import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
@@ -12,18 +12,36 @@ import { MarkdownEditor } from './MarkdownEditor';
 
 interface Props {
   folderId: string | null;
+  tab?: FolderSettingsTab;
 }
 
 const TAB_AUTH = 'auth';
 const TAB_HEADERS = 'headers';
 const TAB_GENERAL = 'general';
 
-export function FolderSettingsDialog({ folderId }: Props) {
-  const authentication = useHttpAuthenticationSummaries();
+export type FolderSettingsTab = typeof TAB_AUTH | typeof TAB_HEADERS | typeof TAB_GENERAL;
 
+export function FolderSettingsDialog({ folderId, tab }: Props) {
   const folders = useAtomValue(foldersAtom);
-  const folder = folders.find((f) => f.id === folderId);
-  const [activeTab, setActiveTab] = useState<string>(TAB_GENERAL);
+  const folder = folders.find((f) => f.id === folderId) ?? null;
+  const [activeTab, setActiveTab] = useState<string>(tab ?? TAB_GENERAL);
+  const authTab = useAuthTab(TAB_AUTH, folder);
+
+  const tabs = useMemo<TabItem[]>(() => {
+    if (folder == null) return [];
+
+    return [
+      {
+        value: TAB_GENERAL,
+        label: 'General',
+      },
+      ...authTab,
+      {
+        value: TAB_HEADERS,
+        label: 'Headers',
+      },
+    ];
+  }, [authTab, folder]);
 
   if (folder == null) return null;
 
@@ -34,42 +52,7 @@ export function FolderSettingsDialog({ folderId }: Props) {
       label="Folder Settings"
       className="px-1.5 pb-2"
       addBorders
-      tabs={[
-        {
-          value: TAB_GENERAL,
-          label: 'General',
-        },
-        {
-          value: TAB_AUTH,
-          label: 'Auth',
-          options: {
-            value: folder.authenticationType,
-            items: [
-              ...authentication.map((a) => ({
-                label: a.label || 'UNKNOWN',
-                shortLabel: a.shortLabel,
-                value: a.name,
-              })),
-              { type: 'separator' },
-              { label: 'Inherit from Parent', shortLabel: 'Auth', value: null },
-              { label: 'No Auth', shortLabel: 'No Auth', value: 'none' },
-            ],
-            onChange: async (authenticationType) => {
-              let authentication: Folder['authentication'] = folder.authentication;
-              if (folder.authenticationType !== authenticationType) {
-                authentication = {
-                  // Reset auth if changing types
-                };
-              }
-              await patchModel(folder, { authentication, authenticationType });
-            },
-          },
-        },
-        {
-          value: TAB_HEADERS,
-          label: 'Headers',
-        },
-      ]}
+      tabs={tabs}
     >
       <TabContent value={TAB_AUTH} className="pt-3 overflow-y-auto h-full px-4">
         <HttpAuthenticationEditor model={folder} />
