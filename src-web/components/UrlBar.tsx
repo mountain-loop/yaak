@@ -113,6 +113,10 @@ export const UrlBar = memo(function UrlBar({
                   iconColor="secondary"
                   icon={isLoading ? 'x' : submitIcon}
                   hotkeyAction="http_request.send"
+                  onMouseDown={(e) => {
+                    // Prevent the button from taking focus
+                    e.preventDefault();
+                  }}
                 />
               </div>
             )}
