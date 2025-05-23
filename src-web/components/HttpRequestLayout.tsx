@@ -4,6 +4,7 @@ import type { HttpRequest } from '@yaakapp-internal/models';
 import { SplitLayout } from './core/SplitLayout';
 import { HttpRequestPane } from './HttpRequestPane';
 import { HttpResponsePane } from './HttpResponsePane';
+import { GraphQLDocsExplorer } from "./GraphQLDocsExplorer";
 
 interface Props {
   activeRequest: HttpRequest;
@@ -11,6 +12,10 @@ interface Props {
 }
 
 export function HttpRequestLayout({ activeRequest, style }: Props) {
+    const {
+        bodyType,
+    } = activeRequest;
+
   return (
     <SplitLayout
       name="http_layout"
@@ -23,7 +28,24 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
           fullHeight={orientation === 'horizontal'}
         />
       )}
-      secondSlot={({ style }) => <HttpResponsePane activeRequestId={activeRequest.id} style={style} />}
+      secondSlot={
+            bodyType === 'graphql'
+            ? () => (
+                    <SplitLayout
+                        name="http_response_layout"
+                        className="gap-1.5"
+                        firstSlot={
+                            ({ style }) => <HttpResponsePane activeRequestId={activeRequest.id} style={style} />
+                        }
+                        secondSlot={
+                            () => <GraphQLDocsExplorer />
+                        }
+                    />
+                )
+            : (
+                ({ style }) => <HttpResponsePane activeRequestId={activeRequest.id} style={style} />
+            )
+        }
     />
   );
 }
