@@ -1,8 +1,8 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{
-    EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestIden, WebsocketRequestIden, Workspace,
-    WorkspaceIden,
+    EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestHeader, HttpRequestIden,
+    WebsocketRequestIden, Workspace, WorkspaceIden,
 };
 use crate::util::UpdateSource;
 use serde_json::Value;
@@ -70,8 +70,12 @@ impl<'a> DbContext<'a> {
 
     pub fn resolve_auth_for_workspace(
         &self,
-        workspace: Workspace,
+        workspace: &Workspace,
     ) -> (Option<String>, BTreeMap<String, Value>) {
-        (workspace.authentication_type, workspace.authentication)
+        (workspace.authentication_type.clone(), workspace.authentication.clone())
+    }
+
+    pub fn resolve_headers_for_workspace(&self, workspace: &Workspace) -> Vec<HttpRequestHeader> {
+        workspace.headers.clone()
     }
 }

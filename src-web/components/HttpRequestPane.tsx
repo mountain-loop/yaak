@@ -9,7 +9,9 @@ import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
+import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useImportCurl } from '../hooks/useImportCurl';
+import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
@@ -86,6 +88,8 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const contentType = getContentTypeFromHeaders(activeRequest.headers);
   const authTab = useAuthTab(TAB_AUTH, activeRequest);
+  const headersTab = useHeadersTab(TAB_HEADERS, activeRequest);
+  const inheritedHeaders = useInheritedHeaders(activeRequest);
 
   const handleContentTypeChange = useCallback(
     async (contentType: string | null, patch: Partial<Omit<HttpRequest, 'headers'>> = {}) => {
@@ -214,18 +218,21 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
         rightSlot: <CountBadge count={urlParameterPairs.length} />,
         label: 'Params',
       },
-      {
-        value: TAB_HEADERS,
-        label: 'Headers',
-        rightSlot: <CountBadge count={activeRequest.headers.filter((h) => h.name).length} />,
-      },
+      ...headersTab,
       ...authTab,
       {
         value: TAB_DESCRIPTION,
         label: 'Info',
       },
     ],
-    [activeRequest, authTab, handleContentTypeChange, numParams, urlParameterPairs.length],
+    [
+      activeRequest,
+      authTab,
+      handleContentTypeChange,
+      headersTab,
+      numParams,
+      urlParameterPairs.length,
+    ],
   );
 
   const { mutate: sendRequest } = useSendAnyHttpRequest();
@@ -352,6 +359,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             </TabContent>
             <TabContent value={TAB_HEADERS}>
               <HeadersEditor
+                inheritedHeaders={inheritedHeaders}
                 forceUpdateKey={`${forceUpdateHeaderEditorKey}::${forceUpdateKey}`}
                 headers={activeRequest.headers}
                 stateKey={`headers.${activeRequest.id}`}

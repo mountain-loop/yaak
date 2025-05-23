@@ -127,18 +127,21 @@ impl<'a> DbContext<'a> {
         }
 
         let workspace = self.get_workspace(&folder.workspace_id)?;
-        Ok(self.resolve_auth_for_workspace(workspace))
+        Ok(self.resolve_auth_for_workspace(&workspace))
     }
 
     pub fn resolve_headers_for_folder(&self, folder: &Folder) -> Result<Vec<HttpRequestHeader>> {
-        let workspace = self.get_workspace(&folder.workspace_id)?;
-        let mut headers = workspace.headers.clone();
+        let mut headers = Vec::new();
 
         if let Some(folder_id) = folder.folder_id.clone() {
             let parent_folder = self.get_folder(&folder_id)?;
             let mut folder_headers = self.resolve_headers_for_folder(&parent_folder)?;
             // NOTE: Add parent headers first, so overrides are logical
             headers.append(&mut folder_headers);
+        } else {
+            let workspace = self.get_workspace(&folder.workspace_id)?;
+            let mut workspace_headers = self.resolve_headers_for_workspace(&workspace);
+            headers.append(&mut workspace_headers);
         }
 
         headers.append(&mut folder.headers.clone());

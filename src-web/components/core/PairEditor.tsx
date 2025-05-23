@@ -290,6 +290,8 @@ type PairEditorRowProps = {
   onFocus?: (pair: PairWithId) => void;
   onSubmit?: (pair: PairWithId) => void;
   isLast?: boolean;
+  disabled?: boolean;
+  disableDrag?: boolean;
   index: number;
 } & Pick<
   PairEditorProps,
@@ -311,21 +313,23 @@ type PairEditorRowProps = {
   | 'valueValidate'
 >;
 
-function PairEditorRow({
+export function PairEditorRow({
   allowFileValues,
   allowMultilineValues,
   className,
-  forcedEnvironmentId,
+  disableDrag,
+  disabled,
   forceFocusNamePairId,
   forceFocusValuePairId,
   forceUpdateKey,
+  forcedEnvironmentId,
   index,
   isLast,
   nameAutocomplete,
-  namePlaceholder,
-  nameValidate,
   nameAutocompleteFunctions,
   nameAutocompleteVariables,
+  namePlaceholder,
+  nameValidate,
   onChange,
   onDelete,
   onEnd,
@@ -461,12 +465,12 @@ function PairEditorRow({
       <Checkbox
         hideLabel
         title={pair.enabled ? 'Disable item' : 'Enable item'}
-        disabled={isLast}
+        disabled={isLast || disabled}
         checked={isLast ? false : !!pair.enabled}
         className={classNames(isLast && '!opacity-disabled')}
         onChange={handleChangeEnabled}
       />
-      {!isLast ? (
+      {!isLast && !disableDrag ? (
         <div
           className={classNames(
             'py-2 h-7 w-4 flex items-center',
@@ -502,6 +506,7 @@ function PairEditorRow({
             ref={nameInputRef}
             hideLabel
             stateKey={`name.${pair.id}.${stateKey}`}
+            disabled={disabled}
             wrapLines={false}
             readOnly={pair.readOnlyName}
             size="sm"
@@ -523,12 +528,19 @@ function PairEditorRow({
         )}
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
           {pair.isFile ? (
-            <SelectFile inline size="xs" filePath={pair.value} onChange={handleChangeValueFile} />
+            <SelectFile
+              disabled={disabled}
+              inline
+              size="xs"
+              filePath={pair.value}
+              onChange={handleChangeValueFile}
+            />
           ) : isLast ? (
             // Use PlainInput for last ones because there's a unique bug where clicking below
             // the Codemirror input focuses it.
             <PlainInput
               hideLabel
+              disabled={disabled}
               size="sm"
               containerClassName={classNames(isLast && 'border-dashed')}
               label="Value"
@@ -553,6 +565,7 @@ function PairEditorRow({
               stateKey={`value.${pair.id}.${stateKey}`}
               wrapLines={false}
               size="sm"
+              disabled={disabled}
               containerClassName={classNames(isLast && 'border-dashed')}
               validate={valueValidate}
               forcedEnvironmentId={forcedEnvironmentId}
@@ -585,8 +598,9 @@ function PairEditorRow({
           <IconButton
             iconSize="sm"
             size="xs"
-            icon={isLast ? 'empty' : 'chevron_down'}
+            icon={(isLast || disabled) ? 'empty' : 'chevron_down'}
             title="Select form data type"
+            className="text-text-subtle"
           />
         </Dropdown>
       )}

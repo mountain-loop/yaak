@@ -17,7 +17,7 @@ export default function RouteError({ error }: { error: unknown }) {
         <FormattedError>
           {message}
           {stack && (
-            <details className="mt-3 select-autotext-xs">
+            <details className="mt-3 select-auto text-xs">
               <summary className="!cursor-default !select-none">Stack Trace</summary>
               <div className="mt-2 text-xs">{stack}</div>
             </details>

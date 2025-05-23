@@ -5,36 +5,81 @@ import { connections } from '../lib/data/connections';
 import { encodings } from '../lib/data/encodings';
 import { headerNames } from '../lib/data/headerNames';
 import { mimeTypes } from '../lib/data/mimetypes';
+import { Banner } from './core/Banner';
+import { CountBadge } from './core/CountBadge';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import type { InputProps } from './core/Input';
 import type { Pair, PairEditorProps } from './core/PairEditor';
+import { ensurePairId, PairEditorRow } from './core/PairEditor';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
+import { HStack } from './core/Stacks';
 
 type Props = {
   forceUpdateKey: string;
   headers: HttpRequestHeader[];
+  inheritedHeaders?: HttpRequestHeader[];
   stateKey: string;
   onChange: (headers: HttpRequestHeader[]) => void;
+  label?: string;
 };
 
-export function HeadersEditor({ stateKey, headers, onChange, forceUpdateKey }: Props) {
+export function HeadersEditor({
+  stateKey,
+  headers,
+  inheritedHeaders,
+  onChange,
+  forceUpdateKey,
+}: Props) {
+  const validInheritedHeaders =
+    inheritedHeaders?.filter((pair) => pair.enabled && (pair.name || pair.value)) ?? [];
   return (
-    <PairOrBulkEditor
-      forceUpdateKey={forceUpdateKey}
-      nameAutocomplete={nameAutocomplete}
-      nameAutocompleteFunctions
-      nameAutocompleteVariables
-      namePlaceholder="Header-Name"
-      nameValidate={validateHttpHeader}
-      onChange={onChange}
-      pairs={headers}
-      preferenceName="headers"
-      stateKey={stateKey}
-      valueType={valueType}
-      valueAutocomplete={valueAutocomplete}
-      valueAutocompleteFunctions
-      valueAutocompleteVariables
-    />
+    <div className="@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)]">
+      {validInheritedHeaders.length > 0 ? (
+        <Banner className="!py-0 mb-1.5 border-dashed" color="secondary">
+          <details>
+            <summary className="py-1.5 text-sm !cursor-default !select-none opacity-70 hover:opacity-100">
+              <HStack>
+                Inherited <CountBadge count={validInheritedHeaders.length} />
+              </HStack>
+            </summary>
+            <div className="pb-2">
+              {validInheritedHeaders?.map((pair, i) => (
+                <PairEditorRow
+                  key={pair.id + '.' + i}
+                  index={i}
+                  disabled
+                  disableDrag
+                  className="py-1"
+                  onChange={() => {}}
+                  onEnd={() => {}}
+                  onMove={() => {}}
+                  pair={ensurePairId(pair)}
+                  stateKey={null}
+                />
+              ))}
+            </div>
+          </details>
+        </Banner>
+      ) : (
+        <span />
+      )}
+      <PairOrBulkEditor
+        forceUpdateKey={forceUpdateKey}
+        nameAutocomplete={nameAutocomplete}
+        nameAutocompleteFunctions
+        nameAutocompleteVariables
+        namePlaceholder="Header-Name"
+        nameValidate={validateHttpHeader}
+        onChange={onChange}
+        pairs={headers}
+        preferenceName="headers"
+        stateKey={stateKey}
+        valueType={valueType}
+        valueAutocomplete={valueAutocomplete}
+        valueAutocompleteFunctions
+        valueAutocompleteVariables
+      />
+    </div>
   );
 }
 
@@ -51,14 +96,14 @@ const headerOptionsMap: Record<string, string[]> = {
 const valueType = (pair: Pair): InputProps['type'] => {
   const name = pair.name.toLowerCase().trim();
   if (
-      name.includes('authorization') ||
-      name.includes('api-key') ||
-      name.includes('access-token') ||
-      name.includes('auth') ||
-      name.includes('secret') ||
-      name.includes('token') ||
-      name === 'cookie' ||
-      name === 'set-cookie'
+    name.includes('authorization') ||
+    name.includes('api-key') ||
+    name.includes('access-token') ||
+    name.includes('auth') ||
+    name.includes('secret') ||
+    name.includes('token') ||
+    name === 'cookie' ||
+    name === 'set-cookie'
   ) {
     return 'password';
   } else {

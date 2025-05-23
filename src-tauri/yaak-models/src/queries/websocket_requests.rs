@@ -65,7 +65,7 @@ impl<'a> DbContext<'a> {
         }
 
         let workspace = self.get_workspace(&websocket_request.workspace_id)?;
-        Ok(self.resolve_auth_for_workspace(workspace))
+        Ok(self.resolve_auth_for_workspace(&workspace))
     }
 
     pub fn resolve_headers_for_websocket_request(
@@ -83,6 +83,10 @@ impl<'a> DbContext<'a> {
             let parent_folder = self.get_folder(&folder_id)?;
             let mut folder_headers = self.resolve_headers_for_folder(&parent_folder)?;
             headers.append(&mut folder_headers);
+        } else {
+            let workspace = self.get_workspace(&websocket_request.workspace_id)?;
+            let mut workspace_headers = self.resolve_headers_for_workspace(&workspace);
+            headers.append(&mut workspace_headers);
         }
 
         headers.append(&mut websocket_request.headers.clone());

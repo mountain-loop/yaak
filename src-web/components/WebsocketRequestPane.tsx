@@ -12,6 +12,8 @@ import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
+import { useHeadersTab } from '../hooks/useHeadersTab';
+import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { activeWebsocketConnectionAtom } from '../hooks/usePinnedWebsocketConnection';
@@ -70,6 +72,8 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   const forceUpdateKey = useRequestUpdateKey(activeRequest.id);
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const authTab = useAuthTab(TAB_AUTH, activeRequest);
+  const headersTab = useHeadersTab(TAB_HEADERS, activeRequest);
+  const inheritedHeaders = useInheritedHeaders(activeRequest);
 
   const { urlParameterPairs, urlParametersKey } = useMemo(() => {
     const placeholderNames = Array.from(activeRequest.url.matchAll(/\/(:[^/]+)/g)).map(
@@ -99,18 +103,14 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
         rightSlot: <CountBadge count={urlParameterPairs.length} />,
         label: 'Params',
       },
-      {
-        value: TAB_HEADERS,
-        label: 'Headers',
-        rightSlot: <CountBadge count={activeRequest.headers.filter((h) => h.name).length} />,
-      },
+      ...headersTab,
       ...authTab,
       {
         value: TAB_DESCRIPTION,
         label: 'Info',
       },
     ];
-  }, [activeRequest.headers, authTab, urlParameterPairs.length]);
+  }, [authTab, headersTab, urlParameterPairs.length]);
 
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
@@ -243,6 +243,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             </TabContent>
             <TabContent value={TAB_HEADERS}>
               <HeadersEditor
+                inheritedHeaders={inheritedHeaders}
                 forceUpdateKey={forceUpdateKey}
                 headers={activeRequest.headers}
                 stateKey={`headers.${activeRequest.id}`}

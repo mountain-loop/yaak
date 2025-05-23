@@ -2,6 +2,8 @@ import { foldersAtom, patchModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { useMemo, useState } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
+import { useHeadersTab } from '../hooks/useHeadersTab';
+import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { Input } from './core/Input';
 import { VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
@@ -26,6 +28,8 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
   const folder = folders.find((f) => f.id === folderId) ?? null;
   const [activeTab, setActiveTab] = useState<string>(tab ?? TAB_GENERAL);
   const authTab = useAuthTab(TAB_AUTH, folder);
+  const headersTab = useHeadersTab(TAB_HEADERS, folder);
+  const inheritedHeaders = useInheritedHeaders(folder);
 
   const tabs = useMemo<TabItem[]>(() => {
     if (folder == null) return [];
@@ -36,12 +40,9 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
         label: 'General',
       },
       ...authTab,
-      {
-        value: TAB_HEADERS,
-        label: 'Headers',
-      },
+      ...headersTab,
     ];
-  }, [authTab, folder]);
+  }, [authTab, folder, headersTab]);
 
   if (folder == null) return null;
 
@@ -78,6 +79,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
       </TabContent>
       <TabContent value={TAB_HEADERS} className="pt-3 overflow-y-auto h-full px-4">
         <HeadersEditor
+          inheritedHeaders={inheritedHeaders}
           forceUpdateKey={folder.id}
           headers={folder.headers}
           onChange={(headers) => patchModel(folder, { headers })}

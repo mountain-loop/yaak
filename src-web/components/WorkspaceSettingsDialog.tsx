@@ -2,6 +2,8 @@ import { patchModel, workspaceMetasAtom, workspacesAtom } from '@yaakapp-interna
 import { useAtomValue } from 'jotai';
 import { useState } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
+import { useHeadersTab } from '../hooks/useHeadersTab';
+import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { router } from '../lib/router';
 import { Banner } from './core/Banner';
@@ -34,6 +36,8 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
   const workspaceMeta = useAtomValue(workspaceMetasAtom).find((m) => m.workspaceId === workspaceId);
   const [activeTab, setActiveTab] = useState<string>(tab ?? TAB_GENERAL);
   const authTab = useAuthTab(TAB_AUTH, workspace ?? null);
+  const headersTab = useHeadersTab(TAB_HEADERS, workspace ?? null);
+  const inheritedHeaders = useInheritedHeaders(workspace ?? null);
 
   if (workspace == null) {
     return (
@@ -57,17 +61,14 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       label="Folder Settings"
       className="px-1.5 pb-2"
       addBorders
-      tabs={[
-        { value: TAB_GENERAL, label: 'General' },
-        ...authTab,
-        { value: TAB_HEADERS, label: 'Headers' },
-      ]}
+      tabs={[{ value: TAB_GENERAL, label: 'General' }, ...authTab, ...headersTab]}
     >
       <TabContent value={TAB_AUTH} className="pt-3 overflow-y-auto h-full px-4">
         <HttpAuthenticationEditor model={workspace} />
       </TabContent>
       <TabContent value={TAB_HEADERS} className="pt-3 overflow-y-auto h-full px-4">
         <HeadersEditor
+          inheritedHeaders={inheritedHeaders}
           forceUpdateKey={workspace.id}
           headers={workspace.headers}
           onChange={(headers) => patchModel(workspace, { headers })}

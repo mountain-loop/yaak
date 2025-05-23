@@ -8,7 +8,7 @@ import { useHttpAuthenticationSummaries } from './useHttpAuthentication';
 import type { AuthenticatedModel} from './useInheritedAuthentication';
 import { useInheritedAuthentication } from './useInheritedAuthentication';
 
-export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedModel) {
+export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedModel | null) {
   const authentication = useHttpAuthenticationSummaries();
   const inheritedAuth = useInheritedAuthentication(model);
 
