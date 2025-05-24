@@ -4,7 +4,8 @@ import { EditorSelection, EditorState } from '@codemirror/state';
 export function singleLineExtensions(): Extension {
   return EditorState.transactionFilter.of(
     (tr: Transaction): TransactionSpec | TransactionSpec[] => {
-      if (!tr.isUserEvent('input')) return tr;
+      // Skip processing during IME composition
+      if (!tr.isUserEvent('input') || tr.isUserEvent('composition')) return tr;
 
       const specs: TransactionSpec[] = [];
       tr.changes.iterChanges((_, toA, fromB, toB, inserted) => {
