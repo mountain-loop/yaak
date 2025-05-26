@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::manager::WebsocketManager;
-use crate::render::render_request;
+use crate::render::render_websocket_request;
+use crate::resolve::resolve_websocket_request;
 use log::{info, warn};
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
@@ -119,8 +120,9 @@ pub(crate) async fn send<R: Runtime>(
     };
     let base_environment =
         app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
-    let request = render_request(
-        &unrendered_request,
+    let resolved_request = resolve_websocket_request(&window, &unrendered_request)?;
+    let request = render_websocket_request(
+        &resolved_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
@@ -194,8 +196,9 @@ pub(crate) async fn connect<R: Runtime>(
     };
     let base_environment =
         app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
-    let request = render_request(
-        &unrendered_request,
+    let resolved_request = resolve_websocket_request(&window, &unrendered_request)?;
+    let request = render_websocket_request(
+        &resolved_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
@@ -206,13 +209,9 @@ pub(crate) async fn connect<R: Runtime>(
     )
     .await?;
 
-    let (authentication_type, authentication) =
-        window.db().resolve_auth_for_websocket_request(&request)?;
-
     let mut headers = HeaderMap::new();
 
-    let resolved_headers = window.db().resolve_headers_for_websocket_request(&request)?;
-    for h in resolved_headers {
+    for h in request.headers.clone() {
         if h.name.is_empty() && h.value.is_empty() {
             continue;
         }
@@ -220,13 +219,16 @@ pub(crate) async fn connect<R: Runtime>(
         if !h.enabled {
             continue;
         }
+
+        println!("Adding header: {:?} {:?}", h.name.clone(), h.value.clone());
+
         headers.insert(
             HeaderName::from_str(&h.name).unwrap(),
             HeaderValue::from_str(&h.value).unwrap(),
         );
     }
 
-    match authentication_type {
+    match request.authentication_type {
         None => {
             // No authentication found. Not even inherited
         }
@@ -234,7 +236,7 @@ pub(crate) async fn connect<R: Runtime>(
             // Explicitly no authentication
         }
         Some(authentication_type) => {
-            let auth = authentication.clone();
+            let auth = request.authentication.clone();
             let plugin_req = CallHttpAuthenticationRequest {
                 context_id: format!("{:x}", md5::compute(request_id.to_string())),
                 values: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
@@ -250,8 +252,9 @@ pub(crate) async fn connect<R: Runtime>(
                     })
                     .collect(),
             };
-            let plugin_result =
-                plugin_manager.call_http_authentication(&window, &authentication_type, plugin_req).await?;
+            let plugin_result = plugin_manager
+                .call_http_authentication(&window, &authentication_type, plugin_req)
+                .await?;
             for header in plugin_result.set_headers {
                 headers.insert(
                     HeaderName::from_str(&header.name).unwrap(),

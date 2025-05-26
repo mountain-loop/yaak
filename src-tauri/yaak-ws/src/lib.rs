@@ -3,6 +3,7 @@ mod connect;
 pub mod error;
 mod manager;
 mod render;
+mod resolve;
 
 use crate::commands::{
     close, connect, delete_connection, delete_connections, delete_request, duplicate_request,

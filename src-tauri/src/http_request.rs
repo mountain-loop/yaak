@@ -65,14 +65,7 @@ pub async fn send_http_request<R: Runtime>(
     );
     let update_source = UpdateSource::from_window(window);
 
-    let request = match render_http_request(
-        &unrendered_request,
-        &base_environment,
-        environment.as_ref(),
-        &cb,
-    )
-    .await
-    {
+    let resolved_request = match resolve_http_request(window, unrendered_request) {
         Ok(r) => r,
         Err(e) => {
             return Ok(response_err(
@@ -83,6 +76,21 @@ pub async fn send_http_request<R: Runtime>(
             ));
         }
     };
+
+    let request =
+        match render_http_request(&resolved_request, &base_environment, environment.as_ref(), &cb)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                return Ok(response_err(
+                    &app_handle,
+                    &*response.lock().await,
+                    e.to_string(),
+                    &update_source,
+                ));
+            }
+        };
 
     let mut url_string = request.url.clone();
 
@@ -230,9 +238,7 @@ pub async fn send_http_request<R: Runtime>(
     //     );
     // }
 
-    let resolved_headers = window.db().resolve_headers_for_http_request(&request)?;
-
-    for h in resolved_headers {
+    for h in request.headers.clone() {
         if h.name.is_empty() && h.value.is_empty() {
             continue;
         }
@@ -431,10 +437,7 @@ pub async fn send_http_request<R: Runtime>(
         }
     };
 
-    let (authentication_type, authentication) =
-        window.db().resolve_auth_for_http_request(&request)?;
-
-    match authentication_type {
+    match request.authentication_type {
         None => {
             // No authentication found. Not even inherited
         }
@@ -444,8 +447,10 @@ pub async fn send_http_request<R: Runtime>(
         Some(authentication_type) => {
             let req = CallHttpAuthenticationRequest {
                 context_id: format!("{:x}", md5::compute(request.id)),
-                values: serde_json::from_value(serde_json::to_value(&authentication).unwrap())
-                    .unwrap(),
+                values: serde_json::from_value(
+                    serde_json::to_value(&request.authentication).unwrap(),
+                )
+                .unwrap(),
                 url: sendable_req.url().to_string(),
                 method: sendable_req.method().to_string(),
                 headers: sendable_req
@@ -674,6 +679,23 @@ pub async fn send_http_request<R: Runtime>(
             }
         }
     })
+}
+
+fn resolve_http_request<R: Runtime>(
+    window: &WebviewWindow<R>,
+    request: &HttpRequest,
+) -> Result<HttpRequest> {
+    let mut new_request = request.clone();
+
+    let (authentication_type, authentication) =
+        window.db().resolve_auth_for_http_request(request)?;
+    new_request.authentication_type = authentication_type;
+    new_request.authentication = authentication;
+
+    let headers = window.db().resolve_headers_for_http_request(request)?;
+    new_request.headers = headers;
+
+    Ok(new_request)
 }
 
 fn ensure_proto(url_str: &str) -> String {

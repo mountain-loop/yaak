@@ -1,7 +1,7 @@
 extern crate core;
 use crate::encoding::read_response_body;
 use crate::error::Error::GenericError;
-use crate::grpc::{build_metadata, metadata_to_map};
+use crate::grpc::{build_metadata, metadata_to_map, resolve_grpc_request};
 use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
@@ -151,10 +151,13 @@ async fn cmd_grpc_reflect<R: Runtime>(
         None => None,
     };
     let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
+    let resolved_request = resolve_grpc_request(&window, &unrendered_request)?;
+
     let base_environment =
         app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+
     let req = render_grpc_request(
-        &unrendered_request,
+        &resolved_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
@@ -195,10 +198,12 @@ async fn cmd_grpc_go<R: Runtime>(
         None => None,
     };
     let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
+    let resolved_request = resolve_grpc_request(&window, &unrendered_request)?;
     let base_environment =
         app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+
     let request = render_grpc_request(
-        &unrendered_request,
+        &resolved_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(

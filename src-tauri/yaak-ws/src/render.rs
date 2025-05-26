@@ -4,7 +4,7 @@ use yaak_models::models::{Environment, HttpRequestHeader, WebsocketRequest};
 use yaak_models::render::make_vars_hashmap;
 use yaak_templates::{parse_and_render, render_json_value_raw, TemplateCallback};
 
-pub async fn render_request<T: TemplateCallback>(
+pub async fn render_websocket_request<T: TemplateCallback>(
     r: &WebsocketRequest,
     base_environment: &Environment,
     environment: Option<&Environment>,
