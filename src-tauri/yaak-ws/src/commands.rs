@@ -220,8 +220,6 @@ pub(crate) async fn connect<R: Runtime>(
             continue;
         }
 
-        println!("Adding header: {:?} {:?}", h.name.clone(), h.value.clone());
-
         headers.insert(
             HeaderName::from_str(&h.name).unwrap(),
             HeaderValue::from_str(&h.value).unwrap(),
