@@ -68,6 +68,7 @@
     "@tauri-apps/cli": "^2.4.1",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
     "@typescript-eslint/parser": "^8.27.0",
+    "@yaakapp/cli": "^0.1.5",
     "eslint": "^8",
     "eslint-config-prettier": "^8",
     "eslint-plugin-import": "^2.31.0",
