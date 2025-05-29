@@ -57,7 +57,7 @@ async function getAccessToken(ctx, {
     ]
   };
   if (scope) httpRequest.body.form.push({ name: "scope", value: scope });
-  if (scope) httpRequest.body.form.push({ name: "audience", value: audience });
+  if (audience) httpRequest.body.form.push({ name: "audience", value: audience });
   if (credentialsInBody) {
     httpRequest.body.form.push({ name: "client_id", value: clientId });
     httpRequest.body.form.push({ name: "client_secret", value: clientSecret });
