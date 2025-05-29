@@ -9,9 +9,6 @@ use mime_guess::Mime;
 use reqwest::redirect::Policy;
 use reqwest::{Method, Response};
 use reqwest::{Proxy, Url, multipart};
-use rustls::ClientConfig;
-use rustls::crypto::ring;
-use rustls_platform_verifier::BuilderVerifierExt;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -112,22 +109,8 @@ pub async fn send_http_request<R: Runtime>(
         .referer(false)
         .tls_info(true);
 
-    if workspace.setting_validate_certificates {
-        // Use platform-native verifier to validate certificates
-        let arc_crypto_provider = Arc::new(ring::default_provider());
-        let config = ClientConfig::builder_with_provider(arc_crypto_provider)
-            .with_safe_default_protocol_versions()
-            .unwrap()
-            .with_platform_verifier()
-            .with_no_client_auth();
-        client_builder = client_builder.use_preconfigured_tls(config)
-    } else {
-        // Use rustls to skip validation because rustls_platform_verifier does not have this ability
-        client_builder = client_builder
-            .use_rustls_tls()
-            .danger_accept_invalid_hostnames(true)
-            .danger_accept_invalid_certs(true);
-    }
+    let tls_config = yaak_http::tls::get_config(workspace.setting_validate_certificates);
+    client_builder = client_builder.use_preconfigured_tls(tls_config);
 
     match settings.proxy {
         Some(ProxySetting::Disabled) => client_builder = client_builder.no_proxy(),

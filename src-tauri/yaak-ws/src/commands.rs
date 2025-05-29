@@ -196,6 +196,7 @@ pub(crate) async fn connect<R: Runtime>(
     };
     let base_environment =
         app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
     let resolved_request = resolve_websocket_request(&window, &unrendered_request)?;
     let request = render_websocket_request(
         &resolved_request,
@@ -298,7 +299,13 @@ pub(crate) async fn connect<R: Runtime>(
         }
     }
 
-    let response = match ws_manager.connect(&connection.id, url.as_str(), headers, receive_tx).await
+    let response = match ws_manager.connect(
+        &connection.id,
+        url.as_str(),
+        headers,
+        receive_tx,
+        workspace.setting_validate_certificates,
+    ).await
     {
         Ok(r) => r,
         Err(e) => {

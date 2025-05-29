@@ -9,8 +9,6 @@ publish = false
 futures-util = "0.3.31"
 log = "0.4.20"
 md5 = "0.7.0"
-rustls = { version = "0.23.25", default-features = false, features = ["custom-provider", "ring"] }
-rustls-platform-verifier = "0.5.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tauri = { workspace = true }

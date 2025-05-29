@@ -155,6 +155,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
 
     let base_environment =
         app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
 
     let req = render_grpc_request(
         &resolved_request,
@@ -179,6 +180,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &uri,
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
             &metadata,
+            workspace.setting_validate_certificates,
         )
         .await
         .map_err(|e| GenericError(e.to_string()))?)
@@ -201,6 +203,7 @@ async fn cmd_grpc_go<R: Runtime>(
     let resolved_request = resolve_grpc_request(&window, &unrendered_request)?;
     let base_environment =
         app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
 
     let request = render_grpc_request(
         &resolved_request,
@@ -263,6 +266,7 @@ async fn cmd_grpc_go<R: Runtime>(
             uri.as_str(),
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
             &metadata,
+            workspace.setting_validate_certificates,
         )
         .await;
 
@@ -296,7 +300,7 @@ async fn cmd_grpc_go<R: Runtime>(
         let cancelled_rx = cancelled_rx.clone();
         let app_handle = app_handle.clone();
         let window = window.clone();
-        let workspace = base_environment.clone();
+        let base_environment = base_environment.clone();
         let environment = environment.clone();
         let base_msg = base_msg.clone();
         let method_desc = method_desc.clone();
@@ -326,7 +330,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         tauri::async_runtime::block_on(async {
                             render_template(
                                 msg.as_str(),
-                                &workspace,
+                                &base_environment,
                                 environment.as_ref(),
                                 &PluginTemplateCallback::new(
                                     &app_handle,

@@ -93,9 +93,10 @@ pub async fn fill_pool_from_files(
 pub async fn fill_pool_from_reflection(
     uri: &Uri,
     metadata: &BTreeMap<String, String>,
+    validate_certificates: bool,
 ) -> Result<DescriptorPool, String> {
     let mut pool = DescriptorPool::new();
-    let mut client = AutoReflectionClient::new(uri);
+    let mut client = AutoReflectionClient::new(uri, validate_certificates);
 
     for service in list_services(&mut client, metadata).await? {
         if service == "grpc.reflection.v1alpha.ServerReflection" {

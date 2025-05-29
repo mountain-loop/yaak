@@ -1,3 +1,5 @@
+pub mod tls;
+
 use yaak_models::models::HttpUrlParameter;
 
 pub fn apply_path_placeholders(

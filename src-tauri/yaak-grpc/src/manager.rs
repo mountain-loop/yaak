@@ -181,10 +181,11 @@ impl GrpcHandle {
         uri: &str,
         proto_files: &Vec<PathBuf>,
         metadata: &BTreeMap<String, String>,
+        validate_certificates: bool,
     ) -> Result<(), String> {
         let pool = if proto_files.is_empty() {
             let full_uri = uri_from_str(uri)?;
-            fill_pool_from_reflection(&full_uri, metadata).await
+            fill_pool_from_reflection(&full_uri, metadata, validate_certificates).await
         } else {
             fill_pool_from_files(&self.app_handle, proto_files).await
         }?;
@@ -199,9 +200,10 @@ impl GrpcHandle {
         uri: &str,
         proto_files: &Vec<PathBuf>,
         metadata: &BTreeMap<String, String>,
+        validate_certificates: bool,
     ) -> Result<Vec<ServiceDefinition>, String> {
         // Ensure reflection is up-to-date
-        self.reflect(id, uri, proto_files, metadata).await?;
+        self.reflect(id, uri, proto_files, metadata, validate_certificates).await?;
 
         let pool = self.get_pool(id, uri, proto_files).ok_or("Failed to get pool".to_string())?;
         Ok(self.services_from_pool(&pool))
@@ -238,12 +240,13 @@ impl GrpcHandle {
         uri: &str,
         proto_files: &Vec<PathBuf>,
         metadata: &BTreeMap<String, String>,
+        validate_certificates: bool,
     ) -> Result<GrpcConnection, String> {
-        self.reflect(id, uri, proto_files, metadata).await?;
+        self.reflect(id, uri, proto_files, metadata, validate_certificates).await?;
         let pool = self.get_pool(id, uri, proto_files).ok_or("Failed to get pool")?;
 
         let uri = uri_from_str(uri)?;
-        let conn = get_transport();
+        let conn = get_transport(validate_certificates);
         let connection = GrpcConnection {
             pool: pool.clone(),
             conn,

@@ -50,8 +50,6 @@ mime_guess = "2.0.5"
 rand = "0.9.0"
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider"] }
 reqwest_cookie_store = "0.8.0"
-rustls = { version = "0.23.25", default-features = false, features = ["custom-provider", "ring"] }
-rustls-platform-verifier = "0.5.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
@@ -93,6 +91,8 @@ tauri-plugin-shell = "2.2.1"
 tokio = "1.44.2"
 thiserror = "2.0.12"
 ts-rs = "10.1.0"
+rustls = { version = "0.23.25", default-features = false }
+rustls-platform-verifier = "0.5.1"
 yaak-common = { path = "yaak-common" }
 yaak-http = { path = "yaak-http" }
 yaak-models = { path = "yaak-models" }

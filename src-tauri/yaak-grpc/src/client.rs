@@ -26,13 +26,13 @@ pub struct AutoReflectionClient<T = Client<HttpsConnector<HttpConnector>, BoxBod
 }
 
 impl AutoReflectionClient {
-    pub fn new(uri: &Uri) -> Self {
+    pub fn new(uri: &Uri, validate_certificates: bool) -> Self {
         let client_v1 = v1::server_reflection_client::ServerReflectionClient::with_origin(
-            get_transport(),
+            get_transport(validate_certificates),
             uri.clone(),
         );
         let client_v1alpha = v1alpha::server_reflection_client::ServerReflectionClient::with_origin(
-            get_transport(),
+            get_transport(validate_certificates),
             uri.clone(),
         );
         AutoReflectionClient {
