@@ -40,7 +40,10 @@ function getRootTypes(graphqlSchema: GraphQLSchema) {
 		)
 }
 
-function getTypeIndices(type: GraphQLAnyType): SearchIndexRecord[] {
+function getTypeIndices(
+	type: GraphQLAnyType,
+	context: IndexGenerationContext
+): SearchIndexRecord[] {
 	const indices: SearchIndexRecord[] = [];
 
 	if (!(type as GraphQLObjectType).name) {
@@ -50,11 +53,13 @@ function getTypeIndices(type: GraphQLAnyType): SearchIndexRecord[] {
 	indices.push({
 		name: (type as GraphQLObjectType).name,
 		type: 'type',
+		schemaPointer: type,
+		args: ''
 	});
 
 	if ((type as GraphQLObjectType).getFields) {
 		indices.push(
-			...getFieldsIndices((type as GraphQLObjectType).getFields())
+			...getFieldsIndices((type as GraphQLObjectType).getFields(), context)
 		)
 	}
 
@@ -66,7 +71,10 @@ function getTypeIndices(type: GraphQLAnyType): SearchIndexRecord[] {
 	);
 }
 
-function getFieldsIndices(fieldMap: FieldsMap): SearchIndexRecord[] {
+function getFieldsIndices(
+	fieldMap: FieldsMap,
+	context: IndexGenerationContext
+): SearchIndexRecord[] {
 	const indices: SearchIndexRecord[] = [];
 
 	Object.values(fieldMap)
@@ -76,14 +84,20 @@ function getFieldsIndices(fieldMap: FieldsMap): SearchIndexRecord[] {
 					return;
 				}
 
+				const args = field.args && field.args.length > 0
+					? field.args.map((arg) => arg.name).join(', ')
+					: '';
+
 				indices.push({
 					name: field.name,
-					type: 'field',
+					type: context.rootType,
+					schemaPointer: field as unknown as Field,
+					args
 				});
 
 				if (field.type) {
 					indices.push(
-						...getTypeIndices(field.type)
+						...getTypeIndices(field.type, context)
 					)
 				}
 			}
@@ -103,14 +117,23 @@ type GraphQLAnyType = FieldsMap[string]['type'];
 
 type SearchIndexRecord = {
 	name: string,
-	type: 'field' | 'type' | 'query' | 'mutation' | 'subscription',
+	args: string,
+	type: 'field' | 'type' | 'Query' | 'Mutation' | 'Subscription',
+	schemaPointer: SchemaPointer
+};
+
+type IndexGenerationContext = {
+	rootType: 'Query' | 'Mutation' | 'Subscription';
 };
 
 type SchemaPointer = Field | GraphQLOutputType | GraphQLInputType | null;
 
 type ViewMode = 'explorer' | 'search' | 'field';
 
-type HistoryRecord = { schemaPointer: SchemaPointer, viewMode: ViewMode };
+type HistoryRecord = {
+	schemaPointer: SchemaPointer,
+	viewMode: ViewMode
+};
 
 function DocsExplorer({
 						  graphqlSchema
@@ -122,7 +145,6 @@ function DocsExplorer({
 	const [searchQuery, setSearchQuery] = useState<string>('');
 	const [searchResults, setSearchResults] = useState<SearchIndexRecord[]>([]);
 	const [viewMode, setViewMode] = useState<ViewMode>('explorer');
-	const [isSearchDropdownOpen, setSearchDropdownOpen] = useState(false);
 
 	useEffect(() => {
 		setRootTypes(getRootTypes(graphqlSchema));
@@ -139,6 +161,8 @@ function DocsExplorer({
 				(x) => ({
 					name: x.name,
 					type: 'type',
+					schemaPointer: x,
+					args: ''
 				})
 			);
 
@@ -146,7 +170,7 @@ function DocsExplorer({
 			.forEach(
 				(type) => {
 					index.push(
-						...getFieldsIndices(type.getFields())
+						...getFieldsIndices(type.getFields(), { rootType: type.name as any })
 					)
 				}
 			)
@@ -171,7 +195,7 @@ function DocsExplorer({
 			const results = fuzzyFilter(
 				searchIndex,
 				searchQuery,
-				{ fields: ['name'] }
+				{ fields: ['name', 'args'] }
 			)
 				.sort((a, b) => b.score - a.score)
 				.map((v) => v.item);
@@ -612,17 +636,55 @@ function DocsExplorer({
 						searchResults
 							.map(
 								(result) => (
-									<div
+									<button
 										key={`${result.name}-${result.type}`}
-										className="flex flex-row justify-between"
+										className="cursor-pointer border border-1 border-border-subtle rounded-md p-2 flex flex-row justify-between hover:bg-surface-highlight transition-colors"
+										onClick={
+											() => {
+												if (!result.schemaPointer) {
+													throw new Error('somehow search result record contains no schema pointer');
+												}
+
+												console.log(result);
+
+												if (result.type === 'type') {
+													onTypeClick(result.schemaPointer);
+
+													return;
+												}
+
+												onFieldClick(result.schemaPointer as unknown as GraphQLField<any, any>);
+											}
+										}
 									>
-										<div>
-											{ result.name }
+										<div
+											className="flex flex-row"
+										>
+											<div
+												className="cursor-pointer"
+											>
+												{ result.name }
+											</div>
+											{
+												result.args
+													? (
+														<div
+															className="cursor-pointer"
+														>
+															{ "( " }
+															{ result.args }
+															{ " )" }
+														</div>
+													)
+													: null
+											}
 										</div>
-										<div>
+										<div
+											className="cursor-pointer"
+										>
 											{ result.type }
 										</div>
-									</div>
+									</button>
 								)
 							)
 					}
@@ -669,19 +731,17 @@ function DocsExplorer({
 					onChange={
 						(value) => {
 							setSearchQuery(value);
-							setSearchDropdownOpen(true);
 						}
 					}
 					onKeyDown={
 						(e) => {
 							// check if enter
-							if (e.key === 'Enter') {
+							if (e.key === 'Enter' && viewMode !== 'search') {
 								addToHistory({
 									schemaPointer: null,
 									viewMode: 'search',
 								})
 								setViewMode('search');
-								setSearchDropdownOpen(false);
 							}
 						}
 					}
