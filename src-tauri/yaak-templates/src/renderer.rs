@@ -242,7 +242,7 @@ mod parse_and_render_tests {
     async fn render_valid_fn() -> Result<()> {
         let vars = HashMap::new();
         let template = r#"${[ say_hello(a='John', b='Kate') ]}"#;
-        let result = r#"say_hello: 2, Some("John") Some("Kate")"#;
+        let result = r#"say_hello: 2, Some(String("John")) Some(String("Kate"))"#;
 
         struct CB {}
         impl TemplateCallback for CB {
@@ -271,7 +271,7 @@ mod parse_and_render_tests {
     async fn render_fn_arg() -> Result<()> {
         let vars = HashMap::new();
         let template = r#"${[ upper(foo='bar') ]}"#;
-        let result = r#"BAR"#;
+        let result = r#""BAR""#;
         struct CB {}
         impl TemplateCallback for CB {
             async fn run(
@@ -305,7 +305,7 @@ mod parse_and_render_tests {
         let mut vars = HashMap::new();
         vars.insert("foo".to_string(), "bar".to_string());
         let template = r#"${[ upper(foo=b64'Zm9vICdiYXInIGJheg') ]}"#;
-        let result = r#"FOO 'BAR' BAZ"#;
+        let result = r#""FOO 'BAR' BAZ""#;
         struct CB {}
         impl TemplateCallback for CB {
             async fn run(&self, fn_name: &str, args: HashMap<String, serde_json::Value>) -> Result<String> {
@@ -334,7 +334,7 @@ mod parse_and_render_tests {
         let mut vars = HashMap::new();
         vars.insert("foo".to_string(), "bar".to_string());
         let template = r#"${[ upper(foo='${[ foo ]}') ]}"#;
-        let result = r#"BAR"#;
+        let result = r#""BAR""#;
         struct CB {}
         impl TemplateCallback for CB {
             async fn run(&self, fn_name: &str, args: HashMap<String, serde_json::Value>) -> Result<String> {
@@ -364,7 +364,7 @@ mod parse_and_render_tests {
         let mut vars = HashMap::new();
         vars.insert("foo".to_string(), "bar".to_string());
         let template = r#"${[ no_op(inner='${[ foo ]}') ]}"#;
-        let result = r#"bar"#;
+        let result = r#""bar""#;
         struct CB {}
         impl TemplateCallback for CB {
             async fn run(&self, fn_name: &str, args: HashMap<String, serde_json::Value>) -> Result<String> {
@@ -392,7 +392,7 @@ mod parse_and_render_tests {
     async fn render_nested_fn() -> Result<()> {
         let vars = HashMap::new();
         let template = r#"${[ upper(foo=secret()) ]}"#;
-        let result = r#"ABC"#;
+        let result = r#""ABC""#;
         struct CB {}
         impl TemplateCallback for CB {
             async fn run(&self, fn_name: &str, args: HashMap<String, serde_json::Value>) -> Result<String> {

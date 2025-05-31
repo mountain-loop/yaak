@@ -4,9 +4,9 @@ use crate::util::ModelChangeEvent;
 use log::info;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use sqlx::SqlitePool;
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::SqlitePool;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -14,7 +14,7 @@ use std::time::Duration;
 use tauri::async_runtime::Mutex;
 use tauri::path::BaseDirectory;
 use tauri::plugin::TauriPlugin;
-use tauri::{generate_handler, AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime, generate_handler};
 use tokio::sync::mpsc;
 
 mod commands;
@@ -39,13 +39,15 @@ impl SqliteConnection {
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     tauri::plugin::Builder::new("yaak-models")
         .invoke_handler(generate_handler![
-            upsert,
             delete,
             duplicate,
-            workspace_models,
-            grpc_events,
-            websocket_events,
+            get_graphql_introspection,
             get_settings,
+            grpc_events,
+            upsert,
+            upsert_graphql_introspection,
+            websocket_events,
+            workspace_models,
         ])
         .setup(|app_handle, _api| {
             let app_path = app_handle.path().app_data_dir().unwrap();

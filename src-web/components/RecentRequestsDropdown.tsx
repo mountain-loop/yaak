@@ -94,7 +94,7 @@ export function RecentRequestsDropdown({ className }: Props) {
           activeRequest == null && 'text-text-subtlest italic',
         )}
       >
-        {resolvedModelName(activeRequest)}
+        {activeRequest?.id}
       </Button>
     </Dropdown>
   );

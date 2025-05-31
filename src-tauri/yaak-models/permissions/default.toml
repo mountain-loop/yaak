@@ -4,8 +4,10 @@ permissions = [
     "allow-delete",
     "allow-duplicate",
     "allow-get-settings",
+    "allow-get-graphql-introspection",
     "allow-grpc-events",
     "allow-upsert",
+    "allow-upsert-graphql-introspection",
     "allow-websocket-events",
     "allow-workspace-models",
 ]

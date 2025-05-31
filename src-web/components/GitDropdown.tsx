@@ -343,7 +343,7 @@ function SetupSyncDropdown({ workspaceMeta }: { workspaceMeta: WorkspaceMeta }) 
           color: 'success',
           label: 'Open Workspace Settings',
           leftSlot: <Icon icon="settings" />,
-          onSelect: openWorkspaceSettings,
+          onSelect: () => openWorkspaceSettings('general'),
         },
         { type: 'separator' },
         {

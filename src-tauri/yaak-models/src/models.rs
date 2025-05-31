@@ -1342,6 +1342,79 @@ impl UpsertModelInfo for HttpResponse {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "graphql_introspections")]
+pub struct GraphQlIntrospection {
+    #[ts(type = "\"graphql_introspection\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+    pub request_id: String,
+    pub content: Option<String>,
+}
+
+impl UpsertModelInfo for GraphQlIntrospection {
+    fn table_name() -> impl IntoTableRef {
+        GraphQlIntrospectionIden::Table
+    }
+
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        GraphQlIntrospectionIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("gi")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (GraphQlIntrospectionIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use GraphQlIntrospectionIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (RequestId, self.request_id.into()),
+            (Content, self.content.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            GraphQlIntrospectionIden::UpdatedAt,
+            GraphQlIntrospectionIden::Content,
+        ]
+    }
+
+    fn from_row(r: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(Self {
+            id: r.get("id")?,
+            model: r.get("model")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            workspace_id: r.get("workspace_id")?,
+            request_id: r.get("request_id")?,
+            content: r.get("content")?,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
@@ -2002,6 +2075,7 @@ define_any_model! {
     CookieJar,
     Environment,
     Folder,
+    GraphQlIntrospection,
     GrpcConnection,
     GrpcEvent,
     GrpcRequest,
@@ -2031,6 +2105,9 @@ impl<'de> Deserialize<'de> for AnyModel {
             Some(m) if m == "cookie_jar" => AnyModel::CookieJar(fv(value).unwrap()),
             Some(m) if m == "environment" => AnyModel::Environment(fv(value).unwrap()),
             Some(m) if m == "folder" => AnyModel::Folder(fv(value).unwrap()),
+            Some(m) if m == "graphql_introspection" => {
+                AnyModel::GraphQlIntrospection(fv(value).unwrap())
+            }
             Some(m) if m == "grpc_connection" => AnyModel::GrpcConnection(fv(value).unwrap()),
             Some(m) if m == "grpc_event" => AnyModel::GrpcEvent(fv(value).unwrap()),
             Some(m) if m == "grpc_request" => AnyModel::GrpcRequest(fv(value).unwrap()),

@@ -29,7 +29,7 @@ export type CallHttpRequestActionArgs = { httpRequest: HttpRequest, };
 
 export type CallHttpRequestActionRequest = { index: number, pluginRefId: string, args: CallHttpRequestActionArgs, };
 
-export type CallTemplateFunctionArgs = { purpose: RenderPurpose, values: { [key in string]?: string }, };
+export type CallTemplateFunctionArgs = { purpose: RenderPurpose, values: { [key in string]?: JsonValue }, };
 
 export type CallTemplateFunctionRequest = { name: string, args: CallTemplateFunctionArgs, };
 
