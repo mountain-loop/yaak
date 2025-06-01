@@ -36,16 +36,19 @@ export function useIntrospectGraphQL(
       }),
   });
 
-  const upsertIntrospection = async (content: string | null) => {
-    const v = await invoke<GraphQlIntrospection>('plugin:yaak-models|upsert_graphql_introspection', {
-      requestId: baseRequest.id,
-      workspaceId: baseRequest.workspaceId,
-      content: content ?? '',
-    });
+  const upsertIntrospection = useCallback(async (content: string | null) => {
+    const v = await invoke<GraphQlIntrospection>(
+      'plugin:yaak-models|upsert_graphql_introspection',
+      {
+        requestId: baseRequest.id,
+        workspaceId: baseRequest.workspaceId,
+        content: content ?? '',
+      },
+    );
 
     // Update local introspection
     queryClient.setQueryData(['introspection', request.id], v);
-  };
+  }, []);
 
   const refetch = useCallback(async () => {
     try {
