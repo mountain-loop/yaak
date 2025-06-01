@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
-import { GraphQlIntrospection, HttpRequest } from '@yaakapp-internal/models';
+import type { GraphQlIntrospection, HttpRequest } from '@yaakapp-internal/models';
 import type { GraphQLSchema } from 'graphql';
 import { buildClientSchema, getIntrospectionQuery } from 'graphql';
 import { useCallback, useEffect, useState } from 'react';
@@ -21,7 +21,7 @@ export function useIntrospectGraphQL(
 ) {
   // Debounce the request because it can change rapidly, and we don't
   // want to send so too many requests.
-  const request = useDebouncedValue(baseRequest);
+  const debouncedRequest = useDebouncedValue(baseRequest);
   const activeEnvironment = useActiveEnvironment();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>();
@@ -29,26 +29,29 @@ export function useIntrospectGraphQL(
   const queryClient = useQueryClient();
 
   const introspection = useQuery({
-    queryKey: ['introspection', request.id],
+    queryKey: ['introspection', baseRequest.id],
     queryFn: async () =>
       invoke<GraphQlIntrospection | null>('plugin:yaak-models|get_graphql_introspection', {
         requestId: baseRequest.id,
       }),
   });
 
-  const upsertIntrospection = useCallback(async (content: string | null) => {
-    const v = await invoke<GraphQlIntrospection>(
-      'plugin:yaak-models|upsert_graphql_introspection',
-      {
-        requestId: baseRequest.id,
-        workspaceId: baseRequest.workspaceId,
-        content: content ?? '',
-      },
-    );
+  const upsertIntrospection = useCallback(
+    async (content: string | null) => {
+      const v = await invoke<GraphQlIntrospection>(
+        'plugin:yaak-models|upsert_graphql_introspection',
+        {
+          requestId: baseRequest.id,
+          workspaceId: baseRequest.workspaceId,
+          content: content ?? '',
+        },
+      );
 
-    // Update local introspection
-    queryClient.setQueryData(['introspection', request.id], v);
-  }, []);
+      // Update local introspection
+      queryClient.setQueryData(['introspection', baseRequest.id], v);
+    },
+    [baseRequest.id, baseRequest.workspaceId, queryClient],
+  );
 
   const refetch = useCallback(async () => {
     try {
@@ -98,7 +101,7 @@ export function useIntrospectGraphQL(
     refetch().catch(console.error);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request.id, request.url, request.method, activeEnvironment?.id]);
+  }, [baseRequest.id, debouncedRequest.url, debouncedRequest.method, activeEnvironment?.id]);
 
   const clear = useCallback(async () => {
     setError('');
