@@ -44,7 +44,6 @@ export function useIntrospectGraphQL(
     });
 
     // Update local introspection
-    console.log("GOT IT", v);
     queryClient.setQueryData(['introspection', request.id], v);
   };
 
