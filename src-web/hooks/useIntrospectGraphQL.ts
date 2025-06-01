@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
 import { GraphQlIntrospection, HttpRequest } from '@yaakapp-internal/models';
-import { data } from 'autoprefixer';
 import type { GraphQLSchema } from 'graphql';
 import { buildClientSchema, getIntrospectionQuery } from 'graphql';
 import { useCallback, useEffect, useState } from 'react';
@@ -79,7 +78,7 @@ export function useIntrospectGraphQL(
         return setError('Empty body returned in response');
       }
 
-      console.log(`Got introspection response for ${baseRequest.url}`, data);
+      console.log(`Got introspection response for ${baseRequest.url}`, bodyText);
       await upsertIntrospection(bodyText);
     } catch (err) {
       setError(String(err));
