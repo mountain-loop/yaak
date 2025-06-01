@@ -18,8 +18,9 @@ impl<'a> DbContext<'a> {
         content: Option<String>,
         source: &UpdateSource,
     ) -> Result<GraphQlIntrospection> {
-        // Clean up old ones every time a new one is inserted
+        // Clean up old ones every time a new one is upserted
         self.delete_expired_graphql_introspections()?;
+
         match self.get_graphql_introspection(request_id) {
             None => self.upsert(
                 &GraphQlIntrospection {
@@ -44,7 +45,7 @@ impl<'a> DbContext<'a> {
         let cutoff = Utc::now().naive_utc() - Duration::days(7);
         let (sql, params) = Query::delete()
             .from_table(GraphQlIntrospectionIden::Table)
-            .cond_where(Expr::col(GraphQlIntrospectionIden::CreatedAt).lt(cutoff))
+            .cond_where(Expr::col(GraphQlIntrospectionIden::UpdatedAt).lt(cutoff))
             .build_rusqlite(SqliteQueryBuilder);
 
         let mut stmt = self.conn.resolve().prepare(sql.as_str())?;

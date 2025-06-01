@@ -105,9 +105,9 @@ pub(crate) fn upsert_graphql_introspection<R: Runtime>(
     workspace_id: &str,
     content: Option<String>,
     window: WebviewWindow<R>,
-) -> Result<String> {
+) -> Result<GraphQlIntrospection> {
     let source = UpdateSource::from_window(&window);
-    Ok(app_handle.db().upsert_graphql_introspection(workspace_id, request_id, content, &source)?.id)
+    Ok(app_handle.db().upsert_graphql_introspection(workspace_id, request_id, content, &source)?)
 }
 
 #[tauri::command]

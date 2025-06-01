@@ -5,7 +5,7 @@ import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { useHotKey } from '../hooks/useHotKey';
 import { useKeyboardEvent } from '../hooks/useKeyboardEvent';
 import { useRecentRequests } from '../hooks/useRecentRequests';
-import {allRequestsAtom} from "../hooks/useAllRequests";
+import { allRequestsAtom } from '../hooks/useAllRequests';
 import { jotaiStore } from '../lib/jotai';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
@@ -94,7 +94,7 @@ export function RecentRequestsDropdown({ className }: Props) {
           activeRequest == null && 'text-text-subtlest italic',
         )}
       >
-        {activeRequest?.id}
+        {resolvedModelName(activeRequest)}
       </Button>
     </Dropdown>
   );

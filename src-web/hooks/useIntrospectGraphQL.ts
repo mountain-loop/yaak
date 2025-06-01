@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
 import { GraphQlIntrospection, HttpRequest } from '@yaakapp-internal/models';
 import { data } from 'autoprefixer';
@@ -27,6 +27,7 @@ export function useIntrospectGraphQL(
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>();
   const [schema, setSchema] = useState<GraphQLSchema | null>(null);
+  const queryClient = useQueryClient();
 
   const introspection = useQuery({
     queryKey: ['introspection', request.id],
@@ -37,11 +38,15 @@ export function useIntrospectGraphQL(
   });
 
   const upsertIntrospection = async (content: string | null) => {
-    await invoke<string>('plugin:yaak-models|upsert_graphql_introspection', {
+    const v = await invoke<GraphQlIntrospection>('plugin:yaak-models|upsert_graphql_introspection', {
       requestId: baseRequest.id,
       workspaceId: baseRequest.workspaceId,
       content: content ?? '',
     });
+
+    // Update local introspection
+    console.log("GOT IT", v);
+    queryClient.setQueryData(['introspection', request.id], v);
   };
 
   const refetch = useCallback(async () => {
