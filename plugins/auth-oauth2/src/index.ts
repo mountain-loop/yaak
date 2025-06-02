@@ -290,6 +290,7 @@ export const plugin: PluginDefinition = {
       const headerPrefix = stringArg(values, 'headerPrefix');
       const grantType = stringArg(values, 'grantType') as GrantType;
       const credentialsInBody = values.credentials === 'body';
+      const tokenName = values.tokenName === 'id_token' ? 'id_token' : 'access_token';
 
       let token: AccessToken;
       if (grantType === 'authorization_code') {
@@ -315,7 +316,7 @@ export const plugin: PluginDefinition = {
                 codeVerifier: stringArgOrNull(values, 'pkceCodeVerifier'),
               }
             : null,
-          tokenName: values.tokenName === 'id_token' ? 'id_token' : 'access_token',
+          tokenName: tokenName,
         });
       } else if (grantType === 'implicit') {
         const authorizationUrl = stringArg(values, 'authorizationUrl');
@@ -329,7 +330,7 @@ export const plugin: PluginDefinition = {
           scope: stringArgOrNull(values, 'scope'),
           audience: stringArgOrNull(values, 'audience'),
           state: stringArgOrNull(values, 'state'),
-          tokenName: values.tokenName === 'id_token' ? 'id_token' : 'access_token',
+          tokenName: tokenName,
         });
       } else if (grantType === 'client_credentials') {
         const accessTokenUrl = stringArg(values, 'accessTokenUrl');
@@ -361,7 +362,7 @@ export const plugin: PluginDefinition = {
         throw new Error('Invalid grant type ' + grantType);
       }
 
-      const headerValue = `${headerPrefix} ${token.response.access_token}`.trim();
+      const headerValue = `${headerPrefix} ${token.response[tokenName]}`.trim();
       return {
         setHeaders: [
           {
