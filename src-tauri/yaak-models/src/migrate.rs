@@ -44,12 +44,13 @@ pub(crate) fn must_migrate_db<R: Runtime>(
         .filter(|e| e.path().extension().map(|ext| ext == "sql").unwrap_or(false))
         .collect::<Vec<_>>();
 
+    // Ensure they're in the correct order
     entries.sort_by_key(|e| e.file_name());
 
+    // Run each migration in a transaction
     for entry in entries {
         let mut conn = pool.get()?;
         let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-
         match run_migration(entry.path().as_path(), &mut tx) {
             Ok(_) => tx.commit()?,
             Err(e) => {
@@ -79,6 +80,7 @@ fn run_migration(migration_path: &Path, tx: &mut rusqlite::Transaction) -> Resul
         .optional()?;
 
     if row.is_some() {
+        // Migration was already run
         return Ok(false);
     }
 
@@ -91,6 +93,7 @@ fn run_migration(migration_path: &Path, tx: &mut rusqlite::Transaction) -> Resul
     let execution_time = start.elapsed().as_nanos() as i64;
     let checksum = sha384_hex_prefixed(sql.as_bytes());
 
+    // NOTE: The success column is never used. It's just there for sqlx compatibility.
     tx.execute(
         "INSERT INTO _sqlx_migrations (version, description, execution_time, checksum, success) VALUES (?, ?, ?, ?, ?)",
         params![version, description, execution_time, checksum, true],
