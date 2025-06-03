@@ -16,11 +16,12 @@ sea-query = { version = "0.32.1", features = ["with-chrono", "attr"] }
 sea-query-rusqlite = { version = "0.7.0", features = ["with-chrono"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-sqlx = { version = "0.8.0", default-features = false, features = ["migrate", "sqlite", "runtime-tokio-rustls"] }
+sha2 = "0.10.9"
 tauri = { workspace = true }
 thiserror = "2.0.11"
 tokio = { workspace = true }
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
+hex = "0.4.3"
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }
