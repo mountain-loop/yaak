@@ -47,8 +47,7 @@ npm start
 New migrations can be created from the `src-tauri/` directory:
    
 ```shell
-cd src-tauri
-sqlx migrate add migration-name
+npm run migration
 ```
 
 Run the app to apply the migrations. 
