@@ -14,12 +14,12 @@ pub(crate) fn must_migrate_db<R: Runtime>(
     app_handle: &AppHandle<R>,
     pool: &Pool<SqliteConnectionManager>,
 ) -> Result<()> {
-    let p = app_handle
+    let migrations_dir = app_handle
         .path()
         .resolve("migrations", BaseDirectory::Resource)
         .expect("failed to resolve resource");
 
-    info!("Running database migrations from: {}", p.to_string_lossy());
+    info!("Running database migrations from: {:?}", migrations_dir);
 
     // Ensure the table exists
     // NOTE: Yaak used to use sqlx for migrations, so we need to mirror that table structure. We
@@ -38,7 +38,7 @@ pub(crate) fn must_migrate_db<R: Runtime>(
     )?;
 
     // Read and sort all .sql files
-    let mut entries = fs::read_dir(p)
+    let mut entries = fs::read_dir(migrations_dir)
         .expect("Failed to find migrations directory")
         .filter_map(StdResult::ok)
         .filter(|e| e.path().extension().map(|ext| ext == "sql").unwrap_or(false))
@@ -47,8 +47,8 @@ pub(crate) fn must_migrate_db<R: Runtime>(
     entries.sort_by_key(|e| e.file_name());
 
     for entry in entries {
-        let mut c = pool.get()?;
-        let mut tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut conn = pool.get()?;
+        let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
 
         match run_migration(entry.path().as_path(), &mut tx) {
             Ok(_) => tx.commit()?,
