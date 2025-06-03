@@ -164,8 +164,6 @@ DROP TABLE websocket_requests;
 ALTER TABLE websocket_requests_dg_tmp
     RENAME TO websocket_requests;
 
-PRAGMA foreign_keys = ON;
-
 ---------------------------
 -- Remove environment FK --
 ---------------------------
