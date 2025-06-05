@@ -5,6 +5,10 @@ import { SplitLayout } from './core/SplitLayout';
 import { HttpRequestPane } from './HttpRequestPane';
 import { HttpResponsePane } from './HttpResponsePane';
 import { GraphQLDocsExplorer } from "./GraphQLDocsExplorer";
+import {
+	useAtomValue
+} from 'jotai';
+import { graphqlDocStateAtom } from "../atoms/graphqlSchemaAtom";
 
 interface Props {
   activeRequest: HttpRequest;
@@ -15,6 +19,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
     const {
         bodyType,
     } = activeRequest;
+  const isDocOpen = useAtomValue(graphqlDocStateAtom);
 
   return (
     <SplitLayout
@@ -29,7 +34,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
         />
       )}
       secondSlot={
-            bodyType === 'graphql'
+            bodyType === 'graphql' && isDocOpen
             ? () => (
                     <SplitLayout
                         name="http_response_layout"

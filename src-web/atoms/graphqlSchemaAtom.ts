@@ -1,4 +1,5 @@
 import { atom } from "jotai";
-import { GraphQLSchema } from "graphql/index";
+import type { GraphQLSchema } from "graphql/index";
 
 export const graphqlSchemaAtom = atom<GraphQLSchema | null>(null);
+export const graphqlDocStateAtom = atom<boolean>(false);
