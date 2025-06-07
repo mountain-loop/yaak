@@ -17,6 +17,7 @@ import {
   setupOrConfigureEncryption,
   withEncryptionEnabled,
 } from '../lib/setupOrConfigureEncryption';
+import { showColorPicker } from '../lib/showColorPicker';
 import { BadgeButton } from './core/BadgeButton';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -35,6 +36,7 @@ import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { VStack } from './core/Stacks';
+import { EnvironmentColorCircle } from './EnvironmentColorCircle';
 
 interface Props {
   initialEnvironment: Environment | null;
@@ -123,7 +125,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
             ))}
             {subEnvironments.length > 0 && (
               <div className="px-2">
-                <Separator className="my-3"></Separator>
+                <Separator className="my-3" />
               </div>
             )}
             {subEnvironments.map((e) => (
@@ -237,6 +239,7 @@ const EnvironmentEditor = function ({
   return (
     <VStack space={4} className={classNames(className, 'pl-4')}>
       <Heading className="w-full flex items-center gap-0.5">
+        <EnvironmentColorCircle clickToEdit environment={selectedEnvironment ?? null} />
         <div className="mr-2">{selectedEnvironment?.name}</div>
         {isEncryptionEnabled ? (
           promptToEncrypt ? (
@@ -344,6 +347,7 @@ function SidebarButton({
           onContextMenu={handleContextMenu}
           rightSlot={rightSlot}
         >
+          <EnvironmentColorCircle environment={environment} />
           {children}
         </Button>
         {outerRightSlot}
@@ -385,6 +389,12 @@ function SidebarButton({
                 },
               ]
             : []) as DropdownItem[]),
+          {
+            label: 'Set Color',
+            leftSlot: <Icon icon="palette" />,
+            hidden: environment.base,
+            onSelect: async () => showColorPicker(environment),
+          },
           {
             label: `Make ${environment.public ? 'Private' : 'Sharable'}`,
             leftSlot: <Icon icon={environment.public ? 'eye_closed' : 'eye'} />,

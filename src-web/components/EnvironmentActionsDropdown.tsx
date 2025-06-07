@@ -4,11 +4,12 @@ import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { toggleDialog } from '../lib/dialog';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
-import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
+import type { ButtonProps } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
+import { EnvironmentColorCircle } from './EnvironmentColorCircle';
 import { EnvironmentEditDialog } from './EnvironmentEditDialog';
 
 type Props = {
@@ -38,6 +39,7 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         (e) => ({
           key: e.id,
           label: e.name,
+          rightSlot: <EnvironmentColorCircle environment={e} />,
           leftSlot: e.id === activeEnvironment?.id ? <Icon icon="check" /> : <Icon icon="empty" />,
           onSelect: async () => {
             if (e.id !== activeEnvironment?.id) {
@@ -80,6 +82,7 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         onClick={subEnvironments.length === 0 ? showEnvironmentDialog : undefined}
         {...buttonProps}
       >
+        <EnvironmentColorCircle environment={activeEnvironment ?? null} />
         {activeEnvironment?.name ?? (hasBaseVars ? 'Environment' : 'No Environment')}
       </Button>
     </Dropdown>
