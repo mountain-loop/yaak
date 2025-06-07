@@ -23,6 +23,7 @@ const icons = {
   arrow_up_from_line: lucide.ArrowUpFromLineIcon,
   badge_check: lucide.BadgeCheckIcon,
   box: lucide.BoxIcon,
+  book_open_text: lucide.BookOpenText,
   cake: lucide.CakeIcon,
   chat: lucide.MessageSquare,
   check: lucide.CheckIcon,
