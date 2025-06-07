@@ -5,19 +5,20 @@ interface Props {
   response: HttpResponse;
   className?: string;
   showReason?: boolean;
+  short?: boolean;
 }
 
-export function HttpStatusTag({ response, className, showReason }: Props) {
+export function HttpStatusTag({ response, className, showReason, short }: Props) {
   const { status, state } = response;
 
   let colorClass;
   let label = `${status}`;
 
   if (state === 'initialized') {
-    label = 'CONNECTING';
+    label = short ? 'CONN' : 'CONNECTING';
     colorClass = 'text-text-subtle';
   } else if (status < 100) {
-    label = 'ERROR';
+    label = short ? 'ERR' : 'ERROR';
     colorClass = 'text-danger';
   } else if (status < 200) {
     colorClass = 'text-info';
@@ -33,8 +34,7 @@ export function HttpStatusTag({ response, className, showReason }: Props) {
 
   return (
     <span className={classNames(className, 'font-mono', colorClass)}>
-      {label}{' '}
-      {showReason && 'statusReason' in response ? response.statusReason : null}
+      {label} {showReason && 'statusReason' in response ? response.statusReason : null}
     </span>
   );
 }

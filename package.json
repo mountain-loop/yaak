@@ -10,6 +10,29 @@
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
     "packages/common-lib",
+    "plugins/auth-basic",
+    "plugins/auth-bearer",
+    "plugins/auth-jwt",
+    "plugins/auth-oauth2",
+    "plugins/exporter-curl",
+    "plugins/filter-jsonpath",
+    "plugins/filter-xpath",
+    "plugins/importer-curl",
+    "plugins/importer-insomnia",
+    "plugins/importer-openapi",
+    "plugins/importer-postman",
+    "plugins/importer-yaak",
+    "plugins/template-function-cookie",
+    "plugins/template-function-encode",
+    "plugins/template-function-fs",
+    "plugins/template-function-hash",
+    "plugins/template-function-json",
+    "plugins/template-function-prompt",
+    "plugins/template-function-regex",
+    "plugins/template-function-request",
+    "plugins/template-function-response",
+    "plugins/template-function-uuid",
+    "plugins/template-function-xml",
     "src-tauri/yaak-crypto",
     "src-tauri/yaak-git",
     "src-tauri/yaak-license",
@@ -26,7 +49,9 @@
     "start": "npm run app-dev",
     "app-build": "tauri build",
     "app-dev": "tauri dev --no-watch --config ./src-tauri/tauri-dev.conf.json",
+    "migration": "node scripts/create-migration.cjs",
     "build": "npm run --workspaces --if-present build",
+    "build-plugins": "npm run --workspaces --if-present build",
     "bootstrap": "run-p bootstrap:* && npm run --workspaces --if-present bootstrap",
     "bootstrap:vendor-node": "node scripts/vendor-node.cjs",
     "bootstrap:vendor-plugins": "node scripts/vendor-plugins.cjs",
@@ -35,7 +60,7 @@
     "replace-version": "node scripts/replace-version.cjs",
     "tauri": "tauri",
     "tauri-before-build": "npm run bootstrap && npm run --workspaces --if-present build",
-    "tauri-before-dev": "npm run --workspaces --if-present dev"
+    "tauri-before-dev": "workspaces-run --parallel -- npm run --workspaces --if-present dev"
   },
   "dependencies": {
     "jotai": "^2.12.2"
@@ -44,6 +69,7 @@
     "@tauri-apps/cli": "^2.4.1",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
     "@typescript-eslint/parser": "^8.27.0",
+    "@yaakapp/cli": "^0.1.5",
     "eslint": "^8",
     "eslint-config-prettier": "^8",
     "eslint-plugin-import": "^2.31.0",
@@ -53,6 +79,7 @@
     "nodejs-file-downloader": "^4.13.0",
     "npm-run-all": "^4.1.5",
     "prettier": "^3.4.2",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "workspaces-run": "^1.0.2"
   }
 }

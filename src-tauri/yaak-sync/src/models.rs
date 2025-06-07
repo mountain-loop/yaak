@@ -117,6 +117,7 @@ impl TryFrom<AnyModel> for SyncModel {
 
             // Non-sync models
             AnyModel::CookieJar(m) => return Err(UnknownModel(m.model)),
+            AnyModel::GraphQlIntrospection(m) => return Err(UnknownModel(m.model)),
             AnyModel::GrpcConnection(m) => return Err(UnknownModel(m.model)),
             AnyModel::GrpcEvent(m) => return Err(UnknownModel(m.model)),
             AnyModel::HttpResponse(m) => return Err(UnknownModel(m.model)),

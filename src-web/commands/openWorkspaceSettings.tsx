@@ -1,20 +1,22 @@
-import { WorkspaceSettingsDialog } from '../components/WorkspaceSettingsDialog';
+import type {
+  WorkspaceSettingsTab} from '../components/WorkspaceSettingsDialog';
+import {
+  WorkspaceSettingsDialog
+} from '../components/WorkspaceSettingsDialog';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
-import { createFastMutation } from '../hooks/useFastMutation';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 
-export const openWorkspaceSettings = createFastMutation<void, string>({
-  mutationKey: ['open_workspace_settings'],
-  async mutationFn() {
-    const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-    showDialog({
-      id: 'workspace-settings',
-      title: 'Workspace Settings',
-      size: 'md',
-      render({ hide }) {
-        return <WorkspaceSettingsDialog workspaceId={workspaceId} hide={hide} />;
-      },
-    });
-  },
-});
+export function openWorkspaceSettings(tab?: WorkspaceSettingsTab) {
+  const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+  showDialog({
+    id: 'workspace-settings',
+    title: 'Workspace Settings',
+    size: 'lg',
+    className: 'h-[50rem]',
+    noPadding: true,
+    render({ hide }) {
+      return <WorkspaceSettingsDialog workspaceId={workspaceId} hide={hide} tab={tab} />;
+    },
+  });
+}

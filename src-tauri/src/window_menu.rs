@@ -1,9 +1,9 @@
-use tauri::menu::{
-    AboutMetadata, Menu, MenuItemBuilder, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID,
-    WINDOW_SUBMENU_ID,
-};
 pub use tauri::AppHandle;
 use tauri::Runtime;
+use tauri::menu::{
+    AboutMetadata, HELP_SUBMENU_ID, Menu, MenuItemBuilder, PredefinedMenuItem, Submenu,
+    WINDOW_SUBMENU_ID,
+};
 
 pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let pkg_info = app_handle.package_info();
@@ -64,7 +64,16 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
                     &PredefinedMenuItem::hide(app_handle, None)?,
                     &PredefinedMenuItem::hide_others(app_handle, None)?,
                     &PredefinedMenuItem::separator(app_handle)?,
-                    &PredefinedMenuItem::quit(app_handle, None)?,
+                    // NOTE: Replace the predefined quit item with a custom one because, for some
+                    //  reason, ExitRequested events are not fired on cmd+Q. Perhaps this will be
+                    //  fixed in the future?
+                    //  https://github.com/tauri-apps/tauri/issues/9198
+                    &MenuItemBuilder::with_id(
+                        "hacked_quit".to_string(),
+                        format!("Quit {}", app_handle.package_info().name),
+                    )
+                    .accelerator("CmdOrCtrl+q")
+                    .build(app_handle)?,
                 ],
             )?,
             #[cfg(not(any(

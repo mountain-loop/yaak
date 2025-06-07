@@ -3,7 +3,7 @@ import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import React from 'react';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
-import { useAppInfo } from '../../hooks/useAppInfo';
+import { appInfo } from '../../lib/appInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { revealInFinderText } from '../../lib/reveal';
 import { Checkbox } from '../core/Checkbox';
@@ -18,7 +18,6 @@ import { VStack } from '../core/Stacks';
 export function SettingsGeneral() {
   const workspace = useAtomValue(activeWorkspaceAtom);
   const settings = useAtomValue(settingsAtom);
-  const appInfo = useAppInfo();
   const checkForUpdates = useCheckForUpdates();
 
   if (settings == null || workspace == null) {

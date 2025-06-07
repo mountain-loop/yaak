@@ -31,12 +31,13 @@ impl WebsocketManager {
         url: &str,
         headers: HeaderMap<HeaderValue>,
         receive_tx: mpsc::Sender<Message>,
+        validate_certificates: bool,
     ) -> Result<Response> {
         let connections = self.connections.clone();
         let connection_id = id.to_string();
         let tx = receive_tx.clone();
 
-        let (stream, response) = ws_connect(url, headers).await?;
+        let (stream, response) = ws_connect(url, headers, validate_certificates).await?;
         let (write, mut read) = stream.split();
 
         connections.lock().await.insert(id.to_string(), write);

@@ -1,7 +1,9 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{WebsocketRequest, WebsocketRequestIden};
+use crate::models::{HttpRequestHeader, WebsocketRequest, WebsocketRequestIden};
 use crate::util::UpdateSource;
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 impl<'a> DbContext<'a> {
     pub fn get_websocket_request(&self, id: &str) -> Result<WebsocketRequest> {
@@ -47,5 +49,48 @@ impl<'a> DbContext<'a> {
         source: &UpdateSource,
     ) -> Result<WebsocketRequest> {
         self.upsert(websocket_request, source)
+    }
+
+    pub fn resolve_auth_for_websocket_request(
+        &self,
+        websocket_request: &WebsocketRequest,
+    ) -> Result<(Option<String>, BTreeMap<String, Value>, String)> {
+        if let Some(at) = websocket_request.authentication_type.clone() {
+            return Ok((Some(at), websocket_request.authentication.clone(), websocket_request.id.clone()));
+        }
+
+        if let Some(folder_id) = websocket_request.folder_id.clone() {
+            let folder = self.get_folder(&folder_id)?;
+            return self.resolve_auth_for_folder(&folder);
+        }
+
+        let workspace = self.get_workspace(&websocket_request.workspace_id)?;
+        Ok(self.resolve_auth_for_workspace(&workspace))
+    }
+
+    pub fn resolve_headers_for_websocket_request(
+        &self,
+        websocket_request: &WebsocketRequest,
+    ) -> Result<Vec<HttpRequestHeader>> {
+        let workspace = self.get_workspace(&websocket_request.workspace_id)?;
+
+        // Resolved headers should be from furthest to closest ancestor, to override logically.
+        let mut headers = Vec::new();
+
+        headers.append(&mut workspace.headers.clone());
+
+        if let Some(folder_id) = websocket_request.folder_id.clone() {
+            let parent_folder = self.get_folder(&folder_id)?;
+            let mut folder_headers = self.resolve_headers_for_folder(&parent_folder)?;
+            headers.append(&mut folder_headers);
+        } else {
+            let workspace = self.get_workspace(&websocket_request.workspace_id)?;
+            let mut workspace_headers = self.resolve_headers_for_workspace(&workspace);
+            headers.append(&mut workspace_headers);
+        }
+
+        headers.append(&mut websocket_request.headers.clone());
+
+        Ok(headers)
     }
 }

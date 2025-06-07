@@ -1,6 +1,6 @@
+import type { EditorView } from '@codemirror/view';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { updateSchema } from 'cm6-graphql';
-import type { EditorView } from 'codemirror';
 
 import { formatSdl } from 'format-graphql';
 import { useEffect, useMemo, useRef } from 'react';
@@ -64,7 +64,7 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
 
   // Refetch the schema when the URL changes
   useEffect(() => {
-    if (editorViewRef.current === null) return;
+    if (editorViewRef.current == null) return;
     updateSchema(editorViewRef.current, schema ?? undefined);
     setGraphqlSchemaAtomValue(schema);
   }, [schema, setGraphqlSchemaAtomValue]);

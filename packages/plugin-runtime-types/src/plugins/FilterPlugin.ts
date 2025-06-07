@@ -1,6 +1,6 @@
 import type { Context } from './Context';
 
-export type FilterPluginResponse = { filtered: string };
+type FilterPluginResponse = { filtered: string };
 
 export type FilterPlugin = {
   name: string;

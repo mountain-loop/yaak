@@ -1,10 +1,12 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{
-    EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestIden, WebsocketRequestIden, Workspace,
-    WorkspaceIden,
+    EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestHeader, HttpRequestIden,
+    WebsocketRequestIden, Workspace, WorkspaceIden,
 };
 use crate::util::UpdateSource;
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 impl<'a> DbContext<'a> {
     pub fn get_workspace(&self, id: &str) -> Result<Workspace> {
@@ -64,5 +66,20 @@ impl<'a> DbContext<'a> {
 
     pub fn upsert_workspace(&self, w: &Workspace, source: &UpdateSource) -> Result<Workspace> {
         self.upsert(w, source)
+    }
+
+    pub fn resolve_auth_for_workspace(
+        &self,
+        workspace: &Workspace,
+    ) -> (Option<String>, BTreeMap<String, Value>, String) {
+        (
+            workspace.authentication_type.clone(),
+            workspace.authentication.clone(),
+            workspace.id.clone(),
+        )
+    }
+
+    pub fn resolve_headers_for_workspace(&self, workspace: &Workspace) -> Vec<HttpRequestHeader> {
+        workspace.headers.clone()
     }
 }

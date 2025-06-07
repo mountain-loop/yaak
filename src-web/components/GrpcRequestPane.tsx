@@ -1,10 +1,12 @@
-import { type GrpcMetadataEntry, type GrpcRequest, patchModel } from '@yaakapp-internal/models';
+import { type GrpcRequest, type HttpRequestHeader, patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useRef } from 'react';
+import { useAuthTab } from '../hooks/useAuthTab';
 import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
-import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
+import { useHeadersTab } from '../hooks/useHeadersTab';
+import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { resolvedModelName } from '../lib/resolvedModelName';
@@ -12,13 +14,13 @@ import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
-import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { PlainInput } from './core/PlainInput';
 import { RadioDropdown } from './core/RadioDropdown';
 import { HStack, VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { GrpcEditor } from './GrpcEditor';
+import { HeadersEditor } from './HeadersEditor';
 import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { UrlBar } from './UrlBar';
@@ -64,7 +66,9 @@ export function GrpcRequestPane({
   onCancel,
   onSend,
 }: Props) {
-  const authentication = useHttpAuthenticationSummaries();
+  const authTab = useAuthTab(TAB_AUTH, activeRequest);
+  const metadataTab = useHeadersTab(TAB_METADATA, activeRequest, 'Metadata');
+  const inheritedHeaders = useInheritedHeaders(activeRequest);
   const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
     namespace: 'no_sync',
     key: 'grpcRequestActiveTabs',
@@ -130,42 +134,15 @@ export function GrpcRequestPane({
   const tabs: TabItem[] = useMemo(
     () => [
       { value: TAB_MESSAGE, label: 'Message' },
-      {
-        value: TAB_AUTH,
-        label: 'Auth',
-        options: {
-          value: activeRequest.authenticationType,
-          items: [
-            ...authentication.map((a) => ({
-              label: a.label || 'UNKNOWN',
-              shortLabel: a.shortLabel,
-              value: a.name,
-            })),
-            { type: 'separator' },
-            { label: 'No Authentication', shortLabel: 'Auth', value: null },
-          ],
-          onChange: async (authenticationType) => {
-            let authentication: GrpcRequest['authentication'] = activeRequest.authentication;
-            if (activeRequest.authenticationType !== authenticationType) {
-              authentication = {
-                // Reset auth if changing types
-              };
-            }
-            await patchModel(activeRequest, {
-              authenticationType,
-              authentication,
-            });
-          },
-        },
-      },
-      { value: TAB_METADATA, label: 'Metadata' },
+      ...metadataTab,
+      ...authTab,
       {
         value: TAB_DESCRIPTION,
         label: 'Info',
         rightSlot: activeRequest.description && <CountBadge count={true} />,
       },
     ],
-    [activeRequest, authentication],
+    [activeRequest.description, authTab, metadataTab],
   );
 
   const activeTab = activeTabs?.[activeRequest.id];
@@ -177,7 +154,7 @@ export function GrpcRequestPane({
   );
 
   const handleMetadataChange = useCallback(
-    (metadata: GrpcMetadataEntry[]) => patchModel(activeRequest, { metadata }),
+    (metadata: HttpRequestHeader[]) => patchModel(activeRequest, { metadata }),
     [activeRequest],
   );
 
@@ -199,7 +176,6 @@ export function GrpcRequestPane({
         <UrlBar
           key={forceUpdateKey}
           url={activeRequest.url ?? ''}
-          method={null}
           submitIcon={null}
           forceUpdateKey={forceUpdateKey}
           placeholder="localhost:50051"
@@ -307,17 +283,15 @@ export function GrpcRequestPane({
           />
         </TabContent>
         <TabContent value={TAB_AUTH}>
-          <HttpAuthenticationEditor request={activeRequest} />
+          <HttpAuthenticationEditor model={activeRequest} />
         </TabContent>
         <TabContent value={TAB_METADATA}>
-          <PairOrBulkEditor
-            preferenceName="grpc_metadata"
-            valueAutocompleteVariables
-            nameAutocompleteVariables
-            pairs={activeRequest.metadata}
-            onChange={handleMetadataChange}
+          <HeadersEditor
+            inheritedHeaders={inheritedHeaders}
             forceUpdateKey={forceUpdateKey}
-            stateKey={`grpc_metadata.${activeRequest.id}`}
+            headers={activeRequest.metadata}
+            stateKey={`headers.${activeRequest.id}`}
+            onChange={handleMetadataChange}
           />
         </TabContent>
         <TabContent value={TAB_DESCRIPTION}>

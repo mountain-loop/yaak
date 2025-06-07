@@ -1,9 +1,8 @@
 import { syntaxTree } from '@codemirror/language';
 import type { Range } from '@codemirror/state';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, ViewPlugin, WidgetType } from '@codemirror/view';
+import { Decoration, ViewPlugin, WidgetType, EditorView } from '@codemirror/view';
 import type { SyntaxNodeRef } from '@lezer/common';
-import { EditorView } from 'codemirror';
 import type { TwigCompletionOption } from './completion';
 
 class TemplateTagWidget extends WidgetType {
@@ -80,6 +79,10 @@ function templateTags(
           // TODO: Search `node.tree` instead of using Regex here
           const inner = rawTag.replace(/^\$\{\[\s*/, '').replace(/\s*]}$/, '');
           let name = inner.match(/([\w.]+)[(]/)?.[1] ?? inner;
+
+          if (inner.includes('\n')) {
+            return;
+          }
 
           // The beta named the function `Response` but was changed in stable.
           // Keep this here for a while because there's no easy way to migrate

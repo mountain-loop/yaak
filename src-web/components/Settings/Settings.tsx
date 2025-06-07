@@ -1,9 +1,9 @@
 import { useSearch } from '@tanstack/react-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import React, { useState } from 'react';
 import { useKeyPressEvent } from 'react-use';
-import { useOsInfo } from '../../hooks/useOsInfo';
 import { capitalize } from '../../lib/capitalize';
 import { HStack } from '../core/Stacks';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
@@ -13,24 +13,22 @@ import { SettingsGeneral } from './SettingsGeneral';
 import { SettingsLicense } from './SettingsLicense';
 import { SettingsPlugins } from './SettingsPlugins';
 import { SettingsProxy } from './SettingsProxy';
-import { SettingsTab } from './SettingsTab';
 
 interface Props {
   hide?: () => void;
 }
 
-const tabs = [
-  SettingsTab.General,
-  SettingsTab.Appearance,
-  SettingsTab.Proxy,
-  SettingsTab.Plugins,
-  SettingsTab.License,
-];
+const TAB_GENERAL = 'general';
+const TAB_APPEARANCE = 'appearance';
+const TAB_PROXY = 'proxy';
+const TAB_PLUGINS = 'plugins';
+const TAB_LICENSE = 'license';
+const tabs = [TAB_GENERAL, TAB_APPEARANCE, TAB_PROXY, TAB_PLUGINS, TAB_LICENSE] as const;
+export type SettingsTab = (typeof tabs)[number];
 
 export default function Settings({ hide }: Props) {
-  const osInfo = useOsInfo();
   const { tab: tabFromQuery } = useSearch({ from: '/workspaces/$workspaceId/settings' });
-  const [tab, setTab] = useState<string>(tabFromQuery ?? SettingsTab.General);
+  const [tab, setTab] = useState<string | undefined>(tabFromQuery);
 
   // Close settings window on escape
   // TODO: Could this be put in a better place? Eg. in Rust key listener when creating the window
@@ -61,9 +59,7 @@ export default function Settings({ hide }: Props) {
             justifyContent="center"
             className="w-full h-full grid grid-cols-[1fr_auto] pointer-events-none"
           >
-            <div className={classNames(osInfo?.osType === 'macos' ? 'text-center' : 'pl-2')}>
-              Settings
-            </div>
+            <div className={classNames(type() === 'macos' ? 'text-center' : 'pl-2')}>Settings</div>
           </HStack>
         </HeaderSize>
       )}
@@ -74,19 +70,19 @@ export default function Settings({ hide }: Props) {
         onChangeValue={setTab}
         tabs={tabs.map((value) => ({ value, label: capitalize(value) }))}
       >
-        <TabContent value={SettingsTab.General} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={TAB_GENERAL} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsGeneral />
         </TabContent>
-        <TabContent value={SettingsTab.Appearance} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={TAB_APPEARANCE} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsAppearance />
         </TabContent>
-        <TabContent value={SettingsTab.Plugins} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={TAB_PLUGINS} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsPlugins />
         </TabContent>
-        <TabContent value={SettingsTab.Proxy} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={TAB_PROXY} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsProxy />
         </TabContent>
-        <TabContent value={SettingsTab.License} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={TAB_LICENSE} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsLicense />
         </TabContent>
       </Tabs>

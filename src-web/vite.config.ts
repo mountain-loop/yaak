@@ -1,12 +1,12 @@
 // @ts-ignore
-import {TanStackRouterVite} from '@tanstack/router-plugin/vite';
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import reactRefresh from 'eslint-plugin-react-refresh';
-import {internalIpV4} from 'internal-ip';
-import {createRequire} from 'node:module';
+import { internalIpV4 } from 'internal-ip';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import {defineConfig, normalizePath} from 'vite';
-import {viteStaticCopy} from 'vite-plugin-static-copy';
+import { defineConfig, normalizePath } from 'vite';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 import svgr from 'vite-plugin-svgr';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import wasm from 'vite-plugin-wasm';

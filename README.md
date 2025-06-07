@@ -5,6 +5,11 @@ APIs. It's built using [Tauri](https://tauri.app), Rust, and ReactJS.
 
 ![366149288-f18e963f-0b68-4ecb-b8b8-cb71aa9aec02](https://github.com/user-attachments/assets/ca83b7ad-5708-411b-8faf-e36b365841a4)
 
+## Contribution Policy
+
+Yaak is open source, but only accepting contributions for bug fixes. To get started, 
+visit [`DEVELOPMENT.md`](DEVELOPMENT.md) for tips on setting up your environment.
+
 ## Feature Overview
 
 - 🪂 Import data from Postman, Insomnia, OpenAPI, Swagger, or Curl.<br/>
@@ -14,6 +19,7 @@ APIs. It's built using [Tauri](https://tauri.app), Rust, and ReactJS.
 - ⛓️ Chain together multiple requests to dynamically reference values.<br/>
 - 📂 Organize requests into workspaces and nested folders.<br/>
 - 🧮 Use environment variables to easily switch between Prod and Dev.<br/>
+- 🛡️ Secure arbitrary text values with end-to-end encryption<br/>
 - 🏷️ Send dynamic values like UUIDs or timestamps using template tags.<br/>
 - 🎨 Choose from many of the included themes, or make your own.<br/>
 - 💽 Mirror workspace data to a directory for integration with Git or Dropbox.<br/>
@@ -21,17 +27,8 @@ APIs. It's built using [Tauri](https://tauri.app), Rust, and ReactJS.
 - 🔌 Create your own plugins for authentication, template tags, and more!<br/>
 - 🛜 Configure a proxy to access firewall-blocked APIs
 
-## Feedback and Bug Reports
+## Useful Resources
 
-All feedback, bug reports, questions, and feature requests should be reported to
-[feedback.yaak.app](https://feedback.yaak.app).
-
-## Community Projects
-
-- [`yaak2postman`](https://github.com/BiteCraft/yaak2postman) CLI for converting Yaak data
-  exports to Postman-compatible collections
-
-## Contribution Policy
-
-Yaak is open source, but only accepting contributions for bug fixes. To get started, 
-visit [`DEVELOPMENT.md`](DEVELOPMENT.md) for tips on setting up your environment.
+- [Feedback and Bug Reports](https://feedback.yaak.app)
+- [Documentation](https://feedback.yaak.app/help)
+- [Yaak vs Postman](https://yaak.app/blog/postman-alternative)

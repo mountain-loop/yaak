@@ -49,7 +49,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
         hotKeyAction: 'workspace_settings.show',
-        onSelect: () => openWorkspaceSettings.mutate(),
+        onSelect: openWorkspaceSettings,
       },
       {
         label: revealInFinderText,

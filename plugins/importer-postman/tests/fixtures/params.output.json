@@ -1,0 +1,96 @@
+{
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "GENERATE_ID::WORKSPACE_1",
+        "name": "New Collection"
+      }
+    ],
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "workspaceId": "GENERATE_ID::WORKSPACE_1",
+        "model": "environment",
+        "name": "Global Variables",
+        "variables": [
+          {
+            "name": "COLLECTION VARIABLE",
+            "value": "collection variable"
+          }
+        ]
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_3",
+        "workspaceId": "GENERATE_ID::WORKSPACE_1",
+        "folderId": null,
+        "name": "Form URL",
+        "method": "POST",
+        "url": "example.com/:foo/:bar",
+        "urlParameters": [
+          {
+            "name": "disabled",
+            "value": "secondvalue",
+            "enabled": false
+          },
+          {
+            "name": "q",
+            "value": "qqq",
+            "enabled": true
+          },
+          {
+            "name": "",
+            "value": "",
+            "enabled": true
+          },
+          {
+            "name": ":foo",
+            "value": "fff",
+            "enabled": true
+          },
+          {
+            "name": ":bar",
+            "value": "bbb",
+            "enabled": true
+          }
+        ],
+        "body": {
+          "form": [
+            {
+              "enabled": true,
+              "contentType": "Custom/COntent",
+              "name": "Key",
+              "file": "/Users/gschier/Desktop/Screenshot 2024-05-31 at 12.05.11 PM.png"
+            }
+          ]
+        },
+        "bodyType": "multipart/form-data",
+        "authentication": {
+          "token": ""
+        },
+        "authenticationType": "bearer",
+        "headers": [
+          {
+            "name": "X-foo",
+            "value": "bar",
+            "enabled": true
+          },
+          {
+            "name": "Disabled",
+            "value": "tnroant",
+            "enabled": false
+          },
+          {
+            "name": "Content-Type",
+            "value": "multipart/form-data",
+            "enabled": true
+          }
+        ]
+      }
+    ],
+    "folders": []
+  }
+}

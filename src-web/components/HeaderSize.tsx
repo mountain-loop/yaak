@@ -1,9 +1,8 @@
 import { settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import type { HTMLAttributes, ReactNode } from 'react';
-import React from 'react';
-import { useOsInfo } from '../hooks/useOsInfo';
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
+import React, { useMemo } from 'react';
 import { useStoplightsVisible } from '../hooks/useStoplightsVisible';
 import { HEADER_SIZE_LG, HEADER_SIZE_MD, WINDOW_CONTROLS_WIDTH } from '../lib/constants';
 import { WindowControls } from './WindowControls';
@@ -23,27 +22,42 @@ export function HeaderSize({
   onlyXWindowControl,
   children,
 }: HeaderSizeProps) {
-  const osInfo = useOsInfo();
   const settings = useAtomValue(settingsAtom);
   const stoplightsVisible = useStoplightsVisible();
+  const finalStyle = useMemo<CSSProperties>(() => {
+    const s = { ...style };
+
+    // Set the height (use min-height because scaling font size may make it larger
+    if (size === 'md') s.minHeight = HEADER_SIZE_MD;
+    if (size === 'lg') s.minHeight = HEADER_SIZE_LG;
+
+    // Add large padding for window controls
+    if (stoplightsVisible && !ignoreControlsSpacing) {
+      s.paddingLeft = 72 / settings.interfaceScale;
+    } else if (!stoplightsVisible && !ignoreControlsSpacing && !settings.hideWindowControls) {
+      s.paddingRight = WINDOW_CONTROLS_WIDTH;
+    }
+
+    return s;
+  }, [
+    ignoreControlsSpacing,
+    settings.hideWindowControls,
+    settings.interfaceScale,
+    size,
+    stoplightsVisible,
+    style,
+  ]);
+
   return (
     <div
       data-tauri-drag-region
-      style={{
-        ...style,
-        // Add padding for macOS stoplights, but keep it the same width (account for the interface scale)
-        paddingLeft:
-          stoplightsVisible && !ignoreControlsSpacing ? 72 / settings.interfaceScale : undefined,
-        ...(size === 'md' ? { minHeight: HEADER_SIZE_MD } : {}),
-        ...(size === 'lg' ? { minHeight: HEADER_SIZE_LG } : {}),
-        ...(osInfo.osType === 'macos' || ignoreControlsSpacing
-          ? { paddingRight: '2px' }
-          : { paddingLeft: '2px', paddingRight: WINDOW_CONTROLS_WIDTH }),
-      }}
+      style={finalStyle}
       className={classNames(
         className,
+        'px-1', // Give it some space on either end
+        'pt-[1px]', // Make up for bottom border
         'select-none relative',
-        'pt-[1px] w-full border-b border-border-subtle min-w-0',
+        'w-full border-b border-border-subtle min-w-0',
       )}
     >
       {/* NOTE: This needs display:grid or else the element shrinks (even though scrollable) */}

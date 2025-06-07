@@ -1,8 +1,8 @@
 import { jsonLanguage } from '@codemirror/lang-json';
 import { linter } from '@codemirror/lint';
+import type { EditorView } from '@codemirror/view';
 import type { GrpcRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import type { EditorView } from 'codemirror';
 import {
   handleRefresh,
   jsonCompletion,

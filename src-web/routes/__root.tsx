@@ -11,29 +11,9 @@ import { Dialogs } from '../components/Dialogs';
 import { GlobalHooks } from '../components/GlobalHooks';
 import RouteError from '../components/RouteError';
 import { Toasts } from '../components/Toasts';
-import { useOsInfo } from '../hooks/useOsInfo';
 import { jotaiStore } from '../lib/jotai';
 import { queryClient } from '../lib/queryClient';
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const TanStackRouterDevtools =
-  process.env.NODE_ENV === 'production'
-    ? () => null // Render nothing in production
-    : React.lazy(() =>
-        import('@tanstack/router-devtools').then((res) => ({
-          default: res.TanStackRouterDevtools,
-        })),
-      );
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const ReactQueryDevtools =
-  process.env.NODE_ENV === 'production'
-    ? () => null // Render nothing in production
-    : React.lazy(() =>
-        import('@tanstack/react-query-devtools').then((res) => ({
-          default: res.ReactQueryDevtools,
-        })),
-      );
+import { type } from '@tauri-apps/plugin-os';
 
 export const Route = createRootRoute({
   component: RouteComponent,
@@ -41,7 +21,6 @@ export const Route = createRootRoute({
 });
 
 function RouteComponent() {
-  const osInfo = useOsInfo();
   return (
     <JotaiProvider store={jotaiStore}>
       <QueryClientProvider client={queryClient}>
@@ -56,7 +35,7 @@ function RouteComponent() {
                   <div
                     className={classNames(
                       'w-full h-full',
-                      osInfo?.osType === 'linux' && 'border border-border-subtle',
+                      type() === 'linux' && 'border border-border-subtle',
                     )}
                   >
                     <Outlet />
@@ -66,8 +45,6 @@ function RouteComponent() {
             </HelmetProvider>
           </MotionConfig>
         </LazyMotion>
-        {/*<ReactQueryDevtools initialIsOpen />*/}
-        {/*<TanStackRouterDevtools initialIsOpen />*/}
       </QueryClientProvider>
     </JotaiProvider>
   );

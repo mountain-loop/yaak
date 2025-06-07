@@ -4,7 +4,7 @@ import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
-import { useCreateEnvironment } from '../hooks/useCreateEnvironment';
+import { createEnvironmentAndActivate } from '../commands/createEnvironment';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useIsEncryptionEnabled } from '../hooks/useIsEncryptionEnabled';
 import { useKeyValue } from '../hooks/useKeyValue';
@@ -41,7 +41,6 @@ interface Props {
 }
 
 export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
-  const createEnvironment = useCreateEnvironment();
   const { baseEnvironment, otherBaseEnvironments, subEnvironments, allEnvironments } =
     useEnvironmentsBreakdown();
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(
@@ -55,7 +54,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
 
   const handleCreateEnvironment = async () => {
     if (baseEnvironment == null) return;
-    const id = await createEnvironment.mutateAsync(baseEnvironment);
+    const id = await createEnvironmentAndActivate.mutateAsync(baseEnvironment);
     if (id != null) setSelectedEnvironmentId(id);
   };
 
@@ -162,30 +161,30 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
 };
 
 const EnvironmentEditor = function ({
-  environment: activeEnvironment,
+  environment: selectedEnvironment,
   className,
 }: {
   environment: Environment;
   className?: string;
 }) {
-  const activeWorkspaceId = activeEnvironment.workspaceId;
+  const workspaceId = selectedEnvironment.workspaceId;
   const isEncryptionEnabled = useIsEncryptionEnabled();
   const valueVisibility = useKeyValue<boolean>({
     namespace: 'global',
-    key: ['environmentValueVisibility', activeWorkspaceId],
+    key: ['environmentValueVisibility', workspaceId],
     fallback: false,
   });
   const { allEnvironments } = useEnvironmentsBreakdown();
   const handleChange = useCallback(
-    (variables: PairWithId[]) => patchModel(activeEnvironment, { variables }),
-    [activeEnvironment],
+    (variables: PairWithId[]) => patchModel(selectedEnvironment, { variables }),
+    [selectedEnvironment],
   );
   const [forceUpdateKey, regenerateForceUpdateKey] = useRandomKey();
 
   // Gather a list of env names from other environments to help the user get them aligned
   const nameAutocomplete = useMemo<GenericCompletionConfig>(() => {
     const options: GenericCompletionOption[] = [];
-    if (activeEnvironment.base) {
+    if (selectedEnvironment.base) {
       return { options };
     }
 
@@ -195,7 +194,7 @@ const EnvironmentEditor = function ({
       const containingEnvs = allEnvironments.filter((e) =>
         e.variables.some((v) => v.name === name),
       );
-      const isAlreadyInActive = containingEnvs.find((e) => e.id === activeEnvironment.id);
+      const isAlreadyInActive = containingEnvs.find((e) => e.id === selectedEnvironment.id);
       if (isAlreadyInActive) continue;
       options.push({
         label: name,
@@ -204,7 +203,7 @@ const EnvironmentEditor = function ({
       });
     }
     return { options };
-  }, [activeEnvironment.base, activeEnvironment.id, allEnvironments]);
+  }, [selectedEnvironment.base, selectedEnvironment.id, allEnvironments]);
 
   const validateName = useCallback((name: string) => {
     // Empty just means the variable doesn't have a name yet and is unusable
@@ -217,11 +216,11 @@ const EnvironmentEditor = function ({
     if (!isEncryptionEnabled) {
       return true;
     } else {
-      return !activeEnvironment.variables.every(
+      return !selectedEnvironment.variables.every(
         (v) => v.value === '' || analyzeTemplate(v.value) !== 'insecure',
       );
     }
-  }, [activeEnvironment.variables, isEncryptionEnabled]);
+  }, [selectedEnvironment.variables, isEncryptionEnabled]);
 
   const encryptEnvironment = (environment: Environment) => {
     withEncryptionEnabled(async () => {
@@ -238,10 +237,10 @@ const EnvironmentEditor = function ({
   return (
     <VStack space={4} className={classNames(className, 'pl-4')}>
       <Heading className="w-full flex items-center gap-0.5">
-        <div className="mr-2">{activeEnvironment?.name}</div>
+        <div className="mr-2">{selectedEnvironment?.name}</div>
         {isEncryptionEnabled ? (
           promptToEncrypt ? (
-            <BadgeButton color="notice" onClick={() => encryptEnvironment(activeEnvironment)}>
+            <BadgeButton color="notice" onClick={() => encryptEnvironment(selectedEnvironment)}>
               Encrypt All Variables
             </BadgeButton>
           ) : (
@@ -257,8 +256,12 @@ const EnvironmentEditor = function ({
           </>
         )}
       </Heading>
-      {activeEnvironment.public && promptToEncrypt && (
-        <DismissibleBanner id={activeEnvironment.id} color="notice" className="mr-3">
+      {selectedEnvironment.public && promptToEncrypt && (
+        <DismissibleBanner
+          id={`warn-unencrypted-${selectedEnvironment.id}`}
+          color="notice"
+          className="mr-3"
+        >
           This environment is sharable. Ensure variable values are encrypted to avoid accidental
           leaking of secrets during directory sync or data export.
         </DismissibleBanner>
@@ -273,11 +276,15 @@ const EnvironmentEditor = function ({
           valueType={valueType}
           valueAutocompleteVariables
           valueAutocompleteFunctions
-          forcedEnvironmentId={activeEnvironment.id}
-          forceUpdateKey={`${activeEnvironment.id}::${forceUpdateKey}`}
-          pairs={activeEnvironment.variables}
+          forceUpdateKey={`${selectedEnvironment.id}::${forceUpdateKey}`}
+          pairs={selectedEnvironment.variables}
           onChange={handleChange}
-          stateKey={`environment.${activeEnvironment.id}`}
+          stateKey={`environment.${selectedEnvironment.id}`}
+          forcedEnvironmentId={
+            // Editing the base environment should resolve variables using the active environment.
+            // Editing a sub environment should resolve variables as if it's the active environment
+            selectedEnvironment.base ? undefined : selectedEnvironment.id
+          }
         />
       </div>
     </VStack>

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { tryFormatJson, tryFormatXml } from '../lib/formatters';
 import type { EditorProps } from '../components/core/Editor/Editor';
+import { tryFormatJson, tryFormatXml } from '../lib/formatters';
 
 export function useFormatText({
   text,
@@ -12,6 +12,7 @@ export function useFormatText({
   pretty: boolean;
 }) {
   return useQuery({
+    placeholderData: (prev) => prev, // Keep previous data on refetch
     queryKey: [text, language, pretty],
     queryFn: async () => {
       if (text === '' || !pretty) {
@@ -24,5 +25,5 @@ export function useFormatText({
         return text;
       }
     },
-  });
+  }).data;
 }

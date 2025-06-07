@@ -1,10 +1,12 @@
+import { settingsAtom } from '@yaakapp-internal/models';
 import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 
 interface Props {
   request: HttpRequest | GrpcRequest | WebsocketRequest;
   className?: string;
-  shortNames?: boolean;
+  short?: boolean;
 }
 
 const methodNames: Record<string, string> = {
@@ -18,7 +20,8 @@ const methodNames: Record<string, string> = {
   query: 'QURY',
 };
 
-export function HttpMethodTag({ request, className }: Props) {
+export function HttpMethodTag({ request, className, short }: Props) {
+  const settings = useAtomValue(settingsAtom);
   const method =
     request.model === 'http_request' && request.bodyType === 'graphql'
       ? 'GQL'
@@ -26,19 +29,34 @@ export function HttpMethodTag({ request, className }: Props) {
         ? 'GRPC'
         : request.model === 'websocket_request'
           ? 'WS'
-          : (methodNames[request.method.toLowerCase()] ?? request.method.slice(0, 4));
+          : request.method;
+  let label = method.toUpperCase();
 
-  const paddedMethod = method.padStart(4, ' ').toUpperCase();
+  if (short) {
+    label = methodNames[method.toLowerCase()] ?? method.slice(0, 4);
+    label = label.padStart(4, ' ');
+  }
 
   return (
     <span
       className={classNames(
         className,
-        'text-xs font-mono text-text-subtle flex-shrink-0 whitespace-pre',
+        !settings.coloredMethods && 'text-text-subtle',
+        settings.coloredMethods && method === 'GQL' && 'text-info',
+        settings.coloredMethods && method === 'WS' && 'text-info',
+        settings.coloredMethods && method === 'GRPC' && 'text-info',
+        settings.coloredMethods && method === 'OPTIONS' && 'text-info',
+        settings.coloredMethods && method === 'HEAD' && 'text-info',
+        settings.coloredMethods && method === 'GET' && 'text-primary',
+        settings.coloredMethods && method === 'PUT' && 'text-warning',
+        settings.coloredMethods && method === 'PATCH' && 'text-notice',
+        settings.coloredMethods && method === 'POST' && 'text-success',
+        settings.coloredMethods && method === 'DELETE' && 'text-danger',
+        'font-mono flex-shrink-0 whitespace-pre',
         'pt-[0.25em]', // Fix for monospace font not vertically centering
       )}
     >
-      {paddedMethod}
+      {label}
     </span>
   );
 }

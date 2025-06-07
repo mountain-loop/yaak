@@ -1,7 +1,7 @@
 extern crate core;
 use crate::encoding::read_response_body;
 use crate::error::Error::GenericError;
-use crate::grpc::metadata_to_map;
+use crate::grpc::{build_metadata, metadata_to_map, resolve_grpc_request};
 use crate::http_request::send_http_request;
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
@@ -38,9 +38,9 @@ use yaak_models::util::{
     BatchUpsertResult, UpdateSource, get_workspace_export_resources, maybe_gen_id, maybe_gen_id_opt,
 };
 use yaak_plugins::events::{
-    BootResponse, CallHttpAuthenticationRequest, CallHttpRequestActionRequest, FilterResponse,
+    BootResponse, CallHttpRequestActionRequest, FilterResponse,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, HttpHeader, InternalEvent,
+    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, InternalEvent,
     InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
@@ -151,10 +151,14 @@ async fn cmd_grpc_reflect<R: Runtime>(
         None => None,
     };
     let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
+    let (resolved_request, auth_context_id) = resolve_grpc_request(&window, &unrendered_request)?;
+
     let base_environment =
         app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
+
     let req = render_grpc_request(
-        &unrendered_request,
+        &resolved_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
@@ -166,6 +170,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
     .await?;
 
     let uri = safe_uri(&req.url);
+    let metadata = build_metadata(&window, &req, &auth_context_id).await?;
 
     Ok(grpc_handle
         .lock()
@@ -174,6 +179,8 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &req.id,
             &uri,
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
+            &metadata,
+            workspace.setting_validate_certificates,
         )
         .await
         .map_err(|e| GenericError(e.to_string()))?)
@@ -186,7 +193,6 @@ async fn cmd_grpc_go<R: Runtime>(
     proto_files: Vec<String>,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<String> {
     let environment = match environment_id {
@@ -194,10 +200,13 @@ async fn cmd_grpc_go<R: Runtime>(
         None => None,
     };
     let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
+    let (resolved_request, auth_context_id) = resolve_grpc_request(&window, &unrendered_request)?;
     let base_environment =
         app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
+
     let request = render_grpc_request(
-        &unrendered_request,
+        &resolved_request,
         &base_environment,
         environment.as_ref(),
         &PluginTemplateCallback::new(
@@ -208,42 +217,7 @@ async fn cmd_grpc_go<R: Runtime>(
     )
     .await?;
 
-    let mut metadata = BTreeMap::new();
-
-    // Add the rest of metadata
-    for h in request.clone().metadata {
-        if h.name.is_empty() && h.value.is_empty() {
-            continue;
-        }
-
-        if !h.enabled {
-            continue;
-        }
-
-        metadata.insert(h.name, h.value);
-    }
-
-    if let Some(auth_name) = request.authentication_type.clone() {
-        let auth = request.authentication.clone();
-        let plugin_req = CallHttpAuthenticationRequest {
-            context_id: format!("{:x}", md5::compute(request_id.to_string())),
-            values: serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap(),
-            method: "POST".to_string(),
-            url: request.url.clone(),
-            headers: metadata
-                .iter()
-                .map(|(name, value)| HttpHeader {
-                    name: name.to_string(),
-                    value: value.to_string(),
-                })
-                .collect(),
-        };
-        let plugin_result =
-            plugin_manager.call_http_authentication(&window, &auth_name, plugin_req).await?;
-        for header in plugin_result.set_headers {
-            metadata.insert(header.name, header.value);
-        }
-    }
+    let metadata = build_metadata(&window, &request, &auth_context_id).await?;
 
     let conn = app_handle.db().upsert_grpc_connection(
         &GrpcConnection {
@@ -291,6 +265,8 @@ async fn cmd_grpc_go<R: Runtime>(
             &request.clone().id,
             uri.as_str(),
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
+            &metadata,
+            workspace.setting_validate_certificates,
         )
         .await;
 
@@ -324,7 +300,7 @@ async fn cmd_grpc_go<R: Runtime>(
         let cancelled_rx = cancelled_rx.clone();
         let app_handle = app_handle.clone();
         let window = window.clone();
-        let workspace = base_environment.clone();
+        let base_environment = base_environment.clone();
         let environment = environment.clone();
         let base_msg = base_msg.clone();
         let method_desc = method_desc.clone();
@@ -354,7 +330,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         tauri::async_runtime::block_on(async {
                             render_template(
                                 msg.as_str(),
-                                &workspace,
+                                &base_environment,
                                 environment.as_ref(),
                                 &PluginTemplateCallback::new(
                                     &app_handle,
@@ -448,7 +424,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 match (method_desc.is_client_streaming(), method_desc.is_server_streaming()) {
                     (true, true) => (
                         Some(
-                            connection.streaming(&service, &method, in_msg_stream, metadata).await,
+                            connection.streaming(&service, &method, in_msg_stream, &metadata).await,
                         ),
                         None,
                     ),
@@ -456,16 +432,16 @@ async fn cmd_grpc_go<R: Runtime>(
                         None,
                         Some(
                             connection
-                                .client_streaming(&service, &method, in_msg_stream, metadata)
+                                .client_streaming(&service, &method, in_msg_stream, &metadata)
                                 .await,
                         ),
                     ),
                     (false, true) => (
-                        Some(connection.server_streaming(&service, &method, &msg, metadata).await),
+                        Some(connection.server_streaming(&service, &method, &msg, &metadata).await),
                         None,
                     ),
                     (false, false) => {
-                        (None, Some(connection.unary(&service, &method, &msg, metadata).await))
+                        (None, Some(connection.unary(&service, &method, &msg, &metadata).await))
                     }
                 };
 
@@ -950,10 +926,10 @@ async fn cmd_call_http_authentication_action<R: Runtime>(
     auth_name: &str,
     action_index: i32,
     values: HashMap<String, JsonPrimitive>,
-    request_id: &str,
+    model_id: &str,
 ) -> YaakResult<()> {
     Ok(plugin_manager
-        .call_http_authentication_action(&window, auth_name, action_index, values, request_id)
+        .call_http_authentication_action(&window, auth_name, action_index, values, model_id)
         .await?)
 }
 
@@ -1256,7 +1232,7 @@ pub fn run() {
                 .level_for("hyper_util", log::LevelFilter::Info)
                 .level_for("hyper_rustls", log::LevelFilter::Info)
                 .level_for("reqwest", log::LevelFilter::Info)
-                .level_for("sqlx", log::LevelFilter::Warn)
+                .level_for("sqlx", log::LevelFilter::Debug)
                 .level_for("tao", log::LevelFilter::Info)
                 .level_for("tokio_util", log::LevelFilter::Info)
                 .level_for("tonic", log::LevelFilter::Info)
@@ -1412,7 +1388,7 @@ pub fn run() {
                     if let Err(e) = app_handle.save_window_state(StateFlags::all()) {
                         warn!("Failed to save window state {e:?}");
                     } else {
-                        debug!("Saved window state");
+                        info!("Saved window state");
                     };
                 }
                 _ => {}

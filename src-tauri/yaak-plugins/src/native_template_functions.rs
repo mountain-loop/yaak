@@ -34,7 +34,7 @@ pub(crate) fn template_function_secure() -> TemplateFunction {
 
 pub fn template_function_secure_run<R: Runtime>(
     app_handle: &AppHandle<R>,
-    args: HashMap<String, String>,
+    args: HashMap<String, serde_json::Value>,
     window_context: &PluginWindowContext,
 ) -> Result<String> {
     match window_context.clone() {
@@ -43,9 +43,10 @@ pub fn template_function_secure_run<R: Runtime>(
             ..
         } => {
             let value = args.get("value").map(|v| v.to_owned()).unwrap_or_default();
-            if value.is_empty() {
-                return Ok("".to_string());
-            }
+            let value = match value {
+                serde_json::Value::String(s) => s,
+                _ => return Ok("".to_string()),
+            };
 
             let value = match value.strip_prefix("YENC_") {
                 None => {
@@ -118,7 +119,7 @@ pub fn decrypt_secure_template_function<R: Runtime>(
                 for a in args {
                     match a.clone().value {
                         Val::Str { text } => {
-                            args_map.insert(a.name.to_string(), text);
+                            args_map.insert(a.name.to_string(), serde_json::Value::String(text));
                         }
                         _ => continue,
                     }

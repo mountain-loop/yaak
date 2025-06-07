@@ -80,7 +80,7 @@ export function SelectFile({
           <>
             {filePath && (
               <IconButton
-                size={size}
+                size={size === 'auto' ? 'md' : size}
                 variant="border"
                 icon="x"
                 title={'Unset ' + itemLabel}

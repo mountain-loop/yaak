@@ -9,9 +9,6 @@ use mime_guess::Mime;
 use reqwest::redirect::Policy;
 use reqwest::{Method, Response};
 use reqwest::{Proxy, Url, multipart};
-use rustls::ClientConfig;
-use rustls::crypto::ring;
-use rustls_platform_verifier::BuilderVerifierExt;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -65,13 +62,7 @@ pub async fn send_http_request<R: Runtime>(
     );
     let update_source = UpdateSource::from_window(window);
 
-    let request = match render_http_request(
-        &unrendered_request,
-        &base_environment,
-        environment.as_ref(),
-        &cb,
-    )
-    .await
+    let (resolved_request, auth_context_id) = match resolve_http_request(window, unrendered_request)
     {
         Ok(r) => r,
         Err(e) => {
@@ -84,7 +75,22 @@ pub async fn send_http_request<R: Runtime>(
         }
     };
 
-    let mut url_string = request.url;
+    let request =
+        match render_http_request(&resolved_request, &base_environment, environment.as_ref(), &cb)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                return Ok(response_err(
+                    &app_handle,
+                    &*response.lock().await,
+                    e.to_string(),
+                    &update_source,
+                ));
+            }
+        };
+
+    let mut url_string = request.url.clone();
 
     url_string = ensure_proto(&url_string);
     if !url_string.starts_with("http://") && !url_string.starts_with("https://") {
@@ -104,26 +110,17 @@ pub async fn send_http_request<R: Runtime>(
         .referer(false)
         .tls_info(true);
 
-    if workspace.setting_validate_certificates {
-        // Use platform-native verifier to validate certificates
-        let arc_crypto_provider = Arc::new(ring::default_provider());
-        let config = ClientConfig::builder_with_provider(arc_crypto_provider)
-            .with_safe_default_protocol_versions()
-            .unwrap()
-            .with_platform_verifier()
-            .with_no_client_auth();
-        client_builder = client_builder.use_preconfigured_tls(config)
-    } else {
-        // Use rustls to skip validation because rustls_platform_verifier does not have this ability
-        client_builder = client_builder
-            .use_rustls_tls()
-            .danger_accept_invalid_hostnames(true)
-            .danger_accept_invalid_certs(true);
-    }
+    let tls_config = yaak_http::tls::get_config(workspace.setting_validate_certificates);
+    client_builder = client_builder.use_preconfigured_tls(tls_config);
 
     match settings.proxy {
         Some(ProxySetting::Disabled) => client_builder = client_builder.no_proxy(),
-        Some(ProxySetting::Enabled { http, https, auth }) => {
+        Some(ProxySetting::Enabled {
+            http,
+            https,
+            auth,
+            disabled,
+        }) if !disabled => {
             debug!("Using proxy http={http} https={https}");
             let mut proxy = Proxy::custom(move |url| {
                 let http = if http.is_empty() { None } else { Some(http.to_owned()) };
@@ -143,12 +140,15 @@ pub async fn send_http_request<R: Runtime>(
 
             client_builder = client_builder.proxy(proxy);
         }
-        None => {} // Nothing to do for this one, as it is the default
+        _ => {} // Nothing to do for this one, as it is the default
     }
 
     // Add cookie store if specified
     let maybe_cookie_manager = match cookie_jar.clone() {
-        Some(cj) => {
+        Some(CookieJar { id, .. }) => {
+            // NOTE: WE need to refetch the cookie jar because a chained request might have
+            //  updated cookies when we rendered the request.
+            let cj = window.db().get_cookie_jar(&id)?;
             // HACK: Can't construct Cookie without serde, so we have to do this
             let cookies = cj
                 .cookies
@@ -250,7 +250,7 @@ pub async fn send_http_request<R: Runtime>(
     }
 
     let request_body = request.body.clone();
-    if let Some(body_type) = &request.body_type {
+    if let Some(body_type) = &request.body_type.clone() {
         if body_type == "graphql" {
             let query = get_str_h(&request_body, "query");
             let variables = get_str_h(&request_body, "variables");
@@ -371,7 +371,7 @@ pub async fn send_http_request<R: Runtime>(
                                 };
                             }
 
-                            // Set file path if it is not empty
+                            // Set a file path if it is not empty
                             if !file_path.is_empty() {
                                 let filename = PathBuf::from(file_path)
                                     .file_name()
@@ -394,6 +394,15 @@ pub async fn send_http_request<R: Runtime>(
         } else {
             warn!("Unsupported body type: {}", body_type);
         }
+    } else {
+        // No body set
+        let method = request.method.to_ascii_lowercase();
+        let is_body_method = method == "post" || method == "put" || method == "patch";
+        // Add Content-Length for methods that commonly accept a body because some servers
+        // will error if they don't receive it.
+        if is_body_method && !headers.contains_key("content-length") {
+            headers.insert("Content-Length", HeaderValue::from_static("0"));
+        }
     }
 
     // Add headers last, because previous steps may modify them
@@ -412,43 +421,52 @@ pub async fn send_http_request<R: Runtime>(
         }
     };
 
-    // Apply authentication
-
-    if let Some(auth_name) = request.authentication_type.to_owned() {
-        let req = CallHttpAuthenticationRequest {
-            context_id: format!("{:x}", md5::compute(request.id)),
-            values: serde_json::from_value(serde_json::to_value(&request.authentication).unwrap())
+    match request.authentication_type {
+        None => {
+            // No authentication found. Not even inherited
+        }
+        Some(authentication_type) if authentication_type == "none" => {
+            // Explicitly no authentication
+        }
+        Some(authentication_type) => {
+            let req = CallHttpAuthenticationRequest {
+                context_id: format!("{:x}", md5::compute(auth_context_id)),
+                values: serde_json::from_value(
+                    serde_json::to_value(&request.authentication).unwrap(),
+                )
                 .unwrap(),
-            url: sendable_req.url().to_string(),
-            method: sendable_req.method().to_string(),
-            headers: sendable_req
-                .headers()
-                .iter()
-                .map(|(name, value)| HttpHeader {
-                    name: name.to_string(),
-                    value: value.to_str().unwrap_or_default().to_string(),
-                })
-                .collect(),
-        };
-        let auth_result = plugin_manager.call_http_authentication(&window, &auth_name, req).await;
-        let plugin_result = match auth_result {
-            Ok(r) => r,
-            Err(e) => {
-                return Ok(response_err(
-                    &app_handle,
-                    &*response.lock().await,
-                    e.to_string(),
-                    &update_source,
-                ));
-            }
-        };
+                url: sendable_req.url().to_string(),
+                method: sendable_req.method().to_string(),
+                headers: sendable_req
+                    .headers()
+                    .iter()
+                    .map(|(name, value)| HttpHeader {
+                        name: name.to_string(),
+                        value: value.to_str().unwrap_or_default().to_string(),
+                    })
+                    .collect(),
+            };
+            let auth_result =
+                plugin_manager.call_http_authentication(&window, &authentication_type, req).await;
+            let plugin_result = match auth_result {
+                Ok(r) => r,
+                Err(e) => {
+                    return Ok(response_err(
+                        &app_handle,
+                        &*response.lock().await,
+                        e.to_string(),
+                        &update_source,
+                    ));
+                }
+            };
 
-        let headers = sendable_req.headers_mut();
-        for header in plugin_result.set_headers {
-            headers.insert(
-                HeaderName::from_str(&header.name).unwrap(),
-                HeaderValue::from_str(&header.value).unwrap(),
-            );
+            let headers = sendable_req.headers_mut();
+            for header in plugin_result.set_headers {
+                headers.insert(
+                    HeaderName::from_str(&header.name).unwrap(),
+                    HeaderValue::from_str(&header.value).unwrap(),
+                );
+            }
         }
     }
 
@@ -645,6 +663,23 @@ pub async fn send_http_request<R: Runtime>(
             }
         }
     })
+}
+
+fn resolve_http_request<R: Runtime>(
+    window: &WebviewWindow<R>,
+    request: &HttpRequest,
+) -> Result<(HttpRequest, String)> {
+    let mut new_request = request.clone();
+
+    let (authentication_type, authentication, authentication_context_id) =
+        window.db().resolve_auth_for_http_request(request)?;
+    new_request.authentication_type = authentication_type;
+    new_request.authentication = authentication;
+
+    let headers = window.db().resolve_headers_for_http_request(request)?;
+    new_request.headers = headers;
+
+    Ok((new_request, authentication_context_id))
 }
 
 fn ensure_proto(url_str: &str) -> String {

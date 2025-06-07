@@ -1,0 +1,2 @@
+ALTER TABLE settings
+    ADD COLUMN colored_methods BOOLEAN DEFAULT FALSE;

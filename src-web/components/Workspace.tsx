@@ -41,6 +41,7 @@ import { Sidebar } from './sidebar/Sidebar';
 import { SidebarActions } from './sidebar/SidebarActions';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
+import { ErrorBoundary } from './ErrorBoundary';
 
 const side = { gridArea: 'side' };
 const head = { gridArea: 'head' };
@@ -149,16 +150,20 @@ export function Workspace() {
             <HeaderSize size="lg" className="border-transparent">
               <SidebarActions />
             </HeaderSize>
-            <Sidebar />
+            <ErrorBoundary name="Sidebar (Floating)">
+              <Sidebar />
+            </ErrorBoundary>
           </m.div>
         </Overlay>
       ) : (
         <>
           <div style={side} className={classNames('x-theme-sidebar', 'overflow-hidden bg-surface')}>
-            <Sidebar className="border-r border-border-subtle" />
+            <ErrorBoundary name="Sidebar">
+              <Sidebar className="border-r border-border-subtle" />
+            </ErrorBoundary>
           </div>
           <ResizeHandle
-            className="-translate-x-3"
+            className="-translate-x-0.5"
             justify="end"
             side="right"
             isResizing={isResizing}
@@ -175,7 +180,9 @@ export function Workspace() {
       >
         <WorkspaceHeader className="pointer-events-none" />
       </HeaderSize>
-      <WorkspaceBody />
+      <ErrorBoundary name="Workspace Body">
+        <WorkspaceBody />
+      </ErrorBoundary>
     </div>
   );
 }
@@ -187,12 +194,18 @@ function WorkspaceBody() {
 
   if (activeWorkspace == null) {
     return (
-      <div className="m-auto">
+      <m.div
+        className="m-auto"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        // Delay the entering because the workspaces might load after a slight delay
+        transition={{ delay: 0.5 }}
+      >
         <Banner color="warning" className="max-w-[30rem]">
           The active workspace was not found. Select a workspace from the header menu or report this
           bug to <FeedbackLink />
         </Banner>
-      </div>
+      </m.div>
     );
   }
 

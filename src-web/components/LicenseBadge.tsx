@@ -2,11 +2,10 @@ import type { LicenseCheckStatus } from '@yaakapp-internal/license';
 import { useLicense } from '@yaakapp-internal/license';
 import type { ReactNode } from 'react';
 import { openSettings } from '../commands/openSettings';
-import { appInfo } from '../hooks/useAppInfo';
+import { appInfo } from '../lib/appInfo';
 import { useLicenseConfirmation } from '../hooks/useLicenseConfirmation';
 import { BadgeButton } from './core/BadgeButton';
 import type { ButtonProps } from './core/Button';
-import { SettingsTab } from './Settings/SettingsTab';
 
 const details: Record<
   LicenseCheckStatus['type'],
@@ -28,7 +27,7 @@ export function LicenseBadge() {
 
   if (check.error) {
     return (
-      <BadgeButton color="danger" onClick={() => openSettings.mutate(SettingsTab.License)}>
+      <BadgeButton color="danger" onClick={() => openSettings.mutate('license')}>
         License Error
       </BadgeButton>
     );
@@ -64,7 +63,7 @@ export function LicenseBadge() {
             hasDismissedTrial: true,
           }));
         }
-        openSettings.mutate(SettingsTab.License);
+        openSettings.mutate('license');
       }}
     >
       {detail.label}

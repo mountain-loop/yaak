@@ -11,8 +11,6 @@ dunce = "1.0.4"
 hyper = "1.5.2"
 hyper-rustls = { version = "0.27.5", default-features = false, features = ["http2"] }
 hyper-util = { version = "0.1.10", default-features = false, features = ["client-legacy"] }
-rustls = { version = "0.23.21", default-features = false, features = ["custom-provider", "ring"] }
-rustls-platform-verifier = "0.5.0"
 log = "0.4.20"
 md5 = "0.7.0"
 prost = "0.13.4"
@@ -27,3 +25,4 @@ tokio-stream = "0.1.14"
 tonic = { version = "0.12.3", default-features = false, features = ["transport"] }
 tonic-reflection = "0.12.3"
 uuid = { version = "1.7.0", features = ["v4"] }
+yaak-http = { workspace = true }

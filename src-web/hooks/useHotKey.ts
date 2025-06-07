@@ -2,7 +2,6 @@ import { type } from '@tauri-apps/plugin-os';
 import { debounce } from '@yaakapp-internal/lib';
 import { useEffect, useRef } from 'react';
 import { capitalize } from '../lib/capitalize';
-import { useOsInfo } from './useOsInfo';
 
 const HOLD_KEYS = ['Shift', 'Control', 'Command', 'Alt', 'Meta'];
 
@@ -176,13 +175,12 @@ export function useHotKeyLabel(action: HotkeyAction): string {
 }
 
 export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {
-  const osInfo = useOsInfo();
   const trigger = action != null ? (hotkeys[action]?.[0] ?? null) : null;
-  if (trigger == null || osInfo == null) {
+  if (trigger == null) {
     return null;
   }
 
-  const os = osInfo.osType;
+  const os = type();
   const parts = trigger.split('+');
   const labelParts: string[] = [];
 

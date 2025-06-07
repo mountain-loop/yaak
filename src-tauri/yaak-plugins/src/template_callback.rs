@@ -30,7 +30,7 @@ impl<R: Runtime> PluginTemplateCallback<R> {
 }
 
 impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
-    async fn run(&self, fn_name: &str, args: HashMap<String, String>) -> Result<String> {
+    async fn run(&self, fn_name: &str, args: HashMap<String, serde_json::Value>) -> Result<String> {
         // The beta named the function `Response` but was changed in stable.
         // Keep this here for a while because there's no easy way to migrate
         let fn_name = if fn_name == "Response" { "response" } else { fn_name };

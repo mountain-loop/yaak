@@ -34,7 +34,7 @@ export function Checkbox({
       space={2}
       className={classNames(className, 'text-text mr-auto')}
     >
-      <div className={classNames(inputWrapperClassName, 'x-theme-input', 'relative flex')}>
+      <div className={classNames(inputWrapperClassName, 'x-theme-input', 'relative flex mr-0.5')}>
         <input
           aria-hidden
           className={classNames(
@@ -52,13 +52,16 @@ export function Checkbox({
         <div className="absolute inset-0 flex items-center justify-center">
           <Icon
             size="sm"
+            className={classNames(disabled && 'opacity-disabled')}
             icon={checked === 'indeterminate' ? 'minus' : checked ? 'check' : 'empty'}
           />
         </div>
       </div>
-      <div className={classNames(fullWidth && 'w-full', disabled && 'opacity-disabled')}>
-        {!hideLabel && title}
-      </div>
+      {!hideLabel && (
+        <div className={classNames(fullWidth && 'w-full', disabled && 'opacity-disabled')}>
+          {title}
+        </div>
+      )}
       {help && <IconTooltip content={help} />}
     </HStack>
   );

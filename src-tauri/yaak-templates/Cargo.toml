@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false # Causes errors in CI (haven't figured out why yet)
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

@@ -8,6 +8,7 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
+use yaak_license::{LicenseCheckStatus, check_license};
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 
@@ -70,6 +71,13 @@ impl YaakNotifier {
 
         self.last_check = SystemTime::now();
 
+        let license_check = match check_license(window).await? {
+            LicenseCheckStatus::PersonalUse { .. } => "personal".to_string(),
+            LicenseCheckStatus::CommercialUse => "commercial".to_string(),
+            LicenseCheckStatus::InvalidLicense => "invalid_license".to_string(),
+            LicenseCheckStatus::Trialing { .. } => "trialing".to_string(),
+        };
+        let settings = window.db().get_settings();
         let num_launches = get_num_launches(app_handle).await;
         let info = app_handle.package_info().clone();
         let req = reqwest::Client::default()
@@ -77,6 +85,8 @@ impl YaakNotifier {
             .query(&[
                 ("version", info.version.to_string().as_str()),
                 ("launches", num_launches.to_string().as_str()),
+                ("installed", settings.created_at.format("%Y-%m-%d").to_string().as_str()),
+                ("license", &license_check),
                 ("platform", get_os()),
             ]);
         let resp = req.send().await?;

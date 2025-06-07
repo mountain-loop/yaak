@@ -1,11 +1,11 @@
 import { setWindowTitle } from '@yaakapp-internal/mac-window';
 import { useAtomValue } from 'jotai';
 import { useEffect } from 'react';
+import { appInfo } from '../lib/appInfo';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { useActiveEnvironment } from './useActiveEnvironment';
 import { activeRequestAtom } from './useActiveRequest';
 import { activeWorkspaceAtom } from './useActiveWorkspace';
-import { appInfo } from './useAppInfo';
 
 export function useSyncWorkspaceRequestTitle() {
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);

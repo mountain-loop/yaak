@@ -1,6 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { WebsocketConnection, WebsocketEvent } from '@yaakapp-internal/models';
-import { replaceModelsInStore , websocketConnectionsAtom, websocketEventsAtom } from '@yaakapp-internal/models';
+import {
+  replaceModelsInStore,
+  websocketConnectionsAtom,
+  websocketEventsAtom,
+} from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import { useEffect } from 'react';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
@@ -45,6 +49,11 @@ export function useWebsocketEvents(connectionId: string | null) {
   const events = useAtomValue(websocketEventsAtom);
 
   useEffect(() => {
+    if (connectionId == null) {
+      replaceModelsInStore('websocket_event', []);
+      return;
+    }
+
     invoke<WebsocketEvent[]>('plugin:yaak-models|websocket_events', { connectionId }).then(
       (events) => replaceModelsInStore('websocket_event', events),
     );

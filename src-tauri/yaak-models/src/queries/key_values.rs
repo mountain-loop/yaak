@@ -11,6 +11,11 @@ impl<'a> DbContext<'a> {
         let (sql, params) = Query::select()
             .from(KeyValueIden::Table)
             .column(Asterisk)
+            // Temporary clause to prevent bug when reverting to the previous version, before the
+            // ID column was added. A previous version will not know about ID and will create
+            // key/value entries that don't have one. This clause ensures they are not queried
+            // TODO: Add migration to delete key/values with NULL IDs later on, then remove this
+            .cond_where(Expr::col(KeyValueIden::Id).is_not_null())
             .build_rusqlite(SqliteQueryBuilder);
         let mut stmt = self.conn.prepare(sql.as_str())?;
         let items = stmt.query_map(&*params.as_params(), KeyValue::from_row)?;

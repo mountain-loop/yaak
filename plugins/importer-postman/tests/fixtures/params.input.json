@@ -1,0 +1,136 @@
+{
+  "info": {
+    "_postman_id": "9e6dfada-256c-49ea-a38f-7d1b05b7ca2d",
+    "name": "New Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "18798"
+  },
+  "item": [
+    {
+      "name": "Form URL",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "baeare",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-foo",
+            "value": "bar",
+            "description": "description"
+          },
+          {
+            "key": "Disabled",
+            "value": "tnroant",
+            "description": "ntisorantosra",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "Key",
+              "contentType": "Custom/COntent",
+              "description": "DEscription",
+              "type": "file",
+              "src": "/Users/gschier/Desktop/Screenshot 2024-05-31 at 12.05.11 PM.png"
+            }
+          ]
+        },
+        "url": {
+          "raw": "example.com/:foo/:bar?q=qqq&",
+          "host": [
+            "example",
+            "com"
+          ],
+          "path": [
+            ":foo",
+            ":bar"
+          ],
+          "query": [
+            {
+              "key": "disabled",
+              "value": "secondvalue",
+              "description": "this is disabled",
+              "disabled": true
+            },
+            {
+              "key": "q",
+              "value": "qqq",
+              "description": "hello"
+            },
+            {
+              "key": "",
+              "value": null
+            }
+          ],
+          "variable": [
+            {
+              "key": "foo",
+              "value": "fff",
+              "description": "Description"
+            },
+            {
+              "key": "bar",
+              "value": "bbb",
+              "description": "bbb description"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "password",
+        "value": "globalpass",
+        "type": "string"
+      },
+      {
+        "key": "username",
+        "value": "globaluser",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "COLLECTION VARIABLE",
+      "value": "collection variable",
+      "type": "string"
+    }
+  ]
+}

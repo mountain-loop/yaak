@@ -6,9 +6,7 @@ import {
 } from '@codemirror/autocomplete';
 import { history, historyKeymap } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
-import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
-import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
 import {
   codeFolding,
@@ -27,6 +25,7 @@ import {
   crosshairCursor,
   drawSelection,
   dropCursor,
+  EditorView,
   highlightActiveLineGutter,
   highlightSpecialChars,
   keymap,
@@ -36,14 +35,15 @@ import {
 import { tags as t } from '@lezer/highlight';
 import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import { graphql } from 'cm6-graphql';
-import { EditorView } from 'codemirror';
 import { pluralizeCount } from '../../../lib/pluralize';
 import type { EditorProps } from './Editor';
-import { pairs } from './pairs/extension';
 import { text } from './text/extension';
 import type { TwigCompletionOption } from './twig/completion';
 import { twig } from './twig/extension';
 import { pathParametersPlugin } from './twig/pathParameters';
+import { json } from '@codemirror/lang-json';
+import { xml } from '@codemirror/lang-xml';
+import { pairs } from './pairs/extension';
 import { url } from './url/extension';
 
 export const syntaxHighlightStyle = HighlightStyle.define([
@@ -75,16 +75,20 @@ const syntaxTheme = EditorView.theme({}, { dark: true });
 
 const closeBracketsExtensions: Extension = [closeBrackets(), keymap.of([...closeBracketsKeymap])];
 
-const syntaxExtensions: Record<NonNullable<EditorProps['language']>, LanguageSupport | null> = {
+const syntaxExtensions: Record<
+  NonNullable<EditorProps['language']>,
+  null | (() => LanguageSupport)
+> = {
   graphql: null,
-  json: json(),
-  javascript: javascript(),
-  html: xml(), // HTML as XML because HTML is oddly slow
-  xml: xml(),
-  url: url(),
-  pairs: pairs(),
-  text: text(),
-  markdown: markdown(),
+  json: json,
+  javascript: javascript,
+  // HTML as XML because HTML is oddly slow
+  html: xml,
+  xml: xml,
+  url: url,
+  pairs: pairs,
+  text: text,
+  markdown: markdown,
 };
 
 const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ['json', 'javascript', 'graphql'];
@@ -122,7 +126,8 @@ export function getLanguageExtension({
     return [graphql(), extraExtensions];
   }
 
-  const base = syntaxExtensions[language ?? 'text'] ?? text();
+  const base_ = syntaxExtensions[language ?? 'text'] ?? text();
+  const base = typeof base_ === 'function' ? base_() : text();
 
   if (!useTemplating) {
     return [base, extraExtensions];

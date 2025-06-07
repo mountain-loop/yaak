@@ -53,9 +53,10 @@ let _activeWorkspaceId: string | null = null;
 
 export async function changeModelStoreWorkspace(workspaceId: string | null) {
   console.log('Syncing models with new workspace', workspaceId);
-  const workspaceModels = await invoke<AnyModel[]>('plugin:yaak-models|workspace_models', {
+  const workspaceModelsStr = await invoke<string>('plugin:yaak-models|workspace_models', {
     workspaceId, // NOTE: if no workspace id provided, it will just fetch global models
   });
+  const workspaceModels = JSON.parse(workspaceModelsStr) as AnyModel[];
   const data = newStoreData();
   for (const model of workspaceModels) {
     data[model.model][model.id] = model;

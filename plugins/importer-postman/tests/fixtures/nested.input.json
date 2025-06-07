@@ -1,0 +1,38 @@
+{
+	"info": {
+		"_postman_id": "9e6dfada-256c-49ea-a38f-7d1b05b7ca2d",
+		"name": "New Collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "18798"
+	},
+	"item": [
+		{
+			"name": "Top Folder",
+			"item": [
+				{
+					"name": "Nested Folder",
+					"item": [
+						{
+							"name": "Request 1",
+							"request": {
+								"method": "GET"
+							}
+						}
+					]
+				},
+				{
+					"name": "Request 2",
+					"request": {
+						"method": "GET"
+					}
+				}
+			]
+		},
+		{
+			"name": "Request 3",
+			"request": {
+				"method": "GET"
+			}
+		}
+	]
+}

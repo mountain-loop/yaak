@@ -1,0 +1,12 @@
+{
+  "name": "@yaakapp/template-function-uuid",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build": "yaakcli build ./src/index.ts",
+    "dev": "yaakcli dev ./src/index.js"
+  },
+  "dependencies": {
+    "uuid": "^11.1.0"
+  }
+}

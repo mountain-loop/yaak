@@ -1,4 +1,4 @@
-import type { HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import type { WebsocketRequest } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
@@ -9,13 +9,15 @@ import React, { useCallback, useMemo } from 'react';
 import { getActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { getActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
+import { allRequestsAtom } from '../hooks/useAllRequests';
+import { useAuthTab } from '../hooks/useAuthTab';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
-import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
+import { useHeadersTab } from '../hooks/useHeadersTab';
+import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { activeWebsocketConnectionAtom } from '../hooks/usePinnedWebsocketConnection';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import {allRequestsAtom} from "../hooks/useAllRequests";
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { deepEqualAtom } from '../lib/atoms';
 import { languageFromContentType } from '../lib/contentType';
@@ -52,10 +54,9 @@ const TAB_DESCRIPTION = 'description';
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
   const requests = get(allRequestsAtom);
-  const urls = requests
+  return requests
     .filter((r) => r.id !== activeRequestId)
     .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url }));
-  return urls;
 });
 
 const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
@@ -69,7 +70,9 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   });
   const forceUpdateKey = useRequestUpdateKey(activeRequest.id);
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
-  const authentication = useHttpAuthenticationSummaries();
+  const authTab = useAuthTab(TAB_AUTH, activeRequest);
+  const headersTab = useHeadersTab(TAB_HEADERS, activeRequest);
+  const inheritedHeaders = useInheritedHeaders(activeRequest);
 
   const { urlParameterPairs, urlParametersKey } = useMemo(() => {
     const placeholderNames = Array.from(activeRequest.url.matchAll(/\/(:[^/]+)/g)).map(
@@ -99,45 +102,14 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
         rightSlot: <CountBadge count={urlParameterPairs.length} />,
         label: 'Params',
       },
-      {
-        value: TAB_HEADERS,
-        label: 'Headers',
-        rightSlot: <CountBadge count={activeRequest.headers.filter((h) => h.name).length} />,
-      },
-      {
-        value: TAB_AUTH,
-        label: 'Auth',
-        options: {
-          value: activeRequest.authenticationType,
-          items: [
-            ...authentication.map((a) => ({
-              label: a.label || 'UNKNOWN',
-              shortLabel: a.shortLabel,
-              value: a.name,
-            })),
-            { type: 'separator' },
-            { label: 'No Authentication', shortLabel: 'Auth', value: null },
-          ],
-          onChange: async (authenticationType) => {
-            let authentication: HttpRequest['authentication'] = activeRequest.authentication;
-            if (activeRequest.authenticationType !== authenticationType) {
-              authentication = {
-                // Reset auth if changing types
-              };
-            }
-            await patchModel(activeRequest, {
-              authenticationType,
-              authentication,
-            });
-          },
-        },
-      },
+      ...headersTab,
+      ...authTab,
       {
         value: TAB_DESCRIPTION,
         label: 'Info',
       },
     ];
-  }, [activeRequest, authentication, urlParameterPairs.length]);
+  }, [authTab, headersTab, urlParameterPairs.length]);
 
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
@@ -254,7 +226,6 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
               onUrlChange={handleUrlChange}
               forceUpdateKey={forceUpdateKey}
               isLoading={activeResponse != null && activeResponse.state !== 'closed'}
-              method={null}
             />
           </div>
           <Tabs
@@ -266,10 +237,11 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             tabListClassName="mt-2 !mb-1.5"
           >
             <TabContent value={TAB_AUTH}>
-              <HttpAuthenticationEditor request={activeRequest} />
+              <HttpAuthenticationEditor model={activeRequest} />
             </TabContent>
             <TabContent value={TAB_HEADERS}>
               <HeadersEditor
+                inheritedHeaders={inheritedHeaders}
                 forceUpdateKey={forceUpdateKey}
                 headers={activeRequest.headers}
                 stateKey={`headers.${activeRequest.id}`}

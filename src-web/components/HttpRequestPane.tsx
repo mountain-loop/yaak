@@ -6,13 +6,15 @@ import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
+import { allRequestsAtom } from '../hooks/useAllRequests';
+import { useAuthTab } from '../hooks/useAuthTab';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
-import { useHttpAuthenticationSummaries } from '../hooks/useHttpAuthentication';
+import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useImportCurl } from '../hooks/useImportCurl';
+import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { deepEqualAtom } from '../lib/atoms';
@@ -39,8 +41,8 @@ import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import { InlineCode } from './core/InlineCode';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
-import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
+import type { TabItem } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { FormMultipartEditor } from './FormMultipartEditor';
 import { FormUrlencodedEditor } from './FormUrlencodedEditor';
@@ -48,6 +50,7 @@ import { GraphQLEditor } from './GraphQLEditor';
 import { HeadersEditor } from './HeadersEditor';
 import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { RequestMethodDropdown } from './RequestMethodDropdown';
 import { UrlBar } from './UrlBar';
 import { UrlParametersEditor } from './UrlParameterEditor';
 
@@ -85,7 +88,9 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   const forceUpdateKey = useRequestUpdateKey(activeRequest.id ?? null);
   const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const contentType = getContentTypeFromHeaders(activeRequest.headers);
-  const authentication = useHttpAuthenticationSummaries();
+  const authTab = useAuthTab(TAB_AUTH, activeRequest);
+  const headersTab = useHeadersTab(TAB_HEADERS, activeRequest);
+  const inheritedHeaders = useInheritedHeaders(activeRequest);
 
   const handleContentTypeChange = useCallback(
     async (contentType: string | null, patch: Partial<Omit<HttpRequest, 'headers'>> = {}) => {
@@ -134,10 +139,9 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     activeRequest.bodyType === BODY_TYPE_FORM_URLENCODED ||
     activeRequest.bodyType === BODY_TYPE_FORM_MULTIPART
   ) {
-    const n = Array.isArray(activeRequest.body?.form)
+    numParams = Array.isArray(activeRequest.body?.form)
       ? activeRequest.body.form.filter((p) => p.name).length
       : 0;
-    numParams = n;
   }
 
   const tabs = useMemo<TabItem[]>(
@@ -214,42 +218,21 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
         rightSlot: <CountBadge count={urlParameterPairs.length} />,
         label: 'Params',
       },
-      {
-        value: TAB_HEADERS,
-        label: 'Headers',
-        rightSlot: <CountBadge count={activeRequest.headers.filter((h) => h.name).length} />,
-      },
-      {
-        value: TAB_AUTH,
-        label: 'Auth',
-        options: {
-          value: activeRequest.authenticationType,
-          items: [
-            ...authentication.map((a) => ({
-              label: a.label || 'UNKNOWN',
-              shortLabel: a.shortLabel,
-              value: a.name,
-            })),
-            { type: 'separator' },
-            { label: 'No Authentication', shortLabel: 'Auth', value: null },
-          ],
-          onChange: async (authenticationType) => {
-            let authentication: HttpRequest['authentication'] = activeRequest.authentication;
-            if (activeRequest.authenticationType !== authenticationType) {
-              authentication = {
-                // Reset auth if changing types
-              };
-            }
-            await patchModel(activeRequest, { authenticationType, authentication });
-          },
-        },
-      },
+      ...headersTab,
+      ...authTab,
       {
         value: TAB_DESCRIPTION,
         label: 'Info',
       },
     ],
-    [activeRequest, authentication, handleContentTypeChange, numParams, urlParameterPairs.length],
+    [
+      activeRequest,
+      authTab,
+      handleContentTypeChange,
+      headersTab,
+      numParams,
+      urlParameterPairs.length,
+    ],
   );
 
   const { mutate: sendRequest } = useSendAnyHttpRequest();
@@ -331,11 +314,6 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     [activeRequest.id, sendRequest],
   );
 
-  const handleMethodChange = useCallback(
-    (method: string) => patchModel(activeRequest, { method }),
-    [activeRequest],
-  );
-
   const handleUrlChange = useCallback(
     (url: string) => patchModel(activeRequest, { url }),
     [activeRequest],
@@ -352,14 +330,17 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             stateKey={`url.${activeRequest.id}`}
             key={forceUpdateKey + urlKey}
             url={activeRequest.url}
-            method={activeRequest.method}
             placeholder="https://example.com"
             onPasteOverwrite={handlePaste}
             autocomplete={autocomplete}
             onSend={handleSend}
             onCancel={cancelResponse}
-            onMethodChange={handleMethodChange}
             onUrlChange={handleUrlChange}
+            leftSlot={
+              <div className="py-0.5">
+                <RequestMethodDropdown request={activeRequest} className="ml-0.5 !h-full" />
+              </div>
+            }
             forceUpdateKey={updateKey}
             isLoading={activeResponse != null && activeResponse.state !== 'closed'}
           />
@@ -372,10 +353,11 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             tabListClassName="mt-2 !mb-1.5"
           >
             <TabContent value={TAB_AUTH}>
-              <HttpAuthenticationEditor request={activeRequest} />
+              <HttpAuthenticationEditor model={activeRequest} />
             </TabContent>
             <TabContent value={TAB_HEADERS}>
               <HeadersEditor
+                inheritedHeaders={inheritedHeaders}
                 forceUpdateKey={`${forceUpdateHeaderEditorKey}::${forceUpdateKey}`}
                 headers={activeRequest.headers}
                 stateKey={`headers.${activeRequest.id}`}

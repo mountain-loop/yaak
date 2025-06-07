@@ -1,0 +1,142 @@
+type: collection.insomnia.rest/5.0
+name: Dummy
+meta:
+  id: wrk_c1eacfa750a04f3ea9985ef28043fa53
+  created: 1746799305927
+  modified: 1746843054272
+  description: This is the description
+collection:
+  - name: Top Level
+    meta:
+      id: fld_42eb2e2bb22b4cedacbd3d057634e80c
+      created: 1736781404718
+      modified: 1736781404718
+      sortKey: -1736781404718
+    children:
+      - url: "{{ _.BASE_URL }}/foo/:id"
+        name: New Request
+        meta:
+          id: req_d72fff2a6b104b91a2ebe9de9edd2785
+          created: 1736781406672
+          modified: 1736781473176
+          isPrivate: false
+          description: My description of the request
+          sortKey: -1736781406672
+        method: GET
+        body:
+          mimeType: multipart/form-data
+          params:
+            - id: pair_7c86036ae8ef499dbbc0b43d0800c5a3
+              name: form
+              value: data
+              disabled: false
+        parameters:
+          - id: pair_b22f6ff611cd4250a6e405ca7b713d09
+            name: query
+            value: qqq
+            disabled: false
+        headers:
+          - name: Content-Type
+            value: multipart/form-data
+            id: pair_4af845963bd14256b98716617971eecd
+          - name: User-Agent
+            value: insomnia/10.3.0
+            id: pair_535ffd00ce48462cb1b7258832ade65a
+          - id: pair_ab4b870278e943cba6babf5a73e213e3
+            name: X-Header
+            value: xxxx
+            disabled: false
+        authentication:
+          type: basic
+          useISO88591: false
+          disabled: false
+          username: user
+          password: pass
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+        pathParameters:
+          - name: id
+            value: iii
+  - url: grpcb.in:9000
+    name: New Request
+    meta:
+      id: greq_06d659324df94504a4d64632be7106b3
+      created: 1746799344864
+      modified: 1746799544082
+      isPrivate: false
+      sortKey: -1746799344864
+    body:
+      text: |-
+        {
+        	"greeting": "Greg"
+        }
+    protoFileId: pf_9d45b0dfaccc4bcc9d930746716786c5
+    protoMethodName: /hello.HelloService/SayHello
+    reflectionApi:
+      enabled: false
+      url: https://buf.build
+      module: buf.build/connectrpc/eliza
+  - url: wss://echo.websocket.org
+    name: New WebSocket Request
+    meta:
+      id: ws-req_5d1a4c7c79494743962e5176f6add270
+      created: 1746799553909
+      modified: 1746887120958
+      sortKey: -1746799553909
+    settings:
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+    authentication:
+      type: basic
+      useISO88591: false
+      disabled: false
+      username: user
+      password: password
+    headers:
+      - name: User-Agent
+        value: insomnia/11.1.0
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_663d5741b072441aa2709a6113371510
+    created: 1736781343768
+    modified: 1736781343768
+environments:
+  name: Base Environment
+  meta:
+    id: env_20945044d3c8497ca8b717bef750987e
+    created: 1736781343767
+    modified: 1736781355209
+    isPrivate: false
+  data:
+    BASE_VAR: hello
+  subEnvironments:
+    - name: Production
+      meta:
+        id: env_6f7728bb7fc04d558d668e954d756ea2
+        created: 1736781358515
+        modified: 1736781394705
+        isPrivate: false
+        sortKey: 1736781358515
+      data:
+        BASE_URL: https://api.yaak.app
+      color: "#f22c2c"
+    - name: Staging
+      meta:
+        id: env_976a8b6eb5d44fb6a20150f65c32d243
+        created: 1736781374707
+        modified: 1736781391078
+        isPrivate: false
+        sortKey: 1736781358565
+      data:
+        BASE_URL: https://api.staging.yaak.app
+      color: "#206fac"

@@ -6,6 +6,7 @@ use crate::{
     workspace_from_window,
 };
 use chrono::Utc;
+use cookie::Cookie;
 use log::warn;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -13,10 +14,11 @@ use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
-    Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse,
+    Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse, GetCookieValueResponse,
     GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
-    PluginWindowContext, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse,
-    ShowToastRequest, TemplateRenderResponse, WindowNavigateEvent,
+    ListCookieNamesResponse, PluginWindowContext, RenderHttpRequestResponse,
+    SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse,
+    WindowNavigateEvent,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -268,6 +270,33 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let name = plugin_handle.name().await;
             let deleted = app_handle.db().delete_plugin_key_value(&name, &req.key).unwrap();
             Some(InternalEventPayload::DeleteKeyValueResponse(DeleteKeyValueResponse { deleted }))
+        }
+        InternalEventPayload::ListCookieNamesRequest(_req) => {
+            let window = get_window_from_window_context(app_handle, &window_context)
+                .expect("Failed to find window for listing cookies");
+            let names = match cookie_jar_from_window(&window) {
+                None => Vec::new(),
+                Some(j) => j
+                    .cookies
+                    .into_iter()
+                    .filter_map(|c| Cookie::parse(c.raw_cookie).ok().map(|c| c.name().to_string()))
+                    .collect(),
+            };
+            Some(InternalEventPayload::ListCookieNamesResponse(ListCookieNamesResponse { names }))
+        }
+        InternalEventPayload::GetCookieValueRequest(req) => {
+            let window = get_window_from_window_context(app_handle, &window_context)
+                .expect("Failed to find window for listing cookies");
+            let value = match cookie_jar_from_window(&window) {
+                None => None,
+                Some(j) => j.cookies.into_iter().find_map(|c| match Cookie::parse(c.raw_cookie) {
+                    Ok(c) if c.name().to_string().eq(&req.name) => {
+                        Some(c.value_trimmed().to_string())
+                    }
+                    _ => None,
+                }),
+            };
+            Some(InternalEventPayload::GetCookieValueResponse(GetCookieValueResponse { value }))
         }
         _ => None,
     };

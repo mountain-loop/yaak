@@ -18,7 +18,9 @@ export function resolvedModelName(r: AnyModel | null): string {
   const withoutVariables = r.url.replace(/\$\{\[\s*([^\]\s]+)\s*]}/g, '$1');
   if (withoutVariables.trim() === '') {
     return r.model === 'http_request'
-      ? 'HTTP Request'
+      ? r.bodyType && r.bodyType === 'graphql'
+        ? 'GraphQL Request'
+        : 'HTTP Request'
       : r.model === 'websocket_request'
         ? 'WebSocket Request'
         : 'gRPC Request';

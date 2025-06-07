@@ -84,6 +84,11 @@ pub enum InternalEventPayload {
     SendHttpRequestRequest(SendHttpRequestRequest),
     SendHttpRequestResponse(SendHttpRequestResponse),
 
+    ListCookieNamesRequest(ListCookieNamesRequest),
+    ListCookieNamesResponse(ListCookieNamesResponse),
+    GetCookieValueRequest(GetCookieValueRequest),
+    GetCookieValueResponse(GetCookieValueResponse),
+
     // Request Actions
     GetHttpRequestActionsRequest(EmptyPayload),
     GetHttpRequestActionsResponse(GetHttpRequestActionsResponse),
@@ -229,6 +234,32 @@ pub struct SendHttpRequestRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct SendHttpRequestResponse {
     pub http_response: HttpResponse,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export, type = "{}", export_to = "gen_events.ts")]
+pub struct ListCookieNamesRequest {}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct ListCookieNamesResponse {
+    pub names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GetCookieValueRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GetCookieValueResponse {
+    pub value: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -563,6 +594,10 @@ pub struct FormInputBase {
 
     #[ts(optional)]
     pub disabled: Option<bool>,
+
+    /// Longer description of the input, likely shown in a tooltip
+    #[ts(optional)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -805,7 +840,7 @@ pub struct CallTemplateFunctionResponse {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct CallTemplateFunctionArgs {
     pub purpose: RenderPurpose,
-    pub values: HashMap<String, String>,
+    pub values: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

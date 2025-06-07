@@ -1,8 +1,11 @@
 import type {
   FindHttpResponsesRequest,
   FindHttpResponsesResponse,
+  GetCookieValueRequest,
+  GetCookieValueResponse,
   GetHttpRequestByIdRequest,
   GetHttpRequestByIdResponse,
+  ListCookieNamesResponse,
   OpenWindowRequest,
   PromptTextRequest,
   PromptTextResponse,
@@ -34,9 +37,13 @@ export interface Context {
     openUrl(
       args: OpenWindowRequest & {
         onNavigate?: (args: { url: string }) => void;
-        onClose: () => void;
+        onClose?: () => void;
       },
     ): Promise<{ close: () => void }>;
+  };
+  cookies: {
+    listNames(): Promise<ListCookieNamesResponse['names']>;
+    getValue(args: GetCookieValueRequest): Promise<GetCookieValueResponse['value']>;
   };
   httpRequest: {
     send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse['httpResponse']>;

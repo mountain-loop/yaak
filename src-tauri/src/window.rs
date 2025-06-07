@@ -1,7 +1,6 @@
 use crate::window_menu::app_menu;
 use log::{info, warn};
 use rand::random;
-use std::process::exit;
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, Runtime, WebviewUrl, WebviewWindow, WindowEvent,
 };
@@ -119,7 +118,7 @@ pub(crate) fn create_window<R: Runtime>(
         win.on_window_event(move |event| match event {
             WindowEvent::CloseRequested { .. } => {
                 let tx = tx.clone();
-                tauri::async_runtime::block_on(async move {
+                tauri::async_runtime::spawn(async move {
                     tx.send(()).await.unwrap();
                 });
             }
@@ -135,7 +134,14 @@ pub(crate) fn create_window<R: Runtime>(
 
         let event_id = event.id().0.as_str();
         match event_id {
-            "quit" => exit(0),
+            "hacked_quit" => {
+                // Cmd+Q on macOS doesn't trigger `CloseRequested` so we use a custom Quit menu
+                // and trigger close() for each window.
+                w.webview_windows().iter().for_each(|(_, w)| {
+                    info!("Closing window {}", w.label());
+                    let _ = w.close();
+                });
+            }
             "close" => w.close().unwrap(),
             "zoom_reset" => w.emit("zoom_reset", true).unwrap(),
             "zoom_in" => w.emit("zoom_in", true).unwrap(),
@@ -199,7 +205,13 @@ pub(crate) fn create_main_window(handle: &AppHandle, url: &str) -> WebviewWindow
     create_window(handle, config)
 }
 
-pub(crate) fn create_child_window(parent_window: &WebviewWindow, url: &str, label: &str, title: &str, inner_size: (f64, f64)) -> WebviewWindow {
+pub(crate) fn create_child_window(
+    parent_window: &WebviewWindow,
+    url: &str,
+    label: &str,
+    title: &str,
+    inner_size: (f64, f64),
+) -> WebviewWindow {
     let app_handle = parent_window.app_handle();
     let label = format!("{OTHER_WINDOW_PREFIX}_{label}");
     let scale_factor = parent_window.scale_factor().unwrap();
@@ -247,7 +259,7 @@ pub(crate) fn create_child_window(parent_window: &WebviewWindow, url: &str, labe
         let child_window = child_window.clone();
         parent_window.clone().on_window_event(move |e| match e {
             // When the parent window is closed, close the child
-            WindowEvent::CloseRequested { .. } => child_window.destroy().unwrap(),
+            WindowEvent::CloseRequested { .. } => child_window.close().unwrap(),
             // When the parent window is focused, bring the child above
             WindowEvent::Focused(focus) => {
                 if *focus {
@@ -259,6 +271,6 @@ pub(crate) fn create_child_window(parent_window: &WebviewWindow, url: &str, labe
             _ => {}
         });
     }
-    
+
     child_window
 }

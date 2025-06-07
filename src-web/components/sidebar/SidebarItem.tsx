@@ -12,7 +12,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
 import { activeRequestAtom } from '../../hooks/useActiveRequest';
-import {allRequestsAtom} from "../../hooks/useAllRequests";
+import { allRequestsAtom } from '../../hooks/useAllRequests';
 import { useScrollIntoView } from '../../hooks/useScrollIntoView';
 import { useSidebarItemCollapsed } from '../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../lib/jotai';
@@ -214,10 +214,13 @@ export const SidebarItem = memo(function SidebarItem({
     return null;
   }
 
+  const opacitySubtle = 'opacity-80';
+
   const itemPrefix = item.model !== 'folder' && (
     <HttpMethodTag
+      short
       request={item}
-      className={classNames(!(active || selected) && 'text-text-subtlest')}
+      className={classNames('text-xs', !(active || selected) && opacitySubtle)}
     />
   );
 
@@ -287,7 +290,11 @@ export const SidebarItem = memo(function SidebarItem({
               {latestHttpResponse.state !== 'closed' ? (
                 <LoadingIcon size="sm" className="text-text-subtlest" />
               ) : (
-                <HttpStatusTag className="text-xs" response={latestHttpResponse} />
+                <HttpStatusTag
+                  short
+                  className={classNames('text-xs', !(active || selected) && opacitySubtle)}
+                  response={latestHttpResponse}
+                />
               )}
             </div>
           ) : null}

@@ -1,16 +1,18 @@
+import type { HttpRequest } from '@yaakapp-internal/models';
+import { patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { showPrompt } from '../lib/prompt';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
+import { HttpMethodTag } from './core/HttpMethodTag';
 import { Icon } from './core/Icon';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
 
 type Props = {
-  method: string;
+  request: HttpRequest;
   className?: string;
-  onChange: (method: string) => void;
 };
 
 const radioItems: RadioDropdownItem<string>[] = [
@@ -28,10 +30,16 @@ const radioItems: RadioDropdownItem<string>[] = [
 }));
 
 export const RequestMethodDropdown = memo(function RequestMethodDropdown({
-  method,
-  onChange,
+  request,
   className,
 }: Props) {
+  const handleChange = useCallback(
+    async (method: string) => {
+      await patchModel(request, { method });
+    },
+    [request],
+  );
+
   const itemsAfter = useMemo<DropdownItem[]>(
     () => [
       {
@@ -49,17 +57,22 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
             placeholder: 'CUSTOM',
           });
           if (newMethod == null) return;
-          onChange(newMethod);
+          await handleChange(newMethod);
         },
       },
     ],
-    [onChange],
+    [handleChange],
   );
 
   return (
-    <RadioDropdown value={method} items={radioItems} itemsAfter={itemsAfter} onChange={onChange}>
+    <RadioDropdown
+      value={request.method}
+      items={radioItems}
+      itemsAfter={itemsAfter}
+      onChange={handleChange}
+    >
       <Button size="xs" className={classNames(className, 'text-text-subtle hover:text')}>
-        {method.toUpperCase()}
+        <HttpMethodTag request={request} />
       </Button>
     </RadioDropdown>
   );

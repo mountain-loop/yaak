@@ -65,6 +65,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
       autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
       data={data}
+      className="pb-4" // Pad the bottom to look nice
     />
   );
 }
@@ -77,15 +78,17 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
   setDataAttr,
   data,
   disabled,
+  className,
 }: Pick<
   Props<T>,
   'inputs' | 'autocompleteFunctions' | 'autocompleteVariables' | 'stateKey' | 'data'
 > & {
   setDataAttr: (name: string, value: JsonPrimitive) => void;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
-    <VStack space={3} className="h-full overflow-auto">
+    <VStack space={3} className={classNames(className, 'h-full overflow-auto')}>
       {inputs?.map((input, i) => {
         if ('hidden' in input && input.hidden) {
           return null;
@@ -234,6 +237,7 @@ function TextArg({
       defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
       required={!arg.optional}
       disabled={arg.disabled}
+      help={arg.description}
       type={arg.password ? 'password' : 'text'}
       label={arg.label ?? arg.name}
       size={INPUT_SIZE}
@@ -275,6 +279,7 @@ function EditorArg({
         htmlFor={id}
         required={!arg.optional}
         visuallyHidden={arg.hideLabel}
+        help={arg.description}
         tags={arg.language ? [capitalize(arg.language)] : undefined}
       >
         {arg.label}
@@ -316,6 +321,7 @@ function SelectArg({
     <Select
       label={arg.label ?? arg.name}
       name={arg.name}
+      help={arg.description}
       onChange={onChange}
       hideLabel={arg.hideLabel}
       value={value}
@@ -338,6 +344,7 @@ function FileArg({
   return (
     <SelectFile
       disabled={arg.disabled}
+      help={arg.description}
       onChange={({ filePath }) => onChange(filePath)}
       filePath={filePath === '__NULL__' ? null : filePath}
       directory={!!arg.directory}
@@ -362,6 +369,7 @@ function HttpRequestArg({
       label={arg.label ?? arg.name}
       name={arg.name}
       onChange={onChange}
+      help={arg.description}
       value={value}
       disabled={arg.disabled}
       options={[
@@ -409,6 +417,7 @@ function CheckboxArg({
     <Checkbox
       onChange={onChange}
       checked={value}
+      help={arg.description}
       disabled={arg.disabled}
       title={arg.label ?? arg.name}
       hideLabel={arg.label == null}

@@ -30,6 +30,7 @@ import { ImageViewer } from './responseViewers/ImageViewer';
 import { PdfViewer } from './responseViewers/PdfViewer';
 import { SvgViewer } from './responseViewers/SvgViewer';
 import { VideoViewer } from './responseViewers/VideoViewer';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface Props {
   style?: CSSProperties;
@@ -155,35 +156,37 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
               tabListClassName="mt-1.5"
             >
               <TabContent value={TAB_BODY}>
-                <ConfirmLargeResponse response={activeResponse}>
-                  {activeResponse.state === 'initialized' ? (
-                    <EmptyStateText>
-                      <LoadingIcon size="xl" className="text-text-subtlest" />
-                    </EmptyStateText>
-                  ) : activeResponse.state === 'closed' && activeResponse.contentLength === 0 ? (
-                    <EmptyStateText>Empty </EmptyStateText>
-                  ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
-                    <EventStreamViewer response={activeResponse} />
-                  ) : mimeType?.match(/^image\/svg/) ? (
-                    <SvgViewer response={activeResponse} />
-                  ) : mimeType?.match(/^image/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={ImageViewer} />
-                  ) : mimeType?.match(/^audio/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={AudioViewer} />
-                  ) : mimeType?.match(/^video/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={VideoViewer} />
-                  ) : mimeType?.match(/pdf/i) ? (
-                    <EnsureCompleteResponse response={activeResponse} render={PdfViewer} />
-                  ) : mimeType?.match(/csv|tab-separated/i) ? (
-                    <CsvViewer className="pb-2" response={activeResponse} />
-                  ) : (
-                    <HTMLOrTextViewer
-                      textViewerClassName="-mr-2 bg-surface" // Pull to the right
-                      response={activeResponse}
-                      pretty={viewMode === 'pretty'}
-                    />
-                  )}
-                </ConfirmLargeResponse>
+                <ErrorBoundary name="Http Response Viewer">
+                  <ConfirmLargeResponse response={activeResponse}>
+                    {activeResponse.state === 'initialized' ? (
+                      <EmptyStateText>
+                        <LoadingIcon size="xl" className="text-text-subtlest" />
+                      </EmptyStateText>
+                    ) : activeResponse.state === 'closed' && activeResponse.contentLength === 0 ? (
+                      <EmptyStateText>Empty </EmptyStateText>
+                    ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
+                      <EventStreamViewer response={activeResponse} />
+                    ) : mimeType?.match(/^image\/svg/) ? (
+                      <SvgViewer response={activeResponse} />
+                    ) : mimeType?.match(/^image/i) ? (
+                      <EnsureCompleteResponse response={activeResponse} render={ImageViewer} />
+                    ) : mimeType?.match(/^audio/i) ? (
+                      <EnsureCompleteResponse response={activeResponse} render={AudioViewer} />
+                    ) : mimeType?.match(/^video/i) ? (
+                      <EnsureCompleteResponse response={activeResponse} render={VideoViewer} />
+                    ) : mimeType?.match(/pdf/i) ? (
+                      <EnsureCompleteResponse response={activeResponse} render={PdfViewer} />
+                    ) : mimeType?.match(/csv|tab-separated/i) ? (
+                      <CsvViewer className="pb-2" response={activeResponse} />
+                    ) : (
+                      <HTMLOrTextViewer
+                        textViewerClassName="-mr-2 bg-surface" // Pull to the right
+                        response={activeResponse}
+                        pretty={viewMode === 'pretty'}
+                      />
+                    )}
+                  </ConfirmLargeResponse>
+                </ErrorBoundary>
               </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />

@@ -2,6 +2,7 @@ import { useAtomValue } from 'jotai';
 import React from 'react';
 import { dialogsAtom, hideDialog } from '../lib/dialog';
 import { Dialog, type DialogProps } from './core/Dialog';
+import { ErrorBoundary } from './ErrorBoundary';
 
 export type DialogInstance = {
   id: string;
@@ -22,16 +23,17 @@ export function Dialogs() {
 function DialogInstance({ render, onClose, id, ...props }: DialogInstance) {
   const children = render({ hide: () => hideDialog(id) });
   return (
-    <Dialog
-      open
-      key={id}
-      onClose={() => {
-        onClose?.();
-        hideDialog(id);
-      }}
-      {...props}
-    >
-      {children}
-    </Dialog>
+    <ErrorBoundary name={`Dialog ${id}`}>
+      <Dialog
+        open
+        onClose={() => {
+          onClose?.();
+          hideDialog(id);
+        }}
+        {...props}
+      >
+        {children}
+      </Dialog>
+    </ErrorBoundary>
   );
 }

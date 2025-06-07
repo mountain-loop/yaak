@@ -1,0 +1,187 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2025-01-13T15:19:18.330Z",
+  "__export_source": "insomnia.desktop.app:v10.3.0",
+  "resources": [
+    {
+      "_id": "req_84cd9ae4bd034dd8bb730e856a665cbb",
+      "parentId": "fld_859d1df78261463480b6a3a1419517e3",
+      "modified": 1736781473176,
+      "created": 1736781406672,
+      "url": "{{ _.BASE_URL }}/foo/:id",
+      "name": "New Request",
+      "description": "My description of the request",
+      "method": "GET",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "id": "pair_7c86036ae8ef499dbbc0b43d0800c5a3",
+            "name": "form",
+            "value": "data",
+            "description": "",
+            "disabled": false
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "id": "pair_b22f6ff611cd4250a6e405ca7b713d09",
+          "name": "query",
+          "value": "qqq",
+          "description": "",
+          "disabled": false
+        }
+      ],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "multipart/form-data",
+          "id": "pair_4af845963bd14256b98716617971eecd"
+        },
+        {
+          "name": "User-Agent",
+          "value": "insomnia/10.3.0",
+          "id": "pair_535ffd00ce48462cb1b7258832ade65a"
+        },
+        {
+          "id": "pair_ab4b870278e943cba6babf5a73e213e3",
+          "name": "X-Header",
+          "value": "xxxx",
+          "description": "",
+          "disabled": false
+        }
+      ],
+      "authentication": {
+        "type": "basic",
+        "useISO88591": false,
+        "disabled": false,
+        "username": "user",
+        "password": "pass"
+      },
+      "metaSortKey": -1736781406672,
+      "isPrivate": false,
+      "pathParameters": [
+        {
+          "name": "id",
+          "value": "iii"
+        }
+      ],
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "fld_859d1df78261463480b6a3a1419517e3",
+      "parentId": "wrk_d4d92f7c0ee947b89159243506687019",
+      "modified": 1736781404718,
+      "created": 1736781404718,
+      "name": "Top Level",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1736781404718,
+      "environmentType": "kv",
+      "_type": "request_group"
+    },
+    {
+      "_id": "wrk_d4d92f7c0ee947b89159243506687019",
+      "parentId": null,
+      "modified": 1736781343765,
+      "created": 1736781343765,
+      "name": "Dummy",
+      "description": "",
+      "scope": "collection",
+      "_type": "workspace"
+    },
+    {
+      "_id": "env_16c0dec5b77c414ae0e419b8f10c3701300c5900",
+      "parentId": "wrk_d4d92f7c0ee947b89159243506687019",
+      "modified": 1736781355209,
+      "created": 1736781343767,
+      "name": "Base Environment",
+      "data": {
+        "BASE_VAR": "hello"
+      },
+      "dataPropertyOrder": null,
+      "color": null,
+      "isPrivate": false,
+      "metaSortKey": 1736781343767,
+      "environmentType": "kv",
+      "kvPairData": [
+        {
+          "id": "envPair_61c1be66d42241b5a28306d2cd92d3e3",
+          "name": "BASE_VAR",
+          "value": "hello",
+          "type": "str",
+          "enabled": true
+        }
+      ],
+      "_type": "environment"
+    },
+    {
+      "_id": "jar_16c0dec5b77c414ae0e419b8f10c3701300c5900",
+      "parentId": "wrk_d4d92f7c0ee947b89159243506687019",
+      "modified": 1736781343768,
+      "created": 1736781343768,
+      "name": "Default Jar",
+      "cookies": [],
+      "_type": "cookie_jar"
+    },
+    {
+      "_id": "env_799ae3d723ef44af91b4817e5d057e6d",
+      "parentId": "env_16c0dec5b77c414ae0e419b8f10c3701300c5900",
+      "modified": 1736781394705,
+      "created": 1736781358515,
+      "name": "Production",
+      "data": {
+        "BASE_URL": "https://api.yaak.app"
+      },
+      "dataPropertyOrder": null,
+      "color": "#f22c2c",
+      "isPrivate": false,
+      "metaSortKey": 1736781358515,
+      "environmentType": "kv",
+      "kvPairData": [
+        {
+          "id": "envPair_4d97b569b7e845ccbf488e1b26637cbc",
+          "name": "BASE_URL",
+          "value": "https://api.yaak.app",
+          "type": "str",
+          "enabled": true
+        }
+      ],
+      "_type": "environment"
+    },
+    {
+      "_id": "env_030fbfdbb274426ebd78e2e6518f8553",
+      "parentId": "env_16c0dec5b77c414ae0e419b8f10c3701300c5900",
+      "modified": 1736781391078,
+      "created": 1736781374707,
+      "name": "Staging",
+      "data": {
+        "BASE_URL": "https://api.staging.yaak.app"
+      },
+      "dataPropertyOrder": null,
+      "color": "#206fac",
+      "isPrivate": false,
+      "metaSortKey": 1736781358565,
+      "environmentType": "kv",
+      "kvPairData": [
+        {
+          "id": "envPair_4d97b569b7e845ccbf488e1b26637cbc",
+          "name": "BASE_URL",
+          "value": "https://api.staging.yaak.app",
+          "type": "str",
+          "enabled": true
+        }
+      ],
+      "_type": "environment"
+    }
+  ]
+}

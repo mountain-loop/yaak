@@ -26,18 +26,23 @@ export function useRecentWorkspaces() {
 
 export function useSubscribeRecentWorkspaces() {
   useEffect(() => {
-    return jotaiStore.sub(activeWorkspaceIdAtom, async () => {
-      const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-      if (activeWorkspaceId == null) return;
-
-      const key = kvKey();
-
-      const recentIds = getKeyValue<string[]>({ namespace, key, fallback });
-      if (recentIds[0] === activeWorkspaceId) return; // Short-circuit
-
-      const withoutActiveId = recentIds.filter((id) => id !== activeWorkspaceId);
-      const value = [activeWorkspaceId, ...withoutActiveId];
-      await setKeyValue({ namespace, key, value });
-    });
+    const unsub = jotaiStore.sub(activeWorkspaceIdAtom, updateRecentWorkspaces);
+    updateRecentWorkspaces().catch(console.error); // Update when opened in a new window
+    return unsub;
   }, []);
+}
+
+async function updateRecentWorkspaces() {
+  const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+  if (activeWorkspaceId == null) return;
+
+  const key = kvKey();
+
+  const recentIds = getKeyValue<string[]>({ namespace, key, fallback });
+  if (recentIds[0] === activeWorkspaceId) return; // Short-circuit
+
+  const withoutActiveId = recentIds.filter((id) => id !== activeWorkspaceId);
+  const value = [activeWorkspaceId, ...withoutActiveId];
+  console.log('Recent workspaces update', activeWorkspaceId);
+  await setKeyValue({ namespace, key, value });
 }

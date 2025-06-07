@@ -1,13 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
 import { InlineCode } from '../components/core/InlineCode';
 import { showAlert } from '../lib/alert';
+import { appInfo } from '../lib/appInfo';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { invokeCmd } from '../lib/tauri';
-import { useAppInfo } from './useAppInfo';
 
 export function useCheckForUpdates() {
-  const appInfo = useAppInfo();
-
   return useMutation({
     mutationKey: ['check_for_updates'],
     mutationFn: async () => {

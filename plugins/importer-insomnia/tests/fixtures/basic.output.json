@@ -1,0 +1,126 @@
+{
+  "resources": {
+    "environments": [
+      {
+        "createdAt": "2025-01-13T15:15:43.767",
+        "updatedAt": "2025-01-13T15:15:55.209",
+        "sortPriority": 1736781343767,
+        "base": true,
+        "id": "GENERATE_ID::env_16c0dec5b77c414ae0e419b8f10c3701300c5900",
+        "model": "environment",
+        "name": "Base Environment",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "BASE_VAR",
+            "value": "hello"
+          }
+        ],
+        "workspaceId": "GENERATE_ID::wrk_d4d92f7c0ee947b89159243506687019"
+      },
+      {
+        "createdAt": "2025-01-13T15:15:58.515",
+        "updatedAt": "2025-01-13T15:16:34.705",
+        "sortPriority": 1736781358515,
+        "base": false,
+        "id": "GENERATE_ID::env_799ae3d723ef44af91b4817e5d057e6d",
+        "model": "environment",
+        "name": "Production",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "BASE_URL",
+            "value": "https://api.yaak.app"
+          }
+        ],
+        "workspaceId": "GENERATE_ID::wrk_d4d92f7c0ee947b89159243506687019"
+      },
+      {
+        "createdAt": "2025-01-13T15:16:14.707",
+        "updatedAt": "2025-01-13T15:16:31.078",
+        "sortPriority": 1736781358565,
+        "base": false,
+        "id": "GENERATE_ID::env_030fbfdbb274426ebd78e2e6518f8553",
+        "model": "environment",
+        "name": "Staging",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "BASE_URL",
+            "value": "https://api.staging.yaak.app"
+          }
+        ],
+        "workspaceId": "GENERATE_ID::wrk_d4d92f7c0ee947b89159243506687019"
+      }
+    ],
+    "folders": [
+      {
+        "createdAt": "2025-01-13T15:16:44.718",
+        "updatedAt": "2025-01-13T15:16:44.718",
+        "folderId": null,
+        "id": "GENERATE_ID::fld_859d1df78261463480b6a3a1419517e3",
+        "model": "folder",
+        "name": "Top Level",
+        "workspaceId": "GENERATE_ID::wrk_d4d92f7c0ee947b89159243506687019"
+      }
+    ],
+    "grpcRequests": [],
+    "httpRequests": [
+      {
+        "authentication": {
+          "password": "pass",
+          "username": "user"
+        },
+        "authenticationType": "basic",
+        "body": {
+          "form": [
+            {
+              "enabled": true,
+              "file": null,
+              "name": "form",
+              "value": "data"
+            }
+          ]
+        },
+        "bodyType": "multipart/form-data",
+        "createdAt": "2025-01-13T15:16:46.672",
+        "sortPriority": -1736781406672,
+        "updatedAt": "2025-01-13T15:17:53.176",
+        "description": "My description of the request",
+        "folderId": "GENERATE_ID::fld_859d1df78261463480b6a3a1419517e3",
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Content-Type",
+            "value": "multipart/form-data"
+          },
+          {
+            "enabled": true,
+            "name": "User-Agent",
+            "value": "insomnia/10.3.0"
+          },
+          {
+            "enabled": true,
+            "name": "X-Header",
+            "value": "xxxx"
+          }
+        ],
+        "id": "GENERATE_ID::req_84cd9ae4bd034dd8bb730e856a665cbb",
+        "method": "GET",
+        "model": "http_request",
+        "name": "New Request",
+        "url": "${[BASE_URL ]}/foo/:id",
+        "workspaceId": "GENERATE_ID::wrk_d4d92f7c0ee947b89159243506687019"
+      }
+    ],
+    "websocketRequests": [],
+    "workspaces": [
+      {
+        "createdAt": "2025-01-13T15:15:43.765",
+        "id": "GENERATE_ID::wrk_d4d92f7c0ee947b89159243506687019",
+        "model": "workspace",
+        "name": "Dummy"
+      }
+    ]
+  }
+}

@@ -2,6 +2,7 @@ mod batch;
 mod cookie_jars;
 mod environments;
 mod folders;
+mod graphql_introspections;
 mod grpc_connections;
 mod grpc_events;
 mod grpc_requests;

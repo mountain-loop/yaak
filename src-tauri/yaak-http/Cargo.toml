@@ -7,4 +7,6 @@ publish = false
 [dependencies]
 yaak-models = { workspace = true }
 regex = "1.11.0"
+rustls = { workspace = true, default-features = false, features = ["ring"] }
+rustls-platform-verifier = { workspace = true }
 urlencoding = "2.1.3"

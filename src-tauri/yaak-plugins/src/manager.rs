@@ -11,6 +11,7 @@ use crate::events::{
     GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, ImportRequest, ImportResponse,
     InternalEvent, InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
 };
+use crate::native_template_functions::template_function_secure;
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
 use crate::server_ws::PluginRuntimeServerWebsocket;
@@ -21,16 +22,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
+use tauri::{AppHandle, Manager, Runtime, WebviewWindow, is_dev};
 use tokio::fs::read_dir;
 use tokio::net::TcpListener;
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::{timeout, Instant};
+use tokio::sync::{Mutex, mpsc};
+use tokio::time::{Instant, timeout};
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::generate_id;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result as TemplateResult;
-use crate::native_template_functions::template_function_secure;
 
 #[derive(Clone)]
 pub struct PluginManager {
@@ -140,9 +140,13 @@ impl PluginManager {
             .resolve("vendored/plugins", BaseDirectory::Resource)
             .expect("failed to resolve plugin directory resource");
 
-        let plugins_dir = match env::var("YAAK_PLUGINS_DIR") {
-            Ok(d) => &PathBuf::from(d),
-            Err(_) => bundled_plugins_dir,
+        let plugins_dir = if is_dev() {
+            // Use plugins directly for easy development
+            env::current_dir()
+                .map(|cwd| cwd.join("../plugins").canonicalize().unwrap())
+                .unwrap_or_else(|_| bundled_plugins_dir.clone())
+        } else {
+            bundled_plugins_dir.clone()
         };
 
         info!("Loading bundled plugins from {plugins_dir:?}");
@@ -160,8 +164,7 @@ impl PluginManager {
             })
             .collect();
 
-        let plugins =
-            app_handle.db().list_plugins().unwrap_or_default();
+        let plugins = app_handle.db().list_plugins().unwrap_or_default();
         let installed_plugin_dirs: Vec<PluginCandidate> = plugins
             .iter()
             .map(|p| PluginCandidate {
@@ -527,6 +530,7 @@ impl PluginManager {
             InternalEventPayload::EmptyResponse(_) => {
                 Err(PluginErr("Auth plugin returned empty".to_string()))
             }
+            InternalEventPayload::ErrorResponse(e) => Err(PluginErr(e.error)),
             e => Err(PluginErr(format!("Auth plugin returned invalid event {:?}", e))),
         }
     }
@@ -537,7 +541,7 @@ impl PluginManager {
         auth_name: &str,
         action_index: i32,
         values: HashMap<String, JsonPrimitive>,
-        request_id: &str,
+        model_id: &str,
     ) -> Result<()> {
         let results = self.get_http_authentication_summaries(window).await?;
         let plugin = results
@@ -545,7 +549,7 @@ impl PluginManager {
             .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
             .ok_or(PluginNotFoundErr(auth_name.into()))?;
 
-        let context_id = format!("{:x}", md5::compute(request_id.to_string()));
+        let context_id = format!("{:x}", md5::compute(model_id.to_string()));
         self.send_to_plugin_and_wait(
             &PluginWindowContext::new(window),
             &plugin,
@@ -598,6 +602,7 @@ impl PluginManager {
             InternalEventPayload::EmptyResponse(_) => {
                 Err(PluginErr("Auth plugin returned empty".to_string()))
             }
+            InternalEventPayload::ErrorResponse(e) => Err(PluginErr(e.error)),
             e => Err(PluginErr(format!("Auth plugin returned invalid event {:?}", e))),
         }
     }
@@ -606,15 +611,12 @@ impl PluginManager {
         &self,
         window_context: &PluginWindowContext,
         fn_name: &str,
-        args: HashMap<String, String>,
+        values: HashMap<String, serde_json::Value>,
         purpose: RenderPurpose,
     ) -> TemplateResult<String> {
         let req = CallTemplateFunctionRequest {
             name: fn_name.to_string(),
-            args: CallTemplateFunctionArgs {
-                purpose,
-                values: args,
-            },
+            args: CallTemplateFunctionArgs { purpose, values },
         };
 
         let events = self

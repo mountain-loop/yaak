@@ -40,6 +40,7 @@ openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu inst
 
 [dependencies]
 chrono = { version = "0.4.31", features = ["serde"] }
+cookie = "0.18.1"
 encoding_rs = "0.8.35"
 eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.14.0" }
 http = { version = "1.2.0", default-features = false }
@@ -49,13 +50,11 @@ mime_guess = "2.0.5"
 rand = "0.9.0"
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider"] }
 reqwest_cookie_store = "0.8.0"
-rustls = { version = "0.23.25", default-features = false, features = ["custom-provider", "ring"] }
-rustls-platform-verifier = "0.5.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
 tauri-plugin-clipboard-manager = "2.2.2"
-tauri-plugin-dialog = "2.2.0"
+tauri-plugin-dialog = { workspace = true }
 tauri-plugin-fs = "2.2.0"
 tauri-plugin-log = { version = "2.3.1", features = ["colored"] }
 tauri-plugin-opener = "2.2.6"
@@ -88,10 +87,13 @@ serde = "1.0.219"
 serde_json = "1.0.140"
 tauri = "2.4.1"
 tauri-plugin = "2.1.1"
+tauri-plugin-dialog = "2.2.0"
 tauri-plugin-shell = "2.2.1"
 tokio = "1.44.2"
 thiserror = "2.0.12"
 ts-rs = "10.1.0"
+rustls = { version = "0.23.25", default-features = false }
+rustls-platform-verifier = "0.5.1"
 yaak-common = { path = "yaak-common" }
 yaak-http = { path = "yaak-http" }
 yaak-models = { path = "yaak-models" }

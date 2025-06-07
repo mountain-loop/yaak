@@ -5,6 +5,7 @@ export function newStoreData(): ModelStoreData {
     cookie_jar: {},
     environment: {},
     folder: {},
+    graphql_introspection: {},
     grpc_connection: {},
     grpc_event: {},
     grpc_request: {},

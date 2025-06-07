@@ -37,6 +37,7 @@ import { Icon } from './Icon';
 import { LoadingIcon } from './LoadingIcon';
 import { Separator } from './Separator';
 import { HStack, VStack } from './Stacks';
+import { ErrorBoundary } from '../ErrorBoundary';
 
 export type DropdownItemSeparator = {
   type: 'separator';
@@ -202,17 +203,19 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   return (
     <>
       {child}
-      <Menu
-        ref={menuRef}
-        showTriangle
-        triggerRef={buttonRef}
-        fullWidth={fullWidth}
-        defaultSelectedIndex={defaultSelectedIndex}
-        items={items}
-        triggerShape={triggerRect ?? null}
-        onClose={() => setIsOpen(false)}
-        isOpen={isOpen}
-      />
+      <ErrorBoundary name={`Dropdown Menu`}>
+        <Menu
+          ref={menuRef}
+          showTriangle
+          triggerRef={buttonRef}
+          fullWidth={fullWidth}
+          defaultSelectedIndex={defaultSelectedIndex}
+          items={items}
+          triggerShape={triggerRect ?? null}
+          onClose={() => setIsOpen(false)}
+          isOpen={isOpen}
+        />
+      </ErrorBoundary>
     </>
   );
 });
@@ -639,7 +642,7 @@ function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: Men
       justify="start"
       leftSlot={
         (isLoading || item.leftSlot) && (
-          <div className={classNames('pr-2 flex justify-start opacity-70')}>
+          <div className={classNames('pr-2 flex justify-start [&_svg]:opacity-70')}>
             {isLoading ? <LoadingIcon /> : item.leftSlot}
           </div>
         )

@@ -1,5 +1,7 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
-import type { GraphQLSchema, IntrospectionQuery } from 'graphql';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { invoke } from '@tauri-apps/api/core';
+import type { GraphQlIntrospection, HttpRequest } from '@yaakapp-internal/models';
+import type { GraphQLSchema } from 'graphql';
 import { buildClientSchema, getIntrospectionQuery } from 'graphql';
 import { useCallback, useEffect, useState } from 'react';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
@@ -7,7 +9,6 @@ import { getResponseBodyText } from '../lib/responseBody';
 import { sendEphemeralRequest } from '../lib/sendEphemeralRequest';
 import { useActiveEnvironment } from './useActiveEnvironment';
 import { useDebouncedValue } from './useDebouncedValue';
-import { useKeyValue } from './useKeyValue';
 
 const introspectionRequestBody = JSON.stringify({
   query: getIntrospectionQuery(),
@@ -20,17 +21,37 @@ export function useIntrospectGraphQL(
 ) {
   // Debounce the request because it can change rapidly, and we don't
   // want to send so too many requests.
-  const request = useDebouncedValue(baseRequest);
+  const debouncedRequest = useDebouncedValue(baseRequest);
   const activeEnvironment = useActiveEnvironment();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>();
   const [schema, setSchema] = useState<GraphQLSchema | null>(null);
+  const queryClient = useQueryClient();
 
-  const { value: introspection, set: setIntrospection } = useKeyValue<IntrospectionQuery | null>({
-    key: ['graphql_introspection', baseRequest.id],
-    fallback: null,
-    namespace: 'global',
+  const introspection = useQuery({
+    queryKey: ['introspection', baseRequest.id],
+    queryFn: async () =>
+      invoke<GraphQlIntrospection | null>('plugin:yaak-models|get_graphql_introspection', {
+        requestId: baseRequest.id,
+      }),
   });
+
+  const upsertIntrospection = useCallback(
+    async (content: string | null) => {
+      const v = await invoke<GraphQlIntrospection>(
+        'plugin:yaak-models|upsert_graphql_introspection',
+        {
+          requestId: baseRequest.id,
+          workspaceId: baseRequest.workspaceId,
+          content: content ?? '',
+        },
+      );
+
+      // Update local introspection
+      queryClient.setQueryData(['introspection', baseRequest.id], v);
+    },
+    [baseRequest.id, baseRequest.workspaceId, queryClient],
+  );
 
   const refetch = useCallback(async () => {
     try {
@@ -62,15 +83,14 @@ export function useIntrospectGraphQL(
         return setError('Empty body returned in response');
       }
 
-      const { data } = JSON.parse(bodyText);
-      console.log(`Got introspection response for ${baseRequest.url}`, data);
-      await setIntrospection(data);
+      console.log(`Got introspection response for ${baseRequest.url}`, bodyText);
+      await upsertIntrospection(bodyText);
     } catch (err) {
       setError(String(err));
     } finally {
       setIsLoading(false);
     }
-  }, [activeEnvironment?.id, baseRequest, setIntrospection]);
+  }, [activeEnvironment?.id, baseRequest, upsertIntrospection]);
 
   useEffect(() => {
     // Skip introspection if automatic is disabled and we already have one
@@ -81,27 +101,27 @@ export function useIntrospectGraphQL(
     refetch().catch(console.error);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request.id, request.url, request.method, activeEnvironment?.id]);
+  }, [baseRequest.id, debouncedRequest.url, debouncedRequest.method, activeEnvironment?.id]);
 
   const clear = useCallback(async () => {
     setError('');
     setSchema(null);
-    await setIntrospection(null);
-  }, [setIntrospection]);
+    await upsertIntrospection(null);
+  }, [upsertIntrospection]);
 
   useEffect(() => {
-    if (introspection == null) {
+    if (introspection.data?.content == null) {
       return;
     }
 
     try {
-      const schema = buildClientSchema(introspection);
+      const schema = buildClientSchema(JSON.parse(introspection.data.content).data);
       setSchema(schema);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       setError('message' in e ? e.message : String(e));
     }
-  }, [introspection]);
+  }, [introspection.data?.content]);
 
   return { schema, isLoading, error, refetch, clear };
 }

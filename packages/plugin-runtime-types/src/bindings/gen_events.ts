@@ -29,7 +29,7 @@ export type CallHttpRequestActionArgs = { httpRequest: HttpRequest, };
 
 export type CallHttpRequestActionRequest = { index: number, pluginRefId: string, args: CallHttpRequestActionArgs, };
 
-export type CallTemplateFunctionArgs = { purpose: RenderPurpose, values: { [key in string]?: string }, };
+export type CallTemplateFunctionArgs = { purpose: RenderPurpose, values: { [key in string]?: JsonValue }, };
 
 export type CallTemplateFunctionRequest = { name: string, args: CallTemplateFunctionArgs, };
 
@@ -104,7 +104,11 @@ hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, };
+defaultValue?: string, disabled?: boolean, 
+/**
+ * Longer description of the input, likely shown in a tooltip
+ */
+description?: string, };
 
 export type FormInputCheckbox = { 
 /**
@@ -131,7 +135,11 @@ hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, };
+defaultValue?: string, disabled?: boolean, 
+/**
+ * Longer description of the input, likely shown in a tooltip
+ */
+description?: string, };
 
 export type FormInputEditor = { 
 /**
@@ -170,7 +178,11 @@ hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, };
+defaultValue?: string, disabled?: boolean, 
+/**
+ * Longer description of the input, likely shown in a tooltip
+ */
+description?: string, };
 
 export type FormInputFile = { 
 /**
@@ -205,7 +217,11 @@ hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, };
+defaultValue?: string, disabled?: boolean, 
+/**
+ * Longer description of the input, likely shown in a tooltip
+ */
+description?: string, };
 
 export type FormInputHttpRequest = { 
 /**
@@ -232,7 +248,11 @@ hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, };
+defaultValue?: string, disabled?: boolean, 
+/**
+ * Longer description of the input, likely shown in a tooltip
+ */
+description?: string, };
 
 export type FormInputMarkdown = { content: string, hidden?: boolean, };
 
@@ -265,7 +285,11 @@ hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, };
+defaultValue?: string, disabled?: boolean, 
+/**
+ * Longer description of the input, likely shown in a tooltip
+ */
+description?: string, };
 
 export type FormInputSelectOption = { label: string, value: string, };
 
@@ -306,9 +330,17 @@ hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, };
+defaultValue?: string, disabled?: boolean, 
+/**
+ * Longer description of the input, likely shown in a tooltip
+ */
+description?: string, };
 
 export type GenericCompletionOption = { label: string, detail?: string, info?: string, type?: CompletionOptionType, boost?: number, };
+
+export type GetCookieValueRequest = { name: string, };
+
+export type GetCookieValueResponse = { value: string | null, };
 
 export type GetHttpAuthenticationConfigRequest = { contextId: string, values: { [key in string]?: JsonPrimitive }, };
 
@@ -346,9 +378,13 @@ export type ImportResponse = { resources: ImportResources, };
 
 export type InternalEvent = { id: string, pluginRefId: string, pluginName: string, replyId: string | null, windowContext: PluginWindowContext, payload: InternalEventPayload, };
 
-export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & EmptyPayload | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_summary_request" } & EmptyPayload | { "type": "get_http_authentication_summary_response" } & GetHttpAuthenticationSummaryResponse | { "type": "get_http_authentication_config_request" } & GetHttpAuthenticationConfigRequest | { "type": "get_http_authentication_config_response" } & GetHttpAuthenticationConfigResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "call_http_authentication_action_request" } & CallHttpAuthenticationActionRequest | { "type": "call_http_authentication_action_response" } & EmptyPayload | { "type": "copy_text_request" } & CopyTextRequest | { "type": "copy_text_response" } & EmptyPayload | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "get_key_value_request" } & GetKeyValueRequest | { "type": "get_key_value_response" } & GetKeyValueResponse | { "type": "set_key_value_request" } & SetKeyValueRequest | { "type": "set_key_value_response" } & SetKeyValueResponse | { "type": "delete_key_value_request" } & DeleteKeyValueRequest | { "type": "delete_key_value_response" } & DeleteKeyValueResponse | { "type": "open_window_request" } & OpenWindowRequest | { "type": "window_navigate_event" } & WindowNavigateEvent | { "type": "window_close_event" } | { "type": "close_window_request" } & CloseWindowRequest | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "show_toast_response" } & EmptyPayload | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "empty_response" } & EmptyPayload | { "type": "error_response" } & ErrorResponse;
+export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & EmptyPayload | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "list_cookie_names_request" } & ListCookieNamesRequest | { "type": "list_cookie_names_response" } & ListCookieNamesResponse | { "type": "get_cookie_value_request" } & GetCookieValueRequest | { "type": "get_cookie_value_response" } & GetCookieValueResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_summary_request" } & EmptyPayload | { "type": "get_http_authentication_summary_response" } & GetHttpAuthenticationSummaryResponse | { "type": "get_http_authentication_config_request" } & GetHttpAuthenticationConfigRequest | { "type": "get_http_authentication_config_response" } & GetHttpAuthenticationConfigResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "call_http_authentication_action_request" } & CallHttpAuthenticationActionRequest | { "type": "call_http_authentication_action_response" } & EmptyPayload | { "type": "copy_text_request" } & CopyTextRequest | { "type": "copy_text_response" } & EmptyPayload | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "get_key_value_request" } & GetKeyValueRequest | { "type": "get_key_value_response" } & GetKeyValueResponse | { "type": "set_key_value_request" } & SetKeyValueRequest | { "type": "set_key_value_response" } & SetKeyValueResponse | { "type": "delete_key_value_request" } & DeleteKeyValueRequest | { "type": "delete_key_value_response" } & DeleteKeyValueResponse | { "type": "open_window_request" } & OpenWindowRequest | { "type": "window_navigate_event" } & WindowNavigateEvent | { "type": "window_close_event" } | { "type": "close_window_request" } & CloseWindowRequest | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "show_toast_response" } & EmptyPayload | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "empty_response" } & EmptyPayload | { "type": "error_response" } & ErrorResponse;
 
 export type JsonPrimitive = string | number | boolean | null;
+
+export type ListCookieNamesRequest = {};
+
+export type ListCookieNamesResponse = { names: Array<string>, };
 
 export type OpenWindowRequest = { url: string, 
 /**

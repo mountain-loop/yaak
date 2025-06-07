@@ -125,8 +125,8 @@ function ActualEventStreamViewer({ response }: Props) {
 
 function FormattedEditor({ text, language }: { text: string; language: EditorProps['language'] }) {
   const formatted = useFormatText({ text, language, pretty: true });
-  if (formatted.data == null) return null;
-  return <Editor readOnly defaultValue={formatted.data} language={language} stateKey={null} />;
+  if (formatted == null) return null;
+  return <Editor readOnly defaultValue={formatted} language={language} stateKey={null} />;
 }
 
 function EventRow({

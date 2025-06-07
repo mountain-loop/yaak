@@ -30,9 +30,8 @@ export function getKeyValueRaw({
   key: string | string[];
 }) {
   const key = buildKeyValueKey(keyOrKeys);
-  const kv = jotaiStore
-    .get(keyValuesAtom)
-    .find((kv) => kv.namespace === namespace && kv?.key === key);
+  const keyValues = jotaiStore.get(keyValuesAtom);
+  const kv = keyValues.find((kv) => kv.namespace === namespace && kv?.key === key);
   return kv ?? null;
 }
 

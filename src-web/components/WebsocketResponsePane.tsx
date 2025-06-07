@@ -27,6 +27,7 @@ import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
 import { WebsocketStatusTag } from './core/WebsocketStatusTag';
 import { EmptyStateText } from './EmptyStateText';
+import { ErrorBoundary } from './ErrorBoundary';
 import { RecentWebsocketConnectionsDropdown } from './RecentWebsocketConnectionsDropdown';
 
 interface Props {
@@ -54,10 +55,9 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
     if (hexDump) {
       return activeEvent?.message ? hexy(activeEvent?.message) : '';
     }
-    const text = activeEvent?.message
+    return activeEvent?.message
       ? new TextDecoder('utf-8').decode(Uint8Array.from(activeEvent.message))
       : '';
-    return text;
   }, [activeEvent?.message, hexDump]);
 
   const language = languageFromContentType(null, message);
@@ -93,27 +93,29 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                 />
               </HStack>
             </HStack>
-            <AutoScroller
-              data={events}
-              header={
-                activeConnection.error && (
-                  <Banner color="danger" className="m-3">
-                    {activeConnection.error}
-                  </Banner>
-                )
-              }
-              render={(event) => (
-                <EventRow
-                  key={event.id}
-                  event={event}
-                  isActive={event.id === activeEventId}
-                  onClick={() => {
-                    if (event.id === activeEventId) setActiveEventId(null);
-                    else setActiveEventId(event.id);
-                  }}
-                />
-              )}
-            />
+            <ErrorBoundary name="Websocket Events">
+              <AutoScroller
+                data={events}
+                header={
+                  activeConnection.error && (
+                    <Banner color="danger" className="m-3">
+                      {activeConnection.error}
+                    </Banner>
+                  )
+                }
+                render={(event) => (
+                  <EventRow
+                    key={event.id}
+                    event={event}
+                    isActive={event.id === activeEventId}
+                    onClick={() => {
+                      if (event.id === activeEventId) setActiveEventId(null);
+                      else setActiveEventId(event.id);
+                    }}
+                  />
+                )}
+              />
+            </ErrorBoundary>
           </div>
         )
       }
@@ -149,7 +151,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                           title="Copy message"
                           icon="copy"
                           size="xs"
-                          onClick={() => copyToClipboard(formattedMessage.data ?? '')}
+                          onClick={() => copyToClipboard(formattedMessage ?? '')}
                         />
                       </HStack>
                     )}
@@ -180,7 +182,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                   ) : (
                     <Editor
                       language={language}
-                      defaultValue={formattedMessage.data ?? ''}
+                      defaultValue={formattedMessage ?? ''}
                       wrapLines={false}
                       readOnly={true}
                       stateKey={null}

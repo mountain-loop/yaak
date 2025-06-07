@@ -1,6 +1,5 @@
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, hoverTooltip, MatchDecorator, ViewPlugin } from '@codemirror/view';
-import { EditorView } from 'codemirror';
+import { Decoration, EditorView, hoverTooltip, MatchDecorator, ViewPlugin } from '@codemirror/view';
 
 const REGEX =
   /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+*~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+*.~#?&/={}[\]]*))/g;

@@ -23,11 +23,13 @@ impl<'a> DbContext<'a> {
             editor_soft_wrap: true,
             interface_font_size: 15,
             interface_scale: 1.0,
+            hide_window_controls: false,
             open_workspace_new_window: None,
             proxy: None,
             theme_dark: "yaak-dark".to_string(),
             theme_light: "yaak-light".to_string(),
             update_channel: "stable".to_string(),
+            colored_methods: false,
         };
         self.upsert(&settings, &UpdateSource::Background).expect("Failed to upsert settings")
     }

@@ -1,7 +1,6 @@
 import classNames from 'classnames';
 import type { HotkeyAction } from '../../hooks/useHotKey';
 import { useFormattedHotkey } from '../../hooks/useHotKey';
-import { useOsInfo } from '../../hooks/useOsInfo';
 import { HStack } from './Stacks';
 
 interface Props {
@@ -11,9 +10,8 @@ interface Props {
 }
 
 export function HotKey({ action, className, variant }: Props) {
-  const osInfo = useOsInfo();
   const labelParts = useFormattedHotkey(action);
-  if (labelParts === null || osInfo == null) {
+  if (labelParts === null) {
     return null;
   }
 

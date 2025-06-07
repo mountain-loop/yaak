@@ -102,11 +102,13 @@
     }
 
     .cm-scroller {
-      @apply font-mono text-xs overflow-hidden;
-    }
+      @apply font-mono text-xs;
 
-    .cm-line {
-      @apply overflow-hidden;
+      /* Hide scrollbars */
+      &::-webkit-scrollbar-corner,
+      &::-webkit-scrollbar {
+        @apply hidden !important;
+      }
     }
   }
 

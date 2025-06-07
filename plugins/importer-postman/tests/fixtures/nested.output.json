@@ -1,0 +1,83 @@
+{
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "GENERATE_ID::WORKSPACE_0",
+        "name": "New Collection"
+      }
+    ],
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "Global Variables",
+        "variables": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0"
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_0",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "folderId": "GENERATE_ID::FOLDER_1",
+        "name": "Request 1",
+        "method": "GET",
+        "url": "",
+        "urlParameters": [],
+        "body": {},
+        "bodyType": null,
+        "authentication": {},
+        "authenticationType": null,
+        "headers": []
+      },
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_1",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "name": "Request 2",
+        "method": "GET",
+        "url": "",
+        "urlParameters": [],
+        "body": {},
+        "bodyType": null,
+        "authentication": {},
+        "authenticationType": null,
+        "headers": []
+      },
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_2",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "folderId": null,
+        "name": "Request 3",
+        "method": "GET",
+        "url": "",
+        "urlParameters": [],
+        "body": {},
+        "bodyType": null,
+        "authentication": {},
+        "authenticationType": null,
+        "headers": []
+      }
+    ],
+    "folders": [
+      {
+        "model": "folder",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "id": "GENERATE_ID::FOLDER_0",
+        "name": "Top Folder",
+        "folderId": null
+      },
+      {
+        "model": "folder",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "id": "GENERATE_ID::FOLDER_1",
+        "name": "Nested Folder",
+        "folderId": "GENERATE_ID::FOLDER_0"
+      }
+    ]
+  }
+}

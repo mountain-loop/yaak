@@ -30,6 +30,7 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
     try {
       const data = await mutationFn(variables);
       onSuccess?.(data);
+      onSettled?.();
       return data;
     } catch (err: unknown) {
       const stringKey = mutationKey.join('.');
@@ -44,11 +45,9 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
         });
       }
       onError?.(e);
-    } finally {
       onSettled?.();
+      throw e;
     }
-
-    return null;
   };
 
   const mutate = (
