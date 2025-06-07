@@ -32,6 +32,7 @@ import { HotKeyList } from './core/HotKeyList';
 import { FeedbackLink } from './core/Link';
 import { HStack } from './core/Stacks';
 import { CreateDropdown } from './CreateDropdown';
+import { ErrorBoundary } from './ErrorBoundary';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
 import { HeaderSize } from './HeaderSize';
 import { HttpRequestLayout } from './HttpRequestLayout';
@@ -41,7 +42,6 @@ import { Sidebar } from './sidebar/Sidebar';
 import { SidebarActions } from './sidebar/SidebarActions';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
-import { ErrorBoundary } from './ErrorBoundary';
 
 const side = { gridArea: 'side' };
 const head = { gridArea: 'head' };

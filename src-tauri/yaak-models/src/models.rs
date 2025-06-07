@@ -520,6 +520,7 @@ pub struct Environment {
     pub public: bool,
     pub base: bool,
     pub variables: Vec<EnvironmentVariable>,
+    pub color: Option<String>,
 }
 
 impl UpsertModelInfo for Environment {
@@ -553,6 +554,7 @@ impl UpsertModelInfo for Environment {
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (WorkspaceId, self.workspace_id.into()),
             (Base, self.base.into()),
+            (Color, self.color.into()),
             (Name, self.name.trim().into()),
             (Public, self.public.into()),
             (Variables, serde_json::to_string(&self.variables)?.into()),
@@ -563,6 +565,7 @@ impl UpsertModelInfo for Environment {
         vec![
             EnvironmentIden::UpdatedAt,
             EnvironmentIden::Base,
+            EnvironmentIden::Color,
             EnvironmentIden::Name,
             EnvironmentIden::Public,
             EnvironmentIden::Variables,
@@ -581,6 +584,7 @@ impl UpsertModelInfo for Environment {
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
             base: row.get("base")?,
+            color: row.get("color")?,
             name: row.get("name")?,
             public: row.get("public")?,
             variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
