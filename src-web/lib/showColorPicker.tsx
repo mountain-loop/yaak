@@ -1,9 +1,7 @@
 import type { Environment } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
-import { useState } from 'react';
-import { Button } from '../components/core/Button';
-import { ColorPicker } from '../components/core/ColorPicker';
 import { showDialog } from './dialog';
+import { EnvironmentColorPicker } from '../components/EnvironmentColorPicker';
 
 export function showColorPicker(environment: Environment) {
   showDialog({
