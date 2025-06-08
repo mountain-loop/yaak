@@ -543,6 +543,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   const cmContainer = (
     <div
       ref={initEditorRef}
+      style={{fontFamily: settings.interfaceFont ?? undefined}}
       className={classNames(
         className,
         'cm-wrapper text-base',
