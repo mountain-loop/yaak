@@ -103,6 +103,11 @@ export function SettingsAppearance() {
                 label: f,
                 value: f,
               })) ?? []),
+              // Some people like monospace fonts for the UI
+              ...(fonts.data.editorFonts.map((f) => ({
+                label: f,
+                value: f,
+              })) ?? []),
             ]}
             onChange={async (v) => {
               const interfaceFont = v === '__DEFAULT__' ? null : v;
@@ -163,7 +168,7 @@ export function SettingsAppearance() {
         options={keymaps}
         onChange={(v) => patchModel(settings, { editorKeymap: v })}
       />
-      <div className='grid grid-cols-2'>
+      <div className="grid grid-cols-2">
         <Checkbox
           checked={settings.editorSoftWrap}
           title="Wrap Editor Lines"
