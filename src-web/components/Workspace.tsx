@@ -8,7 +8,10 @@ import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
 } from '../hooks/useActiveCookieJar';
-import { useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
+import {
+  activeEnvironmentAtom,
+  useSubscribeActiveEnvironmentId,
+} from '../hooks/useActiveEnvironment';
 import { activeRequestAtom } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
@@ -56,6 +59,7 @@ export function Workspace() {
   const { setWidth, width, resetWidth } = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
+  const activeEnvironment = useAtomValue(activeEnvironmentAtom);
   const floating = useShouldFloatSidebar();
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const moveState = useRef<{ move: (e: MouseEvent) => void; up: (e: MouseEvent) => void } | null>(
@@ -117,6 +121,12 @@ export function Workspace() {
     [sideWidth, floating],
   );
 
+  const environmentBg = useMemo(() => {
+    if (activeEnvironment?.color == null) return undefined;
+    const background = `linear-gradient(to right, ${activeEnvironment.color} 15%, transparent 40%)`;
+    return { background };
+  }, [activeEnvironment?.color ?? 'n/a']);
+
   // We're loading still
   if (workspaces.length === 0) {
     return null;
@@ -175,9 +185,19 @@ export function Workspace() {
       <HeaderSize
         data-tauri-drag-region
         size="lg"
-        className="x-theme-appHeader bg-surface"
+        className="relative x-theme-appHeader bg-surface"
         style={head}
       >
+        <div className="absolute inset-0 pointer-events-none">
+          <div // Add subtle background
+            style={environmentBg}
+            className="absolute inset-0 opacity-5"
+          />
+          <div // Add subtle border bottom
+            style={environmentBg}
+            className="absolute left-0 right-0 bottom-0 h-[0.5px] opacity-20"
+          />
+        </div>
         <WorkspaceHeader className="pointer-events-none" />
       </HeaderSize>
       <ErrorBoundary name="Workspace Body">
