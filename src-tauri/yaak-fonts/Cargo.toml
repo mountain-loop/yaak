@@ -1,0 +1,16 @@
+[package]
+name = "yaak-fonts"
+links = "yaak-fonts"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+font-loader = "0.11.0"
+tauri = { workspace = true }
+ts-rs = { workspace = true }
+serde = "1.0"
+thiserror = { workspace = true }
+
+[build-dependencies]
+tauri-plugin = { workspace = true, features = ["build"] }

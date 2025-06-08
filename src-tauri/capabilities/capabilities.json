@@ -53,6 +53,7 @@
     "shell:allow-open",
     "yaak-crypto:default",
     "yaak-git:default",
+    "yaak-fonts:default",
     "yaak-license:default",
     "yaak-mac-window:default",
     "yaak-models:default",

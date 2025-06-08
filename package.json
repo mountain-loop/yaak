@@ -35,6 +35,7 @@
     "plugins/template-function-xml",
     "src-tauri/yaak-crypto",
     "src-tauri/yaak-git",
+    "src-tauri/yaak-fonts",
     "src-tauri/yaak-license",
     "src-tauri/yaak-mac-window",
     "src-tauri/yaak-models",

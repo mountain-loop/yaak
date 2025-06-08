@@ -19,10 +19,12 @@ impl<'a> DbContext<'a> {
 
             appearance: "system".to_string(),
             editor_font_size: 13,
+            editor_font: None,
             editor_keymap: EditorKeymap::Default,
             editor_soft_wrap: true,
             interface_font_size: 15,
             interface_scale: 1.0,
+            interface_font: None,
             hide_window_controls: false,
             open_workspace_new_window: None,
             proxy: None,

@@ -1,3 +1,5 @@
+import { type } from '@tauri-apps/plugin-os';
+import { useFonts } from '@yaakapp-internal/fonts';
 import type { EditorKeymap } from '@yaakapp-internal/models';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
@@ -14,11 +16,9 @@ import { Editor } from '../core/Editor/Editor';
 import type { IconProps } from '../core/Icon';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';
-import type { SelectProps } from '../core/Select';
-import { Select } from '../core/Select';
+import { Select, SelectProps } from '../core/Select';
 import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';
-import { type } from '@tauri-apps/plugin-os';
 
 const fontSizeOptions = [
   8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
@@ -67,6 +67,8 @@ export function SettingsAppearance() {
   const settings = useAtomValue(settingsAtom);
   const appearance = useResolvedAppearance();
   const activeTheme = useResolvedTheme();
+  const fonts = useFonts();
+  console.log('FONTS', fonts);
 
   if (settings == null || workspace == null) {
     return null;
@@ -87,46 +89,92 @@ export function SettingsAppearance() {
     }));
 
   return (
-    <VStack space={2} className="mb-4">
+    <VStack space={3} className="mb-4">
+      <HStack space={2} alignItems="end">
+        {fonts.data && (
+          <Select
+            size="sm"
+            name="uiFont"
+            label="Interface Font"
+            value={settings.interfaceFont ?? '__DEFAULT__'}
+            options={[
+              { label: 'System Default', value: '__DEFAULT__' },
+              ...(fonts.data.uiFonts.map((f) => ({
+                label: f,
+                value: f,
+              })) ?? []),
+            ]}
+            onChange={async (v) => {
+              const interfaceFont = v === '__DEFAULT__' ? null : v;
+              await patchModel(settings, { interfaceFont });
+            }}
+          />
+        )}
+        <Select
+          hideLabel
+          size="sm"
+          name="interfaceFontSize"
+          label="Interface Font Size"
+          defaultValue="15"
+          value={`${settings.interfaceFontSize}`}
+          options={fontSizeOptions}
+          onChange={(v) => patchModel(settings, { interfaceFontSize: parseInt(v) })}
+        />
+      </HStack>
+      <HStack space={2} alignItems="end">
+        {fonts.data && (
+          <Select
+            size="sm"
+            name="editorFont"
+            label="Editor Font"
+            value={settings.editorFont ?? '__DEFAULT__'}
+            options={[
+              { label: 'System Default', value: '__DEFAULT__' },
+              ...(fonts.data.editorFonts.map((f) => ({
+                label: f,
+                value: f,
+              })) ?? []),
+            ]}
+            onChange={async (v) => {
+              const editorFont = v === '__DEFAULT__' ? null : v;
+              await patchModel(settings, { editorFont });
+            }}
+          />
+        )}
+        <Select
+          hideLabel
+          size="sm"
+          name="editorFontSize"
+          label="Editor Font Size"
+          defaultValue="13"
+          value={`${settings.editorFontSize}`}
+          options={fontSizeOptions}
+          onChange={(v) =>
+            patchModel(settings, { editorFontSize: clamp(parseInt(v) || 14, 8, 30) })
+          }
+        />
+      </HStack>
       <Select
-        size="sm"
-        name="interfaceFontSize"
-        label="Font Size"
-        labelPosition="left"
-        defaultValue="15"
-        value={`${settings.interfaceFontSize}`}
-        options={fontSizeOptions}
-        onChange={(v) => patchModel(settings, { interfaceFontSize: parseInt(v) })}
-      />
-      <Select
-        size="sm"
-        name="editorFontSize"
-        label="Editor Font Size"
-        labelPosition="left"
-        defaultValue="13"
-        value={`${settings.editorFontSize}`}
-        options={fontSizeOptions}
-        onChange={(v) => patchModel(settings, { editorFontSize: clamp(parseInt(v) || 14, 8, 30) })}
-      />
-      <Select
+        leftSlot={<Icon icon="keyboard" color="secondary" />}
         size="sm"
         name="editorKeymap"
         label="Editor Keymap"
-        labelPosition="left"
         value={`${settings.editorKeymap}`}
         options={keymaps}
         onChange={(v) => patchModel(settings, { editorKeymap: v })}
       />
-      <Checkbox
-        checked={settings.editorSoftWrap}
-        title="Wrap Editor Lines"
-        onChange={(editorSoftWrap) => patchModel(settings, { editorSoftWrap })}
-      />
-      <Checkbox
-        checked={settings.coloredMethods}
-        title="Colorize Request Methods"
-        onChange={(coloredMethods) => patchModel(settings, { coloredMethods })}
-      />
+      <div className='grid grid-cols-2'>
+        <Checkbox
+          checked={settings.editorSoftWrap}
+          title="Wrap Editor Lines"
+          onChange={(editorSoftWrap) => patchModel(settings, { editorSoftWrap })}
+        />
+        <Checkbox
+          checked={settings.coloredMethods}
+          title="Colorize Request Methods"
+          onChange={(coloredMethods) => patchModel(settings, { coloredMethods })}
+        />
+      </div>
 
       {type() !== 'macos' && (
         <Checkbox
@@ -156,7 +204,7 @@ export function SettingsAppearance() {
         {(settings.appearance === 'system' || settings.appearance === 'light') && (
           <Select
             hideLabel
-            leftSlot={<Icon icon="sun" />}
+            leftSlot={<Icon icon="sun" color="secondary" />}
             name="lightTheme"
             label="Light Theme"
             size="sm"
@@ -172,7 +220,7 @@ export function SettingsAppearance() {
             name="darkTheme"
             className="flex-1"
             label="Dark Theme"
-            leftSlot={<Icon icon="moon" />}
+            leftSlot={<Icon icon="moon" color="secondary" />}
             size="sm"
             value={activeTheme.dark.id}
             options={darkThemes}

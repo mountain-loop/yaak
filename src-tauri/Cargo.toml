@@ -3,6 +3,7 @@ members = [
     "yaak-crypto",
     "yaak-git",
     "yaak-grpc",
+    "yaak-fonts",
     "yaak-http",
     "yaak-license",
     "yaak-mac-window",
@@ -75,6 +76,7 @@ yaak-http = { workspace = true }
 yaak-license = { path = "yaak-license" }
 yaak-mac-window = { path = "yaak-mac-window" }
 yaak-models = { workspace = true }
+yaak-fonts = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }
 yaak-sync = { workspace = true }
@@ -95,6 +97,7 @@ ts-rs = "11.0.1"
 rustls = { version = "0.23.27", default-features = false }
 rustls-platform-verifier = "0.6.0"
 yaak-common = { path = "yaak-common" }
+yaak-fonts = { path = "yaak-fonts" }
 yaak-http = { path = "yaak-http" }
 yaak-models = { path = "yaak-models" }
 yaak-plugins = { path = "yaak-plugins" }
