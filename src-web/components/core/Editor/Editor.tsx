@@ -543,7 +543,6 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   const cmContainer = (
     <div
       ref={initEditorRef}
-      style={{fontFamily: settings.interfaceFont ?? undefined}}
       className={classNames(
         className,
         'cm-wrapper text-base',
@@ -580,18 +579,18 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 });
 
 function getExtensions({
-  stateKey,
-  container,
-  readOnly,
-  singleLine,
-  hideGutter,
-  onChange,
-  onPaste,
-  onPasteOverwrite,
-  onFocus,
-  onBlur,
-  onKeyDown,
-}: Pick<EditorProps, 'singleLine' | 'readOnly' | 'hideGutter'> & {
+                         stateKey,
+                         container,
+                         readOnly,
+                         singleLine,
+                         hideGutter,
+                         onChange,
+                         onPaste,
+                         onPasteOverwrite,
+                         onFocus,
+                         onBlur,
+                         onKeyDown,
+                       }: Pick<EditorProps, 'singleLine' | 'readOnly' | 'hideGutter'> & {
   stateKey: EditorProps['stateKey'];
   container: HTMLDivElement | null;
   onChange: MutableRefObject<EditorProps['onChange']>;

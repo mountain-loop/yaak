@@ -9,6 +9,12 @@
     @apply w-full h-full overflow-hidden text-text bg-surface;
   }
 
+  :root {
+    /* Must default these variables or the default will break */
+    --font-family-interface: '';
+    --font-family-editor: '';
+  }
+
   /* Never show ligatures */
   :root {
     font-variant-ligatures: none;

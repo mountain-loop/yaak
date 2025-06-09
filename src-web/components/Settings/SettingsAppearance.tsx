@@ -68,7 +68,6 @@ export function SettingsAppearance() {
   const appearance = useResolvedAppearance();
   const activeTheme = useResolvedTheme();
   const fonts = useFonts();
-  console.log('FONTS', fonts);
 
   if (settings == null || workspace == null) {
     return null;

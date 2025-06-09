@@ -1,8 +1,8 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createRootRoute, Outlet } from '@tanstack/react-router';
-import { settingsAtom } from '@yaakapp-internal/models';
+import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
-import { Provider as JotaiProvider, useAtomValue } from 'jotai';
+import { Provider as JotaiProvider } from 'jotai';
 import { domAnimation, LazyMotion, MotionConfig } from 'motion/react';
 import React, { Suspense } from 'react';
 import { DndProvider } from 'react-dnd';
@@ -14,7 +14,6 @@ import RouteError from '../components/RouteError';
 import { Toasts } from '../components/Toasts';
 import { jotaiStore } from '../lib/jotai';
 import { queryClient } from '../lib/queryClient';
-import { type } from '@tauri-apps/plugin-os';
 
 export const Route = createRootRoute({
   component: RouteComponent,
@@ -45,11 +44,9 @@ function RouteComponent() {
 }
 
 function Layout() {
-  const settings = useAtomValue(settingsAtom);
   return (
     <div
       className={classNames('w-full h-full', type() === 'linux' && 'border border-border-subtle')}
-      style={{ fontFamily: settings.interfaceFont ?? undefined }}
     >
       <Outlet />
     </div>
