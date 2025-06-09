@@ -4,8 +4,11 @@ import type { ModelPayload, Settings } from '@yaakapp-internal/models';
 import { getSettings } from './lib/settings';
 
 function setFonts(settings: Settings) {
-  document.documentElement.style.setProperty('--font-family-editor', settings.editorFont);
-  document.documentElement.style.setProperty('--font-family-interface', settings.interfaceFont);
+  document.documentElement.style.setProperty('--font-family-editor', settings.editorFont ?? '');
+  document.documentElement.style.setProperty(
+    '--font-family-interface',
+    settings.interfaceFont ?? '',
+  );
 }
 
 listen<ModelPayload>('upserted_model', async (event) => {
