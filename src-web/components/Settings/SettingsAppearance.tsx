@@ -20,6 +20,8 @@ import { Select, SelectProps } from '../core/Select';
 import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';
 
+const NULL_FONT_VALUE = '__NULL_FONT__';
+
 const fontSizeOptions = [
   8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
 ].map((n) => ({ label: `${n}`, value: `${n}` }));
@@ -95,9 +97,9 @@ export function SettingsAppearance() {
             size="sm"
             name="uiFont"
             label="Interface Font"
-            value={settings.interfaceFont ?? '__DEFAULT__'}
+            value={settings.interfaceFont ?? NULL_FONT_VALUE}
             options={[
-              { label: 'System Default', value: '__DEFAULT__' },
+              { label: 'System Default', value: NULL_FONT_VALUE },
               ...(fonts.data.uiFonts.map((f) => ({
                 label: f,
                 value: f,
@@ -109,7 +111,7 @@ export function SettingsAppearance() {
               })) ?? []),
             ]}
             onChange={async (v) => {
-              const interfaceFont = v === '__DEFAULT__' ? null : v;
+              const interfaceFont = v === NULL_FONT_VALUE ? null : v;
               await patchModel(settings, { interfaceFont });
             }}
           />
@@ -131,16 +133,16 @@ export function SettingsAppearance() {
             size="sm"
             name="editorFont"
             label="Editor Font"
-            value={settings.editorFont ?? '__DEFAULT__'}
+            value={settings.editorFont ?? NULL_FONT_VALUE}
             options={[
-              { label: 'System Default', value: '__DEFAULT__' },
+              { label: 'System Default', value: NULL_FONT_VALUE },
               ...(fonts.data.editorFonts.map((f) => ({
                 label: f,
                 value: f,
               })) ?? []),
             ]}
             onChange={async (v) => {
-              const editorFont = v === '__DEFAULT__' ? null : v;
+              const editorFont = v === NULL_FONT_VALUE ? null : v;
               await patchModel(settings, { editorFont });
             }}
           />
