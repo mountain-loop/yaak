@@ -10,10 +10,7 @@ function pluginInfoKey(id: string) {
 export function usePluginInfo(id: string) {
   return useQuery({
     queryKey: pluginInfoKey(id),
-    queryFn: async () => {
-      const info = (await invokeCmd('cmd_plugin_info', { id })) as BootResponse;
-      return info;
-    },
+    queryFn: () => invokeCmd<BootResponse>('cmd_plugin_info', { id }),
   });
 }
 

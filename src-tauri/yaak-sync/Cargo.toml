@@ -6,7 +6,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-chrono = { version = "0.4.38", features = ["serde"] }
+chrono = { workspace = true, features = ["serde"] }
 hex = "0.4.3"
 log = "0.4.22"
 notify = "8.0.0"

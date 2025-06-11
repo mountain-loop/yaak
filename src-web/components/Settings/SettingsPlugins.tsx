@@ -1,8 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import type { Plugin} from '@yaakapp-internal/models';
+import type { Plugin } from '@yaakapp-internal/models';
 import { pluginsAtom } from '@yaakapp-internal/models';
+import { installPlugin, searchPlugins } from '@yaakapp-internal/plugins';
 import { useAtomValue } from 'jotai';
-import React from 'react';
+import React, { useState } from 'react';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
 import { useRefreshPlugins } from '../../hooks/usePlugins';
@@ -10,7 +13,8 @@ import { useUninstallPlugin } from '../../hooks/useUninstallPlugin';
 import { Button } from '../core/Button';
 import { IconButton } from '../core/IconButton';
 import { InlineCode } from '../core/InlineCode';
-import { HStack } from '../core/Stacks';
+import { PlainInput } from '../core/PlainInput';
+import { HStack, VStack } from '../core/Stacks';
 import { EmptyStateText } from '../EmptyStateText';
 import { SelectFile } from '../SelectFile';
 
@@ -20,7 +24,8 @@ export function SettingsPlugins() {
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
   return (
-    <div className="grid grid-rows-[minmax(0,1fr)_auto] h-full">
+    <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] h-full">
+      <PluginSearch />
       {plugins.length === 0 ? (
         <div className="pb-4">
           <EmptyStateText className="text-center">
@@ -105,5 +110,46 @@ function PluginInfo({ plugin }: { plugin: Plugin }) {
         />
       </td>
     </tr>
+  );
+}
+
+function PluginSearch() {
+  const [query, setQuery] = useState<string>('');
+  const debouncedQuery = useDebouncedValue(query);
+  const results = useQuery({
+    queryKey: ['plugins', debouncedQuery],
+    queryFn: () => searchPlugins(query),
+  });
+
+  return (
+    <div className="h-full grid grid-rows-[auto_minmax(0,1fr)] gap-3">
+      <HStack space={1.5}>
+        <PlainInput
+          hideLabel
+          label="Search"
+          placeholder="Search plugins..."
+          onChange={setQuery}
+          defaultValue={query}
+        />
+      </HStack>
+      <VStack className="w-full">
+        {results.data?.results.map((r) => (
+          <HStack key={r.id} className="w-full h-md" alignItems="center">
+            <div className="w-full">{r.displayName ?? r.id}</div>
+            <Button
+              size="xs"
+              variant="border"
+              color="secondary"
+              onClick={async () => {
+                const id = await installPlugin(r);
+                console.log('INSTALLED PLUGIN', id);
+              }}
+            >
+              Install
+            </Button>
+          </HStack>
+        ))}
+      </VStack>
+    </div>
   );
 }
