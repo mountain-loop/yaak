@@ -15,6 +15,7 @@ pub mod plugin_handle;
 mod server_ws;
 pub mod template_callback;
 mod util;
+mod checksum;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-plugins")

@@ -116,6 +116,7 @@ function PluginInfo({ plugin }: { plugin: Plugin }) {
 function PluginSearch() {
   const [query, setQuery] = useState<string>('');
   const debouncedQuery = useDebouncedValue(query);
+  const plugins = useAtomValue(pluginsAtom);
   const results = useQuery({
     queryKey: ['plugins', debouncedQuery],
     queryFn: () => searchPlugins(query),
@@ -136,17 +137,18 @@ function PluginSearch() {
         {results.data?.results.map((r) => (
           <HStack key={r.id} className="w-full h-md" alignItems="center">
             <div className="w-full">{r.displayName ?? r.id}</div>
-            <Button
-              size="xs"
-              variant="border"
-              color="secondary"
-              onClick={async () => {
-                const id = await installPlugin(r);
-                console.log('INSTALLED PLUGIN', id);
-              }}
-            >
-              Install
-            </Button>
+            {!plugins?.some((p) => p.id === r.id) ? (
+              <Button
+                size="xs"
+                variant="border"
+                color="secondary"
+                onClick={async () => {
+                  await installPlugin(r);
+                }}
+              >
+                Install
+              </Button>
+            ) : null}
           </HStack>
         ))}
       </VStack>

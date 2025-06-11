@@ -85,6 +85,7 @@ yaak-ws = { path = "yaak-ws" }
 
 [workspace.dependencies]
 chrono = "0.4.41"
+hex = "0.4.3"
 reqwest = "0.12.20"
 serde = "1.0.219"
 serde_json = "1.0.140"
@@ -97,6 +98,7 @@ thiserror = "2.0.12"
 ts-rs = "11.0.1"
 rustls = { version = "0.23.27", default-features = false }
 rustls-platform-verifier = "0.6.0"
+sha2 = "0.10.9"
 yaak-common = { path = "yaak-common" }
 yaak-fonts = { path = "yaak-fonts" }
 yaak-http = { path = "yaak-http" }

@@ -1,3 +1,5 @@
+use crate::checksum::compute_checksum;
+use crate::error::Error::PluginErr;
 use crate::error::Result;
 use crate::events::PluginWindowContext;
 use crate::manager::PluginManager;
@@ -34,12 +36,19 @@ pub(crate) async fn install<R: Runtime>(
     let resp = reqwest::Client::new().get(plugin.download_url.as_str()).send().await?;
     let bytes = resp.bytes().await?;
 
+    let checksum = compute_checksum(&bytes);
+    if checksum != plugin.checksum {
+        return Err(PluginErr("Checksum mismatch".to_string()));
+    }
+
+    info!("Checksum matched {}", checksum);
+
     let plugin_dir = window.path().app_data_dir()?.join("plugins").join(generate_id());
     let plugin_dir_str = plugin_dir.to_str().unwrap().to_string();
     create_dir_all(&plugin_dir)?;
 
-    zip_extract::extract(Cursor::new(bytes), &plugin_dir, true)?;
-    info!("Extracted plugin {} to {:?}", plugin.id, plugin_dir);
+    zip_extract::extract(Cursor::new(&bytes), &plugin_dir, true)?;
+    info!("Extracted plugin {} to {}", plugin.id, plugin_dir_str);
 
     plugin_manager
         .add_plugin_by_dir(&PluginWindowContext::new(&window), &plugin_dir_str, true)
@@ -47,8 +56,9 @@ pub(crate) async fn install<R: Runtime>(
 
     let p = window.db().upsert_plugin(
         &Plugin {
+            id: plugin.id.clone(),
             checked_at: Some(Utc::now().naive_utc()),
-            directory: plugin_dir_str,
+            directory: plugin_dir_str.clone(),
             enabled: true,
             url: None,
             ..Default::default()
@@ -56,7 +66,7 @@ pub(crate) async fn install<R: Runtime>(
         &UpdateSource::Background,
     )?;
 
-    info!("Installed plugin {}", plugin.id);
+    info!("Installed plugin {} to {}", plugin.id, plugin_dir_str);
 
     Ok(p.id)
 }

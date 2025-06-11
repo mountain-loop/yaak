@@ -23,12 +23,14 @@ thiserror = "2.0.7"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process"] }
 tokio-tungstenite = "0.26.1"
 ts-rs = { workspace = true, features = ["import-esm"] }
+sha2 = { workspace = true }
 yaak-common = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-models = { workspace = true }
 yaak-templates = { workspace = true }
 zip-extract = "0.4.0"
 chrono = { workspace = true }
+hex = { workspace = true }
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }
