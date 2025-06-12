@@ -28,12 +28,14 @@ export function SettingsPlugins() {
     <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] h-full">
       <Tabs
         value={tab}
+        label="Plugins"
+        onChangeValue={setTab}
+        addBorders
+        tabListClassName="!-ml-3"
         tabs={[
           { label: 'Search', value: 'search' },
           { label: 'Installed', value: 'installed' },
         ]}
-        label="Plugins"
-        onChangeValue={setTab}
       >
         <TabContent value="search">
           <PluginSearch />
@@ -88,7 +90,7 @@ export function SettingsPlugins() {
 
 function PluginInfo({ plugin }: { plugin: Plugin }) {
   const pluginInfo = usePluginInfo(plugin.id);
-  const deletePlugin = useUninstallPlugin(plugin.id);
+  const deletePlugin = useUninstallPlugin();
   return (
     <tr className="group">
       <td className="py-2 select-text cursor-text w-full">{pluginInfo.data?.name}</td>
@@ -100,7 +102,7 @@ function PluginInfo({ plugin }: { plugin: Plugin }) {
           size="sm"
           icon="trash"
           title="Uninstall plugin"
-          onClick={() => deletePlugin.mutate()}
+          onClick={() => deletePlugin.mutate(plugin.id)}
         />
       </td>
     </tr>
@@ -110,6 +112,7 @@ function PluginInfo({ plugin }: { plugin: Plugin }) {
 function PluginSearch() {
   const [query, setQuery] = useState<string>('');
   const debouncedQuery = useDebouncedValue(query);
+  const deletePlugin = useUninstallPlugin();
   const plugins = useAtomValue(pluginsAtom);
   const results = useQuery({
     queryKey: ['plugins', debouncedQuery],
@@ -128,23 +131,28 @@ function PluginSearch() {
         />
       </HStack>
       <VStack className="w-full">
-        {results.data?.results.map((r) => (
-          <HStack key={r.id} className="w-full h-md" alignItems="center">
-            <div className="w-full">{r.displayName ?? r.id}</div>
-            {!plugins?.some((p) => p.id === r.id) ? (
+        {results.data?.results.map((plugin) => {
+          const installed = plugins?.some((p) => p.id === plugin.id);
+          return (
+            <HStack key={plugin.id} className="w-full h-md" alignItems="center">
+              <div className="w-full">{plugin.displayName ?? plugin.id}</div>
               <Button
                 size="xs"
                 variant="border"
                 color="secondary"
                 onClick={async () => {
-                  await installPlugin(r);
+                  if (installed) {
+                    deletePlugin.mutate(plugin.id);
+                  } else {
+                    await installPlugin(plugin);
+                  }
                 }}
               >
-                Install
+                {installed ? 'Uninstall' : 'Install'}
               </Button>
-            ) : null}
-          </HStack>
-        ))}
+            </HStack>
+          );
+        })}
       </VStack>
     </div>
   );

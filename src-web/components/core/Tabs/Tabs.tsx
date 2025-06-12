@@ -49,7 +49,10 @@ export function Tabs({
     const tabs = ref.current?.querySelectorAll<HTMLDivElement>(`[data-tab]`);
     for (const tab of tabs ?? []) {
       const v = tab.getAttribute('data-tab');
-      if (v === value) {
+      let parent = tab.closest('.tabs-container');
+      if (parent !== ref.current) {
+        // Tab is part of a nested tab container, so ignore it
+      } else if (v === value) {
         tab.setAttribute('tabindex', '-1');
         tab.setAttribute('data-state', 'active');
         tab.setAttribute('aria-hidden', 'false');
@@ -67,6 +70,7 @@ export function Tabs({
       ref={ref}
       className={classNames(
         className,
+        'tabs-container',
         'transform-gpu',
         'h-full grid',
         layout === 'horizontal' && 'grid-rows-1 grid-cols-[auto_minmax(0,1fr)]',

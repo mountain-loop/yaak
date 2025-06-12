@@ -1,11 +1,10 @@
-import { useFastMutation } from './useFastMutation';
-import type { Plugin } from '@yaakapp-internal/models';
 import { invokeCmd } from '../lib/tauri';
+import { useFastMutation } from './useFastMutation';
 
-export function useUninstallPlugin(pluginId: string) {
-  return useFastMutation<Plugin | null, string>({
+export function useUninstallPlugin() {
+  return useFastMutation({
     mutationKey: ['uninstall_plugin'],
-    mutationFn: async () => {
+    mutationFn: async (pluginId: string) => {
       return invokeCmd('cmd_uninstall_plugin', { pluginId });
     },
   });
