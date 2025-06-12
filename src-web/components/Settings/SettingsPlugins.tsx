@@ -13,8 +13,10 @@ import { useUninstallPlugin } from '../../hooks/useUninstallPlugin';
 import { Button } from '../core/Button';
 import { IconButton } from '../core/IconButton';
 import { InlineCode } from '../core/InlineCode';
+import { LoadingIcon } from '../core/LoadingIcon';
 import { PlainInput } from '../core/PlainInput';
-import { HStack, VStack } from '../core/Stacks';
+import { HStack } from '../core/Stacks';
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { EmptyStateText } from '../EmptyStateText';
 import { SelectFile } from '../SelectFile';
@@ -25,7 +27,7 @@ export function SettingsPlugins() {
   const refreshPlugins = useRefreshPlugins();
   const [tab, setTab] = useState<string>();
   return (
-    <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] h-full">
+    <div className="h-full">
       <Tabs
         value={tab}
         label="Plugins"
@@ -130,30 +132,55 @@ function PluginSearch() {
           defaultValue={query}
         />
       </HStack>
-      <VStack className="w-full">
-        {results.data?.results.map((plugin) => {
-          const installed = plugins?.some((p) => p.id === plugin.id);
-          return (
-            <HStack key={plugin.id} className="w-full h-md" alignItems="center">
-              <div className="w-full">{plugin.displayName ?? plugin.id}</div>
-              <Button
-                size="xs"
-                variant="border"
-                color="secondary"
-                onClick={async () => {
-                  if (installed) {
-                    deletePlugin.mutate(plugin.id);
-                  } else {
-                    await installPlugin(plugin);
-                  }
-                }}
-              >
-                {installed ? 'Uninstall' : 'Install'}
-              </Button>
-            </HStack>
-          );
-        })}
-      </VStack>
+      <div className="w-full h-full overflow-auto">
+        {results.data == null ? (
+          <EmptyStateText>
+            <LoadingIcon size="xl" className="text-text-subtlest" />
+          </EmptyStateText>
+        ) : (results.data.results ?? []).length === 0 ? (
+          <EmptyStateText>No plugins found</EmptyStateText>
+        ) : (
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>Name</TableHeaderCell>
+                <TableHeaderCell>Description</TableHeaderCell>
+                <TableHeaderCell children="" />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {results.data.results.map((plugin) => {
+                const installed = plugins?.some((p) => p.id === plugin.id);
+                return (
+                  <TableRow key={plugin.id}>
+                    <TableCell className="font-semibold">{plugin.displayName}</TableCell>
+                    <TableCell className="w-full text-text-subtle">
+                      {plugin.description ?? 'n/a'}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="xs"
+                        variant={installed ? 'solid' : 'border'}
+                        color={installed ? 'primary' : 'secondary'}
+                        className="ml-auto"
+                        onClick={async () => {
+                          if (installed) {
+                            deletePlugin.mutate(plugin.id);
+                          } else {
+                            await installPlugin(plugin);
+                          }
+                        }}
+                      >
+                        {installed ? 'Uninstall' : 'Install'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </div>
   );
 }
