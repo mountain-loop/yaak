@@ -23,10 +23,11 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
             let url = query_map.get("url").unwrap();
             let plugin_version = get_plugin(&url, None).await?;
             download_and_install(window, &plugin_version).await?;
+            _ = window.set_focus();
             app_handle.emit(
                 "show_toast",
                 ShowToastRequest {
-                    message: format!("Installed plugin {}", plugin_version.version),
+                    message: format!("Installed {}@{}", plugin_version.id, plugin_version.version),
                     color: Some(Color::Success),
                     icon: None,
                 },
@@ -35,7 +36,8 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
         "import-data" => {
             let file_path = query_map.get("path").unwrap();
             let results = import_data(window, file_path).await?;
-            app_handle.emit(
+            _ = window.set_focus();
+            window.emit(
                 "show_toast",
                 ShowToastRequest {
                     message: format!("Imported data for {} workspaces", results.workspaces.len()),
