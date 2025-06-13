@@ -52,11 +52,12 @@
     "opener:allow-reveal-item-in-dir",
     "shell:allow-open",
     "yaak-crypto:default",
-    "yaak-git:default",
     "yaak-fonts:default",
+    "yaak-git:default",
     "yaak-license:default",
     "yaak-mac-window:default",
     "yaak-models:default",
+    "yaak-plugins:default",
     "yaak-sync:default",
     "yaak-ws:default"
   ]

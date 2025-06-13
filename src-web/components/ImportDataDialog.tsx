@@ -11,6 +11,7 @@ interface Props {
 export function ImportDataDialog({ importData }: Props) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [filePath, setFilePath] = useLocalStorage<string | null>('importFilePath', null);
+
   return (
     <VStack space={5} className="pb-4">
       <VStack space={1}>
