@@ -56,14 +56,15 @@ serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
 tauri-plugin-clipboard-manager = "2.2.2"
 tauri-plugin-dialog = { workspace = true }
-tauri-plugin-fs = "2.2.0"
-tauri-plugin-log = { version = "2.3.1", features = ["colored"] }
+tauri-plugin-fs = "2.3.0"
+tauri-plugin-log = { version = "2.4.0", features = ["colored"] }
 tauri-plugin-opener = "2.2.6"
 tauri-plugin-os = "2.2.1"
 tauri-plugin-shell = { workspace = true }
-tauri-plugin-single-instance = "2.2.2"
-tauri-plugin-updater = "2.6.1"
-tauri-plugin-window-state = "2.2.1"
+tauri-plugin-deep-link= "2.3.0"
+tauri-plugin-single-instance = { version = "2.2.4", features = ["deep-link"] }
+tauri-plugin-updater = "2.7.1"
+tauri-plugin-window-state = "2.2.2"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tokio-stream = "0.1.17"
