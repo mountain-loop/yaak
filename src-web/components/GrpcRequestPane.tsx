@@ -269,7 +269,7 @@ export function GrpcRequestPane({
         label="Request"
         onChangeValue={setActiveTab}
         tabs={tabs}
-        tabListClassName="mt-2 !mb-1.5"
+        tabListClassName="mt-1 !mb-1.5"
       >
         <TabContent value="message">
           <GrpcEditor

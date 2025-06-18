@@ -4,14 +4,19 @@ import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useEnsureActiveCookieJar, useSubscribeActiveCookieJarId } from '../hooks/useActiveCookieJar';
-import { activeEnvironmentAtom, useSubscribeActiveEnvironmentId } from '../hooks/useActiveEnvironment';
+import {
+  useEnsureActiveCookieJar,
+  useSubscribeActiveCookieJarId,
+} from '../hooks/useActiveCookieJar';
+import {
+  activeEnvironmentAtom,
+  useSubscribeActiveEnvironmentId,
+} from '../hooks/useActiveEnvironment';
 import { activeRequestAtom } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
 import { useHotKey } from '../hooks/useHotKey';
-import { useImportData } from '../hooks/useImportData';
 import { useSubscribeRecentCookieJars } from '../hooks/useRecentCookieJars';
 import { useSubscribeRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { useSubscribeRecentRequests } from '../hooks/useRecentRequests';
@@ -22,6 +27,7 @@ import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { duplicateRequestAndNavigate } from '../lib/duplicateRequestAndNavigate';
+import { importData } from '../lib/importData';
 import { jotaiStore } from '../lib/jotai';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -204,7 +210,6 @@ export function Workspace() {
 function WorkspaceBody() {
   const activeRequest = useAtomValue(activeRequestAtom);
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
-  const importData = useImportData();
 
   if (activeWorkspace == null) {
     return (

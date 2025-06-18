@@ -153,7 +153,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
               tabs={tabs}
               label="Response"
               className="ml-3 mr-3 mb-3"
-              tabListClassName="mt-1.5"
+              tabListClassName="mt-0.5"
             >
               <TabContent value={TAB_BODY}>
                 <ErrorBoundary name="Http Response Viewer">
