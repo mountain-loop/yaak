@@ -67,7 +67,7 @@ pub enum InternalEventPayload {
     BootResponse(BootResponse),
 
     ReloadRequest(EmptyPayload),
-    ReloadResponse(EmptyPayload),
+    ReloadResponse(BootResponse),
 
     TerminateRequest,
     TerminateResponse,

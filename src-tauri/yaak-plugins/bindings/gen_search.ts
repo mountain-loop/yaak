@@ -2,4 +2,4 @@
 
 export type PluginSearchResponse = { results: Array<PluginVersion>, };
 
-export type PluginVersion = { id: string, version: string, description: string | null, displayName: string | null, homepageUrl: string | null, repositoryUrl: string | null, checksum: string, readme: string | null, downloadUrl: string, yanked: boolean, };
+export type PluginVersion = { id: string, version: string, description: string | null, displayName: string, homepageUrl: string | null, repositoryUrl: string, checksum: string, readme: string | null, yanked: boolean, };

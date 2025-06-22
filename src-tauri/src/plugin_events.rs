@@ -126,7 +126,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await;
             None
         }
-        InternalEventPayload::ReloadResponse(_) => {
+        InternalEventPayload::ReloadResponse(r) => {
             let plugins = app_handle.db().list_plugins().unwrap();
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {
@@ -142,7 +142,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let toast_event = plugin_handle.build_event_to_send(
                 &window_context,
                 &InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                    message: format!("Reloaded plugin {}", plugin_handle.dir),
+                    message: format!("Reloaded plugin {}@{}", r.name, r.version),
                     icon: Some(Icon::Info),
                     ..Default::default()
                 }),

@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type { Plugin } from '@yaakapp-internal/models';
 import { pluginsAtom } from '@yaakapp-internal/models';
-import { installPlugin, searchPlugins } from '@yaakapp-internal/plugins';
+import { installPlugin, PluginVersion, searchPlugins } from '@yaakapp-internal/plugins';
 import { useAtomValue } from 'jotai';
 import React, { useState } from 'react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -114,8 +114,6 @@ function PluginInfo({ plugin }: { plugin: Plugin }) {
 function PluginSearch() {
   const [query, setQuery] = useState<string>('');
   const debouncedQuery = useDebouncedValue(query);
-  const deletePlugin = useUninstallPlugin();
-  const plugins = useAtomValue(pluginsAtom);
   const results = useQuery({
     queryKey: ['plugins', debouncedQuery],
     queryFn: () => searchPlugins(query),
@@ -144,35 +142,24 @@ function PluginSearch() {
             <TableHead>
               <TableRow>
                 <TableHeaderCell>Name</TableHeaderCell>
+                <TableHeaderCell>Version</TableHeaderCell>
                 <TableHeaderCell>Description</TableHeaderCell>
                 <TableHeaderCell children="" />
               </TableRow>
             </TableHead>
             <TableBody>
               {results.data.results.map((plugin) => {
-                const installed = plugins?.some((p) => p.id === plugin.id);
                 return (
                   <TableRow key={plugin.id}>
                     <TableCell className="font-semibold">{plugin.displayName}</TableCell>
+                    <TableCell className="text-text-subtle">
+                      <InlineCode>{plugin.version}</InlineCode>
+                    </TableCell>
                     <TableCell className="w-full text-text-subtle">
                       {plugin.description ?? 'n/a'}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="xs"
-                        variant={installed ? 'solid' : 'border'}
-                        color={installed ? 'primary' : 'secondary'}
-                        className="ml-auto"
-                        onClick={async () => {
-                          if (installed) {
-                            deletePlugin.mutate(plugin.id);
-                          } else {
-                            await installPlugin(plugin);
-                          }
-                        }}
-                      >
-                        {installed ? 'Uninstall' : 'Install'}
-                      </Button>
+                      <InstallPluginButton plugin={plugin} />
                     </TableCell>
                   </TableRow>
                 );
@@ -182,6 +169,35 @@ function PluginSearch() {
         )}
       </div>
     </div>
+  );
+}
+
+function InstallPluginButton({ plugin }: { plugin: PluginVersion }) {
+  const plugins = useAtomValue(pluginsAtom);
+  const deletePlugin = useUninstallPlugin();
+  const installed = plugins?.some((p) => p.id === plugin.id);
+  const installPluginMutation = useMutation({
+    mutationKey: ['install_plugin', plugin.id],
+    mutationFn: installPlugin,
+  });
+
+  return (
+    <Button
+      size="xs"
+      variant={installed ? 'solid' : 'border'}
+      color={installed ? 'primary' : 'secondary'}
+      className="ml-auto"
+      isLoading={installPluginMutation.isPending}
+      onClick={async () => {
+        if (installed) {
+          deletePlugin.mutate(plugin.id);
+        } else {
+          installPluginMutation.mutate(plugin);
+        }
+      }}
+    >
+      {installed ? 'Uninstall' : 'Install'}
+    </Button>
   );
 }
 

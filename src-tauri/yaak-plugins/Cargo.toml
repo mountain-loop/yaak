@@ -19,7 +19,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tauri = { workspace = true }
 tauri-plugin-shell = { workspace = true }
-thiserror = "2.0.7"
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process"] }
 tokio-tungstenite = "0.26.1"
 ts-rs = { workspace = true, features = ["import-esm"] }

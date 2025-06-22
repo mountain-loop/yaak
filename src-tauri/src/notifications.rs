@@ -1,13 +1,14 @@
 use std::time::SystemTime;
 
 use crate::error::Result;
-use crate::history::{get_num_launches, get_os};
+use crate::history::get_num_launches;
 use chrono::{DateTime, Duration, Utc};
 use log::debug;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
+use yaak_common::platform::get_os;
 use yaak_license::{LicenseCheckStatus, check_license};
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;

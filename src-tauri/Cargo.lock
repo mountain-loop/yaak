@@ -7827,7 +7827,10 @@ name = "yaak-common"
 version = "0.1.0"
 dependencies = [
  "regex",
+ "reqwest",
+ "serde",
  "tauri",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -7926,6 +7929,7 @@ dependencies = [
  "tauri-plugin",
  "thiserror 2.0.12",
  "ts-rs",
+ "yaak-common",
  "yaak-models",
 ]
 

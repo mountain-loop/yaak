@@ -976,7 +976,7 @@ async fn cmd_install_plugin<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Plugin> {
-    plugin_manager.add_plugin_by_dir(&PluginWindowContext::new(&window), &directory, true).await?;
+    plugin_manager.add_plugin_by_dir(&PluginWindowContext::new(&window), &directory).await?;
 
     Ok(app_handle.db().upsert_plugin(
         &Plugin {

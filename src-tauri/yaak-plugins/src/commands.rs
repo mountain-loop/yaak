@@ -2,12 +2,15 @@ use crate::api::search_plugins;
 use crate::error::Result;
 use crate::install::download_and_install;
 use serde::{Deserialize, Serialize};
-use tauri::{Runtime, WebviewWindow, command};
+use tauri::{AppHandle, Runtime, WebviewWindow, command};
 use ts_rs::TS;
 
 #[command]
-pub(crate) async fn search(query: &str) -> Result<PluginSearchResponse> {
-    search_plugins(query).await
+pub(crate) async fn search<R: Runtime>(
+    app_handle: AppHandle<R>,
+    query: &str,
+) -> Result<PluginSearchResponse> {
+    search_plugins(&app_handle, query).await
 }
 
 #[command]
@@ -32,15 +35,11 @@ pub struct PluginVersion {
     pub id: String,
     pub version: String,
     pub description: Option<String>,
-    #[serde(rename = "displayName")]
-    pub display_name: Option<String>,
-    #[serde(rename = "homepageUrl")]
+    pub name: String,
+    pub display_name: String,
     pub homepage_url: Option<String>,
-    #[serde(rename = "repositoryUrl")]
     pub repository_url: Option<String>,
     pub checksum: String,
     pub readme: Option<String>,
-    #[serde(rename = "downloadUrl")]
-    pub download_url: String,
     pub yanked: bool,
 }

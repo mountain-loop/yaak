@@ -15,6 +15,7 @@ tauri = { workspace = true }
 thiserror = { workspace = true }
 ts-rs = { workspace = true }
 yaak-models = { workspace = true }
+yaak-common = { workspace = true }
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }

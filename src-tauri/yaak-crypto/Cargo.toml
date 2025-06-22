@@ -13,7 +13,7 @@ keyring = { version = "4.0.0-rc.1" }
 log = "0.4.26"
 serde = { workspace = true, features = ["derive"] }
 tauri = { workspace = true }
-thiserror = "2.0.12"
+thiserror = { workspace = true }
 yaak-models = { workspace = true }
 
 [build-dependencies]

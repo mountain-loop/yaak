@@ -1,29 +1,34 @@
+use crate::api::download_plugin_archive;
 use crate::checksum::compute_checksum;
 use crate::commands::PluginVersion;
 use crate::error::Error::PluginErr;
 use crate::error::Result;
 use crate::events::PluginWindowContext;
+use crate::manager::PluginManager;
 use chrono::Utc;
+use log::info;
 use std::fs::create_dir_all;
 use std::io::Cursor;
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak_models::models::Plugin;
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{UpdateSource, generate_id};
-use crate::manager::PluginManager;
 
 pub async fn download_and_install<R: Runtime>(
     window: &WebviewWindow<R>,
-    plugin: &PluginVersion,
+    plugin_version: &PluginVersion,
 ) -> Result<String> {
-    let resp = reqwest::Client::new().get(plugin.download_url.as_str()).send().await?;
+    let resp = download_plugin_archive(window.app_handle(), &plugin_version).await?;
     let bytes = resp.bytes().await?;
 
     let checksum = compute_checksum(&bytes);
-    if checksum != plugin.checksum {
-        return Err(PluginErr("Checksum mismatch".to_string()));
+    if checksum != plugin_version.checksum {
+        return Err(PluginErr(format!(
+            "Checksum mismatch {}b {checksum} != {}",
+            bytes.len(),
+            plugin_version.checksum
+        )));
     }
-    use log::info;
 
     info!("Checksum matched {}", checksum);
 
@@ -32,16 +37,14 @@ pub async fn download_and_install<R: Runtime>(
     create_dir_all(&plugin_dir)?;
 
     zip_extract::extract(Cursor::new(&bytes), &plugin_dir, true)?;
-    info!("Extracted plugin {} to {}", plugin.id, plugin_dir_str);
+    info!("Extracted plugin {} to {}", plugin_version.id, plugin_dir_str);
 
     let plugin_manager = window.state::<PluginManager>();
-    plugin_manager
-        .add_plugin_by_dir(&PluginWindowContext::new(&window), &plugin_dir_str, true)
-        .await?;
+    plugin_manager.add_plugin_by_dir(&PluginWindowContext::new(&window), &plugin_dir_str).await?;
 
     let p = window.db().upsert_plugin(
         &Plugin {
-            id: plugin.id.clone(),
+            id: plugin_version.id.clone(),
             checked_at: Some(Utc::now().naive_utc()),
             directory: plugin_dir_str.clone(),
             enabled: true,
@@ -51,7 +54,7 @@ pub async fn download_and_install<R: Runtime>(
         &UpdateSource::Background,
     )?;
 
-    info!("Installed plugin {} to {}", plugin.id, plugin_dir_str);
+    info!("Installed plugin {} to {}", plugin_version.id, plugin_dir_str);
 
     Ok(p.id)
 }

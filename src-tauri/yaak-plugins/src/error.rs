@@ -32,6 +32,12 @@ pub enum Error {
 
     #[error("JSON error: {0}")]
     JsonErr(#[from] serde_json::Error),
+    
+    #[error("API Error: {0}")]
+    ApiErr(String),
+
+    #[error(transparent)]
+    CommonError(#[from] yaak_common::error::Error),
 
     #[error("Timeout elapsed: {0}")]
     TimeoutElapsed(#[from] tokio::time::error::Elapsed),

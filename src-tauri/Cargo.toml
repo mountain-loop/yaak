@@ -1,9 +1,9 @@
 [workspace]
 members = [
     "yaak-crypto",
+    "yaak-fonts",
     "yaak-git",
     "yaak-grpc",
-    "yaak-fonts",
     "yaak-http",
     "yaak-license",
     "yaak-mac-window",
@@ -61,7 +61,7 @@ tauri-plugin-log = { version = "2.4.0", features = ["colored"] }
 tauri-plugin-opener = "2.2.6"
 tauri-plugin-os = "2.2.1"
 tauri-plugin-shell = { workspace = true }
-tauri-plugin-deep-link= "2.3.0"
+tauri-plugin-deep-link = "2.3.0"
 tauri-plugin-single-instance = { version = "2.2.4", features = ["deep-link"] }
 tauri-plugin-updater = "2.7.1"
 tauri-plugin-window-state = "2.2.2"
@@ -71,13 +71,13 @@ tokio-stream = "0.1.17"
 uuid = "1.12.1"
 yaak-common = { workspace = true }
 yaak-crypto = { workspace = true }
+yaak-fonts = { workspace = true }
 yaak-git = { path = "yaak-git" }
 yaak-grpc = { path = "yaak-grpc" }
 yaak-http = { workspace = true }
 yaak-license = { path = "yaak-license" }
 yaak-mac-window = { path = "yaak-mac-window" }
 yaak-models = { workspace = true }
-yaak-fonts = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }
 yaak-sync = { workspace = true }
@@ -101,6 +101,7 @@ rustls = { version = "0.23.27", default-features = false }
 rustls-platform-verifier = "0.6.0"
 sha2 = "0.10.9"
 yaak-common = { path = "yaak-common" }
+yaak-crypto = { path = "yaak-crypto" }
 yaak-fonts = { path = "yaak-fonts" }
 yaak-http = { path = "yaak-http" }
 yaak-models = { path = "yaak-models" }
@@ -108,4 +109,3 @@ yaak-plugins = { path = "yaak-plugins" }
 yaak-sse = { path = "yaak-sse" }
 yaak-sync = { path = "yaak-sync" }
 yaak-templates = { path = "yaak-templates" }
-yaak-crypto = { path = "yaak-crypto" }

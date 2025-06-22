@@ -7,6 +7,7 @@ use std::ops::Add;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use ts_rs::TS;
+use yaak_common::platform::get_os;
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 
@@ -68,7 +69,7 @@ pub async fn activate_license<R: Runtime>(
     let client = reqwest::Client::new();
     let payload = ActivateLicenseRequestPayload {
         license_key: license_key.to_string(),
-        app_platform: crate::get_os().to_string(),
+        app_platform: get_os().to_string(),
         app_version: window.app_handle().package_info().version.to_string(),
     };
     let response = client.post(build_url("/licenses/activate")).json(&payload).send().await?;
@@ -107,7 +108,7 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
     let client = reqwest::Client::new();
     let path = format!("/licenses/activations/{}/deactivate", activation_id);
     let payload = DeactivateLicenseRequestPayload {
-        app_platform: crate::get_os().to_string(),
+        app_platform: get_os().to_string(),
         app_version: window.app_handle().package_info().version.to_string(),
     };
     let response = client.post(build_url(&path)).json(&payload).send().await?;
@@ -149,7 +150,7 @@ pub enum LicenseCheckStatus {
 
 pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<LicenseCheckStatus> {
     let payload = CheckActivationRequestPayload {
-        app_platform: crate::get_os().to_string(),
+        app_platform: get_os().to_string(),
         app_version: window.package_info().version.to_string(),
     };
     let activation_id = get_activation_id(window.app_handle()).await;

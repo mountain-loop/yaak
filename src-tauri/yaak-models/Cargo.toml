@@ -21,7 +21,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 tauri = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
-thiserror = "2.0.11"
+thiserror = { workspace = true }
 tokio = { workspace = true }
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
 
