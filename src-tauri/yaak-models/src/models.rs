@@ -11,7 +11,7 @@ use sea_query::{IntoColumnRef, IntoIden, IntoTableRef, Order, SimpleExpr, enum_d
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use ts_rs::TS;
 
@@ -123,7 +123,7 @@ pub struct Settings {
 }
 
 impl UpsertModelInfo for Settings {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         SettingsIden::Table
     }
 
@@ -252,7 +252,7 @@ pub struct Workspace {
 }
 
 impl UpsertModelInfo for Workspace {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         WorkspaceIden::Table
     }
 
@@ -355,7 +355,7 @@ pub struct WorkspaceMeta {
 }
 
 impl UpsertModelInfo for WorkspaceMeta {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         WorkspaceMetaIden::Table
     }
 
@@ -456,7 +456,7 @@ pub struct CookieJar {
 }
 
 impl UpsertModelInfo for CookieJar {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         CookieJarIden::Table
     }
 
@@ -535,7 +535,7 @@ pub struct Environment {
 }
 
 impl UpsertModelInfo for Environment {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         EnvironmentIden::Table
     }
 
@@ -655,7 +655,7 @@ pub struct Folder {
 }
 
 impl UpsertModelInfo for Folder {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         FolderIden::Table
     }
 
@@ -786,7 +786,7 @@ pub struct HttpRequest {
 }
 
 impl UpsertModelInfo for HttpRequest {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         HttpRequestIden::Table
     }
 
@@ -913,7 +913,7 @@ pub struct WebsocketConnection {
 }
 
 impl UpsertModelInfo for WebsocketConnection {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         WebsocketConnectionIden::Table
     }
 
@@ -1027,7 +1027,7 @@ pub struct WebsocketRequest {
 }
 
 impl UpsertModelInfo for WebsocketRequest {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         WebsocketRequestIden::Table
     }
 
@@ -1152,7 +1152,7 @@ pub struct WebsocketEvent {
 }
 
 impl UpsertModelInfo for WebsocketEvent {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         WebsocketEventIden::Table
     }
 
@@ -1269,7 +1269,7 @@ pub struct HttpResponse {
 }
 
 impl UpsertModelInfo for HttpResponse {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         HttpResponseIden::Table
     }
 
@@ -1377,7 +1377,7 @@ pub struct GraphQlIntrospection {
 }
 
 impl UpsertModelInfo for GraphQlIntrospection {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         GraphQlIntrospectionIden::Table
     }
 
@@ -1461,7 +1461,7 @@ pub struct GrpcRequest {
 }
 
 impl UpsertModelInfo for GrpcRequest {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         GrpcRequestIden::Table
     }
 
@@ -1588,7 +1588,7 @@ pub struct GrpcConnection {
 }
 
 impl UpsertModelInfo for GrpcConnection {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         GrpcConnectionIden::Table
     }
 
@@ -1708,7 +1708,7 @@ pub struct GrpcEvent {
 }
 
 impl UpsertModelInfo for GrpcEvent {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         GrpcEventIden::Table
     }
 
@@ -1799,7 +1799,7 @@ pub struct Plugin {
 }
 
 impl UpsertModelInfo for Plugin {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         PluginIden::Table
     }
 
@@ -1881,7 +1881,7 @@ pub struct SyncState {
 }
 
 impl UpsertModelInfo for SyncState {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         SyncStateIden::Table
     }
 
@@ -1964,7 +1964,7 @@ pub struct KeyValue {
 }
 
 impl UpsertModelInfo for KeyValue {
-    fn table_name() -> impl IntoTableRef {
+    fn table_name() -> impl IntoTableRef + Debug {
         KeyValueIden::Table
     }
 
@@ -2181,7 +2181,7 @@ impl AnyModel {
 }
 
 pub trait UpsertModelInfo {
-    fn table_name() -> impl IntoTableRef;
+    fn table_name() -> impl IntoTableRef + Debug;
     fn id_column() -> impl IntoIden + Eq + Clone;
     fn generate_id() -> String;
     fn order_by() -> (impl IntoColumnRef, Order);
