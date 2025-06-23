@@ -4,7 +4,6 @@ use log::{info, warn};
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Url};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-use yaak_plugins::api::get_plugin;
 use yaak_plugins::events::{Color, ShowToastRequest};
 use yaak_plugins::install::download_and_install;
 
@@ -23,14 +22,10 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
         "install-plugin" => {
             let name = query_map.get("name").unwrap();
             let version = query_map.get("version").cloned();
-            let plugin_version = get_plugin(&app_handle, &name, version).await?;
             _ = window.set_focus();
             let confirmed_install = app_handle
                 .dialog()
-                .message(format!(
-                    "Install plugin {}@{}?",
-                    plugin_version.name, plugin_version.version
-                ))
+                .message(format!("Install plugin {name} {version:?}?",))
                 .kind(MessageDialogKind::Info)
                 .buttons(MessageDialogButtons::OkCustom("Install".to_string()))
                 .blocking_show();
@@ -39,14 +34,11 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                 return Ok(());
             }
 
-            download_and_install(window, &plugin_version).await?;
+            let pv = download_and_install(window, name, version).await?;
             app_handle.emit(
                 "show_toast",
                 ShowToastRequest {
-                    message: format!(
-                        "Installed {}@{}",
-                        plugin_version.name, plugin_version.version
-                    ),
+                    message: format!("Installed {name}@{}", pv.version),
                     color: Some(Color::Success),
                     icon: None,
                 },

@@ -18,6 +18,7 @@ use crate::server_ws::PluginRuntimeServerWebsocket;
 use log::{error, info, warn};
 use std::collections::HashMap;
 use std::env;
+use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,7 +40,7 @@ pub struct PluginManager {
     kill_tx: tokio::sync::watch::Sender<bool>,
     ws_service: Arc<PluginRuntimeServerWebsocket>,
     vendored_plugin_dir: PathBuf,
-    installed_plugin_dir: PathBuf,
+    pub(crate) installed_plugin_dir: PathBuf,
 }
 
 #[derive(Clone)]
@@ -62,8 +63,11 @@ impl PluginManager {
             .resolve("vendored/plugins", BaseDirectory::Resource)
             .expect("failed to resolve plugin directory resource");
 
-        let installed_plugin_dir =
-            app_handle.path().app_data_dir().expect("failed to get app data dir");
+        let installed_plugin_dir = app_handle
+            .path()
+            .app_data_dir()
+            .expect("failed to get app data dir")
+            .join("installed-plugins");
 
         let plugin_manager = PluginManager {
             plugins: Default::default(),
@@ -209,7 +213,7 @@ impl PluginManager {
             None => return Err(ClientNotInitializedErr),
             Some(tx) => tx,
         };
-        let plugin_handle = PluginHandle::new(dir, tx.clone());
+        let plugin_handle = PluginHandle::new(dir, tx.clone())?;
         let dir_path = Path::new(dir);
         let is_vendored = dir_path.starts_with(self.vendored_plugin_dir.as_path());
         let is_installed = dir_path.starts_with(self.installed_plugin_dir.as_path());

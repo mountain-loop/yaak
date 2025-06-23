@@ -16,15 +16,16 @@ pub struct PluginHandle {
 }
 
 impl PluginHandle {
-    pub fn new(dir: &str, tx: mpsc::Sender<InternalEvent>) -> Self {
+    pub fn new(dir: &str, tx: mpsc::Sender<InternalEvent>) -> Result<Self> {
         let ref_id = gen_id();
+        let metadata = get_plugin_meta(&Path::new(dir))?;
 
-        PluginHandle {
+        Ok(PluginHandle {
             ref_id: ref_id.clone(),
             dir: dir.to_string(),
             to_plugin_tx: Arc::new(Mutex::new(tx)),
-            metadata: get_plugin_meta(&Path::new(dir)).unwrap(),
-        }
+            metadata,
+        })
     }
 
     pub fn info(&self) -> PluginMetadata {

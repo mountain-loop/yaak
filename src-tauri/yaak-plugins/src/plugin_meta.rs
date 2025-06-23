@@ -10,7 +10,7 @@ use ts_rs::TS;
 pub struct PluginMetadata {
     pub version: String,
     pub name: String,
-    pub display_name: Option<String>,
+    pub display_name: String,
     pub description: Option<String>,
     pub homepage_url: Option<String>,
     pub repository_url: Option<String>,
@@ -20,11 +20,22 @@ pub(crate) fn get_plugin_meta(plugin_dir: &Path) -> Result<PluginMetadata> {
     let package_json = fs::File::open(plugin_dir.join("package.json"))?;
     let package_json: PackageJson = serde_json::from_reader(package_json)?;
 
+    let display_name = match package_json.display_name {
+        None => {
+            let display_name = package_json.name.to_string();
+            let display_name = display_name.split('/').last().unwrap_or(&package_json.name);
+            let display_name = display_name.strip_prefix("yaak-plugin-").unwrap_or(&display_name);
+            let display_name = display_name.strip_prefix("yaak-").unwrap_or(&display_name);
+            display_name.to_string()
+        }
+        Some(n) => n,
+    };
+
     Ok(PluginMetadata {
         version: package_json.version,
         description: package_json.description,
         name: package_json.name,
-        display_name: package_json.display_name,
+        display_name,
         homepage_url: package_json.homepage,
         repository_url: match package_json.repository {
             None => None,

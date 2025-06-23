@@ -1,6 +1,5 @@
 use crate::api::{
-    PluginSearchResponse, PluginUpdatesResponse, PluginVersion, check_plugin_updates,
-    search_plugins,
+    PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates, search_plugins,
 };
 use crate::error::Result;
 use crate::install::download_and_install;
@@ -17,9 +16,11 @@ pub(crate) async fn search<R: Runtime>(
 #[command]
 pub(crate) async fn install<R: Runtime>(
     window: WebviewWindow<R>,
-    plugin: PluginVersion,
-) -> Result<String> {
-    download_and_install(&window, &plugin).await
+    name: &str,
+    version: Option<String>,
+) -> Result<()> {
+    download_and_install(&window, name, version).await?;
+    Ok(())
 }
 
 #[command]

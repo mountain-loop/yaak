@@ -33,6 +33,7 @@ const icons = {
   chevron_down: lucide.ChevronDownIcon,
   chevron_right: lucide.ChevronRightIcon,
   circle_alert: lucide.CircleAlertIcon,
+  circle_fading_arrow_up: lucide.CircleFadingArrowUpIcon,
   clock: lucide.ClockIcon,
   code: lucide.CodeIcon,
   columns_2: lucide.Columns2Icon,
@@ -133,7 +134,7 @@ export const Icon = memo(function Icon({
       title={title}
       className={classNames(
         className,
-        'flex-shrink-0 transform-cpu',
+        'flex-shrink-0',
         size === 'xl' && 'h-6 w-6',
         size === 'lg' && 'h-5 w-5',
         size === 'md' && 'h-4 w-4',

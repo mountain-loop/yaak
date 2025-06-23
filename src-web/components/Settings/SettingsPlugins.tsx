@@ -1,7 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import type { Plugin } from '@yaakapp-internal/models';
-import { pluginsAtom } from '@yaakapp-internal/models';
+import { Plugin, pluginsAtom } from '@yaakapp-internal/models';
 import {
   checkPluginUpdates,
   installPlugin,
@@ -49,15 +48,8 @@ export function SettingsPlugins() {
           <PluginSearch />
         </TabContent>
         <TabContent value="installed">
-          <InstalledPlugins />
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (directory == null) return;
-              createPlugin.mutate(directory);
-              setDirectory(null);
-            }}
-          >
+          <div className="h-full grid grid-rows-[minmax(0,1fr)_auto]">
+            <InstalledPlugins />
             <footer className="grid grid-cols-[minmax(0,1fr)_auto] -mx-4 py-2 px-4 border-t bg-surface-highlight border-border-subtle min-w-0">
               <SelectFile
                 size="xs"
@@ -68,7 +60,16 @@ export function SettingsPlugins() {
               />
               <HStack>
                 {directory && (
-                  <Button size="xs" type="submit" color="primary" className="ml-auto">
+                  <Button
+                    size="xs"
+                    color="primary"
+                    className="ml-auto"
+                    onClick={() => {
+                      if (directory == null) return;
+                      createPlugin.mutate(directory);
+                      setDirectory(null);
+                    }}
+                  >
                     Add Plugin
                   </Button>
                 )}
@@ -89,14 +90,14 @@ export function SettingsPlugins() {
                 />
               </HStack>
             </footer>
-          </form>
+          </div>
         </TabContent>
       </Tabs>
     </div>
   );
 }
 
-function PluginInfo({
+function PluginTableRow({
   plugin,
   updates,
 }: {
@@ -104,34 +105,41 @@ function PluginInfo({
   updates: PluginUpdatesResponse | null;
 }) {
   const pluginInfo = usePluginInfo(plugin.id);
-  const deletePlugin = useUninstallPlugin();
+  const uninstallPlugin = useUninstallPlugin();
   const latestVersion = updates?.plugins.find((u) => u.name === pluginInfo.data?.name)?.version;
-  const hasUpdates = pluginInfo.data?.version !== latestVersion;
+  const installPluginMutation = useMutation({
+    mutationKey: ['install_plugin', plugin.id],
+    mutationFn: (name: string) => installPlugin(name, null),
+  });
+  if (pluginInfo.data == null) return null;
+
   return (
-    <tr className="group">
-      <td className="py-2 select-text cursor-text w-full">{pluginInfo.data?.name}</td>
-      <td className="py-2 select-text cursor-text text-right">
+    <TableRow>
+      <TableCell className="font-semibold">{pluginInfo.data.displayName}</TableCell>
+      <TableCell>
         <InlineCode>{pluginInfo.data?.version}</InlineCode>
-      </td>
-      <td className="py-2 select-text cursor-text pl-2 flex gap-1">
-        {hasUpdates && (
+      </TableCell>
+      <TableCell className="w-full text-text-subtle">{pluginInfo.data.description}</TableCell>
+      <TableCell>
+        {latestVersion != null && (
           <IconButton
-            icon="refresh"
-            title="Install update"
+            icon="circle_fading_arrow_up"
+            title={`Update to ${latestVersion}`}
             size="sm"
-            onClick={() => {
-              // Trigger update
-            }}
+            isLoading={installPluginMutation.isPending}
+            onClick={() => installPluginMutation.mutate(pluginInfo.data.name)}
           />
         )}
         <IconButton
           size="sm"
           icon="trash"
           title="Uninstall plugin"
-          onClick={() => deletePlugin.mutate(plugin.id)}
+          onClick={async () => {
+            uninstallPlugin.mutate({ pluginId: plugin.id, name: pluginInfo.data.displayName });
+          }}
         />
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -175,7 +183,7 @@ function PluginSearch() {
               {results.data.plugins.map((plugin) => (
                 <TableRow key={plugin.id}>
                   <TableCell className="font-semibold">{plugin.displayName}</TableCell>
-                  <TableCell className="text-text-subtle">
+                  <TableCell>
                     <InlineCode>{plugin.version}</InlineCode>
                   </TableCell>
                   <TableCell className="w-full text-text-subtle">
@@ -196,11 +204,11 @@ function PluginSearch() {
 
 function InstallPluginButton({ plugin }: { plugin: PluginVersion }) {
   const plugins = useAtomValue(pluginsAtom);
-  const deletePlugin = useUninstallPlugin();
+  const uninstallPlugin = useUninstallPlugin();
   const installed = plugins?.some((p) => p.id === plugin.id);
   const installPluginMutation = useMutation({
     mutationKey: ['install_plugin', plugin.id],
-    mutationFn: installPlugin,
+    mutationFn: (pv: PluginVersion) => installPlugin(pv.name, null),
   });
 
   return (
@@ -212,7 +220,7 @@ function InstallPluginButton({ plugin }: { plugin: PluginVersion }) {
       isLoading={installPluginMutation.isPending}
       onClick={async () => {
         if (installed) {
-          deletePlugin.mutate(plugin.id);
+          uninstallPlugin.mutate({ pluginId: plugin.id, name: plugin.displayName });
         } else {
           installPluginMutation.mutate(plugin);
         }
@@ -239,19 +247,20 @@ function InstalledPlugins() {
       </EmptyStateText>
     </div>
   ) : (
-    <table className="w-full text-sm mb-auto min-w-full max-w-full divide-y divide-surface-highlight">
-      <thead>
-        <tr>
-          <th className="py-2 text-left">Plugin</th>
-          <th className="py-2 text-right">Version</th>
-          <th></th>
-        </tr>
-      </thead>
+    <Table>
+      <TableHead>
+        <TableRow>
+          <TableHeaderCell>Name</TableHeaderCell>
+          <TableHeaderCell>Version</TableHeaderCell>
+          <TableHeaderCell>Description</TableHeaderCell>
+          <TableHeaderCell />
+        </TableRow>
+      </TableHead>
       <tbody className="divide-y divide-surface-highlight">
         {plugins.map((p) => {
-          return <PluginInfo key={p.id} plugin={p} updates={updates.data ?? null} />;
+          return <PluginTableRow key={p.id} plugin={p} updates={updates.data ?? null} />;
         })}
       </tbody>
-    </table>
+    </Table>
   );
 }
