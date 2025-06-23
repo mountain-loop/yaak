@@ -53,7 +53,7 @@ export function TableHeaderCell({
   children,
   className,
 }: {
-  children: ReactNode;
+  children?: ReactNode;
   className?: string;
 }) {
   return (

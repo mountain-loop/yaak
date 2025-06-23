@@ -1,9 +1,11 @@
+use crate::commands::{install, search, updates};
 use crate::manager::PluginManager;
 use log::info;
 use std::process::exit;
 use tauri::plugin::{Builder, TauriPlugin};
-use tauri::{Manager, RunEvent, Runtime, State};
+use tauri::{Manager, RunEvent, Runtime, State, generate_handler};
 
+mod commands;
 pub mod error;
 pub mod events;
 pub mod manager;
@@ -13,9 +15,14 @@ pub mod plugin_handle;
 mod server_ws;
 pub mod template_callback;
 mod util;
+mod checksum;
+pub mod api;
+pub mod install;
+pub mod plugin_meta;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-plugins")
+        .invoke_handler(generate_handler![search, install, updates])
         .setup(|app_handle, _| {
             let manager = PluginManager::new(app_handle.clone());
             app_handle.manage(manager.clone());

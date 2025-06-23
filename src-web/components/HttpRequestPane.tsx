@@ -350,7 +350,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             label="Request"
             onChangeValue={setActiveTab}
             tabs={tabs}
-            tabListClassName="mt-2 !mb-1.5"
+            tabListClassName="mt-1 !mb-1.5"
           >
             <TabContent value={TAB_AUTH}>
               <HttpAuthenticationEditor model={activeRequest} />

@@ -86,8 +86,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 environment.as_ref(),
                 &cb,
             )
-            .await
-            .expect("Failed to render http request");
+                .await
+                .expect("Failed to render http request");
             Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
                 http_request,
             }))
@@ -115,7 +115,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 &InternalEventPayload::ShowToastRequest(ShowToastRequest {
                     message: format!(
                         "Plugin error from {}: {}",
-                        plugin_handle.name().await,
+                        plugin_handle.info().name,
                         resp.error
                     ),
                     color: Some(Color::Danger),
@@ -126,7 +126,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await;
             None
         }
-        InternalEventPayload::ReloadResponse(_) => {
+        InternalEventPayload::ReloadResponse(r) => {
             let plugins = app_handle.db().list_plugins().unwrap();
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {
@@ -142,7 +142,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let toast_event = plugin_handle.build_event_to_send(
                 &window_context,
                 &InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                    message: format!("Reloaded plugin {}", plugin_handle.dir),
+                    message: format!("Reloaded plugin {}@{}", r.name, r.version),
                     icon: Some(Icon::Info),
                     ..Default::default()
                 }),
@@ -188,7 +188,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 cookie_jar,
                 &mut tokio::sync::watch::channel(false).1, // No-op cancel channel
             )
-            .await;
+                .await;
 
             let http_response = match result {
                 Ok(r) => r,
@@ -257,17 +257,17 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             None
         }
         InternalEventPayload::SetKeyValueRequest(req) => {
-            let name = plugin_handle.name().await;
+            let name = plugin_handle.info().name;
             app_handle.db().set_plugin_key_value(&name, &req.key, &req.value);
             Some(InternalEventPayload::SetKeyValueResponse(SetKeyValueResponse {}))
         }
         InternalEventPayload::GetKeyValueRequest(req) => {
-            let name = plugin_handle.name().await;
+            let name = plugin_handle.info().name;
             let value = app_handle.db().get_plugin_key_value(&name, &req.key).map(|v| v.value);
             Some(InternalEventPayload::GetKeyValueResponse(GetKeyValueResponse { value }))
         }
         InternalEventPayload::DeleteKeyValueRequest(req) => {
-            let name = plugin_handle.name().await;
+            let name = plugin_handle.info().name;
             let deleted = app_handle.db().delete_plugin_key_value(&name, &req.key).unwrap();
             Some(InternalEventPayload::DeleteKeyValueResponse(DeleteKeyValueResponse { deleted }))
         }

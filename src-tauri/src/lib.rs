@@ -3,14 +3,15 @@ use crate::encoding::read_response_body;
 use crate::error::Error::GenericError;
 use crate::grpc::{build_metadata, metadata_to_map, resolve_grpc_request};
 use crate::http_request::send_http_request;
+use crate::import::import_data;
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
 use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
-use crate::uri_scheme::handle_uri_scheme;
+use crate::uri_scheme::handle_deep_link;
 use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, info, warn};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fs::{File, create_dir_all};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -19,31 +20,29 @@ use std::{fs, panic};
 use tauri::{AppHandle, Emitter, RunEvent, State, WebviewWindow, is_dev};
 use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
-use tokio::fs::read_to_string;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{Code, ServiceDefinition, deserialize_message, serialize_message};
 use yaak_models::models::{
-    CookieJar, Environment, Folder, GrpcConnection, GrpcConnectionState, GrpcEvent, GrpcEventType,
-    GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, Plugin, WebsocketRequest, Workspace,
-    WorkspaceMeta,
+    CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent, GrpcEventType,
+    GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, Plugin, Workspace, WorkspaceMeta,
 };
 use yaak_models::query_manager::QueryManagerExt;
-use yaak_models::util::{
-    BatchUpsertResult, UpdateSource, get_workspace_export_resources, maybe_gen_id, maybe_gen_id_opt,
-};
+use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
 use yaak_plugins::events::{
-    BootResponse, CallHttpRequestActionRequest, FilterResponse,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, InternalEvent,
-    InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
+    CallHttpRequestActionRequest, FilterResponse, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
+    GetTemplateFunctionsResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
+    PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
+use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
@@ -55,6 +54,7 @@ mod error;
 mod grpc;
 mod history;
 mod http_request;
+mod import;
 mod notifications;
 mod plugin_events;
 mod render;
@@ -778,98 +778,9 @@ async fn cmd_get_sse_events(file_path: &str) -> YaakResult<Vec<ServerSentEvent>>
 #[tauri::command]
 async fn cmd_import_data<R: Runtime>(
     window: WebviewWindow<R>,
-    app_handle: AppHandle<R>,
-    plugin_manager: State<'_, PluginManager>,
     file_path: &str,
 ) -> YaakResult<BatchUpsertResult> {
-    let file = read_to_string(file_path)
-        .await
-        .unwrap_or_else(|_| panic!("Unable to read file {}", file_path));
-    let file_contents = file.as_str();
-    let import_result = plugin_manager.import_data(&window, file_contents).await?;
-
-    let mut id_map: BTreeMap<String, String> = BTreeMap::new();
-
-    let resources = import_result.resources;
-
-    let workspaces: Vec<Workspace> = resources
-        .workspaces
-        .into_iter()
-        .map(|mut v| {
-            v.id = maybe_gen_id::<Workspace>(v.id.as_str(), &mut id_map);
-            v
-        })
-        .collect();
-
-    let environments: Vec<Environment> = resources
-        .environments
-        .into_iter()
-        .map(|mut v| {
-            v.id = maybe_gen_id::<Environment>(v.id.as_str(), &mut id_map);
-            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
-            v
-        })
-        .collect();
-
-    let folders: Vec<Folder> = resources
-        .folders
-        .into_iter()
-        .map(|mut v| {
-            v.id = maybe_gen_id::<Folder>(v.id.as_str(), &mut id_map);
-            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
-            v.folder_id = maybe_gen_id_opt::<Folder>(v.folder_id, &mut id_map);
-            v
-        })
-        .collect();
-
-    let http_requests: Vec<HttpRequest> = resources
-        .http_requests
-        .into_iter()
-        .map(|mut v| {
-            v.id = maybe_gen_id::<HttpRequest>(v.id.as_str(), &mut id_map);
-            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
-            v.folder_id = maybe_gen_id_opt::<Folder>(v.folder_id, &mut id_map);
-            v
-        })
-        .collect();
-
-    let grpc_requests: Vec<GrpcRequest> = resources
-        .grpc_requests
-        .into_iter()
-        .map(|mut v| {
-            v.id = maybe_gen_id::<GrpcRequest>(v.id.as_str(), &mut id_map);
-            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
-            v.folder_id = maybe_gen_id_opt::<Folder>(v.folder_id, &mut id_map);
-            v
-        })
-        .collect();
-
-    let websocket_requests: Vec<WebsocketRequest> = resources
-        .websocket_requests
-        .into_iter()
-        .map(|mut v| {
-            v.id = maybe_gen_id::<WebsocketRequest>(v.id.as_str(), &mut id_map);
-            v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
-            v.folder_id = maybe_gen_id_opt::<Folder>(v.folder_id, &mut id_map);
-            v
-        })
-        .collect();
-
-    info!("Importing data");
-
-    let upserted = app_handle.with_tx(|tx| {
-        tx.batch_upsert(
-            workspaces,
-            environments,
-            folders,
-            http_requests,
-            grpc_requests,
-            websocket_requests,
-            &UpdateSource::Import,
-        )
-    })?;
-
-    Ok(upserted)
+    import_data(&window, file_path).await
 }
 
 #[tauri::command]
@@ -1066,7 +977,7 @@ async fn cmd_install_plugin<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Plugin> {
-    plugin_manager.add_plugin_by_dir(&PluginWindowContext::new(&window), &directory, true).await?;
+    plugin_manager.add_plugin_by_dir(&PluginWindowContext::new(&window), &directory).await?;
 
     Ok(app_handle.db().upsert_plugin(
         &Plugin {
@@ -1129,14 +1040,13 @@ async fn cmd_plugin_info<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<BootResponse> {
+) -> YaakResult<PluginMetadata> {
     let plugin = app_handle.db().get_plugin(id)?;
     Ok(plugin_manager
         .get_plugin_by_dir(plugin.directory.as_str())
         .await
         .ok_or(GenericError("Failed to find plugin for info".to_string()))?
-        .info()
-        .await)
+        .info())
 }
 
 #[tauri::command]
@@ -1255,6 +1165,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
@@ -1272,6 +1183,21 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            {
+                let app_handle = app.app_handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    info!("Handling deep link open");
+                    let app_handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        for url in event.urls() {
+                            if let Err(e) = handle_deep_link(&app_handle, &url).await {
+                                warn!("Failed to handle deep link {}: {e:?}", url.to_string());
+                            };
+                        }
+                    });
+                });
+            };
+
             let app_data_dir = app.path().app_data_dir().unwrap();
             create_dir_all(app_data_dir.clone()).expect("Problem creating App directory!");
 
@@ -1332,7 +1258,6 @@ pub fn run() {
             crate::commands::cmd_secure_template,
             crate::commands::cmd_show_workspace_key,
         ])
-        .register_uri_scheme_protocol("yaak", handle_uri_scheme)
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app_handle, event| {

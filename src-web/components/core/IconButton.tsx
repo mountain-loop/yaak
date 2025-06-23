@@ -6,6 +6,7 @@ import type { ButtonProps } from './Button';
 import { Button } from './Button';
 import type { IconProps } from './Icon';
 import { Icon } from './Icon';
+import { LoadingIcon } from './LoadingIcon';
 
 export type IconButtonProps = IconProps &
   ButtonProps & {
@@ -31,6 +32,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     iconSize,
     showBadge,
     iconColor,
+    isLoading,
     ...props
   }: IconButtonProps,
   ref,
@@ -70,18 +72,22 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
           <div className="w-2.5 h-2.5 bg-pink-500 rounded-full" />
         </div>
       )}
-      <Icon
-        size={iconSize}
-        icon={confirmed ? 'check' : icon}
-        spin={spin}
-        color={iconColor}
-        className={classNames(
-          iconClassName,
-          'group-hover/button:text-text',
-          confirmed && '!text-success', // Don't use Icon.color here because it won't override the hover color
-          props.disabled && 'opacity-70',
-        )}
-      />
+      {isLoading ? (
+        <LoadingIcon size={iconSize} className={iconClassName} />
+      ) : (
+        <Icon
+          size={iconSize}
+          icon={confirmed ? 'check' : icon}
+          spin={spin}
+          color={iconColor}
+          className={classNames(
+            iconClassName,
+            'group-hover/button:text-text',
+            confirmed && '!text-success', // Don't use Icon.color here because it won't override the hover color
+            props.disabled && 'opacity-70',
+          )}
+        />
+      )}
     </Button>
   );
 });

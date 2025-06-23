@@ -1,5 +1,6 @@
 import {
   BootRequest,
+  BootResponse,
   DeleteKeyValueResponse,
   FindHttpResponsesResponse,
   FormInput,
@@ -52,21 +53,28 @@ export class PluginInstance {
 
     // Reload plugin if the JS or package.json changes
     const windowContextNone: PluginWindowContext = { type: 'none' };
+
+    this.#mod = {};
+    this.#pkg = JSON.parse(readFileSync(this.#pathPkg(), 'utf8'));
+
+    const bootResponse: BootResponse = {
+      name: this.#pkg.name ?? 'unknown',
+      version: this.#pkg.version ?? '0.0.1',
+    };
+
     const fileChangeCallback = async () => {
       this.#importModule();
-      return this.#sendPayload(windowContextNone, { type: 'reload_response' }, null);
+      return this.#sendPayload(
+        windowContextNone,
+        { type: 'reload_response', ...bootResponse },
+        null,
+      );
     };
 
     if (this.#workerData.bootRequest.watch) {
       watchFile(this.#pathMod(), fileChangeCallback);
       watchFile(this.#pathPkg(), fileChangeCallback);
     }
-
-    this.#mod = {};
-    this.#pkg = JSON.parse(readFileSync(this.#pathPkg(), 'utf8'));
-
-    // TODO: Re-implement this now that we're not using workers
-    // prefixStdout(`[plugin][${this.#pkg.name}] %s`);
 
     this.#importModule();
   }

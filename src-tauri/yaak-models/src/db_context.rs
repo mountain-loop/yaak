@@ -1,5 +1,5 @@
 use crate::connection_or_tx::ConnectionOrTx;
-use crate::error::Error::RowNotFound;
+use crate::error::Error::DBRowNotFound;
 use crate::models::{AnyModel, UpsertModelInfo};
 use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
 use rusqlite::OptionalExtension;
@@ -26,7 +26,7 @@ impl<'a> DbContext<'a> {
     {
         match self.find_optional::<M>(col, value) {
             Some(v) => Ok(v),
-            None => Err(RowNotFound),
+            None => Err(DBRowNotFound(format!("{:?}", M::table_name()))),
         }
     }
 

@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 chrono = { version = "0.4.38", features = ["serde"] }
-hex = "0.4.3"
+hex = { workspace = true }
 include_dir = "0.7"
 log = "0.4.22"
 nanoid = "0.4.0"
@@ -18,10 +18,10 @@ sea-query = { version = "0.32.1", features = ["with-chrono", "attr"] }
 sea-query-rusqlite = { version = "0.7.0", features = ["with-chrono"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-sha2 = "0.10.9"
-tauri = { workspace = true}
+sha2 = { workspace = true }
+tauri = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
-thiserror = "2.0.11"
+thiserror = { workspace = true }
 tokio = { workspace = true }
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
 

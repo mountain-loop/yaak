@@ -1,10 +1,12 @@
 [package]
 name = "yaak-plugins"
+links = "yaak-plugins"
 version = "0.1.0"
 edition = "2024"
 publish = false
 
 [dependencies]
+base64 = "0.22.1"
 dunce = "1.0.4"
 futures-util = "0.3.30"
 log = "0.4.21"
@@ -12,16 +14,23 @@ md5 = "0.7.0"
 path-slash = "0.2.1"
 rand = "0.9.0"
 regex = "1.10.6"
+reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tauri = { workspace = true }
 tauri-plugin-shell = { workspace = true }
-thiserror = "2.0.7"
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process"] }
 tokio-tungstenite = "0.26.1"
 ts-rs = { workspace = true, features = ["import-esm"] }
+sha2 = { workspace = true }
+yaak-common = { workspace = true }
+yaak-crypto = { workspace = true }
 yaak-models = { workspace = true }
 yaak-templates = { workspace = true }
-yaak-crypto = { workspace = true }
-yaak-common = { workspace = true }
-base64 = "0.22.1"
+zip-extract = "0.4.0"
+chrono = { workspace = true }
+hex = { workspace = true }
+
+[build-dependencies]
+tauri-plugin = { workspace = true, features = ["build"] }

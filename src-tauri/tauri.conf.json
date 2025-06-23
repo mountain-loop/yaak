@@ -23,7 +23,6 @@
   },
   "plugins": {
     "deep-link": {
-      "mobile": [],
       "desktop": {
         "schemes": [
           "yaak"

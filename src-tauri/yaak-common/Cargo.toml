@@ -6,4 +6,7 @@ publish = false
 
 [dependencies]
 tauri = { workspace = true }
+reqwest = { workspace = true, features = ["system-proxy", "gzip"] }
+thiserror = { workspace = true }
 regex = "1.11.0"
+serde = { workspace = true, features = ["derive"] }

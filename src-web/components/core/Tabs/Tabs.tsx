@@ -1,11 +1,9 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
-import { Icon } from '../Icon';
-import type { RadioDropdownProps } from '../RadioDropdown';
-import { RadioDropdown } from '../RadioDropdown';
-import { HStack } from '../Stacks';
 import { ErrorBoundary } from '../../ErrorBoundary';
+import { Icon } from '../Icon';
+import { RadioDropdown, RadioDropdownProps } from '../RadioDropdown';
 
 export type TabItem =
   | {
@@ -28,6 +26,7 @@ interface Props {
   className?: string;
   children: ReactNode;
   addBorders?: boolean;
+  layout?: 'horizontal' | 'vertical';
 }
 
 export function Tabs({
@@ -39,6 +38,7 @@ export function Tabs({
   className,
   tabListClassName,
   addBorders,
+  layout = 'vertical',
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -49,7 +49,10 @@ export function Tabs({
     const tabs = ref.current?.querySelectorAll<HTMLDivElement>(`[data-tab]`);
     for (const tab of tabs ?? []) {
       const v = tab.getAttribute('data-tab');
-      if (v === value) {
+      let parent = tab.closest('.tabs-container');
+      if (parent !== ref.current) {
+        // Tab is part of a nested tab container, so ignore it
+      } else if (v === value) {
         tab.setAttribute('tabindex', '-1');
         tab.setAttribute('data-state', 'active');
         tab.setAttribute('aria-hidden', 'false');
@@ -67,29 +70,41 @@ export function Tabs({
       ref={ref}
       className={classNames(
         className,
+        'tabs-container',
         'transform-gpu',
-        'h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1',
+        'h-full grid',
+        layout === 'horizontal' && 'grid-rows-1 grid-cols-[auto_minmax(0,1fr)]',
+        layout === 'vertical' && 'grid-rows-[auto_minmax(0,1fr)] grid-cols-1',
       )}
     >
       <div
         aria-label={label}
         className={classNames(
           tabListClassName,
-          addBorders && '!-ml-1 h-md mt-2',
-          'flex items-center overflow-x-auto overflow-y-visible hide-scrollbars mt-1 mb-2',
+          addBorders && '!-ml-1',
+          'flex items-center hide-scrollbars mb-2',
+          layout === 'horizontal' && 'h-full overflow-auto pt-1 px-2',
+          layout === 'vertical' && 'overflow-x-auto overflow-y-visible ',
           // Give space for button focus states within overflow boundary.
-          '-ml-5 pl-3 pr-1 py-1',
+          layout === 'vertical' && 'py-1 -ml-5 pl-3 pr-1',
         )}
       >
-        <HStack space={2} className="h-full flex-shrink-0">
+        <div
+          className={classNames(
+            layout === 'horizontal' && 'flex flex-col gap-1 w-full mt-1 pb-3 mb-auto',
+            layout === 'vertical' && 'flex flex-row flex-shrink-0 gap-2 w-full',
+          )}
+        >
           {tabs.map((t) => {
             const isActive = t.value === value;
             const btnClassName = classNames(
-              'h-full flex items-center rounded',
+              'h-sm flex items-center rounded',
               '!px-2 ml-[1px]',
               addBorders && 'border',
               isActive ? 'text-text' : 'text-text-subtle hover:text-text',
-              isActive && addBorders ? 'border-border-subtle' : 'border-transparent',
+              isActive && addBorders
+                ? 'border-border-subtle bg-surface-active'
+                : 'border-transparent',
             );
 
             if ('options' in t) {
@@ -135,7 +150,7 @@ export function Tabs({
               );
             }
           })}
-        </HStack>
+        </div>
       </div>
       {children}
     </div>

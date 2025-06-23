@@ -66,8 +66,10 @@ export default function Settings({ hide }: Props) {
         </HeaderSize>
       )}
       <Tabs
+        layout="horizontal"
         value={tab}
         addBorders
+        tabListClassName="min-w-[10rem] bg-surface x-theme-sidebar border-r border-border"
         label="Settings"
         onChangeValue={setTab}
         tabs={tabs.map((value) => ({ value, label: capitalize(value) }))}
@@ -81,7 +83,7 @@ export default function Settings({ hide }: Props) {
         <TabContent value={TAB_THEME} className="pt-3 overflow-y-auto h-full px-4">
           <SettingsTheme />
         </TabContent>
-        <TabContent value={TAB_PLUGINS} className="pt-3 overflow-y-auto h-full px-4">
+        <TabContent value={TAB_PLUGINS} className="pt-3 h-full px-4 grid grid-rows-1">
           <SettingsPlugins />
         </TabContent>
         <TabContent value={TAB_PROXY} className="pt-3 overflow-y-auto h-full px-4">

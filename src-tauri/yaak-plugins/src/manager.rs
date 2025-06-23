@@ -18,7 +18,7 @@ use crate::server_ws::PluginRuntimeServerWebsocket;
 use log::{error, info, warn};
 use std::collections::HashMap;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::path::BaseDirectory;
@@ -38,12 +38,13 @@ pub struct PluginManager {
     plugins: Arc<Mutex<Vec<PluginHandle>>>,
     kill_tx: tokio::sync::watch::Sender<bool>,
     ws_service: Arc<PluginRuntimeServerWebsocket>,
+    vendored_plugin_dir: PathBuf,
+    pub(crate) installed_plugin_dir: PathBuf,
 }
 
 #[derive(Clone)]
 struct PluginCandidate {
     dir: String,
-    watch: bool,
 }
 
 impl PluginManager {
@@ -56,11 +57,24 @@ impl PluginManager {
         let ws_service =
             PluginRuntimeServerWebsocket::new(events_tx, client_disconnect_tx, client_connect_tx);
 
+        let vendored_plugin_dir = app_handle
+            .path()
+            .resolve("vendored/plugins", BaseDirectory::Resource)
+            .expect("failed to resolve plugin directory resource");
+
+        let installed_plugin_dir = app_handle
+            .path()
+            .app_data_dir()
+            .expect("failed to get app data dir")
+            .join("installed-plugins");
+
         let plugin_manager = PluginManager {
             plugins: Default::default(),
             subscribers: Default::default(),
             ws_service: Arc::new(ws_service.clone()),
             kill_tx: kill_server_tx,
+            vendored_plugin_dir,
+            installed_plugin_dir,
         };
 
         // Forward events to subscribers
@@ -135,18 +149,13 @@ impl PluginManager {
         &self,
         app_handle: &AppHandle<R>,
     ) -> Vec<PluginCandidate> {
-        let bundled_plugins_dir = &app_handle
-            .path()
-            .resolve("vendored/plugins", BaseDirectory::Resource)
-            .expect("failed to resolve plugin directory resource");
-
         let plugins_dir = if is_dev() {
             // Use plugins directly for easy development
             env::current_dir()
                 .map(|cwd| cwd.join("../plugins").canonicalize().unwrap())
-                .unwrap_or_else(|_| bundled_plugins_dir.clone())
+                .unwrap_or_else(|_| self.vendored_plugin_dir.to_path_buf())
         } else {
-            bundled_plugins_dir.clone()
+            self.vendored_plugin_dir.to_path_buf()
         };
 
         info!("Loading bundled plugins from {plugins_dir:?}");
@@ -155,13 +164,7 @@ impl PluginManager {
             .await
             .expect(format!("Failed to read plugins dir: {:?}", plugins_dir).as_str())
             .iter()
-            .map(|d| {
-                let is_vendored = plugins_dir.starts_with(bundled_plugins_dir);
-                PluginCandidate {
-                    dir: d.into(),
-                    watch: !is_vendored,
-                }
-            })
+            .map(|d| PluginCandidate { dir: d.into() })
             .collect();
 
         let plugins = app_handle.db().list_plugins().unwrap_or_default();
@@ -169,7 +172,6 @@ impl PluginManager {
             .iter()
             .map(|p| PluginCandidate {
                 dir: p.directory.to_owned(),
-                watch: true,
             })
             .collect();
 
@@ -203,7 +205,6 @@ impl PluginManager {
         &self,
         window_context: &PluginWindowContext,
         dir: &str,
-        watch: bool,
     ) -> Result<()> {
         info!("Adding plugin by dir {dir}");
         let maybe_tx = self.ws_service.app_to_plugin_events_tx.lock().await;
@@ -211,7 +212,10 @@ impl PluginManager {
             None => return Err(ClientNotInitializedErr),
             Some(tx) => tx,
         };
-        let plugin_handle = PluginHandle::new(dir, tx.clone());
+        let plugin_handle = PluginHandle::new(dir, tx.clone())?;
+        let dir_path = Path::new(dir);
+        let is_vendored = dir_path.starts_with(self.vendored_plugin_dir.as_path());
+        let is_installed = dir_path.starts_with(self.installed_plugin_dir.as_path());
 
         // Boot the plugin
         let event = timeout(
@@ -221,7 +225,7 @@ impl PluginManager {
                 &plugin_handle,
                 &InternalEventPayload::BootRequest(BootRequest {
                     dir: dir.to_string(),
-                    watch,
+                    watch: !is_vendored && !is_installed,
                 }),
             ),
         )
@@ -230,13 +234,10 @@ impl PluginManager {
         // Add the new plugin
         self.plugins.lock().await.push(plugin_handle.clone());
 
-        let resp = match event.payload {
+        let _ = match event.payload {
             InternalEventPayload::BootResponse(resp) => resp,
             _ => return Err(UnknownEventErr),
         };
-
-        // Set the boot response
-        plugin_handle.set_boot_response(&resp).await;
 
         Ok(())
     }
@@ -256,10 +257,7 @@ impl PluginManager {
                     continue;
                 }
             }
-            if let Err(e) = self
-                .add_plugin_by_dir(window_context, candidate.dir.as_str(), candidate.watch)
-                .await
-            {
+            if let Err(e) = self.add_plugin_by_dir(window_context, candidate.dir.as_str()).await {
                 warn!("Failed to add plugin {} {e:?}", candidate.dir);
             }
         }
@@ -319,7 +317,7 @@ impl PluginManager {
 
     pub async fn get_plugin_by_name(&self, name: &str) -> Option<PluginHandle> {
         for plugin in self.plugins.lock().await.iter().cloned() {
-            let info = plugin.info().await;
+            let info = plugin.info();
             if info.name == name {
                 return Some(plugin);
             }

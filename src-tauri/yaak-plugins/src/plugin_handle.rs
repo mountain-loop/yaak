@@ -1,38 +1,35 @@
 use crate::error::Result;
-use crate::events::{BootResponse, InternalEvent, InternalEventPayload, PluginWindowContext};
+use crate::events::{InternalEvent, InternalEventPayload, PluginWindowContext};
+use crate::plugin_meta::{PluginMetadata, get_plugin_meta};
 use crate::util::gen_id;
 use log::info;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 
 #[derive(Clone)]
 pub struct PluginHandle {
     pub ref_id: String,
     pub dir: String,
     pub(crate) to_plugin_tx: Arc<Mutex<mpsc::Sender<InternalEvent>>>,
-    pub(crate) boot_resp: Arc<Mutex<BootResponse>>,
+    pub(crate) metadata: PluginMetadata,
 }
 
 impl PluginHandle {
-    pub fn new(dir: &str, tx: mpsc::Sender<InternalEvent>) -> Self {
+    pub fn new(dir: &str, tx: mpsc::Sender<InternalEvent>) -> Result<Self> {
         let ref_id = gen_id();
+        let metadata = get_plugin_meta(&Path::new(dir))?;
 
-        PluginHandle {
+        Ok(PluginHandle {
             ref_id: ref_id.clone(),
             dir: dir.to_string(),
             to_plugin_tx: Arc::new(Mutex::new(tx)),
-            boot_resp: Arc::new(Mutex::new(BootResponse::default())),
-        }
+            metadata,
+        })
     }
 
-    pub async fn name(&self) -> String {
-        self.boot_resp.lock().await.name.clone()
-    }
-
-    pub async fn info(&self) -> BootResponse {
-        let resp = &*self.boot_resp.lock().await;
-        resp.clone()
+    pub fn info(&self) -> PluginMetadata {
+        self.metadata.clone()
     }
 
     pub fn build_event_to_send(
@@ -71,10 +68,5 @@ impl PluginHandle {
     pub async fn send(&self, event: &InternalEvent) -> Result<()> {
         self.to_plugin_tx.lock().await.send(event.to_owned()).await?;
         Ok(())
-    }
-
-    pub async fn set_boot_response(&self, resp: &BootResponse) {
-        let mut boot_resp = self.boot_resp.lock().await;
-        *boot_resp = resp.clone();
     }
 }

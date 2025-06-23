@@ -30,8 +30,8 @@ pub enum Error {
     #[error("Multiple base environments for {0}. Delete duplicates before continuing.")]
     MultipleBaseEnvironments(String),
 
-    #[error("Row not found")]
-    RowNotFound,
+    #[error("Database row not found: {0}")]
+    DBRowNotFound(String),
 
     #[error("unknown error")]
     Unknown,
