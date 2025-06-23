@@ -6,7 +6,7 @@ use crate::events::PluginWindowContext;
 use crate::manager::PluginManager;
 use chrono::Utc;
 use log::info;
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, remove_dir_all};
 use std::io::Cursor;
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak_models::models::Plugin;
@@ -36,6 +36,9 @@ pub async fn download_and_install<R: Runtime>(
 
     let plugin_dir = plugin_manager.installed_plugin_dir.join(name);
     let plugin_dir_str = plugin_dir.to_str().unwrap().to_string();
+
+    // Re-create the plugin directory
+    let _ = remove_dir_all(&plugin_dir);
     create_dir_all(&plugin_dir)?;
 
     zip_extract::extract(Cursor::new(&bytes), &plugin_dir, true)?;
