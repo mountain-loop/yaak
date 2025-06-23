@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
-import { PluginSearchResponse, PluginVersion } from './bindings/gen_search';
+import { PluginSearchResponse, PluginUpdatesResponse } from './bindings/gen_api';
+import { PluginVersion } from './bindings/gen_search';
 
 export * from './bindings/gen_models';
 export * from './bindings/gen_events';
@@ -11,4 +12,8 @@ export async function searchPlugins(query: string) {
 
 export async function installPlugin(plugin: PluginVersion) {
   return invoke<string>('plugin:yaak-plugins|install', { plugin });
+}
+
+export async function checkPluginUpdates() {
+  return invoke<PluginUpdatesResponse>('plugin:yaak-plugins|updates', {});
 }

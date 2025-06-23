@@ -1,6 +1,5 @@
-use crate::api::download_plugin_archive;
+use crate::api::{download_plugin_archive, PluginVersion};
 use crate::checksum::compute_checksum;
-use crate::commands::PluginVersion;
 use crate::error::Error::PluginErr;
 use crate::error::Result;
 use crate::events::PluginWindowContext;

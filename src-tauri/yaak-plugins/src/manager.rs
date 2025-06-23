@@ -231,13 +231,10 @@ impl PluginManager {
         // Add the new plugin
         self.plugins.lock().await.push(plugin_handle.clone());
 
-        let resp = match event.payload {
+        let _ = match event.payload {
             InternalEventPayload::BootResponse(resp) => resp,
             _ => return Err(UnknownEventErr),
         };
-
-        // Set the boot response
-        plugin_handle.set_boot_response(&resp).await;
 
         Ok(())
     }
@@ -317,7 +314,7 @@ impl PluginManager {
 
     pub async fn get_plugin_by_name(&self, name: &str) -> Option<PluginHandle> {
         for plugin in self.plugins.lock().await.iter().cloned() {
-            let info = plugin.info().await;
+            let info = plugin.info();
             if info.name == name {
                 return Some(plugin);
             }

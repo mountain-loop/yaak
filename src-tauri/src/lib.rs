@@ -36,12 +36,13 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
 use yaak_plugins::events::{
-    BootResponse, CallHttpRequestActionRequest, FilterResponse,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, InternalEvent,
-    InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
+    CallHttpRequestActionRequest, FilterResponse, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
+    GetTemplateFunctionsResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
+    PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
+use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format::format_json;
@@ -1039,14 +1040,13 @@ async fn cmd_plugin_info<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<BootResponse> {
+) -> YaakResult<PluginMetadata> {
     let plugin = app_handle.db().get_plugin(id)?;
     Ok(plugin_manager
         .get_plugin_by_dir(plugin.directory.as_str())
         .await
         .ok_or(GenericError("Failed to find plugin for info".to_string()))?
-        .info()
-        .await)
+        .info())
 }
 
 #[tauri::command]

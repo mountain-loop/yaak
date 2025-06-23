@@ -2,7 +2,13 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type { Plugin } from '@yaakapp-internal/models';
 import { pluginsAtom } from '@yaakapp-internal/models';
-import { installPlugin, PluginVersion, searchPlugins } from '@yaakapp-internal/plugins';
+import {
+  checkPluginUpdates,
+  installPlugin,
+  PluginVersion,
+  searchPlugins,
+} from '@yaakapp-internal/plugins';
+import { PluginUpdatesResponse } from '@yaakapp-internal/plugins/bindings/gen_api';
 import { useAtomValue } from 'jotai';
 import React, { useState } from 'react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -90,16 +96,34 @@ export function SettingsPlugins() {
   );
 }
 
-function PluginInfo({ plugin }: { plugin: Plugin }) {
+function PluginInfo({
+  plugin,
+  updates,
+}: {
+  plugin: Plugin;
+  updates: PluginUpdatesResponse | null;
+}) {
   const pluginInfo = usePluginInfo(plugin.id);
   const deletePlugin = useUninstallPlugin();
+  const latestVersion = updates?.plugins.find((u) => u.name === pluginInfo.data?.name)?.version;
+  const hasUpdates = pluginInfo.data?.version !== latestVersion;
   return (
     <tr className="group">
       <td className="py-2 select-text cursor-text w-full">{pluginInfo.data?.name}</td>
       <td className="py-2 select-text cursor-text text-right">
         <InlineCode>{pluginInfo.data?.version}</InlineCode>
       </td>
-      <td className="py-2 select-text cursor-text pl-2">
+      <td className="py-2 select-text cursor-text pl-2 flex gap-1">
+        {hasUpdates && (
+          <IconButton
+            icon="refresh"
+            title="Install update"
+            size="sm"
+            onClick={() => {
+              // Trigger update
+            }}
+          />
+        )}
         <IconButton
           size="sm"
           icon="trash"
@@ -135,7 +159,7 @@ function PluginSearch() {
           <EmptyStateText>
             <LoadingIcon size="xl" className="text-text-subtlest" />
           </EmptyStateText>
-        ) : (results.data.results ?? []).length === 0 ? (
+        ) : (results.data.plugins ?? []).length === 0 ? (
           <EmptyStateText>No plugins found</EmptyStateText>
         ) : (
           <Table>
@@ -148,22 +172,20 @@ function PluginSearch() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {results.data.results.map((plugin) => {
-                return (
-                  <TableRow key={plugin.id}>
-                    <TableCell className="font-semibold">{plugin.displayName}</TableCell>
-                    <TableCell className="text-text-subtle">
-                      <InlineCode>{plugin.version}</InlineCode>
-                    </TableCell>
-                    <TableCell className="w-full text-text-subtle">
-                      {plugin.description ?? 'n/a'}
-                    </TableCell>
-                    <TableCell>
-                      <InstallPluginButton plugin={plugin} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {results.data.plugins.map((plugin) => (
+                <TableRow key={plugin.id}>
+                  <TableCell className="font-semibold">{plugin.displayName}</TableCell>
+                  <TableCell className="text-text-subtle">
+                    <InlineCode>{plugin.version}</InlineCode>
+                  </TableCell>
+                  <TableCell className="w-full text-text-subtle">
+                    {plugin.description ?? 'n/a'}
+                  </TableCell>
+                  <TableCell>
+                    <InstallPluginButton plugin={plugin} />
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         )}
@@ -203,6 +225,11 @@ function InstallPluginButton({ plugin }: { plugin: PluginVersion }) {
 
 function InstalledPlugins() {
   const plugins = useAtomValue(pluginsAtom);
+  const updates = useQuery({
+    queryKey: ['plugin_updates'],
+    queryFn: () => checkPluginUpdates(),
+  });
+
   return plugins.length === 0 ? (
     <div className="pb-4">
       <EmptyStateText className="text-center">
@@ -221,9 +248,9 @@ function InstalledPlugins() {
         </tr>
       </thead>
       <tbody className="divide-y divide-surface-highlight">
-        {plugins.map((p) => (
-          <PluginInfo key={p.id} plugin={p} />
-        ))}
+        {plugins.map((p) => {
+          return <PluginInfo key={p.id} plugin={p} updates={updates.data ?? null} />;
+        })}
       </tbody>
     </table>
   );
