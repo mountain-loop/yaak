@@ -121,23 +121,28 @@ function PluginTableRow({
       </TableCell>
       <TableCell className="w-full text-text-subtle">{pluginInfo.data.description}</TableCell>
       <TableCell>
-        {latestVersion != null && (
+        <HStack>
+          {latestVersion != null && (
+            <Button
+              variant="border"
+              color="success"
+              title={`Update to ${latestVersion}`}
+              size="xs"
+              isLoading={installPluginMutation.isPending}
+              onClick={() => installPluginMutation.mutate(pluginInfo.data.name)}
+            >
+              Update
+            </Button>
+          )}
           <IconButton
-            icon="circle_fading_arrow_up"
-            title={`Update to ${latestVersion}`}
             size="sm"
-            isLoading={installPluginMutation.isPending}
-            onClick={() => installPluginMutation.mutate(pluginInfo.data.name)}
+            icon="trash"
+            title="Uninstall plugin"
+            onClick={async () => {
+              uninstallPlugin.mutate({ pluginId: plugin.id, name: pluginInfo.data.displayName });
+            }}
           />
-        )}
-        <IconButton
-          size="sm"
-          icon="trash"
-          title="Uninstall plugin"
-          onClick={async () => {
-            uninstallPlugin.mutate({ pluginId: plugin.id, name: pluginInfo.data.displayName });
-          }}
-        />
+        </HStack>
       </TableCell>
     </TableRow>
   );
@@ -214,8 +219,8 @@ function InstallPluginButton({ plugin }: { plugin: PluginVersion }) {
   return (
     <Button
       size="xs"
-      variant={installed ? 'solid' : 'border'}
-      color={installed ? 'primary' : 'secondary'}
+      variant="border"
+      color={installed ? 'secondary' : 'primary'}
       className="ml-auto"
       isLoading={installPluginMutation.isPending}
       onClick={async () => {

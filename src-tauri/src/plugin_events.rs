@@ -86,8 +86,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 environment.as_ref(),
                 &cb,
             )
-            .await
-            .expect("Failed to render http request");
+                .await
+                .expect("Failed to render http request");
             Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
                 http_request,
             }))
@@ -188,7 +188,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 cookie_jar,
                 &mut tokio::sync::watch::channel(false).1, // No-op cancel channel
             )
-            .await;
+                .await;
 
             let http_response = match result {
                 Ok(r) => r,
