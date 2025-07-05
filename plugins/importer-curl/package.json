@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "scripts": {
     "build": "yaakcli build ./src/index.js",
-    "dev": "yaakcli dev ./src/index.js"
+    "dev": "yaakcli dev ./src/index.js",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "shell-quote": "^1.8.1"

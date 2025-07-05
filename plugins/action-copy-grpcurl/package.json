@@ -1,14 +1,10 @@
 {
-  "name": "@yaak/filter-xpath",
+  "name": "@yaak/action-copy-grpcurl",
   "private": true,
   "version": "0.0.1",
   "scripts": {
     "build": "yaakcli build ./src/index.js",
     "dev": "yaakcli dev ./src/index.js",
     "lint": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@xmldom/xmldom": "^0.8.10",
-    "xpath": "^0.0.34"
   }
 }

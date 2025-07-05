@@ -1,9 +1,10 @@
 {
-  "name": "@yaak/exporter-curl",
+  "name": "@yaak/action-copy-curl",
   "private": true,
   "version": "0.0.1",
   "scripts": {
     "build": "yaakcli build ./src/index.js",
-    "dev": "yaakcli dev ./src/index.js"
+    "dev": "yaakcli dev ./src/index.js",
+    "lint": "tsc --noEmit"
   }
 }

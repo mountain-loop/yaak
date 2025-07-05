@@ -1,32 +1,23 @@
-import { Context, Environment, Folder, HttpRequest, PluginDefinition, Workspace } from '@yaakapp/api';
+import { convertPostman } from '@yaak/importer-postman/src';
+import type { Context, PluginDefinition } from '@yaakapp/api';
+import type { ImportPluginResponse } from '@yaakapp/api/lib/plugins/ImporterPlugin';
 import { convert } from 'openapi-to-postmanv2';
-import { convertPostman } from '@yaakapp/importer-postman/src';
-
-type AtLeast<T, K extends keyof T> = Partial<T> & Pick<T, K>;
-
-interface ExportResources {
-  workspaces: AtLeast<Workspace, 'name' | 'id' | 'model'>[];
-  environments: AtLeast<Environment, 'name' | 'id' | 'model' | 'workspaceId'>[];
-  httpRequests: AtLeast<HttpRequest, 'name' | 'id' | 'model' | 'workspaceId'>[];
-  folders: AtLeast<Folder, 'name' | 'id' | 'model' | 'workspaceId'>[];
-}
 
 export const plugin: PluginDefinition = {
   importer: {
     name: 'OpenAPI',
     description: 'Import OpenAPI collections',
     onImport(_ctx: Context, args: { text: string }) {
-      return convertOpenApi(args.text) as any;
+      return convertOpenApi(args.text);
     },
   },
 };
 
-export async function convertOpenApi(
-  contents: string,
-): Promise<{ resources: ExportResources } | undefined> {
+export async function convertOpenApi(contents: string): Promise<ImportPluginResponse | undefined> {
   let postmanCollection;
   try {
     postmanCollection = await new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       convert({ type: 'string', data: contents }, {}, (err, result: any) => {
         if (err != null) reject(err);
 
@@ -35,7 +26,7 @@ export async function convertOpenApi(
         }
       });
     });
-  } catch (err) {
+  } catch {
     // Probably not an OpenAPI file, so skip it
     return undefined;
   }

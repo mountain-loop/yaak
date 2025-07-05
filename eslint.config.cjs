@@ -80,6 +80,7 @@ module.exports = defineConfig([
   globalIgnores([
     '**/node_modules/',
     '**/dist/',
+    '**/build/',
     '**/.eslintrc.cjs',
     '**/.prettierrc.cjs',
     'src-web/postcss.config.cjs',

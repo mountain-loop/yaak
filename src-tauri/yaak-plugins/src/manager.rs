@@ -3,10 +3,11 @@ use crate::error::Error::{
 };
 use crate::error::Result;
 use crate::events::{
-    BootRequest, CallHttpAuthenticationActionArgs, CallHttpAuthenticationActionRequest,
-    CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
-    CallTemplateFunctionArgs, CallTemplateFunctionRequest, CallTemplateFunctionResponse,
-    EmptyPayload, FilterRequest, FilterResponse, GetHttpAuthenticationConfigRequest,
+    BootRequest, CallGrpcRequestActionRequest, CallHttpAuthenticationActionArgs,
+    CallHttpAuthenticationActionRequest, CallHttpAuthenticationRequest,
+    CallHttpAuthenticationResponse, CallHttpRequestActionRequest, CallTemplateFunctionArgs,
+    CallTemplateFunctionRequest, CallTemplateFunctionResponse, EmptyPayload, FilterRequest,
+    FilterResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigRequest,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
     GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, GetThemesRequest,
     GetThemesResponse, ImportRequest, ImportResponse, InternalEvent, InternalEventPayload,
@@ -426,6 +427,27 @@ impl PluginManager {
         Ok(themes)
     }
 
+    pub async fn get_grpc_request_actions<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+    ) -> Result<Vec<GetGrpcRequestActionsResponse>> {
+        let reply_events = self
+            .send_and_wait(
+                &PluginWindowContext::new(window),
+                &InternalEventPayload::GetGrpcRequestActionsRequest(EmptyPayload {}),
+            )
+            .await?;
+
+        let mut all_actions = Vec::new();
+        for event in reply_events {
+            if let InternalEventPayload::GetGrpcRequestActionsResponse(resp) = event.payload {
+                all_actions.push(resp.clone());
+            }
+        }
+
+        Ok(all_actions)
+    }
+
     pub async fn get_http_request_actions<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
@@ -489,6 +511,23 @@ impl PluginManager {
         let event = plugin.build_event_to_send(
             &PluginWindowContext::new(window),
             &InternalEventPayload::CallHttpRequestActionRequest(req),
+            None,
+        );
+        plugin.send(&event).await?;
+        Ok(())
+    }
+
+    pub async fn call_grpc_request_action<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+        req: CallGrpcRequestActionRequest,
+    ) -> Result<()> {
+        let ref_id = req.plugin_ref_id.clone();
+        let plugin =
+            self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
+        let event = plugin.build_event_to_send(
+            &PluginWindowContext::new(window),
+            &InternalEventPayload::CallGrpcRequestActionRequest(req),
             None,
         );
         plugin.send(&event).await?;

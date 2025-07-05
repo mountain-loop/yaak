@@ -47,9 +47,14 @@ pub async fn fill_pool_from_files(
     ];
 
     for p in paths {
-        if p.as_path().exists() {
+        if !p.exists() {
+            continue;
+        }
+
+        // Dirs are added as includes
+        if p.is_dir() {
+            args.push("-I".to_string());
             args.push(p.to_string_lossy().to_string());
-        } else {
             continue;
         }
 
@@ -62,6 +67,8 @@ pub async fn fill_pool_from_files(
         } else {
             debug!("ignoring {:?} since it does not exist.", parent)
         }
+
+        args.push(p.to_string_lossy().to_string());
     }
 
     let out = app_handle

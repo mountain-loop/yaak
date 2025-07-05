@@ -1,4 +1,4 @@
-import { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
+import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 
 export const plugin: PluginDefinition = {
   templateFunctions: [{
@@ -15,10 +15,10 @@ export const plugin: PluginDefinition = {
 
       return await ctx.prompt.text({
         id: `prompt-${args.values.label}`,
-        label: args.values.title ?? '',
-        title: args.values.title ?? '',
-        defaultValue: args.values.defaultValue,
-        placeholder: args.values.placeholder,
+        label: String(args.values.title ?? ''),
+        title: String(args.values.title ?? ''),
+        defaultValue: String(args.values.defaultValue),
+        placeholder: String(args.values.placeholder),
       });
     },
   }],

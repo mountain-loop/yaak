@@ -47,6 +47,21 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           color="primary"
           onClick={async () => {
             const selected = await open({
+              title: 'Select Proto Directory',
+              directory: true
+            });
+            if (selected == null) return;
+
+            await protoFilesKv.set([...protoFiles.filter(f => f !== selected), selected]);
+            await grpc.reflect.refetch();
+          }}
+        >
+          Add Proto Root(s)
+        </Button>
+        <Button
+          color="primary"
+          onClick={async () => {
+            const selected = await open({
               title: 'Select Proto Files',
               multiple: true,
               filters: [{ name: 'Proto Files', extensions: ['proto'] }],
@@ -108,16 +123,16 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           <table className="w-full divide-y divide-surface-highlight">
             <thead>
               <tr>
-                <th className="text-text-subtlest">
-                  Added Files
-                </th>
-                <th/>
+                <th className="text-text-subtlest">Added Files</th>
+                <th />
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-highlight">
               {protoFiles.map((f, i) => (
                 <tr key={f + i} className="group">
-                  <td className="pl-1 font-mono text-sm" title={f}>{f.split('/').pop()}</td>
+                  <td className="pl-1 font-mono text-sm" title={f}>
+                    {f.split('/').pop()}
+                  </td>
                   <td className="w-0 py-0.5">
                     <IconButton
                       title="Remove file"

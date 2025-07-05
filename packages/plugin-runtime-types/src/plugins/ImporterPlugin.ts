@@ -1,5 +1,5 @@
 import { ImportResources } from '../bindings/gen_events';
-import { AtLeast } from '../helpers';
+import { AtLeast, MaybePromise } from '../helpers';
 import type { Context } from './Context';
 
 type RootFields = 'name' | 'id' | 'model';
@@ -21,5 +21,8 @@ export type ImportPluginResponse = null | {
 export type ImporterPlugin = {
   name: string;
   description?: string;
-  onImport(ctx: Context, args: { text: string }): Promise<ImportPluginResponse>;
+  onImport(
+    ctx: Context,
+    args: { text: string },
+  ): MaybePromise<ImportPluginResponse | null | undefined>;
 };

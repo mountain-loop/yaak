@@ -36,7 +36,8 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
 use yaak_plugins::events::{
-    CallHttpRequestActionRequest, FilterResponse, GetHttpAuthenticationConfigResponse,
+    CallGrpcRequestActionRequest, CallHttpRequestActionRequest, FilterResponse,
+    GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
     GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
     GetTemplateFunctionsResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
     PluginWindowContext, RenderPurpose,
@@ -792,6 +793,14 @@ async fn cmd_http_request_actions<R: Runtime>(
 }
 
 #[tauri::command]
+async fn cmd_grpc_request_actions<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+) -> YaakResult<Vec<GetGrpcRequestActionsResponse>> {
+    Ok(plugin_manager.get_grpc_request_actions(&window).await?)
+}
+
+#[tauri::command]
 async fn cmd_template_functions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -828,6 +837,15 @@ async fn cmd_call_http_request_action<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> YaakResult<()> {
     Ok(plugin_manager.call_http_request_action(&window, req).await?)
+}
+
+#[tauri::command]
+async fn cmd_call_grpc_request_action<R: Runtime>(
+    window: WebviewWindow<R>,
+    req: CallGrpcRequestActionRequest,
+    plugin_manager: State<'_, PluginManager>,
+) -> YaakResult<()> {
+    Ok(plugin_manager.call_grpc_request_action(&window, req).await?)
 }
 
 #[tauri::command]
@@ -1220,6 +1238,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             cmd_call_http_authentication_action,
             cmd_call_http_request_action,
+            cmd_call_grpc_request_action,
             cmd_check_for_updates,
             cmd_create_grpc_request,
             cmd_curl_to_request,
@@ -1236,6 +1255,7 @@ pub fn run() {
             cmd_get_workspace_meta,
             cmd_grpc_go,
             cmd_grpc_reflect,
+            cmd_grpc_request_actions,
             cmd_http_request_actions,
             cmd_import_data,
             cmd_install_plugin,

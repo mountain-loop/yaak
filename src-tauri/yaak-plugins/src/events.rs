@@ -89,10 +89,15 @@ pub enum InternalEventPayload {
     GetCookieValueRequest(GetCookieValueRequest),
     GetCookieValueResponse(GetCookieValueResponse),
 
-    // Request Actions
+    // HTTP Request Actions
     GetHttpRequestActionsRequest(EmptyPayload),
     GetHttpRequestActionsResponse(GetHttpRequestActionsResponse),
     CallHttpRequestActionRequest(CallHttpRequestActionRequest),
+
+    // Grpc Request Actions
+    GetGrpcRequestActionsRequest(EmptyPayload),
+    GetGrpcRequestActionsResponse(GetGrpcRequestActionsResponse),
+    CallGrpcRequestActionRequest(CallGrpcRequestActionRequest),
 
     // Template Functions
     GetTemplateFunctionsRequest,
@@ -115,6 +120,9 @@ pub enum InternalEventPayload {
 
     RenderHttpRequestRequest(RenderHttpRequestRequest),
     RenderHttpRequestResponse(RenderHttpRequestResponse),
+
+    RenderGrpcRequestRequest(RenderGrpcRequestRequest),
+    RenderGrpcRequestResponse(RenderGrpcRequestResponse),
 
     GetKeyValueRequest(GetKeyValueRequest),
     GetKeyValueResponse(GetKeyValueResponse),
@@ -285,6 +293,21 @@ pub struct RenderHttpRequestRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct RenderHttpRequestResponse {
     pub http_request: HttpRequest,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct RenderGrpcRequestRequest {
+    pub grpc_request: GrpcRequest,
+    pub purpose: RenderPurpose,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct RenderGrpcRequestResponse {
+    pub grpc_request: GrpcRequest,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -968,11 +991,6 @@ impl Default for RenderPurpose {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(default)]
-#[ts(export, export_to = "gen_events.ts")]
-pub struct GetHttpRequestActionsRequest {}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct GetHttpRequestActionsResponse {
@@ -1003,6 +1021,40 @@ pub struct CallHttpRequestActionRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct CallHttpRequestActionArgs {
     pub http_request: HttpRequest,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GetGrpcRequestActionsResponse {
+    pub actions: Vec<GrpcRequestAction>,
+    pub plugin_ref_id: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GrpcRequestAction {
+    pub label: String,
+    #[ts(optional)]
+    pub icon: Option<Icon>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct CallGrpcRequestActionRequest {
+    pub index: i32,
+    pub plugin_ref_id: String,
+    pub args: CallGrpcRequestActionArgs,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct CallGrpcRequestActionArgs {
+    pub grpc_request: GrpcRequest,
+    pub proto_files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

@@ -1,13 +1,15 @@
-import {
+import type {
   Context,
   Environment,
   Folder,
   HttpRequest,
   HttpRequestHeader,
   HttpUrlParameter,
+  PartialImportResources,
   PluginDefinition,
   Workspace,
 } from '@yaakapp/api';
+import type { ImportPluginResponse } from '@yaakapp/api/lib/plugins/ImporterPlugin';
 
 const POSTMAN_2_1_0_SCHEMA = 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json';
 const POSTMAN_2_0_0_SCHEMA = 'https://schema.getpostman.com/json/collection/v2.0.0/collection.json';
@@ -27,19 +29,19 @@ export const plugin: PluginDefinition = {
     name: 'Postman',
     description: 'Import postman collections',
     onImport(_ctx: Context, args: { text: string }) {
-      return convertPostman(args.text) as any;
+      return convertPostman(args.text);
     },
   },
 };
 
-export function convertPostman(
-  contents: string,
-): { resources: ExportResources } | undefined {
+export function convertPostman(contents: string): ImportPluginResponse | undefined {
   const root = parseJSONToRecord(contents);
   if (root == null) return;
 
   const info = toRecord(root.info);
-  const isValidSchema = VALID_SCHEMAS.includes(info.schema);
+  const isValidSchema = VALID_SCHEMAS.includes(
+    typeof info.schema === 'string' ? info.schema : 'n/a',
+  );
   if (!isValidSchema || !Array.isArray(root.item)) {
     return;
   }
@@ -53,11 +55,17 @@ export function convertPostman(
     folders: [],
   };
 
+  const rawDescription = info.description;
+  const description =
+    typeof rawDescription === 'object' && rawDescription !== null && 'content' in rawDescription
+      ? String(rawDescription.content)
+      : String(rawDescription);
+
   const workspace: ExportResources['workspaces'][0] = {
     model: 'workspace',
     id: generateId('workspace'),
-    name: info.name || 'Postman Import',
-    description: info.description?.content ?? info.description,
+    name: info.name ? String(info.name) : 'Postman Import',
+    description,
   };
   exportResources.workspaces.push(workspace);
 
@@ -68,14 +76,14 @@ export function convertPostman(
     name: 'Global Variables',
     workspaceId: workspace.id,
     variables:
-      root.variable?.map((v: any) => ({
+      toArray<{ key: string; value: string }>(root.variable).map((v) => ({
         name: v.key,
         value: v.value,
       })) ?? [],
   };
   exportResources.environments.push(environment);
 
-  const importItem = (v: Record<string, any>, folderId: string | null = null) => {
+  const importItem = (v: Record<string, unknown>, folderId: string | null = null) => {
     if (typeof v.name === 'string' && Array.isArray(v.item)) {
       const folder: ExportResources['folders'][0] = {
         model: 'folder',
@@ -94,7 +102,11 @@ export function convertPostman(
       const requestAuthPath = importAuth(r.auth);
       const authPatch = requestAuthPath.authenticationType == null ? globalAuth : requestAuthPath;
 
-      const headers: HttpRequestHeader[] = toArray(r.header).map((h) => {
+      const headers: HttpRequestHeader[] = toArray<{
+        key: string;
+        value: string;
+        disabled?: boolean;
+      }>(r.header).map((h) => {
         return {
           name: h.key,
           value: h.value,
@@ -104,7 +116,9 @@ export function convertPostman(
 
       // Add body headers only if they don't already exist
       for (const bodyPatchHeader of bodyPatch.headers) {
-        const existingHeader = headers.find(h => h.name.toLowerCase() === bodyPatchHeader.name.toLowerCase());
+        const existingHeader = headers.find(
+          (h) => h.name.toLowerCase() === bodyPatchHeader.name.toLowerCase(),
+        );
         if (existingHeader) {
           continue;
         }
@@ -119,8 +133,8 @@ export function convertPostman(
         workspaceId: workspace.id,
         folderId,
         name: v.name,
-        description: v.description || undefined,
-        method: r.method || 'GET',
+        description: v.description ? String(v.description) : undefined,
+        method: typeof r.method === 'string' ? r.method : 'GET',
         url,
         urlParameters,
         body: bodyPatch.body,
@@ -139,17 +153,19 @@ export function convertPostman(
     importItem(item);
   }
 
-  const resources = deleteUndefinedAttrs(convertTemplateSyntax(exportResources));
+  const resources = deleteUndefinedAttrs(
+    convertTemplateSyntax(exportResources),
+  ) as PartialImportResources;
 
   return { resources };
 }
 
-function convertUrl(url: string | any): Pick<HttpRequest, 'url' | 'urlParameters'> {
-  if (typeof url === 'string') {
-    return { url, urlParameters: [] };
+function convertUrl(rawUrl: string | unknown): Pick<HttpRequest, 'url' | 'urlParameters'> {
+  if (typeof rawUrl === 'string') {
+    return { url: rawUrl, urlParameters: [] };
   }
 
-  url = toRecord(url);
+  const url = toRecord(rawUrl);
 
   let v = '';
 
@@ -199,10 +215,8 @@ function convertUrl(url: string | any): Pick<HttpRequest, 'url' | 'urlParameters
   return { url: v, urlParameters: params };
 }
 
-function importAuth(
-  rawAuth: any,
-): Pick<HttpRequest, 'authentication' | 'authenticationType'> {
-  const auth = toRecord(rawAuth);
+function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'authenticationType'> {
+  const auth = toRecord<{ username?: string; password?: string; token?: string }>(rawAuth);
   if ('basic' in auth) {
     return {
       authenticationType: 'basic',
@@ -223,8 +237,22 @@ function importAuth(
   }
 }
 
-function importBody(rawBody: any): Pick<HttpRequest, 'body' | 'bodyType' | 'headers'> {
-  const body = toRecord(rawBody);
+function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | 'headers'> {
+  const body = toRecord(rawBody) as {
+    mode: string;
+    graphql: { query?: string; variables?: string };
+    urlencoded?: { key?: string; value?: string; disabled?: boolean }[];
+    formdata?: {
+      key?: string;
+      value?: string;
+      disabled?: boolean;
+      contentType?: string;
+      src?: string;
+    }[];
+    raw?: string;
+    options?: { raw?: { language?: string } };
+    file?: { src?: string };
+  };
   if (body.mode === 'graphql') {
     return {
       headers: [
@@ -237,7 +265,10 @@ function importBody(rawBody: any): Pick<HttpRequest, 'body' | 'bodyType' | 'head
       bodyType: 'graphql',
       body: {
         text: JSON.stringify(
-          { query: body.graphql.query, variables: parseJSONToRecord(body.graphql.variables) },
+          {
+            query: body.graphql?.query || '',
+            variables: parseJSONToRecord(body.graphql?.variables || '{}'),
+          },
           null,
           2,
         ),
@@ -254,7 +285,7 @@ function importBody(rawBody: any): Pick<HttpRequest, 'body' | 'bodyType' | 'head
       ],
       bodyType: 'application/x-www-form-urlencoded',
       body: {
-        form: toArray(body.urlencoded).map((f) => ({
+        form: toArray<NonNullable<typeof body.urlencoded>[0]>(body.urlencoded).map((f) => ({
           enabled: !f.disabled,
           name: f.key ?? '',
           value: f.value ?? '',
@@ -272,19 +303,19 @@ function importBody(rawBody: any): Pick<HttpRequest, 'body' | 'bodyType' | 'head
       ],
       bodyType: 'multipart/form-data',
       body: {
-        form: toArray(body.formdata).map((f) =>
+        form: toArray<NonNullable<typeof body.formdata>[0]>(body.formdata).map((f) =>
           f.src != null
             ? {
-              enabled: !f.disabled,
-              contentType: f.contentType ?? null,
-              name: f.key ?? '',
-              file: f.src ?? '',
-            }
+                enabled: !f.disabled,
+                contentType: f.contentType ?? null,
+                name: f.key ?? '',
+                file: f.src ?? '',
+              }
             : {
-              enabled: !f.disabled,
-              name: f.key ?? '',
-              value: f.value ?? '',
-            },
+                enabled: !f.disabled,
+                name: f.key ?? '',
+                value: f.value ?? '',
+              },
         ),
       },
     };
@@ -315,21 +346,23 @@ function importBody(rawBody: any): Pick<HttpRequest, 'body' | 'bodyType' | 'head
   }
 }
 
-function parseJSONToRecord(jsonStr: string): Record<string, any> | null {
+function parseJSONToRecord<T>(jsonStr: string): Record<string, T> | null {
   try {
     return toRecord(JSON.parse(jsonStr));
-  } catch (err) {
+  } catch {
+    return null;
   }
-  return null;
 }
 
-function toRecord(value: any): Record<string, any> {
-  if (Object.prototype.toString.call(value) === '[object Object]') return value;
-  else return {};
+function toRecord<T>(value: Record<string, T> | unknown): Record<string, T> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, T>;
+  }
+  return {};
 }
 
-function toArray(value: any): any[] {
-  if (Object.prototype.toString.call(value) === '[object Array]') return value;
+function toArray<T>(value: unknown): T[] {
+  if (Object.prototype.toString.call(value) === '[object Array]') return value as T[];
   else return [];
 }
 

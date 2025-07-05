@@ -5,6 +5,7 @@
   "main": "./build/index.js",
   "scripts": {
     "build": "yaakcli build ./src/index.js",
-    "dev": "yaakcli dev ./src/index.js"
+    "dev": "yaakcli dev ./src/index.js",
+    "lint": "tsc --noEmit"
   }
 }

@@ -3,6 +3,7 @@ import { useAtomValue } from 'jotai';
 import React, { useMemo } from 'react';
 import { openFolderSettings } from '../../commands/openFolderSettings';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
+import { useGrpcRequestActions } from '../../hooks/useGrpcRequestActions';
 import { useHttpRequestActions } from '../../hooks/useHttpRequestActions';
 import { useMoveToWorkspace } from '../../hooks/useMoveToWorkspace';
 import { useSendAnyHttpRequest } from '../../hooks/useSendAnyHttpRequest';
@@ -25,6 +26,7 @@ interface Props {
 export function SidebarItemContextMenu({ child, show, close }: Props) {
   const sendManyRequests = useSendManyRequests();
   const httpRequestActions = useHttpRequestActions();
+  const grpcRequestActions = useGrpcRequestActions();
   const sendRequest = useSendAnyHttpRequest();
   const workspaces = useAtomValue(workspacesAtom);
   const moveToWorkspace = useMoveToWorkspace(child.id);
@@ -65,25 +67,35 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
       const requestItems: DropdownItem[] =
         child.model === 'http_request'
           ? [
-              {
-                label: 'Send',
-                hotKeyAction: 'http_request.send',
-                hotKeyLabelOnly: true, // Already bound in URL bar
-                leftSlot: <Icon icon="send_horizontal" />,
-                onSelect: () => sendRequest.mutate(child.id),
+            {
+              label: 'Send',
+              hotKeyAction: 'http_request.send',
+              hotKeyLabelOnly: true, // Already bound in URL bar
+              leftSlot: <Icon icon="send_horizontal" />,
+              onSelect: () => sendRequest.mutate(child.id),
+            },
+            ...httpRequestActions.map((a) => ({
+              label: a.label,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+              onSelect: async () => {
+                const request = getModel('http_request', child.id);
+                if (request != null) await a.call(request);
               },
-              ...httpRequestActions.map((a) => ({
-                label: a.label,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
-                onSelect: async () => {
-                  const request = getModel('http_request', child.id);
-                  if (request != null) await a.call(request);
-                },
-              })),
-              { type: 'separator' },
-            ]
-          : [];
+            })),
+            { type: 'separator' },
+          ]
+          : child.model === 'grpc_request'
+            ? grpcRequestActions.map((a) => ({
+              label: a.label,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+              onSelect: async () => {
+                const request = getModel('grpc_request', child.id);
+                if (request != null) await a.call(request);
+              },
+            }))
+            : [];
       return [
         ...requestItems,
         {
@@ -134,6 +146,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
     child.model,
     createDropdownItems,
     httpRequestActions,
+    grpcRequestActions,
     moveToWorkspace.mutate,
     sendManyRequests,
     sendRequest,

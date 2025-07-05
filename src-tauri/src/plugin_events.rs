@@ -1,6 +1,6 @@
 use crate::http_request::send_http_request;
-use crate::render::{render_http_request, render_json_value};
-use crate::window::{CreateWindowConfig, create_window};
+use crate::render::{render_grpc_request, render_http_request, render_json_value};
+use crate::window::{create_window, CreateWindowConfig};
 use crate::{
     call_frontend, cookie_jar_from_window, environment_from_window, get_window_from_window_context,
     workspace_from_window,
@@ -13,13 +13,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
-use yaak_plugins::events::{
-    Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse, GetCookieValueResponse,
-    GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload,
-    ListCookieNamesResponse, PluginWindowContext, RenderHttpRequestResponse,
-    SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse,
-    WindowNavigateEvent,
-};
+use yaak_plugins::events::{Color, DeleteKeyValueResponse, EmptyPayload, FindHttpResponsesResponse, GetCookieValueResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent, InternalEventPayload, ListCookieNamesResponse, PluginWindowContext, RenderGrpcRequestResponse, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse, WindowNavigateEvent};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -66,6 +60,30 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let http_request = app_handle.db().get_http_request(&req.id).ok();
             Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
                 http_request,
+            }))
+        }
+        InternalEventPayload::RenderGrpcRequestRequest(req) => {
+            let window = get_window_from_window_context(app_handle, &window_context)
+                .expect("Failed to find window for render grpc request");
+
+            let workspace =
+                workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
+            let environment = environment_from_window(&window);
+            let base_environment = app_handle
+                .db()
+                .get_base_environment(&workspace.id)
+                .expect("Failed to get base environment");
+            let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
+            let grpc_request = render_grpc_request(
+                &req.grpc_request,
+                &base_environment,
+                environment.as_ref(),
+                &cb,
+            )
+                .await
+                .expect("Failed to render grpc request");
+            Some(InternalEventPayload::RenderGrpcRequestResponse(RenderGrpcRequestResponse {
+                grpc_request,
             }))
         }
         InternalEventPayload::RenderHttpRequestRequest(req) => {

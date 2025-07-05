@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "scripts": {
     "build": "yaakcli build ./src/index.ts",
-    "dev": "yaakcli dev ./src/index.js"
+    "dev": "yaakcli dev ./src/index.js",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "jsonpath-plus": "^10.3.0"

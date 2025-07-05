@@ -6,6 +6,10 @@ export type BootRequest = { dir: string, watch: boolean, };
 
 export type BootResponse = { name: string, version: string, };
 
+export type CallGrpcRequestActionArgs = { grpcRequest: GrpcRequest, protoFiles: Array<string>, };
+
+export type CallGrpcRequestActionRequest = { index: number, pluginRefId: string, args: CallGrpcRequestActionArgs, };
+
 export type CallHttpAuthenticationActionArgs = { contextId: string, values: { [key in string]?: JsonPrimitive }, };
 
 export type CallHttpAuthenticationActionRequest = { index: number, pluginRefId: string, args: CallHttpAuthenticationActionArgs, };
@@ -336,13 +340,13 @@ export type GetCookieValueRequest = { name: string, };
 
 export type GetCookieValueResponse = { value: string | null, };
 
+export type GetGrpcRequestActionsResponse = { actions: Array<GrpcRequestAction>, pluginRefId: string, };
+
 export type GetHttpAuthenticationConfigRequest = { contextId: string, values: { [key in string]?: JsonPrimitive }, };
 
 export type GetHttpAuthenticationConfigResponse = { args: Array<FormInput>, pluginRefId: string, actions?: Array<HttpAuthenticationAction>, };
 
 export type GetHttpAuthenticationSummaryResponse = { name: string, label: string, shortLabel: string, };
-
-export type GetHttpRequestActionsRequest = Record<string, never>;
 
 export type GetHttpRequestActionsResponse = { actions: Array<HttpRequestAction>, pluginRefId: string, };
 
@@ -360,6 +364,8 @@ export type GetThemesRequest = Record<string, never>;
 
 export type GetThemesResponse = { themes: Array<Theme>, };
 
+export type GrpcRequestAction = { label: string, icon?: Icon, };
+
 export type HttpAuthenticationAction = { label: string, icon?: Icon, };
 
 export type HttpHeader = { name: string, value: string, };
@@ -376,7 +382,7 @@ export type ImportResponse = { resources: ImportResources, };
 
 export type InternalEvent = { id: string, pluginRefId: string, pluginName: string, replyId: string | null, windowContext: PluginWindowContext, payload: InternalEventPayload, };
 
-export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & BootResponse | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "list_cookie_names_request" } & ListCookieNamesRequest | { "type": "list_cookie_names_response" } & ListCookieNamesResponse | { "type": "get_cookie_value_request" } & GetCookieValueRequest | { "type": "get_cookie_value_response" } & GetCookieValueResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_summary_request" } & EmptyPayload | { "type": "get_http_authentication_summary_response" } & GetHttpAuthenticationSummaryResponse | { "type": "get_http_authentication_config_request" } & GetHttpAuthenticationConfigRequest | { "type": "get_http_authentication_config_response" } & GetHttpAuthenticationConfigResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "call_http_authentication_action_request" } & CallHttpAuthenticationActionRequest | { "type": "call_http_authentication_action_response" } & EmptyPayload | { "type": "copy_text_request" } & CopyTextRequest | { "type": "copy_text_response" } & EmptyPayload | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "get_key_value_request" } & GetKeyValueRequest | { "type": "get_key_value_response" } & GetKeyValueResponse | { "type": "set_key_value_request" } & SetKeyValueRequest | { "type": "set_key_value_response" } & SetKeyValueResponse | { "type": "delete_key_value_request" } & DeleteKeyValueRequest | { "type": "delete_key_value_response" } & DeleteKeyValueResponse | { "type": "open_window_request" } & OpenWindowRequest | { "type": "window_navigate_event" } & WindowNavigateEvent | { "type": "window_close_event" } | { "type": "close_window_request" } & CloseWindowRequest | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "show_toast_response" } & EmptyPayload | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "get_themes_request" } & GetThemesRequest | { "type": "get_themes_response" } & GetThemesResponse | { "type": "empty_response" } & EmptyPayload | { "type": "error_response" } & ErrorResponse;
+export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } & BootResponse | { "type": "reload_request" } & EmptyPayload | { "type": "reload_response" } & BootResponse | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "list_cookie_names_request" } & ListCookieNamesRequest | { "type": "list_cookie_names_response" } & ListCookieNamesResponse | { "type": "get_cookie_value_request" } & GetCookieValueRequest | { "type": "get_cookie_value_response" } & GetCookieValueResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_grpc_request_actions_request" } & EmptyPayload | { "type": "get_grpc_request_actions_response" } & GetGrpcRequestActionsResponse | { "type": "call_grpc_request_action_request" } & CallGrpcRequestActionRequest | { "type": "get_template_functions_request" } | { "type": "get_template_functions_response" } & GetTemplateFunctionsResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_summary_request" } & EmptyPayload | { "type": "get_http_authentication_summary_response" } & GetHttpAuthenticationSummaryResponse | { "type": "get_http_authentication_config_request" } & GetHttpAuthenticationConfigRequest | { "type": "get_http_authentication_config_response" } & GetHttpAuthenticationConfigResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "call_http_authentication_action_request" } & CallHttpAuthenticationActionRequest | { "type": "call_http_authentication_action_response" } & EmptyPayload | { "type": "copy_text_request" } & CopyTextRequest | { "type": "copy_text_response" } & EmptyPayload | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "render_grpc_request_request" } & RenderGrpcRequestRequest | { "type": "render_grpc_request_response" } & RenderGrpcRequestResponse | { "type": "get_key_value_request" } & GetKeyValueRequest | { "type": "get_key_value_response" } & GetKeyValueResponse | { "type": "set_key_value_request" } & SetKeyValueRequest | { "type": "set_key_value_response" } & SetKeyValueResponse | { "type": "delete_key_value_request" } & DeleteKeyValueRequest | { "type": "delete_key_value_response" } & DeleteKeyValueResponse | { "type": "open_window_request" } & OpenWindowRequest | { "type": "window_navigate_event" } & WindowNavigateEvent | { "type": "window_close_event" } | { "type": "close_window_request" } & CloseWindowRequest | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "show_toast_request" } & ShowToastRequest | { "type": "show_toast_response" } & EmptyPayload | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "get_themes_request" } & GetThemesRequest | { "type": "get_themes_response" } & GetThemesResponse | { "type": "empty_response" } & EmptyPayload | { "type": "error_response" } & ErrorResponse;
 
 export type JsonPrimitive = string | number | boolean | null;
 
@@ -407,6 +413,10 @@ cancelText?: string,
 required?: boolean, };
 
 export type PromptTextResponse = { value: string | null, };
+
+export type RenderGrpcRequestRequest = { grpcRequest: GrpcRequest, purpose: RenderPurpose, };
+
+export type RenderGrpcRequestResponse = { grpcRequest: GrpcRequest, };
 
 export type RenderHttpRequestRequest = { httpRequest: HttpRequest, purpose: RenderPurpose, };
 

@@ -9,6 +9,8 @@ import type {
   OpenWindowRequest,
   PromptTextRequest,
   PromptTextResponse,
+  RenderGrpcRequestRequest,
+  RenderGrpcRequestResponse,
   RenderHttpRequestRequest,
   RenderHttpRequestResponse,
   SendHttpRequestRequest,
@@ -44,6 +46,9 @@ export interface Context {
   cookies: {
     listNames(): Promise<ListCookieNamesResponse['names']>;
     getValue(args: GetCookieValueRequest): Promise<GetCookieValueResponse['value']>;
+  };
+  grpcRequest: {
+    render(args: RenderGrpcRequestRequest): Promise<RenderGrpcRequestResponse['grpcRequest']>;
   };
   httpRequest: {
     send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse['httpResponse']>;

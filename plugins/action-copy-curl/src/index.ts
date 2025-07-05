@@ -1,18 +1,27 @@
-import { HttpRequest, PluginDefinition } from '@yaakapp/api';
+import type { HttpRequest, PluginDefinition } from '@yaakapp/api';
 
 const NEWLINE = '\\\n ';
 
 export const plugin: PluginDefinition = {
-  httpRequestActions: [{
-    label: 'Copy as Curl',
-    icon: 'copy',
-    async onSelect(ctx, args) {
-      const rendered_request = await ctx.httpRequest.render({ httpRequest: args.httpRequest, purpose: 'preview' });
-      const data = await convertToCurl(rendered_request);
-      await ctx.clipboard.copyText(data);
-      await ctx.toast.show({ message: 'Curl copied to clipboard', icon: 'copy', color: 'success' });
+  httpRequestActions: [
+    {
+      label: 'Copy as Curl',
+      icon: 'copy',
+      async onSelect(ctx, args) {
+        const rendered_request = await ctx.httpRequest.render({
+          httpRequest: args.httpRequest,
+          purpose: 'preview',
+        });
+        const data = await convertToCurl(rendered_request);
+        await ctx.clipboard.copyText(data);
+        await ctx.toast.show({
+          message: 'Command copied to clipboard',
+          icon: 'copy',
+          color: 'success',
+        });
+      },
     },
-  }],
+  ],
 };
 
 export async function convertToCurl(request: Partial<HttpRequest>) {
@@ -21,7 +30,6 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
   // Add method and URL all on first line
   if (request.method) xs.push('-X', request.method);
   if (request.url) xs.push(quote(request.url));
-
 
   xs.push(NEWLINE);
 
@@ -51,7 +59,10 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
       xs.push(NEWLINE);
     }
   } else if (typeof request.body?.query === 'string') {
-    const body = { query: request.body.query || '', variables: maybeParseJSON(request.body.variables, undefined) };
+    const body = {
+      query: request.body.query || '',
+      variables: maybeParseJSON(request.body.variables, undefined),
+    };
     xs.push('--data-raw', `${quote(JSON.stringify(body))}`);
     xs.push(NEWLINE);
   } else if (typeof request.body?.text === 'string') {
@@ -84,7 +95,7 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
 }
 
 function quote(arg: string): string {
-  const escaped = arg.replace(/'/g, '\\\'');
+  const escaped = arg.replace(/'/g, "\\'");
   return `'${escaped}'`;
 }
 
@@ -92,10 +103,10 @@ function onlyEnabled(v: { name?: string; enabled?: boolean }): boolean {
   return v.enabled !== false && !!v.name;
 }
 
-function maybeParseJSON(v: any, fallback: any): string {
+function maybeParseJSON<T>(v: string, fallback: T) {
   try {
     return JSON.parse(v);
-  } catch (err) {
+  } catch {
     return fallback;
   }
 }

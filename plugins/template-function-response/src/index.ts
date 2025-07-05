@@ -1,5 +1,5 @@
 import { DOMParser } from '@xmldom/xmldom';
-import {
+import type {
   CallTemplateFunctionArgs,
   Context,
   FormInput,
@@ -47,14 +47,14 @@ export const plugin: PluginDefinition = {
         if (!args.values.request || !args.values.header) return null;
 
         const response = await getResponse(ctx, {
-          requestId: args.values.request,
+          requestId: String(args.values.request || ''),
           purpose: args.purpose,
-          behavior: args.values.behavior ?? null,
+          behavior: args.values.behavior ? String(args.values.behavior) : null,
         });
         if (response == null) return null;
 
         const header = response.headers.find(
-          h => h.name.toLowerCase() === String(args.values.header ?? '').toLowerCase(),
+          (h) => h.name.toLowerCase() === String(args.values.header ?? '').toLowerCase(),
         );
         return header?.value ?? null;
       },
@@ -77,9 +77,9 @@ export const plugin: PluginDefinition = {
         if (!args.values.request || !args.values.path) return null;
 
         const response = await getResponse(ctx, {
-          requestId: args.values.request,
+          requestId: String(args.values.request || ''),
           purpose: args.purpose,
-          behavior: args.values.behavior ?? null,
+          behavior: args.values.behavior ? String(args.values.behavior) : null,
         });
         if (response == null) return null;
 
@@ -90,19 +90,19 @@ export const plugin: PluginDefinition = {
         let body;
         try {
           body = readFileSync(response.bodyPath, 'utf-8');
-        } catch (_) {
+        } catch {
           return null;
         }
 
         try {
-          return filterJSONPath(body, args.values.path);
-        } catch (err) {
+          return filterJSONPath(body, String(args.values.path || ''));
+        } catch {
           // Probably not JSON, try XPath
         }
 
         try {
-          return filterXPath(body, args.values.path);
-        } catch (err) {
+          return filterXPath(body, String(args.values.path || ''));
+        } catch {
           // Probably not XML
         }
 
@@ -113,17 +113,14 @@ export const plugin: PluginDefinition = {
       name: 'response.body.raw',
       description: 'Access the entire response body, as text',
       aliases: ['response'],
-      args: [
-        requestArg,
-        behaviorArg,
-      ],
+      args: [requestArg, behaviorArg],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         if (!args.values.request) return null;
 
         const response = await getResponse(ctx, {
-          requestId: args.values.request,
+          requestId: String(args.values.request || ''),
           purpose: args.purpose,
-          behavior: args.values.behavior ?? null,
+          behavior: args.values.behavior ? String(args.values.behavior) : null,
         });
         if (response == null) return null;
 
@@ -134,7 +131,7 @@ export const plugin: PluginDefinition = {
         let body;
         try {
           body = readFileSync(response.bodyPath, 'utf-8');
-        } catch (_) {
+        } catch {
           return null;
         }
 
@@ -173,11 +170,18 @@ function filterXPath(body: string, path: string): string {
   }
 }
 
-async function getResponse(ctx: Context, { requestId, behavior, purpose }: {
-  requestId: string,
-  behavior: string | null,
-  purpose: RenderPurpose,
-}): Promise<HttpResponse | null> {
+async function getResponse(
+  ctx: Context,
+  {
+    requestId,
+    behavior,
+    purpose,
+  }: {
+    requestId: string;
+    behavior: string | null;
+    purpose: RenderPurpose;
+  },
+): Promise<HttpResponse | null> {
   if (!requestId) return null;
 
   const httpRequest = await ctx.httpRequest.getById({ id: requestId ?? 'n/a' });
@@ -195,9 +199,7 @@ async function getResponse(ctx: Context, { requestId, behavior, purpose }: {
 
   // Previews happen a ton, and we don't want to send too many times on "always," so treat
   // it as "smart" during preview.
-  let finalBehavior = (behavior === 'always' && purpose === 'preview')
-    ? 'smart'
-    : behavior;
+  const finalBehavior = behavior === 'always' && purpose === 'preview' ? 'smart' : behavior;
 
   // Send if no responses and "smart," or "always"
   if ((finalBehavior === 'smart' && response == null) || finalBehavior === 'always') {

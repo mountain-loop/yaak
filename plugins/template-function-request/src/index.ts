@@ -1,21 +1,26 @@
-import { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
+import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 
 export const plugin: PluginDefinition = {
   templateFunctions: [
     {
       name: 'request.body',
-      args: [{
-        name: 'requestId',
-        label: 'Http Request',
-        type: 'http_request',
-      }],
+      args: [
+        {
+          name: 'requestId',
+          label: 'Http Request',
+          type: 'http_request',
+        },
+      ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
-        const httpRequest = await ctx.httpRequest.getById({ id: args.values.requestId ?? 'n/a' });
+        const requestId = String(args.values.requestId ?? 'n/a');
+        const httpRequest = await ctx.httpRequest.getById({ id: requestId });
         if (httpRequest == null) return null;
-        return String(await ctx.templates.render({
-          data: httpRequest.body?.text ?? '',
-          purpose: args.purpose,
-        }));
+        return String(
+          await ctx.templates.render({
+            data: httpRequest.body?.text ?? '',
+            purpose: args.purpose,
+          }),
+        );
       },
     },
     {
@@ -30,15 +35,22 @@ export const plugin: PluginDefinition = {
           name: 'header',
           label: 'Header Name',
           type: 'text',
-        }],
+        },
+      ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
-        const httpRequest = await ctx.httpRequest.getById({ id: args.values.requestId ?? 'n/a' });
+        const headerName = String(args.values.header ?? '');
+        const requestId = String(args.values.requestId ?? 'n/a');
+        const httpRequest = await ctx.httpRequest.getById({ id: requestId });
         if (httpRequest == null) return null;
-        const header = httpRequest.headers.find(h => h.name.toLowerCase() === args.values.header?.toLowerCase());
-        return String(await ctx.templates.render({
-          data: header?.value ?? '',
-          purpose: args.purpose,
-        }));
+        const header = httpRequest.headers.find(
+          (h) => h.name.toLowerCase() === headerName.toLowerCase(),
+        );
+        return String(
+          await ctx.templates.render({
+            data: header?.value ?? '',
+            purpose: args.purpose,
+          }),
+        );
       },
     },
   ],

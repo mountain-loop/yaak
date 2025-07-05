@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 type TauriCmd =
   | 'cmd_get_themes'
   | 'cmd_call_http_authentication_action'
+  | 'cmd_call_grpc_request_action'
   | 'cmd_call_http_request_action'
   | 'cmd_check_for_updates'
   | 'cmd_create_grpc_request'
@@ -23,6 +24,7 @@ type TauriCmd =
   | 'cmd_get_workspace_meta'
   | 'cmd_grpc_go'
   | 'cmd_grpc_reflect'
+  | 'cmd_grpc_request_actions'
   | 'cmd_http_request_actions'
   | 'cmd_import_data'
   | 'cmd_install_plugin'

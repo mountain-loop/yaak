@@ -7,7 +7,7 @@ import {
   GetCookieValueRequest,
   GetCookieValueResponse,
   GetHttpRequestByIdResponse,
-  GetKeyValueResponse,
+  GetKeyValueResponse, GrpcRequestAction,
   HttpAuthenticationAction,
   HttpRequestAction,
   InternalEvent,
@@ -16,6 +16,7 @@ import {
   PluginWindowContext,
   PromptTextResponse,
   RenderHttpRequestResponse,
+  RenderGrpcRequestResponse,
   SendHttpRequestResponse,
   TemplateFunction,
   TemplateFunctionArg,
@@ -146,6 +147,24 @@ export class PluginInstance {
       }
 
       if (
+        payload.type === 'get_grpc_request_actions_request' &&
+        Array.isArray(this.#mod?.grpcRequestActions)
+      ) {
+        const reply: GrpcRequestAction[] = this.#mod.grpcRequestActions.map((a) => ({
+          ...a,
+          // Add everything except onSelect
+          onSelect: undefined,
+        }));
+        const replyPayload: InternalEventPayload = {
+          type: 'get_grpc_request_actions_response',
+          pluginRefId: this.#workerData.pluginRefId,
+          actions: reply,
+        };
+        this.#sendPayload(windowContext, replyPayload, replyId);
+        return;
+      }
+
+      if (
         payload.type === 'get_http_request_actions_request' &&
         Array.isArray(this.#mod?.httpRequestActions)
       ) {
@@ -208,13 +227,12 @@ export class PluginInstance {
       if (payload.type === 'get_http_authentication_config_request' && this.#mod?.authentication) {
         const { args, actions } = this.#mod.authentication;
         const resolvedArgs: FormInput[] = [];
-        for (let i = 0; i < args.length; i++) {
-          let v = args[i];
-          if ('dynamic' in v) {
+        for (const v of args) {
+          if (v && 'dynamic' in v) {
             const dynamicAttrs = await v.dynamic(ctx, payload);
             const { dynamic, ...other } = v;
             resolvedArgs.push({ ...other, ...dynamicAttrs } as FormInput);
-          } else {
+          } else if (v) {
             resolvedArgs.push(v);
           }
         }
@@ -268,6 +286,18 @@ export class PluginInstance {
         Array.isArray(this.#mod.httpRequestActions)
       ) {
         const action = this.#mod.httpRequestActions[payload.index];
+        if (typeof action?.onSelect === 'function') {
+          await action.onSelect(ctx, payload.args);
+          this.#sendEmpty(windowContext, replyId);
+          return;
+        }
+      }
+
+      if (
+        payload.type === 'call_grpc_request_action_request' &&
+        Array.isArray(this.#mod.grpcRequestActions)
+      ) {
+        const action = this.#mod.grpcRequestActions[payload.index];
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
           this.#sendEmpty(windowContext, replyId);
@@ -472,6 +502,19 @@ export class PluginInstance {
           return httpResponses;
         },
       },
+      grpcRequest: {
+        render: async (args) => {
+          const payload = {
+            type: 'render_grpc_request_request',
+            ...args,
+          } as const;
+          const { grpcRequest } = await this.#sendAndWaitForReply<RenderGrpcRequestResponse>(
+            event.windowContext,
+            payload,
+          );
+          return grpcRequest;
+        },
+      },
       httpRequest: {
         getById: async (args) => {
           const payload = {
@@ -596,20 +639,20 @@ function applyFormInputDefaults(
   }
 }
 
-const watchedFiles: Record<string, Stats> = {};
+const watchedFiles: Record<string, Stats | null> = {};
 
 /**
- * Watch a file and trigger callback on change.
+ * Watch a file and trigger a callback on change.
  *
  * We also track the stat for each file because fs.watch() will
- * trigger a "change" event when the access date changes
+ * trigger a "change" event when the access date changes.
  */
-function watchFile(filepath: string, cb: (filepath: string) => void) {
+function watchFile(filepath: string, cb: () => void) {
   watch(filepath, () => {
-    const stat = statSync(filepath);
-    if (stat.mtimeMs !== watchedFiles[filepath]?.mtimeMs) {
-      cb(filepath);
+    const stat = statSync(filepath, { throwIfNoEntry: false });
+    if (stat == null || stat.mtimeMs !== watchedFiles[filepath]?.mtimeMs) {
+      watchedFiles[filepath] = stat ?? null;
+      cb();
     }
-    watchedFiles[filepath] = stat;
   });
 }
