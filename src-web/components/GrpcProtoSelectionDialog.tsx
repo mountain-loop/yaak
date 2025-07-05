@@ -10,6 +10,7 @@ import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import { Link } from './core/Link';
 import { HStack, VStack } from './core/Stacks';
+import { Icon } from './core/Icon';
 
 interface Props {
   onDone: () => void;
@@ -45,21 +46,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
       <HStack space={2} justifyContent="start" className="flex-row-reverse">
         <Button
           color="primary"
-          onClick={async () => {
-            const selected = await open({
-              title: 'Select Proto Directory',
-              directory: true
-            });
-            if (selected == null) return;
-
-            await protoFilesKv.set([...protoFiles.filter(f => f !== selected), selected]);
-            await grpc.reflect.refetch();
-          }}
-        >
-          Add Proto Root(s)
-        </Button>
-        <Button
-          color="primary"
+          variant="border"
           onClick={async () => {
             const selected = await open({
               title: 'Select Proto Files',
@@ -73,11 +60,28 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             await grpc.reflect.refetch();
           }}
         >
-          Add Proto File(s)
+          Add Files
+        </Button>
+        <Button
+          variant="border"
+          color="primary"
+          onClick={async () => {
+            const selected = await open({
+              title: 'Select Proto Directory',
+              directory: true,
+            });
+            if (selected == null) return;
+
+            await protoFilesKv.set([...protoFiles.filter((f) => f !== selected), selected]);
+            await grpc.reflect.refetch();
+          }}
+        >
+          Add Directories
         </Button>
         <Button
           isLoading={grpc.reflect.isFetching}
           disabled={grpc.reflect.isFetching}
+          variant="border"
           color="secondary"
           onClick={() => grpc.reflect.refetch()}
         >
@@ -85,6 +89,14 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
         </Button>
       </HStack>
       <VStack space={5}>
+        {reflectError && (
+          <Banner color="warning">
+            <h1 className="font-bold">
+              Reflection failed on URL <InlineCode>{request.url || 'n/a'}</InlineCode>
+            </h1>
+            <p>{reflectError.trim()}</p>
+          </Banner>
+        )}
         {!serverReflection && services != null && services.length > 0 && (
           <Banner className="flex flex-col gap-2">
             <p>
@@ -123,38 +135,40 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           <table className="w-full divide-y divide-surface-highlight">
             <thead>
               <tr>
-                <th className="text-text-subtlest">Added Files</th>
+                <th />
+                <th className="text-text-subtlest">Added File Paths</th>
                 <th />
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-highlight">
-              {protoFiles.map((f, i) => (
-                <tr key={f + i} className="group">
-                  <td className="pl-1 font-mono text-sm" title={f}>
-                    {f.split('/').pop()}
-                  </td>
-                  <td className="w-0 py-0.5">
-                    <IconButton
-                      title="Remove file"
-                      icon="trash"
-                      className="ml-auto opacity-50 transition-opacity group-hover:opacity-100"
-                      onClick={async () => {
-                        await protoFilesKv.set(protoFiles.filter((p) => p !== f));
-                      }}
-                    />
-                  </td>
-                </tr>
-              ))}
+              {protoFiles.map((f, i) => {
+                const parts = f.split('/');
+                return (
+                  <tr key={f + i} className="group">
+                    <td>
+                      <Icon icon={f.endsWith('.proto') ? 'file_code' : 'folder_code'} />
+                    </td>
+                    <td className="pl-1 font-mono text-sm" title={f}>
+                      {parts.length > 3 && '.../'}
+                      {parts.slice(-3).join('/')}
+                    </td>
+                    <td className="w-0 py-0.5">
+                      <IconButton
+                        title="Remove file"
+                        variant="border"
+                        size="xs"
+                        icon="trash"
+                        className="my-0.5 ml-auto opacity-50 transition-opacity group-hover:opacity-100"
+                        onClick={async () => {
+                          await protoFilesKv.set(protoFiles.filter((p) => p !== f));
+                        }}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        )}
-        {reflectError && (
-          <Banner color="warning">
-            <h1 className="font-bold">
-              Reflection failed on URL <InlineCode>{request.url || 'n/a'}</InlineCode>
-            </h1>
-            {reflectError}
-          </Banner>
         )}
         {reflectionUnimplemented && protoFiles.length === 0 && (
           <Banner>

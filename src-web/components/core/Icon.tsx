@@ -45,6 +45,7 @@ const icons = {
   eye: lucide.EyeIcon,
   eye_closed: lucide.EyeOffIcon,
   file_code: lucide.FileCodeIcon,
+  folder_code: lucide.FolderCodeIcon,
   filter: lucide.FilterIcon,
   flame: lucide.FlameIcon,
   flask: lucide.FlaskConicalIcon,
@@ -134,6 +135,8 @@ export const Icon = memo(function Icon({
       title={title}
       className={classNames(
         className,
+        !spin && 'transform-cpu',
+        spin && 'animate-spin',
         'flex-shrink-0',
         size === 'xl' && 'h-6 w-6',
         size === 'lg' && 'h-5 w-5',
@@ -149,7 +152,6 @@ export const Icon = memo(function Icon({
         color === 'success' && 'text-success',
         color === 'primary' && 'text-primary',
         color === 'secondary' && 'text-secondary',
-        spin && 'animate-spin',
       )}
     />
   );
