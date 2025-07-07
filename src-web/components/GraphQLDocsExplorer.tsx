@@ -45,8 +45,16 @@ function getTypeIndices(
     return indices;
   }
 
+  const typeName = (type as GraphQLObjectType).name;
+
+  if (context.visitedTypes.has(typeName)) {
+    return indices;
+  }
+
+  context.visitedTypes.add(typeName);
+
   indices.push({
-    name: (type as GraphQLObjectType).name,
+    name: typeName,
     type: 'type',
     schemaPointer: type,
     args: '',
@@ -107,6 +115,7 @@ type SearchIndexRecord = {
 
 type IndexGenerationContext = {
   rootType: 'Query' | 'Mutation' | 'Subscription';
+  visitedTypes: Set<string>;
 };
 
 type SchemaPointer = Field | GraphQLOutputType | GraphQLInputType | null;
@@ -147,6 +156,7 @@ function DocsExplorer({ graphqlSchema }: { graphqlSchema: GraphQLSchema }) {
       index.push(
         ...getFieldsIndices(type.getFields(), {
           rootType: type.name as IndexGenerationContext['rootType'],
+          visitedTypes: new Set<string>(),
         }),
       );
     });
