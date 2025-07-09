@@ -6,6 +6,9 @@ export function singleLineExtensions(): Extension {
     (tr: Transaction): TransactionSpec | TransactionSpec[] => {
       if (!tr.isUserEvent('input')) return tr;
 
+      // when composing text via IME, return
+      if (tr.isUserEvent('input.type.compose')) return tr;
+
       const specs: TransactionSpec[] = [];
       tr.changes.iterChanges((_, toA, fromB, toB, inserted) => {
         let insert = '';
