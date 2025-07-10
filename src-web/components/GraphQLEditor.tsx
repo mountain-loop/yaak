@@ -12,6 +12,7 @@ import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { showDialog } from '../lib/dialog';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
+import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import type { EditorProps } from './core/Editor/Editor';
 import { Editor } from './core/Editor/Editor';
@@ -74,6 +75,17 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
           {schema === undefined ? null /* Initializing */ : (
             <Dropdown
               items={[
+                ...((schema != null
+                  ? [
+                      {
+                        label: 'Clear',
+                        onSelect: clear,
+                        color: 'danger',
+                        leftSlot: <Icon icon="trash" />,
+                      },
+                      { type: 'separator' },
+                    ]
+                  : []) satisfies DropdownItem[]),
                 {
                   hidden: !error,
                   label: (
@@ -116,6 +128,7 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
                   type: 'content',
                 },
                 {
+                  hidden: schema == null,
                   label: `${isDocOpen ? 'Hide' : 'Show'} Documentation`,
                   leftSlot: <Icon icon="book_open_text" />,
                   onSelect: () => {
@@ -124,15 +137,9 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
                 },
                 {
                   label: 'Introspect Schema',
-                  leftSlot: <Icon icon="refresh" />,
+                  leftSlot: <Icon icon="refresh" spin={isLoading} />,
+                  keepOpenOnSelect: true,
                   onSelect: refetch,
-                },
-                {
-                  label: 'Clear',
-                  onSelect: clear,
-                  hidden: !schema,
-                  color: 'danger',
-                  leftSlot: <Icon icon="trash" />,
                 },
                 { type: 'separator', label: 'Setting' },
                 {

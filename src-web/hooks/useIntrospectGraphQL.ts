@@ -110,7 +110,7 @@ export function useIntrospectGraphQL(
   }, [upsertIntrospection]);
 
   useEffect(() => {
-    if (introspection.data?.content == null) {
+    if (introspection.data?.content == null || introspection.data.content === '') {
       return;
     }
 

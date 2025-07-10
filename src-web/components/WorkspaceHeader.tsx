@@ -57,7 +57,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
           <LicenseBadge />
         )}
         <IconButton
-          icon="search"
+          icon="square_terminal"
           title="Search or execute a command"
           size="sm"
           iconColor="secondary"

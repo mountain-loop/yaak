@@ -5,6 +5,7 @@ const sizes = {
   xs: '1.8rem',
   sm: '2.0rem',
   md: '2.3rem',
+  lg: '2.6rem',
 };
 
 /** @type {import('tailwindcss').Config} */

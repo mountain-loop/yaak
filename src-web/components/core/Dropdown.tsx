@@ -62,6 +62,7 @@ export type DropdownItemDefault = {
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
   waitForOnSelect?: boolean;
+  keepOpenOnSelect?: boolean;
   onSelect?: () => void | Promise<void>;
 };
 
@@ -402,7 +403,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           }
         }
 
-        handleClose();
+        if (!item.keepOpenOnSelect) handleClose();
       },
       [handleClose, setSelectedIndex],
     );

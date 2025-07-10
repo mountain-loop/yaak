@@ -43,10 +43,15 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
     return (
       <SplitLayout
         name="graphql_layout"
-        defaultRatio={0.25}
+        defaultRatio={1/3}
         firstSlot={requestResponseSplit}
         secondSlot={({ style, orientation }) => (
-          <GraphQLDocsExplorer key={activeRequest.id} schema={graphQLSchema} className={classNames(orientation == 'horizontal' && '!ml-0')} style={style} />
+          <GraphQLDocsExplorer
+            key={activeRequest.id}
+            schema={graphQLSchema}
+            className={classNames(orientation == 'horizontal' && '!ml-0')}
+            style={style}
+          />
         )}
       />
     );
