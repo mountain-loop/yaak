@@ -406,7 +406,7 @@ function FileArg({
       disabled={arg.disabled}
       help={arg.description}
       onChange={({ filePath }) => onChange(filePath)}
-      filePath={filePath === '__NULL__' ? null : filePath}
+      filePath={filePath === DYNAMIC_FORM_NULL_ARG ? null : filePath}
       directory={!!arg.directory}
     />
   );
@@ -427,7 +427,7 @@ function HttpRequestArg({
   return (
     <Select
       label={arg.label ?? arg.name}
-      name={arg.name}
+      name={value === DYNAMIC_FORM_NULL_ARG ? activeRequest?.id ?? value : value}
       onChange={onChange}
       help={arg.description}
       value={value}
