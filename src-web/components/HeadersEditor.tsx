@@ -37,7 +37,7 @@ export function HeadersEditor({
       {validInheritedHeaders.length > 0 ? (
         <Banner className="!py-0 mb-1.5 border-dashed" color="secondary">
           <details>
-            <summary className="py-1.5 text-sm !cursor-default !select-none opacity-70 hover:opacity-100">
+            <summary className="py-1.5 text-sm !cursor-default !select-none opacity-70 hover:opacity-100 list-none">
               <HStack>
                 Inherited <CountBadge count={validInheritedHeaders.length} />
               </HStack>
