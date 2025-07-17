@@ -13,7 +13,7 @@ describe('exporter-curl', () => {
         ],
       }),
     ).toEqual(
-      [`curl 'https://yaak.app'`, `--url-query 'a=aaa'`, `--url-query 'b=bbb'`].join(` \\\n  `),
+      [`curl 'https://yaak.app/?a=aaa&b=bbb'`].join(` \\n  `),
     );
   });
   test('Exports POST with url form data', async () => {
@@ -47,7 +47,7 @@ describe('exporter-curl', () => {
         },
       }),
     ).toEqual(
-      [`curl -X POST 'https://yaak.app'`, `--data-raw '{"query":"{foo,bar}","variables":{"a":"aaa","b":"bbb"}}'`].join(` \\\n  `),
+      [`curl -X POST 'https://yaak.app'`, `--data '{"query":"{foo,bar}","variables":{"a":"aaa","b":"bbb"}}'`].join(` \\\n  `),
     );
   });
 
@@ -62,7 +62,7 @@ describe('exporter-curl', () => {
         },
       }),
     ).toEqual(
-      [`curl -X POST 'https://yaak.app'`, `--data-raw '{"query":"{foo,bar}"}'`].join(` \\\n  `),
+      [`curl -X POST 'https://yaak.app'`, `--data '{"query":"{foo,bar}"}'`].join(` \\\n  `),
     );
   });
 
@@ -106,7 +106,7 @@ describe('exporter-curl', () => {
       [
         `curl -X POST 'https://yaak.app'`,
         `--header 'Content-Type: application/json'`,
-        `--data-raw '{"foo":"bar\\'s"}'`,
+        `--data '{"foo":"bar\\'s"}'`,
       ].join(` \\\n  `),
     );
   });
@@ -126,7 +126,7 @@ describe('exporter-curl', () => {
       [
         `curl -X POST 'https://yaak.app'`,
         `--header 'Content-Type: application/json'`,
-        `--data-raw '{"foo":"bar",\n"baz":"qux"}'`,
+        `--data '{"foo":"bar",\n"baz":"qux"}'`,
       ].join(` \\\n  `),
     );
   });
@@ -140,7 +140,7 @@ describe('exporter-curl', () => {
           { name: 'c', value: 'ccc', enabled: false },
         ],
       }),
-    ).toEqual([`curl`, `--header 'a: aaa'`, `--header 'b: bbb'`].join(` \\\n  `));
+    ).toEqual([`curl ''`, `--header 'a: aaa'`, `--header 'b: bbb'`].join(` \\\n  `));
   });
 
   test('Basic auth', async () => {
