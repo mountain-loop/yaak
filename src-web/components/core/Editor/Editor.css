@@ -257,6 +257,10 @@
 .cm-tooltip.cm-completionInfo {
   @apply shadow-lg bg-surface rounded text-text-subtle border border-border-subtle z-50 pointer-events-auto text-editor;
 
+  & * {
+    @apply font-mono;
+  }
+
   .cm-completionIcon {
     @apply font-mono opacity-80 italic;
 
