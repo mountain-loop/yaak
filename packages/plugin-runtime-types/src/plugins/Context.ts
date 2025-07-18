@@ -17,8 +17,8 @@ import type {
   SendHttpRequestResponse,
   ShowToastRequest,
   TemplateRenderRequest,
-  TemplateRenderResponse,
 } from '../bindings/gen_events.ts';
+import { JsonValue } from '../bindings/serde_json/JsonValue';
 
 export interface Context {
   clipboard: {
@@ -59,6 +59,6 @@ export interface Context {
     find(args: FindHttpResponsesRequest): Promise<FindHttpResponsesResponse['httpResponses']>;
   };
   templates: {
-    render(args: TemplateRenderRequest): Promise<TemplateRenderResponse['data']>;
+    render<T extends JsonValue>(args: TemplateRenderRequest & { data: T }): Promise<T>;
   };
 }

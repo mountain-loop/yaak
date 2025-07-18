@@ -427,7 +427,7 @@ function HttpRequestArg({
   return (
     <Select
       label={arg.label ?? arg.name}
-      name={value === DYNAMIC_FORM_NULL_ARG ? activeRequest?.id ?? value : value}
+      name={arg.name}
       onChange={onChange}
       help={arg.description}
       value={value}
