@@ -2,8 +2,11 @@ use crate::error::Result;
 use crate::import::import_data;
 use log::{info, warn};
 use std::collections::HashMap;
+use std::fs;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Url};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use yaak_common::api_client::yaak_api_client;
+use yaak_models::util::generate_id;
 use yaak_plugins::events::{Color, ShowToastRequest};
 use yaak_plugins::install::download_and_install;
 
@@ -25,9 +28,12 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
             _ = window.set_focus();
             let confirmed_install = app_handle
                 .dialog()
-                .message(format!("Install plugin {name} {version:?}?",))
+                .message(format!("Install plugin {name} {version:?}?"))
                 .kind(MessageDialogKind::Info)
-                .buttons(MessageDialogButtons::OkCustom("Install".to_string()))
+                .buttons(MessageDialogButtons::OkCancelCustom(
+                    "Install".to_string(),
+                    "Cancel".to_string(),
+                ))
                 .blocking_show();
             if !confirmed_install {
                 // Cancelled installation
@@ -45,8 +51,51 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
             )?;
         }
         "import-data" => {
-            let file_path = query_map.get("path").unwrap();
-            let results = import_data(window, file_path).await?;
+            let mut file_path = query_map.get("path").map(|s| s.to_owned());
+            let name = query_map.get("name").map(|s| s.to_owned()).unwrap_or("data".to_string());
+
+            if let Some(file_url) = query_map.get("url") {
+                let confirmed_import = app_handle
+                    .dialog()
+                    .message(format!("Import {name} from {file_url}?"))
+                    .kind(MessageDialogKind::Info)
+                    .buttons(MessageDialogButtons::OkCancelCustom(
+                        "Import".to_string(),
+                        "Cancel".to_string(),
+                    ))
+                    .blocking_show();
+                if !confirmed_import {
+                    return Ok(());
+                }
+
+                let resp = yaak_api_client(app_handle)?.get(file_url).send().await?;
+                let json = resp.bytes().await?;
+                let p = app_handle
+                    .path()
+                    .temp_dir()?
+                    .join(format!("import-{}", generate_id()))
+                    .to_string_lossy()
+                    .to_string();
+                fs::write(&p, json)?;
+                file_path = Some(p);
+            }
+
+            let file_path = match file_path {
+                Some(p) => p,
+                None => {
+                    app_handle.emit(
+                        "show_toast",
+                        ShowToastRequest {
+                            message: "Failed to import data".to_string(),
+                            color: Some(Color::Danger),
+                            icon: None,
+                        },
+                    )?;
+                    return Ok(());
+                }
+            };
+
+            let results = import_data(window, &file_path).await?;
             _ = window.set_focus();
             window.emit(
                 "show_toast",

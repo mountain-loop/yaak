@@ -4,7 +4,6 @@ import { useRef } from 'react';
 import { openSettings } from '../commands/openSettings';
 import { useCheckForUpdates } from '../hooks/useCheckForUpdates';
 import { useExportData } from '../hooks/useExportData';
-import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { appInfo } from '../lib/appInfo';
 import { showDialog } from '../lib/dialog';
 import { importData } from '../lib/importData';
@@ -19,8 +18,6 @@ export function SettingsDropdown() {
   const dropdownRef = useRef<DropdownRef>(null);
   const checkForUpdates = useCheckForUpdates();
   const { check } = useLicense();
-
-  useListenToTauriEvent('settings', () => openSettings.mutate(null));
 
   return (
     <Dropdown

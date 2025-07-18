@@ -28,7 +28,7 @@ export function Link({ href, children, noUnderline, className, ...other }: Props
         rel="noopener noreferrer"
         className={classNames(
           className,
-          'pr-4 inline-flex items-center hover:underline',
+          'pr-4 inline-flex items-center hover:underline group',
           !noUnderline && 'underline',
         )}
         onClick={(e) => {
@@ -36,8 +36,8 @@ export function Link({ href, children, noUnderline, className, ...other }: Props
         }}
         {...other}
       >
-        <span>{children}</span>
-        <Icon className="inline absolute right-0.5 top-[0.3em]" size="xs" icon="external_link" />
+        <span className="pr-0.5">{children}</span>
+        <Icon className="inline absolute right-0.5 top-[0.3em] opacity-70 group-hover:opacity-100" size="xs" icon="external_link" />
       </a>
     );
   }

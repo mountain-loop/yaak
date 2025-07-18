@@ -1,9 +1,10 @@
 use crate::api::{
-    PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates, search_plugins,
+    check_plugin_updates, search_plugins, PluginSearchResponse, PluginUpdatesResponse,
 };
 use crate::error::Result;
-use crate::install::download_and_install;
-use tauri::{AppHandle, Runtime, WebviewWindow, command};
+use crate::install::{delete_and_uninstall, download_and_install};
+use tauri::{command, AppHandle, Runtime, WebviewWindow};
+use yaak_models::models::Plugin;
 
 #[command]
 pub(crate) async fn search<R: Runtime>(
@@ -21,6 +22,14 @@ pub(crate) async fn install<R: Runtime>(
 ) -> Result<()> {
     download_and_install(&window, name, version).await?;
     Ok(())
+}
+
+#[command]
+pub(crate) async fn uninstall<R: Runtime>(
+    plugin_id: &str,
+    window: WebviewWindow<R>,
+) -> Result<Plugin> {
+    delete_and_uninstall(&window, plugin_id).await
 }
 
 #[command]

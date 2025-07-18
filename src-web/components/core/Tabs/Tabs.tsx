@@ -84,7 +84,7 @@ export function Tabs({
           tabListClassName,
           addBorders && '!-ml-1',
           'flex items-center hide-scrollbars mb-2',
-          layout === 'horizontal' && 'h-full overflow-auto pt-1 px-2',
+          layout === 'horizontal' && 'h-full overflow-auto px-2',
           layout === 'vertical' && 'overflow-x-auto overflow-y-visible ',
           // Give space for button focus states within overflow boundary.
           layout === 'vertical' && 'py-1 -ml-5 pl-3 pr-1',
@@ -92,7 +92,7 @@ export function Tabs({
       >
         <div
           className={classNames(
-            layout === 'horizontal' && 'flex flex-col gap-1 w-full mt-1 pb-3 mb-auto',
+            layout === 'horizontal' && 'flex flex-col gap-1 w-full pb-3 mb-auto',
             layout === 'vertical' && 'flex flex-row flex-shrink-0 gap-2 w-full',
           )}
         >
@@ -104,8 +104,11 @@ export function Tabs({
               addBorders && 'border',
               isActive ? 'text-text' : 'text-text-subtle hover:text-text',
               isActive && addBorders
-                ? 'border-border-subtle bg-surface-active'
-                : 'border-transparent',
+                ? 'border-surface-active bg-surface-active'
+                : layout === 'vertical'
+                  ? 'border-border-subtle'
+                  : 'border-transparent',
+              layout === 'horizontal' && 'flex justify-between',
             );
 
             if ('options' in t) {
@@ -121,7 +124,7 @@ export function Tabs({
                 >
                   <button
                     onClick={isActive ? undefined : () => onChangeValue(t.value)}
-                    className={btnClassName}
+                    className={classNames(btnClassName)}
                   >
                     {option && 'shortLabel' in option && option.shortLabel
                       ? option.shortLabel
