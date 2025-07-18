@@ -3,7 +3,12 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import type { Plugin } from '@yaakapp-internal/models';
 import { pluginsAtom } from '@yaakapp-internal/models';
 import type { PluginVersion } from '@yaakapp-internal/plugins';
-import { checkPluginUpdates, installPlugin, searchPlugins } from '@yaakapp-internal/plugins';
+import {
+  checkPluginUpdates,
+  installPlugin,
+  searchPlugins,
+  uninstallPlugin,
+} from '@yaakapp-internal/plugins';
 import type { PluginUpdatesResponse } from '@yaakapp-internal/plugins/bindings/gen_api';
 import { useAtomValue } from 'jotai';
 import React, { useState } from 'react';
@@ -11,8 +16,10 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
 import { useRefreshPlugins } from '../../hooks/usePlugins';
-import { useUninstallPlugin } from '../../hooks/useUninstallPlugin';
+import { showConfirmDelete } from '../../lib/confirm';
+import { minPromiseMillis } from '../../lib/minPromiseMillis';
 import { Button } from '../core/Button';
+import { CountBadge } from '../core/CountBadge';
 import { IconButton } from '../core/IconButton';
 import { InlineCode } from '../core/InlineCode';
 import { Link } from '../core/Link';
@@ -26,6 +33,7 @@ import { SelectFile } from '../SelectFile';
 
 export function SettingsPlugins() {
   const [directory, setDirectory] = React.useState<string | null>(null);
+  const plugins = useAtomValue(pluginsAtom);
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
   const [tab, setTab] = useState<string>();
@@ -39,7 +47,11 @@ export function SettingsPlugins() {
         tabListClassName="!-ml-3"
         tabs={[
           { label: 'Marketplace', value: 'search' },
-          { label: 'Installed', value: 'installed' },
+          {
+            label: 'Installed',
+            value: 'installed',
+            rightSlot: <CountBadge count={plugins.length} />,
+          },
         ]}
       >
         <TabContent value="search">
@@ -103,32 +115,36 @@ function PluginTableRow({
   updates: PluginUpdatesResponse | null;
 }) {
   const pluginInfo = usePluginInfo(plugin.id);
-  const uninstallPlugin = useUninstallPlugin();
   const latestVersion = updates?.plugins.find((u) => u.name === pluginInfo.data?.name)?.version;
   const installPluginMutation = useMutation({
     mutationKey: ['install_plugin', plugin.id],
     mutationFn: (name: string) => installPlugin(name, null),
   });
-  if (pluginInfo.data == null) return null;
+
+  const displayName = pluginInfo.data?.displayName ?? 'Unknown';
+  const uninstallPluginMutation = usePromptUninstall(plugin.id, displayName);
+
+  if (pluginInfo.isPending) {
+    return null;
+  }
 
   return (
     <TableRow>
       <TableCell className="font-semibold">
         {plugin.url ? (
           <Link noUnderline href={plugin.url}>
-            {pluginInfo.data.displayName}
+            {displayName}
           </Link>
         ) : (
-          pluginInfo.data.displayName
+          displayName
         )}
       </TableCell>
       <TableCell>
-        <InlineCode>{pluginInfo.data?.version}</InlineCode>
+        <InlineCode>{pluginInfo.data?.version ?? 'n/a'}</InlineCode>
       </TableCell>
-      <TableCell className="w-full text-text-subtle">{pluginInfo.data.description}</TableCell>
       <TableCell>
-        <HStack>
-          {latestVersion != null && (
+        <HStack justifyContent="end">
+          {pluginInfo.data && latestVersion != null && (
             <Button
               variant="border"
               color="success"
@@ -140,14 +156,17 @@ function PluginTableRow({
               Update
             </Button>
           )}
-          <IconButton
-            size="sm"
-            icon="trash"
+          <Button
+            size="xs"
             title="Uninstall plugin"
+            variant="border"
+            isLoading={uninstallPluginMutation.isPending}
             onClick={async () => {
-              uninstallPlugin.mutate({ pluginId: plugin.id, name: pluginInfo.data.displayName });
+              uninstallPluginMutation.mutate();
             }}
-          />
+          >
+            Uninstall
+          </Button>
         </HStack>
       </TableCell>
     </TableRow>
@@ -173,7 +192,7 @@ function PluginSearch() {
           defaultValue={query}
         />
       </HStack>
-      <div className="w-full h-full overflow-auto">
+      <div className="w-full h-full">
         {results.data == null ? (
           <EmptyStateText>
             <LoadingIcon size="xl" className="text-text-subtlest" />
@@ -186,7 +205,6 @@ function PluginSearch() {
               <TableRow>
                 <TableHeaderCell>Name</TableHeaderCell>
                 <TableHeaderCell>Version</TableHeaderCell>
-                <TableHeaderCell>Description</TableHeaderCell>
                 <TableHeaderCell />
               </TableRow>
             </TableHead>
@@ -201,11 +219,8 @@ function PluginSearch() {
                   <TableCell>
                     <InlineCode>{plugin.version}</InlineCode>
                   </TableCell>
-                  <TableCell className="w-full text-text-subtle">
-                    {plugin.description ?? 'n/a'}
-                  </TableCell>
-                  <TableCell>
-                    <InstallPluginButton plugin={plugin} />
+                  <TableCell className="w-[6rem]">
+                    <InstallPluginButton pluginVersion={plugin} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -217,12 +232,12 @@ function PluginSearch() {
   );
 }
 
-function InstallPluginButton({ plugin }: { plugin: PluginVersion }) {
+function InstallPluginButton({ pluginVersion }: { pluginVersion: PluginVersion }) {
   const plugins = useAtomValue(pluginsAtom);
-  const uninstallPlugin = useUninstallPlugin();
-  const installed = plugins?.some((p) => p.id === plugin.id);
+  const installed = plugins?.some((p) => p.id === pluginVersion.id);
+  const uninstallPluginMutation = usePromptUninstall(pluginVersion.id, pluginVersion.displayName);
   const installPluginMutation = useMutation({
-    mutationKey: ['install_plugin', plugin.id],
+    mutationKey: ['install_plugin', pluginVersion.id],
     mutationFn: (pv: PluginVersion) => installPlugin(pv.name, null),
   });
 
@@ -230,14 +245,14 @@ function InstallPluginButton({ plugin }: { plugin: PluginVersion }) {
     <Button
       size="xs"
       variant="border"
-      color={installed ? 'secondary' : 'primary'}
+      color={installed ? 'default' : 'primary'}
       className="ml-auto"
-      isLoading={installPluginMutation.isPending}
+      isLoading={installPluginMutation.isPending || uninstallPluginMutation.isPending}
       onClick={async () => {
         if (installed) {
-          uninstallPlugin.mutate({ pluginId: plugin.id, name: plugin.displayName });
+          uninstallPluginMutation.mutate();
         } else {
-          installPluginMutation.mutate(plugin);
+          installPluginMutation.mutate(pluginVersion);
         }
       }}
     >
@@ -267,7 +282,6 @@ function InstalledPlugins() {
         <TableRow>
           <TableHeaderCell>Name</TableHeaderCell>
           <TableHeaderCell>Version</TableHeaderCell>
-          <TableHeaderCell>Description</TableHeaderCell>
           <TableHeaderCell />
         </TableRow>
       </TableHead>
@@ -278,4 +292,25 @@ function InstalledPlugins() {
       </tbody>
     </Table>
   );
+}
+
+function usePromptUninstall(pluginId: string, name: string) {
+  return useMutation({
+    mutationKey: ['uninstall_plugin', pluginId],
+    mutationFn: async () => {
+      const confirmed = await showConfirmDelete({
+        id: 'uninstall-plugin-' + pluginId,
+        title: 'Uninstall Plugin',
+        confirmText: 'Uninstall',
+        description: (
+          <>
+            Permanently uninstall <InlineCode>{name}</InlineCode>?
+          </>
+        ),
+      });
+      if (confirmed) {
+        await minPromiseMillis(uninstallPlugin(pluginId), 700);
+      }
+    },
+  });
 }

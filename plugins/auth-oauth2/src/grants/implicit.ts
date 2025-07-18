@@ -31,7 +31,12 @@ export async function getImplicit(
     return token;
   }
 
-  const authorizationUrl = new URL(`${authorizationUrlRaw ?? ''}`);
+  let authorizationUrl: URL;
+  try {
+    authorizationUrl = new URL(`${authorizationUrlRaw ?? ''}`);
+  } catch {
+    throw new Error(`Invalid authorization URL "${authorizationUrlRaw}"`);
+  }
   authorizationUrl.searchParams.set('response_type', 'token');
   authorizationUrl.searchParams.set('client_id', clientId);
   if (redirectUri) authorizationUrl.searchParams.set('redirect_uri', redirectUri);

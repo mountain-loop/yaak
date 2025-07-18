@@ -4,8 +4,11 @@ import { InlineCode } from '../components/core/InlineCode';
 import { showConfirmDelete } from './confirm';
 import { resolvedModelName } from './resolvedModelName';
 
-export async function deleteModelWithConfirm(model: AnyModel | null): Promise<boolean> {
-  if (model == null ) {
+export async function deleteModelWithConfirm(
+  model: AnyModel | null,
+  options: { confirmName?: string } = {},
+): Promise<boolean> {
+  if (model == null) {
     console.warn('Tried to delete null model');
     return false;
   }
@@ -13,6 +16,7 @@ export async function deleteModelWithConfirm(model: AnyModel | null): Promise<bo
   const confirmed = await showConfirmDelete({
     id: 'delete-model-' + model.id,
     title: 'Delete ' + modelTypeLabel(model),
+    requireTyping: options.confirmName,
     description: (
       <>
         Permanently delete <InlineCode>{resolvedModelName(model)}</InlineCode>?

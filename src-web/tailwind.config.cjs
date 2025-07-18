@@ -93,7 +93,7 @@ module.exports = {
       shrink: '0.8em',
     },
     boxShadow: {
-      DEFAULT: '0 1px 3px 0 var(--shadow);',
+      DEFAULT: '0 1px 3px 0 var(--shadow)',
       lg: '0 10px 15px -3px var(--shadow)',
     },
     colors: {

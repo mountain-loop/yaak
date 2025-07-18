@@ -312,10 +312,11 @@ export const plugin: PluginDefinition = {
         const authorizationUrl = stringArg(values, 'authorizationUrl');
         const accessTokenUrl = stringArg(values, 'accessTokenUrl');
         token = await getAuthorizationCode(ctx, contextId, {
-          accessTokenUrl: accessTokenUrl.match(/^https?:\/\//)
-            ? accessTokenUrl
-            : `https://${accessTokenUrl}`,
-          authorizationUrl: authorizationUrl.match(/^https?:\/\//)
+          accessTokenUrl:
+            accessTokenUrl === '' || accessTokenUrl.match(/^https?:\/\//)
+              ? accessTokenUrl
+              : `https://${accessTokenUrl}`,
+          authorizationUrl: authorizationUrl === '' || authorizationUrl.match(/^https?:\/\//)
             ? authorizationUrl
             : `https://${authorizationUrl}`,
           clientId: stringArg(values, 'clientId'),

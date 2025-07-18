@@ -255,10 +255,14 @@
 /* NOTE: Extra selector required to override default styles */
 .cm-tooltip.cm-tooltip-autocomplete,
 .cm-tooltip.cm-completionInfo {
-  @apply shadow-lg bg-surface rounded text-text-subtle border border-border-subtle z-50 pointer-events-auto text-editor;
+  @apply shadow-lg bg-surface rounded text-text-subtle border border-border-subtle z-50 pointer-events-auto;
+
+  & * {
+    @apply font-mono text-editor !important;
+  }
 
   .cm-completionIcon {
-    @apply font-mono opacity-80 italic;
+    @apply opacity-80 italic;
 
     &::after {
       content: 'a' !important; /* Default (eg. for GraphQL) */

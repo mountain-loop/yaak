@@ -201,22 +201,35 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
     [setPairsAndSave, setForceFocusNamePairId, pairs],
   );
 
-  const handleFocus = useCallback(
-    (pair: Pair) =>
-      setPairs((pairs) => {
-        setForceFocusNamePairId(null); // Remove focus override when something focused
-        setForceFocusValuePairId(null); // Remove focus override when something focused
-        const isLast = pair.id === pairs[pairs.length - 1]?.id;
-        if (isLast) {
-          const prevPair = pairs[pairs.length - 1];
-          setForceFocusNamePairId(prevPair?.id ?? null);
-          return [...pairs, emptyPair()];
-        } else {
-          return pairs;
-        }
-      }),
-    [],
-  );
+  const handleFocusName = useCallback((pair: Pair) => {
+    setForceFocusNamePairId(null); // Remove focus override when something focused
+    setForceFocusValuePairId(null); // Remove focus override when something focused
+    setPairs((pairs) => {
+      const isLast = pair.id === pairs[pairs.length - 1]?.id;
+      if (isLast) {
+        const prevPair = pairs[pairs.length - 1];
+        setTimeout(() => setForceFocusNamePairId(prevPair?.id ?? null));
+        return [...pairs, emptyPair()];
+      } else {
+        return pairs;
+      }
+    });
+  }, []);
+
+  const handleFocusValue = useCallback((pair: Pair) => {
+    setForceFocusNamePairId(null); // Remove focus override when something focused
+    setForceFocusValuePairId(null); // Remove focus override when something focused
+    setPairs((pairs) => {
+      const isLast = pair.id === pairs[pairs.length - 1]?.id;
+      if (isLast) {
+        const prevPair = pairs[pairs.length - 1];
+        setTimeout(() => setForceFocusValuePairId(prevPair?.id ?? null));
+        return [...pairs, emptyPair()];
+      } else {
+        return pairs;
+      }
+    });
+  }, []);
 
   return (
     <div
@@ -256,7 +269,8 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
               onChange={handleChange}
               onDelete={handleDelete}
               onEnd={handleEnd}
-              onFocus={handleFocus}
+              onFocusName={handleFocusName}
+              onFocusValue={handleFocusValue}
               onMove={handleMove}
               pair={p}
               stateKey={stateKey}
@@ -292,7 +306,8 @@ type PairEditorRowProps = {
   onEnd: (id: string) => void;
   onChange: (pair: PairWithId) => void;
   onDelete?: (pair: PairWithId, focusPrevious: boolean) => void;
-  onFocus?: (pair: PairWithId) => void;
+  onFocusName?: (pair: PairWithId) => void;
+  onFocusValue?: (pair: PairWithId) => void;
   onSubmit?: (pair: PairWithId) => void;
   isLast?: boolean;
   disabled?: boolean;
@@ -338,7 +353,8 @@ export function PairEditorRow({
   onChange,
   onDelete,
   onEnd,
-  onFocus,
+  onFocusName,
+  onFocusValue,
   onMove,
   pair,
   stateKey,
@@ -365,7 +381,8 @@ export function PairEditorRow({
     }
   }, [forceFocusValuePairId, pair.id]);
 
-  const handleFocus = useCallback(() => onFocus?.(pair), [onFocus, pair]);
+  const handleFocusName = useCallback(() => onFocusName?.(pair), [onFocusName, pair]);
+  const handleFocusValue = useCallback(() => onFocusValue?.(pair), [onFocusValue, pair]);
   const handleDelete = useCallback(() => onDelete?.(pair, false), [onDelete, pair]);
 
   const handleChangeEnabled = useMemo(
@@ -503,7 +520,7 @@ export function PairEditorRow({
             containerClassName={classNames(isLast && 'border-dashed')}
             label="Name"
             name={`name[${index}]`}
-            onFocus={handleFocus}
+            onFocus={handleFocusName}
             placeholder={namePlaceholder ?? 'name'}
           />
         ) : (
@@ -524,7 +541,7 @@ export function PairEditorRow({
             label="Name"
             name={`name[${index}]`}
             onChange={handleChangeName}
-            onFocus={handleFocus}
+            onFocus={handleFocusName}
             placeholder={namePlaceholder ?? 'name'}
             autocomplete={nameAutocomplete}
             autocompleteVariables={nameAutocompleteVariables}
@@ -550,7 +567,7 @@ export function PairEditorRow({
               containerClassName={classNames(isLast && 'border-dashed')}
               label="Value"
               name={`value[${index}]`}
-              onFocus={handleFocus}
+              onFocus={handleFocusValue}
               placeholder={valuePlaceholder ?? 'value'}
             />
           ) : pair.value.includes('\n') ? (
@@ -579,7 +596,7 @@ export function PairEditorRow({
               label="Value"
               name={`value[${index}]`}
               onChange={handleChangeValueText}
-              onFocus={handleFocus}
+              onFocus={handleFocusValue}
               type={isLast ? 'text' : typeof valueType === 'function' ? valueType(pair) : valueType}
               placeholder={valuePlaceholder ?? 'value'}
               autocomplete={valueAutocomplete?.(pair.name)}
@@ -603,7 +620,7 @@ export function PairEditorRow({
           <IconButton
             iconSize="sm"
             size="xs"
-            icon={(isLast || disabled) ? 'empty' : 'chevron_down'}
+            icon={isLast || disabled ? 'empty' : 'chevron_down'}
             title="Select form data type"
             className="text-text-subtle"
           />

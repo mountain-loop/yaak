@@ -27,7 +27,7 @@ export function TableCell({ children, className }: { children: ReactNode; classN
     <td
       className={classNames(
         className,
-        'py-2 [&:not(:first-child)]:pl-4 text-left w-0 whitespace-nowrap',
+        'py-2 [&:not(:first-child)]:pl-4 text-left whitespace-nowrap',
       )}
     >
       {children}
@@ -57,7 +57,7 @@ export function TableHeaderCell({
   className?: string;
 }) {
   return (
-    <th className={classNames(className, 'py-2 [&:not(:first-child)]:pl-4 text-left w-0 text-text-subtle')}>
+    <th className={classNames(className, 'py-2 [&:not(:first-child)]:pl-4 text-left text-text-subtle')}>
       {children}
     </th>
   );
