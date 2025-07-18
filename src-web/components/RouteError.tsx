@@ -1,4 +1,5 @@
 import { Button } from './core/Button';
+import { DetailsBanner } from './core/DetailsBanner';
 import { FormattedError } from './core/FormattedError';
 import { Heading } from './core/Heading';
 import { VStack } from './core/Stacks';
@@ -17,10 +18,9 @@ export default function RouteError({ error }: { error: unknown }) {
         <FormattedError>
           {message}
           {stack && (
-            <details className="mt-3 select-auto text-xs">
-              <summary className="!cursor-default !select-none">Stack Trace</summary>
+            <DetailsBanner color="secondary" className="mt-3 select-auto text-xs" summary="Stack Trace">
               <div className="mt-2 text-xs">{stack}</div>
-            </details>
+            </DetailsBanner>
           )}
         </FormattedError>
         <VStack space={2}>

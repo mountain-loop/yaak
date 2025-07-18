@@ -20,6 +20,7 @@ import { showDialog } from '../lib/dialog';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { Banner } from './core/Banner';
 import { Checkbox } from './core/Checkbox';
+import { DetailsBanner } from './core/DetailsBanner';
 import { Editor } from './core/Editor/Editor';
 import { IconButton } from './core/IconButton';
 import { Input } from './core/Input';
@@ -174,22 +175,23 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
             );
           case 'accordion':
             return (
-              <Banner key={i} className={classNames('!p-0', disabled && 'opacity-disabled')}>
-                <details>
-                  <summary className="px-3 py-1.5 text-text-subtle">{input.label}</summary>
-                  <div className="mb-3 px-3">
-                    <FormInputs
-                      data={data}
-                      disabled={disabled}
-                      inputs={input.inputs}
-                      setDataAttr={setDataAttr}
-                      stateKey={stateKey}
-                      autocompleteFunctions={autocompleteFunctions || false}
-                      autocompleteVariables={autocompleteVariables}
-                    />
-                  </div>
-                </details>
-              </Banner>
+              <DetailsBanner
+                key={i}
+                summary={input.label}
+                className={classNames(disabled && 'opacity-disabled')}
+              >
+                <div className="mb-3 px-3">
+                  <FormInputs
+                    data={data}
+                    disabled={disabled}
+                    inputs={input.inputs}
+                    setDataAttr={setDataAttr}
+                    stateKey={stateKey}
+                    autocompleteFunctions={autocompleteFunctions || false}
+                    autocompleteVariables={autocompleteVariables}
+                  />
+                </div>
+              </DetailsBanner>
             );
           case 'banner':
             return (
