@@ -9,14 +9,15 @@ import { jotaiStore } from '../lib/jotai';
 
 export function openWorkspaceSettings(tab?: WorkspaceSettingsTab) {
   const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+  if (workspaceId == null) return;
   showDialog({
     id: 'workspace-settings',
     title: 'Workspace Settings',
-    size: 'lg',
-    className: 'h-[50rem]',
+    size: 'md',
+    className: 'h-[calc(100vh-5rem)] max-h-[40rem]',
     noPadding: true,
-    render({ hide }) {
-      return <WorkspaceSettingsDialog workspaceId={workspaceId} hide={hide} tab={tab} />;
-    },
+    render: ({ hide }) => (
+      <WorkspaceSettingsDialog workspaceId={workspaceId} hide={hide} tab={tab} />
+    ),
   });
 }

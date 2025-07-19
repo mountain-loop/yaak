@@ -77,9 +77,9 @@ export function Dialog({
             'border border-border-subtle shadow-lg shadow-[rgba(0,0,0,0.1)]',
             'min-h-[10rem]',
             'max-w-[calc(100vw-5rem)] max-h-[calc(100vh-5rem)]',
-            size === 'sm' && 'w-[28rem]',
-            size === 'md' && 'w-[45rem]',
-            size === 'lg' && 'w-[65rem]',
+            size === 'sm' && 'w-[30rem]',
+            size === 'md' && 'w-[50rem]',
+            size === 'lg' && 'w-[70rem]',
             size === 'full' && 'w-[100vw] h-[100vh]',
             size === 'dynamic' && 'min-w-[20rem] max-w-[100vw]',
           )}

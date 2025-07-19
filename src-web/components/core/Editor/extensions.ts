@@ -139,7 +139,6 @@ export function getLanguageExtension({
         onShowInDocs(field, type, parentType) {
           const activeRequestId = jotaiStore.get(activeRequestIdAtom);
           if (activeRequestId == null) return;
-          console.log('SHOW IN DOCS', field);
           jotaiStore.set(showGraphQLDocExplorerAtom, (v) => ({
             ...v,
             [activeRequestId]: { field, type, parentType },

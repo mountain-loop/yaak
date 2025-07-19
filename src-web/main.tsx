@@ -6,6 +6,7 @@ import { changeModelStoreWorkspace, initModelStore } from '@yaakapp-internal/mod
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { initSync } from './init/sync';
+import { initGlobalListeners } from './lib/initGlobalListeners';
 import { jotaiStore } from './lib/jotai';
 import { router } from './lib/router';
 
@@ -44,6 +45,7 @@ window.addEventListener('keydown', (e) => {
 // Initialize a bunch of watchers
 initSync();
 initModelStore(jotaiStore);
+initGlobalListeners();
 await changeModelStoreWorkspace(null); // Load global models
 
 console.log('Creating React root');

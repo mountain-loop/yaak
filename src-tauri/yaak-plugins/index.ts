@@ -13,6 +13,10 @@ export async function installPlugin(name: string, version: string | null) {
   return invoke<string>('plugin:yaak-plugins|install', { name, version });
 }
 
+export async function uninstallPlugin(pluginId: string) {
+  return invoke<string>('plugin:yaak-plugins|uninstall', { pluginId });
+}
+
 export async function checkPluginUpdates() {
   return invoke<PluginUpdatesResponse>('plugin:yaak-plugins|updates', {});
 }

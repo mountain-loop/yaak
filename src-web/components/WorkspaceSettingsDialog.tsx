@@ -6,11 +6,11 @@ import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { router } from '../lib/router';
+import { CopyIconButton } from './CopyIconButton';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
 import { PlainInput } from './core/PlainInput';
-import { Separator } from './core/Separator';
 import { HStack, VStack } from './core/Stacks';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { HeadersEditor } from './HeadersEditor';
@@ -20,13 +20,13 @@ import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
 import { WorkspaceEncryptionSetting } from './WorkspaceEncryptionSetting';
 
 interface Props {
-  workspaceId: string | null;
+  workspaceId: string;
   hide: () => void;
   tab?: WorkspaceSettingsTab;
 }
 
 const TAB_AUTH = 'auth';
-const TAB_DESCRIPTION = 'description';
+const TAB_DATA = 'data';
 const TAB_HEADERS = 'headers';
 const TAB_GENERAL = 'general';
 
@@ -34,9 +34,9 @@ export type WorkspaceSettingsTab =
   | typeof TAB_AUTH
   | typeof TAB_HEADERS
   | typeof TAB_GENERAL
-  | typeof TAB_DESCRIPTION;
+  | typeof TAB_DATA;
 
-const DEFAULT_TAB: WorkspaceSettingsTab = TAB_DESCRIPTION;
+const DEFAULT_TAB: WorkspaceSettingsTab = TAB_GENERAL;
 
 export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
   const workspace = useAtomValue(workspacesAtom).find((w) => w.id === workspaceId);
@@ -63,25 +63,26 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
 
   return (
     <Tabs
+      layout="horizontal"
       value={activeTab}
       onChangeValue={setActiveTab}
       label="Folder Settings"
-      className="px-1.5 pb-2"
+      className="pt-2 pb-2 pl-3 pr-1"
       addBorders
       tabs={[
-        { value: TAB_DESCRIPTION, label: 'Description' },
+        { value: TAB_GENERAL, label: 'General' },
         {
-          value: TAB_GENERAL,
-          label: 'General',
+          value: TAB_DATA,
+          label: 'Directory Sync',
         },
         ...authTab,
         ...headersTab,
       ]}
     >
-      <TabContent value={TAB_AUTH} className="pt-3 overflow-y-auto h-full px-4">
+      <TabContent value={TAB_AUTH} className="overflow-y-auto h-full px-4">
         <HttpAuthenticationEditor model={workspace} />
       </TabContent>
-      <TabContent value={TAB_HEADERS} className="pt-3 overflow-y-auto h-full px-4">
+      <TabContent value={TAB_HEADERS} className="overflow-y-auto h-full px-4">
         <HeadersEditor
           inheritedHeaders={inheritedHeaders}
           forceUpdateKey={workspace.id}
@@ -90,7 +91,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
           stateKey={`headers.${workspace.id}`}
         />
       </TabContent>
-      <TabContent value={TAB_DESCRIPTION} className="pt-3 overflow-y-auto h-full px-4">
+      <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-4">
         <VStack space={4} alignItems="start" className="pb-3 h-full">
           <PlainInput
             required
@@ -111,23 +112,13 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
             onChange={(description) => patchModel(workspace, { description })}
             heightMode="auto"
           />
-        </VStack>
-      </TabContent>
-      <TabContent value={TAB_GENERAL} className="pt-3 overflow-y-auto h-full px-4">
-        <VStack space={4} alignItems="start" className="pb-3 h-full">
-          <SyncToFilesystemSetting
-            value={{ filePath: workspaceMeta.settingSyncDir }}
-            onCreateNewWorkspace={hide}
-            onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
-          />
-          <WorkspaceEncryptionSetting size="xs" />
-
-          <Separator className="my-4" />
 
           <HStack alignItems="center" justifyContent="between" className="w-full">
             <Button
               onClick={async () => {
-                const didDelete = await deleteModelWithConfirm(workspace);
+                const didDelete = await deleteModelWithConfirm(workspace, {
+                  confirmName: workspace.name,
+                });
                 if (didDelete) {
                   hide(); // Only hide if actually deleted workspace
                   await router.navigate({ to: '/' });
@@ -139,8 +130,27 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
             >
               Delete Workspace
             </Button>
-            <InlineCode className="select-text cursor-text">{workspaceId}</InlineCode>
+            <InlineCode className="flex gap-1 items-center text-primary pl-2.5">
+              {workspaceId}
+              <CopyIconButton
+                className="opacity-70 !text-primary"
+                size="2xs"
+                iconSize="sm"
+                title="Copy workspace ID"
+                text={workspaceId}
+              />
+            </InlineCode>
           </HStack>
+        </VStack>
+      </TabContent>
+      <TabContent value={TAB_DATA} className="overflow-y-auto h-full px-4">
+        <VStack space={4} alignItems="start" className="pb-3 h-full">
+          <SyncToFilesystemSetting
+            value={{ filePath: workspaceMeta.settingSyncDir }}
+            onCreateNewWorkspace={hide}
+            onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
+          />
+          <WorkspaceEncryptionSetting size="xs" />
         </VStack>
       </TabContent>
     </Tabs>

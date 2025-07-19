@@ -39,8 +39,7 @@ type TauriCmd =
   | 'cmd_send_http_request'
   | 'cmd_show_workspace_key'
   | 'cmd_template_functions'
-  | 'cmd_template_tokens_to_string'
-  | 'cmd_uninstall_plugin';
+  | 'cmd_template_tokens_to_string';
 
 export async function invokeCmd<T>(cmd: TauriCmd, args?: InvokeArgs): Promise<T> {
   // console.log('RUN COMMAND', cmd, args);

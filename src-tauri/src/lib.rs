@@ -35,13 +35,7 @@ use yaak_models::models::{
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
-use yaak_plugins::events::{
-    CallGrpcRequestActionArgs, CallGrpcRequestActionRequest, CallHttpRequestActionArgs,
-    CallHttpRequestActionRequest, FilterResponse, GetGrpcRequestActionsResponse,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, InternalEvent,
-    InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose,
-};
+use yaak_plugins::events::{CallGrpcRequestActionArgs, CallGrpcRequestActionRequest, CallHttpRequestActionArgs, CallHttpRequestActionRequest, Color, FilterResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, InternalEvent, InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose, ShowToastRequest};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -1054,21 +1048,6 @@ async fn cmd_install_plugin<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_uninstall_plugin<R: Runtime>(
-    plugin_id: &str,
-    plugin_manager: State<'_, PluginManager>,
-    window: WebviewWindow<R>,
-    app_handle: AppHandle<R>,
-) -> YaakResult<Plugin> {
-    let plugin =
-        app_handle.db().delete_plugin_by_id(plugin_id, &UpdateSource::from_window(&window))?;
-
-    plugin_manager.uninstall(&PluginWindowContext::new(&window), plugin.directory.as_str()).await?;
-
-    Ok(plugin)
-}
-
-#[tauri::command]
 async fn cmd_create_grpc_request<R: Runtime>(
     workspace_id: &str,
     name: &str,
@@ -1256,6 +1235,14 @@ pub fn run() {
                         for url in event.urls() {
                             if let Err(e) = handle_deep_link(&app_handle, &url).await {
                                 warn!("Failed to handle deep link {}: {e:?}", url.to_string());
+                                let _ = app_handle.emit(
+                                    "show_toast",
+                                    ShowToastRequest {
+                                        message: format!("Error handling deep link: {}", e.to_string()),
+                                        color: Some(Color::Danger),
+                                        icon: None,
+                                    },
+                                );
                             };
                         }
                     });
@@ -1316,7 +1303,6 @@ pub fn run() {
             cmd_send_http_request,
             cmd_template_functions,
             cmd_template_tokens_to_string,
-            cmd_uninstall_plugin,
             //
             //
             // Migrated commands

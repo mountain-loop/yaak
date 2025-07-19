@@ -7,9 +7,9 @@ import slugify from 'slugify';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { pluralizeCount } from '../lib/pluralize';
 import { invokeCmd } from '../lib/tauri';
-import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
+import { DetailsBanner } from './core/DetailsBanner';
 import { HStack, VStack } from './core/Stacks';
 
 interface Props {
@@ -123,19 +123,14 @@ function ExportDataDialogContent({
           ))}
         </tbody>
       </table>
-      <Banner className="!p-0">
-        <details open>
-          <summary className="px-3 py-2">Extra Settings</summary>
-          <div className="px-3 pb-2">
-            <Checkbox
-              checked={includePrivateEnvironments}
-              onChange={setIncludePrivateEnvironments}
-              title="Include private environments"
-              help='Environments marked as "sharable" will be exported by default'
-            />
-          </div>
-        </details>
-      </Banner>
+      <DetailsBanner color="secondary" open summary="Extra Settings">
+        <Checkbox
+          checked={includePrivateEnvironments}
+          onChange={setIncludePrivateEnvironments}
+          title="Include private environments"
+          help='Environments marked as "sharable" will be exported by default'
+        />
+      </DetailsBanner>
       <HStack space={2} justifyContent="end">
         <Button className="focus" variant="border" onClick={onHide}>
           Cancel
