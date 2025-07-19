@@ -160,7 +160,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   if (format == null && !readOnly) {
     format =
       language === 'json'
-        ? tryFormatJson
+        ? (text) => tryFormatJson(text, { repair: true })
         : language === 'xml' || language === 'html'
           ? tryFormatXml
           : undefined;

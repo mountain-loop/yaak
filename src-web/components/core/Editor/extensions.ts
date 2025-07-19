@@ -6,7 +6,7 @@ import {
 } from '@codemirror/autocomplete';
 import { history, historyKeymap } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
-import { json } from '@codemirror/lang-json';
+import { jsonc } from '@shopify/lang-jsonc';
 import { markdown } from '@codemirror/lang-markdown';
 import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
@@ -84,7 +84,7 @@ const syntaxExtensions: Record<
   null | (() => LanguageSupport)
 > = {
   graphql: null,
-  json: json,
+  json: jsonc,
   javascript: javascript,
   // HTML as XML because HTML is oddly slow
   html: xml,
