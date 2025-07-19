@@ -173,7 +173,7 @@ export function Workspace() {
             </ErrorBoundary>
           </div>
           <ResizeHandle
-            className="-translate-x-0.5"
+            className="-translate-x-[50%]"
             justify="end"
             side="right"
             isResizing={isResizing}

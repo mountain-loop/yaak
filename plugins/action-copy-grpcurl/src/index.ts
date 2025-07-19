@@ -90,14 +90,14 @@ export async function convert(request: Partial<GrpcRequest>, allProtoFiles: stri
   if (request.url) {
     const server = request.url.replace(/^https?:\/\//, ''); // remove protocol
     xs.push(server);
+    xs.push(NEWLINE);
   }
 
   // Add service + method
   if (request.service && request.method) {
     xs.push(`${request.service}/${request.method}`);
+    xs.push(NEWLINE);
   }
-
-  xs.push(NEWLINE);
 
   // Remove trailing newline
   if (xs[xs.length - 1] === NEWLINE) {

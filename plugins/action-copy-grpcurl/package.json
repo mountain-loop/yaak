@@ -2,6 +2,11 @@
   "name": "@yaak/action-copy-grpcurl",
   "displayName": "Copy as gRPCurl",
   "description": "Copy gRPC request as a grpcurl command",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mountain-loop/yaak.git",
+    "directory": "plugins/action-copy-grpcurl"
+  },
   "private": true,
   "version": "0.1.0",
   "scripts": {

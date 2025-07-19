@@ -154,7 +154,7 @@ export function SplitLayout({
           <ResizeHandle
             style={areaD}
             isResizing={isResizing}
-            className={classNames(vertical ? '-translate-y-1.5' : '-translate-x-1.5')}
+            className={classNames(vertical ? '-translate-y-1' : '-translate-x-1')}
             onResizeStart={handleResizeStart}
             onReset={handleReset}
             side={vertical ? 'top' : 'left'}

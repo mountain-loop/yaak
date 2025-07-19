@@ -2,6 +2,11 @@
   "name": "@yaak/action-copy-curl",
   "displayName": "Copy as Curl",
   "description": "Copy request as a curl command",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mountain-loop/yaak.git",
+    "directory": "plugins/action-copy-curl"
+  },
   "private": true,
   "version": "0.1.0",
   "scripts": {
