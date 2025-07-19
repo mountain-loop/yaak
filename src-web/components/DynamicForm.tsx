@@ -92,7 +92,14 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
   className?: string;
 }) {
   return (
-    <VStack space={3} className={classNames(className, 'h-full overflow-auto')}>
+    <VStack
+      space={3}
+      className={classNames(
+        className,
+        'h-full overflow-auto',
+        'pr-1', // A bit of space between inputs and scrollbar
+      )}
+    >
       {inputs?.map((input, i) => {
         if ('hidden' in input && input.hidden) {
           return null;

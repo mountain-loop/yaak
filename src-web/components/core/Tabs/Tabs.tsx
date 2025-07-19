@@ -99,7 +99,7 @@ export function Tabs({
           {tabs.map((t) => {
             const isActive = t.value === value;
             const btnClassName = classNames(
-              'h-sm flex items-center rounded',
+              'h-sm flex items-center rounded whitespace-nowrap',
               '!px-2 ml-[1px]',
               addBorders && 'border',
               isActive ? 'text-text' : 'text-text-subtle hover:text-text',
