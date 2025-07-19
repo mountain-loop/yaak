@@ -14,7 +14,7 @@ export function openWorkspaceSettings(tab?: WorkspaceSettingsTab) {
     id: 'workspace-settings',
     title: 'Workspace Settings',
     size: 'md',
-    className: 'h-[calc(100vh-5rem)] max-h-[40rem]',
+    className: 'h-[calc(100vh-5rem)] !max-h-[40rem]',
     noPadding: true,
     render: ({ hide }) => (
       <WorkspaceSettingsDialog workspaceId={workspaceId} hide={hide} tab={tab} />
