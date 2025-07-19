@@ -12,7 +12,7 @@ import type {
 } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useRandomKey } from '../hooks/useRandomKey';
 import { capitalize } from '../lib/capitalize';
@@ -432,7 +432,14 @@ function HttpRequestArg({
 }) {
   const folders = useAtomValue(foldersAtom);
   const httpRequests = useAtomValue(httpRequestsAtom);
-  const activeRequest = useActiveRequest();
+  const activeHttpRequest = useActiveRequest('http_request');
+
+  useEffect(() => {
+    if (value === DYNAMIC_FORM_NULL_ARG && activeHttpRequest) {
+      onChange(activeHttpRequest.id);
+    }
+  }, [activeHttpRequest, onChange, value]);
+
   return (
     <Select
       label={arg.label ?? arg.name}
@@ -446,7 +453,7 @@ function HttpRequestArg({
           return {
             label:
               buildRequestBreadcrumbs(r, folders).join(' / ') +
-              (r.id == activeRequest?.id ? ' (current)' : ''),
+              (r.id == activeHttpRequest?.id ? ' (current)' : ''),
             value: r.id,
           };
         }),
