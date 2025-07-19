@@ -1,0 +1,13 @@
+{
+  "name": "@yaak/template-function-datetime",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0"
+  }
+}
