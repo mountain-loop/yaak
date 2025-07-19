@@ -29,16 +29,23 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
 
   // Add method and URL all on first line
   if (request.method) xs.push('-X', request.method);
-  if (request.url) xs.push(quote(request.url));
 
-  xs.push(NEWLINE);
-
-  // Add URL params
-  for (const p of (request.urlParameters ?? []).filter(onlyEnabled)) {
-    xs.push('--url-query', quote(`${p.name}=${p.value}`));
-    xs.push(NEWLINE);
+  // Build final URL with parameters (compatible with old curl)
+  let finalUrl = request.url || '';
+  const urlParams = (request.urlParameters ?? []).filter(onlyEnabled);
+  if (urlParams.length > 0) {
+    // Build url 
+    const [base, hash] = finalUrl.split('#');
+    const separator = base!.includes('?') ? '&' : '?';
+    const queryString = urlParams
+      .map(p => `${encodeURIComponent(p.name)}=${encodeURIComponent(p.value)}`)
+      .join('&');
+    finalUrl = base + separator + queryString + (hash ? `#${hash}` : '');
   }
-
+  
+  xs.push(quote(finalUrl));
+  xs.push(NEWLINE);
+  
   // Add headers
   for (const h of (request.headers ?? []).filter(onlyEnabled)) {
     xs.push('--header', quote(`${h.name}: ${h.value}`));
@@ -63,10 +70,10 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
       query: request.body.query || '',
       variables: maybeParseJSON(request.body.variables, undefined),
     };
-    xs.push('--data-raw', `${quote(JSON.stringify(body))}`);
+    xs.push('--data', quote(JSON.stringify(body)));
     xs.push(NEWLINE);
   } else if (typeof request.body?.text === 'string') {
-    xs.push('--data-raw', `${quote(request.body.text)}`);
+    xs.push('--data', quote(request.body.text));
     xs.push(NEWLINE);
   }
 
