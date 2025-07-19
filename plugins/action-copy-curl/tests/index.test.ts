@@ -16,6 +16,21 @@ describe('exporter-curl', () => {
       [`curl 'https://yaak.app/?a=aaa&b=bbb'`].join(` \\n  `),
     );
   });
+
+  test('Exports GET with params and hash', async () => {
+    expect(
+      await convertToCurl({
+        url: 'https://yaak.app/path#section',
+        urlParameters: [
+          { name: 'a', value: 'aaa' },
+          { name: 'b', value: 'bbb', enabled: true },
+          { name: 'c', value: 'ccc', enabled: false },
+        ],
+      }),
+    ).toEqual(
+      [`curl 'https://yaak.app/path?a=aaa&b=bbb#section'`].join(` \\n  `),
+    );
+  });
   test('Exports POST with url form data', async () => {
     expect(
       await convertToCurl({
