@@ -2,6 +2,7 @@ use crate::error::Result;
 use crate::manager::WebsocketManager;
 use crate::render::render_websocket_request;
 use crate::resolve::resolve_websocket_request;
+use log::debug;
 use log::{info, warn};
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
@@ -300,11 +301,44 @@ pub(crate) async fn connect<R: Runtime>(
         }
     }
 
-    // TODO: Handle cookies
-    let _cookie_jar = match cookie_jar_id {
-        Some(id) => Some(app_handle.db().get_cookie_jar(id)?),
-        None => None,
-    };
+    // Add cookies to WS HTTP Upgrade
+    if let Some(id) = cookie_jar_id {
+        let cookie_jar = app_handle.db().get_cookie_jar(id)?;
+
+        let cookies = cookie_jar
+            .cookies
+            .iter()
+            .filter_map(|cookie| {
+                // HACK: same as in src-tauri/src/http_request.rs
+                let json_cookie = serde_json::to_value(cookie).ok()?;
+                match serde_json::from_value(json_cookie) {
+                    Ok(cookie) => Some(Ok(cookie)),
+                    Err(_e) => None,
+                }
+            })
+            .collect::<Vec<Result<_>>>();
+
+        let store = reqwest_cookie_store::CookieStore::from_cookies(cookies, true)?;
+
+        // Convert WS URL -> HTTP URL bc reqwest_cookie_store's `get_request_values`
+        // strictly matches based on Path/HttpOnly/Secure attributes even though WS upgrades are HTTP requests
+        let http_url = convert_ws_url_to_http(&url);
+        let pairs: Vec<_> = store.get_request_values(&http_url).collect();
+        debug!("Inserting {} cookies into WS upgrade to {}", pairs.len(), url);
+
+        let cookie_header_value = pairs
+            .into_iter()
+            .map(|(name, value)| format!("{}={}", name, value))
+            .collect::<Vec<_>>()
+            .join("; ");
+
+        if !cookie_header_value.is_empty() {
+            headers.insert(
+                HeaderName::from_static("cookie"),
+                HeaderValue::from_str(&cookie_header_value).unwrap(),
+            );
+        }
+    }
 
     let (receive_tx, mut receive_rx) = mpsc::channel::<Message>(128);
     let mut ws_manager = ws_manager.lock().await;
@@ -337,7 +371,7 @@ pub(crate) async fn connect<R: Runtime>(
         Err(e) => {
             return Ok(app_handle.db().upsert_websocket_connection(
                 &WebsocketConnection {
-                    error: Some(format!("{e:?}")),
+                    error: Some(e.to_string()),
                     state: WebsocketConnectionState::Closed,
                     ..connection
                 },
@@ -447,4 +481,24 @@ pub(crate) async fn connect<R: Runtime>(
     }
 
     Ok(connection)
+}
+
+/// Convert WS URL to HTTP URL for cookie filtering
+/// WebSocket upgrade requests are HTTP requests initially, so HttpOnly cookies should apply
+fn convert_ws_url_to_http(ws_url: &Url) -> Url {
+    let mut http_url = ws_url.clone();
+
+    match ws_url.scheme() {
+        "ws" => {
+            http_url.set_scheme("http").expect("Failed to set http scheme");
+        }
+        "wss" => {
+            http_url.set_scheme("https").expect("Failed to set https scheme");
+        }
+        _ => {
+            // Already HTTP/HTTPS, no conversion needed
+        }
+    }
+
+    http_url
 }

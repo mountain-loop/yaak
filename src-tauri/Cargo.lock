@@ -8103,6 +8103,7 @@ dependencies = [
  "futures-util",
  "log",
  "md5 0.7.0",
+ "reqwest_cookie_store",
  "serde",
  "serde_json",
  "tauri",
