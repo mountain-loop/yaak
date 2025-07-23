@@ -142,7 +142,7 @@ export const Icon = memo(function Icon({
       title={title}
       className={classNames(
         className,
-        !spin && 'transform-cpu',
+        !spin && 'transform-gpu',
         spin && 'animate-spin',
         'flex-shrink-0',
         size === 'xl' && 'h-6 w-6',

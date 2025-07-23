@@ -974,6 +974,8 @@ pub struct CallTemplateFunctionRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct CallTemplateFunctionResponse {
     pub value: Option<String>,
+    #[ts(optional)]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

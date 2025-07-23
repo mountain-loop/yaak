@@ -6,12 +6,13 @@ use crate::events::{
     BootRequest, CallGrpcRequestActionRequest, CallHttpAuthenticationActionArgs,
     CallHttpAuthenticationActionRequest, CallHttpAuthenticationRequest,
     CallHttpAuthenticationResponse, CallHttpRequestActionRequest, CallTemplateFunctionArgs,
-    CallTemplateFunctionRequest, CallTemplateFunctionResponse, EmptyPayload, FilterRequest,
-    FilterResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigRequest,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, GetThemesRequest,
-    GetThemesResponse, ImportRequest, ImportResponse, InternalEvent, InternalEventPayload,
-    JsonPrimitive, PluginWindowContext, RenderPurpose,
+    CallTemplateFunctionRequest, CallTemplateFunctionResponse, EmptyPayload, ErrorResponse,
+    FilterRequest, FilterResponse, GetGrpcRequestActionsResponse,
+    GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
+    GetTemplateFunctionsResponse, GetThemesRequest, GetThemesResponse, ImportRequest,
+    ImportResponse, InternalEvent, InternalEventPayload, JsonPrimitive, PluginWindowContext,
+    RenderPurpose,
 };
 use crate::native_template_functions::template_function_secure;
 use crate::nodejs::start_nodejs_plugin_runtime;
@@ -644,7 +645,7 @@ impl PluginManager {
             info!("Not applying disabled auth {:?}", auth_name);
             return Ok(CallHttpAuthenticationResponse {
                 set_headers: None,
-                set_query_parameters: None
+                set_query_parameters: None,
             });
         }
 
@@ -689,16 +690,25 @@ impl PluginManager {
             .map_err(|e| RenderError(format!("Failed to call template function {e:}")))?;
 
         let value = events.into_iter().find_map(|e| match e.payload {
+            // Error returned
+            InternalEventPayload::CallTemplateFunctionResponse(CallTemplateFunctionResponse {
+                error: Some(error),
+                ..
+            }) => Some(Err(error)),
+            // Value or null returned
             InternalEventPayload::CallTemplateFunctionResponse(CallTemplateFunctionResponse {
                 value,
-            }) => Some(value),
+                ..
+            }) => Some(Ok(value.unwrap_or_default())),
+            // Generic error returned
+            InternalEventPayload::ErrorResponse(ErrorResponse { error }) => Some(Err(error)),
             _ => None,
         });
 
         match value {
             None => Err(RenderError(format!("Template function {fn_name}(…) not found "))),
-            Some(Some(v)) => Ok(v),           // Plugin returned string
-            Some(None) => Ok("".to_string()), // Plugin returned null
+            Some(Ok(v)) => Ok(v),
+            Some(Err(e)) => Err(RenderError(e)),
         }
     }
 

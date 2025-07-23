@@ -279,7 +279,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       const show = () =>
         showDialog({
           id: 'template-function-' + Math.random(), // Allow multiple at once
-          size: 'sm',
+          size: 'md',
           title: <InlineCode>{fn.name}(…)</InlineCode>,
           description: fn.description,
           render: ({ hide }) => (

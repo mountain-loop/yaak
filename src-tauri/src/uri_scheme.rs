@@ -53,6 +53,7 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
         "import-data" => {
             let mut file_path = query_map.get("path").map(|s| s.to_owned());
             let name = query_map.get("name").map(|s| s.to_owned()).unwrap_or("data".to_string());
+            _ = window.set_focus();
 
             if let Some(file_url) = query_map.get("url") {
                 let confirmed_import = app_handle
@@ -96,7 +97,6 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
             };
 
             let results = import_data(window, &file_path).await?;
-            _ = window.set_focus();
             window.emit(
                 "show_toast",
                 ShowToastRequest {

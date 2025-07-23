@@ -11,10 +11,10 @@ import {
 import { useToggle } from '../hooks/useToggle';
 import { convertTemplateToInsecure } from '../lib/encryption';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
-import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
+import { LoadingIcon } from './core/LoadingIcon';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
@@ -178,7 +178,10 @@ function InitializedTemplateFunctionDialog({
       {enablePreview && (
         <VStack className="w-full" space={1}>
           <HStack space={0.5}>
-            <div className="text-sm text-text-subtle">Rendered Preview</div>
+            <HStack className="text-sm text-text-subtle" space={1.5}>
+              Rendered Preview
+              {rendered.isPending && <LoadingIcon size="xs" />}
+            </HStack>
             <IconButton
               size="xs"
               iconSize="sm"
@@ -191,26 +194,24 @@ function InitializedTemplateFunctionDialog({
               )}
             />
           </HStack>
-          {rendered.error || tagText.error ? (
-            <Banner color="danger">{`${rendered.error || tagText.error}`}</Banner>
-          ) : (
-            <InlineCode
-              className={classNames(
-                'whitespace-pre select-text cursor-text max-h-[10rem] overflow-y-auto hide-scrollbars',
-                tooLarge && 'italic text-danger',
-              )}
-            >
-              {dataContainsSecrets && !showSecretsInPreview ? (
-                <span className="italic text-text-subtle">
-                  ------ sensitive values hidden ------
-                </span>
-              ) : tooLarge ? (
-                'too large to preview'
-              ) : (
-                rendered.data || <>&nbsp;</>
-              )}
-            </InlineCode>
-          )}
+          <InlineCode
+            className={classNames(
+              'whitespace-pre-wrap select-text cursor-text max-h-[10rem] overflow-y-auto hide-scrollbars',
+              tooLarge && 'italic text-danger',
+            )}
+          >
+            {rendered.error || tagText.error ? (
+              <em className="text-danger">
+                {`${rendered.error || tagText.error}`.replace(/^Render Error: /, '')}
+              </em>
+            ) : dataContainsSecrets && !showSecretsInPreview ? (
+              <span className="italic text-text-subtle">------ sensitive values hidden ------</span>
+            ) : tooLarge ? (
+              'too large to preview'
+            ) : (
+              rendered.data || <>&nbsp;</>
+            )}
+          </InlineCode>
         </VStack>
       )}
       <div className="flex justify-stretch w-full flex-grow gap-2 [&>*]:flex-1">

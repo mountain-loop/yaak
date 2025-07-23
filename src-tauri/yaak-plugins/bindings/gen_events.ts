@@ -36,7 +36,7 @@ export type CallTemplateFunctionArgs = { purpose: RenderPurpose, values: { [key 
 
 export type CallTemplateFunctionRequest = { name: string, args: CallTemplateFunctionArgs, };
 
-export type CallTemplateFunctionResponse = { value: string | null, };
+export type CallTemplateFunctionResponse = { value: string | null, error?: string, };
 
 export type CloseWindowRequest = { label: string, };
 

@@ -39,7 +39,7 @@ export function Label({
           ({tag})
         </span>
       ))}
-      {help && <IconTooltip content={help} />}
+      {help && <IconTooltip tabIndex={-1} content={help} />}
     </label>
   );
 }

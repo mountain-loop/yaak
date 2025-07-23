@@ -9,6 +9,7 @@ type Props = Omit<TooltipProps, 'children'> & {
   iconSize?: IconProps['size'];
   iconColor?: IconProps['color'];
   className?: string;
+  tabIndex?: number;
 };
 
 export function IconTooltip({

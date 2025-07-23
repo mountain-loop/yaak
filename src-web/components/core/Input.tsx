@@ -519,7 +519,7 @@ function EncryptionInput({
         color="danger"
         size={props.size}
         className="text-sm"
-        rightSlot={<IconTooltip content={state.error} icon="alert_triangle" />}
+        rightSlot={<IconTooltip tabIndex={-1} content={state.error} icon="alert_triangle" />}
         onClick={() => {
           setupOrConfigureEncryption();
         }}

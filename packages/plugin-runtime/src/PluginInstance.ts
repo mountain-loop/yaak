@@ -308,15 +308,27 @@ export class PluginInstance {
         const fn = this.#mod.templateFunctions.find((a) => a.name === payload.name);
         if (typeof fn?.onRender === 'function') {
           applyFormInputDefaults(fn.args, payload.args.values);
-          const result = await fn.onRender(ctx, payload.args);
-          this.#sendPayload(
-            windowContext,
-            {
-              type: 'call_template_function_response',
-              value: result ?? null,
-            },
-            replyId,
-          );
+          try {
+            const result = await fn.onRender(ctx, payload.args);
+            this.#sendPayload(
+              windowContext,
+              {
+                type: 'call_template_function_response',
+                value: result ?? null,
+              },
+              replyId,
+            );
+          } catch (err) {
+            this.#sendPayload(
+              windowContext,
+              {
+                type: 'call_template_function_response',
+                value: null,
+                error: `${err}`.replace(/^Error:\s*/g, ''),
+              },
+              replyId,
+            );
+          }
           return;
         }
       }

@@ -25,6 +25,7 @@
     "plugins/importer-postman",
     "plugins/importer-yaak",
     "plugins/template-function-cookie",
+    "plugins/template-function-timestamp",
     "plugins/template-function-encode",
     "plugins/template-function-fs",
     "plugins/template-function-hash",
