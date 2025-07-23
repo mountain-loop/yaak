@@ -50,7 +50,7 @@ md5 = "0.8.0"
 mime_guess = "2.0.5"
 rand = "0.9.0"
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider", "socks"] }
-reqwest_cookie_store = "0.8.0"
+reqwest_cookie_store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
@@ -97,6 +97,7 @@ tauri-plugin-shell = "2.3.0"
 tokio = "1.45.1"
 thiserror = "2.0.12"
 ts-rs = "11.0.1"
+reqwest_cookie_store = "0.8.0"
 rustls = { version = "0.23.27", default-features = false }
 rustls-platform-verifier = "0.6.0"
 sha2 = "0.10.9"
