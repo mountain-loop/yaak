@@ -159,6 +159,7 @@ impl YaakUpdater {
         &mut self,
         window: &WebviewWindow<R>,
         mode: UpdateMode,
+        do_not_check_for_updates: bool,
     ) -> Result<bool> {
         let update_period_seconds = match mode {
             UpdateMode::Stable => MAX_UPDATE_CHECK_HOURS_STABLE,
@@ -173,6 +174,10 @@ impl YaakUpdater {
 
         // Don't check if dev
         if is_dev() {
+            return Ok(false);
+        }
+
+        if do_not_check_for_updates {
             return Ok(false);
         }
 
