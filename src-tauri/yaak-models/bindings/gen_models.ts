@@ -62,7 +62,7 @@ export type ProxySetting = { "type": "enabled", http: string, https: string, aut
 
 export type ProxySettingAuth = { user: string, password: string, };
 
-export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, coloredMethods: boolean, editorFont: string | null, editorFontSize: number, editorKeymap: EditorKeymap, editorSoftWrap: boolean, hideWindowControls: boolean, interfaceFont: string | null, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, proxy: ProxySetting | null, themeDark: string, themeLight: string, updateChannel: string, };
+export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, coloredMethods: boolean, editorFont: string | null, editorFontSize: number, editorKeymap: EditorKeymap, editorSoftWrap: boolean, hideWindowControls: boolean, interfaceFont: string | null, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, proxy: ProxySetting | null, themeDark: string, themeLight: string, updateChannel: string, doNotCheckForUpdates: boolean};
 
 export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, relPath: string, syncDir: string, };
 

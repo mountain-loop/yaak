@@ -49,6 +49,16 @@ export function SettingsGeneral() {
           onClick={() => checkForUpdates.mutateAsync()}
         />
       </div>
+
+      <Checkbox
+        checked={settings.doNotCheckForUpdates}
+        help="When enabled, the app will not check for updates automatically."
+        title="Do not check for updates"
+        onChange={(doNotCheckForUpdates) =>
+          patchModel(settings, { doNotCheckForUpdates })
+        }
+      />
+
       <Select
         name="switchWorkspaceBehavior"
         label="Workspace Window Behavior"
