@@ -111,7 +111,7 @@ pub async fn send_http_request<R: Runtime>(
         .referer(false)
         .tls_info(true);
 
-    let tls_config = yaak_http::tls::get_config(workspace.setting_validate_certificates);
+    let tls_config = yaak_http::tls::get_config(workspace.setting_validate_certificates, true);
     client_builder = client_builder.use_preconfigured_tls(tls_config);
 
     match settings.proxy {

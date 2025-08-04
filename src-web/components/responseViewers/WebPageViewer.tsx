@@ -21,9 +21,10 @@ export function WebPageViewer({ response }: Props) {
     <div className="h-full pb-3">
       <iframe
         key={body ? 'has-body' : 'no-body'}
-        title="Response preview"
+        title="Yaak response preview"
         srcDoc={contentForIframe}
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts allow-forms"
+        referrerPolicy="no-referrer"
         className="h-full w-full rounded border border-border-subtle"
       />
     </div>

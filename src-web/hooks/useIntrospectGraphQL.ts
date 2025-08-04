@@ -108,12 +108,11 @@ export function useIntrospectGraphQL(
       return;
     }
 
-    try {
-      const schema = buildClientSchema(JSON.parse(introspection.data.content).data);
-      setSchema(schema);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      setError('message' in e ? e.message : String(e));
+    const parseResult = tryParseIntrospectionToSchema(introspection.data.content);
+    if ('error' in parseResult) {
+      setError(parseResult.error);
+    } else {
+      setSchema(parseResult.schema);
     }
   }, [introspection.data?.content]);
 
@@ -135,7 +134,26 @@ export function useCurrentGraphQLSchema(request: HttpRequest) {
   return useMemo(() => {
     if (result.data == null) return null;
     if (result.data.content == null || result.data.content === '') return null;
-    const schema = buildClientSchema(JSON.parse(result.data.content).data);
-    return schema;
+    const r = tryParseIntrospectionToSchema(result.data.content);
+    return 'error' in r ? null : r.schema;
   }, [result.data]);
+}
+
+function tryParseIntrospectionToSchema(
+  content: string,
+): { schema: GraphQLSchema } | { error: string } {
+  let parsedResponse;
+  try {
+    parsedResponse = JSON.parse(content).data;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (e: any) {
+    return { error: String('message' in e ? e.message : e) };
+  }
+
+  try {
+    return { schema: buildClientSchema(parsedResponse, {}) };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (e: any) {
+    return { error: String('message' in e ? e.message : e) };
+  }
 }

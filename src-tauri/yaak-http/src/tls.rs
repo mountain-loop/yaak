@@ -5,7 +5,7 @@ use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
 use rustls_platform_verifier::BuilderVerifierExt;
 use std::sync::Arc;
 
-pub fn get_config(validate_certificates: bool) -> ClientConfig {
+pub fn get_config(validate_certificates: bool, with_alpn: bool) -> ClientConfig {
     let arc_crypto_provider = Arc::new(ring::default_provider());
     let config_builder = ClientConfig::builder_with_provider(arc_crypto_provider)
         .with_safe_default_protocol_versions()
@@ -19,8 +19,11 @@ pub fn get_config(validate_certificates: bool) -> ClientConfig {
             .with_custom_certificate_verifier(Arc::new(NoVerifier))
             .with_no_client_auth()
     };
-    // Required for http/2 support
-    client.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+    if with_alpn {
+        client.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    }
+
     client
 }
 

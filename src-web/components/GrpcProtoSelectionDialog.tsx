@@ -43,7 +43,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
   return (
     <VStack className="flex-col-reverse mb-3" space={3}>
       {/* Buttons on top so they get focus first */}
-      <HStack space={2} justifyContent="start" className="flex-row-reverse">
+      <HStack space={2} justifyContent="start" className="flex-row-reverse mt-3">
         <Button
           color="primary"
           variant="border"
@@ -135,9 +135,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           <table className="w-full divide-y divide-surface-highlight">
             <thead>
               <tr>
-                <th />
-                <th className="text-text-subtlest">Added File Paths</th>
-                <th />
+                <th className="text-text-subtlest" colSpan={3}>Added File Paths</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-highlight">

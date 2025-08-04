@@ -7,8 +7,11 @@ use tokio_tungstenite::tungstenite::handshake::client::Response;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::{
-    connect_async_tls_with_config, Connector, MaybeTlsStream, WebSocketStream,
+    Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
 };
+
+// Enabling ALPN breaks websocket requests
+const WITH_ALPN: bool = false;
 
 pub(crate) async fn ws_connect(
     url: &str,
@@ -16,7 +19,7 @@ pub(crate) async fn ws_connect(
     validate_certificates: bool,
 ) -> crate::error::Result<(WebSocketStream<MaybeTlsStream<TcpStream>>, Response)> {
     info!("Connecting to WS {url}");
-    let tls_config = yaak_http::tls::get_config(validate_certificates);
+    let tls_config = yaak_http::tls::get_config(validate_certificates, WITH_ALPN);
 
     let mut req = url.into_client_request()?;
     let req_headers = req.headers_mut();

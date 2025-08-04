@@ -34,18 +34,18 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
   let finalUrl = request.url || '';
   const urlParams = (request.urlParameters ?? []).filter(onlyEnabled);
   if (urlParams.length > 0) {
-    // Build url 
+    // Build url
     const [base, hash] = finalUrl.split('#');
     const separator = base!.includes('?') ? '&' : '?';
     const queryString = urlParams
-      .map(p => `${encodeURIComponent(p.name)}=${encodeURIComponent(p.value)}`)
+      .map((p) => `${encodeURIComponent(p.name)}=${encodeURIComponent(p.value)}`)
       .join('&');
     finalUrl = base + separator + queryString + (hash ? `#${hash}` : '');
   }
-  
+
   xs.push(quote(finalUrl));
   xs.push(NEWLINE);
-  
+
   // Add headers
   for (const h of (request.headers ?? []).filter(onlyEnabled)) {
     xs.push('--header', quote(`${h.name}: ${h.value}`));
@@ -53,7 +53,11 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
   }
 
   // Add form params
-  if (Array.isArray(request.body?.form)) {
+  const type = request.bodyType ?? 'none';
+  if (
+    (type === 'multipart/form-data' || type === 'application/x-www-form-urlencoded') &&
+    Array.isArray(request.body?.form)
+  ) {
     const flag = request.bodyType === 'multipart/form-data' ? '--form' : '--data';
     for (const p of (request.body?.form ?? []).filter(onlyEnabled)) {
       if (p.file) {
@@ -65,14 +69,14 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
       }
       xs.push(NEWLINE);
     }
-  } else if (typeof request.body?.query === 'string') {
+  } else if (type === 'graphql' && typeof request.body?.query === 'string') {
     const body = {
       query: request.body.query || '',
       variables: maybeParseJSON(request.body.variables, undefined),
     };
     xs.push('--data', quote(JSON.stringify(body)));
     xs.push(NEWLINE);
-  } else if (typeof request.body?.text === 'string') {
+  } else if (type !== 'none' && typeof request.body?.text === 'string') {
     xs.push('--data', quote(request.body.text));
     xs.push(NEWLINE);
   }

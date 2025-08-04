@@ -13,7 +13,7 @@ describe('exporter-curl', () => {
         ],
       }),
     ).toEqual(
-      [`curl 'https://yaak.app/?a=aaa&b=bbb'`].join(` \\n  `),
+      [`curl 'https://yaak.app?a=aaa&b=bbb'`].join(` \\n  `),
     );
   });
 
@@ -217,5 +217,17 @@ describe('exporter-curl', () => {
         },
       }),
     ).toEqual([`curl 'https://yaak.app'`, `--header 'Authorization: Bearer '`].join(` \\\n  `));
+  });
+
+  test('Stale body data', async () => {
+    expect(
+      await convertToCurl({
+        url: 'https://yaak.app',
+        bodyType: 'none',
+        body: {
+          text: 'ignore me',
+        }
+      }),
+    ).toEqual([`curl 'https://yaak.app'`].join(` \\\n  `));
   });
 });
