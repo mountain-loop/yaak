@@ -50,13 +50,18 @@ export function SettingsGeneral() {
         />
       </div>
 
-      <Checkbox
-        checked={settings.doNotCheckForUpdates}
-        help="When enabled, the app will not check for updates automatically."
-        title="Do not check for updates"
-        onChange={(doNotCheckForUpdates) =>
-          patchModel(settings, { doNotCheckForUpdates })
-        }
+      <Select
+        name="autoupdate"
+        value={settings.autoupdate ? 'auto' : 'manual'}
+        label="Update Behavior"
+        labelPosition="left"
+        size="sm"
+        labelClassName="w-[14rem]"
+        onChange={(v) => patchModel(settings, { autoupdate: v === 'auto' })}
+        options={[
+          { label: 'Automatic', value: 'auto' },
+          { label: 'Manual', value: 'manual' },
+        ]}
       />
 
       <Select

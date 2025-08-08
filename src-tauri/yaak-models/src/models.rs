@@ -120,7 +120,7 @@ pub struct Settings {
     pub theme_dark: String,
     pub theme_light: String,
     pub update_channel: String,
-    pub do_not_check_for_updates: bool,
+    pub autoupdate: bool,
 }
 
 impl UpsertModelInfo for Settings {
@@ -169,7 +169,7 @@ impl UpsertModelInfo for Settings {
             (ThemeDark, self.theme_dark.as_str().into()),
             (ThemeLight, self.theme_light.as_str().into()),
             (UpdateChannel, self.update_channel.into()),
-            (DoNotCheckForUpdates, self.do_not_check_for_updates.into()),
+            (Autoupdate, self.autoupdate.into()),
             (ColoredMethods, self.colored_methods.into()),
             (Proxy, proxy.into()),
         ])
@@ -192,7 +192,7 @@ impl UpsertModelInfo for Settings {
             SettingsIden::ThemeDark,
             SettingsIden::ThemeLight,
             SettingsIden::UpdateChannel,
-            SettingsIden::DoNotCheckForUpdates,
+            SettingsIden::Autoupdate,
             SettingsIden::ColoredMethods,
         ]
     }
@@ -222,7 +222,7 @@ impl UpsertModelInfo for Settings {
             theme_light: row.get("theme_light")?,
             hide_window_controls: row.get("hide_window_controls")?,
             update_channel: row.get("update_channel")?,
-            do_not_check_for_updates: row.get("do_not_check_for_updates")?,
+            autoupdate: row.get("autoupdate")?,
             colored_methods: row.get("colored_methods")?,
         })
     }

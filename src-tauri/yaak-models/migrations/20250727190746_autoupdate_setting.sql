@@ -1,0 +1,1 @@
+ALTER TABLE settings ADD COLUMN autoupdate BOOLEAN DEFAULT true NOT NULL;

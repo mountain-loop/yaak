@@ -1392,8 +1392,7 @@ pub fn run() {
 
                     // Run update check whenever the window is focused
                     tauri::async_runtime::spawn(async move {
-                        let do_not_check_for_updates = get_do_not_check_for_updates(&w).await;
-                        if !do_not_check_for_updates {
+                        if w.db().get_settings().autoupdate {
                             let val: State<'_, Mutex<YaakUpdater>> = h.state();
                             let update_mode = get_update_mode(&w).await.unwrap();
                             if let Err(e) = val.lock().await.maybe_check(&w, update_mode).await {
@@ -1432,11 +1431,6 @@ pub fn run() {
 async fn get_update_mode<R: Runtime>(window: &WebviewWindow<R>) -> YaakResult<UpdateMode> {
     let settings = window.db().get_settings();
     Ok(UpdateMode::new(settings.update_channel.as_str()))
-}
-
-async fn get_do_not_check_for_updates<R: Runtime>(window: &WebviewWindow<R>) -> bool {
-    let settings = window.db().get_settings();
-    settings.do_not_check_for_updates
 }
 
 fn safe_uri(endpoint: &str) -> String {
