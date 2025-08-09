@@ -1,5 +1,6 @@
 enum FormatState {
     TemplateTag,
+    Comment,
     String,
     None,
 }
@@ -40,9 +41,10 @@ pub fn format_json(text: &str, tab: &str) -> String {
                 }
             }
         }
+
         // Close Template tag states
         if let FormatState::TemplateTag = state {
-            if rest_of_chars.take(2).collect::<String>() == "]}" {
+            if rest_of_chars.clone().take(2).collect::<String>() == "]}" {
                 state = FormatState::None;
                 new_json.push_str("]}");
                 chars.next(); // Skip the second closing bracket
@@ -53,11 +55,31 @@ pub fn format_json(text: &str, tab: &str) -> String {
             }
         }
 
-        if rest_of_chars.take(3).collect::<String>() == "${[" {
+        // Close Comment state
+        if let FormatState::Comment = state {
+            if current_char == '\n' {
+                state = FormatState::None;
+                new_json.push('\n');
+                new_json.push_str(tab.to_string().repeat(depth).as_str());
+                continue;
+            } else {
+                new_json.push(current_char);
+                continue;
+            }
+        }
+
+        if rest_of_chars.clone().take(3).collect::<String>() == "${[" {
             state = FormatState::TemplateTag;
             new_json.push_str("${[");
             chars.next(); // Skip {
             chars.next(); // Skip [
+            continue;
+        }
+
+        if rest_of_chars.clone().take(2).collect::<String>() == "//" {
+            state = FormatState::Comment;
+            new_json.push_str("//");
+            chars.next(); // Skip second /
             continue;
         }
 
@@ -299,6 +321,20 @@ mod tests {
 }
 "#
             .trim()
+        );
+    }
+
+    #[test]
+    fn test_comment() {
+        assert_eq!(
+            format_json("{\n  // Hello world\n  \"foo\":\"bar\"\n}", "  "),
+            r#"
+{
+  // Hello world
+  "foo": "bar"
+}
+"#
+                .trim()
         );
     }
 }
