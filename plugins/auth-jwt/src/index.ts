@@ -48,6 +48,16 @@ export const plugin: PluginDefinition = {
       },
       {
         type: 'editor',
+        name: 'headers',
+        label: 'JWT Headers',
+        language: 'json',
+        defaultValue: '{}',
+        placeholder: '{ }',
+        optional: true,
+        description: 'Additional JWT header fields',
+      },
+      {
+        type: 'editor',
         name: 'payload',
         label: 'Payload',
         language: 'json',
@@ -56,10 +66,11 @@ export const plugin: PluginDefinition = {
       },
     ],
     async onApply(_ctx, { values }) {
-      const { algorithm, secret: _secret, secretBase64, payload } = values;
+      const { algorithm, secret: _secret, secretBase64, payload, headers } = values;
       const secret = secretBase64 ? Buffer.from(`${_secret}`, 'base64') : `${_secret}`;
       const token = jwt.sign(`${payload}`, secret, {
         algorithm: algorithm as (typeof algorithms)[number],
+        header: JSON.parse(`${headers}`),
       });
       const value = `Bearer ${token}`;
       return { setHeaders: [{ name: 'Authorization', value }] };
