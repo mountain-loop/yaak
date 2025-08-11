@@ -30,8 +30,9 @@ A JWT consists of three parts separated by dots:
 
 1. Configure the request, folder, or workspace to use JWT Authentication
 2. Set up your signing algorithm and secret/key
-3. Configure the required claims for your JWT
-4. The plugin will generate, sign, and include the JWT in your requests
+3. Add custom JWT header fields if needed
+4. Configure the required claims for your JWT payload
+5. The plugin will generate, sign, and include the JWT in your requests
 
 ## Common Use Cases
 
