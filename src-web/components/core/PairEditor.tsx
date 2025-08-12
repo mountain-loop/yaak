@@ -78,6 +78,60 @@ export type PairWithId = Pair & {
 /** Max number of pairs to show before prompting the user to reveal the rest */
 const MAX_INITIAL_PAIRS = 50;
 
+interface SelectAllHeaderProps {
+  pairs: PairWithId[];
+  setPairsAndSave: (fn: (pairs: PairWithId[]) => PairWithId[]) => void;
+}
+
+function SelectAllHeader({ pairs, setPairsAndSave }: SelectAllHeaderProps) {
+  // INFO: excludes the empty "placeholder" pair until filled
+  const activePairs = pairs.slice(0, -1);
+
+  const enabledCount = activePairs.filter((pair) => pair.enabled).length;
+  const selectAllState =
+    !activePairs.length || !enabledCount
+      ? false
+      : enabledCount === activePairs.length
+        ? true
+        : ('indeterminate' as const);
+
+  const statusLabel =
+    selectAllState === true
+      ? 'All selected'
+      : selectAllState === 'indeterminate'
+        ? `${enabledCount}/${activePairs.length} selected`
+        : 'None selected';
+
+  const handleToggleAll = () => {
+    setPairsAndSave((oldPairs) => {
+      // INFO: excludes the empty "placeholder" pair until filled
+      const lastPair = oldPairs[oldPairs.length - 1];
+      const activePairs = oldPairs.slice(0, -1);
+
+      const shouldEnable = selectAllState === false;
+
+      const updatedPairs = activePairs.map((pair) => ({ ...pair, enabled: shouldEnable }));
+      return lastPair ? [...updatedPairs, lastPair] : updatedPairs;
+    });
+  };
+
+  // INFO: excludes the empty "placeholder" pair until filled
+  if (pairs.length <= 1) return null;
+
+  return (
+    <div className="flex items-center gap-2 py-1 mb-1 border-b border-border-subtle">
+      <Checkbox
+        hideLabel
+        // TODO: could probably use as accessibility label
+        title={selectAllState === true ? 'Deselect all' : 'Select all'}
+        checked={selectAllState}
+        onChange={handleToggleAll}
+      />
+      <span className="text-xs text-text-subtle">{statusLabel}</span>
+    </div>
+  );
+}
+
 export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function PairEditor(
   {
     allowFileValues,
@@ -244,6 +298,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
         'pt-0.5',
       )}
     >
+      <SelectAllHeader pairs={pairs} setPairsAndSave={setPairsAndSave} />
       {pairs.map((p, i) => {
         if (!showAll && i > MAX_INITIAL_PAIRS) return null;
 
