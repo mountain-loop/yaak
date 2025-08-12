@@ -41,3 +41,16 @@ export function getSidebarCollapsedMap() {
 
   return value;
 }
+
+export async function expandFolder(folderId: string) {
+  if (!folderId) return;
+
+  const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+  const collapsedMap = getSidebarCollapsedMap();
+
+  await setKeyValue({
+    key: kvKey(workspaceId),
+    namespace: 'no_sync',
+    value: { ...collapsedMap, [folderId]: false },
+  });
+}

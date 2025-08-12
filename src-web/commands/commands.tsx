@@ -6,6 +6,7 @@ import { InlineCode } from '../components/core/InlineCode';
 import { VStack } from '../components/core/Stacks';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
+import { expandFolder } from '../hooks/useSidebarItemCollapsed';
 import { showConfirm } from '../lib/confirm';
 import { jotaiStore } from '../lib/jotai';
 import { pluralizeCount } from '../lib/pluralize';
@@ -41,6 +42,11 @@ export const createFolder = createFastMutation<
 
     patch.sortPriority = patch.sortPriority || -Date.now();
     await createWorkspaceModel({ model: 'folder', workspaceId, ...patch });
+
+    // Expand the parent folder if the new folder is it's child
+    if (patch.folderId) {
+      await expandFolder(patch.folderId);
+    }
   },
 });
 
