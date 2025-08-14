@@ -735,24 +735,23 @@ async fn cmd_filter_response<R: Runtime>(
 ) -> YaakResult<FilterResponse> {
     let response = app_handle.db().get_http_response(response_id)?;
 
-    if let None = response.body_path {
+    if response.body_path.is_none() {
         return Err(GenericError("Response body path not set".to_string()));
     }
 
-    let mut content_type = "".to_string();
-    for header in response.headers.iter() {
-        if header.name.to_lowercase() == "content-type" {
-            content_type = header.value.to_string().to_lowercase();
-            break;
+    let content_type = response.headers.iter().find_map(|h| {
+        if h.name.eq_ignore_ascii_case("content-type"){
+            Some(h.value.as_str())
+        } else {
+            None
         }
-    }
+    }).unwrap_or_default();
 
-    let body = read_response_body(response)
+    let body = read_response_body(response.body_path.as_ref().unwrap(), content_type)
         .await
         .ok_or(GenericError("Failed to find response body".to_string()))?;
-
     // TODO: Have plugins register their own content type (regex?)
-    Ok(plugin_manager.filter_data(&window, filter, &body, &content_type).await?)
+    Ok(plugin_manager.filter_data(&window, filter, &body, content_type).await?)
 }
 
 #[tauri::command]
