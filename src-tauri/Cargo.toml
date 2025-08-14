@@ -83,6 +83,7 @@ yaak-sse = { workspace = true }
 yaak-sync = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-ws = { path = "yaak-ws" }
+charset = "0.1.5"
 
 [workspace.dependencies]
 chrono = "0.4.41"
