@@ -726,32 +726,43 @@ async fn cmd_format_json(text: &str) -> YaakResult<String> {
 }
 
 #[tauri::command]
-async fn cmd_filter_response<R: Runtime>(
+async fn cmd_http_response_body<R: Runtime>(
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
-    response_id: &str,
     plugin_manager: State<'_, PluginManager>,
-    filter: &str,
+    response_id: &str,
+    filter: Option<&str>,
 ) -> YaakResult<FilterResponse> {
     let response = app_handle.db().get_http_response(response_id)?;
 
-    if response.body_path.is_none() {
-        return Err(GenericError("Response body path not set".to_string()));
-    }
-
-    let content_type = response.headers.iter().find_map(|h| {
-        if h.name.eq_ignore_ascii_case("content-type"){
-            Some(h.value.as_str())
-        } else {
-            None
+    let body_path = match response.body_path {
+        None => {
+            return Err(GenericError("Response body path not set".to_string()));
         }
-    }).unwrap_or_default();
+        Some(p) => p,
+    };
 
-    let body = read_response_body(response.body_path.as_ref().unwrap(), content_type)
+    let content_type = response
+        .headers
+        .iter()
+        .find_map(|h| {
+            if h.name.eq_ignore_ascii_case("content-type") { Some(h.value.as_str()) } else { None }
+        })
+        .unwrap_or_default();
+
+    let body = read_response_body(&body_path, content_type)
         .await
         .ok_or(GenericError("Failed to find response body".to_string()))?;
-    // TODO: Have plugins register their own content type (regex?)
-    Ok(plugin_manager.filter_data(&window, filter, &body, content_type).await?)
+
+    match filter {
+        Some(filter) if !filter.is_empty() => {
+            Ok(plugin_manager.filter_data(&window, filter, &body, content_type).await?)
+        }
+        _ => Ok(FilterResponse {
+            content: body,
+            error: None,
+        }),
+    }
 }
 
 #[tauri::command]
@@ -1329,7 +1340,7 @@ pub fn run() {
             cmd_delete_send_history,
             cmd_dismiss_notification,
             cmd_export_data,
-            cmd_filter_response,
+            cmd_http_response_body,
             cmd_format_json,
             cmd_get_http_authentication_summaries,
             cmd_get_http_authentication_config,
