@@ -440,7 +440,7 @@ function EncryptionInput({
   const dropdownItems = useMemo<DropdownItem[]>(
     () => [
       {
-        label: state.obscured ? 'Reveal' : 'Conceal',
+        label: state.obscured ? 'Reveal' : 'Cancel',
         disabled: isEncryptionEnabled && state.fieldType === 'text',
         leftSlot: <Icon icon={state.obscured ? 'eye' : 'eye_closed'} />,
         onSelect: () => setState((s) => ({ ...s, obscured: !s.obscured })),
