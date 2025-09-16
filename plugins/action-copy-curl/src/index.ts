@@ -93,12 +93,9 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
 
   // Add bearer authentication
   if (request.authenticationType === 'bearer') {
-    xs.push(
-      '--header',
-      quote(
-        `Authorization: ${request.authentication?.prefix ?? 'Bearer'} ${request.authentication?.token ?? ''}`,
-      ),
-    );
+    const value =
+      `${request.authentication?.prefix ?? 'Bearer'} ${request.authentication?.token ?? ''}`.trim();
+    xs.push('--header', quote(`Authorization: ${value}`));
     xs.push(NEWLINE);
   }
 

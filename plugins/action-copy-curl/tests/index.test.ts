@@ -230,7 +230,7 @@ describe('exporter-curl', () => {
           prefix: '',
         },
       }),
-    ).toEqual([`curl 'https://yaak.app'`, `--header 'Authorization:  xyz789'`].join(` \\\n  `));
+    ).toEqual([`curl 'https://yaak.app'`, `--header 'Authorization: xyz789'`].join(` \\\n  `));
   });
 
   test('Broken bearer auth', async () => {
@@ -243,7 +243,7 @@ describe('exporter-curl', () => {
           password: 'pass',
         },
       }),
-    ).toEqual([`curl 'https://yaak.app'`, `--header 'Authorization: Bearer '`].join(` \\\n  `));
+    ).toEqual([`curl 'https://yaak.app'`, `--header 'Authorization: Bearer'`].join(` \\\n  `));
   });
 
   test('Stale body data', async () => {
