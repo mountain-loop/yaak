@@ -12,9 +12,7 @@ describe('exporter-curl', () => {
           { name: 'c', value: 'ccc', enabled: false },
         ],
       }),
-    ).toEqual(
-      [`curl 'https://yaak.app?a=aaa&b=bbb'`].join(` \\n  `),
-    );
+    ).toEqual([`curl 'https://yaak.app?a=aaa&b=bbb'`].join(` \\n  `));
   });
 
   test('Exports GET with params and hash', async () => {
@@ -27,9 +25,7 @@ describe('exporter-curl', () => {
           { name: 'c', value: 'ccc', enabled: false },
         ],
       }),
-    ).toEqual(
-      [`curl 'https://yaak.app/path?a=aaa&b=bbb#section'`].join(` \\n  `),
-    );
+    ).toEqual([`curl 'https://yaak.app/path?a=aaa&b=bbb#section'`].join(` \\n  `));
   });
   test('Exports POST with url form data', async () => {
     expect(
@@ -62,7 +58,10 @@ describe('exporter-curl', () => {
         },
       }),
     ).toEqual(
-      [`curl -X POST 'https://yaak.app'`, `--data '{"query":"{foo,bar}","variables":{"a":"aaa","b":"bbb"}}'`].join(` \\\n  `),
+      [
+        `curl -X POST 'https://yaak.app'`,
+        `--data '{"query":"{foo,bar}","variables":{"a":"aaa","b":"bbb"}}'`,
+      ].join(` \\\n  `),
     );
   });
 
@@ -206,6 +205,34 @@ describe('exporter-curl', () => {
     ).toEqual([`curl 'https://yaak.app'`, `--header 'Authorization: Bearer tok'`].join(` \\\n  `));
   });
 
+  test('Bearer auth with custom prefix', async () => {
+    expect(
+      await convertToCurl({
+        url: 'https://yaak.app',
+        authenticationType: 'bearer',
+        authentication: {
+          token: 'abc123',
+          prefix: 'Token',
+        },
+      }),
+    ).toEqual(
+      [`curl 'https://yaak.app'`, `--header 'Authorization: Token abc123'`].join(` \\\n  `),
+    );
+  });
+
+  test('Bearer auth with empty prefix', async () => {
+    expect(
+      await convertToCurl({
+        url: 'https://yaak.app',
+        authenticationType: 'bearer',
+        authentication: {
+          token: 'xyz789',
+          prefix: '',
+        },
+      }),
+    ).toEqual([`curl 'https://yaak.app'`, `--header 'Authorization: xyz789'`].join(` \\\n  `));
+  });
+
   test('Broken bearer auth', async () => {
     expect(
       await convertToCurl({
@@ -216,7 +243,7 @@ describe('exporter-curl', () => {
           password: 'pass',
         },
       }),
-    ).toEqual([`curl 'https://yaak.app'`, `--header 'Authorization: Bearer '`].join(` \\\n  `));
+    ).toEqual([`curl 'https://yaak.app'`, `--header 'Authorization: Bearer'`].join(` \\\n  `));
   });
 
   test('Stale body data', async () => {
@@ -226,7 +253,7 @@ describe('exporter-curl', () => {
         bodyType: 'none',
         body: {
           text: 'ignore me',
-        }
+        },
       }),
     ).toEqual([`curl 'https://yaak.app'`].join(` \\\n  `));
   });
