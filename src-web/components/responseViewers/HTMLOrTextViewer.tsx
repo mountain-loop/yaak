@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Props) {
-  const rawTextBody = useResponseBodyText(response);
+  const rawTextBody = useResponseBodyText({ responseId: response.id, filter: null });
   const contentType = getContentTypeFromHeaders(response.headers);
   const language = languageFromContentType(contentType, rawTextBody.data ?? '');
 
@@ -24,7 +24,7 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
   if (language === 'html' && pretty) {
     return <WebPageViewer response={response} />;
   } else if (rawTextBody.data == null) {
-    return <EmptyStateText>Empty response</EmptyStateText>
+    return <EmptyStateText>Empty response</EmptyStateText>;
   } else {
     return (
       <TextViewer
