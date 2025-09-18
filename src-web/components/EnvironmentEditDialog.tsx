@@ -254,7 +254,7 @@ const EnvironmentEditor = function ({
         ) : (
           <>
             <BadgeButton color="secondary" onClick={() => valueVisibility.set((v) => !v)}>
-              {valueVisibility.value ? 'Cancel Values' : 'Reveal Values'}
+              {valueVisibility.value ? 'Hide Values' : 'Show Values'}
             </BadgeButton>
           </>
         )}
