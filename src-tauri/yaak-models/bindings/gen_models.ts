@@ -14,7 +14,7 @@ export type EditorKeymap = "default" | "vim" | "vscode" | "emacs";
 
 export type EncryptedKey = { encryptedKey: string, };
 
-export type Environment = { model: "environment", id: string, workspaceId: string, createdAt: string, updatedAt: string, name: string, public: boolean, base: boolean, variables: Array<EnvironmentVariable>, color: string | null, };
+export type Environment = { model: "environment", id: string, workspaceId: string, createdAt: string, updatedAt: string, name: string, public: boolean, variables: Array<EnvironmentVariable>, color: string | null, parentModel: string, parentId: string | null, };
 
 export type EnvironmentVariable = { enabled?: boolean, name: string, value: string, id?: string, };
 

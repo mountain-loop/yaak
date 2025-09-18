@@ -11,6 +11,7 @@ import { useKeyValue } from '../hooks/useKeyValue';
 import { useRandomKey } from '../hooks/useRandomKey';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { analyzeTemplate, convertTemplateToSecure } from '../lib/encryption';
+import { isBaseEnvironment } from '../lib/model_util';
 import { showPrompt } from '../lib/prompt';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import {
@@ -103,7 +104,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
                 onClick={() => setSelectedEnvironmentId(e.id)}
                 environment={e}
                 duplicateEnvironment={handleDuplicateEnvironment}
-                // Allow deleting base environment if there are multiples
+                // Allow deleting the base environment if there are multiples
                 deleteEnvironment={
                   otherBaseEnvironments.length > 0 ? handleDeleteEnvironment : null
                 }
@@ -186,7 +187,7 @@ const EnvironmentEditor = function ({
   // Gather a list of env names from other environments to help the user get them aligned
   const nameAutocomplete = useMemo<GenericCompletionConfig>(() => {
     const options: GenericCompletionOption[] = [];
-    if (selectedEnvironment.base) {
+    if (isBaseEnvironment(selectedEnvironment)) {
       return { options };
     }
 
@@ -205,7 +206,7 @@ const EnvironmentEditor = function ({
       });
     }
     return { options };
-  }, [selectedEnvironment.base, selectedEnvironment.id, allEnvironments]);
+  }, [selectedEnvironment, allEnvironments]);
 
   const validateName = useCallback((name: string) => {
     // Empty just means the variable doesn't have a name yet and is unusable
@@ -286,7 +287,7 @@ const EnvironmentEditor = function ({
           forcedEnvironmentId={
             // Editing the base environment should resolve variables using the active environment.
             // Editing a sub environment should resolve variables as if it's the active environment
-            selectedEnvironment.base ? undefined : selectedEnvironment.id
+            isBaseEnvironment(selectedEnvironment) ? undefined : selectedEnvironment.id
           }
         />
       </div>
@@ -359,7 +360,7 @@ function SidebarButton({
           {
             label: 'Rename',
             leftSlot: <Icon icon="pencil" />,
-            hidden: environment.base,
+            hidden: isBaseEnvironment(environment),
             onSelect: async () => {
               const name = await showPrompt({
                 id: 'rename-environment',
@@ -392,7 +393,7 @@ function SidebarButton({
           {
             label: environment.color ? 'Change Color' : 'Assign Color',
             leftSlot: <Icon icon="palette" />,
-            hidden: environment.base,
+            hidden: isBaseEnvironment(environment),
             onSelect: async () => showColorPicker(environment),
           },
           {

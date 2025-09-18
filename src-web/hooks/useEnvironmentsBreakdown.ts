@@ -5,8 +5,8 @@ import { useMemo } from 'react';
 export function useEnvironmentsBreakdown() {
   const allEnvironments = useAtomValue(environmentsAtom);
   return useMemo(() => {
-    const baseEnvironments = allEnvironments.filter((e) => e.base) ?? [];
-    const subEnvironments = allEnvironments.filter((e) => !e.base) ?? [];
+    const baseEnvironments = allEnvironments.filter((e) => e.parentId == null) ?? [];
+    const subEnvironments = allEnvironments.filter((e) => e.parentId != null) ?? [];
 
     const baseEnvironment = baseEnvironments[0] ?? null;
     const otherBaseEnvironments =

@@ -1,4 +1,4 @@
-import type { AnyModel, Cookie, HttpResponseHeader } from '@yaakapp-internal/models';
+import type { AnyModel, Cookie, Environment, HttpResponseHeader } from '@yaakapp-internal/models';
 import { getMimeTypeFromContentType } from './contentType';
 
 export const BODY_TYPE_NONE = null;
@@ -46,4 +46,8 @@ export function getCharsetFromContentType(headers: HttpResponseHeader[]): string
 
   const mimeType = getMimeTypeFromContentType(contentType);
   return mimeType.parameters.get('charset') ?? null;
+}
+
+export function isBaseEnvironment(environment: Environment): boolean {
+  return environment.parentId == null;
 }
