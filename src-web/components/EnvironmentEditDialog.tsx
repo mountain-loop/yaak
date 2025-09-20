@@ -1,43 +1,27 @@
 import type { Environment } from '@yaakapp-internal/models';
 import { duplicateModel, patchModel } from '@yaakapp-internal/models';
-import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { createEnvironmentAndActivate } from '../commands/createEnvironment';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
-import { useIsEncryptionEnabled } from '../hooks/useIsEncryptionEnabled';
-import { useKeyValue } from '../hooks/useKeyValue';
-import { useRandomKey } from '../hooks/useRandomKey';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { analyzeTemplate, convertTemplateToSecure } from '../lib/encryption';
 import { isBaseEnvironment } from '../lib/model_util';
 import { showPrompt } from '../lib/prompt';
 import { resolvedModelName } from '../lib/resolvedModelName';
-import {
-  setupOrConfigureEncryption,
-  withEncryptionEnabled,
-} from '../lib/setupOrConfigureEncryption';
 import { showColorPicker } from '../lib/showColorPicker';
-import { BadgeButton } from './core/BadgeButton';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { DismissibleBanner } from './core/DismissibleBanner';
 import type { DropdownItem } from './core/Dropdown';
 import { ContextMenu } from './core/Dropdown';
-import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
-import { Heading } from './core/Heading';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
-import type { PairWithId } from './core/PairEditor';
-import { ensurePairId } from './core/PairEditor';
-import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
-import { VStack } from './core/Stacks';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
+import { EnvironmentEditor } from './EnvironmentEditor';
 
 interface Props {
   initialEnvironment: Environment | null;
@@ -98,7 +82,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
         <aside className="w-full min-w-0 pt-2">
           <div className="min-w-0 h-full overflow-y-auto pt-1">
             {[baseEnvironment, ...otherBaseEnvironments].map((e) => (
-              <SidebarButton
+              <EnvironmentDialogSidebarButton
                 key={e.id}
                 active={selectedEnvironment?.id == e.id}
                 onClick={() => setSelectedEnvironmentId(e.id)}
@@ -122,7 +106,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
                 }
               >
                 {resolvedModelName(e)}
-              </SidebarButton>
+              </EnvironmentDialogSidebarButton>
             ))}
             {subEnvironments.length > 0 && (
               <div className="px-2">
@@ -130,7 +114,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
               </div>
             )}
             {subEnvironments.map((e) => (
-              <SidebarButton
+              <EnvironmentDialogSidebarButton
                 key={e.id}
                 active={selectedEnvironment?.id === e.id}
                 environment={e}
@@ -140,7 +124,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
                 deleteEnvironment={handleDeleteEnvironment}
               >
                 {e.name}
-              </SidebarButton>
+              </EnvironmentDialogSidebarButton>
             ))}
           </div>
         </aside>
@@ -154,7 +138,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
           </div>
         ) : (
           <EnvironmentEditor
-            className="pt-2 border-l border-border-subtle"
+            className="pl-4 pt-2 border-l border-border-subtle"
             environment={selectedEnvironment}
           />
         )
@@ -163,139 +147,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
   );
 };
 
-const EnvironmentEditor = function ({
-  environment: selectedEnvironment,
-  className,
-}: {
-  environment: Environment;
-  className?: string;
-}) {
-  const workspaceId = selectedEnvironment.workspaceId;
-  const isEncryptionEnabled = useIsEncryptionEnabled();
-  const valueVisibility = useKeyValue<boolean>({
-    namespace: 'global',
-    key: ['environmentValueVisibility', workspaceId],
-    fallback: false,
-  });
-  const { allEnvironments } = useEnvironmentsBreakdown();
-  const handleChange = useCallback(
-    (variables: PairWithId[]) => patchModel(selectedEnvironment, { variables }),
-    [selectedEnvironment],
-  );
-  const [forceUpdateKey, regenerateForceUpdateKey] = useRandomKey();
-
-  // Gather a list of env names from other environments to help the user get them aligned
-  const nameAutocomplete = useMemo<GenericCompletionConfig>(() => {
-    const options: GenericCompletionOption[] = [];
-    if (isBaseEnvironment(selectedEnvironment)) {
-      return { options };
-    }
-
-    const allVariables = allEnvironments.flatMap((e) => e?.variables);
-    const allVariableNames = new Set(allVariables.map((v) => v?.name));
-    for (const name of allVariableNames) {
-      const containingEnvs = allEnvironments.filter((e) =>
-        e.variables.some((v) => v.name === name),
-      );
-      const isAlreadyInActive = containingEnvs.find((e) => e.id === selectedEnvironment.id);
-      if (isAlreadyInActive) continue;
-      options.push({
-        label: name,
-        type: 'constant',
-        detail: containingEnvs.map((e) => e.name).join(', '),
-      });
-    }
-    return { options };
-  }, [selectedEnvironment, allEnvironments]);
-
-  const validateName = useCallback((name: string) => {
-    // Empty just means the variable doesn't have a name yet and is unusable
-    if (name === '') return true;
-    return name.match(/^[a-z_][a-z0-9_-]*$/i) != null;
-  }, []);
-
-  const valueType = !isEncryptionEnabled && valueVisibility.value ? 'text' : 'password';
-  const promptToEncrypt = useMemo(() => {
-    if (!isEncryptionEnabled) {
-      return true;
-    } else {
-      return !selectedEnvironment.variables.every(
-        (v) => v.value === '' || analyzeTemplate(v.value) !== 'insecure',
-      );
-    }
-  }, [selectedEnvironment.variables, isEncryptionEnabled]);
-
-  const encryptEnvironment = (environment: Environment) => {
-    withEncryptionEnabled(async () => {
-      const encryptedVariables: PairWithId[] = [];
-      for (const variable of environment.variables) {
-        const value = variable.value ? await convertTemplateToSecure(variable.value) : '';
-        encryptedVariables.push(ensurePairId({ ...variable, value }));
-      }
-      await handleChange(encryptedVariables);
-      regenerateForceUpdateKey();
-    });
-  };
-
-  return (
-    <VStack space={4} className={classNames(className, 'pl-4')}>
-      <Heading className="w-full flex items-center gap-0.5">
-        <EnvironmentColorIndicator clickToEdit environment={selectedEnvironment ?? null} />
-        <div className="mr-2">{selectedEnvironment?.name}</div>
-        {isEncryptionEnabled ? (
-          promptToEncrypt ? (
-            <BadgeButton color="notice" onClick={() => encryptEnvironment(selectedEnvironment)}>
-              Encrypt All Variables
-            </BadgeButton>
-          ) : (
-            <BadgeButton color="secondary" onClick={setupOrConfigureEncryption}>
-              Encryption Settings
-            </BadgeButton>
-          )
-        ) : (
-          <>
-            <BadgeButton color="secondary" onClick={() => valueVisibility.set((v) => !v)}>
-              {valueVisibility.value ? 'Hide Values' : 'Show Values'}
-            </BadgeButton>
-          </>
-        )}
-      </Heading>
-      {selectedEnvironment.public && promptToEncrypt && (
-        <DismissibleBanner
-          id={`warn-unencrypted-${selectedEnvironment.id}`}
-          color="notice"
-          className="mr-3"
-        >
-          This environment is sharable. Ensure variable values are encrypted to avoid accidental
-          leaking of secrets during directory sync or data export.
-        </DismissibleBanner>
-      )}
-      <div className="h-full pr-2 pb-2 grid grid-rows-[minmax(0,1fr)] overflow-auto">
-        <PairOrBulkEditor
-          allowMultilineValues
-          preferenceName="environment"
-          nameAutocomplete={nameAutocomplete}
-          namePlaceholder="VAR_NAME"
-          nameValidate={validateName}
-          valueType={valueType}
-          valueAutocompleteVariables
-          valueAutocompleteFunctions
-          forceUpdateKey={`${selectedEnvironment.id}::${forceUpdateKey}`}
-          pairs={selectedEnvironment.variables}
-          onChange={handleChange}
-          stateKey={`environment.${selectedEnvironment.id}`}
-          forcedEnvironmentId={
-            // Editing the base environment should resolve variables using the active environment.
-            // Editing a sub environment should resolve variables as if it's the active environment
-            isBaseEnvironment(selectedEnvironment) ? undefined : selectedEnvironment.id
-          }
-        />
-      </div>
-    </VStack>
-  );
-};
-
-function SidebarButton({
+function EnvironmentDialogSidebarButton({
   children,
   className,
   active,

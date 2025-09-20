@@ -75,8 +75,8 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
           value: TAB_DATA,
           label: 'Directory Sync',
         },
-        ...authTab,
         ...headersTab,
+        ...authTab,
       ]}
     >
       <TabContent value={TAB_AUTH} className="overflow-y-auto h-full px-4">
