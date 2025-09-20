@@ -533,9 +533,10 @@ pub struct Environment {
 
     pub name: String,
     pub public: bool,
-    pub base: bool,
     pub variables: Vec<EnvironmentVariable>,
     pub color: Option<String>,
+    pub parent_model: String,
+    pub parent_id: Option<String>,
 }
 
 impl UpsertModelInfo for Environment {
@@ -568,7 +569,8 @@ impl UpsertModelInfo for Environment {
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (WorkspaceId, self.workspace_id.into()),
-            (Base, self.base.into()),
+            (ParentId, self.parent_id.into()),
+            (ParentModel, self.parent_model.into()),
             (Color, self.color.into()),
             (Name, self.name.trim().into()),
             (Public, self.public.into()),
@@ -579,7 +581,8 @@ impl UpsertModelInfo for Environment {
     fn update_columns() -> Vec<impl IntoIden> {
         vec![
             EnvironmentIden::UpdatedAt,
-            EnvironmentIden::Base,
+            EnvironmentIden::ParentId,
+            EnvironmentIden::ParentModel,
             EnvironmentIden::Color,
             EnvironmentIden::Name,
             EnvironmentIden::Public,
@@ -598,7 +601,8 @@ impl UpsertModelInfo for Environment {
             workspace_id: row.get("workspace_id")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
-            base: row.get("base")?,
+            parent_id: row.get("parent_id")?,
+            parent_model: row.get("parent_model")?,
             color: row.get("color")?,
             name: row.get("name")?,
             public: row.get("public")?,
