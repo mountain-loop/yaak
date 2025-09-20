@@ -6,11 +6,10 @@ use yaak_templates::{parse_and_render, render_json_value_raw, TemplateCallback};
 
 pub async fn render_websocket_request<T: TemplateCallback>(
     r: &WebsocketRequest,
-    base_environment: &Environment,
-    environment: Option<&Environment>,
+    environment_chain: Vec<Environment>,
     cb: &T,
 ) -> Result<WebsocketRequest> {
-    let vars = &make_vars_hashmap(base_environment, environment);
+    let vars = &make_vars_hashmap(environment_chain);
 
     let mut headers = Vec::new();
     for p in r.headers.clone() {

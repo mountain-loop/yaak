@@ -7,6 +7,7 @@ import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { Button } from './core/Button';
 import { Input } from './core/Input';
+import { Link } from './core/Link';
 import { VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
@@ -40,13 +41,6 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
     (e) => e.parentModel === 'folder' && e.parentId === folderId,
   );
 
-  const handleActiveTabChange = (tab: string) => {
-    setActiveTab(tab);
-    if (tab === TAB_VARIABLES && folderEnvironment == null) {
-      console.log('CREATE FOLDER ENVIRONMENT');
-    }
-  };
-
   const tabs = useMemo<TabItem[]>(() => {
     if (folder == null) return [];
 
@@ -69,7 +63,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
   return (
     <Tabs
       value={activeTab}
-      onChangeValue={handleActiveTabChange}
+      onChangeValue={setActiveTab}
       label="Folder Settings"
       className="px-1.5 pb-2"
       addBorders
@@ -109,7 +103,9 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
         {folderEnvironment == null ? (
           <EmptyStateText>
             <VStack alignItems="center" space={1.5}>
-              <p>Folder environment not found for folder</p>
+              <p>Override <Link
+                href="https://feedback.yaak.app/help/articles/3284139-environments-and-variables">Variables</Link> for
+                requests within this folder.</p>
               <Button
                 variant="border"
                 size="sm"
@@ -119,6 +115,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
                     parentModel: 'folder',
                     parentId: folder.id,
                     model: 'environment',
+                    name: 'Folder Environment',
                   });
                 }}
               >

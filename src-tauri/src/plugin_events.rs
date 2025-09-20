@@ -74,20 +74,15 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
 
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
-            let environment = environment_from_window(&window);
-            let base_environment = app_handle
+            let environment_id = environment_from_window(&window).map(|e| e.id);
+            let environment_chain = window
                 .db()
-                .get_base_environment(&workspace.id)
-                .expect("Failed to get base environment");
+                .resolve_environments(&workspace.id, None, environment_id.as_deref())
+                .expect("Failed to resolve environments");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let grpc_request = render_grpc_request(
-                &req.grpc_request,
-                &base_environment,
-                environment.as_ref(),
-                &cb,
-            )
-            .await
-            .expect("Failed to render grpc request");
+            let grpc_request = render_grpc_request(&req.grpc_request, environment_chain, &cb)
+                .await
+                .expect("Failed to render grpc request");
             Some(InternalEventPayload::RenderGrpcRequestResponse(RenderGrpcRequestResponse {
                 grpc_request,
             }))
@@ -98,20 +93,15 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
 
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
-            let environment = environment_from_window(&window);
-            let base_environment = app_handle
+            let environment_id = environment_from_window(&window).map(|e| e.id);
+            let environment_chain = window
                 .db()
-                .get_base_environment(&workspace.id)
-                .expect("Failed to get base environment");
+                .resolve_environments(&workspace.id, None, environment_id.as_deref())
+                .expect("Failed to resolve environments");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let http_request = render_http_request(
-                &req.http_request,
-                &base_environment,
-                environment.as_ref(),
-                &cb,
-            )
-            .await
-            .expect("Failed to render http request");
+            let http_request = render_http_request(&req.http_request, environment_chain, &cb)
+                .await
+                .expect("Failed to render http request");
             Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
                 http_request,
             }))
@@ -122,13 +112,13 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
 
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
-            let environment = environment_from_window(&window);
-            let base_environment = app_handle
+            let environment_id = environment_from_window(&window).map(|e| e.id);
+            let environment_chain = window
                 .db()
-                .get_base_environment(&workspace.id)
-                .expect("Failed to get base environment");
+                .resolve_environments(&workspace.id, None, environment_id.as_deref())
+                .expect("Failed to resolve environments");
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let data = render_json_value(req.data, &base_environment, environment.as_ref(), &cb)
+            let data = render_json_value(req.data, environment_chain, &cb)
                 .await
                 .expect("Failed to render template");
             Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))

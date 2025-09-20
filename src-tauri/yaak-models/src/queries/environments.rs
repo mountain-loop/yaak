@@ -1,5 +1,7 @@
 use crate::db_context::DbContext;
-use crate::error::Error::{MissingBaseEnvironment, MultipleBaseEnvironments};
+use crate::error::Error::{
+    MissingBaseEnvironment, MultipleBaseEnvironments, MultipleFolderEnvironments,
+};
 use crate::error::Result;
 use crate::models::{Environment, EnvironmentIden, EnvironmentVariable};
 use crate::util::UpdateSource;
@@ -8,6 +10,16 @@ use log::info;
 impl<'a> DbContext<'a> {
     pub fn get_environment(&self, id: &str) -> Result<Environment> {
         self.find_one(EnvironmentIden::Id, id)
+    }
+
+    pub fn get_environment_by_folder_id(&self, folder_id: &str) -> Result<Option<Environment>> {
+        let environments: Vec<Environment> =
+            self.find_many(EnvironmentIden::ParentId, folder_id, None)?;
+        if environments.len() > 1 {
+            return Err(MultipleFolderEnvironments(folder_id.to_string()));
+        }
+
+        Ok(environments.get(0).cloned())
     }
 
     pub fn get_base_environment(&self, workspace_id: &str) -> Result<Environment> {
@@ -21,10 +33,11 @@ impl<'a> DbContext<'a> {
             return Err(MultipleBaseEnvironments(workspace_id.to_string()));
         }
 
-        let base_environment = base_environments.into_iter().find(|e| e.parent_id.is_none()).ok_or(
-            // Should never happen because one should be created above if it does not exist
-            MissingBaseEnvironment(workspace_id.to_string()),
-        )?;
+        let base_environment =
+            base_environments.into_iter().find(|e| e.parent_id.is_none()).ok_or(
+                // Should never happen because one should be created above if it does not exist
+                MissingBaseEnvironment(workspace_id.to_string()),
+            )?;
 
         Ok(base_environment)
     }
@@ -98,5 +111,55 @@ impl<'a> DbContext<'a> {
             },
             source,
         )
+    }
+
+    pub fn resolve_environments(
+        &self,
+        workspace_id: &str,
+        folder_id: Option<&str>,
+        active_environment_id: Option<&str>,
+    ) -> Result<Vec<Environment>> {
+        let mut environments = Vec::new();
+
+        let folder = match folder_id {
+            None => {
+                return Ok(environments);
+            }
+            Some(id) => self.get_folder(&id)?,
+        };
+
+        // 1. Add folder environment
+        if let Some(folder_id) = folder_id {
+            if let Some(e) = self.get_environment_by_folder_id(folder_id)? {
+                environments.push(e);
+            };
+        }
+
+        match &folder.folder_id {
+            // 2a. Recurse to parent folders if there is one
+            Some(parent_folder_id) => {
+                let parent_folder = self.get_folder(parent_folder_id)?;
+                let ancestors = self.resolve_environments(
+                    workspace_id,
+                    Some(&parent_folder.id),
+                    active_environment_id,
+                )?;
+                environments.extend(ancestors);
+            }
+            // 2b. Add sub and base environments
+            None => {
+                if let Some(id) = active_environment_id {
+                    if let Ok(e) = self.get_environment(&id) {
+                        // Add active sub environment
+                        environments.push(e);
+                    };
+                };
+
+                // Add the base environment
+                environments.push(self.get_base_environment(workspace_id)?);
+            }
+        };
+
+        Ok(environments)
     }
 }

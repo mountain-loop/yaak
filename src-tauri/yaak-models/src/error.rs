@@ -29,6 +29,9 @@ pub enum Error {
 
     #[error("Multiple base environments for {0}. Delete duplicates before continuing.")]
     MultipleBaseEnvironments(String),
+    
+    #[error("Multiple folder environments for {0}. Delete duplicates before continuing.")]
+    MultipleFolderEnvironments(String),
 
     #[error("unknown error")]
     Unknown,

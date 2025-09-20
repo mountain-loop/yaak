@@ -30,8 +30,9 @@ use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
 use yaak_grpc::{Code, ServiceDefinition, deserialize_message, serialize_message};
 use yaak_models::models::{
-    CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent, GrpcEventType,
-    GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, Plugin, Workspace, WorkspaceMeta,
+    AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
+    GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, Plugin, Workspace,
+    WorkspaceMeta,
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
@@ -110,15 +111,11 @@ async fn cmd_render_template<R: Runtime>(
     workspace_id: &str,
     environment_id: Option<&str>,
 ) -> YaakResult<String> {
-    let environment = match environment_id {
-        Some(id) => app_handle.db().get_environment(id).ok(),
-        None => None,
-    };
-    let base_environment = app_handle.db().get_base_environment(&workspace_id)?;
+    let environment_chain =
+        app_handle.db().resolve_environments(workspace_id, None, environment_id)?;
     let result = render_template(
         template,
-        &base_environment,
-        environment.as_ref(),
+        environment_chain,
         &PluginTemplateCallback::new(
             &app_handle,
             &PluginWindowContext::new(&window),
@@ -147,21 +144,19 @@ async fn cmd_grpc_reflect<R: Runtime>(
     app_handle: AppHandle<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<Vec<ServiceDefinition>> {
-    let environment = match environment_id {
-        Some(id) => app_handle.db().get_environment(id).ok(),
-        None => None,
-    };
     let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
     let (resolved_request, auth_context_id) = resolve_grpc_request(&window, &unrendered_request)?;
 
-    let base_environment =
-        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let environment_chain = app_handle.db().resolve_environments(
+        &unrendered_request.workspace_id,
+        unrendered_request.folder_id.as_deref(),
+        environment_id,
+    )?;
     let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
 
     let req = render_grpc_request(
         &resolved_request,
-        &base_environment,
-        environment.as_ref(),
+        environment_chain,
         &PluginTemplateCallback::new(
             &app_handle,
             &PluginWindowContext::new(&window),
@@ -196,20 +191,18 @@ async fn cmd_grpc_go<R: Runtime>(
     window: WebviewWindow<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<String> {
-    let environment = match environment_id {
-        Some(id) => app_handle.db().get_environment(id).ok(),
-        None => None,
-    };
     let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
     let (resolved_request, auth_context_id) = resolve_grpc_request(&window, &unrendered_request)?;
-    let base_environment =
-        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let environment_chain = app_handle.db().resolve_environments(
+        &unrendered_request.workspace_id,
+        unrendered_request.folder_id.as_deref(),
+        environment_id,
+    )?;
     let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
 
     let request = render_grpc_request(
         &resolved_request,
-        &base_environment,
-        environment.as_ref(),
+        environment_chain.clone(),
         &PluginTemplateCallback::new(
             &app_handle,
             &PluginWindowContext::new(&window),
@@ -300,9 +293,8 @@ async fn cmd_grpc_go<R: Runtime>(
     let cb = {
         let cancelled_rx = cancelled_rx.clone();
         let app_handle = app_handle.clone();
+        let environment_chain = environment_chain.clone();
         let window = window.clone();
-        let base_environment = base_environment.clone();
-        let environment = environment.clone();
         let base_msg = base_msg.clone();
         let method_desc = method_desc.clone();
 
@@ -327,12 +319,12 @@ async fn cmd_grpc_go<R: Runtime>(
                     let app_handle = app_handle.clone();
                     let base_msg = base_msg.clone();
                     let method_desc = method_desc.clone();
+                    let environment_chain = environment_chain.clone();
                     let msg = block_in_place(|| {
                         tauri::async_runtime::block_on(async {
                             render_template(
                                 msg.as_str(),
-                                &base_environment,
-                                environment.as_ref(),
+                                environment_chain,
                                 &PluginTemplateCallback::new(
                                     &app_handle,
                                     &PluginWindowContext::new(&window),
@@ -396,12 +388,12 @@ async fn cmd_grpc_go<R: Runtime>(
         let window = window.clone();
         let app_handle = app_handle.clone();
         let base_event = base_msg.clone();
+        let environment_chain = environment_chain.clone();
         let req = request.clone();
         let msg = if req.message.is_empty() { "{}".to_string() } else { req.message };
         let msg = render_template(
             msg.as_str(),
-            &base_environment.clone(),
-            environment.as_ref(),
+            environment_chain,
             &PluginTemplateCallback::new(
                 &app_handle,
                 &PluginWindowContext::new(&window),
@@ -833,30 +825,25 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
     auth_name: &str,
     values: HashMap<String, JsonPrimitive>,
-    request_id: &str,
+    request: AnyModel,
     environment_id: Option<&str>,
-    workspace_id: &str,
 ) -> YaakResult<GetHttpAuthenticationConfigResponse> {
-    let base_environment = window.db().get_base_environment(&workspace_id)?;
-    let environment = match environment_id {
-        Some(id) => match window.db().get_environment(id) {
-            Ok(env) => Some(env),
-            Err(e) => {
-                warn!("Failed to find environment by id {id} {}", e);
-                None
-            }
+    let (workspace_id, folder_id) = match request.clone() {
+        AnyModel::HttpRequest(m) => (m.workspace_id, m.folder_id),
+        AnyModel::GrpcRequest(m) => (m.workspace_id, m.folder_id),
+        AnyModel::WebsocketRequest(m) => (m.workspace_id, m.folder_id),
+        AnyModel::Folder(m) => (m.workspace_id, m.folder_id),
+        AnyModel::Workspace(m) => (m.id, None),
+        m => {
+            return Err(GenericError(format!("Unsupported model to call auth config {m:?}")));
         },
-        None => None,
     };
+
+    let environment_chain =
+        window.db().resolve_environments(&workspace_id, folder_id.as_deref(), environment_id)?;
+
     Ok(plugin_manager
-        .get_http_authentication_config(
-            &window,
-            &base_environment,
-            environment.as_ref(),
-            auth_name,
-            values,
-            request_id,
-        )
+        .get_http_authentication_config(&window, environment_chain, auth_name, values, request.id())
         .await?)
 }
 
@@ -907,30 +894,29 @@ async fn cmd_call_http_authentication_action<R: Runtime>(
     auth_name: &str,
     action_index: i32,
     values: HashMap<String, JsonPrimitive>,
-    model_id: &str,
-    workspace_id: &str,
+    model: AnyModel,
     environment_id: Option<&str>,
 ) -> YaakResult<()> {
-    let base_environment = window.db().get_base_environment(&workspace_id)?;
-    let environment = match environment_id {
-        Some(id) => match window.db().get_environment(id) {
-            Ok(env) => Some(env),
-            Err(e) => {
-                warn!("Failed to find environment by id {id} {}", e);
-                None
-            }
-        },
-        None => None,
+    let (workspace_id, folder_id) = match model.clone() {
+        AnyModel::HttpRequest(m) => (m.workspace_id, m.folder_id),
+        AnyModel::GrpcRequest(m) => (m.workspace_id, m.folder_id),
+        AnyModel::WebsocketRequest(m) => (m.workspace_id, m.folder_id),
+        AnyModel::Folder(m) => (m.workspace_id, m.folder_id),
+        AnyModel::Workspace(m) => (m.id, None),
+        m => {
+            return Err(GenericError(format!("Unsupported model to call auth {m:?}")));
+        }
     };
+    let environment_chain =
+        window.db().resolve_environments(&workspace_id, folder_id.as_deref(), environment_id)?;
     Ok(plugin_manager
         .call_http_authentication_action(
             &window,
-            &base_environment,
-            environment.as_ref(),
+            environment_chain,
             auth_name,
             action_index,
             values,
-            model_id,
+            &model.id(),
         )
         .await?)
 }

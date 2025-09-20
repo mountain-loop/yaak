@@ -2076,6 +2076,17 @@ macro_rules! define_any_model {
             )*
         }
 
+        impl AnyModel {
+            #[inline]
+            pub fn id(&self) -> &str {
+                match self {
+                    $(
+                        AnyModel::$type(inner) => &inner.id,
+                    )*
+                }
+            }
+        }
+
         $(
             impl From<$type> for AnyModel {
                 fn from(value: $type) -> Self {

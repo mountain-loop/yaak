@@ -1,14 +1,10 @@
-use std::collections::HashMap;
 use crate::models::{Environment, EnvironmentVariable};
+use std::collections::HashMap;
 
-pub fn make_vars_hashmap(
-    base_environment: &Environment,
-    environment: Option<&Environment>,
-) -> HashMap<String, String> {
+pub fn make_vars_hashmap(environment_chain: Vec<Environment>) -> HashMap<String, String> {
     let mut variables = HashMap::new();
-    variables = add_variable_to_map(variables, &base_environment.variables);
 
-    if let Some(e) = environment {
+    for e in environment_chain.iter().rev() {
         variables = add_variable_to_map(variables, &e.variables);
     }
 
@@ -31,4 +27,3 @@ fn add_variable_to_map(
 
     map
 }
-

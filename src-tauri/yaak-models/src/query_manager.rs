@@ -64,7 +64,7 @@ impl QueryManager {
         }
     }
 
-    pub fn connect(&self) -> DbContext {
+    pub fn connect(&self) -> DbContext<'_> {
         let conn = self
             .pool
             .lock()

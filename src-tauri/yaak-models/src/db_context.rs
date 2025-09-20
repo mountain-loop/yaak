@@ -89,7 +89,7 @@ impl<'a> DbContext<'a> {
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
         limit: Option<u64>,
-    ) -> crate::error::Result<Vec<M>>
+    ) -> Result<Vec<M>>
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {

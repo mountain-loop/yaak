@@ -18,7 +18,7 @@ import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 export function useHttpAuthenticationConfig(
   authName: string | null,
   values: Record<string, JsonPrimitive>,
-  requestId: string,
+  request: HttpRequest | GrpcRequest | WebsocketRequest,
 ) {
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const environmentId = useAtomValue(activeEnvironmentIdAtom);
@@ -37,7 +37,7 @@ export function useHttpAuthenticationConfig(
   return useQuery({
     queryKey: [
       'http_authentication_config',
-      requestId,
+      request,
       authName,
       values,
       responseKey,
@@ -53,8 +53,7 @@ export function useHttpAuthenticationConfig(
         {
           authName,
           values,
-          requestId,
-          workspaceId,
+          request,
           environmentId,
         },
       );
@@ -63,17 +62,16 @@ export function useHttpAuthenticationConfig(
         ...config,
         actions: config.actions?.map((a, i) => ({
           ...a,
-          call: async ({
-            id: modelId,
-          }: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace) => {
+          call: async (
+            model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
+          ) => {
             await invokeCmd('cmd_call_http_authentication_action', {
               pluginRefId: config.pluginRefId,
               actionIndex: i,
               authName,
               values,
-              modelId,
+              model,
               environmentId,
-              workspaceId,
             });
 
             // Ensure the config is refreshed after the action is done

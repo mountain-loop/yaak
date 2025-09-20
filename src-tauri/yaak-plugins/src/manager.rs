@@ -584,8 +584,7 @@ impl PluginManager {
     pub async fn get_http_authentication_config<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
-        base_environment: &Environment,
-        environment: Option<&Environment>,
+        environment_chain: Vec<Environment>,
         auth_name: &str,
         values: HashMap<String, JsonPrimitive>,
         request_id: &str,
@@ -596,7 +595,7 @@ impl PluginManager {
             .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
             .ok_or(PluginNotFoundErr(auth_name.into()))?;
 
-        let vars = &make_vars_hashmap(&base_environment, environment);
+        let vars = &make_vars_hashmap(environment_chain);
         let cb = PluginTemplateCallback::new(
             window.app_handle(),
             &PluginWindowContext::new(&window),
@@ -629,14 +628,13 @@ impl PluginManager {
     pub async fn call_http_authentication_action<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
-        base_environment: &Environment,
-        environment: Option<&Environment>,
+        environment_chain: Vec<Environment>,
         auth_name: &str,
         action_index: i32,
         values: HashMap<String, JsonPrimitive>,
         model_id: &str,
     ) -> Result<()> {
-        let vars = &make_vars_hashmap(&base_environment, environment);
+        let vars = &make_vars_hashmap(environment_chain);
         let rendered_values = render_json_value_raw(
             json!(values),
             vars,

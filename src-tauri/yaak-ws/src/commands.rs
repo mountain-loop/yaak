@@ -109,24 +109,18 @@ pub(crate) async fn send<R: Runtime>(
     window: WebviewWindow<R>,
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
-    let (connection, unrendered_request) = {
-        let db = app_handle.db();
-        let connection = db.get_websocket_connection(connection_id)?;
-        let unrendered_request = db.get_websocket_request(&connection.request_id)?;
-        (connection, unrendered_request)
-    };
-    let environment = match environment_id {
-        Some(id) => Some(app_handle.db().get_environment(id)?),
-        None => None,
-    };
-    let base_environment =
-        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let connection = app_handle.db().get_websocket_connection(connection_id)?;
+    let unrendered_request = app_handle.db().get_websocket_request(&connection.request_id)?;
+    let environment_chain = app_handle.db().resolve_environments(
+        &unrendered_request.workspace_id,
+        unrendered_request.folder_id.as_deref(),
+        environment_id,
+    )?;
     let (resolved_request, _auth_context_id) =
         resolve_websocket_request(&window, &unrendered_request)?;
     let request = render_websocket_request(
         &resolved_request,
-        &base_environment,
-        environment.as_ref(),
+        environment_chain,
         &PluginTemplateCallback::new(
             &app_handle,
             &PluginWindowContext::new(&window),
@@ -192,19 +186,17 @@ pub(crate) async fn connect<R: Runtime>(
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
     let unrendered_request = app_handle.db().get_websocket_request(request_id)?;
-    let environment = match environment_id {
-        Some(id) => Some(app_handle.db().get_environment(id)?),
-        None => None,
-    };
-    let base_environment =
-        app_handle.db().get_base_environment(&unrendered_request.workspace_id)?;
+    let environment_chain = app_handle.db().resolve_environments(
+        &unrendered_request.workspace_id,
+        unrendered_request.folder_id.as_deref(),
+        environment_id,
+    )?;
     let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
     let (resolved_request, auth_context_id) =
         resolve_websocket_request(&window, &unrendered_request)?;
     let request = render_websocket_request(
         &resolved_request,
-        &base_environment,
-        environment.as_ref(),
+        environment_chain,
         &PluginTemplateCallback::new(
             &app_handle,
             &PluginWindowContext::new(&window),
@@ -305,7 +297,7 @@ pub(crate) async fn connect<R: Runtime>(
 
     // Add cookies to WS HTTP Upgrade
     if let Some(id) = cookie_jar_id {
-        let cookie_jar = app_handle.db().get_cookie_jar(id)?;
+        let cookie_jar = app_handle.db().get_cookie_jar(&id)?;
 
         let cookies = cookie_jar
             .cookies

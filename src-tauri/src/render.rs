@@ -5,35 +5,32 @@ use yaak_models::models::{
     Environment, GrpcRequest, HttpRequest, HttpRequestHeader, HttpUrlParameter,
 };
 use yaak_models::render::make_vars_hashmap;
-use yaak_templates::{parse_and_render, render_json_value_raw, TemplateCallback};
+use yaak_templates::{TemplateCallback, parse_and_render, render_json_value_raw};
 
 pub async fn render_template<T: TemplateCallback>(
     template: &str,
-    base_environment: &Environment,
-    environment: Option<&Environment>,
+    environment_chain: Vec<Environment>,
     cb: &T,
 ) -> yaak_templates::error::Result<String> {
-    let vars = &make_vars_hashmap(base_environment, environment);
+    let vars = &make_vars_hashmap(environment_chain);
     render(template, vars, cb).await
 }
 
 pub async fn render_json_value<T: TemplateCallback>(
     value: Value,
-    base_environment: &Environment,
-    environment: Option<&Environment>,
+    environment_chain: Vec<Environment>,
     cb: &T,
 ) -> yaak_templates::error::Result<Value> {
-    let vars = &make_vars_hashmap(base_environment, environment);
+    let vars = &make_vars_hashmap(environment_chain);
     render_json_value_raw(value, vars, cb).await
 }
 
 pub async fn render_grpc_request<T: TemplateCallback>(
     r: &GrpcRequest,
-    base_environment: &Environment,
-    environment: Option<&Environment>,
+    environment_chain: Vec<Environment>,
     cb: &T,
 ) -> yaak_templates::error::Result<GrpcRequest> {
-    let vars = &make_vars_hashmap(base_environment, environment);
+    let vars = &make_vars_hashmap(environment_chain);
 
     let mut metadata = Vec::new();
     for p in r.metadata.clone() {
@@ -62,11 +59,10 @@ pub async fn render_grpc_request<T: TemplateCallback>(
 
 pub async fn render_http_request<T: TemplateCallback>(
     r: &HttpRequest,
-    base_environment: &Environment,
-    environment: Option<&Environment>,
+    environment_chain: Vec<Environment>,
     cb: &T,
 ) -> yaak_templates::error::Result<HttpRequest> {
-    let vars = &make_vars_hashmap(base_environment, environment);
+    let vars = &make_vars_hashmap(environment_chain);
 
     let mut url_parameters = Vec::new();
     for p in r.url_parameters.clone() {

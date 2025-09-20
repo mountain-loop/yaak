@@ -24,7 +24,7 @@ pub(crate) fn find_ssh_key() -> Option<PathBuf> {
     None
 }
 
-pub(crate) fn get_current_branch(repo: &Repository) -> Result<Option<Branch>> {
+pub(crate) fn get_current_branch(repo: &Repository) -> Result<Option<Branch<'_>>> {
     for b in repo.branches(None)? {
         let branch = b?.0;
         if branch.is_head() {
@@ -101,7 +101,7 @@ pub(crate) fn get_default_remote_in_repo(repo: &Repository) -> Result<String> {
         return Ok(DEFAULT_REMOTE_NAME.into());
     }
 
-    // if only one remote exists pick that
+    // if only one remote exists, pick that
     if remotes.len() == 1 {
         let first_remote = remotes
             .iter()

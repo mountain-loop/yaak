@@ -112,11 +112,9 @@ export function EnvironmentEditor({
             </BadgeButton>
           )
         ) : (
-          <>
-            <BadgeButton color="secondary" onClick={() => valueVisibility.set((v) => !v)}>
-              {valueVisibility.value ? 'Hide Values' : 'Show Values'}
-            </BadgeButton>
-          </>
+          <BadgeButton color="secondary" onClick={() => valueVisibility.set((v) => !v)}>
+            {valueVisibility.value ? 'Hide Values' : 'Show Values'}
+          </BadgeButton>
         )}
       </Heading>
       {selectedEnvironment.public && promptToEncrypt && (
