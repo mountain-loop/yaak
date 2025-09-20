@@ -121,44 +121,33 @@ impl<'a> DbContext<'a> {
     ) -> Result<Vec<Environment>> {
         let mut environments = Vec::new();
 
-        let folder = match folder_id {
-            None => {
-                return Ok(environments);
-            }
-            Some(id) => self.get_folder(&id)?,
-        };
-
-        // 1. Add folder environment
         if let Some(folder_id) = folder_id {
+            let folder = self.get_folder(folder_id)?;
+
+            // Add current folder's environment
             if let Some(e) = self.get_environment_by_folder_id(folder_id)? {
                 environments.push(e);
             };
-        }
 
-        match &folder.folder_id {
-            // 2a. Recurse to parent folders if there is one
-            Some(parent_folder_id) => {
-                let parent_folder = self.get_folder(parent_folder_id)?;
-                let ancestors = self.resolve_environments(
-                    workspace_id,
-                    Some(&parent_folder.id),
-                    active_environment_id,
-                )?;
-                environments.extend(ancestors);
-            }
-            // 2b. Add sub and base environments
-            None => {
-                if let Some(id) = active_environment_id {
-                    if let Ok(e) = self.get_environment(&id) {
-                        // Add active sub environment
-                        environments.push(e);
-                    };
+            // Recurse up
+            let ancestors = self.resolve_environments(
+                workspace_id,
+                folder.folder_id.as_deref(),
+                active_environment_id,
+            )?;
+            environments.extend(ancestors);
+        } else {
+            // Add active and base environments
+            if let Some(id) = active_environment_id {
+                if let Ok(e) = self.get_environment(&id) {
+                    // Add active sub environment
+                    environments.push(e);
                 };
+            };
 
-                // Add the base environment
-                environments.push(self.get_base_environment(workspace_id)?);
-            }
-        };
+            // Add the base environment
+            environments.push(self.get_base_environment(workspace_id)?);
+        }
 
         Ok(environments)
     }

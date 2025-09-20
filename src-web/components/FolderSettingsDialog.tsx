@@ -1,11 +1,12 @@
 import { createWorkspaceModel, foldersAtom, patchModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { Button } from './core/Button';
+import { CountBadge } from './core/CountBadge';
 import { Input } from './core/Input';
 import { Link } from './core/Link';
 import { VStack } from './core/Stacks';
@@ -40,6 +41,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
   const folderEnvironment = environments.allEnvironments.find(
     (e) => e.parentModel === 'folder' && e.parentId === folderId,
   );
+  const numVars = (folderEnvironment?.variables ?? []).filter((v) => v.name).length;
 
   const tabs = useMemo<TabItem[]>(() => {
     if (folder == null) return [];
@@ -54,9 +56,10 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
       {
         value: TAB_VARIABLES,
         label: 'Variables',
+        rightSlot: numVars > 0 ? <CountBadge count={numVars} /> : null,
       },
     ];
-  }, [authTab, folder, headersTab]);
+  }, [authTab, folder, headersTab, numVars]);
 
   if (folder == null) return null;
 
@@ -103,9 +106,13 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
         {folderEnvironment == null ? (
           <EmptyStateText>
             <VStack alignItems="center" space={1.5}>
-              <p>Override <Link
-                href="https://feedback.yaak.app/help/articles/3284139-environments-and-variables">Variables</Link> for
-                requests within this folder.</p>
+              <p>
+                Override{' '}
+                <Link href="https://feedback.yaak.app/help/articles/3284139-environments-and-variables">
+                  Variables
+                </Link>{' '}
+                for requests within this folder.
+              </p>
               <Button
                 variant="border"
                 size="sm"
@@ -124,7 +131,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
             </VStack>
           </EmptyStateText>
         ) : (
-          <EnvironmentEditor environment={folderEnvironment} />
+          <EnvironmentEditor hideName environment={folderEnvironment} />
         )}
       </TabContent>
     </Tabs>

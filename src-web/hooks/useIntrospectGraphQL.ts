@@ -66,7 +66,7 @@ export function useIntrospectGraphQL(
         return setError(response.error);
       }
 
-      const bodyText = await getResponseBodyText(response);
+      const bodyText = await getResponseBodyText({ responseId: response.id, filter: null });
       if (response.status < 200 || response.status >= 300) {
         return setError(
           `Request failed with status ${response.status}.\nThe response text is:\n\n${bodyText}`,

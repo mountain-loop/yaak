@@ -7,7 +7,7 @@ interface Props {
 }
 
 export function SvgViewer({ response }: Props) {
-  const rawTextBody = useResponseBodyText(response);
+  const rawTextBody = useResponseBodyText({ response, filter: null });
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {

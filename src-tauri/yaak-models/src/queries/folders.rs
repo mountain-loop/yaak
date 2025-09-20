@@ -1,10 +1,7 @@
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{
-    Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestHeader,
-    HttpRequestIden, WebsocketRequest, WebsocketRequestIden,
-};
+use crate::models::{Environment, EnvironmentIden, Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestHeader, HttpRequestIden, WebsocketRequest, WebsocketRequestIden};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -35,6 +32,10 @@ impl<'a> DbContext<'a> {
 
         for m in self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, fid, None)? {
             self.delete_websocket_request(&m, source)?;
+        }
+
+        for e in self.find_many(EnvironmentIden::ParentId, fid, None)? {
+            self.delete_environment(&e, source)?;
         }
 
         // Recurse down into child folders
@@ -93,6 +94,17 @@ impl<'a> DbContext<'a> {
                 &GrpcRequest {
                     id: "".into(),
                     folder_id: Some(new_folder.id.clone()),
+                    ..m
+                },
+                source,
+            )?;
+        }
+
+        for m in self.find_many::<Environment>(EnvironmentIden::ParentId, fid, None)? {
+            self.upsert_environment(
+                &Environment {
+                    id: "".into(),
+                    parent_id: Some(new_folder.id.clone()),
                     ..m
                 },
                 source,

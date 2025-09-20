@@ -40,7 +40,7 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'request_switcher.prev': ['Control+Tab'],
   'request_switcher.toggle': ['CmdCtrl+p'],
   'settings.show': ['CmdCtrl+,'],
-  'sidebar.delete_selected_item': ['Backspace'],
+  'sidebar.delete_selected_item': ['Delete'],
   'sidebar.focus': ['CmdCtrl+b'],
   'url_bar.focus': ['CmdCtrl+l'],
   'workspace_settings.show': ['CmdCtrl+;'],
@@ -98,7 +98,7 @@ export function useHotKey(
 
       // Don't add key if not holding modifier
       const isValidKeymapKey =
-        e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.key === 'Backspace';
+        e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.key === 'Backspace' || e.key === 'Delete';
       if (!isValidKeymapKey) {
         return;
       }

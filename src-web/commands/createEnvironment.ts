@@ -37,7 +37,8 @@ export const createEnvironmentAndActivate = createFastMutation<
       name,
       variables: [],
       workspaceId,
-      base: false,
+      parentId: baseEnvironment.id,
+      parentModel: 'environment',
     });
   },
   onSuccess: async (environmentId) => {

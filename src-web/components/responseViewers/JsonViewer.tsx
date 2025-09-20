@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function JsonViewer({ response, className }: Props) {
-  const rawBody = useResponseBodyText(response);
+  const rawBody = useResponseBodyText({ response, filter: null });
 
   if (rawBody.isLoading || rawBody.data == null) return null;
 

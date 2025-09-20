@@ -21,12 +21,15 @@ import { ensurePairId } from './core/PairEditor';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { VStack } from './core/Stacks';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
+import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 
 export function EnvironmentEditor({
   environment: selectedEnvironment,
+  hideName,
   className,
 }: {
   environment: Environment;
+  hideName?: boolean;
   className?: string;
 }) {
   const workspaceId = selectedEnvironment.workspaceId;
@@ -100,7 +103,7 @@ export function EnvironmentEditor({
     <VStack space={4} className={className}>
       <Heading className="w-full flex items-center gap-0.5">
         <EnvironmentColorIndicator clickToEdit environment={selectedEnvironment ?? null} />
-        <div className="mr-2">{selectedEnvironment?.name}</div>
+        {!hideName && <div className="mr-2">{selectedEnvironment?.name}</div>}
         {isEncryptionEnabled ? (
           promptToEncrypt ? (
             <BadgeButton color="notice" onClick={() => encryptEnvironment(selectedEnvironment)}>
@@ -116,6 +119,15 @@ export function EnvironmentEditor({
             {valueVisibility.value ? 'Hide Values' : 'Show Values'}
           </BadgeButton>
         )}
+        <BadgeButton
+          color="secondary"
+          rightSlot={<EnvironmentSharableTooltip />}
+          onClick={async () => {
+            await patchModel(selectedEnvironment, { public: !selectedEnvironment.public });
+          }}
+        >
+          {selectedEnvironment.public ? 'Sharable' : 'Private'}
+        </BadgeButton>
       </Heading>
       {selectedEnvironment.public && promptToEncrypt && (
         <DismissibleBanner

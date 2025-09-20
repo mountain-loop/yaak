@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Props) {
-  const rawTextBody = useResponseBodyText({ responseId: response.id, filter: null });
+  const rawTextBody = useResponseBodyText({ response, filter: null });
   const contentType = getContentTypeFromHeaders(response.headers);
   const language = languageFromContentType(contentType, rawTextBody.data ?? '');
 
@@ -32,7 +32,7 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
         text={rawTextBody.data}
         pretty={pretty}
         className={textViewerClassName}
-        responseId={response.id}
+        response={response}
         requestId={response.requestId}
       />
     );

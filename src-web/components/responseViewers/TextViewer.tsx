@@ -1,3 +1,4 @@
+import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
@@ -18,13 +19,13 @@ interface Props {
   className?: string;
   text: string;
   language: EditorProps['language'];
-  responseId: string;
+  response: HttpResponse;
   requestId: string;
 }
 
 const useFilterText = createGlobalState<Record<string, string | null>>({});
 
-export function TextViewer({ language, text, responseId, requestId, pretty, className }: Props) {
+export function TextViewer({ language, text, response, requestId, pretty, className }: Props) {
   const [filterTextMap, setFilterTextMap] = useFilterText();
   const filterText = filterTextMap[requestId] ?? null;
   const debouncedFilterText = useDebouncedValue(filterText);
@@ -36,7 +37,7 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
   );
 
   const isSearching = filterText != null;
-  const filteredResponse = useResponseBodyText({ responseId, filter: debouncedFilterText ?? null });
+  const filteredResponse = useResponseBodyText({ response, filter: debouncedFilterText ?? null });
 
   const toggleSearch = useCallback(() => {
     if (isSearching) {
@@ -69,7 +70,7 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
             defaultValue={filterText}
             onKeyDown={(e) => e.key === 'Escape' && toggleSearch()}
             onChange={setFilterText}
-            stateKey={`filter.${responseId}`}
+            stateKey={`filter.${response.id}`}
           />
         </div>,
       );
@@ -96,7 +97,7 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
     isSearching,
     language,
     requestId,
-    responseId,
+    response,
     setFilterText,
     toggleSearch,
   ]);

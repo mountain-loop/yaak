@@ -22,6 +22,7 @@ import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 import { EnvironmentEditor } from './EnvironmentEditor';
+import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 
 interface Props {
   initialEnvironment: Environment | null;
@@ -138,7 +139,7 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
           </div>
         ) : (
           <EnvironmentEditor
-            className="pl-4 pt-2 border-l border-border-subtle"
+            className="pl-4 pt-3 border-l border-border-subtle"
             environment={selectedEnvironment}
           />
         )
@@ -251,17 +252,7 @@ function EnvironmentDialogSidebarButton({
           {
             label: `Make ${environment.public ? 'Private' : 'Sharable'}`,
             leftSlot: <Icon icon={environment.public ? 'eye_closed' : 'eye'} />,
-            rightSlot: (
-              <IconTooltip
-                content={
-                  <>
-                    Sharable environments will be included in Directory Sync or data export. It is
-                    recommended to encrypt all variable values within sharable environments to
-                    prevent accidentally leaking secrets.
-                  </>
-                }
-              />
-            ),
+            rightSlot: <EnvironmentSharableTooltip />,
             onSelect: async () => {
               await patchModel(environment, { public: !environment.public });
             },

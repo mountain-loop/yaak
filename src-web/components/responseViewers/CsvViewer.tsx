@@ -10,7 +10,7 @@ interface Props {
 }
 
 export function CsvViewer({ response, className }: Props) {
-  const body = useResponseBodyText(response);
+  const body = useResponseBodyText({ response, filter: null });
 
   const parsed = useMemo(() => {
     if (body.data == null) return null;
