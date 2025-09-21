@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev --force",
     "build": "vite build",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "tsc --noEmit && eslint . --ext .ts,.tsx"
   },
   "dependencies": {
     "@codemirror/commands": "^6.8.1",

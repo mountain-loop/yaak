@@ -18,7 +18,7 @@ import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 export function useHttpAuthenticationConfig(
   authName: string | null,
   values: Record<string, JsonPrimitive>,
-  request: HttpRequest | GrpcRequest | WebsocketRequest,
+  request: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
 ) {
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const environmentId = useAtomValue(activeEnvironmentIdAtom);

@@ -32,7 +32,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
   const authConfig = useHttpAuthenticationConfig(
     model.authenticationType,
     model.authentication,
-    model.id,
+    model,
   );
 
   const handleChange = useCallback(
