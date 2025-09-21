@@ -27,7 +27,8 @@ import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { createRequestAndNavigate } from '../lib/createRequestAndNavigate';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { showDialog, toggleDialog } from '../lib/dialog';
+import { showDialog } from '../lib/dialog';
+import { editEnvironment } from '../lib/editEnvironment';
 import { renameModelWithPrompt } from '../lib/renameModelWithPrompt';
 import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
@@ -40,7 +41,6 @@ import { HttpMethodTag } from './core/HttpMethodTag';
 import { Icon } from './core/Icon';
 import { PlainInput } from './core/PlainInput';
 import { HStack } from './core/Stacks';
-import { EnvironmentEditDialog } from './EnvironmentEditDialog';
 
 interface CommandPaletteGroup {
   key: string;
@@ -125,15 +125,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         key: 'environment.edit',
         label: 'Edit Environment',
         action: 'environmentEditor.toggle',
-        onSelect: () => {
-          toggleDialog({
-            id: 'environment-editor',
-            noPadding: true,
-            size: 'lg',
-            className: 'h-[80vh]',
-            render: () => <EnvironmentEditDialog initialEnvironment={activeEnvironment} />,
-          });
-        },
+        onSelect: () => editEnvironment(activeEnvironment),
       },
       {
         key: 'environment.create',

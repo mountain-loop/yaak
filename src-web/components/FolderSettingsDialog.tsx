@@ -28,7 +28,7 @@ const TAB_HEADERS = 'headers';
 const TAB_VARIABLES = 'variables';
 const TAB_GENERAL = 'general';
 
-export type FolderSettingsTab = typeof TAB_AUTH | typeof TAB_HEADERS | typeof TAB_GENERAL;
+export type FolderSettingsTab = typeof TAB_AUTH | typeof TAB_HEADERS | typeof TAB_GENERAL | typeof TAB_VARIABLES;
 
 export function FolderSettingsDialog({ folderId, tab }: Props) {
   const folders = useAtomValue(foldersAtom);

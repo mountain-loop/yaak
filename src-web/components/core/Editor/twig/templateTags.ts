@@ -94,13 +94,16 @@ function templateTags(
             (o) => o.name === name || (o.type === 'function' && o.aliases?.includes(name)),
           );
           if (option == null) {
+            const from = node.from; // Cache here so the reference doesn't change
             option = {
               invalid: true,
               type: 'variable',
               name: inner,
               value: null,
               label: inner,
-              onClick: () => onClickMissingVariable(name, rawTag, node.from),
+              onClick: () => {
+                onClickMissingVariable(name, rawTag, from);
+              },
             };
           }
 

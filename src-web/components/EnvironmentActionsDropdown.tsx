@@ -1,16 +1,15 @@
 import classNames from 'classnames';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
-import { toggleDialog } from '../lib/dialog';
+import { editEnvironment } from '../lib/editEnvironment';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
-import { Button } from './core/Button';
 import type { ButtonProps } from './core/Button';
+import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
-import { EnvironmentEditDialog } from './EnvironmentEditDialog';
 
 type Props = {
   className?: string;
@@ -22,16 +21,6 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
 }: Props) {
   const { subEnvironments, baseEnvironment } = useEnvironmentsBreakdown();
   const activeEnvironment = useActiveEnvironment();
-
-  const showEnvironmentDialog = useCallback(() => {
-    toggleDialog({
-      id: 'environment-editor',
-      noPadding: true,
-      size: 'lg',
-      className: 'h-[80vh]',
-      render: () => <EnvironmentEditDialog initialEnvironment={activeEnvironment} />,
-    });
-  }, [activeEnvironment]);
 
   const items: DropdownItem[] = useMemo(
     () => [
@@ -55,14 +44,13 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         ? [{ type: 'separator', label: 'Environments' }]
         : []) as DropdownItem[]),
       {
-        key: 'edit',
         label: 'Manage Environments',
         hotKeyAction: 'environmentEditor.toggle',
         leftSlot: <Icon icon="box" />,
-        onSelect: showEnvironmentDialog,
+        onSelect: () => editEnvironment(activeEnvironment),
       },
     ],
-    [activeEnvironment?.id, subEnvironments, showEnvironmentDialog],
+    [subEnvironments, activeEnvironment],
   );
 
   const hasBaseVars =
@@ -79,7 +67,7 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         )}
         // If no environments, the button simply opens the dialog.
         // NOTE: We don't create a new button because we want to reuse the hotkey from the menu items
-        onClick={subEnvironments.length === 0 ? showEnvironmentDialog : undefined}
+        onClick={subEnvironments.length === 0 ? () => editEnvironment(null) : undefined}
         {...buttonProps}
       >
         <EnvironmentColorIndicator environment={activeEnvironment ?? null} />

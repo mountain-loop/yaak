@@ -35,10 +35,10 @@ import {
   rectangularSelection,
 } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
-import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import { graphql } from 'cm6-graphql';
 import type { GraphQLSchema } from 'graphql';
 import { activeRequestIdAtom } from '../../../hooks/useActiveRequestId';
+import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
 import { jotaiStore } from '../../../lib/jotai';
 import { renderMarkdown } from '../../../lib/markdown';
 import { pluralizeCount } from '../../../lib/pluralize';
@@ -110,8 +110,8 @@ export function getLanguageExtension({
   graphQLSchema,
 }: {
   useTemplating: boolean;
-  environmentVariables: EnvironmentVariable[];
-  onClickVariable: (option: EnvironmentVariable, tagValue: string, startPos: number) => void;
+  environmentVariables: WrappedEnvironmentVariable[];
+  onClickVariable: (option: WrappedEnvironmentVariable, tagValue: string, startPos: number) => void;
   onClickMissingVariable: (name: string, tagValue: string, startPos: number) => void;
   onClickPathParameter: (name: string) => void;
   completionOptions: TwigCompletionOption[];

@@ -2,7 +2,7 @@ import type { LanguageSupport } from '@codemirror/language';
 import { LRLanguage } from '@codemirror/language';
 import type { Extension } from '@codemirror/state';
 import { parseMixed } from '@lezer/common';
-import type { EnvironmentVariable } from '@yaakapp-internal/models';
+import type { WrappedEnvironmentVariable } from '../../../../hooks/useEnvironmentVariables';
 import type { GenericCompletionConfig } from '../genericCompletion';
 import { genericCompletion } from '../genericCompletion';
 import { textLanguage } from '../text/extension';
@@ -21,10 +21,10 @@ export function twig({
   extraExtensions,
 }: {
   base: LanguageSupport;
-  environmentVariables: EnvironmentVariable[];
+  environmentVariables: WrappedEnvironmentVariable[];
   completionOptions: TwigCompletionOption[];
   autocomplete?: GenericCompletionConfig;
-  onClickVariable: (option: EnvironmentVariable, tagValue: string, startPos: number) => void;
+  onClickVariable: (option: WrappedEnvironmentVariable, tagValue: string, startPos: number) => void;
   onClickMissingVariable: (name: string, tagValue: string, startPos: number) => void;
   onClickPathParameter: (name: string) => void;
   extraExtensions: Extension[];
@@ -33,9 +33,11 @@ export function twig({
 
   const variableOptions: TwigCompletionOption[] =
     environmentVariables.map((v) => ({
-      ...v,
+      name: v.variable.name,
+      value: v.variable.value,
       type: 'variable',
-      label: v.name,
+      label: v.variable.name,
+      description: `Inherited from ${v.source}`,
       onClick: (rawTag: string, startPos: number) => onClickVariable(v, rawTag, startPos),
     })) ?? [];
 
