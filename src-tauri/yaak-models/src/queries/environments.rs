@@ -33,13 +33,10 @@ impl<'a> DbContext<'a> {
             return Err(MultipleBaseEnvironments(workspace_id.to_string()));
         }
 
-        let base_environment =
-            base_environments.into_iter().find(|e| e.parent_id.is_none()).ok_or(
-                // Should never happen because one should be created above if it does not exist
-                MissingBaseEnvironment(workspace_id.to_string()),
-            )?;
-
-        Ok(base_environment)
+        Ok(base_environments.first().cloned().ok_or(
+            // Should never happen because one should be created above if it does not exist
+            MissingBaseEnvironment(workspace_id.to_string()),
+        )?)
     }
 
     /// Lists environments and will create a base environment if one doesn't exist

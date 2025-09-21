@@ -25,7 +25,7 @@ export function useEnvironmentVariables(environmentId: string | null) {
     ];
 
     for (const v of allVariables) {
-      if (!v.variable.enabled || !v.variable.name || varMap[v.variable.name] != null) {
+      if (!v.variable.enabled || !v.variable.name || v.variable.name in varMap) {
         continue;
       }
       varMap[v.variable.name] = v;
