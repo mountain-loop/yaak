@@ -140,7 +140,7 @@ export function EnvironmentEditor({
             },
           ]}
         >
-          This sharable environment contains plan-text secrets
+          This sharable environment contains plain-text secrets
         </DismissibleBanner>
       )}
       <div className="h-full pr-2 pb-2 grid grid-rows-[minmax(0,1fr)] overflow-auto">
