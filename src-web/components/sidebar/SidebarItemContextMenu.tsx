@@ -38,11 +38,6 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
     if (child.model === 'folder') {
       return [
         {
-          label: 'Send All',
-          leftSlot: <Icon icon="send_horizontal" />,
-          onSelect: () => sendManyRequests.mutate(child.children.map((c) => c.id)),
-        },
-        {
           label: 'Settings',
           leftSlot: <Icon icon="settings" />,
           onSelect: () => openFolderSettings(child.id),
@@ -51,6 +46,11 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
           label: 'Duplicate',
           leftSlot: <Icon icon="copy" />,
           onSelect: () => duplicateModelById(child.model, child.id),
+        },
+        {
+          label: 'Send All',
+          leftSlot: <Icon icon="send_horizontal" />,
+          onSelect: () => sendManyRequests.mutate(child.children.map((c) => c.id)),
         },
         {
           label: 'Delete',

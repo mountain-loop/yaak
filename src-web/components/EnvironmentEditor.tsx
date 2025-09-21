@@ -77,15 +77,13 @@ export function EnvironmentEditor({
   }, []);
 
   const valueType = !isEncryptionEnabled && valueVisibility.value ? 'text' : 'password';
-  const promptToEncrypt = useMemo(() => {
-    if (!isEncryptionEnabled) {
-      return true;
-    } else {
-      return !selectedEnvironment.variables.every(
+  const allVariableAreEncrypted = useMemo(
+    () =>
+      selectedEnvironment.variables.every(
         (v) => v.value === '' || analyzeTemplate(v.value) !== 'insecure',
-      );
-    }
-  }, [selectedEnvironment.variables, isEncryptionEnabled]);
+      ),
+    [selectedEnvironment.variables],
+  );
 
   const encryptEnvironment = (environment: Environment) => {
     withEncryptionEnabled(async () => {
@@ -105,7 +103,7 @@ export function EnvironmentEditor({
         <EnvironmentColorIndicator clickToEdit environment={selectedEnvironment ?? null} />
         {!hideName && <div className="mr-2">{selectedEnvironment?.name}</div>}
         {isEncryptionEnabled ? (
-          promptToEncrypt ? (
+          !allVariableAreEncrypted ? (
             <BadgeButton color="notice" onClick={() => encryptEnvironment(selectedEnvironment)}>
               Encrypt All Variables
             </BadgeButton>
@@ -129,14 +127,20 @@ export function EnvironmentEditor({
           {selectedEnvironment.public ? 'Sharable' : 'Private'}
         </BadgeButton>
       </Heading>
-      {selectedEnvironment.public && promptToEncrypt && (
+      {selectedEnvironment.public && (!isEncryptionEnabled || !allVariableAreEncrypted) && (
         <DismissibleBanner
           id={`warn-unencrypted-${selectedEnvironment.id}`}
           color="notice"
           className="mr-3"
+          actions={[
+            {
+              label: 'Encrypt Variables',
+              onClick: () => encryptEnvironment(selectedEnvironment),
+              color: 'primary',
+            },
+          ]}
         >
-          This environment is sharable. Ensure variable values are encrypted to avoid accidental
-          leaking of secrets during directory sync or data export.
+          This sharable environment contains plan-text secrets
         </DismissibleBanner>
       )}
       <div className="h-full pr-2 pb-2 grid grid-rows-[minmax(0,1fr)] overflow-auto">
