@@ -15,13 +15,13 @@ export function useEnvironmentVariables(environmentId: string | null) {
   return useMemo(() => {
     const varMap: Record<string, WrappedEnvironmentVariable> = {};
     const folderVariables = parentFolders.flatMap((f) =>
-      wrapVar(folderEnvironments.find((fe) => fe.parentId === f.id) ?? null),
+      wrapVariables(folderEnvironments.find((fe) => fe.parentId === f.id) ?? null),
     );
 
     const allVariables = [
       ...folderVariables,
-      ...wrapVar(activeEnvironment),
-      ...wrapVar(baseEnvironment),
+      ...wrapVariables(activeEnvironment),
+      ...wrapVariables(baseEnvironment),
     ];
 
     for (const v of allVariables) {
@@ -41,7 +41,7 @@ export interface WrappedEnvironmentVariable {
   source: string;
 }
 
-const wrapVar = (e: Environment | null): WrappedEnvironmentVariable[] => {
+function wrapVariables(e: Environment | null): WrappedEnvironmentVariable[] {
   if (e == null) return [];
   const folders = jotaiStore.get(foldersAtom);
   return e.variables.map((v) => {
@@ -49,4 +49,4 @@ const wrapVar = (e: Environment | null): WrappedEnvironmentVariable[] => {
     const source = folder?.name ?? e.name;
     return { variable: v, environment: e, source };
   });
-};
+}
