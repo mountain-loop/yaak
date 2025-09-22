@@ -1,9 +1,10 @@
 import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import React, { memo } from 'react';
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
+import { workspaceLayoutAtom } from '../lib/atoms';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
 import { BadgeButton } from './core/BadgeButton';
@@ -24,6 +25,7 @@ interface Props {
 
 export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Props) {
   const togglePalette = useToggleCommandPalette();
+  const [workspaceLayout, setWorkspaceLayout] = useAtom(workspaceLayoutAtom);
   const workspace = useAtomValue(activeWorkspaceAtom);
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const showEncryptionSetup =
@@ -57,6 +59,21 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         ) : (
           <LicenseBadge />
         )}
+        <IconButton
+          icon={
+            workspaceLayout === 'responsive'
+              ? 'magic_wand'
+              : workspaceLayout === 'horizontal'
+                ? 'columns_2'
+                : 'rows_2'
+          }
+          title="Search or execute a command"
+          size="sm"
+          iconColor="secondary"
+          onClick={() =>
+            setWorkspaceLayout((prev) => (prev === 'horizontal' ? 'vertical' : 'horizontal'))
+          }
+        />
         <IconButton
           icon={type() == 'macos' ? 'command' : 'square_terminal'}
           title="Search or execute a command"

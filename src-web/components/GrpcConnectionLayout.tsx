@@ -7,6 +7,7 @@ import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
 import { activeGrpcConnectionAtom, useGrpcEvents } from '../hooks/usePinnedGrpcConnection';
+import { workspaceLayoutAtom } from '../lib/atoms';
 import { Banner } from './core/Banner';
 import { HotKeyList } from './core/HotKeyList';
 import { SplitLayout } from './core/SplitLayout';
@@ -20,6 +21,7 @@ interface Props {
 const emptyArray: string[] = [];
 
 export function GrpcConnectionLayout({ style }: Props) {
+  const workspaceLayout = useAtomValue(workspaceLayoutAtom);
   const activeRequest = useActiveRequest('grpc_request');
   const activeConnection = useAtomValue(activeGrpcConnectionAtom);
   const grpcEvents = useGrpcEvents(activeConnection?.id ?? null);
@@ -80,6 +82,7 @@ export function GrpcConnectionLayout({ style }: Props) {
       name="grpc_layout"
       className="p-3 gap-1.5"
       style={style}
+      layout={workspaceLayout}
       firstSlot={({ style }) => (
         <GrpcRequestPane
           style={style}

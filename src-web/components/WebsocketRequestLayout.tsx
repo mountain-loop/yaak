@@ -1,7 +1,9 @@
 import type { WebsocketRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import React from 'react';
+import { workspaceLayoutAtom } from '../lib/atoms';
 import { SplitLayout } from './core/SplitLayout';
 import { WebsocketRequestPane } from './WebsocketRequestPane';
 import { WebsocketResponsePane } from './WebsocketResponsePane';
@@ -12,10 +14,12 @@ interface Props {
 }
 
 export function WebsocketRequestLayout({ activeRequest, style }: Props) {
+  const workspaceLayout = useAtomValue(workspaceLayoutAtom);
   return (
     <SplitLayout
       name="websocket_layout"
       className="p-3 gap-1.5"
+      layout={workspaceLayout}
       style={style}
       firstSlot={({ orientation, style }) => (
         <WebsocketRequestPane

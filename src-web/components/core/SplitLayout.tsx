@@ -8,6 +8,8 @@ import { useContainerSize } from '../../hooks/useContainerQuery';
 import { clamp } from '../../lib/clamp';
 import { ResizeHandle } from '../ResizeHandle';
 
+export type SplitLayoutLayout = 'responsive' | 'horizontal' | 'vertical';
+
 export interface SlotProps {
   orientation: 'horizontal' | 'vertical';
   style: CSSProperties;
@@ -22,7 +24,7 @@ interface Props {
   defaultRatio?: number;
   minHeightPx?: number;
   minWidthPx?: number;
-  layout?: 'responsive' | 'vertical' | 'horizontal';
+  layout?: SplitLayoutLayout;
 }
 
 const baseProperties = { minWidth: 0 };
