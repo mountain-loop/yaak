@@ -206,7 +206,7 @@ function KeyRevealer({
       <VStack space={0.5}>
         {!disableLabel && (
           <span className="text-sm text-primary flex items-center gap-1">
-            workspace encryption key{' '}
+            Workspace encryption key{' '}
             <IconTooltip iconSize="sm" size="lg" content={helpAfterEncryption} />
           </span>
         )}

@@ -1,9 +1,7 @@
-import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
 import React, { memo } from 'react';
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
-import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { workspaceLayoutAtom } from '../lib/atoms';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
@@ -24,7 +22,6 @@ interface Props {
 }
 
 export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Props) {
-  const togglePalette = useToggleCommandPalette();
   const [workspaceLayout, setWorkspaceLayout] = useAtom(workspaceLayoutAtom);
   const workspace = useAtomValue(activeWorkspaceAtom);
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
@@ -59,6 +56,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         ) : (
           <LicenseBadge />
         )}
+        <SettingsDropdown />
         <IconButton
           icon={
             workspaceLayout === 'responsive'
@@ -67,21 +65,13 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
                 ? 'columns_2'
                 : 'rows_2'
           }
-          title="Search or execute a command"
+          title={`Change to ${workspaceLayout === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
           size="sm"
           iconColor="secondary"
           onClick={() =>
             setWorkspaceLayout((prev) => (prev === 'horizontal' ? 'vertical' : 'horizontal'))
           }
         />
-        <IconButton
-          icon={type() == 'macos' ? 'command' : 'square_terminal'}
-          title="Search or execute a command"
-          size="sm"
-          iconColor="secondary"
-          onClick={togglePalette}
-        />
-        <SettingsDropdown />
       </div>
     </div>
   );
