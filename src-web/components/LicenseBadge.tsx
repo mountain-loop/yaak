@@ -2,8 +2,8 @@ import type { LicenseCheckStatus } from '@yaakapp-internal/license';
 import { useLicense } from '@yaakapp-internal/license';
 import type { ReactNode } from 'react';
 import { openSettings } from '../commands/openSettings';
-import { appInfo } from '../lib/appInfo';
 import { useLicenseConfirmation } from '../hooks/useLicenseConfirmation';
+import { appInfo } from '../lib/appInfo';
 import { BadgeButton } from './core/BadgeButton';
 import type { ButtonProps } from './core/Button';
 
@@ -26,11 +26,9 @@ export function LicenseBadge() {
   }
 
   if (check.error) {
-    return (
-      <BadgeButton color="danger" onClick={() => openSettings.mutate('license')}>
-        License Error
-      </BadgeButton>
-    );
+    // Failed to check for license. Probably a network or server error so just don't
+    // show anything.
+    return null;
   }
 
   // Hasn't loaded yet
