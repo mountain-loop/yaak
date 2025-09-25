@@ -72,11 +72,15 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Some things (eg. WASM package) requires building before lint will work
       - name: Run bootstrap
         run: npm run bootstrap
 
       - name: Run lint
         run: npm run lint
+
+      - name: Run tests
+        run: npm test
 
       - name: Set version
         run: npm run replace-version

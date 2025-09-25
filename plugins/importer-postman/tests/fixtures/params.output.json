@@ -13,6 +13,8 @@
         "workspaceId": "GENERATE_ID::WORKSPACE_1",
         "model": "environment",
         "name": "Global Variables",
+        "parentId": null,
+        "parentModel": "workspace",
         "variables": [
           {
             "name": "COLLECTION VARIABLE",
@@ -28,6 +30,7 @@
         "workspaceId": "GENERATE_ID::WORKSPACE_1",
         "folderId": null,
         "name": "Form URL",
+        "sortPriority": 0,
         "method": "POST",
         "url": "example.com/:foo/:bar",
         "urlParameters": [

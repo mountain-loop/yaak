@@ -57,9 +57,11 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
 
   const rawDescription = info.description;
   const description =
-    typeof rawDescription === 'object' && rawDescription !== null && 'content' in rawDescription
+    typeof rawDescription === 'object' && rawDescription != null && 'content' in rawDescription
       ? String(rawDescription.content)
-      : String(rawDescription);
+      : rawDescription == null
+        ? undefined
+        : String(rawDescription);
 
   const workspace: ExportResources['workspaces'][0] = {
     model: 'workspace',
@@ -75,6 +77,8 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
     id: generateId('environment'),
     name: 'Global Variables',
     workspaceId: workspace.id,
+    parentModel: 'workspace',
+    parentId: null,
     variables:
       toArray<{ key: string; value: string }>(root.variable).map((v) => ({
         name: v.key,

@@ -92,7 +92,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
         />
       </TabContent>
       <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-4">
-        <VStack space={4} alignItems="start" className="pb-3 h-full">
+        <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] gap-4 pb-3 h-full">
           <PlainInput
             required
             hideLabel
@@ -141,7 +141,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
               />
             </InlineCode>
           </HStack>
-        </VStack>
+        </div>
       </TabContent>
       <TabContent value={TAB_DATA} className="overflow-y-auto h-full px-4">
         <VStack space={4} alignItems="start" className="pb-3 h-full">

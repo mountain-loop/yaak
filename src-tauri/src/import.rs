@@ -39,6 +39,19 @@ pub(crate) async fn import_data<R: Runtime>(
         .map(|mut v| {
             v.id = maybe_gen_id::<Environment>(v.id.as_str(), &mut id_map);
             v.workspace_id = maybe_gen_id::<Workspace>(v.workspace_id.as_str(), &mut id_map);
+            match (v.parent_model.as_str(), v.parent_id.clone().as_deref()) {
+                ("folder", Some(parent_id)) => {
+                    v.parent_id = Some(maybe_gen_id::<Folder>(&parent_id, &mut id_map));
+                }
+                ("", _) => {
+                    // Fix any empty ones
+                    v.parent_model = "workspace".to_string();
+                }
+                _ => {
+                    // Parent ID only required for the folder case
+                    v.parent_id = None;
+                }
+            };
             v
         })
         .collect();

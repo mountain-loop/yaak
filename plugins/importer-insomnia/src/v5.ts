@@ -30,18 +30,25 @@ export function convertInsomniaV5(parsed: any) {
     model: 'workspace',
     name: parsed.name,
     description: meta.description || undefined,
+    ...importHeaders(parsed),
+    ...importAuthentication(parsed),
   });
+
+  // Import environments
   resources.environments.push(
     importEnvironment(parsed.environments, meta.id, true),
     ...(parsed.environments.subEnvironments ?? []).map((r: any) => importEnvironment(r, meta.id)),
   );
 
+  // Import folders
   const nextFolder = (children: any[], parentId: string) => {
     for (const child of children ?? []) {
       if (!isJSObject(child)) continue;
 
       if (Array.isArray(child.children)) {
-        resources.folders.push(importFolder(child, meta.id, parentId));
+        const { folder, environment } = importFolder(child, meta.id, parentId);
+        resources.folders.push(folder);
+        if (environment) resources.environments.push(environment);
         nextFolder(child.children, child.meta.id);
       } else if (child.method) {
         resources.httpRequests.push(importHttpRequest(child, meta.id, parentId));
@@ -191,8 +198,8 @@ function importWebsocketRequest(
   };
 }
 
-function importHeaders(r: any) {
-  const headers = (r.headers ?? [])
+function importHeaders(obj: any) {
+  const headers = (obj.headers ?? [])
     .map((h: any) => ({
       enabled: !h.disabled,
       name: h.name ?? '',
@@ -202,19 +209,19 @@ function importHeaders(r: any) {
   return { headers } as const;
 }
 
-function importAuthentication(r: any) {
+function importAuthentication(obj: any) {
   let authenticationType: string | null = null;
   let authentication = {};
-  if (r.authentication?.type === 'bearer') {
+  if (obj.authentication?.type === 'bearer') {
     authenticationType = 'bearer';
     authentication = {
-      token: convertSyntax(r.authentication.token),
+      token: convertSyntax(obj.authentication.token),
     };
-  } else if (r.authentication?.type === 'basic') {
+  } else if (obj.authentication?.type === 'basic') {
     authenticationType = 'basic';
     authentication = {
-      username: convertSyntax(r.authentication.username),
-      password: convertSyntax(r.authentication.password),
+      username: convertSyntax(obj.authentication.username),
+      password: convertSyntax(obj.authentication.password),
     };
   }
 
@@ -225,22 +232,50 @@ function importFolder(
   f: any,
   workspaceId: string,
   parentId: string,
-): PartialImportResources['folders'][0] {
+): {
+  folder: PartialImportResources['folders'][0];
+  environment: PartialImportResources['environments'][0] | null;
+} {
   const id = f.meta?.id ?? f._id;
   const created = f.meta?.created ?? f.created;
   const updated = f.meta?.modified ?? f.updated;
   const sortKey = f.meta?.sortKey ?? f.sortKey;
 
+  let environment: PartialImportResources['environments'][0] | null = null;
+  if (Object.keys(f.environment ?? {}).length > 0) {
+    environment = {
+      id: convertId(id + 'folder'),
+      createdAt: created ? new Date(created).toISOString().replace('Z', '') : undefined,
+      updatedAt: updated ? new Date(updated).toISOString().replace('Z', '') : undefined,
+      workspaceId: convertId(workspaceId),
+      public: true,
+      parentModel: 'folder',
+      parentId: convertId(id),
+      model: 'environment',
+      name: 'Folder Environment',
+      variables: Object.entries(f.environment ?? {}).map(([name, value]) => ({
+        enabled: true,
+        name,
+        value: `${value}`,
+      })),
+    };
+  }
+
   return {
-    model: 'folder',
-    id: convertId(id),
-    createdAt: created ? new Date(created).toISOString().replace('Z', '') : undefined,
-    updatedAt: updated ? new Date(updated).toISOString().replace('Z', '') : undefined,
-    folderId: parentId === workspaceId ? null : convertId(parentId),
-    sortPriority: sortKey,
-    workspaceId: convertId(workspaceId),
-    description: f.description || undefined,
-    name: f.name,
+    folder: {
+      model: 'folder',
+      id: convertId(id),
+      createdAt: created ? new Date(created).toISOString().replace('Z', '') : undefined,
+      updatedAt: updated ? new Date(updated).toISOString().replace('Z', '') : undefined,
+      folderId: parentId === workspaceId ? null : convertId(parentId),
+      sortPriority: sortKey,
+      workspaceId: convertId(workspaceId),
+      description: f.description || undefined,
+      name: f.name,
+      ...importAuthentication(f),
+      ...importHeaders(f),
+    },
+    environment,
   };
 }
 
@@ -263,7 +298,8 @@ function importEnvironment(
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error
     sortPriority: sortKey, // Will be added to Yaak later
-    base: isParent ?? e.parentId === workspaceId,
+    parentModel: isParent ? 'workspace' : 'environment',
+    parentId: null,
     model: 'environment',
     name: e.name,
     variables: Object.entries(e.data ?? {}).map(([name, value]) => ({

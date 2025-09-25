@@ -4,11 +4,12 @@
       {
         "createdAt": "2025-01-13T15:15:43.767",
         "updatedAt": "2025-01-13T15:15:55.209",
-        "base": true,
         "public": true,
         "id": "GENERATE_ID::env_20945044d3c8497ca8b717bef750987e",
         "model": "environment",
         "name": "Base Environment",
+        "parentId": null,
+        "parentModel": "workspace",
         "variables": [
           {
             "enabled": true,
@@ -21,11 +22,12 @@
       {
         "createdAt": "2025-01-13T15:15:58.515",
         "updatedAt": "2025-01-13T15:16:34.705",
-        "base": false,
         "public": true,
         "id": "GENERATE_ID::env_6f7728bb7fc04d558d668e954d756ea2",
         "model": "environment",
         "name": "Production",
+        "parentId": null,
+        "parentModel": "environment",
         "sortPriority": 1736781358515,
         "variables": [
           {
@@ -39,8 +41,9 @@
       {
         "createdAt": "2025-01-13T15:16:14.707",
         "updatedAt": "2025-01-13T15:16:31.078",
-        "base": false,
         "public": true,
+        "parentId": null,
+        "parentModel": "environment",
         "id": "GENERATE_ID::env_976a8b6eb5d44fb6a20150f65c32d243",
         "model": "environment",
         "name": "Staging",
@@ -64,7 +67,10 @@
         "model": "folder",
         "name": "Top Level",
         "sortPriority": -1736781404718,
-        "workspaceId": "GENERATE_ID::wrk_c1eacfa750a04f3ea9985ef28043fa53"
+        "workspaceId": "GENERATE_ID::wrk_c1eacfa750a04f3ea9985ef28043fa53",
+        "authentication": {},
+        "authenticationType": null,
+        "headers": []
       }
     ],
     "grpcRequests": [
@@ -165,7 +171,10 @@
         "description": "This is the description",
         "id": "GENERATE_ID::wrk_c1eacfa750a04f3ea9985ef28043fa53",
         "model": "workspace",
-        "name": "Dummy"
+        "name": "Dummy",
+        "authentication": {},
+        "authenticationType": null,
+        "headers": []
       }
     ]
   }

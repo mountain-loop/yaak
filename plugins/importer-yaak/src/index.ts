@@ -69,15 +69,13 @@ export function migrateImport(contents: string) {
   // Migrate v4 to v5
   for (const environment of parsed.resources.environments ?? []) {
     if ('base' in environment && environment.base) {
-      environment.parentId = environment.workspaceId;
-      environment.parentType = 'workspace';
-      delete environment.environmentId;
+      environment.parentModel = 'workspace';
+      environment.parentId = null;
+      delete environment.base;
     } else if ('base' in environment && !environment.base) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const baseEnvironment = parsed.resources.environments.find((e: any) => e.base);
-      environment.parentId = baseEnvironment?.id ?? null;
-      environment.parentType = 'environment';
-      delete environment.environmentId;
+      environment.parentModel = 'environment';
+      environment.parentId = null;
+      delete environment.base;
     }
   }
 

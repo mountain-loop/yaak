@@ -5,7 +5,8 @@
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "lint":"tsc --noEmit && eslint . --ext .ts,.tsx"
+    "lint":"tsc --noEmit && eslint . --ext .ts,.tsx",
+    "test": "vitest --run tests"
   },
   "dependencies": {
     "date-fns": "^4.1.0"

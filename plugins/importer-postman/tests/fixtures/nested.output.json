@@ -13,7 +13,9 @@
         "model": "environment",
         "name": "Global Variables",
         "variables": [],
-        "workspaceId": "GENERATE_ID::WORKSPACE_0"
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "parentId": null,
+        "parentModel": "workspace"
       }
     ],
     "httpRequests": [
@@ -25,6 +27,7 @@
         "name": "Request 1",
         "method": "GET",
         "url": "",
+        "sortPriority": 2,
         "urlParameters": [],
         "body": {},
         "bodyType": null,
@@ -39,6 +42,7 @@
         "folderId": "GENERATE_ID::FOLDER_0",
         "name": "Request 2",
         "method": "GET",
+        "sortPriority": 3,
         "url": "",
         "urlParameters": [],
         "body": {},
@@ -52,6 +56,7 @@
         "id": "GENERATE_ID::HTTP_REQUEST_2",
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
         "folderId": null,
+        "sortPriority": 4,
         "name": "Request 3",
         "method": "GET",
         "url": "",
@@ -69,6 +74,7 @@
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
         "id": "GENERATE_ID::FOLDER_0",
         "name": "Top Folder",
+        "sortPriority": 0,
         "folderId": null
       },
       {
@@ -76,6 +82,7 @@
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
         "id": "GENERATE_ID::FOLDER_1",
         "name": "Nested Folder",
+        "sortPriority": 1,
         "folderId": "GENERATE_ID::FOLDER_0"
       }
     ]

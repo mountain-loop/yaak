@@ -57,6 +57,7 @@
     "migration": "node scripts/create-migration.cjs",
     "build": "npm run --workspaces --if-present build",
     "build-plugins": "npm run --workspaces --if-present build",
+    "test": "npm run --workspaces --if-present test",
     "icons": "run-p icons:*",
     "icons:dev": "tauri icon src-tauri/icons/icon.png --output src-tauri/icons/release",
     "icons:release": "tauri icon src-tauri/icons/icon-dev.png --output src-tauri/icons/dev",
