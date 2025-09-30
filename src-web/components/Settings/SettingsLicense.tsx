@@ -4,6 +4,7 @@ import { differenceInDays } from 'date-fns';
 import React, { useState } from 'react';
 import { useToggle } from '../../hooks/useToggle';
 import { pluralizeCount } from '../../lib/pluralize';
+import { CargoFeature } from '../CargoFeature';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import { Icon } from '../core/Icon';
@@ -13,6 +14,14 @@ import { HStack, VStack } from '../core/Stacks';
 import { LocalImage } from '../LocalImage';
 
 export function SettingsLicense() {
+  return (
+    <CargoFeature feature="license">
+      <SettingsLicenseCmp />
+    </CargoFeature>
+  );
+}
+
+function SettingsLicenseCmp() {
   const { check, activate, deactivate } = useLicense();
   const [key, setKey] = useState<string>('');
   const [activateFormVisible, toggleActivateFormVisible] = useToggle(false);

@@ -32,6 +32,9 @@ strip = true  # Automatically strip symbols from the binary.
 
 [features]
 cargo-clippy = []
+default = []
+updater = []
+license = ["yaak-license"]
 
 [build-dependencies]
 tauri-build = { version = "2.4.1", features = [] }
@@ -74,7 +77,7 @@ yaak-fonts = { workspace = true }
 yaak-git = { path = "yaak-git" }
 yaak-grpc = { path = "yaak-grpc" }
 yaak-http = { workspace = true }
-yaak-license = { path = "yaak-license" }
+yaak-license = { path = "yaak-license", optional = true }
 yaak-mac-window = { path = "yaak-mac-window" }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }

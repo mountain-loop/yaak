@@ -5,6 +5,7 @@ import { useAtomValue } from 'jotai';
 import type { ReactNode } from 'react';
 import { openSettings } from '../commands/openSettings';
 import { appInfo } from '../lib/appInfo';
+import { CargoFeature } from './CargoFeature';
 import { BadgeButton } from './core/BadgeButton';
 import type { ButtonProps } from './core/Button';
 
@@ -19,6 +20,14 @@ const details: Record<
 };
 
 export function LicenseBadge() {
+  return (
+    <CargoFeature feature="license">
+      <LicenseBadgeCmp />
+    </CargoFeature>
+  );
+}
+
+function LicenseBadgeCmp() {
   const { check } = useLicense();
   const settings = useAtomValue(settingsAtom);
 

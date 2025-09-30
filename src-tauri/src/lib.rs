@@ -73,6 +73,8 @@ struct AppMetaData {
     name: String,
     app_data_dir: String,
     app_log_dir: String,
+    feature_updater: bool,
+    feature_license: bool,
 }
 
 #[tauri::command]
@@ -85,6 +87,8 @@ async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
         name: app_handle.package_info().name.to_string(),
         app_data_dir: app_data_dir.to_string_lossy().to_string(),
         app_log_dir: app_log_dir.to_string_lossy().to_string(),
+        feature_license: cfg!(feature = "license"),
+        feature_updater: cfg!(feature = "updater"),
     })
 }
 
@@ -1254,7 +1258,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(yaak_license::init())
         .plugin(yaak_mac_window::init())
         .plugin(yaak_models::init())
         .plugin(yaak_plugins::init())
@@ -1263,6 +1266,11 @@ pub fn run() {
         .plugin(yaak_git::init())
         .plugin(yaak_ws::init())
         .plugin(yaak_sync::init());
+
+    #[cfg(feature = "license")]
+    {
+        builder = builder.plugin(yaak_license::init());
+    }
 
     builder
         .setup(|app| {
@@ -1380,19 +1388,21 @@ pub fn run() {
                     label,
                     ..
                 } => {
-                    let w = app_handle.get_webview_window(&label).unwrap();
-                    let h = app_handle.clone();
-
-                    // Run update check whenever the window is focused
-                    tauri::async_runtime::spawn(async move {
-                        if w.db().get_settings().autoupdate {
-                            let val: State<'_, Mutex<YaakUpdater>> = h.state();
-                            let update_mode = get_update_mode(&w).await.unwrap();
-                            if let Err(e) = val.lock().await.maybe_check(&w, update_mode).await {
-                                warn!("Failed to check for updates {e:?}");
+                    if cfg!(feature = "updater") {
+                        // Run update check whenever the window is focused
+                        let w = app_handle.get_webview_window(&label).unwrap();
+                        let h = app_handle.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if w.db().get_settings().autoupdate {
+                                let val: State<'_, Mutex<YaakUpdater>> = h.state();
+                                let update_mode = get_update_mode(&w).await.unwrap();
+                                if let Err(e) = val.lock().await.maybe_check(&w, update_mode).await
+                                {
+                                    warn!("Failed to check for updates {e:?}");
+                                }
                             };
-                        };
-                    });
+                        });
+                    }
 
                     let h = app_handle.clone();
                     tauri::async_runtime::spawn(async move {

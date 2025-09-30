@@ -4,8 +4,10 @@ import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import React, { useState } from 'react';
 import { useKeyPressEvent } from 'react-use';
+import { appInfo } from '../../lib/appInfo';
 import { capitalize } from '../../lib/capitalize';
 import { HStack } from '../core/Stacks';
+import type { TabItem } from '../core/Tabs/Tabs';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { HeaderSize } from '../HeaderSize';
 import { SettingsInterface } from './SettingsInterface';
@@ -72,21 +74,27 @@ export default function Settings({ hide }: Props) {
         tabListClassName="min-w-[10rem] bg-surface x-theme-sidebar border-r border-border pl-3"
         label="Settings"
         onChangeValue={setTab}
-        tabs={tabs.map((value) => ({ value, label: capitalize(value) }))}
+        tabs={tabs.map(
+          (value): TabItem => ({
+            value,
+            label: capitalize(value),
+            hidden: !appInfo.featureLicense && value === TAB_LICENSE,
+          }),
+        )}
       >
-        <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full p-8">
+        <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-8 !py-4">
           <SettingsGeneral />
         </TabContent>
-        <TabContent value={TAB_INTERFACE} className="overflow-y-auto h-full p-8">
+        <TabContent value={TAB_INTERFACE} className="overflow-y-auto h-full px-8 !py-4">
           <SettingsInterface />
         </TabContent>
-        <TabContent value={TAB_THEME} className="overflow-y-auto h-full p-8">
+        <TabContent value={TAB_THEME} className="overflow-y-auto h-full px-8 !py-4">
           <SettingsTheme />
         </TabContent>
-        <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1 p-8">
+        <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1 px-8 !py-4">
           <SettingsPlugins />
         </TabContent>
-        <TabContent value={TAB_PROXY} className="overflow-y-auto h-full p-8!">
+        <TabContent value={TAB_PROXY} className="overflow-y-auto h-full px-8 !py-4">
           <SettingsProxy />
         </TabContent>
         <TabContent value={TAB_LICENSE} className="overflow-y-auto h-full px-8 !py-4">

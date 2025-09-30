@@ -74,6 +74,7 @@ export function SettingsDropdown() {
         {
           label: 'Check for Updates',
           leftSlot: <Icon icon="update" />,
+          hidden: !appInfo.featureUpdater,
           onSelect: () => checkForUpdates.mutate(),
         },
         {

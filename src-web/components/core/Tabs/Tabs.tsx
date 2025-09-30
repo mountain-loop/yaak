@@ -10,6 +10,7 @@ export type TabItem =
   | {
       value: string;
       label: string;
+      hidden?: boolean;
       rightSlot?: ReactNode;
     }
   | {
@@ -97,6 +98,10 @@ export function Tabs({
           )}
         >
           {tabs.map((t) => {
+            if ('hidden' in t && t.hidden) {
+              return null;
+            }
+
             const isActive = t.value === value;
             const btnClassName = classNames(
               'h-sm flex items-center rounded whitespace-nowrap',

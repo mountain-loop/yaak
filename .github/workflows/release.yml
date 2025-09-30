@@ -114,4 +114,4 @@ jobs:
           releaseBody: '[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)'
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: '${{ matrix.args }} --features "updates commercial"'
