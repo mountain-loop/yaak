@@ -541,10 +541,15 @@ pub struct Environment {
 
     pub name: String,
     pub public: bool,
-    pub variables: Vec<EnvironmentVariable>,
-    pub color: Option<String>,
+    #[deprecated(
+        note = "parent_model is used instead. This field will be removed when schema field is added for sync/export."
+    )]
+    #[ts(skip)]
+    pub base: bool,
     pub parent_model: String,
     pub parent_id: Option<String>,
+    pub variables: Vec<EnvironmentVariable>,
+    pub color: Option<String>,
 }
 
 impl UpsertModelInfo for Environment {
@@ -603,6 +608,8 @@ impl UpsertModelInfo for Environment {
         Self: Sized,
     {
         let variables: String = row.get("variables")?;
+        let parent_model = row.get("parent_model")?;
+        let base = parent_model == "workspace";
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -610,11 +617,16 @@ impl UpsertModelInfo for Environment {
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
             parent_id: row.get("parent_id")?,
-            parent_model: row.get("parent_model")?,
+            parent_model,
             color: row.get("color")?,
             name: row.get("name")?,
             public: row.get("public")?,
             variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
+
+            // Deprecated field, but we need to keep it around for a couple of versions
+            // for compatibility because sync/export don't have a schema field
+            #[allow(deprecated)]
+            base,
         })
     }
 }
