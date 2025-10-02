@@ -48,6 +48,8 @@ impl<'a> DbContext<'a> {
                     workspace_id: workspace_id.to_string(),
                     name: "Global Variables".to_string(),
                     parent_model: "workspace".to_string(),
+                    #[allow(deprecated)]
+                    base: true,
                     ..Default::default()
                 },
                 &UpdateSource::Background,
@@ -141,6 +143,8 @@ impl<'a> DbContext<'a> {
             &Environment {
                 name,
                 variables: cleaned_variables,
+                #[allow(deprecated)]
+                base: environment.parent_model == "workspace",
                 ..environment.clone()
             },
             source,
