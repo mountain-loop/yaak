@@ -11,12 +11,14 @@ import { useAtom, useAtomValue } from 'jotai';
 import React, { useCallback, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
 import { useKey, useKeyPressEvent } from 'react-use';
-import { activeRequestIdAtom } from '../../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useCreateDropdownItems } from '../../hooks/useCreateDropdownItems';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useSidebarHidden } from '../../hooks/useSidebarHidden';
-import { getSidebarCollapsedMap } from '../../hooks/useSidebarItemCollapsed';
+import {
+  sidebarCollapsedAtom,
+  toggleSidebarItemCollapsed,
+} from '../../hooks/useSidebarItemCollapsed';
 import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
 import { jotaiStore } from '../../lib/jotai';
 import { router } from '../../lib/router';
@@ -25,7 +27,12 @@ import { ContextMenu } from '../core/Dropdown';
 import { GitDropdown } from '../GitDropdown';
 import type { DragItem } from './dnd';
 import { ItemTypes } from './dnd';
-import { sidebarSelectedIdAtom, sidebarTreeAtom } from './SidebarAtoms';
+import {
+  sidebarActiveItemAtom,
+  sidebarHasFocusAtom,
+  sidebarSelectedIdAtom,
+  sidebarTreeAtom,
+} from './SidebarAtoms';
 import type { SidebarItemProps } from './SidebarItem';
 import { SidebarItems } from './SidebarItems';
 
@@ -50,16 +57,16 @@ export function Sidebar({ className }: Props) {
   const [hidden, setHidden] = useSidebarHidden();
   const sidebarRef = useRef<HTMLElement>(null);
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
-  const [hasFocus, setHasFocus] = useState<boolean>(false);
+  const [hasFocus, setHasFocus] = useAtom(sidebarHasFocusAtom);
   const [selectedId, setSelectedId] = useAtom(sidebarSelectedIdAtom);
   const [selectedTree, setSelectedTree] = useState<SidebarTreeNode | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoveredTree, setHoveredTree] = useState<SidebarTreeNode | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const { tree, treeParentMap, selectableRequests } = useAtomValue(sidebarTreeAtom);
+  const { tree, treeParentMap, selectableItems } = useAtomValue(sidebarTreeAtom);
 
-  const focusActiveRequest = useCallback(
+  const focusActiveItem = useCallback(
     (
       args: {
         forced?: {
@@ -69,11 +76,11 @@ export function Sidebar({ className }: Props) {
         noFocusSidebar?: boolean;
       } = {},
     ) => {
-      const activeRequestId = jotaiStore.get(activeRequestIdAtom);
+      const activeItemId = jotaiStore.get(sidebarActiveItemAtom)?.id;
       const { forced, noFocusSidebar } = args;
-      const tree = forced?.tree ?? treeParentMap[activeRequestId ?? 'n/a'] ?? null;
+      const tree = forced?.tree ?? treeParentMap[activeItemId ?? 'n/a'] ?? null;
       const children = tree?.children ?? [];
-      const id = forced?.id ?? children.find((m) => m.id === activeRequestId)?.id ?? null;
+      const id = forced?.id ?? children.find((m) => m.id === activeItemId)?.id ?? null;
 
       setHasFocus(true);
       setSelectedId(id);
@@ -99,31 +106,29 @@ export function Sidebar({ className }: Props) {
       }
 
       // NOTE: I'm not sure why, but TS thinks workspaceId is (string | undefined) here
-      if (node.model !== 'folder' && node.workspaceId) {
+      if (node.workspaceId) {
         const workspaceId = node.workspaceId;
         await router.navigate({
           to: '/workspaces/$workspaceId',
           params: { workspaceId },
-          search: (prev) => ({ ...prev, request_id: node.id }),
+          search: (prev) =>
+            node.model === 'folder'
+              ? { ...prev, folder_id: node.id, request_id: null }
+              : { ...prev, folder_id: null, request_id: node.id },
         });
-
-        setHasFocus(true);
-        setSelectedId(id);
-        setSelectedTree(tree);
       }
+
+      setHasFocus(true);
+      setSelectedId(id);
+      setSelectedTree(tree);
     },
-    [treeParentMap, setSelectedId],
+    [treeParentMap, setHasFocus, setSelectedId],
   );
 
   const handleClearSelected = useCallback(() => {
     setSelectedId(null);
     setSelectedTree(null);
   }, [setSelectedId]);
-
-  const handleFocus = useCallback(() => {
-    if (hasFocus) return;
-    focusActiveRequest({ noFocusSidebar: true });
-  }, [focusActiveRequest, hasFocus]);
 
   const handleBlur = useCallback(() => setHasFocus(false), [setHasFocus]);
 
@@ -150,8 +155,8 @@ export function Sidebar({ className }: Props) {
       await setHidden(false);
     }
 
-    // Select 0th index on focus if none selected
-    focusActiveRequest(
+    // Select the 0th index on focus if none selected
+    focusActiveItem(
       selectedTree != null && selectedId != null
         ? { forced: { id: selectedId, tree: selectedTree } }
         : undefined,
@@ -159,14 +164,19 @@ export function Sidebar({ className }: Props) {
   });
 
   useKeyPressEvent('Enter', async (e) => {
-    if (!hasFocus) return;
-    const selected = selectableRequests.find((r) => r.id === selectedId);
+    if (!hasFocus) {
+      return;
+    }
+    const selected = selectableItems.find((r) => r.id === selectedId);
     if (!selected || activeWorkspace == null) {
       return;
     }
-
     e.preventDefault();
-    setWorkspaceSearchParams({ request_id: selected.id });
+    if (selected.model === 'folder') {
+      toggleSidebarItemCollapsed(selected.id);
+    } else {
+      setWorkspaceSearchParams({ request_id: selected.id, folder_id: null });
+    }
   });
 
   useKey(
@@ -174,9 +184,9 @@ export function Sidebar({ className }: Props) {
     (e) => {
       if (!hasFocus) return;
       e.preventDefault();
-      const i = selectableRequests.findIndex((r) => r.id === selectedId);
-      const newI = i <= 0 ? selectableRequests.length - 1 : i - 1;
-      const newSelectable = selectableRequests[newI];
+      const i = selectableItems.findIndex((r) => r.id === selectedId);
+      const newI = i <= 0 ? selectableItems.length - 1 : i - 1;
+      const newSelectable = selectableItems[newI];
       if (newSelectable == null) {
         return;
       }
@@ -185,7 +195,7 @@ export function Sidebar({ className }: Props) {
       setSelectedTree(newSelectable.tree);
     },
     undefined,
-    [hasFocus, selectableRequests, selectedId, setSelectedId, setSelectedTree],
+    [hasFocus, selectableItems, selectedId, setSelectedId, setSelectedTree],
   );
 
   useKey(
@@ -193,9 +203,9 @@ export function Sidebar({ className }: Props) {
     (e) => {
       if (!hasFocus) return;
       e.preventDefault();
-      const i = selectableRequests.findIndex((r) => r.id === selectedId);
-      const newI = i >= selectableRequests.length - 1 ? 0 : i + 1;
-      const newSelectable = selectableRequests[newI];
+      const i = selectableItems.findIndex((r) => r.id === selectedId);
+      const newI = i >= selectableItems.length - 1 ? 0 : i + 1;
+      const newSelectable = selectableItems[newI];
       if (newSelectable == null) {
         return;
       }
@@ -204,7 +214,7 @@ export function Sidebar({ className }: Props) {
       setSelectedTree(newSelectable.tree);
     },
     undefined,
-    [hasFocus, selectableRequests, selectedId, setSelectedId, setSelectedTree],
+    [hasFocus, selectableItems, selectedId, setSelectedId, setSelectedTree],
   );
 
   const handleMoveToSidebarEnd = useCallback(() => {
@@ -220,7 +230,7 @@ export function Sidebar({ className }: Props) {
       const hoveredItem = hoveredTree?.children[dragIndex] ?? null;
       let hoveredIndex = dragIndex + (side === 'above' ? 0 : 1);
 
-      const collapsedMap = getSidebarCollapsedMap();
+      const collapsedMap = jotaiStore.get(jotaiStore.get(sidebarCollapsedAtom));
       const isHoveredItemCollapsed = hoveredItem != null ? collapsedMap[hoveredItem.id] : false;
 
       if (hoveredItem?.model === 'folder' && side === 'below' && !isHoveredItemCollapsed) {
@@ -331,16 +341,15 @@ export function Sidebar({ className }: Props) {
     <aside
       aria-hidden={hidden ?? undefined}
       ref={sidebarRef}
-      onFocus={handleFocus}
       onBlur={handleBlur}
       tabIndex={hidden ? -1 : 0}
       onContextMenu={handleMainContextMenu}
       data-focused={hasFocus}
       className={classNames(
         className,
-        // Style item selection color here, because it's very hard to do in an efficient
-        // way in the item itself (selection ID makes it hard)
-        hasFocus && '[&_[data-selected=true]]:bg-surface-active',
+        // Style item selection color here, because it's very hard to do
+        // efficiently in the item itself (selection ID makes it hard)
+        hasFocus && '[&_[data-selected=true]]:ring-1 [&_[data-selected=true]]:ring-border-focus',
         'h-full grid grid-rows-[minmax(0,1fr)_auto]',
       )}
     >

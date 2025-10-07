@@ -71,7 +71,7 @@ export const SidebarItems = memo(function SidebarItems({
               onDragStart={handleDragStart}
               child={child}
             >
-              {child.model === 'folder' && draggingId !== child.id ? (
+              {child.model === 'folder' && draggingId !== child.id && child.children.length > 0 ? (
                 <SidebarItems
                   draggingId={draggingId}
                   handleDragStart={handleDragStart}

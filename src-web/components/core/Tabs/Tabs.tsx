@@ -83,13 +83,13 @@ export function Tabs({
         aria-label={label}
         className={classNames(
           tabListClassName,
-          addBorders && '!-ml-1',
-          addBorders && layout === 'vertical' && 'mb-2',
+          addBorders && layout === 'horizontal' && 'pl-3 -ml-1',
+          addBorders && layout === 'vertical' && 'ml-0 mb-2',
           'flex items-center hide-scrollbars',
           layout === 'horizontal' && 'h-full overflow-auto p-2 -mr-2',
           layout === 'vertical' && 'overflow-x-auto overflow-y-visible ',
           // Give space for button focus states within overflow boundary.
-          layout === 'vertical' && 'py-1 -ml-5 pl-3 pr-1',
+          !addBorders && layout === 'vertical' && 'py-1 pl-3 -ml-5 pr-1',
         )}
       >
         <div
@@ -125,6 +125,8 @@ export function Tabs({
                 <RadioDropdown
                   key={t.value}
                   items={t.options.items}
+                  itemsAfter={t.options.itemsAfter}
+                  itemsBefore={t.options.itemsBefore}
                   value={t.options.value}
                   onChange={t.options.onChange}
                 >

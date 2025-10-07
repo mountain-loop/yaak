@@ -1,22 +1,35 @@
-import {
-  type Folder,
-  foldersAtom,
-  type GrpcRequest,
-  type HttpRequest,
-  type WebsocketRequest,
-} from '@yaakapp-internal/models';
+import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import { foldersAtom } from '@yaakapp-internal/models';
 
 // This is an atom, so we can use it in the child items to avoid re-rendering the entire list
 import { atom } from 'jotai';
+import { activeFolderAtom } from '../../hooks/useActiveFolder';
+import { activeRequestAtom } from '../../hooks/useActiveRequest';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { allRequestsAtom } from '../../hooks/useAllRequests';
+import { sidebarCollapsedAtom } from '../../hooks/useSidebarItemCollapsed';
 import { deepEqualAtom } from '../../lib/atoms';
 import { resolvedModelName } from '../../lib/resolvedModelName';
 import type { SidebarTreeNode } from './Sidebar';
 
-export const sidebarSelectedIdAtom = atom<string | null>(null);
+type SidebarModel = Folder | HttpRequest | GrpcRequest | WebsocketRequest;
+type SidebarChild = Pick<
+  SidebarModel,
+  'id' | 'model' | 'folderId' | 'name' | 'workspaceId' | 'sortPriority'
+>;
 
-const allPotentialChildrenAtom = atom((get) => {
+export const sidebarHasFocusAtom = atom<boolean>(false);
+export const sidebarSelectedIdAtom = atom<string | null>(null);
+export const sidebarActiveIdAtom = atom<string | null>((get) => {
+  return get(sidebarActiveItemAtom)?.id ?? null;
+});
+export const sidebarActiveItemAtom = atom<SidebarModel | null>((get) => {
+  const activeRequest = get(activeRequestAtom);
+  const activeFolder = get(activeFolderAtom);
+  return activeRequest ?? activeFolder ?? null;
+});
+
+const allPotentialChildrenAtom = atom<SidebarChild[]>((get) => {
   const requests = get(allRequestsAtom);
   const folders = get(foldersAtom);
   return [...requests, ...folders].map((v) => ({
@@ -31,19 +44,24 @@ const allPotentialChildrenAtom = atom((get) => {
 
 const memoAllPotentialChildrenAtom = deepEqualAtom(allPotentialChildrenAtom);
 
+interface SelectableItem {
+  id: SidebarChild['id'];
+  model: SidebarChild['model'];
+  index: number;
+  tree: SidebarTreeNode;
+  depth: number;
+}
+
 export const sidebarTreeAtom = atom<{
   tree: SidebarTreeNode | null;
   treeParentMap: Record<string, SidebarTreeNode>;
-  selectableRequests: {
-    id: string;
-    index: number;
-    tree: SidebarTreeNode;
-  }[];
+  selectableItems: SelectableItem[];
 }>((get) => {
+  const collapsedMap = get(get(sidebarCollapsedAtom));
   const allModels = get(memoAllPotentialChildrenAtom);
   const activeWorkspace = get(activeWorkspaceAtom);
 
-  const childrenMap: Record<string, typeof allModels> = {};
+  const childrenMap: Record<string, SidebarChild[]> = {};
   for (const item of allModels) {
     if ('folderId' in item && item.folderId == null) {
       childrenMap[item.workspaceId] = childrenMap[item.workspaceId] ?? [];
@@ -55,21 +73,18 @@ export const sidebarTreeAtom = atom<{
   }
 
   const treeParentMap: Record<string, SidebarTreeNode> = {};
-  const selectableRequests: {
-    id: string;
-    index: number;
-    tree: SidebarTreeNode;
-  }[] = [];
+  const selectableItems: SelectableItem[] = [];
 
   if (activeWorkspace == null) {
-    return { tree: null, treeParentMap, selectableRequests };
+    return { tree: null, treeParentMap, selectableItems };
   }
 
-  const selectedRequest: HttpRequest | GrpcRequest | WebsocketRequest | null = null;
-  let selectableRequestIndex = 0;
+  const selectedItem: Folder | HttpRequest | GrpcRequest | WebsocketRequest | null = null;
+  let selectableIndex = 0;
 
   // Put requests and folders into a tree structure
   const next = (node: SidebarTreeNode): SidebarTreeNode => {
+    const isCollapsed = collapsedMap[node.id] === true;
     const childItems = childrenMap[node.id] ?? [];
 
     // Recurse to children
@@ -77,16 +92,17 @@ export const sidebarTreeAtom = atom<{
     childItems.sort((a, b) => a.sortPriority - b.sortPriority);
     for (const childItem of childItems) {
       treeParentMap[childItem.id] = node;
-      // Add to children
-      node.children.push(next(itemFromModel(childItem, depth)));
-      // Add to selectable requests
-      if (childItem.model !== 'folder') {
-        selectableRequests.push({
+      if (!isCollapsed) {
+        selectableItems.push({
           id: childItem.id,
-          index: selectableRequestIndex++,
+          model: childItem.model,
+          index: selectableIndex++,
           tree: node,
+          depth,
         });
       }
+
+      node.children.push(next(itemFromModel(childItem, depth)));
     }
 
     return node;
@@ -100,7 +116,14 @@ export const sidebarTreeAtom = atom<{
     depth: 0,
   });
 
-  return { tree, treeParentMap, selectableRequests, selectedRequest };
+  console.log('HELLO', selectableItems);
+
+  return {
+    tree,
+    treeParentMap,
+    selectableItems,
+    selectedItem,
+  };
 });
 
 function itemFromModel(

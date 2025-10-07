@@ -11,19 +11,17 @@ import type { ReactElement } from 'react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { XYCoord } from 'react-dnd';
 import { useDrag, useDrop } from 'react-dnd';
-import { activeRequestAtom } from '../../hooks/useActiveRequest';
 import { allRequestsAtom } from '../../hooks/useAllRequests';
-import { useScrollIntoView } from '../../hooks/useScrollIntoView';
 import { useSidebarItemCollapsed } from '../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../lib/jotai';
 import { HttpMethodTag } from '../core/HttpMethodTag';
 import { HttpStatusTag } from '../core/HttpStatusTag';
 import { Icon } from '../core/Icon';
 import { LoadingIcon } from '../core/LoadingIcon';
-import type { DragItem} from './dnd';
+import type { DragItem } from './dnd';
 import { ItemTypes } from './dnd';
 import type { SidebarTreeNode } from './Sidebar';
-import { sidebarSelectedIdAtom } from './SidebarAtoms';
+import { sidebarActiveIdAtom, sidebarSelectedIdAtom } from './SidebarAtoms';
 import { SidebarItemContextMenu } from './SidebarItemContextMenu';
 import type { SidebarItemsProps } from './SidebarItems';
 
@@ -102,9 +100,9 @@ export const SidebarItem = memo(function SidebarItem({
 
   const [editing, setEditing] = useState<boolean>(false);
 
-  const [selected, setSelected] = useState<boolean>(
-    jotaiStore.get(sidebarSelectedIdAtom) == itemId,
-  );
+  const [active, setActive] = useState<boolean>(jotaiStore.get(sidebarActiveIdAtom) === itemId);
+  const [selected, setSelected] = useState<boolean>(jotaiStore.get(sidebarSelectedIdAtom) === itemId);
+
   useEffect(() => {
     return jotaiStore.sub(sidebarSelectedIdAtom, () => {
       const value = jotaiStore.get(sidebarSelectedIdAtom);
@@ -112,16 +110,19 @@ export const SidebarItem = memo(function SidebarItem({
     });
   }, [itemId]);
 
-  const [active, setActive] = useState<boolean>(jotaiStore.get(activeRequestAtom)?.id === itemId);
-  useEffect(
-    () =>
-      jotaiStore.sub(activeRequestAtom, () =>
-        setActive(jotaiStore.get(activeRequestAtom)?.id === itemId),
-      ),
-    [itemId],
-  );
-
-  useScrollIntoView(ref.current, active);
+  useEffect(() => {
+    jotaiStore.sub(sidebarActiveIdAtom, () => {
+      const isActive = jotaiStore.get(sidebarActiveIdAtom) === itemId;
+      setActive(isActive);
+    });
+    jotaiStore.sub(sidebarSelectedIdAtom, () => {
+      const isSelected = jotaiStore.get(sidebarSelectedIdAtom) === itemId;
+      setSelected(isSelected);
+      if (isSelected) {
+        ref.current?.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  }, [itemId]);
 
   const handleSubmitNameEdit = useCallback(
     async (el: HTMLInputElement) => {
@@ -155,15 +156,17 @@ export const SidebarItem = memo(function SidebarItem({
     [handleSubmitNameEdit],
   );
 
-  const handleStartEditing = useCallback(() => {
+  const handleDoubleClick = useCallback(() => {
     if (
-      itemModel !== 'http_request' &&
-      itemModel !== 'grpc_request' &&
-      itemModel !== 'websocket_request'
-    )
-      return;
-    setEditing(true);
-  }, [setEditing, itemModel]);
+      itemModel === 'http_request' ||
+      itemModel === 'grpc_request' ||
+      itemModel === 'websocket_request'
+    ) {
+      setEditing(true);
+    } else {
+      toggleCollapsed();
+    }
+  }, [itemModel, toggleCollapsed]);
 
   const handleBlur = useCallback(
     async (e: React.FocusEvent<HTMLInputElement>) => {
@@ -173,12 +176,8 @@ export const SidebarItem = memo(function SidebarItem({
   );
 
   const handleSelect = useCallback(async () => {
-    if (itemModel === 'folder') {
-      toggleCollapsed();
-    } else {
-      onSelect(itemId);
-    }
-  }, [itemModel, toggleCollapsed, onSelect, itemId]);
+    onSelect(itemId);
+  }, [onSelect, itemId]);
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
     y: number;
@@ -194,11 +193,8 @@ export const SidebarItem = memo(function SidebarItem({
 
   const itemAtom = useMemo(() => {
     return atom((get) => {
-      if (itemModel === 'folder') {
-        return get(foldersAtom).find((v) => v.id === itemId);
-      } else {
-        return get(allRequestsAtom).find((v) => v.id === itemId);
-      }
+      const items = itemModel === 'folder' ? get(foldersAtom) : get(allRequestsAtom);
+      return items.find((v) => v.id === itemId);
     });
   }, [itemId, itemModel]);
 
@@ -228,32 +224,40 @@ export const SidebarItem = memo(function SidebarItem({
             close={handleCloseContextMenu}
           />
         )}
-        <button
-          // tabIndex={-1} // Will prevent drag-n-drop
-          disabled={editing}
-          onClick={handleSelect}
-          onDoubleClick={handleStartEditing}
+        <div
           onContextMenu={handleContextMenu}
           data-active={active}
           data-selected={selected}
           className={classNames(
-            'w-full flex gap-1.5 items-center h-xs px-1.5 rounded-md focus-visible:ring focus-visible:ring-border-focus outline-0',
+            'w-full flex gap-1.5 items-center h-xs pl-[0.33rem] pr-1.5 rounded-md focus-visible:ring focus-visible:ring-border-focus outline-0',
+            'text-text-subtle',
             editing && 'ring-1 focus-within:ring-focus',
-            'hover:bg-surface-highlight',
-            active && 'bg-surface-highlight text-text',
-            !active && 'text-text-subtle',
+            active && 'bg-surface-active !text-text',
             showContextMenu && '!text-text', // Show as "active" when the context menu is open
           )}
         >
           {itemModel === 'folder' && (
-            <Icon
-              size="sm"
-              icon="chevron_right"
-              color="secondary"
-              className={classNames('transition-transform', !collapsed && 'transform rotate-90')}
-            />
+            <>
+              <button onClick={toggleCollapsed} type="button" className="px-1.5 -mx-1.5 h-full">
+                <Icon
+                  size="sm"
+                  icon={children ? 'chevron_right' : 'empty'}
+                  className={classNames(
+                    'transition-transform text-text-subtlest',
+                    !collapsed && 'transform rotate-90',
+                  )}
+                />
+              </button>
+              <Icon icon="folder" />
+            </>
           )}
-          <div className="flex items-center gap-2 min-w-0">
+          <button
+            // tabIndex={-1} // Will prevent drag-n-drop
+            className="flex items-center gap-2 min-w-0 h-full w-full text-left"
+            disabled={editing}
+            onClick={handleSelect}
+            onDoubleClick={handleDoubleClick}
+          >
             {itemPrefix}
             {editing ? (
               <input
@@ -266,7 +270,7 @@ export const SidebarItem = memo(function SidebarItem({
             ) : (
               <div className="truncate w-full">{itemName}</div>
             )}
-          </div>
+          </button>
           {latestGrpcConnection ? (
             <div className="ml-auto">
               {latestGrpcConnection.state !== 'closed' && (
@@ -292,7 +296,7 @@ export const SidebarItem = memo(function SidebarItem({
               )}
             </div>
           ) : null}
-        </button>
+        </div>
       </div>
       {collapsed ? null : children}
     </li>

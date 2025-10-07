@@ -10,6 +10,7 @@ export function setWorkspaceSearchParams(
     cookie_jar_id: string | null;
     environment_id: string | null;
     request_id: string | null;
+    folder_id: string | null;
   }>,
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

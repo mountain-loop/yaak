@@ -12,6 +12,8 @@ import {
   activeEnvironmentAtom,
   useSubscribeActiveEnvironmentId,
 } from '../hooks/useActiveEnvironment';
+import { activeFolderAtom } from '../hooks/useActiveFolder';
+import { useSubscribeActiveFolderId } from '../hooks/useActiveFolderId';
 import { activeRequestAtom } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
@@ -26,7 +28,7 @@ import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
-import { duplicateRequestAndNavigate } from '../lib/duplicateRequestAndNavigate';
+import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFolderAndNavigate';
 import { importData } from '../lib/importData';
 import { jotaiStore } from '../lib/jotai';
 import { Banner } from './core/Banner';
@@ -36,6 +38,7 @@ import { FeedbackLink } from './core/Link';
 import { HStack } from './core/Stacks';
 import { CreateDropdown } from './CreateDropdown';
 import { ErrorBoundary } from './ErrorBoundary';
+import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
 import { HeaderSize } from './HeaderSize';
 import { HttpRequestLayout } from './HttpRequestLayout';
@@ -43,6 +46,7 @@ import { Overlay } from './Overlay';
 import { ResizeHandle } from './ResizeHandle';
 import { Sidebar } from './sidebar/Sidebar';
 import { SidebarActions } from './sidebar/SidebarActions';
+import { sidebarActiveItemAtom } from './sidebar/SidebarAtoms';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
 
@@ -193,7 +197,7 @@ export function Workspace() {
             style={environmentBgStyle}
             className="absolute inset-0 opacity-5"
           />
-          <div // Add subtle border bottom
+          <div // Add a subtle border bottom
             style={environmentBgStyle}
             className="absolute left-0 right-0 bottom-0 h-[0.5px] opacity-20"
           />
@@ -209,6 +213,7 @@ export function Workspace() {
 
 function WorkspaceBody() {
   const activeRequest = useAtomValue(activeRequestAtom);
+  const activeFolder = useAtomValue(activeFolderAtom);
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
 
   if (activeWorkspace == null) {
@@ -228,39 +233,40 @@ function WorkspaceBody() {
     );
   }
 
-  if (activeRequest == null) {
-    return (
-      <HotKeyList
-        hotkeys={['http_request.create', 'sidebar.focus', 'settings.show']}
-        bottomSlot={
-          <HStack space={1} justifyContent="center" className="mt-3">
-            <Button variant="border" size="sm" onClick={() => importData.mutate()}>
-              Import
-            </Button>
-            <CreateDropdown hideFolder>
-              <Button variant="border" forDropdown size="sm">
-                New Request
-              </Button>
-            </CreateDropdown>
-          </HStack>
-        }
-      />
-    );
+  if (activeRequest?.model === 'grpc_request') {
+    return <GrpcConnectionLayout style={body} />;
+  } else if (activeRequest?.model === 'websocket_request') {
+    return <WebsocketRequestLayout style={body} activeRequest={activeRequest} />;
+  } else if (activeRequest?.model === 'http_request') {
+    return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
+  } else if (activeFolder != null) {
+    return <FolderLayout folder={activeFolder} style={body} />;
   }
 
-  if (activeRequest.model === 'grpc_request') {
-    return <GrpcConnectionLayout style={body} />;
-  } else if (activeRequest.model === 'websocket_request') {
-    return <WebsocketRequestLayout style={body} activeRequest={activeRequest} />;
-  } else {
-    return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
-  }
+  return (
+    <HotKeyList
+      hotkeys={['http_request.create', 'sidebar.focus', 'settings.show']}
+      bottomSlot={
+        <HStack space={1} justifyContent="center" className="mt-3">
+          <Button variant="border" size="sm" onClick={() => importData.mutate()}>
+            Import
+          </Button>
+          <CreateDropdown hideFolder>
+            <Button variant="border" forDropdown size="sm">
+              New Request
+            </Button>
+          </CreateDropdown>
+        </HStack>
+      }
+    />
+  );
 }
 
 function useGlobalWorkspaceHooks() {
   useEnsureActiveCookieJar();
 
   useSubscribeActiveRequestId();
+  useSubscribeActiveFolderId();
   useSubscribeActiveEnvironmentId();
   useSubscribeActiveCookieJarId();
 
@@ -275,6 +281,6 @@ function useGlobalWorkspaceHooks() {
   useHotKey('command_palette.toggle', toggleCommandPalette);
 
   useHotKey('http_request.duplicate', () =>
-    duplicateRequestAndNavigate(jotaiStore.get(activeRequestAtom)),
+    duplicateRequestOrFolderAndNavigate(jotaiStore.get(sidebarActiveItemAtom)),
   );
 }
