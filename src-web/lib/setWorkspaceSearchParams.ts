@@ -1,3 +1,5 @@
+import type { Folder, GrpcRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import type { HttpRequest } from '@yaakapp-internal/sync';
 import { router } from './router.js';
 
 /**
@@ -18,4 +20,15 @@ export function setWorkspaceSearchParams(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     search: (prev: any) => ({ ...prev, ...search }),
   });
+}
+
+export function navigateToRequestOrFolder(
+  id: string,
+  model: (Folder | HttpRequest | GrpcRequest | WebsocketRequest)['model'],
+) {
+  if (model === 'folder') {
+    setWorkspaceSearchParams({ request_id: null, folder_id: id });
+  } else {
+    setWorkspaceSearchParams({ request_id: id, folder_id: null });
+  }
 }

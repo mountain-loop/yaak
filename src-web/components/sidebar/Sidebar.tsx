@@ -21,8 +21,10 @@ import {
 } from '../../hooks/useSidebarItemCollapsed';
 import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
 import { jotaiStore } from '../../lib/jotai';
-import { router } from '../../lib/router';
-import { setWorkspaceSearchParams } from '../../lib/setWorkspaceSearchParams';
+import {
+  navigateToRequestOrFolder,
+  setWorkspaceSearchParams,
+} from '../../lib/setWorkspaceSearchParams';
 import { ContextMenu } from '../core/Dropdown';
 import { GitDropdown } from '../GitDropdown';
 import type { DragItem } from './dnd';
@@ -107,15 +109,7 @@ export function Sidebar({ className }: Props) {
 
       // NOTE: I'm not sure why, but TS thinks workspaceId is (string | undefined) here
       if (node.workspaceId) {
-        const workspaceId = node.workspaceId;
-        await router.navigate({
-          to: '/workspaces/$workspaceId',
-          params: { workspaceId },
-          search: (prev) =>
-            node.model === 'folder'
-              ? { ...prev, folder_id: node.id, request_id: null }
-              : { ...prev, folder_id: null, request_id: node.id },
-        });
+        navigateToRequestOrFolder(node.id, node.model);
       }
 
       setHasFocus(true);
@@ -193,6 +187,9 @@ export function Sidebar({ className }: Props) {
 
       setSelectedId(newSelectable.id);
       setSelectedTree(newSelectable.tree);
+      if (e.shiftKey) {
+        navigateToRequestOrFolder(newSelectable.id, newSelectable.model);
+      }
     },
     undefined,
     [hasFocus, selectableItems, selectedId, setSelectedId, setSelectedTree],
@@ -212,6 +209,9 @@ export function Sidebar({ className }: Props) {
 
       setSelectedId(newSelectable.id);
       setSelectedTree(newSelectable.tree);
+      if (e.shiftKey) {
+        navigateToRequestOrFolder(newSelectable.id, newSelectable.model);
+      }
     },
     undefined,
     [hasFocus, selectableItems, selectedId, setSelectedId, setSelectedTree],
