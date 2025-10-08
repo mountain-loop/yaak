@@ -1,7 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { atom } from 'jotai';
-import { InlineCode } from '../../components/core/InlineCode';
-import { HStack } from '../../components/core/Stacks';
 import type { TreeNode } from '../../components/core/tree/atoms';
 import { Tree } from '../../components/core/tree/Tree';
 import { jotaiStore } from '../../lib/jotai';
@@ -17,34 +15,76 @@ interface Dummy {
 }
 
 const root: TreeNode<Dummy> = {
-  id: 'root',
   icon: 'folder',
   item: { id: 'root', name: 'Workspace', model: 'workspace' },
   children: [
     {
-      id: 'f1',
-      item: { id: 'f1', model: 'folder', name: 'Folder 1' },
       icon: 'folder',
+      item: { id: 'f1', model: 'folder', name: 'Folder 1' },
       children: [
         {
-          id: 'r1',
           item: { id: 'r1', model: 'request', name: 'Request 1' },
         },
         {
-          id: 'r2',
           item: { id: 'r2', model: 'request', name: 'Request 2' },
+        },
+        {
+          icon: 'folder',
+          item: { id: 'f3', model: 'folder', name: 'Folder 3' },
+          children: [
+            {
+              item: { id: 'r3', model: 'request', name: 'Request 3' },
+            },
+            {
+              icon: 'folder',
+              item: { id: 'f4', model: 'folder', name: 'Folder 4' },
+              children: [
+                {
+                  item: { id: 'r4', model: 'request', name: 'Request 4' },
+                },
+                {
+                  item: { id: 'r5', model: 'request', name: 'Request 5' },
+                },
+              ],
+            },
+          ],
         },
       ],
     },
     {
-      id: 'f2',
       icon: 'folder',
       item: { id: 'f2', model: 'folder', name: 'Folder 2' },
+      children: [
+        {
+          item: { id: 'r6', model: 'request', name: 'Auth: Login' },
+        },
+        {
+          item: { id: 'r7', model: 'request', name: 'Auth: Logout' },
+        },
+        {
+          icon: 'folder',
+          item: { id: 'f5', model: 'folder', name: 'Subfolder A' },
+          children: [
+            {
+              item: { id: 'r8', model: 'request', name: 'Nested Request 1' },
+            },
+            {
+              item: { id: 'r9', model: 'request', name: 'Nested Request 2' },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      icon: 'folder',
+      item: { id: 'f6', model: 'folder', name: 'Folder 3 (Empty)' },
       children: [],
+    },
+    {
+      item: { id: 'r10', model: 'request', name: 'Top-level Request' },
     },
   ],
 };
-
 const selectedIdAtom = atom<string | null>('r2');
 
 function RouteComponent() {
