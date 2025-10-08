@@ -1,3 +1,4 @@
+import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { Fragment } from 'react';
 import { DropMarker } from '../../DropMarker';
@@ -9,7 +10,7 @@ import { TreeItem } from './TreeItem';
 
 export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'renderRow' | 'treeId' | 'selectedIdAtom' | 'onSelect' | 'getItemKey'
+  'renderItem' | 'treeId' | 'selectedIdAtom' | 'onSelect' | 'getItemKey'
 > &
   Pick<TreeItemProps<T>, 'onMove' | 'onEnd' | 'onDragStart'> & {
     node: TreeNode<T>;
@@ -17,16 +18,16 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
     onEnd: (item: T) => void;
     onDragStart: (item: T) => void;
     depth: number;
-    hoveredNode: TreeNode<T> | null;
+    hoveredParent: TreeNode<T> | null;
     hoveredIndex: number | null;
   };
 
 export function TreeItemList<T extends { id: string }>({
   treeId,
   node,
-  hoveredNode,
+  hoveredParent,
   hoveredIndex,
-  renderRow,
+  renderItem,
   selectedIdAtom,
   onSelect,
   getItemKey,
@@ -37,45 +38,56 @@ export function TreeItemList<T extends { id: string }>({
 }: TreeItemListProps<T>) {
   const collapsedMap = useAtomValue(collapsedFamily(treeId));
   const isCollapsed = collapsedMap[node.item.id] === true;
+
+  const childList = !isCollapsed && node.children != null && (
+    <ul
+      className={classNames(
+        depth > 0 && 'ml-[calc(0.6rem+1px)] pl-[calc(0.6rem)] border-l',
+        hoveredParent?.item.id === node.item.id ? 'border-l-text-subtlest' : 'border-l-border-subtle',
+      )}
+    >
+      {node.children.map((child, i) => (
+        <Fragment key={getItemKey(child.item)}>
+          {hoveredIndex === i && hoveredParent?.item.id === node.item.id && <DropMarker />}
+          <TreeItemList
+            treeId={treeId}
+            node={child}
+            selectedIdAtom={selectedIdAtom}
+            renderItem={renderItem}
+            onSelect={onSelect}
+            onMove={onMove}
+            onEnd={onEnd}
+            onDragStart={onDragStart}
+            depth={depth + 1}
+            getItemKey={getItemKey}
+            hoveredParent={hoveredParent}
+            hoveredIndex={hoveredIndex}
+          />
+        </Fragment>
+      ))}
+      {hoveredIndex === node.children?.length && hoveredParent?.item.id === node.item.id && (
+        <DropMarker />
+      )}
+    </ul>
+  );
+
+  if (depth === 0) {
+    return childList;
+  }
+
   return (
-    <>
+    <li>
       <TreeItem
-        className="relative z-10"
         treeId={treeId}
         node={node}
         selectedIdAtom={selectedIdAtom}
-        renderRow={renderRow}
+        renderItem={renderItem}
         onSelect={onSelect}
         onMove={onMove}
         onEnd={onEnd}
         onDragStart={onDragStart}
       />
-      {!isCollapsed && node.children != null && (
-        <ul className="ml-[calc(1rem-0.5px)] pl-[calc(1rem-0.5px)] border-l border-l-border-subtle">
-          {node.children.map((child, i) => (
-            <Fragment key={getItemKey(child.item)}>
-              {hoveredIndex === i && hoveredNode?.item.id === node.item.id && <DropMarker />}
-              <TreeItemList
-                treeId={treeId}
-                node={child}
-                selectedIdAtom={selectedIdAtom}
-                renderRow={renderRow}
-                onSelect={onSelect}
-                onMove={onMove}
-                onEnd={onEnd}
-                onDragStart={onDragStart}
-                depth={depth + 1}
-                getItemKey={getItemKey}
-                hoveredNode={hoveredNode}
-                hoveredIndex={hoveredIndex}
-              />
-            </Fragment>
-          ))}
-          {hoveredIndex === node.children?.length && hoveredNode?.item.id === node.item.id && (
-            <DropMarker />
-          )}
-        </ul>
-      )}
-    </>
+      {childList}
+    </li>
   );
 }

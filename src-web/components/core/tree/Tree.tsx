@@ -1,4 +1,5 @@
-import type { Atom } from 'jotai';
+import classNames from 'classnames';
+import type { WritableAtom } from 'jotai';
 import type { ReactNode } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
@@ -14,9 +15,9 @@ export interface TreeProps<T extends { id: string }> {
   root: TreeNode<T>;
   treeId: string;
   getItemKey: (item: T) => string;
-  renderRow: (item: T) => ReactNode;
+  renderItem: (item: T) => ReactNode;
   className?: string;
-  selectedIdAtom: Atom<string | null>;
+  selectedIdAtom: WritableAtom<string | null, (string | null)[], void>;
   onSelect?: (item: T) => void;
 }
 
@@ -24,17 +25,17 @@ export function Tree<T extends { id: string }>({
   root,
   treeId,
   getItemKey,
-  renderRow,
+  renderItem,
   className,
   selectedIdAtom,
   onSelect,
 }: TreeProps<T>) {
   const treeRef = useRef<HTMLDivElement>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [, setDraggingId] = useState<string | null>(null);
   const [hoveredParent, setHoveredParent] = useState<TreeNode<T> | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const { treeParentMap, selectableItems } = useTreeParentMap(root);
+  const { treeParentMap } = useTreeParentMap(root);
 
   const handleMove = useCallback<TreeItemProps<T>['onMove']>(
     (item, side) => {
@@ -63,11 +64,15 @@ export function Tree<T extends { id: string }>({
     setDraggingId(item.id);
   }, []);
 
+  const handleClearSelected = useCallback(() => {
+    jotaiStore.set(selectedIdAtom, null);
+  }, [selectedIdAtom]);
+
   const handleEnd = useCallback<TreeItemProps<T>['onEnd']>(
     async (item) => {
       setHoveredParent(null);
       setDraggingId(null);
-      // handleClearSelected();
+      handleClearSelected();
 
       if (hoveredParent == null || hoveredIndex == null) {
         return;
@@ -122,7 +127,7 @@ export function Tree<T extends { id: string }>({
       //   await patchModelById(child.model, child.id, { sortPriority, folderId });
       // }
     },
-    [hoveredParent, hoveredIndex, treeParentMap],
+    [handleClearSelected, hoveredParent, hoveredIndex, treeParentMap],
   );
 
   const handleMoveToSidebarEnd = useCallback(() => {
@@ -147,18 +152,21 @@ export function Tree<T extends { id: string }>({
   connectDrop(treeRef);
 
   return (
-    <div ref={treeRef} className={className}>
+    <div
+      ref={treeRef}
+      className={classNames(className, 'h-full overflow-x-hidden overflow-y-auto')}
+    >
       <TreeItemList
         depth={0}
         getItemKey={getItemKey}
         hoveredIndex={hoveredIndex}
-        hoveredNode={hoveredParent}
+        hoveredParent={hoveredParent}
         node={root}
         onDragStart={handleDragStart}
         onEnd={handleEnd}
         onMove={handleMove}
         onSelect={onSelect}
-        renderRow={renderRow}
+        renderItem={renderItem}
         selectedIdAtom={selectedIdAtom}
         treeId={treeId}
       />

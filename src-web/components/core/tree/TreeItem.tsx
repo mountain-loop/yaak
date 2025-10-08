@@ -10,7 +10,7 @@ import { ItemTypes } from './dnd';
 import type { TreeProps } from './Tree';
 
 export interface TreeItemProps<T extends { id: string }>
-  extends Pick<TreeProps<T>, 'renderRow' | 'treeId' | 'selectedIdAtom' | 'onSelect'> {
+  extends Pick<TreeProps<T>, 'renderItem' | 'treeId' | 'selectedIdAtom' | 'onSelect'> {
   node: TreeNode<T>;
   className?: string;
   onMove: (item: T, side: 'above' | 'below') => void;
@@ -21,7 +21,7 @@ export interface TreeItemProps<T extends { id: string }>
 export function TreeItem<T extends { id: string }>({
   treeId,
   node,
-  renderRow,
+  renderItem,
   selectedIdAtom,
   onMove,
   onDragStart,
@@ -29,7 +29,7 @@ export function TreeItem<T extends { id: string }>({
   onSelect,
   className,
 }: TreeItemProps<T>) {
-  const ref = useRef<HTMLLIElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const isSelected = useAtomValue(selectedIdAtom) == node.item.id;
   const [collapsedMap, setCollapsedMap] = useAtom(collapsedFamily(treeId));
 
@@ -86,41 +86,42 @@ export function TreeItem<T extends { id: string }>({
   connectDrag(connectDrop(ref));
 
   return (
-    <li
+    <div
       ref={ref}
       draggable
       className={classNames(
         className,
-        '!tree-item h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded',
+        'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded',
         isSelected && 'bg-surface-highlight',
       )}
     >
-      <div className="flex h-full">
-        {node.children != null && (
-          <button className="h-full w-[2rem]" onClick={handleCollapse}>
-            <Icon
-              icon="chevron_right"
-              className={classNames(
-                'transition-transform text-text-subtlest',
-                'mx-auto !h-[1rem] !w-[1rem]',
-                node.children.length == 0 && 'opacity-0',
-                !collapsedMap[node.item.id] && 'rotate-90',
-              )}
-            />
-          </button>
-        )}
-      </div>
+      {node.children != null ? (
+        <button className="h-full w-[2.6rem] pr-[0.4rem] -ml-[1rem]" onClick={handleCollapse}>
+          <Icon
+            icon="chevron_right"
+            className={classNames(
+              'transition-transform text-text-subtlest',
+              'ml-auto !h-[1rem] !w-[1rem]',
+              node.children.length == 0 && 'opacity-0',
+              !collapsedMap[node.item.id] && 'rotate-90',
+            )}
+          />
+        </button>
+      ) : (
+        <span />
+      )}
       <button
         onClick={handleSelect}
         onDoubleClick={handleCollapse}
         className={classNames(
-          'w-full flex items-center gap-2 h-full',
-          node.children == null && 'pl-[1rem]',
+          'flex items-center gap-2 h-full',
+          // node.children == null && 'pl-[1rem]',
+          isSelected ? 'text-text' : 'text-text-subtle',
         )}
       >
-        {node.icon && <Icon icon={node.icon} color="secondary" />}
-        {renderRow(node.item)}
+        {node.icon ? <Icon icon={node.icon} /> : <span />}
+        {renderItem(node.item)}
       </button>
-    </li>
+    </div>
   );
 }
