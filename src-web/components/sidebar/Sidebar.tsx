@@ -22,7 +22,7 @@ import {
 import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
 import { jotaiStore } from '../../lib/jotai';
 import {
-  navigateToRequestOrFolder,
+  navigateToRequestOrFolderOrWorkspace,
   setWorkspaceSearchParams,
 } from '../../lib/setWorkspaceSearchParams';
 import { ContextMenu } from '../core/Dropdown';
@@ -109,7 +109,7 @@ export function Sidebar({ className }: Props) {
 
       // NOTE: I'm not sure why, but TS thinks workspaceId is (string | undefined) here
       if (node.workspaceId) {
-        navigateToRequestOrFolder(node.id, node.model);
+        navigateToRequestOrFolderOrWorkspace(node.id, node.model);
       }
 
       setHasFocus(true);
@@ -188,7 +188,7 @@ export function Sidebar({ className }: Props) {
       setSelectedId(newSelectable.id);
       setSelectedTree(newSelectable.tree);
       if (e.shiftKey) {
-        navigateToRequestOrFolder(newSelectable.id, newSelectable.model);
+        navigateToRequestOrFolderOrWorkspace(newSelectable.id, newSelectable.model);
       }
     },
     undefined,
@@ -210,7 +210,7 @@ export function Sidebar({ className }: Props) {
       setSelectedId(newSelectable.id);
       setSelectedTree(newSelectable.tree);
       if (e.shiftKey) {
-        navigateToRequestOrFolder(newSelectable.id, newSelectable.model);
+        navigateToRequestOrFolderOrWorkspace(newSelectable.id, newSelectable.model);
       }
     },
     undefined,

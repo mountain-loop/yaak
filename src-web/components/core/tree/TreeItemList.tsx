@@ -40,7 +40,7 @@ export function TreeItemList<T extends { id: string }>({
   const childList = !isCollapsed && node.children != null && (
     <ul
       className={classNames(
-        depth > 0 && 'ml-[calc(0.6rem+1px)] pl-[calc(0.6rem)] border-l',
+        depth > 0 && 'ml-[calc(0.7rem+1px)] pl-[calc(0.7rem)] border-l',
         hoveredParent?.item.id === node.item.id
           ? 'border-l-text-subtlest'
           : 'border-l-border-subtle',

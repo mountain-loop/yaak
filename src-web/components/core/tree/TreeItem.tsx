@@ -59,7 +59,7 @@ export function TreeItem<T extends { id: string }>({
         [node.item.id]: !prev[node.item.id],
       }));
     }
-  }, [node.children, node.item, setCollapsedMap]);
+  }, [node, setCollapsedMap]);
 
   const [, connectDrag, preview] = useDrag<
     DragItem,
@@ -101,7 +101,7 @@ export function TreeItem<T extends { id: string }>({
   );
 
   connectDrag(connectDrop(ref));
-  preview(getEmptyImage()); // Hide browser preview to show our own
+  preview(getEmptyImage()); // Hide the browser preview to show our own
 
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
@@ -118,7 +118,7 @@ export function TreeItem<T extends { id: string }>({
       }}
       className={classNames(
         className,
-        'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded',
+        'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded pr-2',
         isSelected && 'bg-surface-highlight',
       )}
     >
@@ -146,6 +146,7 @@ export function TreeItem<T extends { id: string }>({
       )}
       <button
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         className={classNames(
           'flex items-center gap-2 h-full',
           // node.children == null && 'pl-[1rem]',

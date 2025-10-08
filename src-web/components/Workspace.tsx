@@ -42,6 +42,7 @@ import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
 import { HeaderSize } from './HeaderSize';
 import { HttpRequestLayout } from './HttpRequestLayout';
+import { NewSidebar } from './NewSidebar';
 import { Overlay } from './Overlay';
 import { ResizeHandle } from './ResizeHandle';
 import { Sidebar } from './sidebar/Sidebar';
@@ -173,7 +174,7 @@ export function Workspace() {
         <>
           <div style={side} className={classNames('x-theme-sidebar', 'overflow-hidden bg-surface')}>
             <ErrorBoundary name="Sidebar">
-              <Sidebar className="border-r border-border-subtle" />
+              <NewSidebar className="border-r border-border-subtle" />
             </ErrorBoundary>
           </div>
           <ResizeHandle

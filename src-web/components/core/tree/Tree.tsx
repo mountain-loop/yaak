@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import type { Atom } from 'jotai';
 import type { ReactNode } from 'react';
-import { useMemo, useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
 import { useKey, useKeyPressEvent } from 'react-use';
 import { sidebarCollapsedAtom } from '../../../hooks/useSidebarItemCollapsed';
@@ -76,13 +76,10 @@ export function Tree<T extends { id: string }>({
         const anchorIndex = selectableItems.findIndex((i) => i.node.item.id === anchorSelectedId);
         const currIndex = selectableItems.findIndex((v) => v.node.item.id === item.id);
         if (selectedIds.length === 0 || anchorIndex === -1 || currIndex === -1) {
-          console.log('SELECTED FIRST', item.id);
           jotaiStore.set(selectedIdsAtom, [item.id]);
           setAnchorSelectedId(item.id);
           return;
         }
-
-        console.log('SELECTING FROM', anchorIndex, '->', currIndex, { id: item.id });
 
         if (currIndex > anchorIndex) {
           // Selecting down
@@ -112,7 +109,6 @@ export function Tree<T extends { id: string }>({
         }
       } else {
         // Select single
-        console.log('SELECTED SINGLE', item.id);
         jotaiStore.set(selectedIdsAtom, [item.id]);
         setAnchorSelectedId(item.id);
       }
@@ -267,7 +263,6 @@ export function Tree<T extends { id: string }>({
   );
 
   const handleMoveToSidebarEnd = useCallback(() => {
-    console.log('ON MOVE SIDEBAR END');
     setHoveredParent(root);
     // Put at the end of the top tree
     setHoveredIndex(root.children?.length ?? 0);
@@ -307,8 +302,8 @@ export function Tree<T extends { id: string }>({
       tabIndex={-1}
       className={classNames(
         className,
-        'outline-none h-full overflow-x-hidden overflow-y-auto',
-        'pr-[1px]', // Room to have outline on each item
+        'outline-none h-full',
+        'pr-[1px]', // Room to have an outline on each item
       )}
     >
       <CustomDragLayer>

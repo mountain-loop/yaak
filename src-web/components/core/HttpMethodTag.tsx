@@ -61,21 +61,23 @@ export function HttpMethodTagRaw({
     label = label.padStart(4, ' ');
   }
 
+  const m = method.toUpperCase();
+
   return (
     <span
       className={classNames(
         className,
         !colored && 'text-text-subtle',
-        colored && method === 'GQL' && 'text-info',
-        colored && method === 'WS' && 'text-info',
-        colored && method === 'GRPC' && 'text-info',
-        colored && method === 'OPTIONS' && 'text-info',
-        colored && method === 'HEAD' && 'text-info',
-        colored && method === 'GET' && 'text-primary',
-        colored && method === 'PUT' && 'text-warning',
-        colored && method === 'PATCH' && 'text-notice',
-        colored && method === 'POST' && 'text-success',
-        colored && method === 'DELETE' && 'text-danger',
+        colored && m === 'GRAPHQL' && 'text-info',
+        colored && m === 'WEBSOCKET' && 'text-info',
+        colored && m === 'GRPC' && 'text-info',
+        colored && m === 'OPTIONS' && 'text-info',
+        colored && m === 'HEAD' && 'text-info',
+        colored && m === 'GET' && 'text-primary',
+        colored && m === 'PUT' && 'text-warning',
+        colored && m === 'PATCH' && 'text-notice',
+        colored && m === 'POST' && 'text-success',
+        colored && m === 'DELETE' && 'text-danger',
         'font-mono flex-shrink-0 whitespace-pre',
         'pt-[0.15em]', // Fix for monospace font not vertically centering
       )}
