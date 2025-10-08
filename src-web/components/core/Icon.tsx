@@ -121,7 +121,7 @@ const icons = {
   x: lucide.XIcon,
   _unknown: lucide.ShieldAlertIcon,
 
-  empty: (props: HTMLAttributes<HTMLSpanElement>) => <span {...props} />,
+  empty: (props: HTMLAttributes<HTMLSpanElement>) => <div {...props} />,
 };
 
 export interface IconProps {
