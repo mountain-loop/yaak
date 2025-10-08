@@ -1,7 +1,8 @@
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
-import { type MouseEvent, useCallback, useRef } from 'react';
+import React, { type MouseEvent, useCallback, useRef, useState } from 'react';
 import { useDrag, useDrop, type XYCoord } from 'react-dnd';
+import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
 import type { TreeNode } from './atoms';
 import { collapsedFamily, selectedFamily } from './atoms';
@@ -95,16 +96,41 @@ export function TreeItem<T extends { id: string }>({
 
   connectDrag(connectDrop(ref));
 
+  const [showContextMenu, setShowContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
   return (
     <div
       ref={ref}
       draggable
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setShowContextMenu({ x: e.clientX, y: e.clientY });
+      }}
       className={classNames(
         className,
         'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded',
         isActive ? 'bg-surface-active' : isSelected ? 'bg-surface-highlight' : null,
       )}
     >
+      {showContextMenu && (
+        <ContextMenu
+          items={[
+            {
+              label: 'Hello',
+              onSelect: () => {},
+            },
+            {
+              label: 'World',
+              onSelect: () => {},
+            },
+          ]}
+          triggerPosition={showContextMenu}
+          onClose={() => setShowContextMenu(null)}
+        />
+      )}
       {node.children != null ? (
         <button className="h-full w-[2.6rem] pr-[0.4rem] -ml-[1rem]" onClick={handleDoubleClick}>
           <Icon

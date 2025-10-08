@@ -63,12 +63,12 @@ export function Tree<T extends { id: string }>({
 
         if (currIndex > anchorIndex) {
           // Selecting down
-          const itemsToSelect = selectableItems.slice(anchorIndex, currIndex+1);
+          const itemsToSelect = selectableItems.slice(anchorIndex, currIndex + 1);
           jotaiStore.set(
             selectedIdsAtom,
             itemsToSelect.map((v) => v.node.item.id),
           );
-        } else if (currIndex < anchorIndex){
+        } else if (currIndex < anchorIndex) {
           // Selecting up
           const itemsToSelect = selectableItems.slice(currIndex, anchorIndex);
           jotaiStore.set(
@@ -91,8 +91,11 @@ export function Tree<T extends { id: string }>({
   const handleClick = useCallback<TreeItemProps<T>['onClick']>(
     (item, e) => {
       handleSelect(item, e);
-      const items = getSelectedItems(treeId, selectableItems);
-      onActivate?.(items);
+      if (!(e.shiftKey || e.ctrlKey || e.metaKey)) {
+        // Only call onActivate if the user didn't use a modifier key to change the selection
+        const items = getSelectedItems(treeId, selectableItems);
+        onActivate?.(items);
+      }
     },
     [handleSelect, onActivate, selectableItems, treeId],
   );
@@ -123,17 +126,12 @@ export function Tree<T extends { id: string }>({
     [hasFocus, selectableItems, anchorSelectedId, handleSelect],
   );
 
-  useKeyPressEvent('Enter', async (e) => {
+  useKeyPressEvent('Enter', async () => {
     if (!hasFocus) {
       return;
     }
-    const selected = selectableItems.find(
-      (i) => i.node.item.id === jotaiStore.get(selectedFamily(treeId))[0],
-    );
-    if (selected == null) {
-      return;
-    }
-    handleSelect(selected.node.item, e);
+    const items = getSelectedItems(treeId, selectableItems);
+    onActivate?.(items);
   });
 
   const handleMove = useCallback<TreeItemProps<T>['onMove']>(
