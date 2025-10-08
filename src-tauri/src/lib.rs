@@ -1282,7 +1282,6 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
@@ -1298,6 +1297,11 @@ pub fn run() {
     #[cfg(feature = "license")]
     {
         builder = builder.plugin(yaak_license::init());
+    }
+
+    #[cfg(feature = "updater")]
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::default().build());
     }
 
     builder

@@ -114,4 +114,4 @@ jobs:
           releaseBody: '[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)'
           releaseDraft: true
           prerelease: true
-          args: '${{ matrix.args }} --config ./src-tauri/tauri.commercial.conf.json'
+          args: '${{ matrix.args }} --config ./src-tauri/tauri.release.conf.json'

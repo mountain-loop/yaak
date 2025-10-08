@@ -86,7 +86,7 @@ impl<'de> Deserialize<'de> for SyncModel {
 fn migrate_environment(obj: &mut Mapping) {
     match (obj.get("base"), obj.get("parentModel")) {
         (Some(Value::Bool(base)), None) => {
-            debug!("Migrating legacy environment {}", serde_yaml::to_string(obj).unwrap());
+            debug!("Migrating legacy environment {:?}", obj.get("id"));
             if *base {
                 obj.insert("parentModel".into(), "workspace".into());
             } else {
