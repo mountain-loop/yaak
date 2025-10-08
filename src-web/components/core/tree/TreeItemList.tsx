@@ -10,9 +10,9 @@ import { TreeItem } from './TreeItem';
 
 export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'renderItem' | 'treeId' | 'selectedIdAtom' | 'onSelect' | 'getItemKey'
+  'renderItem' | 'treeId' | 'activeIdAtom' | 'getItemKey'
 > &
-  Pick<TreeItemProps<T>, 'onMove' | 'onEnd' | 'onDragStart'> & {
+  Pick<TreeItemProps<T>, 'onMove' | 'onEnd' | 'onDragStart' | 'onClick'> & {
     node: TreeNode<T>;
     onMove: (item: T, side: 'above' | 'below') => void;
     onEnd: (item: T) => void;
@@ -28,8 +28,8 @@ export function TreeItemList<T extends { id: string }>({
   hoveredParent,
   hoveredIndex,
   renderItem,
-  selectedIdAtom,
-  onSelect,
+  activeIdAtom,
+  onClick,
   getItemKey,
   onMove,
   onEnd,
@@ -43,7 +43,9 @@ export function TreeItemList<T extends { id: string }>({
     <ul
       className={classNames(
         depth > 0 && 'ml-[calc(0.6rem+1px)] pl-[calc(0.6rem)] border-l',
-        hoveredParent?.item.id === node.item.id ? 'border-l-text-subtlest' : 'border-l-border-subtle',
+        hoveredParent?.item.id === node.item.id
+          ? 'border-l-text-subtlest'
+          : 'border-l-border-subtle',
       )}
     >
       {node.children.map((child, i) => (
@@ -52,9 +54,9 @@ export function TreeItemList<T extends { id: string }>({
           <TreeItemList
             treeId={treeId}
             node={child}
-            selectedIdAtom={selectedIdAtom}
+            activeIdAtom={activeIdAtom}
             renderItem={renderItem}
-            onSelect={onSelect}
+            onClick={onClick}
             onMove={onMove}
             onEnd={onEnd}
             onDragStart={onDragStart}
@@ -80,9 +82,9 @@ export function TreeItemList<T extends { id: string }>({
       <TreeItem
         treeId={treeId}
         node={node}
-        selectedIdAtom={selectedIdAtom}
+        activeIdAtom={activeIdAtom}
         renderItem={renderItem}
-        onSelect={onSelect}
+        onClick={onClick}
         onMove={onMove}
         onEnd={onEnd}
         onDragStart={onDragStart}

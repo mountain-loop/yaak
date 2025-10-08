@@ -1,48 +1,58 @@
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
-import { useCallback, useRef } from 'react';
+import { type MouseEvent, useCallback, useRef } from 'react';
 import { useDrag, useDrop, type XYCoord } from 'react-dnd';
 import { Icon } from '../Icon';
 import type { TreeNode } from './atoms';
-import { collapsedFamily } from './atoms';
+import { collapsedFamily, selectedFamily } from './atoms';
 import type { DragItem } from './dnd';
 import { ItemTypes } from './dnd';
 import type { TreeProps } from './Tree';
 
-export interface TreeItemProps<T extends { id: string }>
-  extends Pick<TreeProps<T>, 'renderItem' | 'treeId' | 'selectedIdAtom' | 'onSelect'> {
+export type TreeItemProps<T extends { id: string }> = Pick<
+  TreeProps<T>,
+  'renderItem' | 'treeId' | 'activeIdAtom'
+> & {
   node: TreeNode<T>;
   className?: string;
   onMove: (item: T, side: 'above' | 'below') => void;
   onEnd: (item: T) => void;
   onDragStart: (item: T) => void;
-}
+  onClick: (item: T, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
+};
 
 export function TreeItem<T extends { id: string }>({
   treeId,
   node,
   renderItem,
-  selectedIdAtom,
+  activeIdAtom,
   onMove,
   onDragStart,
   onEnd,
-  onSelect,
+  onClick,
   className,
 }: TreeItemProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
-  const isSelected = useAtomValue(selectedIdAtom) == node.item.id;
+  const isActive = useAtomValue(activeIdAtom) == node.item.id;
+  const selectedIds = useAtomValue(selectedFamily(treeId));
+  const isSelected = selectedIds.includes(node.item.id);
   const [collapsedMap, setCollapsedMap] = useAtom(collapsedFamily(treeId));
 
-  const handleSelect = useCallback(() => {
-    onSelect?.(node.item);
-  }, [node, onSelect]);
+  const handleClick = useCallback(
+    ({ shiftKey, ctrlKey, metaKey }: MouseEvent<HTMLButtonElement>) => {
+      onClick?.(node.item, { shiftKey, ctrlKey, metaKey });
+    },
+    [node, onClick],
+  );
 
-  const handleCollapse = useCallback(() => {
-    setCollapsedMap((prev) => ({
-      ...prev,
-      [node.item.id]: !prev[node.item.id],
-    }));
-  }, [node.item.id, setCollapsedMap]);
+  const handleDoubleClick = useCallback(() => {
+    if (node.children != null) {
+      setCollapsedMap((prev) => ({
+        ...prev,
+        [node.item.id]: !prev[node.item.id],
+      }));
+    }
+  }, [node.children, node.item, setCollapsedMap]);
 
   const [, connectDrag] = useDrag<
     DragItem,
@@ -92,11 +102,11 @@ export function TreeItem<T extends { id: string }>({
       className={classNames(
         className,
         'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded',
-        isSelected && 'bg-surface-highlight',
+        isActive ? 'bg-surface-active' : isSelected ? 'bg-surface-highlight' : null,
       )}
     >
       {node.children != null ? (
-        <button className="h-full w-[2.6rem] pr-[0.4rem] -ml-[1rem]" onClick={handleCollapse}>
+        <button className="h-full w-[2.6rem] pr-[0.4rem] -ml-[1rem]" onClick={handleDoubleClick}>
           <Icon
             icon="chevron_right"
             className={classNames(
@@ -111,12 +121,11 @@ export function TreeItem<T extends { id: string }>({
         <span />
       )}
       <button
-        onClick={handleSelect}
-        onDoubleClick={handleCollapse}
+        onClick={handleClick}
         className={classNames(
           'flex items-center gap-2 h-full',
           // node.children == null && 'pl-[1rem]',
-          isSelected ? 'text-text' : 'text-text-subtle',
+          isActive ? 'text-text' : 'text-text-subtle',
         )}
       >
         {node.icon ? <Icon icon={node.icon} /> : <span />}

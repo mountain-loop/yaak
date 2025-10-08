@@ -49,6 +49,12 @@ const root: TreeNode<Dummy> = {
                 {
                   item: { id: 'r5', model: 'request', name: 'Request 5', method: 'PATCH' },
                 },
+                {
+                  item: { id: 'r11', model: 'request', name: 'Request 11', method: 'OPTIONS' },
+                },
+                {
+                  item: { id: 'r12', model: 'request', name: 'Request 12', method: 'GRAPHQL' },
+                },
               ],
             },
           ],
@@ -90,10 +96,10 @@ const root: TreeNode<Dummy> = {
   ],
 };
 
-const selectedIdAtom = atom<string | null>('r2');
+const activeIdAtom = atom<string | null>('r2');
 
 function RouteComponent() {
-  const [selected, setSelected] = useState<Dummy | null>(null);
+  const [active, setActive] = useState<Dummy | null>(null);
   return (
     <div className="h-full w-full grid grid-rows-1 grid-cols-[auto_1fr]">
       <div className="pl-3 pt-12 w-[24rem] border-r border-border-subtle h-full pr-1.5 x-theme-sidebar bg-surface pb-3">
@@ -102,15 +108,16 @@ function RouteComponent() {
           root={root}
           getItemKey={getItemKey}
           renderItem={renderItem}
-          selectedIdAtom={selectedIdAtom}
-          onSelect={(item) => {
-            setSelected(item);
-            return jotaiStore.set(selectedIdAtom, item.id);
+          activeIdAtom={activeIdAtom}
+          onActivate={(items) => {
+            const item = items[0] ?? null;
+            setActive(item);
+            return jotaiStore.set(activeIdAtom, item?.id ?? null);
           }}
         />
       </div>
       <div className="p-6">
-      {selected?.name ?? 'Nothing Selected'}
+      {active?.name ?? 'Nothing Selected'}
       </div>
     </div>
   );
@@ -121,7 +128,7 @@ function getItemKey(item: Dummy) {
 }
 
 function renderItem(item: Dummy) {
-  const isSelected = item.id === jotaiStore.get(selectedIdAtom);
+  const isSelected = item.id === jotaiStore.get(activeIdAtom);
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 h-full">
       {item.method && (
