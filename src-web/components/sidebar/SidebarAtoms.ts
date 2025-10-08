@@ -116,8 +116,6 @@ export const sidebarTreeAtom = atom<{
     depth: 0,
   });
 
-  console.log('HELLO', selectableItems);
-
   return {
     tree,
     treeParentMap,

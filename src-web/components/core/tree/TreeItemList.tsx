@@ -2,8 +2,8 @@ import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { Fragment } from 'react';
 import { DropMarker } from '../../DropMarker';
-import type { TreeNode } from './atoms';
 import { collapsedFamily } from './atoms';
+import type { TreeNode } from './common';
 import type { TreeProps } from './Tree';
 import type { TreeItemProps } from './TreeItem';
 import { TreeItem } from './TreeItem';
@@ -12,14 +12,11 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
   'renderItem' | 'treeId' | 'activeIdAtom' | 'getItemKey'
 > &
-  Pick<TreeItemProps<T>, 'onMove' | 'onEnd' | 'onDragStart' | 'onClick'> & {
+  Pick<TreeItemProps<T>, 'onMove' | 'onEnd' | 'onDragStart' | 'onClick' | 'getContextMenu'> & {
     node: TreeNode<T>;
-    onMove: (item: T, side: 'above' | 'below') => void;
-    onEnd: (item: T) => void;
-    onDragStart: (item: T) => void;
     depth: number;
-    hoveredParent: TreeNode<T> | null;
-    hoveredIndex: number | null;
+    hoveredParent?: TreeNode<T> | null;
+    hoveredIndex?: number | null;
   };
 
 export function TreeItemList<T extends { id: string }>({
@@ -31,6 +28,7 @@ export function TreeItemList<T extends { id: string }>({
   activeIdAtom,
   onClick,
   getItemKey,
+  getContextMenu,
   onMove,
   onEnd,
   onDragStart,
@@ -62,6 +60,7 @@ export function TreeItemList<T extends { id: string }>({
             onDragStart={onDragStart}
             depth={depth + 1}
             getItemKey={getItemKey}
+            getContextMenu={getContextMenu}
             hoveredParent={hoveredParent}
             hoveredIndex={hoveredIndex}
           />
@@ -83,6 +82,7 @@ export function TreeItemList<T extends { id: string }>({
         treeId={treeId}
         node={node}
         activeIdAtom={activeIdAtom}
+        getContextMenu={getContextMenu}
         renderItem={renderItem}
         onClick={onClick}
         onMove={onMove}

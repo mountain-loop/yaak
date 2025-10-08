@@ -1,11 +1,13 @@
 import classNames from 'classnames';
-import { useAtom, useAtomValue } from 'jotai';
+import { atom, useAtom, useAtomValue } from 'jotai';
 import React, { type MouseEvent, useCallback, useRef, useState } from 'react';
 import { useDrag, useDrop, type XYCoord } from 'react-dnd';
+import { getEmptyImage } from 'react-dnd-html5-backend';
+import type { ContextMenuProps } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
-import type { TreeNode } from './atoms';
 import { collapsedFamily, selectedFamily } from './atoms';
+import type { TreeNode } from './common';
 import type { DragItem } from './dnd';
 import { ItemTypes } from './dnd';
 import type { TreeProps } from './Tree';
@@ -16,17 +18,21 @@ export type TreeItemProps<T extends { id: string }> = Pick<
 > & {
   node: TreeNode<T>;
   className?: string;
-  onMove: (item: T, side: 'above' | 'below') => void;
-  onEnd: (item: T) => void;
-  onDragStart: (item: T) => void;
-  onClick: (item: T, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
+  onMove?: (item: T, side: 'above' | 'below') => void;
+  onEnd?: (item: T) => void;
+  onDragStart?: (item: T) => void;
+  onClick?: (item: T, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
+  getContextMenu?: (item: T) => ContextMenuProps['items'];
 };
+
+const emptyActiveIdAtom = atom();
 
 export function TreeItem<T extends { id: string }>({
   treeId,
   node,
   renderItem,
   activeIdAtom,
+  getContextMenu,
   onMove,
   onDragStart,
   onEnd,
@@ -34,14 +40,14 @@ export function TreeItem<T extends { id: string }>({
   className,
 }: TreeItemProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
-  const isActive = useAtomValue(activeIdAtom) == node.item.id;
+  const isActive = useAtomValue(activeIdAtom ?? emptyActiveIdAtom) == node.item.id;
   const selectedIds = useAtomValue(selectedFamily(treeId));
   const isSelected = selectedIds.includes(node.item.id);
   const [collapsedMap, setCollapsedMap] = useAtom(collapsedFamily(treeId));
 
   const handleClick = useCallback(
-    ({ shiftKey, ctrlKey, metaKey }: MouseEvent<HTMLButtonElement>) => {
-      onClick?.(node.item, { shiftKey, ctrlKey, metaKey });
+    (e: MouseEvent<HTMLButtonElement>) => {
+      onClick?.(node.item, e);
     },
     [node, onClick],
   );
@@ -55,7 +61,7 @@ export function TreeItem<T extends { id: string }>({
     }
   }, [node.children, node.item, setCollapsedMap]);
 
-  const [, connectDrag] = useDrag<
+  const [, connectDrag, preview] = useDrag<
     DragItem,
     unknown,
     {
@@ -68,12 +74,12 @@ export function TreeItem<T extends { id: string }>({
         // Cancel drag when editing
         // TODO: Editing
         // if (editing) return null;
-        onDragStart(node.item);
+        onDragStart?.(node.item);
         return { id: node.item.id };
       },
       collect: (m) => ({ isDragging: m.isDragging() }),
       options: { dropEffect: 'move' },
-      end: () => onEnd(node.item),
+      end: () => onEnd?.(node.item),
     }),
     [onEnd],
   );
@@ -88,13 +94,14 @@ export function TreeItem<T extends { id: string }>({
         const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
         const clientOffset = monitor.getClientOffset();
         const hoverClientY = (clientOffset as XYCoord).y - hoverBoundingRect.top;
-        onMove(node.item, hoverClientY < hoverMiddleY ? 'above' : 'below');
+        onMove?.(node.item, hoverClientY < hoverMiddleY ? 'above' : 'below');
       },
     },
     [onMove],
   );
 
   connectDrag(connectDrop(ref));
+  preview(getEmptyImage()); // Hide browser preview to show our own
 
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
@@ -103,8 +110,8 @@ export function TreeItem<T extends { id: string }>({
 
   return (
     <div
-      ref={ref}
       draggable
+      ref={ref}
       onContextMenu={(e) => {
         e.preventDefault();
         setShowContextMenu({ x: e.clientX, y: e.clientY });
@@ -112,21 +119,12 @@ export function TreeItem<T extends { id: string }>({
       className={classNames(
         className,
         'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded',
-        isActive ? 'bg-surface-active' : isSelected ? 'bg-surface-highlight' : null,
+        isSelected && 'bg-surface-highlight',
       )}
     >
-      {showContextMenu && (
+      {showContextMenu && getContextMenu && (
         <ContextMenu
-          items={[
-            {
-              label: 'Hello',
-              onSelect: () => {},
-            },
-            {
-              label: 'World',
-              onSelect: () => {},
-            },
-          ]}
+          items={getContextMenu(node.item)}
           triggerPosition={showContextMenu}
           onClose={() => setShowContextMenu(null)}
         />

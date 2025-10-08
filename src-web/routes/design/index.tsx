@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import classNames from 'classnames';
-import { atom } from 'jotai';
-import { useState } from 'react';
+import { atom, useAtomValue } from 'jotai';
+import type { ContextMenuProps } from '../../components/core/Dropdown';
 import { HttpMethodTagRaw } from '../../components/core/HttpMethodTag';
-import type { TreeNode } from '../../components/core/tree/atoms';
+import type { TreeNode } from '../../components/core/tree/common';
 import { Tree } from '../../components/core/tree/Tree';
 import { jotaiStore } from '../../lib/jotai';
 
@@ -97,9 +97,10 @@ const root: TreeNode<Dummy> = {
 };
 
 const activeIdAtom = atom<string | null>('r2');
+const activeAtom = atom<Dummy | null>(null);
 
 function RouteComponent() {
-  const [active, setActive] = useState<Dummy | null>(null);
+  const active = useAtomValue(activeAtom);
   return (
     <div className="h-full w-full grid grid-rows-1 grid-cols-[auto_1fr]">
       <div className="pl-3 pt-12 w-[24rem] border-r border-border-subtle h-full pr-1.5 x-theme-sidebar bg-surface pb-3">
@@ -109,18 +110,36 @@ function RouteComponent() {
           getItemKey={getItemKey}
           renderItem={renderItem}
           activeIdAtom={activeIdAtom}
-          onActivate={(items) => {
-            const item = items[0] ?? null;
-            setActive(item);
-            return jotaiStore.set(activeIdAtom, item?.id ?? null);
-          }}
+          getContextMenu={getContextMenu}
+          onActivate={handleActivate}
         />
       </div>
-      <div className="p-6">
-      {active?.name ?? 'Nothing Selected'}
-      </div>
+      <div className="p-6">{active?.name ?? 'Nothing Selected'}</div>
     </div>
   );
+}
+
+function handleActivate(items: Dummy[]) {
+  const item = items[0] ?? null;
+  jotaiStore.set(activeIdAtom, item?.id ?? null);
+  jotaiStore.set(activeAtom, item);
+}
+
+function getContextMenu(items: Dummy[]): ContextMenuProps['items'] {
+  return [
+    {
+      label: 'Testing 123',
+      onSelect: () => {
+        console.log('CONTEXT Testing', items);
+      },
+    },
+    {
+      label: 'Testing 456',
+      onSelect: () => {
+        console.log('CONTEXT Testing again', items);
+      },
+    },
+  ];
 }
 
 function getItemKey(item: Dummy) {
