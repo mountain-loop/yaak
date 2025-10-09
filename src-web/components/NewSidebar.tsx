@@ -17,6 +17,8 @@ import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import React, { useCallback } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
+import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
+import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
@@ -32,7 +34,7 @@ import { HttpMethodTag } from './core/HttpMethodTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
 import { Icon } from './core/Icon';
 import { LoadingIcon } from './core/LoadingIcon';
-import { selectedFamily } from './core/tree/atoms';
+import { selectedIdsFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
@@ -49,7 +51,7 @@ function getItemKey(item: Model) {
 
 export function NewSidebar({ className }: { className?: string }) {
   const tree = useAtomValue(sidebarTreeAtom);
-  const treeId = 'sidebar';
+  const treeId = 'workspace.sidebar';
 
   const renderLeftSlot = useCallback((item: Model) => {
     if (item.model === 'folder') {
@@ -57,7 +59,7 @@ export function NewSidebar({ className }: { className?: string }) {
     } else if (item.model === 'workspace') {
       return null;
     } else {
-      const isSelected = jotaiStore.get(selectedFamily(treeId)).includes(item.id);
+      const isSelected = jotaiStore.get(selectedIdsFamily(treeId)).includes(item.id);
       return (
         <HttpMethodTag
           short
@@ -69,7 +71,7 @@ export function NewSidebar({ className }: { className?: string }) {
   }, []);
 
   const renderItem = useCallback((item: Model) => {
-    const isSelected = jotaiStore.get(selectedFamily(treeId)).includes(item.id);
+    const isSelected = jotaiStore.get(selectedIdsFamily(treeId)).includes(item.id);
     const responses = jotaiStore.get(httpResponsesAtom);
     const latestHttpResponse = responses.find((r) => r.requestId === item.id) ?? null;
     return (
@@ -123,10 +125,15 @@ export function NewSidebar({ className }: { className?: string }) {
         getContextMenu={getContextMenu}
         onActivate={handleActivate}
         getEditOptions={getEditOptions}
+        activeIdAtom={activeIdAtom}
       />
     </div>
   );
 }
+
+const activeIdAtom = atom<string | null>(get => {
+  return get(activeRequestIdAtom) || get(activeFolderIdAtom);
+});
 
 function getEditOptions(
   item: Model,

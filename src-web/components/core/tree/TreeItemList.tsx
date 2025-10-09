@@ -1,9 +1,10 @@
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import { Fragment } from 'react';
+import { Fragment, memo } from 'react';
 import { DropMarker } from '../../DropMarker';
-import { collapsedFamily } from './atoms';
+import { isCollapsedFamily } from './atoms';
 import type { TreeNode } from './common';
+import { equalSubtree } from './common';
 import type { TreeProps } from './Tree';
 import type { TreeItemProps } from './TreeItem';
 import { TreeItem } from './TreeItem';
@@ -19,7 +20,7 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
     hoveredIndex?: number | null;
   };
 
-export function TreeItemList<T extends { id: string }>({
+function TreeItemList_<T extends { id: string }>({
   treeId,
   node,
   hoveredParent,
@@ -36,21 +37,19 @@ export function TreeItemList<T extends { id: string }>({
   getEditOptions,
   depth,
 }: TreeItemListProps<T>) {
-  const collapsedMap = useAtomValue(collapsedFamily(treeId));
-  const isCollapsed = collapsedMap[node.item.id] === true;
-
+  const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
   const childList = !isCollapsed && node.children != null && (
     <ul
       className={classNames(
-        depth > 0 && 'ml-[calc(0.7rem+0.5px)] pl-[calc(0.7rem)] border-l',
+        depth > 0 && 'ml-[calc(0.7rem+0.5px)] pl-[0.7rem] border-l',
         hoveredParent?.item.id === node.item.id
-          ? 'border-l-text-subtlest'
+          ? 'border-l-primary'
           : 'border-l-border-subtle',
       )}
     >
       {node.children.map((child, i) => (
         <Fragment key={getItemKey(child.item)}>
-          {hoveredIndex === i && hoveredParent?.item.id === node.item.id && <DropMarker />}
+          {hoveredIndex === i && hoveredParent?.item.id === node.item.id && <DropMarker className="-ml-[0.7rem]"/>}
           <TreeItemList
             treeId={treeId}
             node={child}
@@ -99,3 +98,19 @@ export function TreeItemList<T extends { id: string }>({
     </li>
   );
 }
+
+export const TreeItemList = memo(
+  TreeItemList_,
+  ({ node: prevNode, ...prevProps }, { node: nextNode, ...nextProps }) => {
+    const nonEqualKeys = [];
+    for (const key of Object.keys(prevProps)) {
+      if (prevProps[key as keyof typeof prevProps] !== nextProps[key as keyof typeof nextProps]) {
+        nonEqualKeys.push(key);
+      }
+    }
+    if (nonEqualKeys.length > 0) {
+      return false;
+    }
+    return equalSubtree(prevNode, nextNode, nextProps.getItemKey);
+  },
+) as typeof TreeItemList_;

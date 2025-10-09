@@ -18,7 +18,9 @@ export function setWorkspaceSearchParams(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (router as any).navigate({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    search: (prev: any) => ({ ...prev, ...search }),
+    search: (prev: any) => {
+      return { ...prev, ...search };
+    },
   });
 }
 

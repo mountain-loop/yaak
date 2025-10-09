@@ -348,7 +348,9 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   // Force input to update when receiving change and not in focus
   useLayoutEffect(() => {
-    if (!cm.current?.view.hasFocus) {
+    const currDoc = cm.current?.view.state.doc.toString() || '';
+    const nextDoc = defaultValue || '';
+    if (!cm.current?.view.hasFocus && currDoc !== nextDoc) {
       regenerateFocusedUpdateKey();
     }
   }, [defaultValue, regenerateFocusedUpdateKey]);

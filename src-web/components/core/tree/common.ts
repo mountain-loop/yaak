@@ -1,5 +1,5 @@
 import { jotaiStore } from '../../../lib/jotai';
-import { selectedFamily } from './atoms';
+import { selectedIdsFamily } from './atoms';
 
 export interface TreeNode<T extends { id: string }> {
   children?: TreeNode<T>[];
@@ -16,8 +16,24 @@ export function getSelectedItems<T extends { id: string }>(
   treeId: string,
   selectableItems: SelectableTreeNode<T>[],
 ) {
-  const selectedItemIds = jotaiStore.get(selectedFamily(treeId));
+  const selectedItemIds = jotaiStore.get(selectedIdsFamily(treeId));
   return selectableItems
     .filter((i) => selectedItemIds.includes(i.node.item.id))
     .map((i) => i.node.item);
+}
+
+export function equalSubtree<T extends { id: string }>(
+  a: TreeNode<T>,
+  b: TreeNode<T>,
+  getKey: (t: T) => string,
+): boolean {
+  if (getKey(a.item) !== getKey(b.item)) return false;
+  const ak = a.children ?? [];
+  const bk = b.children ?? [];
+  if (ak.length !== bk.length) return false;
+  for (let i = 0; i < ak.length; i++) {
+    if (!equalSubtree(ak[i]!, bk[i]!, getKey)) return false;
+  }
+
+  return true;
 }

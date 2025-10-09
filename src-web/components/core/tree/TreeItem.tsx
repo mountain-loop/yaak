@@ -1,12 +1,13 @@
 import classNames from 'classnames';
 import { atom, useAtom, useAtomValue } from 'jotai';
-import React, { type MouseEvent, useCallback, useRef, useState } from 'react';
+import { selectAtom } from 'jotai/utils';
+import React, { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDrag, useDrop, type XYCoord } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import type { ContextMenuProps } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
-import { collapsedFamily, selectedFamily } from './atoms';
+import { isCollapsedFamily, isSelectedFamily } from './atoms';
 import type { TreeNode } from './common';
 import type { DragItem } from './dnd';
 import { ItemTypes } from './dnd';
@@ -42,11 +43,24 @@ export function TreeItem<T extends { id: string }>({
   className,
 }: TreeItemProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
-  const isActive = useAtomValue(activeIdAtom ?? emptyActiveIdAtom) == node.item.id;
-  const selectedIds = useAtomValue(selectedFamily(treeId));
-  const isSelected = selectedIds.includes(node.item.id);
-  const [collapsedMap, setCollapsedMap] = useAtom(collapsedFamily(treeId));
+  const isSelected = useAtomValue(isSelectedFamily({ treeId, itemId: node.item.id }));
+  const [collapsed, setCollapsed] = useAtom(isCollapsedFamily({ treeId, itemId: node.item.id }));
   const [editing, setEditing] = useState<boolean>(false);
+
+  const isActiveAtom = useMemo(() => {
+    const source = activeIdAtom ?? emptyActiveIdAtom;
+    // notify only when the boolean changes
+    return selectAtom(source, (activeId) => activeId === node.item.id, Object.is);
+  }, [activeIdAtom, node.item.id]);
+
+  const isActive = useAtomValue(isActiveAtom);
+
+  // Scroll into view when it becomes selected
+  useEffect(() => {
+    if (isSelected) {
+      ref.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [isSelected]);
 
   const handleClick = useCallback(
     (e: MouseEvent<HTMLButtonElement>) => {
@@ -56,11 +70,8 @@ export function TreeItem<T extends { id: string }>({
   );
 
   const toggleCollapsed = useCallback(() => {
-    setCollapsedMap((prev) => ({
-      ...prev,
-      [node.item.id]: !prev[node.item.id],
-    }));
-  }, [node, setCollapsedMap]);
+    setCollapsed((prev) => !prev);
+  }, [setCollapsed]);
 
   const handleSubmitNameEdit = useCallback(
     async (el: HTMLInputElement) => {
@@ -180,7 +191,7 @@ export function TreeItem<T extends { id: string }>({
               'transition-transform text-text-subtlest',
               'ml-auto !h-[1rem] !w-[1rem]',
               node.children.length == 0 && 'opacity-0',
-              !collapsedMap[node.item.id] && 'rotate-90',
+              !collapsed && 'rotate-90',
             )}
           />
         </button>
@@ -193,7 +204,6 @@ export function TreeItem<T extends { id: string }>({
         disabled={editing}
         className={classNames(
           'flex items-center gap-2 h-full whitespace-nowrap',
-          // node.children == null && 'pl-[1rem]',
           isActive ? 'text-text' : 'text-text-subtle',
         )}
       >
