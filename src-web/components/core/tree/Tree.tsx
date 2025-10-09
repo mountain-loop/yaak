@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import type { Atom } from 'jotai';
 import type { ReactNode } from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { memo , useCallback, useMemo, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
 import { useKey, useKeyPressEvent } from 'react-use';
 import { sidebarCollapsedAtom } from '../../../hooks/useSidebarItemCollapsed';
@@ -23,20 +23,28 @@ export interface TreeProps<T extends { id: string }> {
   getItemKey: (item: T) => string;
   getContextMenu?: (items: T[]) => ContextMenuProps['items'];
   renderItem: (item: T) => ReactNode;
+  renderLeftSlot: (item: T) => ReactNode;
   className?: string;
   activeIdAtom?: Atom<string | null>;
   onActivate?: (items: T[]) => void;
+  getEditOptions?: (item: T) => {
+    defaultValue: string;
+    placeholder?: string;
+    onChange: (item: T, text: string) => void;
+  };
 }
 
-export function Tree<T extends { id: string }>({
+function Tree_<T extends { id: string }>({
   root,
   treeId,
   getItemKey,
   getContextMenu,
   renderItem,
+  renderLeftSlot,
   className,
   activeIdAtom,
   onActivate,
+  getEditOptions,
 }: TreeProps<T>) {
   const treeRef = useRef<HTMLDivElement>(null);
   const [draggingItems, setDraggingItems] = useState<T[]>([]);
@@ -293,7 +301,9 @@ export function Tree<T extends { id: string }>({
     onEnd: handleEnd,
     onMove: handleMove,
     onClick: handleClick,
+    getEditOptions,
     renderItem: renderItem,
+    renderLeftSlot: renderLeftSlot,
   };
 
   return (
@@ -333,6 +343,8 @@ export function Tree<T extends { id: string }>({
     </div>
   );
 }
+
+export const Tree = memo(Tree_) as typeof Tree_;
 
 function useTreeParentMap<T extends { id: string }>(root: TreeNode<T>) {
   const collapsedMap = jotaiStore.get(jotaiStore.get(sidebarCollapsedAtom));

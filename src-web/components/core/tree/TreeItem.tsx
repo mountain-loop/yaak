@@ -14,7 +14,7 @@ import type { TreeProps } from './Tree';
 
 export type TreeItemProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'renderItem' | 'treeId' | 'activeIdAtom'
+  'renderItem' | 'renderLeftSlot' | 'treeId' | 'activeIdAtom' | 'getEditOptions'
 > & {
   node: TreeNode<T>;
   className?: string;
@@ -31,12 +31,14 @@ export function TreeItem<T extends { id: string }>({
   treeId,
   node,
   renderItem,
+  renderLeftSlot,
   activeIdAtom,
   getContextMenu,
   onMove,
   onDragStart,
   onEnd,
   onClick,
+  getEditOptions,
   className,
 }: TreeItemProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
@@ -44,6 +46,7 @@ export function TreeItem<T extends { id: string }>({
   const selectedIds = useAtomValue(selectedFamily(treeId));
   const isSelected = selectedIds.includes(node.item.id);
   const [collapsedMap, setCollapsedMap] = useAtom(collapsedFamily(treeId));
+  const [editing, setEditing] = useState<boolean>(false);
 
   const handleClick = useCallback(
     (e: MouseEvent<HTMLButtonElement>) => {
@@ -52,14 +55,55 @@ export function TreeItem<T extends { id: string }>({
     [node, onClick],
   );
 
-  const handleDoubleClick = useCallback(() => {
-    if (node.children != null) {
-      setCollapsedMap((prev) => ({
-        ...prev,
-        [node.item.id]: !prev[node.item.id],
-      }));
-    }
+  const toggleCollapsed = useCallback(() => {
+    setCollapsedMap((prev) => ({
+      ...prev,
+      [node.item.id]: !prev[node.item.id],
+    }));
   }, [node, setCollapsedMap]);
+
+  const handleSubmitNameEdit = useCallback(
+    async (el: HTMLInputElement) => {
+      getEditOptions?.(node.item).onChange(node.item, el.value);
+      // Slight delay for the model to propagate to the local store
+      setTimeout(() => setEditing(false));
+    },
+    [getEditOptions, node.item],
+  );
+
+  const handleEditFocus = useCallback((el: HTMLInputElement | null) => {
+    el?.focus();
+    el?.select();
+  }, []);
+
+  const handleEditBlur = useCallback(
+    async (e: React.FocusEvent<HTMLInputElement>) => {
+      await handleSubmitNameEdit(e.currentTarget);
+    },
+    [handleSubmitNameEdit],
+  );
+
+  const handleEditKeyDown = useCallback(
+    async (e: React.KeyboardEvent<HTMLInputElement>) => {
+      e.stopPropagation();
+      switch (e.key) {
+        case 'Enter':
+          e.preventDefault();
+          await handleSubmitNameEdit(e.currentTarget);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          setEditing(false);
+          break;
+      }
+    },
+    [handleSubmitNameEdit],
+  );
+  const handleDoubleClick = useCallback(() => {
+    if (getEditOptions != null) {
+      setEditing(true);
+    }
+  }, [getEditOptions]);
 
   const [, connectDrag, preview] = useDrag<
     DragItem,
@@ -71,9 +115,7 @@ export function TreeItem<T extends { id: string }>({
     () => ({
       type: ItemTypes.TREE_ITEM,
       item: () => {
-        // Cancel drag when editing
-        // TODO: Editing
-        // if (editing) return null;
+        if (editing) return null; // Cancel drag when editing
         onDragStart?.(node.item);
         return { id: node.item.id };
       },
@@ -118,7 +160,8 @@ export function TreeItem<T extends { id: string }>({
       }}
       className={classNames(
         className,
-        'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded pr-2',
+        'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded-md pr-2',
+        editing && 'ring-1 focus-within:ring-focus',
         isSelected && 'bg-surface-highlight',
       )}
     >
@@ -130,7 +173,7 @@ export function TreeItem<T extends { id: string }>({
         />
       )}
       {node.children != null ? (
-        <button className="h-full w-[2.6rem] pr-[0.4rem] -ml-[1rem]" onClick={handleDoubleClick}>
+        <button className="h-full w-[2.7rem] pr-[0.4rem] -ml-[1rem]" onClick={toggleCollapsed}>
           <Icon
             icon="chevron_right"
             className={classNames(
@@ -147,14 +190,29 @@ export function TreeItem<T extends { id: string }>({
       <button
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        disabled={editing}
         className={classNames(
-          'flex items-center gap-2 h-full',
+          'flex items-center gap-2 h-full whitespace-nowrap',
           // node.children == null && 'pl-[1rem]',
           isActive ? 'text-text' : 'text-text-subtle',
         )}
       >
-        {node.icon ? <Icon icon={node.icon} /> : <span />}
-        {renderItem(node.item)}
+        {renderLeftSlot?.(node.item)}
+        {getEditOptions && editing
+          ? (() => {
+              const { defaultValue, placeholder } = getEditOptions(node.item);
+              return (
+                <input
+                  ref={handleEditFocus}
+                  defaultValue={defaultValue}
+                  placeholder={placeholder}
+                  className="bg-transparent outline-none w-full cursor-text"
+                  onBlur={handleEditBlur}
+                  onKeyDown={handleEditKeyDown}
+                />
+              );
+            })()
+          : renderItem(node.item)}
       </button>
     </div>
   );

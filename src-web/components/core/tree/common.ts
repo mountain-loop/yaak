@@ -1,10 +1,8 @@
 import { jotaiStore } from '../../../lib/jotai';
-import type { IconProps } from '../Icon';
 import { selectedFamily } from './atoms';
 
 export interface TreeNode<T extends { id: string }> {
   children?: TreeNode<T>[];
-  icon?: IconProps['icon'];
   item: T;
 }
 

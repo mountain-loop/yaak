@@ -10,6 +10,7 @@ import {
   foldersAtom,
   getModel,
   httpResponsesAtom,
+  patchModel,
   workspacesAtom,
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
@@ -34,24 +35,43 @@ import { LoadingIcon } from './core/LoadingIcon';
 import { selectedFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import { Tree } from './core/tree/Tree';
+import type { TreeItemProps } from './core/tree/TreeItem';
 
 type Model = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
+
+const opacitySubtle = 'opacity-80';
 
 function getItemKey(item: Model) {
   const responses = jotaiStore.get(httpResponsesAtom);
   const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
-  return [item.id, item.updatedAt, latestResponse?.id ?? 'n/a'].join('::');
+  return [item.id, item.name, latestResponse?.id ?? 'n/a'].join('::');
 }
 
 export function NewSidebar({ className }: { className?: string }) {
   const tree = useAtomValue(sidebarTreeAtom);
   const treeId = 'sidebar';
 
+  const renderLeftSlot = useCallback((item: Model) => {
+    if (item.model === 'folder') {
+      return <Icon icon="folder" />;
+    } else if (item.model === 'workspace') {
+      return null;
+    } else {
+      const isSelected = jotaiStore.get(selectedFamily(treeId)).includes(item.id);
+      return (
+        <HttpMethodTag
+          short
+          className={classNames('text-xs', !isSelected && opacitySubtle)}
+          request={item}
+        />
+      );
+    }
+  }, []);
+
   const renderItem = useCallback((item: Model) => {
     const isSelected = jotaiStore.get(selectedFamily(treeId)).includes(item.id);
     const responses = jotaiStore.get(httpResponsesAtom);
     const latestHttpResponse = responses.find((r) => r.requestId === item.id) ?? null;
-    const opacitySubtle = 'opacity-80';
     return (
       <div
         className={classNames(
@@ -59,14 +79,7 @@ export function NewSidebar({ className }: { className?: string }) {
           isSelected && '!text-text',
         )}
       >
-        {item.model !== 'folder' && item.model !== 'workspace' && (
-          <HttpMethodTag
-            short
-            className={classNames('text-xs', !isSelected && opacitySubtle)}
-            request={item}
-          />
-        )}
-        {resolvedModelName(item)}
+        <div className="truncate">{resolvedModelName(item)}</div>
         {latestHttpResponse && (
           <div className="ml-auto">
             {latestHttpResponse.state !== 'closed' ? (
@@ -97,7 +110,7 @@ export function NewSidebar({ className }: { className?: string }) {
         // Style item selection color here, because it's very hard to do
         // efficiently in the item itself (selection ID makes it hard)
         hasFocus && '[&_[data-selected=true]]:ring-1 [&_[data-selected=true]]:ring-border-focus',
-        'max-h-full pl-3 pt-2 pb-2',
+        'w-full h-full max-h-full pl-3 pr-2 pt-2 pb-2',
         'overflow-y-auto overflow-x-hidden',
       )}
     >
@@ -106,11 +119,27 @@ export function NewSidebar({ className }: { className?: string }) {
         treeId={treeId}
         getItemKey={getItemKey}
         renderItem={renderItem}
+        renderLeftSlot={renderLeftSlot}
         getContextMenu={getContextMenu}
         onActivate={handleActivate}
+        getEditOptions={getEditOptions}
       />
     </div>
   );
+}
+
+function getEditOptions(
+  item: Model,
+): ReturnType<NonNullable<TreeItemProps<Model>['getEditOptions']>> {
+  return {
+    onChange: handleSubmitEdit,
+    defaultValue: resolvedModelName(item),
+    placeholder: item.name,
+  };
+}
+
+async function handleSubmitEdit(item: Model, text: string) {
+  await patchModel(item, { name: text });
 }
 
 function handleActivate(items: Model[]) {
@@ -268,8 +297,7 @@ const sidebarTreeAtom = atom((get) => {
       node.children = node.children ?? [];
       for (const item of childItems) {
         treeParentMap[item.id] = node;
-        const icon = item.model === 'folder' ? 'folder' : undefined;
-        node.children.push(next({ item, icon }));
+        node.children.push(next({ item }));
       }
     }
 

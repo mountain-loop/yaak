@@ -24,11 +24,13 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
 } from 'react';
 import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
 import { useEnvironmentVariables } from '../../../hooks/useEnvironmentVariables';
+import { useRandomKey } from '../../../hooks/useRandomKey';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { showDialog } from '../../../lib/dialog';
@@ -114,7 +116,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     disabled,
     extraExtensions,
     forcedEnvironmentId,
-    forceUpdateKey,
+    forceUpdateKey: forceUpdateKeyFromAbove,
     format,
     heightMode,
     hideGutter,
@@ -145,6 +147,10 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       ? allEnvironmentVariables.filter(autocompleteVariables)
       : allEnvironmentVariables;
   }, [allEnvironmentVariables, autocompleteVariables]);
+  // Track a local key for updates. If the default value is changed when the input is not in focus,
+  // regenerate this to force the field to update.
+  const [focusedUpdateKey, regenerateFocusedUpdateKey] = useRandomKey();
+  const forceUpdateKey = `${forceUpdateKeyFromAbove}::${focusedUpdateKey}`;
 
   if (settings && wrapLines === undefined) {
     wrapLines = settings.editorSoftWrap;
@@ -339,6 +345,13 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     },
     [],
   );
+
+  // Force input to update when receiving change and not in focus
+  useLayoutEffect(() => {
+    if (!cm.current?.view.hasFocus) {
+      regenerateFocusedUpdateKey();
+    }
+  }, [defaultValue, regenerateFocusedUpdateKey]);
 
   const [, { focusParamValue }] = useRequestEditor();
   const onClickPathParameter = useCallback(

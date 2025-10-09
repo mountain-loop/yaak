@@ -216,10 +216,10 @@ pub(crate) fn create_child_window(
 ) -> Result<WebviewWindow> {
     let app_handle = parent_window.app_handle();
     let label = format!("{OTHER_WINDOW_PREFIX}_{label}");
-    let scale_factor = parent_window.scale_factor().unwrap();
+    let scale_factor = parent_window.scale_factor()?;
 
-    let current_pos = parent_window.inner_position().unwrap().to_logical::<f64>(scale_factor);
-    let current_size = parent_window.inner_size().unwrap().to_logical::<f64>(scale_factor);
+    let current_pos = parent_window.inner_position()?.to_logical::<f64>(scale_factor);
+    let current_size = parent_window.inner_size()?.to_logical::<f64>(scale_factor);
 
     // Position the new window in the middle of the parent
     let position = (

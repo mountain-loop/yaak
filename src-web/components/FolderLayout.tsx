@@ -39,9 +39,12 @@ export function FolderLayout({ folder, style }: Props) {
 
   return (
     <div style={style} className="p-6 pt-4 overflow-y-auto @container">
-      <HStack space={2}>
+      <HStack space={2} alignItems="center">
         <Icon icon="folder" size="xl" color="secondary" />
         <Heading level={1}>{resolvedModelName(folder)}</Heading>
+        <HStack className="ml-auto" alignItems="center">
+          <Button rightSlot={<Icon icon="send_horizontal" />} color="secondary" size="sm" variant="border">Send All</Button>
+        </HStack>
       </HStack>
       <Separator className="mt-3 mb-8" />
       <div className="grid grid-cols-1 @lg:grid-cols-2 @4xl:grid-cols-3 gap-4 min-w-0">
@@ -92,7 +95,7 @@ function ChildCard({ child }: { child: Folder | HttpRequest | GrpcRequest | Webs
             color="custom"
             title="Send Request"
             size="sm"
-            icon="expand"
+            icon="external_link"
             className="opacity-70 hover:opacity-100"
             onClick={navigate}
           />

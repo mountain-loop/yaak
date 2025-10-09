@@ -102,8 +102,8 @@ const activeAtom = atom<Dummy | null>(null);
 function RouteComponent() {
   const active = useAtomValue(activeAtom);
   return (
-    <div className="h-full w-full grid grid-rows-1 grid-cols-[auto_1fr]">
-      <div className="pl-3 pt-12 w-[24rem] border-r border-border-subtle h-full pr-1.5 x-theme-sidebar bg-surface pb-3">
+    <div className="h-full w-full grid grid-rows-1 grid-cols-[200px_1fr]">
+      <div className="pl-3 pt-12 border-r border-border-subtle h-full pr-1.5 x-theme-sidebar bg-surface pb-3">
         <Tree
           treeId={root.item.id}
           root={root}
