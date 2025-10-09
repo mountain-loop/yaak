@@ -10,6 +10,7 @@ import { jotaiStore } from '../../../lib/jotai';
 import type { DragItem } from '../../sidebar/dnd';
 import type { ContextMenuProps } from '../Dropdown';
 import { selectedIdsFamily } from './atoms';
+import { AutoScrollWhileDragging } from './AutoScrollWhileDragging';
 import type { SelectableTreeNode, TreeNode } from './common';
 import { equalSubtree, getSelectedItems } from './common';
 import { CustomDragLayer } from './CustomDragLayer';
@@ -318,9 +319,11 @@ function Tree_<T extends { id: string }>({
       className={classNames(
         className,
         'outline-none h-full',
+        'overflow-y-auto overflow-x-hidden',
         'pr-[1px]', // Room to have an outline on each item
       )}
     >
+      <AutoScrollWhileDragging container={treeRef.current} />
       <CustomDragLayer>
         <TreeItemList
           treeId={treeId + '.dragging'}

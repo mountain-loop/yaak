@@ -103,19 +103,8 @@ export function NewSidebar({ className }: { className?: string }) {
     return null;
   }
 
-  const hasFocus = true;
-
   return (
-    <div
-      className={classNames(
-        className,
-        // Style item selection color here, because it's very hard to do
-        // efficiently in the item itself (selection ID makes it hard)
-        hasFocus && '[&_[data-selected=true]]:ring-1 [&_[data-selected=true]]:ring-border-focus',
-        'w-full h-full max-h-full pl-3 pr-2 pt-2 pb-2',
-        'overflow-y-auto overflow-x-hidden',
-      )}
-    >
+    <div className={classNames(className, 'w-full h-full max-h-full')}>
       <Tree
         root={tree}
         treeId={treeId}
@@ -126,12 +115,13 @@ export function NewSidebar({ className }: { className?: string }) {
         onActivate={handleActivate}
         getEditOptions={getEditOptions}
         activeIdAtom={activeIdAtom}
+        className="pl-3 pr-2 pt-2 pb-2"
       />
     </div>
   );
 }
 
-const activeIdAtom = atom<string | null>(get => {
+const activeIdAtom = atom<string | null>((get) => {
   return get(activeRequestIdAtom) || get(activeFolderIdAtom);
 });
 
