@@ -326,6 +326,7 @@ function Tree_<T extends { id: string }>({
           treeId={treeId + '.dragging'}
           hoveredIndex={null}
           hoveredParent={null}
+          style={{ width: treeRef.current?.clientWidth ?? undefined }}
           node={{
             item: { ...root.item, id: `${root.item.id}_dragging` },
             children: draggingItems.map((i) => {

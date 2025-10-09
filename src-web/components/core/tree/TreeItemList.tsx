@@ -1,5 +1,6 @@
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
+import type { CSSProperties} from 'react';
 import { Fragment, memo } from 'react';
 import { DropMarker } from '../../DropMarker';
 import { isCollapsedFamily } from './atoms';
@@ -18,6 +19,7 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
     depth: number;
     hoveredParent?: TreeNode<T> | null;
     hoveredIndex?: number | null;
+    style?: CSSProperties;
   };
 
 function TreeItemList_<T extends { id: string }>({
@@ -36,10 +38,12 @@ function TreeItemList_<T extends { id: string }>({
   onDragStart,
   getEditOptions,
   depth,
+  style,
 }: TreeItemListProps<T>) {
   const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
   const childList = !isCollapsed && node.children != null && (
     <ul
+      style={style}
       className={classNames(
         depth > 0 && 'ml-[calc(0.7rem+0.5px)] pl-[0.7rem] border-l',
         hoveredParent?.item.id === node.item.id
