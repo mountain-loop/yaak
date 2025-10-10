@@ -215,7 +215,7 @@ export const SidebarItem = memo(function SidebarItem({
   );
 
   return (
-    <li ref={ref} draggable>
+    <li ref={ref}>
       <div className={classNames(className, 'block relative group/item pl-2 pb-0.5')}>
         {showContextMenu && (
           <SidebarItemContextMenu

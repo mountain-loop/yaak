@@ -21,7 +21,9 @@ import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { allRequestsAtom } from '../hooks/useAllRequests';
+import { useHotKey } from '../hooks/useHotKey';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
+import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { deepEqualAtom } from '../lib/atoms';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFolderAndNavigate';
@@ -50,6 +52,7 @@ function getItemKey(item: Model) {
 }
 
 export function NewSidebar({ className }: { className?: string }) {
+  const [hidden, setHidden] = useSidebarHidden();
   const tree = useAtomValue(sidebarTreeAtom);
   const treeId = 'workspace.sidebar';
 
@@ -99,7 +102,28 @@ export function NewSidebar({ className }: { className?: string }) {
     );
   }, []);
 
-  if (tree == null) {
+  useHotKey('sidebar.focus', async () => {
+    // Hide the sidebar if it's already focused
+    if (!hidden) {
+      //  && hasFocus) {
+      await setHidden(true);
+      return;
+    }
+
+    // Show the sidebar if it's hidden
+    if (hidden) {
+      await setHidden(false);
+    }
+
+    // Select the 0th index on focus if none selected
+    // focusActiveItem(
+    //   selectedTree != null && selectedId != null
+    //     ? { forced: { id: selectedId, tree: selectedTree } }
+    //     : undefined,
+    // );
+  });
+
+  if (tree == null || hidden) {
     return null;
   }
 

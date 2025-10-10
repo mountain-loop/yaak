@@ -3,7 +3,6 @@ import { atom, useAtom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import React, { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDrag, useDrop, type XYCoord } from 'react-dnd';
-import { getEmptyImage } from 'react-dnd-html5-backend';
 import type { ContextMenuProps } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
@@ -111,12 +110,15 @@ export function TreeItem<T extends { id: string }>({
     [handleSubmitNameEdit],
   );
   const handleDoubleClick = useCallback(() => {
-    if (getEditOptions != null) {
+    const isFolder = node.children != null;
+    if (isFolder) {
+      toggleCollapsed();
+    } else if (getEditOptions) {
       setEditing(true);
     }
-  }, [getEditOptions]);
+  }, [getEditOptions, node.children, toggleCollapsed]);
 
-  const [, connectDrag, preview] = useDrag<
+  const [, connectDrag] = useDrag<
     DragItem,
     unknown,
     {
@@ -154,7 +156,6 @@ export function TreeItem<T extends { id: string }>({
   );
 
   connectDrag(connectDrop(ref));
-  preview(getEmptyImage()); // Hide the browser preview to show our own
 
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
@@ -163,7 +164,6 @@ export function TreeItem<T extends { id: string }>({
 
   return (
     <div
-      draggable
       ref={ref}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -184,7 +184,7 @@ export function TreeItem<T extends { id: string }>({
         />
       )}
       {node.children != null ? (
-        <button className="h-full w-[2.7rem] pr-[0.4rem] -ml-[1rem]" onClick={toggleCollapsed}>
+        <button className="h-full w-[2.8rem] pr-[0.5rem] -ml-[1rem]" onClick={toggleCollapsed}>
           <Icon
             icon="chevron_right"
             className={classNames(
