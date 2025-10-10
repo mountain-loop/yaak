@@ -11,6 +11,7 @@ import {
   getModel,
   httpResponsesAtom,
   patchModel,
+  patchModelById,
   workspacesAtom,
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
@@ -123,6 +124,54 @@ export function NewSidebar({ className }: { className?: string }) {
     // );
   });
 
+  const handleDragEnd = useCallback(
+    async ({
+      items,
+      parent,
+      children,
+      insertAt,
+    }: {
+      items: Model[];
+      parent: Model;
+      children: Model[];
+      insertAt: number;
+    }) => {
+      const prev = children[insertAt - 1] as Exclude<Model, Workspace>;
+      const next = children[insertAt] as Exclude<Model, Workspace>;
+      const folderId = parent.model === 'folder' ? parent.id : null;
+
+      const beforePriority = prev?.sortPriority ?? 0;
+      const afterPriority = next?.sortPriority ?? 0;
+      const shouldUpdateAll = afterPriority - beforePriority < 1;
+
+      if (shouldUpdateAll) {
+        // Add items to children at insertAt
+        children.splice(insertAt, 0, ...items);
+        for (let i = 0; i < children.length; i++) {
+          const child = children[i]!;
+          await patchModelById(child.model, child.id, {
+            sortPriority: i * 1000,
+            folderId,
+          });
+        }
+      } else {
+        const range = afterPriority - beforePriority;
+        const increment = range / (items.length + 2);
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i]!;
+          if (item.model === 'workspace') continue; // Not possible, but make TS happy
+          // Spread item sortPriority out over before/after range
+          const sortPriority = beforePriority + (i + 1) * increment;
+          await patchModelById(item.model, item.id, {
+            sortPriority,
+            folderId,
+          });
+        }
+      }
+    },
+    [],
+  );
+
   if (tree == null || hidden) {
     return null;
   }
@@ -140,6 +189,7 @@ export function NewSidebar({ className }: { className?: string }) {
         getEditOptions={getEditOptions}
         activeIdAtom={activeIdAtom}
         className="pl-3 pr-2 pt-2 pb-2"
+        onDragEnd={handleDragEnd}
       />
     </div>
   );

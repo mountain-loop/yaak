@@ -29,6 +29,7 @@ export interface TreeProps<T extends { id: string }> {
   className?: string;
   activeIdAtom?: Atom<string | null>;
   onActivate?: (items: T[]) => void;
+  onDragEnd?: (opt: { items: T[]; parent: T; children: T[]; insertAt: number }) => void;
   getEditOptions?: (item: T) => {
     defaultValue: string;
     placeholder?: string;
@@ -37,16 +38,17 @@ export interface TreeProps<T extends { id: string }> {
 }
 
 function Tree_<T extends { id: string }>({
-  root,
-  treeId,
-  getItemKey,
+  activeIdAtom,
+  className,
   getContextMenu,
+  getEditOptions,
+  getItemKey,
+  onActivate,
+  onDragEnd,
   renderItem,
   renderLeftSlot,
-  className,
-  activeIdAtom,
-  onActivate,
-  getEditOptions,
+  root,
+  treeId,
 }: TreeProps<T>) {
   const treeRef = useRef<HTMLDivElement>(null);
   const [draggingItems, setDraggingItems] = useState<T[]>([]);
@@ -214,67 +216,46 @@ function Tree_<T extends { id: string }>({
     jotaiStore.set(selectedIdsFamily(treeId), []);
   }, [treeId]);
 
-  const handleEnd = useCallback<NonNullable<TreeItemProps<T>['onEnd']>>(
-    async (item) => {
-      setHoveredParent(null);
-      setDraggingItems([]);
-      handleClearSelected();
+  const handleEnd = useCallback<NonNullable<TreeItemProps<T>['onEnd']>>(async () => {
+    setHoveredParent(null);
+    setDraggingItems([]);
+    handleClearSelected();
 
-      if (hoveredParent == null || hoveredIndex == null) {
-        return;
+    if (!hoveredParent || hoveredIndex == null || !draggingItems?.length) return;
+
+    // Optional tiny guard: don't drop into itself
+    if (draggingItems.some((it) => it.id === hoveredParent.item.id)) return;
+
+    // Resolve the actual tree nodes for each dragged item (keeps order of draggingItems)
+    const draggedNodes: TreeNode<T>[] = draggingItems
+      .map((it) => {
+        const parent = treeParentMap[it.id];
+        const idx = parent?.children?.findIndex((n) => n.item.id === it.id) ?? -1;
+        return idx >= 0 ? parent!.children![idx]! : null;
+      })
+      .filter(Boolean) as TreeNode<T>[];
+
+    // Work on a local copy of target children
+    const nextChildren = [...(hoveredParent.children ?? [])];
+
+    // Remove any of the dragged nodes already in the target, adjusting hoveredIndex
+    let insertAt = hoveredIndex;
+    for (const node of draggedNodes) {
+      const i = nextChildren.findIndex((n) => n.item.id === node.item.id);
+      if (i !== -1) {
+        nextChildren.splice(i, 1);
+        if (i < insertAt) insertAt -= 1; // account for removed-before
       }
+    }
 
-      // Block dragging folder into itself
-      if (hoveredParent.item.id === item.id) {
-        return;
-      }
-
-      const parentTree = treeParentMap[item.id] ?? null;
-      const index = parentTree?.children?.findIndex((n) => n.item.id === item.id) ?? -1;
-      const child = parentTree?.children?.[index ?? -1];
-      if (child == null || parentTree == null) return;
-
-      const movedToDifferentTree = hoveredParent.item.id !== parentTree.item.id;
-      const movedUpInSameTree = !movedToDifferentTree && hoveredIndex < index;
-
-      const newChildren = hoveredParent.children?.filter((n) => n.item.id !== item.id);
-      if (newChildren == null) {
-        return;
-      }
-
-      if (movedToDifferentTree || movedUpInSameTree) {
-        // Moving up or into a new tree is simply inserting before the hovered item
-        newChildren.splice(hoveredIndex, 0, child);
-      } else {
-        // Moving down has to account for the fact that the original item will be removed
-        newChildren.splice(hoveredIndex - 1, 0, child);
-      }
-
-      const insertedIndex = newChildren.findIndex((n) => n.item.id === child.item.id);
-      const prev = newChildren[insertedIndex - 1];
-      const next = newChildren[insertedIndex + 1];
-
-      console.log('DROP END', { prev, next });
-      // const beforePriority = prev?.sortPriority ?? 0;
-      // const afterPriority = next?.sortPriority ?? 0;
-      //
-      // const folderId = hoveredTree.model === 'folder' ? hoveredTree.id : null;
-      // const shouldUpdateAll = afterPriority - beforePriority < 1;
-      //
-      // if (shouldUpdateAll) {
-      //   await Promise.all(
-      //     newChildren.map((child, i) => {
-      //       const sortPriority = i * 1000;
-      //       return patchModelById(child.model, child.id, { sortPriority, folderId });
-      //     }),
-      //   );
-      // } else {
-      //   const sortPriority = afterPriority - (afterPriority - beforePriority) / 2;
-      //   await patchModelById(child.model, child.id, { sortPriority, folderId });
-      // }
-    },
-    [handleClearSelected, hoveredParent, hoveredIndex, treeParentMap],
-  );
+    // Batch callback
+    onDragEnd?.({
+      items: draggedNodes.map((n) => n.item),
+      parent: hoveredParent.item,
+      children: nextChildren.map((c) => c.item),
+      insertAt,
+    });
+  }, [handleClearSelected, hoveredParent, hoveredIndex, draggingItems, treeParentMap, onDragEnd]);
 
   const handleMoveToSidebarEnd = useCallback(() => {
     setHoveredParent(root);
