@@ -100,6 +100,11 @@ export async function getAuthorizationCode(
         const url = new URL(urlStr);
         if (logsEnabled) console.log('[oauth2] Navigated to', urlStr);
 
+        if (redirectUri && !url.toString().startsWith(redirectUri)) {
+          console.log('[oauth2] Current URL does not match redirect URI, not looking for code.');
+          return;
+        }
+
         if (url.searchParams.has('error')) {
           close();
           return reject(new Error(`Failed to authorize: ${url.searchParams.get('error')}`));
