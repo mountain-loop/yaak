@@ -1,6 +1,7 @@
 import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
 import { createWorkspaceModel } from '@yaakapp-internal/models';
 import { activeRequestAtom } from '../hooks/useActiveRequest';
+import { expandFolder } from '../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from './jotai';
 import { router } from './router';
 
@@ -21,6 +22,11 @@ export async function createRequestAndNavigate<
   patch.folderId = patch.folderId || activeRequest?.folderId;
 
   const newId = await createWorkspaceModel(patch);
+
+  // INFO: Expand the parent folder if the new request is it's child
+  if (patch.folderId) {
+    await expandFolder(patch.folderId);
+  }
 
   await router.navigate({
     to: '/workspaces/$workspaceId',
