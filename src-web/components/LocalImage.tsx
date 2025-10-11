@@ -14,7 +14,6 @@ export function LocalImage({ src: srcPath, className }: Props) {
     queryKey: ['local-image', srcPath],
     queryFn: async () => {
       const p = await resolveResource(srcPath);
-      console.log("LOADING SRC", srcPath, p)
       return convertFileSrc(p);
     },
   });

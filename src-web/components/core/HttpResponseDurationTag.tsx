@@ -12,6 +12,7 @@ export function HttpResponseDurationTag({ response }: Props) {
   // Calculate the duration of the response for use when the response hasn't finished yet
   useEffect(() => {
     clearInterval(timeout.current);
+    if (response.state === 'closed') return;
     timeout.current = setInterval(() => {
       setFallbackElapsed(Date.now() - new Date(response.createdAt + 'Z').getTime());
     }, 100);

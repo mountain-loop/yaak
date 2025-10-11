@@ -33,7 +33,15 @@ export function RadioDropdown<T = string | null>({
 }: RadioDropdownProps<T>) {
   const dropdownItems = useMemo(
     () => [
-      ...((itemsBefore ? [...itemsBefore, { type: 'separator' }] : []) as DropdownItem[]),
+      ...((itemsBefore
+        ? [
+            ...itemsBefore,
+            {
+              type: 'separator',
+              hidden: itemsBefore[itemsBefore.length - 1]?.type === 'separator',
+            },
+          ]
+        : []) as DropdownItem[]),
       ...items.map((item) => {
         if (item.type === 'separator') {
           return item;
@@ -47,7 +55,9 @@ export function RadioDropdown<T = string | null>({
           } as DropdownItem;
         }
       }),
-      ...((itemsAfter ? [{ type: 'separator' }, ...itemsAfter] : []) as DropdownItem[]),
+      ...((itemsAfter
+        ? [{ type: 'separator', hidden: itemsAfter[0]?.type === 'separator' }, ...itemsAfter]
+        : []) as DropdownItem[]),
     ],
     [itemsBefore, items, itemsAfter, value, onChange],
   );

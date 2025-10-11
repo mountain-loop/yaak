@@ -10,7 +10,7 @@ import { useSendAnyHttpRequest } from '../../hooks/useSendAnyHttpRequest';
 import { useSendManyRequests } from '../../hooks/useSendManyRequests';
 import { deleteModelWithConfirm } from '../../lib/deleteModelWithConfirm';
 
-import { duplicateRequestAndNavigate } from '../../lib/duplicateRequestAndNavigate';
+import { duplicateRequestOrFolderAndNavigate } from '../../lib/duplicateRequestOrFolderAndNavigate';
 import { renameModelWithPrompt } from '../../lib/renameModelWithPrompt';
 import type { DropdownItem } from '../core/Dropdown';
 import { ContextMenu } from '../core/Dropdown';
@@ -45,7 +45,11 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
         {
           label: 'Duplicate',
           leftSlot: <Icon icon="copy" />,
-          onSelect: () => duplicateModelById(child.model, child.id),
+          hotKeyAction: 'http_request.duplicate',
+          hotKeyLabelOnly: true,
+          onSelect: async () => {
+            await duplicateModelById(child.model, child.id);
+          },
         },
         {
           label: 'Send All',
@@ -67,34 +71,34 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
       const requestItems: DropdownItem[] =
         child.model === 'http_request'
           ? [
-            {
-              label: 'Send',
-              hotKeyAction: 'http_request.send',
-              hotKeyLabelOnly: true, // Already bound in URL bar
-              leftSlot: <Icon icon="send_horizontal" />,
-              onSelect: () => sendRequest.mutate(child.id),
-            },
-            ...httpRequestActions.map((a) => ({
-              label: a.label,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
-              onSelect: async () => {
-                const request = getModel('http_request', child.id);
-                if (request != null) await a.call(request);
+              {
+                label: 'Send',
+                hotKeyAction: 'http_request.send',
+                hotKeyLabelOnly: true, // Already bound in URL bar
+                leftSlot: <Icon icon="send_horizontal" />,
+                onSelect: () => sendRequest.mutate(child.id),
               },
-            })),
-            { type: 'separator' },
-          ]
+              ...httpRequestActions.map((a) => ({
+                label: a.label,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+                onSelect: async () => {
+                  const request = getModel('http_request', child.id);
+                  if (request != null) await a.call(request);
+                },
+              })),
+              { type: 'separator' },
+            ]
           : child.model === 'grpc_request'
             ? grpcRequestActions.map((a) => ({
-              label: a.label,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
-              onSelect: async () => {
-                const request = getModel('grpc_request', child.id);
-                if (request != null) await a.call(request);
-              },
-            }))
+                label: a.label,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+                onSelect: async () => {
+                  const request = getModel('grpc_request', child.id);
+                  if (request != null) await a.call(request);
+                },
+              }))
             : [];
       return [
         ...requestItems,
@@ -119,7 +123,7 @@ export function SidebarItemContextMenu({ child, show, close }: Props) {
               ['http_request', 'grpc_request', 'websocket_request'],
               child.id,
             );
-            await duplicateRequestAndNavigate(request);
+            await duplicateRequestOrFolderAndNavigate(request);
           },
         },
         {

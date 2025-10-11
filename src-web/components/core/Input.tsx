@@ -1,3 +1,4 @@
+import { EditorSelection } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
@@ -164,7 +165,7 @@ const BaseInput = forwardRef<EditorView, InputProps>(function InputBase(
     setFocused(false);
     // Move selection to the end on blur
     editorRef.current?.dispatch({
-      selection: { anchor: editorRef.current.state.doc.length },
+      selection: EditorSelection.single(editorRef.current.state.doc.length ),
     });
     onBlur?.();
   }, [onBlur]);

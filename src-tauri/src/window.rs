@@ -1,3 +1,4 @@
+use crate::error::Result;
 use crate::window_menu::app_menu;
 use log::{info, warn};
 use rand::random;
@@ -6,7 +7,6 @@ use tauri::{
 };
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
-use crate::error::Result;
 
 const DEFAULT_WINDOW_WIDTH: f64 = 1100.0;
 const DEFAULT_WINDOW_HEIGHT: f64 = 600.0;
@@ -49,7 +49,6 @@ pub(crate) fn create_window<R: Runtime>(
             .resizable(true)
             .visible(false) // To prevent theme flashing, the frontend code calls show() immediately after configuring the theme
             .fullscreen(false)
-            .disable_drag_drop_handler() // Required for frontend Dnd on windows
             .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
 
     if let Some(key) = config.data_dir_key {
@@ -216,10 +215,10 @@ pub(crate) fn create_child_window(
 ) -> Result<WebviewWindow> {
     let app_handle = parent_window.app_handle();
     let label = format!("{OTHER_WINDOW_PREFIX}_{label}");
-    let scale_factor = parent_window.scale_factor().unwrap();
+    let scale_factor = parent_window.scale_factor()?;
 
-    let current_pos = parent_window.inner_position().unwrap().to_logical::<f64>(scale_factor);
-    let current_size = parent_window.inner_size().unwrap().to_logical::<f64>(scale_factor);
+    let current_pos = parent_window.inner_position()?.to_logical::<f64>(scale_factor);
+    let current_size = parent_window.inner_size()?.to_logical::<f64>(scale_factor);
 
     // Position the new window in the middle of the parent
     let position = (

@@ -39,6 +39,7 @@ const icons = {
   code: lucide.CodeIcon,
   columns_2: lucide.Columns2Icon,
   command: lucide.CommandIcon,
+  corner_right_up: lucide.CornerRightUpIcon,
   credit_card: lucide.CreditCardIcon,
   cookie: lucide.CookieIcon,
   copy: lucide.CopyIcon,
@@ -54,6 +55,7 @@ const icons = {
   flame: lucide.FlameIcon,
   flask: lucide.FlaskConicalIcon,
   folder: lucide.FolderIcon,
+  folder_cog: lucide.FolderCogIcon,
   folder_code: lucide.FolderCodeIcon,
   folder_git: lucide.FolderGitIcon,
   folder_input: lucide.FolderInputIcon,
@@ -61,6 +63,7 @@ const icons = {
   folder_output: lucide.FolderOutputIcon,
   folder_symlink: lucide.FolderSymlinkIcon,
   folder_sync: lucide.FolderSyncIcon,
+  folder_up: lucide.FolderUpIcon,
   git_branch: lucide.GitBranchIcon,
   git_branch_plus: lucide.GitBranchPlusIcon,
   git_commit: lucide.GitCommitIcon,
@@ -118,7 +121,7 @@ const icons = {
   x: lucide.XIcon,
   _unknown: lucide.ShieldAlertIcon,
 
-  empty: (props: HTMLAttributes<HTMLSpanElement>) => <span {...props} />,
+  empty: (props: HTMLAttributes<HTMLSpanElement>) => <div {...props} />,
 };
 
 export interface IconProps {

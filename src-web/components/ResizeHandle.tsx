@@ -25,9 +25,8 @@ export function ResizeHandle({
   return (
     <div
       aria-hidden
-      draggable
       style={style}
-      onDragStart={onResizeStart}
+      onPointerDown={onResizeStart}
       onDoubleClick={onReset}
       className={classNames(
         className,

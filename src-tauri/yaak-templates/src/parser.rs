@@ -170,7 +170,13 @@ impl Parser {
         let start_pos = self.pos;
 
         while self.pos < self.chars.len() {
-            if self.match_str("${[") {
+            if self.match_str(r#"\\"#) {
+                // Skip double-escapes so we don't trigger our own escapes in the next case
+                self.curr_text += r#"\\"#;
+            } else if self.match_str(r#"\${["#) {
+                // Unescaped template syntax so we treat it as a string
+                self.curr_text += "${[";
+            } else if self.match_str("${[") {
                 let start_curr = self.pos;
                 if let Some(t) = self.parse_tag()? {
                     self.push_token(t);
@@ -489,6 +495,39 @@ mod tests {
     use crate::Val::Null;
     use crate::error::Result;
     use crate::*;
+
+    #[test]
+    fn escaped() -> Result<()> {
+        let mut p = Parser::new(r#"\${[ foo ]}"#);
+        assert_eq!(
+            p.parse()?.tokens,
+            vec![
+                Token::Raw {
+                    text: "${[ foo ]}".to_string()
+                },
+                Token::Eof
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn escaped_tricky() -> Result<()> {
+        let mut p = Parser::new(r#"\\${[ foo ]}"#);
+        assert_eq!(
+            p.parse()?.tokens,
+            vec![
+                Token::Raw {
+                    text: r#"\\"#.to_string()
+                },
+                Token::Tag {
+                    val: Val::Var { name: "foo".into() }
+                },
+                Token::Eof
+            ]
+        );
+        Ok(())
+    }
 
     #[test]
     fn var_simple() -> Result<()> {

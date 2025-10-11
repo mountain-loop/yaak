@@ -1,6 +1,14 @@
 import classNames from 'classnames';
 import type { FocusEvent, HTMLAttributes } from 'react';
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { useRandomKey } from '../../hooks/useRandomKey';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { IconButton } from './IconButton';
 import type { InputProps } from './Input';
@@ -22,7 +30,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     className,
     containerClassName,
     defaultValue,
-    forceUpdateKey,
+    forceUpdateKey: forceUpdateKeyFromAbove,
     help,
     hideLabel,
     hideObscureToggle,
@@ -47,15 +55,21 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
   },
   ref,
 ) {
+  // Track a local key for updates. If the default value is changed when the input is not in focus,
+  // regenerate this to force the field to update.
+  const [focusedUpdateKey, regenerateFocusedUpdateKey] = useRandomKey();
+  const forceUpdateKey = `${forceUpdateKeyFromAbove}::${focusedUpdateKey}`;
+
   const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
   const [focused, setFocused] = useState(false);
   const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [forceUpdateKey]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
   useImperativeHandle<{ focus: () => void } | null, { focus: () => void } | null>(
     ref,
     () => inputRef.current,
   );
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleFocus = useCallback(
     (e: FocusEvent<HTMLInputElement>) => {
@@ -74,6 +88,13 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     setFocused(false);
     onBlur?.();
   }, [onBlur]);
+
+  // Force input to update when receiving change and not in focus
+  useLayoutEffect(() => {
+    if (!focused) {
+      regenerateFocusedUpdateKey();
+    }
+  }, [focused, regenerateFocusedUpdateKey, defaultValue]);
 
   const id = `input-${name}`;
   const commonClassName = classNames(
@@ -152,9 +173,9 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
           )}
         >
           <input
+            id={id}
             ref={inputRef}
             key={forceUpdateKey}
-            id={id}
             type={type === 'password' && !obscured ? 'text' : type}
             defaultValue={defaultValue ?? undefined}
             autoComplete="off"
