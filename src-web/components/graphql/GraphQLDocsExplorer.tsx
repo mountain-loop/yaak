@@ -210,7 +210,7 @@ function GraphQLExplorerHeader({
         />
       </div>
       <div className="ml-auto flex gap-1 [&>*]:text-text-subtle">
-        <IconButton icon="x" size="sm" title="Close documenation explorer" onClick={onClose} />
+        <IconButton icon="x" size="sm" title="Close documentation explorer" onClick={onClose} />
       </div>
     </nav>
   );
