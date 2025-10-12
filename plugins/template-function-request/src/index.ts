@@ -1,6 +1,5 @@
-import type { HttpUrlParameter } from '@yaakapp-internal/models';
+import type { AnyModel, HttpUrlParameter } from '@yaakapp-internal/models';
 import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
-import { resolvedModelName } from '@yaakapp/app/lib/resolvedModelName';
 
 export const plugin: PluginDefinition = {
   templateFunctions: [
@@ -116,3 +115,40 @@ export const plugin: PluginDefinition = {
     },
   ],
 };
+
+// TODO: Use a common function for this, but it fails to build on windows during CI if I try importing it here
+export function resolvedModelName(r: AnyModel | null): string {
+  if (r == null) return '';
+
+  if (!('url' in r) || r.model === 'plugin') {
+    return 'name' in r ? r.name : '';
+  }
+
+  // Return name if it has one
+  if ('name' in r && r.name) {
+    return r.name;
+  }
+
+  // Replace variable syntax with variable name
+  const withoutVariables = r.url.replace(/\$\{\[\s*([^\]\s]+)\s*]}/g, '$1');
+  if (withoutVariables.trim() === '') {
+    return r.model === 'http_request'
+      ? r.bodyType && r.bodyType === 'graphql'
+        ? 'GraphQL Request'
+        : 'HTTP Request'
+      : r.model === 'websocket_request'
+        ? 'WebSocket Request'
+        : 'gRPC Request';
+  }
+
+  // GRPC gets nice short names
+  if (r.model === 'grpc_request' && r.service != null && r.method != null) {
+    const shortService = r.service.split('.').pop();
+    return `${shortService}/${r.method}`;
+  }
+
+  // Strip unnecessary protocol
+  const withoutProto = withoutVariables.replace(/^(http|https|ws|wss):\/\//, '');
+
+  return withoutProto;
+}
