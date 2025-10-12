@@ -1,12 +1,13 @@
 import classNames from 'classnames';
-import { atom, useAtom, useAtomValue } from 'jotai';
+import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import React, { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDrag, useDrop, type XYCoord } from 'react-dnd';
+import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
-import { isCollapsedFamily, isSelectedFamily } from './atoms';
+import { draggingIdsFamily, isCollapsedFamily, isSelectedFamily } from './atoms';
 import type { TreeNode } from './common';
 import type { DragItem } from './dnd';
 import { ItemTypes } from './dnd';
@@ -19,7 +20,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
   node: TreeNode<T>;
   className?: string;
   onMove?: (item: T, side: 'above' | 'below') => void;
-  onEnd?: (item: T) => void;
+  onEnd?: () => void;
   onDragStart?: (item: T) => void;
   onClick?: (item: T, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   getContextMenu?: (item: T) => ContextMenuProps['items'];
@@ -43,7 +44,7 @@ export function TreeItem<T extends { id: string }>({
 }: TreeItemProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
   const isSelected = useAtomValue(isSelectedFamily({ treeId, itemId: node.item.id }));
-  const [collapsed, setCollapsed] = useAtom(isCollapsedFamily({ treeId, itemId: node.item.id }));
+  const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
   const [editing, setEditing] = useState<boolean>(false);
 
   const isActiveAtom = useMemo(() => {
@@ -69,8 +70,8 @@ export function TreeItem<T extends { id: string }>({
   );
 
   const toggleCollapsed = useCallback(() => {
-    setCollapsed((prev) => !prev);
-  }, [setCollapsed]);
+    jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
+  }, [node.item.id, treeId]);
 
   const handleSubmitNameEdit = useCallback(
     async (el: HTMLInputElement) => {
@@ -134,7 +135,7 @@ export function TreeItem<T extends { id: string }>({
       },
       collect: (m) => ({ isDragging: m.isDragging() }),
       options: { dropEffect: 'move' },
-      end: () => onEnd?.(node.item),
+      end: () => onEnd?.(),
     }),
     [onEnd],
   );
@@ -162,18 +163,45 @@ export function TreeItem<T extends { id: string }>({
     y: number;
   } | null>(null);
 
+  const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
+  const [isDropHover, setIsDropHover] = useState<boolean>(false);
+  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setShowContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsDropHover(false);
+    clearTimeout(startedHoverTimeout.current);
+  }, []);
+
+  const handleMouseEnter = useCallback(
+    () => {
+      const isDraggingSomething = jotaiStore.get(draggingIdsFamily(treeId)).length > 0;
+      const isFolderWithChildren = (node.children?.length ?? 0) > 0;
+      if (!isFolderWithChildren || !isCollapsed || !isDraggingSomething) return;
+
+      setIsDropHover(true);
+      startedHoverTimeout.current = setTimeout(() => {
+        toggleCollapsed();
+        setIsDropHover(false);
+      }, 1000);
+    },
+    [isCollapsed, node.children?.length, toggleCollapsed, treeId],
+  );
+
   return (
     <div
       ref={ref}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        setShowContextMenu({ x: e.clientX, y: e.clientY });
-      }}
+      onContextMenu={handleContextMenu}
+      onMouseLeave={handleMouseLeave}
+      onMouseEnter={handleMouseEnter}
       className={classNames(
         className,
-        'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded-md pr-2',
+        'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded px-2',
         editing && 'ring-1 focus-within:ring-focus',
         isSelected && 'bg-surface-highlight',
+        isDropHover && 'ring-2 ring-primary animate-blinkRing',
       )}
     >
       {showContextMenu && getContextMenu && (
@@ -191,7 +219,7 @@ export function TreeItem<T extends { id: string }>({
               'transition-transform text-text-subtlest',
               'ml-auto !h-[1rem] !w-[1rem]',
               node.children.length == 0 && 'opacity-0',
-              !collapsed && 'rotate-90',
+              !isCollapsed && 'rotate-90',
             )}
           />
         </button>

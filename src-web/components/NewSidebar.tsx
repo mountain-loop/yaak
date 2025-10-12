@@ -57,7 +57,7 @@ export function NewSidebar({ className }: { className?: string }) {
   const tree = useAtomValue(sidebarTreeAtom);
   const treeId = 'workspace.sidebar';
 
-  const renderLeftSlot = useCallback((item: Model) => {
+  const renderLeftSlot = useCallback(function renderLeftSlot(item: Model) {
     if (item.model === 'folder') {
       return <Icon icon="folder" />;
     } else if (item.model === 'workspace') {
@@ -74,7 +74,7 @@ export function NewSidebar({ className }: { className?: string }) {
     }
   }, []);
 
-  const renderItem = useCallback((item: Model) => {
+  const renderItem = useCallback(function renderItem(item: Model) {
     const isSelected = jotaiStore.get(selectedIdsFamily(treeId)).includes(item.id);
     const responses = jotaiStore.get(httpResponsesAtom);
     const latestHttpResponse = responses.find((r) => r.requestId === item.id) ?? null;
@@ -103,7 +103,7 @@ export function NewSidebar({ className }: { className?: string }) {
     );
   }, []);
 
-  useHotKey('sidebar.focus', async () => {
+  useHotKey('sidebar.focus', async function focusHotkey() {
     // Hide the sidebar if it's already focused
     if (!hidden) {
       //  && hasFocus) {
@@ -124,53 +124,50 @@ export function NewSidebar({ className }: { className?: string }) {
     // );
   });
 
-  const handleDragEnd = useCallback(
-    async ({
-      items,
-      parent,
-      children,
-      insertAt,
-    }: {
-      items: Model[];
-      parent: Model;
-      children: Model[];
-      insertAt: number;
-    }) => {
-      const prev = children[insertAt - 1] as Exclude<Model, Workspace>;
-      const next = children[insertAt] as Exclude<Model, Workspace>;
-      const folderId = parent.model === 'folder' ? parent.id : null;
+  const handleDragEnd = useCallback(async function handleDragEnd({
+    items,
+    parent,
+    children,
+    insertAt,
+  }: {
+    items: Model[];
+    parent: Model;
+    children: Model[];
+    insertAt: number;
+  }) {
+    const prev = children[insertAt - 1] as Exclude<Model, Workspace>;
+    const next = children[insertAt] as Exclude<Model, Workspace>;
+    const folderId = parent.model === 'folder' ? parent.id : null;
 
-      const beforePriority = prev?.sortPriority ?? 0;
-      const afterPriority = next?.sortPriority ?? 0;
-      const shouldUpdateAll = afterPriority - beforePriority < 1;
+    const beforePriority = prev?.sortPriority ?? 0;
+    const afterPriority = next?.sortPriority ?? 0;
+    const shouldUpdateAll = afterPriority - beforePriority < 1;
 
-      if (shouldUpdateAll) {
-        // Add items to children at insertAt
-        children.splice(insertAt, 0, ...items);
-        for (let i = 0; i < children.length; i++) {
-          const child = children[i]!;
-          await patchModelById(child.model, child.id, {
-            sortPriority: i * 1000,
-            folderId,
-          });
-        }
-      } else {
-        const range = afterPriority - beforePriority;
-        const increment = range / (items.length + 2);
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i]!;
-          if (item.model === 'workspace') continue; // Not possible, but make TS happy
-          // Spread item sortPriority out over before/after range
-          const sortPriority = beforePriority + (i + 1) * increment;
-          await patchModelById(item.model, item.id, {
-            sortPriority,
-            folderId,
-          });
-        }
+    if (shouldUpdateAll) {
+      // Add items to children at insertAt
+      children.splice(insertAt, 0, ...items);
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i]!;
+        await patchModelById(child.model, child.id, {
+          sortPriority: i * 1000,
+          folderId,
+        });
       }
-    },
-    [],
-  );
+    } else {
+      const range = afterPriority - beforePriority;
+      const increment = range / (items.length + 2);
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]!;
+        if (item.model === 'workspace') continue; // Not possible, but make TS happy
+        // Spread item sortPriority out over before/after range
+        const sortPriority = beforePriority + (i + 1) * increment;
+        await patchModelById(item.model, item.id, {
+          sortPriority,
+          folderId,
+        });
+      }
+    }
+  }, []);
 
   if (tree == null || hidden) {
     return null;
@@ -188,7 +185,7 @@ export function NewSidebar({ className }: { className?: string }) {
         onActivate={handleActivate}
         getEditOptions={getEditOptions}
         activeIdAtom={activeIdAtom}
-        className="pl-3 pr-2 pt-2 pb-2"
+        className="pl-3 pr-3 pt-2 pb-2"
         onDragEnd={handleDragEnd}
       />
     </div>
@@ -368,7 +365,7 @@ const sidebarTreeAtom = atom((get) => {
       node.children = node.children ?? [];
       for (const item of childItems) {
         treeParentMap[item.id] = node;
-        node.children.push(next({ item }));
+        node.children.push(next({ item, parent: node }));
       }
     }
 
@@ -378,5 +375,6 @@ const sidebarTreeAtom = atom((get) => {
   return next({
     item: activeWorkspace,
     children: [],
+    parent: null,
   });
 });

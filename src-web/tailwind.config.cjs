@@ -22,6 +22,16 @@ module.exports = {
   ],
   theme: {
     extend: {
+      keyframes: {
+        blinkRing: {
+          '0%, 49%': { '--tw-ring-color': 'var(--primary)' },
+          '50%, 99%': { '--tw-ring-color': 'transparent' },
+          '100%': { '--tw-ring-color': 'var(--primary)' },
+        },
+      },
+      animation: {
+        blinkRing: 'blinkRing 0.2s step-start 0.4s infinite',
+      },
       opacity: {
         disabled: '0.3',
       },

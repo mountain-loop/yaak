@@ -4,6 +4,7 @@ import { selectedIdsFamily } from './atoms';
 export interface TreeNode<T extends { id: string }> {
   children?: TreeNode<T>[];
   item: T;
+  parent: TreeNode<T> | null;
 }
 
 export interface SelectableTreeNode<T extends { id: string }> {
@@ -36,4 +37,11 @@ export function equalSubtree<T extends { id: string }>(
   }
 
   return true;
+}
+
+export function hasAncestor<T extends { id: string }>(node: TreeNode<T>, ancestorId: string) {
+  // Check parents recursively
+  if (node.parent == null) return false;
+  if (node.parent.item.id === ancestorId) return true;
+  return hasAncestor(node.parent, ancestorId);
 }
