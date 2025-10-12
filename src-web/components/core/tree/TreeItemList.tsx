@@ -14,7 +14,7 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
   'renderItem' | 'renderLeftSlot' | 'treeId' | 'activeIdAtom' | 'getItemKey' | 'getEditOptions'
 > &
-  Pick<TreeItemProps<T>, 'onMove' | 'onEnd' | 'onDragStart' | 'onClick' | 'getContextMenu'> & {
+  Pick<TreeItemProps<T>, 'onClick' | 'getContextMenu'> & {
     node: TreeNode<T>;
     depth: number;
     style?: CSSProperties;
@@ -29,9 +29,6 @@ function TreeItemList_<T extends { id: string }>({
   onClick,
   getItemKey,
   getContextMenu,
-  onMove,
-  onEnd,
-  onDragStart,
   getEditOptions,
   depth,
   style,
@@ -49,7 +46,7 @@ function TreeItemList_<T extends { id: string }>({
       {node.children.map(function mapChild(child, i) {
         return (
           <Fragment key={getItemKey(child.item)}>
-            <TreeDropMarker treeId={treeId} parent={node} index={i} className="-ml-[0.7rem]" />
+            <TreeDropMarker treeId={treeId} parent={node} index={i} />
             <TreeItemList
               treeId={treeId}
               node={child}
@@ -57,9 +54,6 @@ function TreeItemList_<T extends { id: string }>({
               renderItem={renderItem}
               renderLeftSlot={renderLeftSlot}
               onClick={onClick}
-              onMove={onMove}
-              onEnd={onEnd}
-              onDragStart={onDragStart}
               getEditOptions={getEditOptions}
               depth={depth + 1}
               getItemKey={getItemKey}
@@ -80,7 +74,6 @@ function TreeItemList_<T extends { id: string }>({
     <li>
       <TreeItem
         treeId={treeId}
-        // className={classNames(isHovered && isCollapsed && 'bg-surface-highlight text-text')}
         node={node}
         activeIdAtom={activeIdAtom}
         getContextMenu={getContextMenu}
@@ -88,9 +81,6 @@ function TreeItemList_<T extends { id: string }>({
         renderLeftSlot={renderLeftSlot}
         onClick={onClick}
         getEditOptions={getEditOptions}
-        onMove={onMove}
-        onEnd={onEnd}
-        onDragStart={onDragStart}
       />
       {childList}
     </li>

@@ -14,6 +14,11 @@ export const isSelectedFamily = atomFamily(
 );
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const focusIdsFamily = atomFamily((_treeId: string) => {
+  return atom<{ lastId: string | null; anchorId: string | null }>({ lastId: null, anchorId: null });
+});
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const draggingIdsFamily = atomFamily((_treeId: string) => {
   return atom<string[]>([]);
 });

@@ -37,7 +37,7 @@ import { HttpMethodTag } from './core/HttpMethodTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
 import { Icon } from './core/Icon';
 import { LoadingIcon } from './core/LoadingIcon';
-import { selectedIdsFamily } from './core/tree/atoms';
+import { isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
@@ -63,7 +63,7 @@ export function NewSidebar({ className }: { className?: string }) {
     } else if (item.model === 'workspace') {
       return null;
     } else {
-      const isSelected = jotaiStore.get(selectedIdsFamily(treeId)).includes(item.id);
+      const isSelected = jotaiStore.get(isSelectedFamily({ treeId, itemId: item.id }));
       return (
         <HttpMethodTag
           short

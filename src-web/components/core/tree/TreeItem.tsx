@@ -1,17 +1,24 @@
+import type { DragMoveEvent } from '@dnd-kit/core';
+import { useDndMonitor, useDraggable, useDroppable } from '@dnd-kit/core';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
-import React, { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useDrag, useDrop, type XYCoord } from 'react-dnd';
+import type { MouseEvent, PointerEvent } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
-import { draggingIdsFamily, isCollapsedFamily, isSelectedFamily } from './atoms';
+import { focusIdsFamily, isCollapsedFamily, isSelectedFamily } from './atoms';
 import type { TreeNode } from './common';
-import type { DragItem } from './dnd';
-import { ItemTypes } from './dnd';
+import  { computeSideForDragMove } from './common';
 import type { TreeProps } from './Tree';
+
+interface OnClickEvent {
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+}
 
 export type TreeItemProps<T extends { id: string }> = Pick<
   TreeProps<T>,
@@ -19,10 +26,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
 > & {
   node: TreeNode<T>;
   className?: string;
-  onMove?: (item: T, side: 'above' | 'below') => void;
-  onEnd?: () => void;
-  onDragStart?: (item: T) => void;
-  onClick?: (item: T, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
+  onClick?: (item: T, e: OnClickEvent) => void;
   getContextMenu?: (item: T) => ContextMenuProps['items'];
 };
 
@@ -35,16 +39,15 @@ export function TreeItem<T extends { id: string }>({
   renderLeftSlot,
   activeIdAtom,
   getContextMenu,
-  onMove,
-  onDragStart,
-  onEnd,
   onClick,
   getEditOptions,
   className,
 }: TreeItemProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
+  const draggableRef = useRef<HTMLButtonElement>(null);
   const isSelected = useAtomValue(isSelectedFamily({ treeId, itemId: node.item.id }));
   const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
+  const lastSelectedId = useAtomValue(focusIdsFamily(treeId)).lastId;
   const [editing, setEditing] = useState<boolean>(false);
 
   const isActiveAtom = useMemo(() => {
@@ -54,6 +57,11 @@ export function TreeItem<T extends { id: string }>({
   }, [activeIdAtom, node.item.id]);
 
   const isActive = useAtomValue(isActiveAtom);
+  useEffect(() => {
+    if (lastSelectedId === node.item.id) {
+      draggableRef.current?.focus();
+    }
+  }, [lastSelectedId, node.item.id]);
 
   // Scroll into view when it becomes selected
   useEffect(() => {
@@ -63,18 +71,21 @@ export function TreeItem<T extends { id: string }>({
   }, [isSelected]);
 
   const handleClick = useCallback(
-    (e: MouseEvent<HTMLButtonElement>) => {
+    function handleClick(e: OnClickEvent) {
       onClick?.(node.item, e);
     },
     [node, onClick],
   );
 
-  const toggleCollapsed = useCallback(() => {
-    jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
-  }, [node.item.id, treeId]);
+  const toggleCollapsed = useCallback(
+    function toggleCollapsed() {
+      jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
+    },
+    [node.item.id, treeId],
+  );
 
   const handleSubmitNameEdit = useCallback(
-    async (el: HTMLInputElement) => {
+    async function submitNameEdit(el: HTMLInputElement) {
       getEditOptions?.(node.item).onChange(node.item, el.value);
       // Slight delay for the model to propagate to the local store
       setTimeout(() => setEditing(false));
@@ -82,34 +93,30 @@ export function TreeItem<T extends { id: string }>({
     [getEditOptions, node.item],
   );
 
-  const handleEditFocus = useCallback((el: HTMLInputElement | null) => {
+  const handleEditFocus = useCallback(function handleEditFocus(el: HTMLInputElement | null) {
     el?.focus();
     el?.select();
   }, []);
 
   const handleEditBlur = useCallback(
-    async (e: React.FocusEvent<HTMLInputElement>) => {
+    async function editBlur(e: React.FocusEvent<HTMLInputElement>) {
       await handleSubmitNameEdit(e.currentTarget);
     },
     [handleSubmitNameEdit],
   );
 
-  const handleEditKeyDown = useCallback(
-    async (e: React.KeyboardEvent<HTMLInputElement>) => {
-      e.stopPropagation();
-      switch (e.key) {
-        case 'Enter':
-          e.preventDefault();
-          await handleSubmitNameEdit(e.currentTarget);
-          break;
-        case 'Escape':
-          e.preventDefault();
-          setEditing(false);
-          break;
-      }
-    },
-    [handleSubmitNameEdit],
-  );
+  const handleEditKeyDown = useCallback(async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    switch (e.key) {
+      case 'Enter':
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setEditing(false);
+        break;
+    }
+  }, []);
+
   const handleDoubleClick = useCallback(() => {
     const isFolder = node.children != null;
     if (isFolder) {
@@ -119,44 +126,47 @@ export function TreeItem<T extends { id: string }>({
     }
   }, [getEditOptions, node.children, toggleCollapsed]);
 
-  const [, connectDrag] = useDrag<
-    DragItem,
-    unknown,
-    {
-      isDragging: boolean;
-    }
-  >(
-    () => ({
-      type: ItemTypes.TREE_ITEM,
-      item: () => {
-        if (editing) return null; // Cancel drag when editing
-        onDragStart?.(node.item);
-        return { id: node.item.id };
-      },
-      collect: (m) => ({ isDragging: m.isDragging() }),
-      options: { dropEffect: 'move' },
-      end: () => onEnd?.(),
-    }),
-    [onEnd],
-  );
-
-  const [, connectDrop] = useDrop<DragItem, void>(
-    {
-      accept: [ItemTypes.TREE, ItemTypes.TREE_ITEM],
-      hover: (_, monitor) => {
-        if (!ref.current) return;
-        if (!monitor.isOver()) return;
-        const hoverBoundingRect = ref.current?.getBoundingClientRect();
-        const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
-        const clientOffset = monitor.getClientOffset();
-        const hoverClientY = (clientOffset as XYCoord).y - hoverBoundingRect.top;
-        onMove?.(node.item, hoverClientY < hoverMiddleY ? 'above' : 'below');
-      },
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableRef,
+  } = useDraggable({
+    id: node.item.id,
+    attributes: {
+      tabIndex: lastSelectedId ? 0 : -1,
     },
-    [onMove],
-  );
+  });
 
-  connectDrag(connectDrop(ref));
+  const { setNodeRef: setDroppableRef } = useDroppable({
+    id: node.item.id,
+  });
+
+  const clearHoverTimer = () => {
+    if (startedHoverTimeout.current) {
+      setIsDropHover(false); // NEW
+      clearTimeout(startedHoverTimeout.current); // NEW
+      startedHoverTimeout.current = undefined; // NEW
+    }
+  };
+
+  // Toggle auto-expand of folders when hovering over them
+  useDndMonitor({
+    onDragMove(e: DragMoveEvent) {
+      const side = computeSideForDragMove(node, e);
+      const isFolderWithChildren = (node.children?.length ?? 0) > 0;
+      const isCollapsed = jotaiStore.get(isCollapsedFamily({ treeId, itemId: node.item.id }));
+      if (isCollapsed && isFolderWithChildren && side === 'below') {
+        setIsDropHover(true);
+        clearTimeout(startedHoverTimeout.current);
+        startedHoverTimeout.current = setTimeout(() => {
+          jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), false);
+          setIsDropHover(false);
+        }, 1000);
+      } else {
+        clearHoverTimer();
+      }
+    },
+  });
 
   const [showContextMenu, setShowContextMenu] = useState<{
     x: number;
@@ -165,37 +175,37 @@ export function TreeItem<T extends { id: string }>({
 
   const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
   const [isDropHover, setIsDropHover] = useState<boolean>(false);
-  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const handleContextMenu = useCallback((e: MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     setShowContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
 
-  const handleMouseLeave = useCallback(() => {
-    setIsDropHover(false);
-    clearTimeout(startedHoverTimeout.current);
-  }, []);
-
-  const handleMouseEnter = useCallback(
-    () => {
-      const isDraggingSomething = jotaiStore.get(draggingIdsFamily(treeId)).length > 0;
-      const isFolderWithChildren = (node.children?.length ?? 0) > 0;
-      if (!isFolderWithChildren || !isCollapsed || !isDraggingSomething) return;
-
-      setIsDropHover(true);
-      startedHoverTimeout.current = setTimeout(() => {
-        toggleCollapsed();
-        setIsDropHover(false);
-      }, 1000);
+  const handlePointerDown = useCallback(
+    (e: PointerEvent<HTMLButtonElement>) => {
+      if (!(e.metaKey || e.ctrlKey || e.shiftKey)) {
+        listeners?.onPointerDown?.(e);
+      }
     },
-    [isCollapsed, node.children?.length, toggleCollapsed, treeId],
+    [listeners],
   );
+
+  const handleSetDraggableRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      draggableRef.current = node;
+      setDraggableRef(node);
+      setDroppableRef(node);
+    },
+    [setDraggableRef, setDroppableRef],
+  );
+
+  const handleCloseContextMenu = useCallback(() => {
+    setShowContextMenu(null);
+  }, []);
 
   return (
     <div
       ref={ref}
       onContextMenu={handleContextMenu}
-      onMouseLeave={handleMouseLeave}
-      onMouseEnter={handleMouseEnter}
       className={classNames(
         className,
         'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded px-2',
@@ -208,11 +218,15 @@ export function TreeItem<T extends { id: string }>({
         <ContextMenu
           items={getContextMenu(node.item)}
           triggerPosition={showContextMenu}
-          onClose={() => setShowContextMenu(null)}
+          onClose={handleCloseContextMenu}
         />
       )}
       {node.children != null ? (
-        <button className="h-full w-[2.8rem] pr-[0.5rem] -ml-[1rem]" onClick={toggleCollapsed}>
+        <button
+          tabIndex={-1}
+          className="h-full w-[2.8rem] pr-[0.5rem] -ml-[1rem]"
+          onClick={toggleCollapsed}
+        >
           <Icon
             icon="chevron_right"
             className={classNames(
@@ -227,6 +241,8 @@ export function TreeItem<T extends { id: string }>({
         <span />
       )}
       <button
+        ref={handleSetDraggableRef}
+        onPointerDown={handlePointerDown}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         disabled={editing}
@@ -234,6 +250,9 @@ export function TreeItem<T extends { id: string }>({
           'flex items-center gap-2 h-full whitespace-nowrap',
           isActive ? 'text-text' : 'text-text-subtle',
         )}
+        {...listeners}
+        {...attributes}
+        tabIndex={lastSelectedId == node.item.id ? 0 : -1}
       >
         {renderLeftSlot?.(node.item)}
         {getEditOptions && editing

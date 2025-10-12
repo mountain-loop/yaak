@@ -1,3 +1,4 @@
+import type { DragMoveEvent } from '@dnd-kit/core';
 import { jotaiStore } from '../../../lib/jotai';
 import { selectedIdsFamily } from './atoms';
 
@@ -44,4 +45,29 @@ export function hasAncestor<T extends { id: string }>(node: TreeNode<T>, ancesto
   if (node.parent == null) return false;
   if (node.parent.item.id === ancestorId) return true;
   return hasAncestor(node.parent, ancestorId);
+}
+
+export function computeSideForDragMove<T extends { id: string }>(
+  node: TreeNode<T>,
+  e: DragMoveEvent,
+): 'above' | 'below' | null {
+  if (e.over == null || e.over.id !== node.item.id) {
+    // clearHoverTimer();
+    return null;
+  }
+  if (e.active.rect.current.initial == null) return null;
+
+  const overRect = e.over.rect;
+  const activeTop =
+    e.active.rect.current.translated?.top ?? e.active.rect.current.initial.top + e.delta.y;
+  const pointerY = activeTop + e.active.rect.current.initial.height / 2;
+
+  const hoverTop = overRect.top;
+  const hoverBottom = overRect.bottom;
+  const hoverMiddleY = (hoverBottom - hoverTop) / 2;
+  const hoverClientY = pointerY - hoverTop;
+
+  const side = hoverClientY < hoverMiddleY ? 'above' : 'below';
+
+  return side;
 }
