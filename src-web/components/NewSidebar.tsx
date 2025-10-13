@@ -180,7 +180,7 @@ function NewSidebar({ className }: { className?: string }) {
         onActivate={handleActivate}
         getEditOptions={getEditOptions}
         activeIdAtom={activeIdAtom}
-        className="pl-3 pr-3 pt-2 pb-2"
+        className="pl-0.5 pr-3 pt-2 pb-2"
         onDragEnd={handleDragEnd}
       />
     </div>

@@ -18,6 +18,7 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
     node: TreeNode<T>;
     depth: number;
     style?: CSSProperties;
+    className?: string;
   };
 
 function TreeItemList_<T extends { id: string }>({
@@ -31,6 +32,7 @@ function TreeItemList_<T extends { id: string }>({
   getContextMenu,
   getEditOptions,
   depth,
+  className,
   style,
 }: TreeItemListProps<T>) {
   const isHovered = useAtomValue(isParentHoveredFamily({ treeId, parentId: node.item.id }));
@@ -39,8 +41,10 @@ function TreeItemList_<T extends { id: string }>({
     <ul
       style={style}
       className={classNames(
-        depth > 0 && 'ml-[calc(0.7rem+0.5px)] pl-[0.7rem] border-l',
-        isHovered ? 'border-l-primary' : 'border-l-border-subtle',
+        className,
+        depth > 0 && 'ml-[calc(1.2rem+0.5px)] pl-[0.7rem] border-l',
+        'transition-colors',
+        isHovered ? 'border-l-text-subtle' : 'border-l-border-subtle',
       )}
     >
       {node.children.map(function mapChild(child, i) {

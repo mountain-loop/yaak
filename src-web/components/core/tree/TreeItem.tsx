@@ -9,7 +9,12 @@ import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
-import { focusIdsFamily, isCollapsedFamily, isSelectedFamily } from './atoms';
+import {
+  focusIdsFamily,
+  isCollapsedFamily,
+  isParentHoveredFamily,
+  isSelectedFamily,
+} from './atoms';
 import type { TreeNode } from './common';
 import { computeSideForDragMove } from './common';
 import type { TreeProps } from './Tree';
@@ -31,7 +36,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
 };
 
 const emptyActiveIdAtom = atom();
-const HOVER_CLOSED_FOLDER_DELAY = 900;
+const HOVER_CLOSED_FOLDER_DELAY = 800;
 
 export function TreeItem<T extends { id: string }>({
   treeId,
@@ -48,6 +53,7 @@ export function TreeItem<T extends { id: string }>({
   const draggableRef = useRef<HTMLButtonElement>(null);
   const isSelected = useAtomValue(isSelectedFamily({ treeId, itemId: node.item.id }));
   const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
+  const isHoveredAsParent = useAtomValue(isParentHoveredFamily({ treeId, parentId: node.item.id }));
   const lastSelectedId = useAtomValue(focusIdsFamily(treeId)).lastId;
   const [editing, setEditing] = useState<boolean>(false);
   const [isDropHover, setIsDropHover] = useState<boolean>(false);
@@ -90,7 +96,7 @@ export function TreeItem<T extends { id: string }>({
     async function submitNameEdit(el: HTMLInputElement) {
       getEditOptions?.(node.item).onChange(node.item, el.value);
       // Slight delay for the model to propagate to the local store
-      setTimeout(() => setEditing(false));
+      setTimeout(() => setEditing(false), 200);
     },
     [getEditOptions, node.item],
   );
@@ -107,17 +113,22 @@ export function TreeItem<T extends { id: string }>({
     [handleSubmitNameEdit],
   );
 
-  const handleEditKeyDown = useCallback(async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    e.stopPropagation();
-    switch (e.key) {
-      case 'Enter':
-        break;
-      case 'Escape':
-        e.preventDefault();
-        setEditing(false);
-        break;
-    }
-  }, []);
+  const handleEditKeyDown = useCallback(
+    async (e: React.KeyboardEvent<HTMLInputElement>) => {
+      e.stopPropagation();
+      switch (e.key) {
+        case 'Enter':
+          e.preventDefault();
+          await handleSubmitNameEdit(e.currentTarget);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          setEditing(false);
+          break;
+      }
+    },
+    [handleSubmitNameEdit],
+  );
 
   const handleDoubleClick = useCallback(() => {
     const isFolder = node.children != null;
@@ -236,6 +247,7 @@ export function TreeItem<T extends { id: string }>({
               'ml-auto !h-[1rem] !w-[1rem]',
               node.children.length == 0 && 'opacity-0',
               !isCollapsed && 'rotate-90',
+              isHoveredAsParent && '!text-text',
             )}
           />
         </button>
@@ -250,7 +262,7 @@ export function TreeItem<T extends { id: string }>({
         disabled={editing}
         className={classNames(
           'flex items-center gap-2 h-full whitespace-nowrap',
-          isActive || isDropHover ? 'text-text' : 'text-text-subtle',
+          isActive || isDropHover || isHoveredAsParent ? 'text-text' : 'text-text-subtle',
         )}
         {...listeners}
         {...attributes}

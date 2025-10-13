@@ -1,4 +1,4 @@
-import type { DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
+import type { DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   DndContext,
   DragOverlay,
@@ -18,7 +18,6 @@ import { sidebarCollapsedAtom } from '../../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
 import { draggingIdsFamily, focusIdsFamily, hoveredParentFamily, selectedIdsFamily } from './atoms';
-import { AutoScrollWhileDragging } from './AutoScrollWhileDragging';
 import type { SelectableTreeNode, TreeNode } from './common';
 import { computeSideForDragMove, equalSubtree, getSelectedItems, hasAncestor } from './common';
 import type { TreeItemProps } from './TreeItem';
@@ -181,11 +180,23 @@ function Tree_<T extends { id: string }>({
     onActivate?.(items);
   });
 
-  const handleMove = useCallback(
+  useKeyPressEvent('Escape', async () => {
+    clearDragState();
+  });
+
+  const handleDragMove = useCallback(
     function handleMove(e: DragMoveEvent) {
       const over = e.over;
-      if (!over) return;
-      if (e.active.rect.current.initial == null) return;
+      if (!over) {
+        // Clear the drop indicator when hovering outside the tree
+        jotaiStore.set(hoveredParentFamily(treeId), { parentId: null, index: null });
+        return;
+      }
+
+      // Not sure when or if this happens
+      if (e.active.rect.current.initial == null) {
+        return;
+      }
 
       const node = selectableItems.find((i) => i.node.item.id === e.over?.id)?.node ?? null;
       if (node == null) return;
@@ -239,13 +250,14 @@ function Tree_<T extends { id: string }>({
   }, [treeId]);
 
   const handleDragEnd = useCallback(
-    function handleDragEnd() {
+    function handleDragEnd(e: DragEndEvent) {
       // Get this from the store so our callback doesn't change all the time
       const hovered = jotaiStore.get(hoveredParentFamily(treeId));
       const draggingItems = jotaiStore.get(draggingIdsFamily(treeId));
-
-      // Clear the state
       clearDragState();
+
+      // Dropped outside the tree?
+      if (e.over == null) return;
 
       const hoveredParent =
         hovered.parentId == root.item.id
@@ -292,20 +304,6 @@ function Tree_<T extends { id: string }>({
     [treeId, clearDragState, root, selectableItems, onDragEnd, treeParentMap],
   );
 
-  const { setNodeRef, isOver } = useDroppable({
-    id: root.item.id,
-  });
-
-  useEffect(() => {
-    if (isOver) {
-      // Put at the end of the top tree
-      jotaiStore.set(hoveredParentFamily(treeId), {
-        parentId: root.item.id,
-        index: root.children?.length ?? 0,
-      });
-    }
-  }, [isOver, root.children?.length, root.item.id, treeId]);
-
   const treeItemProps: Omit<
     TreeItemListProps<T>,
     'node' | 'treeId' | 'activeIdAtom' | 'hoveredParent' | 'hoveredIndex'
@@ -329,41 +327,46 @@ function Tree_<T extends { id: string }>({
       onDragEnd={handleDragEnd}
       onDragCancel={clearDragState}
       onDragAbort={clearDragState}
-      onDragMove={handleMove}
-      autoScroll={false}
+      onDragMove={handleDragMove}
+      autoScroll
     >
       <div
-        ref={(node) => {
-          treeRef.current = node;
-          setNodeRef(node);
-        }}
+        ref={treeRef}
         className={classNames(
           className,
           'outline-none h-full',
           'overflow-y-auto overflow-x-hidden',
+          'grid grid-rows-[auto_1fr]',
         )}
       >
-        <AutoScrollWhileDragging container={treeRef.current} />
-        <DragOverlay dropAnimation={null}>
-          <TreeItemList
-            treeId={treeId + '.dragging'}
-            style={{ width: treeRef.current?.clientWidth ?? undefined }}
-            node={{
-              item: { ...root.item, id: `${root.item.id}_dragging` },
-              parent: null,
-              children: draggingItems.map((id) => {
-                const child = selectableItems.find((i2) => i2.node.item.id === id)!.node;
-                // Remove children so we don't render them in the drag preview
-                return { ...child, children: undefined };
-              }),
-            }}
-            {...treeItemProps}
-          />
-        </DragOverlay>
         <TreeItemList node={root} treeId={treeId} activeIdAtom={activeIdAtom} {...treeItemProps} />
+        <DropRegionAfterList treeId={treeId} />
       </div>
+      <DragOverlay dropAnimation={null}>
+        <TreeItemList
+          treeId={treeId + '.dragging'}
+          style={{ width: treeRef.current?.clientWidth ?? undefined }}
+          node={{
+            item: { ...root.item, id: `${root.item.id}_dragging` },
+            parent: null,
+            children: draggingItems.map((id) => {
+              const child = selectableItems.find((i2) => i2.node.item.id === id)!.node;
+              // Remove children so we don't render them in the drag preview
+              return { ...child, children: undefined };
+            }),
+          }}
+          {...treeItemProps}
+        />
+      </DragOverlay>
     </DndContext>
   );
+}
+
+function DropRegionAfterList({ treeId }: { treeId: string }) {
+  const { setNodeRef } = useDroppable({
+    id: treeId,
+  });
+  return <div className="bg-info opacity-10 h-full" ref={setNodeRef} />;
 }
 
 export const Tree = memo(
