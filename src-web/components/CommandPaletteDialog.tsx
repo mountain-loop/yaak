@@ -369,7 +369,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       const index = filteredAllItems.findIndex((v) => v.key === selectedItem?.key);
-
       if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) {
         const next = filteredAllItems[index + 1] ?? filteredAllItems[0];
         setSelectedItemKey(next?.key ?? null);

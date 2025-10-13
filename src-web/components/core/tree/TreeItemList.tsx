@@ -14,7 +14,7 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
   'renderItem' | 'renderLeftSlot' | 'treeId' | 'activeIdAtom' | 'getItemKey' | 'getEditOptions'
 > &
-  Pick<TreeItemProps<T>, 'onClick' | 'getContextMenu'> & {
+  Pick<TreeItemProps<T>, 'onClick' | 'getContextMenu' | 'treeFocusedAtom'> & {
     node: TreeNode<T>;
     depth: number;
     style?: CSSProperties;
@@ -22,18 +22,19 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
   };
 
 function TreeItemList_<T extends { id: string }>({
-  treeId,
-  node,
-  renderItem,
-  renderLeftSlot,
   activeIdAtom,
-  onClick,
-  getItemKey,
+  className,
+  depth,
   getContextMenu,
   getEditOptions,
-  depth,
-  className,
+  getItemKey,
+  node,
+  onClick,
+  renderItem,
+  renderLeftSlot,
   style,
+  treeFocusedAtom,
+  treeId,
 }: TreeItemListProps<T>) {
   const isHovered = useAtomValue(isParentHoveredFamily({ treeId, parentId: node.item.id }));
   const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
@@ -43,7 +44,6 @@ function TreeItemList_<T extends { id: string }>({
       className={classNames(
         className,
         depth > 0 && 'ml-[calc(1.2rem+0.5px)] pl-[0.7rem] border-l',
-        'transition-colors',
         isHovered ? 'border-l-text-subtle' : 'border-l-border-subtle',
       )}
     >
@@ -55,6 +55,7 @@ function TreeItemList_<T extends { id: string }>({
               treeId={treeId}
               node={child}
               activeIdAtom={activeIdAtom}
+              treeFocusedAtom={treeFocusedAtom}
               renderItem={renderItem}
               renderLeftSlot={renderLeftSlot}
               onClick={onClick}
@@ -80,6 +81,7 @@ function TreeItemList_<T extends { id: string }>({
         treeId={treeId}
         node={node}
         activeIdAtom={activeIdAtom}
+        treeFocusedAtom={treeFocusedAtom}
         getContextMenu={getContextMenu}
         renderItem={renderItem}
         renderLeftSlot={renderLeftSlot}

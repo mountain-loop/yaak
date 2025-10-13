@@ -15,7 +15,7 @@ import {
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
@@ -36,25 +36,37 @@ import { HttpMethodTag } from './core/HttpMethodTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
 import { Icon } from './core/Icon';
 import { LoadingIcon } from './core/LoadingIcon';
-import { isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
+import { isSelectedFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
+import { GitDropdown } from './GitDropdown';
 
 type Model = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
 
 const opacitySubtle = 'opacity-80';
+const treeFocusedAtom = atom<boolean>(false);
 
 function getItemKey(item: Model) {
   const responses = jotaiStore.get(httpResponsesAtom);
   const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
-  return [item.id, item.name, latestResponse?.id ?? 'n/a'].join('::');
+  const url = 'url' in item ? item.url : 'n/a';
+  return [item.id, item.name, url, latestResponse?.id ?? 'n/a'].join('::');
 }
 
 function NewSidebar({ className }: { className?: string }) {
   const [hidden, setHidden] = useSidebarHidden();
   const tree = useAtomValue(sidebarTreeAtom);
   const treeId = 'workspace.sidebar';
+  const wrapperRef = useRef<HTMLElement>(null);
+
+  const handleBlur = useCallback(function handleBlur() {
+    jotaiStore.set(treeFocusedAtom, false);
+  }, []);
+
+  const handleFocus = useCallback(function handleFocus() {
+    jotaiStore.set(treeFocusedAtom, true);
+  }, []);
 
   const renderLeftSlot = useCallback(function renderLeftSlot(item: Model) {
     if (item.model === 'folder') {
@@ -74,27 +86,17 @@ function NewSidebar({ className }: { className?: string }) {
   }, []);
 
   const renderItem = useCallback(function renderItem(item: Model) {
-    const isSelected = jotaiStore.get(selectedIdsFamily(treeId)).includes(item.id);
     const responses = jotaiStore.get(httpResponsesAtom);
     const latestHttpResponse = responses.find((r) => r.requestId === item.id) ?? null;
     return (
-      <div
-        className={classNames(
-          'flex items-center gap-2 min-w-0 h-full w-full text-left',
-          isSelected && '!text-text',
-        )}
-      >
+      <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
         <div className="truncate">{resolvedModelName(item)}</div>
         {latestHttpResponse && (
           <div className="ml-auto">
             {latestHttpResponse.state !== 'closed' ? (
               <LoadingIcon size="sm" className="text-text-subtlest" />
             ) : (
-              <HttpStatusTag
-                short
-                className={classNames('text-xs', !isSelected && opacitySubtle)}
-                response={latestHttpResponse}
-              />
+              <HttpStatusTag short className="text-xs" response={latestHttpResponse} />
             )}
           </div>
         )}
@@ -102,10 +104,30 @@ function NewSidebar({ className }: { className?: string }) {
     );
   }, []);
 
+  const focusActiveItem = useCallback(() => {
+    // const activeId = jotaiStore.get(activeIdAtom);
+    // const activeItemId = jotaiStore.get(sidebarActiveItemAtom)?.id;
+    // const { forced, noFocusSidebar } = args;
+    // const tree = forced?.tree ?? treeParentMap[activeItemId ?? 'n/a'] ?? null;
+    // const children = tree?.children ?? [];
+    // const id = forced?.id ?? children.find((m) => m.id === activeItemId)?.id ?? null;
+    //
+    wrapperRef.current?.focus();
+    // setHasFocus(true);
+    // setSelectedId(id);
+    // setSelectedTree(tree);
+    //
+    // if (id == null) {
+    //   return;
+    // }
+    // if (!noFocusSidebar) {
+    //   sidebarRef.current?.focus();
+    // }
+  }, []);
+
   useHotKey('sidebar.focus', async function focusHotkey() {
     // Hide the sidebar if it's already focused
-    if (!hidden) {
-      //  && hasFocus) {
+    if (!hidden && jotaiStore.get(treeFocusedAtom)) {
       await setHidden(true);
       return;
     }
@@ -116,11 +138,7 @@ function NewSidebar({ className }: { className?: string }) {
     }
 
     // Select the 0th index on focus if none selected
-    // focusActiveItem(
-    //   selectedTree != null && selectedId != null
-    //     ? { forced: { id: selectedId, tree: selectedTree } }
-    //     : undefined,
-    // );
+    focusActiveItem();
   });
 
   const handleDragEnd = useCallback(async function handleDragEnd({
@@ -169,7 +187,14 @@ function NewSidebar({ className }: { className?: string }) {
   }
 
   return (
-    <div className={classNames(className, 'w-full h-full max-h-full')}>
+    <aside
+      ref={wrapperRef}
+      aria-hidden={hidden ?? undefined}
+      onBlur={handleBlur}
+      onFocus={handleFocus}
+      tabIndex={hidden ? -1 : 0}
+      className={classNames(className, 'h-full grid grid-rows-[minmax(0,1fr)_auto]')}
+    >
       <Tree
         root={tree}
         treeId={treeId}
@@ -180,10 +205,12 @@ function NewSidebar({ className }: { className?: string }) {
         onActivate={handleActivate}
         getEditOptions={getEditOptions}
         activeIdAtom={activeIdAtom}
+        treeFocusedAtom={treeFocusedAtom}
         className="pl-0.5 pr-3 pt-2 pb-2"
         onDragEnd={handleDragEnd}
       />
-    </div>
+      <GitDropdown />
+    </aside>
   );
 }
 

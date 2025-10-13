@@ -10,7 +10,7 @@ import {
 } from '@dnd-kit/core';
 import classNames from 'classnames';
 import type { Atom } from 'jotai';
-import { useAtom, useAtomValue } from 'jotai';
+import { atom , useAtom, useAtomValue } from 'jotai';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
@@ -33,6 +33,7 @@ export interface TreeProps<T extends { id: string }> {
   renderLeftSlot?: (item: T) => ReactNode;
   className?: string;
   activeIdAtom?: Atom<string | null>;
+  treeFocusedAtom?: Atom<boolean>;
   onActivate?: (items: T[]) => void;
   onDragEnd?: (opt: { items: T[]; parent: T; children: T[]; insertAt: number }) => void;
   getEditOptions?: (item: T) => {
@@ -42,8 +43,11 @@ export interface TreeProps<T extends { id: string }> {
   };
 }
 
+const emptyTreeFocusedAtom = atom<boolean>(false);
+
 function Tree_<T extends { id: string }>({
   activeIdAtom,
+  treeFocusedAtom = emptyTreeFocusedAtom,
   className,
   getContextMenu,
   getEditOptions,
@@ -57,7 +61,6 @@ function Tree_<T extends { id: string }>({
 }: TreeProps<T>) {
   const treeRef = useRef<HTMLDivElement>(null);
   const [draggingItems, setDraggingItems] = useAtom(draggingIdsFamily(treeId));
-  const [hasFocus, setHasFocus] = useState<boolean>(false);
   const { treeParentMap, selectableItems } = useTreeParentMap(root, getItemKey);
 
   const handleGetContextMenu = useMemo(() => {
@@ -80,7 +83,7 @@ function Tree_<T extends { id: string }>({
 
   const handleSelect = useCallback<NonNullable<TreeItemProps<T>['onClick']>>(
     (item, { shiftKey, metaKey, ctrlKey }) => {
-      setHasFocus(true);
+      // jotaiStore.set(treeFocusedAtom, true);
       jotaiStore.set(focusIdsFamily(treeId), (prev) => ({ ...prev, lastId: item.id }));
       const anchorSelectedId = jotaiStore.get(focusIdsFamily(treeId)).anchorId;
       const selectedIdsAtom = selectedIdsFamily(treeId);
@@ -147,7 +150,7 @@ function Tree_<T extends { id: string }>({
   useKey(
     'ArrowUp',
     (e) => {
-      if (!hasFocus) return;
+      if (!jotaiStore.get(treeFocusedAtom)) return;
       e.preventDefault();
       const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
       const index = selectableItems.findIndex((i) => i.node.item.id === lastSelectedId);
@@ -155,13 +158,13 @@ function Tree_<T extends { id: string }>({
       if (item != null) handleSelect(item.node.item, e);
     },
     undefined,
-    [hasFocus, selectableItems, handleSelect],
+    [selectableItems, handleSelect],
   );
 
   useKey(
     'ArrowDown',
     (e) => {
-      if (!hasFocus) return;
+      if (!jotaiStore.get(treeFocusedAtom)) return;
       e.preventDefault();
       const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
       const index = selectableItems.findIndex((i) => i.node.item.id === lastSelectedId);
@@ -169,13 +172,11 @@ function Tree_<T extends { id: string }>({
       if (item != null) handleSelect(item.node.item, e);
     },
     undefined,
-    [hasFocus, selectableItems, handleSelect],
+    [selectableItems, handleSelect],
   );
 
   useKeyPressEvent('Enter', async () => {
-    if (!hasFocus) {
-      return;
-    }
+    if (!jotaiStore.get(treeFocusedAtom)) return;
     const items = getSelectedItems(treeId, selectableItems);
     onActivate?.(items);
   });
@@ -323,6 +324,7 @@ function Tree_<T extends { id: string }>({
     depth: 0,
     getItemKey: getItemKey,
     getContextMenu: handleGetContextMenu,
+    treeFocusedAtom,
     onClick: handleClick,
     getEditOptions,
     renderItem: renderItem,
@@ -424,6 +426,7 @@ function compute<T extends { id: string }>(
   // Put requests and folders into a tree structure
   const next = (node: TreeNode<T>, depth: number = 0) => {
     const isCollapsed = collapsedMap[node.item.id] === true;
+    // console.log("IS COLLAPSED", node.item.name, isCollapsed);
     if (node.children == null) {
       return;
     }

@@ -350,7 +350,9 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   useLayoutEffect(() => {
     const currDoc = cm.current?.view.state.doc.toString() || '';
     const nextDoc = defaultValue || '';
-    if (!cm.current?.view.hasFocus && currDoc !== nextDoc) {
+    const notFocused = !cm.current?.view.hasFocus;
+    const hasChanged = currDoc !== nextDoc;
+    if (notFocused && hasChanged) {
       regenerateFocusedUpdateKey();
     }
   }, [defaultValue, regenerateFocusedUpdateKey]);

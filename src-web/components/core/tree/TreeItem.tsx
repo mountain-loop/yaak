@@ -4,7 +4,7 @@ import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import type { MouseEvent, PointerEvent } from 'react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
@@ -27,12 +27,13 @@ interface OnClickEvent {
 
 export type TreeItemProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'renderItem' | 'renderLeftSlot' | 'treeId' | 'activeIdAtom' | 'getEditOptions'
+  'renderItem' | 'renderLeftSlot' | 'treeId' | 'activeIdAtom' | 'treeFocusedAtom' | 'getEditOptions'
 > & {
   node: TreeNode<T>;
   className?: string;
   onClick?: (item: T, e: OnClickEvent) => void;
   getContextMenu?: (item: T) => ContextMenuProps['items'];
+  treeFocusedAtom: NonNullable<TreeProps<T>['treeFocusedAtom']>;
 };
 
 const emptyActiveIdAtom = atom();
@@ -44,6 +45,7 @@ export function TreeItem<T extends { id: string }>({
   renderItem,
   renderLeftSlot,
   activeIdAtom,
+  treeFocusedAtom,
   getContextMenu,
   onClick,
   getEditOptions,
@@ -51,6 +53,7 @@ export function TreeItem<T extends { id: string }>({
 }: TreeItemProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
   const draggableRef = useRef<HTMLButtonElement>(null);
+  const treeFocused = useAtomValue(treeFocusedAtom);
   const isSelected = useAtomValue(isSelectedFamily({ treeId, itemId: node.item.id }));
   const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
   const isHoveredAsParent = useAtomValue(isParentHoveredFamily({ treeId, parentId: node.item.id }));
@@ -60,23 +63,32 @@ export function TreeItem<T extends { id: string }>({
 
   const isActiveAtom = useMemo(() => {
     const source = activeIdAtom ?? emptyActiveIdAtom;
-    // notify only when the boolean changes
+    // Only notify when the boolean changes
     return selectAtom(source, (activeId) => activeId === node.item.id, Object.is);
   }, [activeIdAtom, node.item.id]);
 
   const isActive = useAtomValue(isActiveAtom);
-  useEffect(() => {
-    if (lastSelectedId === node.item.id) {
-      draggableRef.current?.focus();
-    }
-  }, [lastSelectedId, node.item.id]);
 
-  // Scroll into view when it becomes selected
-  useEffect(() => {
-    if (isSelected) {
-      ref.current?.scrollIntoView({ block: 'nearest' });
-    }
-  }, [isSelected]);
+  useEffect(
+    function focusWhenSelectionChanges() {
+      return jotaiStore.sub(focusIdsFamily(treeId), () => {
+        const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
+        if (lastSelectedId === node.item.id) {
+          draggableRef.current?.focus();
+        }
+      });
+    },
+    [node.item.id, treeId],
+  );
+
+  useEffect(
+    function scrollIntoViewWhenSelected() {
+      return jotaiStore.sub(isSelectedFamily({ treeId, itemId: node.item.id }), () => {
+        ref.current?.scrollIntoView({ block: 'nearest' });
+      });
+    },
+    [node.item.id, treeId],
+  );
 
   const handleClick = useCallback(
     function handleClick(e: OnClickEvent) {
@@ -85,12 +97,9 @@ export function TreeItem<T extends { id: string }>({
     [node, onClick],
   );
 
-  const toggleCollapsed = useCallback(
-    function toggleCollapsed() {
-      jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
-    },
-    [node.item.id, treeId],
-  );
+  const toggleCollapsed = useCallback(() => {
+    jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
+  }, [node.item.id, treeId]);
 
   const handleSubmitNameEdit = useCallback(
     async function submitNameEdit(el: HTMLInputElement) {
@@ -223,7 +232,8 @@ export function TreeItem<T extends { id: string }>({
         className,
         'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded px-2',
         editing && 'ring-1 focus-within:ring-focus',
-        isSelected && 'bg-surface-highlight',
+        isSelected && treeFocused && 'bg-surface-active',
+        isSelected && !treeFocused && 'bg-surface-highlight',
         isDropHover && 'relative z-10 ring-2 ring-primary animate-blinkRing',
       )}
     >
@@ -262,7 +272,9 @@ export function TreeItem<T extends { id: string }>({
         disabled={editing}
         className={classNames(
           'flex items-center gap-2 h-full whitespace-nowrap',
-          isActive || isDropHover || isHoveredAsParent ? 'text-text' : 'text-text-subtle',
+          isSelected || isActive || isDropHover || isHoveredAsParent
+            ? 'text-text'
+            : 'text-text-subtle',
         )}
         {...listeners}
         {...attributes}
