@@ -1,9 +1,10 @@
 import type { DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
 import {
-  useDroppable,
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
+  useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -11,7 +12,7 @@ import classNames from 'classnames';
 import type { Atom } from 'jotai';
 import { useAtom, useAtomValue } from 'jotai';
 import type { ReactNode } from 'react';
-import { useEffect, memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
 import { sidebarCollapsedAtom } from '../../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../../lib/jotai';
@@ -19,7 +20,7 @@ import type { ContextMenuProps } from '../Dropdown';
 import { draggingIdsFamily, focusIdsFamily, hoveredParentFamily, selectedIdsFamily } from './atoms';
 import { AutoScrollWhileDragging } from './AutoScrollWhileDragging';
 import type { SelectableTreeNode, TreeNode } from './common';
-import { computeSideForDragMove , equalSubtree, getSelectedItems, hasAncestor } from './common';
+import { computeSideForDragMove, equalSubtree, getSelectedItems, hasAncestor } from './common';
 import type { TreeItemProps } from './TreeItem';
 import type { TreeItemListProps } from './TreeItemList';
 import { TreeItemList } from './TreeItemList';
@@ -220,19 +221,21 @@ function Tree_<T extends { id: string }>({
       if (item == null) return;
 
       const selectedItems = getSelectedItems(treeId, selectableItems);
-      if (selectedItems.find((i) => i.id === item.id)) {
+      const isDraggingSelectedItem = selectedItems.find((i) => i.id === item.id);
+      if (isDraggingSelectedItem) {
         setDraggingItems(selectedItems.map((i) => i.id));
       } else {
         setDraggingItems([item.id]);
+        // Also update selection to just be this one
+        handleSelect(item, { shiftKey: false, metaKey: false, ctrlKey: false });
       }
     },
-    [selectableItems, setDraggingItems, treeId],
+    [handleSelect, selectableItems, setDraggingItems, treeId],
   );
 
   const clearDragState = useCallback(() => {
     jotaiStore.set(hoveredParentFamily(treeId), { parentId: null, index: null });
     jotaiStore.set(draggingIdsFamily(treeId), []);
-    jotaiStore.set(selectedIdsFamily(treeId), []);
   }, [treeId]);
 
   const handleDragEnd = useCallback(
@@ -321,6 +324,7 @@ function Tree_<T extends { id: string }>({
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={clearDragState}

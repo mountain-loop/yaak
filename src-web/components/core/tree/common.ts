@@ -52,7 +52,6 @@ export function computeSideForDragMove<T extends { id: string }>(
   e: DragMoveEvent,
 ): 'above' | 'below' | null {
   if (e.over == null || e.over.id !== node.item.id) {
-    // clearHoverTimer();
     return null;
   }
   if (e.active.rect.current.initial == null) return null;
@@ -67,7 +66,5 @@ export function computeSideForDragMove<T extends { id: string }>(
   const hoverMiddleY = (hoverBottom - hoverTop) / 2;
   const hoverClientY = pointerY - hoverTop;
 
-  const side = hoverClientY < hoverMiddleY ? 'above' : 'below';
-
-  return side;
+  return hoverClientY < hoverMiddleY ? 'above' : 'below';
 }

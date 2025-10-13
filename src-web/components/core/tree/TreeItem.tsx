@@ -11,7 +11,7 @@ import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
 import { focusIdsFamily, isCollapsedFamily, isSelectedFamily } from './atoms';
 import type { TreeNode } from './common';
-import  { computeSideForDragMove } from './common';
+import { computeSideForDragMove } from './common';
 import type { TreeProps } from './Tree';
 
 interface OnClickEvent {
@@ -49,6 +49,7 @@ export function TreeItem<T extends { id: string }>({
   const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
   const lastSelectedId = useAtomValue(focusIdsFamily(treeId)).lastId;
   const [editing, setEditing] = useState<boolean>(false);
+  const [isDropHover, setIsDropHover] = useState<boolean>(false);
 
   const isActiveAtom = useMemo(() => {
     const source = activeIdAtom ?? emptyActiveIdAtom;
@@ -161,7 +162,7 @@ export function TreeItem<T extends { id: string }>({
         startedHoverTimeout.current = setTimeout(() => {
           jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), false);
           setIsDropHover(false);
-        }, 1000);
+        }, 800);
       } else {
         clearHoverTimer();
       }
@@ -174,7 +175,6 @@ export function TreeItem<T extends { id: string }>({
   } | null>(null);
 
   const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
-  const [isDropHover, setIsDropHover] = useState<boolean>(false);
   const handleContextMenu = useCallback((e: MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     setShowContextMenu({ x: e.clientX, y: e.clientY });
@@ -182,7 +182,8 @@ export function TreeItem<T extends { id: string }>({
 
   const handlePointerDown = useCallback(
     (e: PointerEvent<HTMLButtonElement>) => {
-      if (!(e.metaKey || e.ctrlKey || e.shiftKey)) {
+      const handleByTree = e.metaKey || e.ctrlKey || e.shiftKey;
+      if (!handleByTree) {
         listeners?.onPointerDown?.(e);
       }
     },
@@ -211,7 +212,7 @@ export function TreeItem<T extends { id: string }>({
         'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded px-2',
         editing && 'ring-1 focus-within:ring-focus',
         isSelected && 'bg-surface-highlight',
-        isDropHover && 'ring-2 ring-primary animate-blinkRing',
+        isDropHover && 'relative z-10 ring-2 ring-primary animate-blinkRing',
       )}
     >
       {showContextMenu && getContextMenu && (
@@ -248,7 +249,7 @@ export function TreeItem<T extends { id: string }>({
         disabled={editing}
         className={classNames(
           'flex items-center gap-2 h-full whitespace-nowrap',
-          isActive ? 'text-text' : 'text-text-subtle',
+          isActive || isDropHover ? 'text-text' : 'text-text-subtle',
         )}
         {...listeners}
         {...attributes}
