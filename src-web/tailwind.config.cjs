@@ -30,7 +30,7 @@ module.exports = {
         },
       },
       animation: {
-        blinkRing: 'blinkRing 0.2s step-start 0.4s infinite',
+        blinkRing: 'blinkRing 150ms step-start 400ms infinite',
       },
       opacity: {
         disabled: '0.3',

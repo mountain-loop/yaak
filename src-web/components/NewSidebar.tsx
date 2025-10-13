@@ -11,7 +11,6 @@ import {
   getModel,
   httpResponsesAtom,
   patchModel,
-  patchModelById,
   workspacesAtom,
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
@@ -52,7 +51,7 @@ function getItemKey(item: Model) {
   return [item.id, item.name, latestResponse?.id ?? 'n/a'].join('::');
 }
 
-export function NewSidebar({ className }: { className?: string }) {
+function NewSidebar({ className }: { className?: string }) {
   const [hidden, setHidden] = useSidebarHidden();
   const tree = useAtomValue(sidebarTreeAtom);
   const treeId = 'workspace.sidebar';
@@ -143,29 +142,25 @@ export function NewSidebar({ className }: { className?: string }) {
     const afterPriority = next?.sortPriority ?? 0;
     const shouldUpdateAll = afterPriority - beforePriority < 1;
 
-    if (shouldUpdateAll) {
-      // Add items to children at insertAt
-      children.splice(insertAt, 0, ...items);
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i]!;
-        await patchModelById(child.model, child.id, {
-          sortPriority: i * 1000,
-          folderId,
-        });
+    try {
+      if (shouldUpdateAll) {
+        // Add items to children at insertAt
+        children.splice(insertAt, 0, ...items);
+        await Promise.allSettled(
+          children.map((m, i) => patchModel(m, { sortPriority: i * 1000, folderId })),
+        );
+      } else {
+        const range = afterPriority - beforePriority;
+        const increment = range / (items.length + 2);
+        await Promise.allSettled(
+          items.map((m, i) =>
+            // Spread item sortPriority out over before/after range
+            patchModel(m, { sortPriority: beforePriority + (i + 1) * increment, folderId }),
+          ),
+        );
       }
-    } else {
-      const range = afterPriority - beforePriority;
-      const increment = range / (items.length + 2);
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i]!;
-        if (item.model === 'workspace') continue; // Not possible, but make TS happy
-        // Spread item sortPriority out over before/after range
-        const sortPriority = beforePriority + (i + 1) * increment;
-        await patchModelById(item.model, item.id, {
-          sortPriority,
-          folderId,
-        });
-      }
+    } catch (e) {
+      console.error(e);
     }
   }, []);
 
@@ -191,6 +186,8 @@ export function NewSidebar({ className }: { className?: string }) {
     </div>
   );
 }
+
+export default NewSidebar;
 
 const activeIdAtom = atom<string | null>((get) => {
   return get(activeRequestIdAtom) || get(activeFolderIdAtom);

@@ -31,6 +31,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
 };
 
 const emptyActiveIdAtom = atom();
+const HOVER_CLOSED_FOLDER_DELAY = 900;
 
 export function TreeItem<T extends { id: string }>({
   treeId,
@@ -162,7 +163,7 @@ export function TreeItem<T extends { id: string }>({
         startedHoverTimeout.current = setTimeout(() => {
           jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), false);
           setIsDropHover(false);
-        }, 800);
+        }, HOVER_CLOSED_FOLDER_DELAY);
       } else {
         clearHoverTimer();
       }

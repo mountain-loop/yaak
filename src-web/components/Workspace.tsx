@@ -42,10 +42,9 @@ import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
 import { HeaderSize } from './HeaderSize';
 import { HttpRequestLayout } from './HttpRequestLayout';
-import { NewSidebar } from './NewSidebar';
+import NewSidebar from './NewSidebar';
 import { Overlay } from './Overlay';
 import { ResizeHandle } from './ResizeHandle';
-import { Sidebar } from './sidebar/Sidebar';
 import { SidebarActions } from './sidebar/SidebarActions';
 import { sidebarActiveItemAtom } from './sidebar/SidebarAtoms';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
@@ -166,7 +165,7 @@ export function Workspace() {
               <SidebarActions />
             </HeaderSize>
             <ErrorBoundary name="Sidebar (Floating)">
-              <Sidebar />
+              <NewSidebar />
             </ErrorBoundary>
           </m.div>
         </Overlay>
