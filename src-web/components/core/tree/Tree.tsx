@@ -185,7 +185,7 @@ function Tree_<T extends { id: string }>({
   });
 
   const handleDragMove = useCallback(
-    function handleMove(e: DragMoveEvent) {
+    function handleDragMove(e: DragMoveEvent) {
       const over = e.over;
       if (!over) {
         // Clear the drop indicator when hovering outside the tree
@@ -198,8 +198,20 @@ function Tree_<T extends { id: string }>({
         return;
       }
 
-      const node = selectableItems.find((i) => i.node.item.id === e.over?.id)?.node ?? null;
-      if (node == null) return;
+      // Root is anything past the end of the list, so set it to the end
+      const hoveringRoot = over.id === root.item.id;
+      if (hoveringRoot) {
+        jotaiStore.set(hoveredParentFamily(treeId), {
+          parentId: root.item.id,
+          index: root.children?.length ?? 0,
+        });
+        return;
+      }
+
+      const node = selectableItems.find((i) => i.node.item.id === over.id)?.node ?? null;
+      if (node == null) {
+        return;
+      }
 
       const side = computeSideForDragMove(node, e);
 
@@ -223,7 +235,7 @@ function Tree_<T extends { id: string }>({
         index: hoveredIndex,
       });
     },
-    [selectableItems, treeId, treeParentMap],
+    [root.children?.length, root.item.id, selectableItems, treeId, treeParentMap],
   );
 
   const handleDragStart = useCallback(
@@ -340,7 +352,8 @@ function Tree_<T extends { id: string }>({
         )}
       >
         <TreeItemList node={root} treeId={treeId} activeIdAtom={activeIdAtom} {...treeItemProps} />
-        <DropRegionAfterList treeId={treeId} />
+        {/* Assign root ID so we can reuse our same move/end logic */}
+        <DropRegionAfterList id={root.item.id} />
       </div>
       <DragOverlay dropAnimation={null}>
         <TreeItemList
@@ -362,13 +375,6 @@ function Tree_<T extends { id: string }>({
   );
 }
 
-function DropRegionAfterList({ treeId }: { treeId: string }) {
-  const { setNodeRef } = useDroppable({
-    id: treeId,
-  });
-  return <div className="bg-info opacity-10 h-full" ref={setNodeRef} />;
-}
-
 export const Tree = memo(
   Tree_,
   ({ root: prevNode, ...prevProps }, { root: nextNode, ...nextProps }) => {
@@ -380,6 +386,11 @@ export const Tree = memo(
     return equalSubtree(prevNode, nextNode, nextProps.getItemKey);
   },
 ) as typeof Tree_;
+
+function DropRegionAfterList({ id }: { id: string }) {
+  const { setNodeRef } = useDroppable({ id });
+  return <div ref={setNodeRef} />;
+}
 
 function useTreeParentMap<T extends { id: string }>(
   root: TreeNode<T>,
