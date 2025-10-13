@@ -89,14 +89,14 @@ export function SplitLayout({
   const unsub = () => {
     if (moveState.current !== null) {
       document.documentElement.removeEventListener('mousemove', moveState.current.move);
-      document.documentElement.removeEventListener('mouseup', moveState.current.up);
+      document.documentElement.removeEventListener('pointerup', moveState.current.up);
     }
   };
 
-  const handleReset = useCallback(
-    () => (vertical ? setHeight(defaultRatio) : setWidth(defaultRatio)),
-    [vertical, setHeight, defaultRatio, setWidth],
-  );
+  const handleReset = useCallback(() => {
+    if (vertical) setHeight(defaultRatio);
+    else setWidth(defaultRatio);
+  }, [vertical, setHeight, defaultRatio, setWidth]);
 
   const handleResizeStart = useCallback(
     (e: ReactMouseEvent<HTMLDivElement>) => {
@@ -112,6 +112,7 @@ export function SplitLayout({
 
       moveState.current = {
         move: (e: MouseEvent) => {
+          setIsResizing(true); // Set this here so we don't block double-clicks
           e.preventDefault(); // Prevent text selection and things
           if (vertical) {
             const maxHeightPx = containerRect.height - minHeightPx;
@@ -139,7 +140,6 @@ export function SplitLayout({
       };
       document.documentElement.addEventListener('mousemove', moveState.current.move);
       document.documentElement.addEventListener('mouseup', moveState.current.up);
-      setIsResizing(true);
     },
     [width, height, vertical, minHeightPx, setHeight, minWidthPx, setWidth],
   );
