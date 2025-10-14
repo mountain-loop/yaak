@@ -29,7 +29,7 @@ export function useHttpRequestActions() {
   return actions;
 }
 
-export const getHttpRequestActions = async function () {
+export async function getHttpRequestActions() {
   const responses = await invokeCmd<GetHttpRequestActionsResponse[]>('cmd_http_request_actions');
   const actions = responses.flatMap((r) =>
     r.actions.map((a, i) => ({
@@ -47,4 +47,4 @@ export const getHttpRequestActions = async function () {
   );
 
   return actions;
-};
+}

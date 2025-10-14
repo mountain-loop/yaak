@@ -16,6 +16,7 @@ import { useAllRequests } from '../hooks/useAllRequests';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDebouncedState } from '../hooks/useDebouncedState';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
+import { useGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import type { HotkeyAction } from '../hooks/useHotKey';
 import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
@@ -61,6 +62,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const activeEnvironment = useActiveEnvironment();
   const httpRequestActions = useHttpRequestActions();
+  const grpcRequestActions = useGrpcRequestActions();
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const workspaces = useAtomValue(workspacesAtom);
   const { baseEnvironment, subEnvironments } = useEnvironmentsBreakdown();
@@ -157,6 +159,17 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       }
     }
 
+    if (activeRequest?.model === 'grpc_request') {
+      for (let i = 0; i < grpcRequestActions.length; i++) {
+        const a = grpcRequestActions[i]!;
+        commands.push({
+          key: `grpc_request_action.${i}`,
+          label: a.label,
+          onSelect: () => a.call(activeRequest),
+        });
+      }
+    }
+
     if (activeRequest != null) {
       commands.push({
         key: 'http_request.rename',
@@ -182,6 +195,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     activeRequest,
     baseEnvironment,
     createWorkspace,
+    grpcRequestActions,
     httpRequestActions,
     sendRequest,
     setSidebarHidden,

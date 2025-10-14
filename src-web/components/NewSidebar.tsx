@@ -21,6 +21,7 @@ import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { allRequestsAtom } from '../hooks/useAllRequests';
+import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import { useHotKey } from '../hooks/useHotKey';
 import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
@@ -272,7 +273,7 @@ async function getContextMenu(items: Model[]): Promise<ContextMenuProps['items']
 
   const workspaces = jotaiStore.get(workspacesAtom);
 
-  const menuItems: ContextMenuProps['items'] = [
+  const initialItems: ContextMenuProps['items'] = [
     {
       label: 'Folder Settings',
       hidden: !(items.length === 1 && child.model === 'folder'),
@@ -309,20 +310,23 @@ async function getContextMenu(items: Model[]): Promise<ContextMenuProps['items']
         if (request != null) await a.call(request);
       },
     })),
-    { type: 'separator' },
-    // ]
-    // : child.model === 'grpc_request'
-    //   ? grpcRequestActions.map((a) => ({
-    //     label: a.label,
-    //     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    //     leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
-    //     onSelect: async () => {
-    //       const request = getModel('grpc_request', child.id);
-    //       if (request != null) await a.call(request);
-    //     },
-    //   }))
-    //   : [];
-    // ...requestItems,
+    ...(items.length === 1 && child.model === 'grpc_request'
+      ? await getGrpcRequestActions()
+      : []
+    ).map((a) => ({
+      label: a.label,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+      onSelect: async () => {
+        const request = getModel('grpc_request', child.id);
+        if (request != null) await a.call(request);
+      },
+    })),
+  ];
+
+  const menuItems: ContextMenuProps['items'] = [
+    ...initialItems,
+    { type: 'separator', hidden: initialItems.filter(v => !v.hidden).length === 0 },
     {
       label: 'Rename',
       leftSlot: <Icon icon="pencil" />,
