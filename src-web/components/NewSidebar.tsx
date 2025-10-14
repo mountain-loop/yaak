@@ -6,7 +6,6 @@ import type {
   Workspace,
 } from '@yaakapp-internal/models';
 import {
-  duplicateModelById,
   foldersAtom,
   getModel,
   httpResponsesAtom,
@@ -15,13 +14,15 @@ import {
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
-import React, { useCallback, useRef } from 'react';
+import { selectAtom } from 'jotai/utils';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useHotKey } from '../hooks/useHotKey';
+import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { deepEqualAtom } from '../lib/atoms';
@@ -51,7 +52,37 @@ function getItemKey(item: Model) {
   const responses = jotaiStore.get(httpResponsesAtom);
   const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
   const url = 'url' in item ? item.url : 'n/a';
-  return [item.id, item.name, url, latestResponse?.id ?? 'n/a'].join('::');
+  console.log('LATEST', latestResponse?.elapsed);
+  return [item.id, item.name, url, latestResponse?.elapsed, latestResponse?.id ?? 'n/a'].join('::');
+}
+
+function SidebarItem(item: Model) {
+  const response = useAtomValue(
+    useMemo(
+      () =>
+        selectAtom(
+          httpResponsesAtom,
+          (responses) => responses.find((r) => r.requestId === item.id),
+          (a, b) => a?.state === b?.state, // Only update when the response state changes updated
+        ),
+      [item.id],
+    ),
+  );
+
+  return (
+    <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
+      <div className="truncate">{resolvedModelName(item)}</div>
+      {response != null && (
+        <div className="ml-auto">
+          {response.state !== 'closed' ? (
+            <LoadingIcon size="sm" className="text-text-subtlest" />
+          ) : (
+            <HttpStatusTag short className="text-xs" response={response} />
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NewSidebar({ className }: { className?: string }) {
@@ -78,24 +109,26 @@ function NewSidebar({ className }: { className?: string }) {
     }
   }, []);
 
-  const renderItem = useCallback(function renderItem(item: Model) {
-    const responses = jotaiStore.get(httpResponsesAtom);
-    const latestHttpResponse = responses.find((r) => r.requestId === item.id) ?? null;
-    return (
-      <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
-        <div className="truncate">{resolvedModelName(item)}</div>
-        {latestHttpResponse && (
-          <div className="ml-auto">
-            {latestHttpResponse.state !== 'closed' ? (
-              <LoadingIcon size="sm" className="text-text-subtlest" />
-            ) : (
-              <HttpStatusTag short className="text-xs" response={latestHttpResponse} />
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }, []);
+  const renderItem = SidebarItem;
+
+  // const renderItem = useCallback(function renderItem(item: Model) {
+  //   const responses = jotaiStore.get(httpResponsesAtom);
+  //   const latestHttpResponse = responses.find((r) => r.requestId === item.id) ?? null;
+  //   return (
+  //     <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
+  //       <div className="truncate">{resolvedModelName(item)}</div>
+  //       {latestHttpResponse && (
+  //         <div className="ml-auto">
+  //           {latestHttpResponse.state !== 'closed' ? (
+  //             <LoadingIcon size="sm" className="text-text-subtlest" />
+  //           ) : (
+  //             <HttpStatusTagForResponse short className="text-xs" responseId={latestHttpResponse.id} />
+  //           )}
+  //         </div>
+  //       )}
+  //     </div>
+  //   );
+  // }, []);
 
   const focusActiveItem = useCallback(() => {
     treeRef.current?.focus();
@@ -233,29 +266,22 @@ function handleActivate(items: Model[]) {
   }
 }
 
-function getContextMenu(items: Model[]): ContextMenuProps['items'] {
+async function getContextMenu(items: Model[]): Promise<ContextMenuProps['items']> {
   const child = items[0];
   if (child == null) return [];
+
   const workspaces = jotaiStore.get(workspacesAtom);
 
   const menuItems: ContextMenuProps['items'] = [
     {
-      label: 'Settings',
+      label: 'Folder Settings',
       hidden: !(items.length === 1 && child.model === 'folder'),
-      leftSlot: <Icon icon="settings" />,
+      leftSlot: <Icon icon="folder_cog" />,
       onSelect: () => openFolderSettings(child.id),
     },
     {
-      label: 'Duplicate',
-      leftSlot: <Icon icon="copy" />,
-      hotKeyAction: 'http_request.duplicate',
-      hotKeyLabelOnly: true,
-      onSelect: async () => {
-        await duplicateModelById(child.model, child.id);
-      },
-    },
-    {
       label: 'Send All',
+      hidden: !(items.length === 1 && child.model === 'folder'),
       leftSlot: <Icon icon="send_horizontal" />,
       onSelect: () => {
         for (const item of items) {
@@ -264,31 +290,25 @@ function getContextMenu(items: Model[]): ContextMenuProps['items'] {
       },
     },
     {
-      label: 'Delete',
-      color: 'danger',
-      leftSlot: <Icon icon="trash" />,
-      onSelect: async () => {
-        await deleteModelWithConfirm(getModel(child.model, child.id));
-      },
-    },
-    { type: 'separator' },
-    // ...createDropdownItems,
-    {
       label: 'Send',
       hotKeyAction: 'http_request.send',
       hotKeyLabelOnly: true, // Already bound in URL bar
+      hidden: !(items.length === 1 && child.model === 'http_request'),
       leftSlot: <Icon icon="send_horizontal" />,
       onSelect: () => sendAnyHttpRequest.mutate(child.id),
     },
-    // ...httpRequestActions.map((a) => ({
-    //   label: a.label,
-    //   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    //   leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
-    //   onSelect: async () => {
-    //     const request = getModel('http_request', child.id);
-    //     if (request != null) await a.call(request);
-    //   },
-    // })),
+    ...(items.length === 1 && child.model === 'http_request'
+      ? await getHttpRequestActions()
+      : []
+    ).map((a) => ({
+      label: a.label,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+      onSelect: async () => {
+        const request = getModel('http_request', child.id);
+        if (request != null) await a.call(request);
+      },
+    })),
     { type: 'separator' },
     // ]
     // : child.model === 'grpc_request'
@@ -306,8 +326,12 @@ function getContextMenu(items: Model[]): ContextMenuProps['items'] {
     {
       label: 'Rename',
       leftSlot: <Icon icon="pencil" />,
+      hidden: items.length > 1,
       onSelect: async () => {
-        const request = getModel(['http_request', 'grpc_request', 'websocket_request'], child.id);
+        const request = getModel(
+          ['folder', 'http_request', 'grpc_request', 'websocket_request'],
+          child.id,
+        );
         await renameModelWithPrompt(request);
       },
     },

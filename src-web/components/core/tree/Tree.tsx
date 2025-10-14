@@ -37,7 +37,7 @@ export interface TreeProps<T extends { id: string }> {
   root: TreeNode<T>;
   treeId: string;
   getItemKey: (item: T) => string;
-  getContextMenu?: (items: T[]) => ContextMenuProps['items'];
+  getContextMenu?: (items: T[]) => Promise<ContextMenuProps['items']>;
   renderItem: (item: T) => ReactNode;
   renderLeftSlot?: (item: T) => ReactNode;
   className?: string;

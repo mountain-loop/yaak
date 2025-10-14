@@ -18,26 +18,7 @@ export function useHttpRequestActions() {
 
   const actionsResult = useQuery<CallableHttpRequestAction[]>({
     queryKey: ['http_request_actions', pluginsKey],
-    queryFn: async () => {
-      const responses = await invokeCmd<GetHttpRequestActionsResponse[]>(
-        'cmd_http_request_actions',
-      );
-
-      return responses.flatMap((r) =>
-        r.actions.map((a, i) => ({
-          label: a.label,
-          icon: a.icon,
-          call: async (httpRequest: HttpRequest) => {
-            const payload: CallHttpRequestActionRequest = {
-              index: i,
-              pluginRefId: r.pluginRefId,
-              args: { httpRequest },
-            };
-            await invokeCmd('cmd_call_http_request_action', { req: payload });
-          },
-        })),
-      );
-    },
+    queryFn: () => getHttpRequestActions(),
   });
 
   const actions = useMemo(() => {
@@ -47,3 +28,23 @@ export function useHttpRequestActions() {
 
   return actions;
 }
+
+export const getHttpRequestActions = async function () {
+  const responses = await invokeCmd<GetHttpRequestActionsResponse[]>('cmd_http_request_actions');
+  const actions = responses.flatMap((r) =>
+    r.actions.map((a, i) => ({
+      label: a.label,
+      icon: a.icon,
+      call: async (httpRequest: HttpRequest) => {
+        const payload: CallHttpRequestActionRequest = {
+          index: i,
+          pluginRefId: r.pluginRefId,
+          args: { httpRequest },
+        };
+        await invokeCmd('cmd_call_http_request_action', { req: payload });
+      },
+    })),
+  );
+
+  return actions;
+};

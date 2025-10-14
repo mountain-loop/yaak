@@ -14,7 +14,6 @@ import {
   isLastFocusedFamily,
   isParentHoveredFamily,
   isSelectedFamily,
-  selectedIdsFamily,
 } from './atoms';
 import type { TreeNode } from './common';
 import { computeSideForDragMove } from './common';
@@ -33,7 +32,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
   node: TreeNode<T>;
   className?: string;
   onClick?: (item: T, e: OnClickEvent) => void;
-  getContextMenu?: (item: T) => ContextMenuProps['items'];
+  getContextMenu?: (item: T) => Promise<ContextMenuProps['items']>;
 };
 
 const HOVER_CLOSED_FOLDER_DELAY = 800;
@@ -87,7 +86,7 @@ export function TreeItem<T extends { id: string }>({
   );
 
   const handleClick = useCallback(
-    function handleClick(e: OnClickEvent) {
+    function handleClick(e: MouseEvent<HTMLButtonElement>) {
       onClick?.(node.item, e);
     },
     [node, onClick],
@@ -176,25 +175,15 @@ export function TreeItem<T extends { id: string }>({
 
   const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
   const handleContextMenu = useCallback(
-    (e: MouseEvent<HTMLDivElement>) => {
+    async (e: MouseEvent<HTMLDivElement>) => {
       if (getContextMenu == null) return;
 
       e.preventDefault();
       e.stopPropagation();
-      const items = getContextMenu(node.item);
-      const isSelected = jotaiStore.get(isSelectedFamily({ treeId, itemId: node.item.id }));
-      console.log(
-        'HANDLE CONTEXT MENU',
-        isSelected,
-        node.item.id,
-        jotaiStore.get(selectedIdsFamily(treeId)),
-      );
-      if (!isSelected) {
-        // handleClick(e);
-      }
+      const items = await getContextMenu(node.item);
       setShowContextMenu({ items, x: e.clientX, y: e.clientY });
     },
-    [getContextMenu, node.item, treeId],
+    [getContextMenu, node.item],
   );
 
   const handleCloseContextMenu = useCallback(() => {
@@ -236,7 +225,6 @@ export function TreeItem<T extends { id: string }>({
         'tree-item',
         isSelected && 'selected',
         'text-text-subtle',
-        'focus-within:ring-1 focus-within:ring-border-focus',
         'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded px-2',
         editing && 'ring-1 focus-within:ring-focus',
         isDropHover && 'relative z-10 ring-2 ring-primary animate-blinkRing',
