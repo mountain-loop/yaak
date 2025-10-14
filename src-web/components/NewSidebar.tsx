@@ -15,6 +15,7 @@ import {
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
+import type { FocusEvent } from 'react';
 import React, { useCallback, useRef } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
@@ -36,7 +37,7 @@ import { HttpMethodTag } from './core/HttpMethodTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
 import { Icon } from './core/Icon';
 import { LoadingIcon } from './core/LoadingIcon';
-import { isSelectedFamily } from './core/tree/atoms';
+import { focusIdsFamily, isSelectedFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
@@ -60,7 +61,10 @@ function NewSidebar({ className }: { className?: string }) {
   const treeId = 'workspace.sidebar';
   const wrapperRef = useRef<HTMLElement>(null);
 
-  const handleBlur = useCallback(function handleBlur() {
+  const handleBlur = useCallback(function handleBlur(e: FocusEvent<HTMLElement>) {
+    // If the next focused element is still inside the sidebar, ignore this blur
+    const next = e.relatedTarget as Node | null;
+    if (next && wrapperRef.current?.contains(next)) return;
     jotaiStore.set(treeFocusedAtom, false);
   }, []);
 
@@ -124,6 +128,18 @@ function NewSidebar({ className }: { className?: string }) {
     //   sidebarRef.current?.focus();
     // }
   }, []);
+
+  useHotKey('http_request.duplicate', async () => {
+    const lastFocused = jotaiStore.get(focusIdsFamily(treeId)).lastId;
+    const activeId = jotaiStore.get(activeIdAtom);
+    const toFocus = lastFocused ?? activeId;
+    const model = toFocus
+      ? getModel(['http_request', 'websocket_request', 'grpc_request', 'folder'], toFocus)
+      : null;
+    if (model != null) {
+      await duplicateRequestOrFolderAndNavigate(model);
+    }
+  });
 
   useHotKey('sidebar.focus', async function focusHotkey() {
     // Hide the sidebar if it's already focused

@@ -1,7 +1,6 @@
 import type { DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   DndContext,
-  DragOverlay,
   PointerSensor,
   pointerWithin,
   useDroppable,
@@ -10,16 +9,24 @@ import {
 } from '@dnd-kit/core';
 import classNames from 'classnames';
 import type { Atom } from 'jotai';
-import { atom , useAtom, useAtomValue } from 'jotai';
+import { useAtomValue } from 'jotai';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
 import { sidebarCollapsedAtom } from '../../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
-import { draggingIdsFamily, focusIdsFamily, hoveredParentFamily, selectedIdsFamily } from './atoms';
+import {
+  draggingIdsFamily,
+  emptyActiveIdAtom,
+  emptyTreeFocusedAtom,
+  focusIdsFamily,
+  hoveredParentFamily,
+  selectedIdsFamily,
+} from './atoms';
 import type { SelectableTreeNode, TreeNode } from './common';
 import { computeSideForDragMove, equalSubtree, getSelectedItems, hasAncestor } from './common';
+import { TreeDragOverlay } from './TreeDragOverlay';
 import type { TreeItemProps } from './TreeItem';
 import type { TreeItemListProps } from './TreeItemList';
 import { TreeItemList } from './TreeItemList';
@@ -43,10 +50,8 @@ export interface TreeProps<T extends { id: string }> {
   };
 }
 
-const emptyTreeFocusedAtom = atom<boolean>(false);
-
 function Tree_<T extends { id: string }>({
-  activeIdAtom,
+  activeIdAtom = emptyActiveIdAtom,
   treeFocusedAtom = emptyTreeFocusedAtom,
   className,
   getContextMenu,
@@ -60,7 +65,6 @@ function Tree_<T extends { id: string }>({
   treeId,
 }: TreeProps<T>) {
   const treeRef = useRef<HTMLDivElement>(null);
-  const [draggingItems, setDraggingItems] = useAtom(draggingIdsFamily(treeId));
   const { treeParentMap, selectableItems } = useTreeParentMap(root, getItemKey);
 
   const handleGetContextMenu = useMemo(() => {
@@ -132,6 +136,22 @@ function Tree_<T extends { id: string }>({
       }
     },
     [selectableItems, treeId],
+  );
+
+  useEffect(
+    function selectItemOnFocus() {
+      return jotaiStore.sub(treeFocusedAtom, () => {
+        const focused = jotaiStore.get(treeFocusedAtom);
+        if (!focused) return;
+
+        const activeId = jotaiStore.get(activeIdAtom);
+        const item = selectableItems.find((i) => i.node.item.id === activeId)?.node;
+        if (item == null) return;
+
+        handleSelect(item.item, { shiftKey: false, metaKey: false, ctrlKey: false });
+      });
+    },
+    [activeIdAtom, handleSelect, selectableItems, treeFocusedAtom],
   );
 
   const handleClick = useCallback<NonNullable<TreeItemProps<T>['onClick']>>(
@@ -247,19 +267,22 @@ function Tree_<T extends { id: string }>({
       const selectedItems = getSelectedItems(treeId, selectableItems);
       const isDraggingSelectedItem = selectedItems.find((i) => i.id === item.id);
       if (isDraggingSelectedItem) {
-        setDraggingItems(selectedItems.map((i) => i.id));
+        jotaiStore.set(
+          draggingIdsFamily(treeId),
+          selectedItems.map((i) => i.id),
+        );
       } else {
-        setDraggingItems([item.id]);
+        jotaiStore.set(draggingIdsFamily(treeId), [item.id]);
         // Also update selection to just be this one
         handleSelect(item, { shiftKey: false, metaKey: false, ctrlKey: false });
       }
     },
-    [handleSelect, selectableItems, setDraggingItems, treeId],
+    [handleSelect, selectableItems, treeId],
   );
 
   const clearDragState = useCallback(() => {
     jotaiStore.set(hoveredParentFamily(treeId), { parentId: null, index: null });
-    jotaiStore.set(draggingIdsFamily(treeId), []);
+    // jotaiStore.set(draggingIdsFamily(treeId), []);
   }, [treeId]);
 
   const handleDragEnd = useCallback(
@@ -317,7 +340,7 @@ function Tree_<T extends { id: string }>({
     [treeId, clearDragState, root, selectableItems, onDragEnd, treeParentMap],
   );
 
-  const treeItemProps: Omit<
+  const treeItemListProps: Omit<
     TreeItemListProps<T>,
     'node' | 'treeId' | 'activeIdAtom' | 'hoveredParent' | 'hoveredIndex'
   > = {
@@ -332,6 +355,7 @@ function Tree_<T extends { id: string }>({
   };
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const focused = useAtomValue(treeFocusedAtom);
 
   return (
     <DndContext
@@ -351,28 +375,27 @@ function Tree_<T extends { id: string }>({
           'outline-none h-full',
           'overflow-y-auto overflow-x-hidden',
           'grid grid-rows-[auto_1fr]',
+          focused
+            ? '[&_.tree-item--selected]:bg-surface-active'
+            : '[&_.tree-item--selected]:bg-surface-highlight',
         )}
       >
-        <TreeItemList node={root} treeId={treeId} activeIdAtom={activeIdAtom} {...treeItemProps} />
+        <TreeItemList
+          node={root}
+          treeId={treeId}
+          activeIdAtom={activeIdAtom}
+          {...treeItemListProps}
+        />
         {/* Assign root ID so we can reuse our same move/end logic */}
         <DropRegionAfterList id={root.item.id} />
-      </div>
-      <DragOverlay dropAnimation={null}>
-        <TreeItemList
-          treeId={treeId + '.dragging'}
-          style={{ width: treeRef.current?.clientWidth ?? undefined }}
-          node={{
-            item: { ...root.item, id: `${root.item.id}_dragging` },
-            parent: null,
-            children: draggingItems.map((id) => {
-              const child = selectableItems.find((i2) => i2.node.item.id === id)!.node;
-              // Remove children so we don't render them in the drag preview
-              return { ...child, children: undefined };
-            }),
-          }}
-          {...treeItemProps}
+        <TreeDragOverlay
+          treeId={treeId}
+          root={root}
+          selectableItems={selectableItems}
+          renderItem={renderItem}
+          getItemKey={getItemKey}
         />
-      </DragOverlay>
+      </div>
     </DndContext>
   );
 }

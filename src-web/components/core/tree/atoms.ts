@@ -2,6 +2,9 @@ import { atom } from 'jotai';
 import { atomFamily, selectAtom } from 'jotai/utils';
 import { atomWithKVStorage } from '../../../lib/atoms/atomWithKVStorage';
 
+export const emptyTreeFocusedAtom = atom<boolean>(false);
+export const emptyActiveIdAtom = atom<string | null>(null);
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const selectedIdsFamily = atomFamily((_treeId: string) => {
   return atom<string[]>([]);
@@ -17,6 +20,12 @@ export const isSelectedFamily = atomFamily(
 export const focusIdsFamily = atomFamily((_treeId: string) => {
   return atom<{ lastId: string | null; anchorId: string | null }>({ lastId: null, anchorId: null });
 });
+
+export const isLastFocusedFamily = atomFamily(
+  ({ treeId, itemId }: { treeId: string; itemId: string }) =>
+    selectAtom(focusIdsFamily(treeId), (v) => v.lastId == itemId, Object.is),
+  (a, b) => a.treeId === b.treeId && a.itemId === b.itemId,
+);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const draggingIdsFamily = atomFamily((_treeId: string) => {

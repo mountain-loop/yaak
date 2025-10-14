@@ -12,9 +12,9 @@ import { TreeItem } from './TreeItem';
 
 export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'renderItem' | 'renderLeftSlot' | 'treeId' | 'activeIdAtom' | 'getItemKey' | 'getEditOptions'
+  'renderItem' | 'renderLeftSlot' | 'treeId' | 'getItemKey' | 'getEditOptions'
 > &
-  Pick<TreeItemProps<T>, 'onClick' | 'getContextMenu' | 'treeFocusedAtom'> & {
+  Pick<TreeItemProps<T>, 'onClick' | 'activeIdAtom' | 'getContextMenu' | 'treeFocusedAtom'> & {
     node: TreeNode<T>;
     depth: number;
     style?: CSSProperties;
@@ -110,7 +110,7 @@ export const TreeItemList = memo(
   },
 ) as typeof TreeItemList_;
 
-function TreeDropMarker<T extends { id: string }>({
+const TreeDropMarker = memo(function TreeDropMarker<T extends { id: string }>({
   className,
   treeId,
   parent,
@@ -134,4 +134,4 @@ function TreeDropMarker<T extends { id: string }>({
   if (!isHovered && !(isLastItem && isLastItemHovered)) return null;
 
   return <DropMarker className={classNames(className)} />;
-}
+});

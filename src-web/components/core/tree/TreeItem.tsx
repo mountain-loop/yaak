@@ -1,10 +1,10 @@
 import type { DragMoveEvent } from '@dnd-kit/core';
 import { useDndMonitor, useDraggable, useDroppable } from '@dnd-kit/core';
 import classNames from 'classnames';
-import { atom, useAtomValue } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import type { MouseEvent, PointerEvent } from 'react';
-import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
@@ -12,6 +12,7 @@ import { Icon } from '../Icon';
 import {
   focusIdsFamily,
   isCollapsedFamily,
+  isLastFocusedFamily,
   isParentHoveredFamily,
   isSelectedFamily,
 } from './atoms';
@@ -27,16 +28,16 @@ interface OnClickEvent {
 
 export type TreeItemProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'renderItem' | 'renderLeftSlot' | 'treeId' | 'activeIdAtom' | 'treeFocusedAtom' | 'getEditOptions'
+  'renderItem' | 'renderLeftSlot' | 'treeId' | 'treeFocusedAtom' | 'getEditOptions'
 > & {
   node: TreeNode<T>;
   className?: string;
   onClick?: (item: T, e: OnClickEvent) => void;
   getContextMenu?: (item: T) => ContextMenuProps['items'];
   treeFocusedAtom: NonNullable<TreeProps<T>['treeFocusedAtom']>;
+  activeIdAtom: NonNullable<TreeProps<T>['activeIdAtom']>;
 };
 
-const emptyActiveIdAtom = atom();
 const HOVER_CLOSED_FOLDER_DELAY = 800;
 
 export function TreeItem<T extends { id: string }>({
@@ -45,7 +46,7 @@ export function TreeItem<T extends { id: string }>({
   renderItem,
   renderLeftSlot,
   activeIdAtom,
-  treeFocusedAtom,
+  // treeFocusedAtom,
   getContextMenu,
   onClick,
   getEditOptions,
@@ -53,21 +54,40 @@ export function TreeItem<T extends { id: string }>({
 }: TreeItemProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
   const draggableRef = useRef<HTMLButtonElement>(null);
-  const treeFocused = useAtomValue(treeFocusedAtom);
+  // const treeFocused = useAtomValue(treeFocusedAtom);
   const isSelected = useAtomValue(isSelectedFamily({ treeId, itemId: node.item.id }));
   const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
   const isHoveredAsParent = useAtomValue(isParentHoveredFamily({ treeId, parentId: node.item.id }));
-  const lastSelectedId = useAtomValue(focusIdsFamily(treeId)).lastId;
+  const isLastSelected = useAtomValue(isLastFocusedFamily({ treeId, itemId: node.item.id }));
   const [editing, setEditing] = useState<boolean>(false);
   const [isDropHover, setIsDropHover] = useState<boolean>(false);
 
-  const isActiveAtom = useMemo(() => {
-    const source = activeIdAtom ?? emptyActiveIdAtom;
-    // Only notify when the boolean changes
-    return selectAtom(source, (activeId) => activeId === node.item.id, Object.is);
-  }, [activeIdAtom, node.item.id]);
+  const isActive = useAtomValue(
+    useMemo(() => {
+      const source = activeIdAtom;
+      // Only notify when the boolean changes
+      return selectAtom(source, (activeId) => activeId === node.item.id, Object.is);
+    }, [activeIdAtom, node.item.id]),
+  );
 
-  const isActive = useAtomValue(isActiveAtom);
+  // useEffect(
+  //   function focusWhenSidebarFocused() {
+  //     return jotaiStore.sub(treeFocusedAtom, () => {
+  //       const focused = jotaiStore.get(treeFocusedAtom);
+  //       const activeId = jotaiStore.get(activeIdAtom);
+  //       const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
+  //       if (lastSelectedId) {
+  //         console.log('WAS FOCUSED', draggableRef.current, focused, {
+  //           lastSelectedId,
+  //           activeId,
+  //           id: node.item.id,
+  //         });
+  //         draggableRef.current?.focus();
+  //       }
+  //     });
+  //   },
+  //   [activeIdAtom, node.item.id, treeFocusedAtom, treeId],
+  // );
 
   useEffect(
     function focusWhenSelectionChanges() {
@@ -148,16 +168,7 @@ export function TreeItem<T extends { id: string }>({
     }
   }, [getEditOptions, node.children, toggleCollapsed]);
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef: setDraggableRef,
-  } = useDraggable({
-    id: node.item.id,
-    attributes: {
-      tabIndex: lastSelectedId ? 0 : -1,
-    },
-  });
+  const { attributes, listeners, setNodeRef: setDraggableRef } = useDraggable({ id: node.item.id });
 
   const { setNodeRef: setDroppableRef } = useDroppable({
     id: node.item.id,
@@ -230,10 +241,9 @@ export function TreeItem<T extends { id: string }>({
       onContextMenu={handleContextMenu}
       className={classNames(
         className,
+        isSelected && 'tree-item--selected',
         'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded px-2',
         editing && 'ring-1 focus-within:ring-focus',
-        isSelected && treeFocused && 'bg-surface-active',
-        isSelected && !treeFocused && 'bg-surface-highlight',
         isDropHover && 'relative z-10 ring-2 ring-primary animate-blinkRing',
       )}
     >
@@ -276,9 +286,9 @@ export function TreeItem<T extends { id: string }>({
             ? 'text-text'
             : 'text-text-subtle',
         )}
-        {...listeners}
         {...attributes}
-        tabIndex={lastSelectedId == node.item.id ? 0 : -1}
+        {...listeners}
+        tabIndex={isLastSelected ? 0 : -1}
       >
         {renderLeftSlot?.(node.item)}
         {getEditOptions && editing
