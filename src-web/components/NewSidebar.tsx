@@ -33,6 +33,7 @@ import { jotaiStore } from '../lib/jotai';
 import { renameModelWithPrompt } from '../lib/renameModelWithPrompt';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { navigateToRequestOrFolderOrWorkspace } from '../lib/setWorkspaceSearchParams';
+import { Banner } from './core/Banner';
 import type { ContextMenuProps } from './core/Dropdown';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
@@ -136,6 +137,7 @@ function NewSidebar({ className }: { className?: string }) {
   }, []);
 
   useHotKey('http_request.duplicate', async () => {
+    // TODO: Make this delete selected items when sidebar is active, or delete active request if not
     const lastFocused = jotaiStore.get(focusIdsFamily(treeId)).lastId;
     const activeId = jotaiStore.get(activeIdAtom);
     const toFocus = lastFocused ?? activeId;
@@ -144,6 +146,19 @@ function NewSidebar({ className }: { className?: string }) {
       : null;
     if (model != null) {
       await duplicateRequestOrFolderAndNavigate(model);
+    }
+  });
+
+  useHotKey('sidebar.delete_selected_item', async () => {
+    if (hidden || !wrapperRef.current?.contains(document.activeElement)) return;
+    const lastFocused = jotaiStore.get(focusIdsFamily(treeId)).lastId;
+    const activeId = jotaiStore.get(activeIdAtom);
+    const toDelete = lastFocused ?? activeId;
+    const model = toDelete
+      ? getModel(['http_request', 'websocket_request', 'grpc_request', 'folder'], toDelete)
+      : null;
+    if (model != null) {
+      await deleteModelWithConfirm(model);
     }
   });
 
@@ -270,6 +285,13 @@ function handleActivate(items: Model[]) {
 async function getContextMenu(items: Model[]): Promise<ContextMenuProps['items']> {
   const child = items[0];
   if (child == null) return [];
+  if (items.length > 1)
+    return [
+      {
+        type: 'content',
+        label: <Banner color="info">Multi-item context menu coming soon</Banner>,
+      },
+    ];
 
   const workspaces = jotaiStore.get(workspacesAtom);
 
@@ -326,7 +348,7 @@ async function getContextMenu(items: Model[]): Promise<ContextMenuProps['items']
 
   const menuItems: ContextMenuProps['items'] = [
     ...initialItems,
-    { type: 'separator', hidden: initialItems.filter(v => !v.hidden).length === 0 },
+    { type: 'separator', hidden: initialItems.filter((v) => !v.hidden).length === 0 },
     {
       label: 'Rename',
       leftSlot: <Icon icon="pencil" />,
