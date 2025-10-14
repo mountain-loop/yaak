@@ -15,7 +15,6 @@ import {
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
-import type { FocusEvent } from 'react';
 import React, { useCallback, useRef } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
@@ -39,6 +38,7 @@ import { Icon } from './core/Icon';
 import { LoadingIcon } from './core/LoadingIcon';
 import { focusIdsFamily, isSelectedFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
+import type { TreeHandle } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
 import { GitDropdown } from './GitDropdown';
@@ -46,7 +46,6 @@ import { GitDropdown } from './GitDropdown';
 type Model = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
 
 const opacitySubtle = 'opacity-80';
-const treeFocusedAtom = atom<boolean>(false);
 
 function getItemKey(item: Model) {
   const responses = jotaiStore.get(httpResponsesAtom);
@@ -60,17 +59,7 @@ function NewSidebar({ className }: { className?: string }) {
   const tree = useAtomValue(sidebarTreeAtom);
   const treeId = 'workspace.sidebar';
   const wrapperRef = useRef<HTMLElement>(null);
-
-  const handleBlur = useCallback(function handleBlur(e: FocusEvent<HTMLElement>) {
-    // If the next focused element is still inside the sidebar, ignore this blur
-    const next = e.relatedTarget as Node | null;
-    if (next && wrapperRef.current?.contains(next)) return;
-    jotaiStore.set(treeFocusedAtom, false);
-  }, []);
-
-  const handleFocus = useCallback(function handleFocus() {
-    jotaiStore.set(treeFocusedAtom, true);
-  }, []);
+  const treeRef = useRef<TreeHandle>(null);
 
   const renderLeftSlot = useCallback(function renderLeftSlot(item: Model) {
     if (item.model === 'folder') {
@@ -109,24 +98,7 @@ function NewSidebar({ className }: { className?: string }) {
   }, []);
 
   const focusActiveItem = useCallback(() => {
-    // const activeId = jotaiStore.get(activeIdAtom);
-    // const activeItemId = jotaiStore.get(sidebarActiveItemAtom)?.id;
-    // const { forced, noFocusSidebar } = args;
-    // const tree = forced?.tree ?? treeParentMap[activeItemId ?? 'n/a'] ?? null;
-    // const children = tree?.children ?? [];
-    // const id = forced?.id ?? children.find((m) => m.id === activeItemId)?.id ?? null;
-    //
-    wrapperRef.current?.focus();
-    // setHasFocus(true);
-    // setSelectedId(id);
-    // setSelectedTree(tree);
-    //
-    // if (id == null) {
-    //   return;
-    // }
-    // if (!noFocusSidebar) {
-    //   sidebarRef.current?.focus();
-    // }
+    treeRef.current?.focus();
   }, []);
 
   useHotKey('http_request.duplicate', async () => {
@@ -143,7 +115,7 @@ function NewSidebar({ className }: { className?: string }) {
 
   useHotKey('sidebar.focus', async function focusHotkey() {
     // Hide the sidebar if it's already focused
-    if (!hidden && jotaiStore.get(treeFocusedAtom)) {
+    if (!hidden && wrapperRef.current?.contains(document.activeElement)) {
       await setHidden(true);
       return;
     }
@@ -198,6 +170,14 @@ function NewSidebar({ className }: { className?: string }) {
     }
   }, []);
 
+  const handleTreeRefInit = useCallback((n: TreeHandle) => {
+    treeRef.current = n;
+    if (n == null) return;
+    const activeId = jotaiStore.get(activeIdAtom);
+    if (activeId == null) return;
+    n.selectItem(activeId);
+  }, []);
+
   if (tree == null || hidden) {
     return null;
   }
@@ -206,12 +186,10 @@ function NewSidebar({ className }: { className?: string }) {
     <aside
       ref={wrapperRef}
       aria-hidden={hidden ?? undefined}
-      onBlur={handleBlur}
-      onFocus={handleFocus}
-      tabIndex={hidden ? -1 : 0}
       className={classNames(className, 'h-full grid grid-rows-[minmax(0,1fr)_auto]')}
     >
       <Tree
+        ref={handleTreeRefInit}
         root={tree}
         treeId={treeId}
         getItemKey={getItemKey}
@@ -220,8 +198,6 @@ function NewSidebar({ className }: { className?: string }) {
         getContextMenu={getContextMenu}
         onActivate={handleActivate}
         getEditOptions={getEditOptions}
-        activeIdAtom={activeIdAtom}
-        treeFocusedAtom={treeFocusedAtom}
         className="pl-0.5 pr-3 pt-2 pb-2"
         onDragEnd={handleDragEnd}
       />

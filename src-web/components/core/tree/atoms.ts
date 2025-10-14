@@ -2,17 +2,15 @@ import { atom } from 'jotai';
 import { atomFamily, selectAtom } from 'jotai/utils';
 import { atomWithKVStorage } from '../../../lib/atoms/atomWithKVStorage';
 
-export const emptyTreeFocusedAtom = atom<boolean>(false);
-export const emptyActiveIdAtom = atom<string | null>(null);
-
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const selectedIdsFamily = atomFamily((_treeId: string) => {
   return atom<string[]>([]);
 });
 
 export const isSelectedFamily = atomFamily(
-  ({ treeId, itemId }: { treeId: string; itemId: string }) =>
-    selectAtom(selectedIdsFamily(treeId), (ids) => ids.includes(itemId), Object.is),
+  ({ treeId, itemId }: { treeId: string; itemId: string }) => {
+    return selectAtom(selectedIdsFamily(treeId), (ids) => ids.includes(itemId), Object.is);
+  },
   (a, b) => a.treeId === b.treeId && a.itemId === b.itemId,
 );
 
@@ -31,12 +29,6 @@ export const isLastFocusedFamily = atomFamily(
 export const draggingIdsFamily = atomFamily((_treeId: string) => {
   return atom<string[]>([]);
 });
-
-export const isDraggingFamily = atomFamily(
-  ({ treeId, itemId }: { treeId: string; itemId: string }) =>
-    selectAtom(draggingIdsFamily(treeId), (ids) => ids.includes(itemId), Object.is),
-  (a, b) => a.treeId === b.treeId && a.itemId === b.itemId,
-);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const hoveredParentFamily = atomFamily((_treeId: string) => {

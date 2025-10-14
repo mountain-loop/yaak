@@ -7,23 +7,25 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
-import type { Atom } from 'jotai';
 import { useAtomValue } from 'jotai';
-import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactElement, ReactNode, Ref, RefAttributes } from 'react';
+import {
+  useEffect,
+  forwardRef,
+  memo,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
 import { sidebarCollapsedAtom } from '../../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
-import {
-  draggingIdsFamily,
-  emptyActiveIdAtom,
-  emptyTreeFocusedAtom,
-  focusIdsFamily,
-  hoveredParentFamily,
-  selectedIdsFamily,
-} from './atoms';
+import { draggingIdsFamily, focusIdsFamily, hoveredParentFamily, selectedIdsFamily } from './atoms';
 import type { SelectableTreeNode, TreeNode } from './common';
 import { computeSideForDragMove, equalSubtree, getSelectedItems, hasAncestor } from './common';
 import { TreeDragOverlay } from './TreeDragOverlay';
@@ -39,8 +41,6 @@ export interface TreeProps<T extends { id: string }> {
   renderItem: (item: T) => ReactNode;
   renderLeftSlot?: (item: T) => ReactNode;
   className?: string;
-  activeIdAtom?: Atom<string | null>;
-  treeFocusedAtom?: Atom<boolean>;
   onActivate?: (items: T[]) => void;
   onDragEnd?: (opt: { items: T[]; parent: T; children: T[]; insertAt: number }) => void;
   getEditOptions?: (item: T) => {
@@ -50,22 +50,54 @@ export interface TreeProps<T extends { id: string }> {
   };
 }
 
-function Tree_<T extends { id: string }>({
-  activeIdAtom = emptyActiveIdAtom,
-  treeFocusedAtom = emptyTreeFocusedAtom,
-  className,
-  getContextMenu,
-  getEditOptions,
-  getItemKey,
-  onActivate,
-  onDragEnd,
-  renderItem,
-  renderLeftSlot,
-  root,
-  treeId,
-}: TreeProps<T>) {
+export interface TreeHandle {
+  focus: () => void;
+  selectItem: (id: string) => void;
+}
+
+function TreeInner<T extends { id: string }>(
+  {
+    className,
+    getContextMenu,
+    getEditOptions,
+    getItemKey,
+    onActivate,
+    onDragEnd,
+    renderItem,
+    renderLeftSlot,
+    root,
+    treeId,
+  }: TreeProps<T>,
+  ref: Ref<TreeHandle>,
+) {
   const treeRef = useRef<HTMLDivElement>(null);
   const { treeParentMap, selectableItems } = useTreeParentMap(root, getItemKey);
+  const [isFocused, setIsFocused] = useState<boolean>(false);
+
+  const tryFocus = useCallback(() => {
+    treeRef.current?.querySelector<HTMLButtonElement>('.tree-item button[tabindex="0"]')?.focus();
+  }, []);
+
+  const setSelected = useCallback(
+    function setSelected(ids: string[], focus: boolean) {
+      jotaiStore.set(selectedIdsFamily(treeId), ids);
+      // TODO: Figure out a better way than timeout
+      if (focus) setTimeout(tryFocus, 50);
+    },
+    [treeId, tryFocus],
+  );
+
+  useImperativeHandle(
+    ref,
+    (): TreeHandle => ({
+      focus: tryFocus,
+      selectItem(id) {
+        setSelected([id], false);
+        jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
+      },
+    }),
+    [setSelected, treeId, tryFocus],
+  );
 
   const handleGetContextMenu = useMemo(() => {
     if (getContextMenu == null) return;
@@ -87,18 +119,19 @@ function Tree_<T extends { id: string }>({
 
   const handleSelect = useCallback<NonNullable<TreeItemProps<T>['onClick']>>(
     (item, { shiftKey, metaKey, ctrlKey }) => {
-      // jotaiStore.set(treeFocusedAtom, true);
-      jotaiStore.set(focusIdsFamily(treeId), (prev) => ({ ...prev, lastId: item.id }));
       const anchorSelectedId = jotaiStore.get(focusIdsFamily(treeId)).anchorId;
       const selectedIdsAtom = selectedIdsFamily(treeId);
       const selectedIds = jotaiStore.get(selectedIdsAtom);
 
+      // Mark item as the last one selected
+      jotaiStore.set(focusIdsFamily(treeId), (prev) => ({ ...prev, lastId: item.id }));
+
       if (shiftKey) {
-        // Nothing was selected yet, so just select this item
         const anchorIndex = selectableItems.findIndex((i) => i.node.item.id === anchorSelectedId);
         const currIndex = selectableItems.findIndex((v) => v.node.item.id === item.id);
+        // Nothing was selected yet, so just select this item
         if (selectedIds.length === 0 || anchorIndex === -1 || currIndex === -1) {
-          jotaiStore.set(selectedIdsAtom, [item.id]);
+          setSelected([item.id], true);
           jotaiStore.set(focusIdsFamily(treeId), (prev) => ({ ...prev, anchorId: item.id }));
           return;
         }
@@ -106,52 +139,30 @@ function Tree_<T extends { id: string }>({
         if (currIndex > anchorIndex) {
           // Selecting down
           const itemsToSelect = selectableItems.slice(anchorIndex, currIndex + 1);
-          jotaiStore.set(
-            selectedIdsAtom,
-            itemsToSelect.map((v) => v.node.item.id),
-          );
+          setSelected(itemsToSelect.map((v) => v.node.item.id), true);
         } else if (currIndex < anchorIndex) {
           // Selecting up
           const itemsToSelect = selectableItems.slice(currIndex, anchorIndex + 1);
-          jotaiStore.set(
-            selectedIdsAtom,
-            itemsToSelect.map((v) => v.node.item.id),
-          );
+          setSelected(itemsToSelect.map((v) => v.node.item.id), true);
         } else {
-          jotaiStore.set(selectedIdsAtom, [item.id]);
+          setSelected([item.id], true);
         }
-      } else if (metaKey || ctrlKey) {
+      } else if (type() === 'macos' ? metaKey : ctrlKey) {
         const withoutCurr = selectedIds.filter((id) => id !== item.id);
         if (withoutCurr.length === selectedIds.length) {
           // It wasn't in there, so add it
-          jotaiStore.set(selectedIdsAtom, [...selectedIds, item.id]);
+          setSelected([...selectedIds, item.id], true);
         } else {
           // It was in there, so remove it
-          jotaiStore.set(selectedIdsAtom, withoutCurr);
+          setSelected(withoutCurr, true);
         }
       } else {
         // Select single
-        jotaiStore.set(selectedIdsAtom, [item.id]);
+        setSelected([item.id], true);
         jotaiStore.set(focusIdsFamily(treeId), (prev) => ({ ...prev, anchorId: item.id }));
       }
     },
-    [selectableItems, treeId],
-  );
-
-  useEffect(
-    function selectItemOnFocus() {
-      return jotaiStore.sub(treeFocusedAtom, () => {
-        const focused = jotaiStore.get(treeFocusedAtom);
-        if (!focused) return;
-
-        const activeId = jotaiStore.get(activeIdAtom);
-        const item = selectableItems.find((i) => i.node.item.id === activeId)?.node;
-        if (item == null) return;
-
-        handleSelect(item.item, { shiftKey: false, metaKey: false, ctrlKey: false });
-      });
-    },
-    [activeIdAtom, handleSelect, selectableItems, treeFocusedAtom],
+    [selectableItems, setSelected, treeId],
   );
 
   const handleClick = useCallback<NonNullable<TreeItemProps<T>['onClick']>>(
@@ -170,7 +181,7 @@ function Tree_<T extends { id: string }>({
   useKey(
     'ArrowUp',
     (e) => {
-      if (!jotaiStore.get(treeFocusedAtom)) return;
+      if (!treeRef.current?.contains(document.activeElement)) return;
       e.preventDefault();
       const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
       const index = selectableItems.findIndex((i) => i.node.item.id === lastSelectedId);
@@ -184,7 +195,7 @@ function Tree_<T extends { id: string }>({
   useKey(
     'ArrowDown',
     (e) => {
-      if (!jotaiStore.get(treeFocusedAtom)) return;
+      if (!treeRef.current?.contains(document.activeElement)) return;
       e.preventDefault();
       const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
       const index = selectableItems.findIndex((i) => i.node.item.id === lastSelectedId);
@@ -196,12 +207,13 @@ function Tree_<T extends { id: string }>({
   );
 
   useKeyPressEvent('Enter', async () => {
-    if (!jotaiStore.get(treeFocusedAtom)) return;
+    if (!treeRef.current?.contains(document.activeElement)) return;
     const items = getSelectedItems(treeId, selectableItems);
     onActivate?.(items);
   });
 
   useKeyPressEvent('Escape', async () => {
+    if (!treeRef.current?.contains(document.activeElement)) return;
     clearDragState();
   });
 
@@ -347,15 +359,21 @@ function Tree_<T extends { id: string }>({
     depth: 0,
     getItemKey: getItemKey,
     getContextMenu: handleGetContextMenu,
-    treeFocusedAtom,
     onClick: handleClick,
     getEditOptions,
     renderItem: renderItem,
     renderLeftSlot: renderLeftSlot,
   };
 
+  const handleFocus = useCallback(function handleFocus() {
+    setIsFocused(true);
+  }, []);
+
+  const handleBlur = useCallback(function handleBlur() {
+    setIsFocused(false);
+  }, []);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const focused = useAtomValue(treeFocusedAtom);
 
   return (
     <DndContext
@@ -370,22 +388,20 @@ function Tree_<T extends { id: string }>({
     >
       <div
         ref={treeRef}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         className={classNames(
           className,
           'outline-none h-full',
           'overflow-y-auto overflow-x-hidden',
           'grid grid-rows-[auto_1fr]',
-          focused
-            ? '[&_.tree-item--selected]:bg-surface-active'
-            : '[&_.tree-item--selected]:bg-surface-highlight',
+          ' [&_.tree-item.selected]:text-text',
+          isFocused
+            ? '[&_.tree-item.selected]:bg-surface-active'
+            : '[&_.tree-item.selected]:bg-surface-highlight',
         )}
       >
-        <TreeItemList
-          node={root}
-          treeId={treeId}
-          activeIdAtom={activeIdAtom}
-          {...treeItemListProps}
-        />
+        <TreeItemList node={root} treeId={treeId} {...treeItemListProps} />
         {/* Assign root ID so we can reuse our same move/end logic */}
         <DropRegionAfterList id={root.item.id} />
         <TreeDragOverlay
@@ -399,6 +415,11 @@ function Tree_<T extends { id: string }>({
     </DndContext>
   );
 }
+
+// 1) Preserve generics through forwardRef:
+const Tree_ = forwardRef(TreeInner) as <T extends { id: string }>(
+  props: TreeProps<T> & RefAttributes<TreeHandle>,
+) => ReactElement | null;
 
 export const Tree = memo(
   Tree_,

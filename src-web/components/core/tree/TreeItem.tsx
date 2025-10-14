@@ -2,11 +2,10 @@ import type { DragMoveEvent } from '@dnd-kit/core';
 import { useDndMonitor, useDraggable, useDroppable } from '@dnd-kit/core';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import { selectAtom } from 'jotai/utils';
 import type { MouseEvent, PointerEvent } from 'react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { jotaiStore } from '../../../lib/jotai';
-import type { ContextMenuProps } from '../Dropdown';
+import type { ContextMenuProps, DropdownItem } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
 import {
@@ -15,6 +14,7 @@ import {
   isLastFocusedFamily,
   isParentHoveredFamily,
   isSelectedFamily,
+  selectedIdsFamily,
 } from './atoms';
 import type { TreeNode } from './common';
 import { computeSideForDragMove } from './common';
@@ -28,14 +28,12 @@ interface OnClickEvent {
 
 export type TreeItemProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'renderItem' | 'renderLeftSlot' | 'treeId' | 'treeFocusedAtom' | 'getEditOptions'
+  'renderItem' | 'renderLeftSlot' | 'treeId' | 'getEditOptions'
 > & {
   node: TreeNode<T>;
   className?: string;
   onClick?: (item: T, e: OnClickEvent) => void;
   getContextMenu?: (item: T) => ContextMenuProps['items'];
-  treeFocusedAtom: NonNullable<TreeProps<T>['treeFocusedAtom']>;
-  activeIdAtom: NonNullable<TreeProps<T>['activeIdAtom']>;
 };
 
 const HOVER_CLOSED_FOLDER_DELAY = 800;
@@ -45,8 +43,6 @@ export function TreeItem<T extends { id: string }>({
   node,
   renderItem,
   renderLeftSlot,
-  activeIdAtom,
-  // treeFocusedAtom,
   getContextMenu,
   onClick,
   getEditOptions,
@@ -62,43 +58,23 @@ export function TreeItem<T extends { id: string }>({
   const [editing, setEditing] = useState<boolean>(false);
   const [isDropHover, setIsDropHover] = useState<boolean>(false);
 
-  const isActive = useAtomValue(
-    useMemo(() => {
-      const source = activeIdAtom;
-      // Only notify when the boolean changes
-      return selectAtom(source, (activeId) => activeId === node.item.id, Object.is);
-    }, [activeIdAtom, node.item.id]),
-  );
-
-  // useEffect(
-  //   function focusWhenSidebarFocused() {
-  //     return jotaiStore.sub(treeFocusedAtom, () => {
-  //       const focused = jotaiStore.get(treeFocusedAtom);
-  //       const activeId = jotaiStore.get(activeIdAtom);
-  //       const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
-  //       if (lastSelectedId) {
-  //         console.log('WAS FOCUSED', draggableRef.current, focused, {
-  //           lastSelectedId,
-  //           activeId,
-  //           id: node.item.id,
-  //         });
-  //         draggableRef.current?.focus();
-  //       }
-  //     });
-  //   },
-  //   [activeIdAtom, node.item.id, treeFocusedAtom, treeId],
-  // );
+  const [showContextMenu, setShowContextMenu] = useState<{
+    items: DropdownItem[];
+    x: number;
+    y: number;
+  } | null>(null);
 
   useEffect(
     function focusWhenSelectionChanges() {
       return jotaiStore.sub(focusIdsFamily(treeId), () => {
         const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
+        if (showContextMenu == null) return;
         if (lastSelectedId === node.item.id) {
-          draggableRef.current?.focus();
+          // draggableRef.current?.focus();
         }
       });
     },
-    [node.item.id, treeId],
+    [node.item.id, showContextMenu, treeId],
   );
 
   useEffect(
@@ -117,9 +93,12 @@ export function TreeItem<T extends { id: string }>({
     [node, onClick],
   );
 
-  const toggleCollapsed = useCallback(() => {
-    jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
-  }, [node.item.id, treeId]);
+  const toggleCollapsed = useCallback(
+    function toggleCollapsed() {
+      jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
+    },
+    [node.item.id, treeId],
+  );
 
   const handleSubmitNameEdit = useCallback(
     async function submitNameEdit(el: HTMLInputElement) {
@@ -168,12 +147,6 @@ export function TreeItem<T extends { id: string }>({
     }
   }, [getEditOptions, node.children, toggleCollapsed]);
 
-  const { attributes, listeners, setNodeRef: setDraggableRef } = useDraggable({ id: node.item.id });
-
-  const { setNodeRef: setDroppableRef } = useDroppable({
-    id: node.item.id,
-  });
-
   const clearHoverTimer = () => {
     if (startedHoverTimeout.current) {
       setIsDropHover(false); // NEW
@@ -201,19 +174,42 @@ export function TreeItem<T extends { id: string }>({
     },
   });
 
-  const [showContextMenu, setShowContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
   const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
-  const handleContextMenu = useCallback((e: MouseEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setShowContextMenu({ x: e.clientX, y: e.clientY });
+  const handleContextMenu = useCallback(
+    (e: MouseEvent<HTMLDivElement>) => {
+      if (getContextMenu == null) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      const items = getContextMenu(node.item);
+      const isSelected = jotaiStore.get(isSelectedFamily({ treeId, itemId: node.item.id }));
+      console.log(
+        'HANDLE CONTEXT MENU',
+        isSelected,
+        node.item.id,
+        jotaiStore.get(selectedIdsFamily(treeId)),
+      );
+      if (!isSelected) {
+        // handleClick(e);
+      }
+      setShowContextMenu({ items, x: e.clientX, y: e.clientY });
+    },
+    [getContextMenu, node.item, treeId],
+  );
+
+  const handleCloseContextMenu = useCallback(() => {
+    setShowContextMenu(null);
   }, []);
 
+  const { attributes, listeners, setNodeRef: setDraggableRef } = useDraggable({ id: node.item.id });
+
+  const { setNodeRef: setDroppableRef } = useDroppable({
+    id: node.item.id,
+  });
+
   const handlePointerDown = useCallback(
-    (e: PointerEvent<HTMLButtonElement>) => {
+    function handlePointerDown(e: PointerEvent<HTMLButtonElement>) {
+      console.log('HANDLE POINTER DOWN', e);
       const handleByTree = e.metaKey || e.ctrlKey || e.shiftKey;
       if (!handleByTree) {
         listeners?.onPointerDown?.(e);
@@ -231,25 +227,24 @@ export function TreeItem<T extends { id: string }>({
     [setDraggableRef, setDroppableRef],
   );
 
-  const handleCloseContextMenu = useCallback(() => {
-    setShowContextMenu(null);
-  }, []);
-
   return (
     <div
       ref={ref}
       onContextMenu={handleContextMenu}
       className={classNames(
         className,
-        isSelected && 'tree-item--selected',
+        'tree-item',
+        isSelected && 'selected',
+        'text-text-subtle',
+        'focus-within:ring-1 focus-within:ring-border-focus',
         'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded px-2',
         editing && 'ring-1 focus-within:ring-focus',
         isDropHover && 'relative z-10 ring-2 ring-primary animate-blinkRing',
       )}
     >
-      {showContextMenu && getContextMenu && (
+      {showContextMenu && (
         <ContextMenu
-          items={getContextMenu(node.item)}
+          items={showContextMenu.items}
           triggerPosition={showContextMenu}
           onClose={handleCloseContextMenu}
         />
@@ -280,12 +275,7 @@ export function TreeItem<T extends { id: string }>({
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         disabled={editing}
-        className={classNames(
-          'flex items-center gap-2 h-full whitespace-nowrap',
-          isSelected || isActive || isDropHover || isHoveredAsParent
-            ? 'text-text'
-            : 'text-text-subtle',
-        )}
+        className="focus:outline-none flex items-center gap-2 h-full whitespace-nowrap"
         {...attributes}
         {...listeners}
         tabIndex={isLastSelected ? 0 : -1}

@@ -14,7 +14,7 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
   'renderItem' | 'renderLeftSlot' | 'treeId' | 'getItemKey' | 'getEditOptions'
 > &
-  Pick<TreeItemProps<T>, 'onClick' | 'activeIdAtom' | 'getContextMenu' | 'treeFocusedAtom'> & {
+  Pick<TreeItemProps<T>, 'onClick' | 'getContextMenu'> & {
     node: TreeNode<T>;
     depth: number;
     style?: CSSProperties;
@@ -22,7 +22,6 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
   };
 
 function TreeItemList_<T extends { id: string }>({
-  activeIdAtom,
   className,
   depth,
   getContextMenu,
@@ -33,7 +32,6 @@ function TreeItemList_<T extends { id: string }>({
   renderItem,
   renderLeftSlot,
   style,
-  treeFocusedAtom,
   treeId,
 }: TreeItemListProps<T>) {
   const isHovered = useAtomValue(isParentHoveredFamily({ treeId, parentId: node.item.id }));
@@ -54,8 +52,6 @@ function TreeItemList_<T extends { id: string }>({
             <TreeItemList
               treeId={treeId}
               node={child}
-              activeIdAtom={activeIdAtom}
-              treeFocusedAtom={treeFocusedAtom}
               renderItem={renderItem}
               renderLeftSlot={renderLeftSlot}
               onClick={onClick}
@@ -80,8 +76,6 @@ function TreeItemList_<T extends { id: string }>({
       <TreeItem
         treeId={treeId}
         node={node}
-        activeIdAtom={activeIdAtom}
-        treeFocusedAtom={treeFocusedAtom}
         getContextMenu={getContextMenu}
         renderItem={renderItem}
         renderLeftSlot={renderLeftSlot}
