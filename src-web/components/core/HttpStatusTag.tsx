@@ -1,7 +1,5 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
-import { httpResponsesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
 
 interface Props {
   response: HttpResponse;
@@ -39,15 +37,4 @@ export function HttpStatusTag({ response, className, showReason, short }: Props)
       {label} {showReason && 'statusReason' in response ? response.statusReason : null}
     </span>
   );
-}
-
-export function HttpStatusTagForResponse({
-  responseId,
-  ...props
-}: Omit<Props, 'response'> & { responseId: string }) {
-  const response = useAtomValue(httpResponsesAtom).find((r) => r.id === responseId);
-  if (response == null) return null;
-  console.log("RENDER RESPONSE", response.elapsed);
-
-  return <HttpStatusTag response={response} {...props} />;
 }

@@ -99,7 +99,7 @@ function SidebarInnerItem({ item }: { treeId: string; item: Model }) {
             ...get(websocketConnectionsAtom),
           ]),
           (responses) => responses.find((r) => r.requestId === item.id),
-          (a, b) => a?.state === b?.state, // Only update when the response state changes updated
+          (a, b) => a?.state === b?.state && a?.id === b?.id, // Only update when the response state changes updated
         ),
       [item.id],
     ),
