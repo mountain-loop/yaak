@@ -9,7 +9,6 @@ import type { ContextMenuProps, DropdownItem } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
 import {
-  focusIdsFamily,
   isCollapsedFamily,
   isLastFocusedFamily,
   isParentHoveredFamily,
@@ -27,7 +26,7 @@ interface OnClickEvent {
 
 export type TreeItemProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'renderItem' | 'renderLeftSlot' | 'treeId' | 'getEditOptions'
+  'ItemInner' | 'ItemLeftSlot' | 'treeId' | 'getEditOptions'
 > & {
   node: TreeNode<T>;
   className?: string;
@@ -40,8 +39,8 @@ const HOVER_CLOSED_FOLDER_DELAY = 800;
 export function TreeItem<T extends { id: string }>({
   treeId,
   node,
-  renderItem,
-  renderLeftSlot,
+  ItemInner,
+  ItemLeftSlot,
   getContextMenu,
   onClick,
   getEditOptions,
@@ -49,32 +48,19 @@ export function TreeItem<T extends { id: string }>({
 }: TreeItemProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
   const draggableRef = useRef<HTMLButtonElement>(null);
-  // const treeFocused = useAtomValue(treeFocusedAtom);
   const isSelected = useAtomValue(isSelectedFamily({ treeId, itemId: node.item.id }));
   const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
   const isHoveredAsParent = useAtomValue(isParentHoveredFamily({ treeId, parentId: node.item.id }));
   const isLastSelected = useAtomValue(isLastFocusedFamily({ treeId, itemId: node.item.id }));
   const [editing, setEditing] = useState<boolean>(false);
   const [isDropHover, setIsDropHover] = useState<boolean>(false);
+  const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
 
   const [showContextMenu, setShowContextMenu] = useState<{
     items: DropdownItem[];
     x: number;
     y: number;
   } | null>(null);
-
-  useEffect(
-    function focusWhenSelectionChanges() {
-      return jotaiStore.sub(focusIdsFamily(treeId), () => {
-        const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
-        if (showContextMenu == null) return;
-        if (lastSelectedId === node.item.id) {
-          // draggableRef.current?.focus();
-        }
-      });
-    },
-    [node.item.id, showContextMenu, treeId],
-  );
 
   useEffect(
     function scrollIntoViewWhenSelected() {
@@ -141,7 +127,7 @@ export function TreeItem<T extends { id: string }>({
     const isFolder = node.children != null;
     if (isFolder) {
       toggleCollapsed();
-    } else if (getEditOptions) {
+    } else if (getEditOptions != null) {
       setEditing(true);
     }
   }, [getEditOptions, node.children, toggleCollapsed]);
@@ -173,7 +159,6 @@ export function TreeItem<T extends { id: string }>({
     },
   });
 
-  const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
   const handleContextMenu = useCallback(
     async (e: MouseEvent<HTMLDivElement>) => {
       if (getContextMenu == null) return;
@@ -191,14 +176,10 @@ export function TreeItem<T extends { id: string }>({
   }, []);
 
   const { attributes, listeners, setNodeRef: setDraggableRef } = useDraggable({ id: node.item.id });
-
-  const { setNodeRef: setDroppableRef } = useDroppable({
-    id: node.item.id,
-  });
+  const { setNodeRef: setDroppableRef } = useDroppable({ id: node.item.id });
 
   const handlePointerDown = useCallback(
     function handlePointerDown(e: PointerEvent<HTMLButtonElement>) {
-      console.log('HANDLE POINTER DOWN', e);
       const handleByTree = e.metaKey || e.ctrlKey || e.shiftKey;
       if (!handleByTree) {
         listeners?.onPointerDown?.(e);
@@ -268,22 +249,24 @@ export function TreeItem<T extends { id: string }>({
         {...listeners}
         tabIndex={isLastSelected ? 0 : -1}
       >
-        {renderLeftSlot?.(node.item)}
-        {getEditOptions && editing
-          ? (() => {
-              const { defaultValue, placeholder } = getEditOptions(node.item);
-              return (
-                <input
-                  ref={handleEditFocus}
-                  defaultValue={defaultValue}
-                  placeholder={placeholder}
-                  className="bg-transparent outline-none w-full cursor-text"
-                  onBlur={handleEditBlur}
-                  onKeyDown={handleEditKeyDown}
-                />
-              );
-            })()
-          : renderItem(node.item)}
+        {ItemLeftSlot != null && <ItemLeftSlot treeId={treeId} item={node.item} />}
+        {getEditOptions != null && editing ? (
+          (() => {
+            const { defaultValue, placeholder } = getEditOptions(node.item);
+            return (
+              <input
+                ref={handleEditFocus}
+                defaultValue={defaultValue}
+                placeholder={placeholder}
+                className="bg-transparent outline-none w-full cursor-text"
+                onBlur={handleEditBlur}
+                onKeyDown={handleEditKeyDown}
+              />
+            );
+          })()
+        ) : (
+          <ItemInner treeId={treeId} item={node.item} />
+        )}
       </button>
     </div>
   );

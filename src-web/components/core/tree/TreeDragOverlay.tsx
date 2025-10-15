@@ -10,12 +10,13 @@ export function TreeDragOverlay<T extends { id: string }>({
   root,
   selectableItems,
   getItemKey,
-  renderItem,
+  ItemInner,
+  ItemLeftSlot,
 }: {
   treeId: string;
   root: TreeNode<T>;
   selectableItems: SelectableTreeNode<T>[];
-} & Pick<TreeProps<T>, 'getItemKey' | 'renderItem'>) {
+} & Pick<TreeProps<T>, 'getItemKey' | 'ItemInner' | 'ItemLeftSlot'>) {
   const draggingItems = useAtomValue(draggingIdsFamily(treeId));
   return (
     <DragOverlay dropAnimation={null}>
@@ -33,7 +34,8 @@ export function TreeDragOverlay<T extends { id: string }>({
           }),
         }}
         getItemKey={getItemKey}
-        renderItem={renderItem}
+        ItemInner={ItemInner}
+        ItemLeftSlot={ItemLeftSlot}
         depth={0}
       />
     </DragOverlay>

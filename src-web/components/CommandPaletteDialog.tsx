@@ -18,7 +18,6 @@ import { useDebouncedState } from '../hooks/useDebouncedState';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import type { HotkeyAction } from '../hooks/useHotKey';
-import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { useRecentRequests } from '../hooks/useRecentRequests';
@@ -430,9 +429,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
                 active={v.key === selectedItem?.key}
                 key={v.key}
                 onClick={() => handleSelectAndClose(v.onSelect)}
-                rightSlot={
-                  v.action && <CommandPaletteAction action={v.action} onAction={v.onSelect} />
-                }
+                rightSlot={v.action && <CommandPaletteAction action={v.action} />}
               >
                 {v.label}
               </CommandPaletteItem>
@@ -478,13 +475,6 @@ function CommandPaletteItem({
   );
 }
 
-function CommandPaletteAction({
-  action,
-  onAction,
-}: {
-  action: HotkeyAction;
-  onAction: () => void;
-}) {
-  useHotKey(action, onAction);
+function CommandPaletteAction({ action }: { action: HotkeyAction }) {
   return <HotKey className="ml-auto" action={action} />;
 }

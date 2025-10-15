@@ -1,5 +1,6 @@
 import { useSubscribeActiveWorkspaceId } from '../hooks/useActiveWorkspace';
 import { useActiveWorkspaceChangedToast } from '../hooks/useActiveWorkspaceChangedToast';
+import { useSubscribeHotKeys } from '../hooks/useHotKey';
 import { useSubscribeHttpAuthentication } from '../hooks/useHttpAuthentication';
 import { useSyncFontSizeSetting } from '../hooks/useSyncFontSizeSetting';
 import { useSyncWorkspaceChildModels } from '../hooks/useSyncWorkspaceChildModels';
@@ -18,6 +19,7 @@ export function GlobalHooks() {
 
   // Other useful things
   useActiveWorkspaceChangedToast();
+  useSubscribeHotKeys();
 
   return null;
 }

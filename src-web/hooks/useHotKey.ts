@@ -1,7 +1,9 @@
 import { type } from '@tauri-apps/plugin-os';
 import { debounce } from '@yaakapp-internal/lib';
-import { useEffect, useRef } from 'react';
+import { atom } from 'jotai';
+import { useEffect } from 'react';
 import { capitalize } from '../lib/capitalize';
+import { jotaiStore } from '../lib/jotai';
 
 const HOLD_KEYS = ['Shift', 'Control', 'Command', 'Alt', 'Meta'];
 
@@ -71,108 +73,136 @@ const layoutInsensitiveKeys = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 
 
 export const hotkeyActions: HotkeyAction[] = Object.keys(hotkeys) as (keyof typeof hotkeys)[];
 
-interface Options {
-  enable?: boolean;
+export type HotKeyOptions = {
+  enable?: boolean | (() => boolean);
+  priority?: number;
+};
+
+interface Callback {
+  action: HotkeyAction;
+  callback: (e: KeyboardEvent) => void;
+  options: HotKeyOptions;
 }
+
+const callbacksAtom = atom<Callback[]>([]);
+const currentKeysAtom = atom<Set<string>>(new Set([]));
+export const sortedCallbacksAtom = atom((get) =>
+  [...get(callbacksAtom)].sort((a, b) => (b.options.priority ?? 0) - (a.options.priority ?? 0)),
+);
+
+const clearCurrentKeysDebounced = debounce(() => {
+  jotaiStore.set(currentKeysAtom, new Set([]));
+}, 5000);
 
 export function useHotKey(
   action: HotkeyAction | null,
   callback: (e: KeyboardEvent) => void,
-  options: Options = {},
+  options: HotKeyOptions = {},
 ) {
-  const currentKeys = useRef<Set<string>>(new Set());
-  const callbackRef = useRef(callback);
-
   useEffect(() => {
-    callbackRef.current = callback;
-  }, [callback]);
+    if (action == null) return;
+    jotaiStore.set(callbacksAtom, (prev) => {
+      const without = prev.filter((cb) => {
+        const isTheSame = cb.action === action && cb.options.priority === options.priority;
+        return !isTheSame;
+      });
+      const newCb: Callback = { action, callback, options };
+      return [...without, newCb];
+    });
+  }, [action, callback, options]);
+}
 
+export function useSubscribeHotKeys() {
   useEffect(() => {
-    // Sometimes the keyup event doesn't fire (eg, cmd+Tab), so we clear the keys after a timeout
-    const clearCurrentKeys = debounce(() => currentKeys.current.clear(), 5000);
+    document.addEventListener('keyup', handleKeyUp, { capture: true });
+    document.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, { capture: true });
+      document.removeEventListener('keyup', handleKeyUp, { capture: true });
+    };
+  }, []);
+}
 
-    const down = (e: KeyboardEvent) => {
-      if (options.enable === false) {
-        return;
-      }
+function handleKeyUp(e: KeyboardEvent) {
+  const keyToRemove = layoutInsensitiveKeys.includes(e.code) ? e.code : e.key;
+  const currentKeys = new Set(jotaiStore.get(currentKeysAtom));
+  currentKeys.delete(keyToRemove);
 
-      // Don't add key if not holding modifier
-      const isValidKeymapKey =
-        e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.key === 'Backspace' || e.key === 'Delete';
-      if (!isValidKeymapKey) {
-        return;
-      }
+  // Clear all keys if no longer holding modifier
+  // HACK: This is to get around the case of DOWN SHIFT -> DOWN : -> UP SHIFT -> UP ;
+  //  As you see, the ":" is not removed because it turned into ";" when shift was released
+  const isHoldingModifier = e.altKey || e.ctrlKey || e.metaKey || e.shiftKey;
+  if (!isHoldingModifier) {
+    currentKeys.clear();
+  }
 
-      // Don't add hold keys
-      if (HOLD_KEYS.includes(e.key)) {
-        return;
-      }
+  jotaiStore.set(currentKeysAtom, currentKeys);
+}
 
-      const keyToAdd = layoutInsensitiveKeys.includes(e.code) ? e.code : e.key;
-      currentKeys.current.add(keyToAdd);
+function handleKeyDown(e: KeyboardEvent) {
+  // Don't add key if not holding modifier
+  const isValidKeymapKey =
+    e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.key === 'Backspace' || e.key === 'Delete';
+  if (!isValidKeymapKey) {
+    return;
+  }
 
-      const currentKeysWithModifiers = new Set(currentKeys.current);
-      if (e.altKey) currentKeysWithModifiers.add('Alt');
-      if (e.ctrlKey) currentKeysWithModifiers.add('Control');
-      if (e.metaKey) currentKeysWithModifiers.add('Meta');
-      if (e.shiftKey) currentKeysWithModifiers.add('Shift');
+  // Don't add hold keys
+  if (HOLD_KEYS.includes(e.key)) {
+    return;
+  }
 
-      for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
-        if (
-          (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
-          currentKeysWithModifiers.size === 1 &&
-          currentKeysWithModifiers.has('Backspace')
-        ) {
-          // Don't support Backspace-only modifiers within input fields. This is fairly brittle, so maybe there's a
-          // better way to do stuff like this in the future.
+  const keyToAdd = layoutInsensitiveKeys.includes(e.code) ? e.code : e.key;
+  const currentKeys = new Set(jotaiStore.get(currentKeysAtom));
+  currentKeys.add(keyToAdd);
+
+  const currentKeysWithModifiers = new Set(currentKeys);
+  if (e.altKey) currentKeysWithModifiers.add('Alt');
+  if (e.ctrlKey) currentKeysWithModifiers.add('Control');
+  if (e.metaKey) currentKeysWithModifiers.add('Meta');
+  if (e.shiftKey) currentKeysWithModifiers.add('Shift');
+  console.log('KEY DOWN', currentKeysWithModifiers);
+
+  for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
+    if (
+      (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
+      currentKeysWithModifiers.size === 1 &&
+      currentKeysWithModifiers.has('Backspace')
+    ) {
+      // Don't support Backspace-only modifiers within input fields. This is fairly brittle, so maybe there's a
+      // better way to do stuff like this in the future.
+      continue;
+    }
+
+    for (const hkKey of hkKeys) {
+      for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
+        const enable = typeof options.enable === 'function' ? options.enable() : options.enable;
+        if (enable === false) {
+          continue;
+        }
+        if (hkAction !== action) {
           continue;
         }
 
-        for (const hkKey of hkKeys) {
-          if (hkAction !== action) {
-            continue;
-          }
-
-          const keys = hkKey.split('+').map(resolveHotkeyKey);
-          if (
-            keys.length === currentKeysWithModifiers.size &&
-            keys.every((key) => currentKeysWithModifiers.has(key))
-          ) {
-            e.preventDefault();
-            e.stopPropagation();
-            callbackRef.current(e);
-            currentKeys.current.clear();
-          }
+        console.log('CHECKING', action, options.priority);
+        const keys = hkKey.split('+').map(resolveHotkeyKey);
+        if (
+          keys.length === currentKeysWithModifiers.size &&
+          keys.every((key) => currentKeysWithModifiers.has(key))
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          callback(e);
+          jotaiStore.set(currentKeysAtom, new Set([]));
+          console.log('EXECUTING', action, options);
+          clearCurrentKeysDebounced();
+          return;
         }
       }
+    }
+  }
 
-      clearCurrentKeys();
-    };
-
-    const up = (e: KeyboardEvent) => {
-      if (options.enable === false) {
-        return;
-      }
-
-      const keyToRemove = layoutInsensitiveKeys.includes(e.code) ? e.code : e.key;
-      currentKeys.current.delete(keyToRemove);
-
-      // Clear all keys if no longer holding modifier
-      // HACK: This is to get around the case of DOWN SHIFT -> DOWN : -> UP SHIFT -> UP ;
-      //  As you see, the ":" is not removed because it turned into ";" when shift was released
-      const isHoldingModifier = e.altKey || e.ctrlKey || e.metaKey || e.shiftKey;
-      if (!isHoldingModifier) {
-        currentKeys.current.clear();
-      }
-    };
-
-    document.addEventListener('keyup', up, { capture: true });
-    document.addEventListener('keydown', down, { capture: true });
-    return () => {
-      document.removeEventListener('keydown', down, { capture: true });
-      document.removeEventListener('keyup', up, { capture: true });
-    };
-  }, [action, options.enable]);
+  clearCurrentKeysDebounced();
 }
 
 export function useHotKeyLabel(action: HotkeyAction): string {

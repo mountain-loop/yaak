@@ -2,7 +2,7 @@ import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakap
 import { duplicateModel } from '@yaakapp-internal/models';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { jotaiStore } from './jotai';
-import { router } from './router';
+import { navigateToRequestOrFolderOrWorkspace } from './setWorkspaceSearchParams';
 
 export async function duplicateRequestOrFolderAndNavigate(
   model: Folder | HttpRequest | GrpcRequest | WebsocketRequest | null,
@@ -15,13 +15,5 @@ export async function duplicateRequestOrFolderAndNavigate(
   const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
   if (workspaceId == null) return;
 
-  await router.navigate({
-    to: '/workspaces/$workspaceId',
-    params: { workspaceId },
-    search: (prev) => {
-      return model.model === 'folder'
-        ? { ...prev, folder_id: null, request_id: newId }
-        : { ...prev, folder_id: newId, request_id: null };
-    },
-  });
+  navigateToRequestOrFolderOrWorkspace(newId, model.model);
 }

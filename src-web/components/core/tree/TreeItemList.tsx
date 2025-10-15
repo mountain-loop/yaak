@@ -12,7 +12,7 @@ import { TreeItem } from './TreeItem';
 
 export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'renderItem' | 'renderLeftSlot' | 'treeId' | 'getItemKey' | 'getEditOptions'
+  'ItemInner' | 'ItemLeftSlot' | 'treeId' | 'getItemKey' | 'getEditOptions'
 > &
   Pick<TreeItemProps<T>, 'onClick' | 'getContextMenu'> & {
     node: TreeNode<T>;
@@ -29,8 +29,8 @@ function TreeItemList_<T extends { id: string }>({
   getItemKey,
   node,
   onClick,
-  renderItem,
-  renderLeftSlot,
+  ItemInner,
+  ItemLeftSlot,
   style,
   treeId,
 }: TreeItemListProps<T>) {
@@ -52,8 +52,8 @@ function TreeItemList_<T extends { id: string }>({
             <TreeItemList
               treeId={treeId}
               node={child}
-              renderItem={renderItem}
-              renderLeftSlot={renderLeftSlot}
+              ItemInner={ItemInner}
+              ItemLeftSlot={ItemLeftSlot}
               onClick={onClick}
               getEditOptions={getEditOptions}
               depth={depth + 1}
@@ -77,8 +77,8 @@ function TreeItemList_<T extends { id: string }>({
         treeId={treeId}
         node={node}
         getContextMenu={getContextMenu}
-        renderItem={renderItem}
-        renderLeftSlot={renderLeftSlot}
+        ItemInner={ItemInner}
+        ItemLeftSlot={ItemLeftSlot}
         onClick={onClick}
         getEditOptions={getEditOptions}
       />

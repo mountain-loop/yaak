@@ -10,18 +10,20 @@ import {
 import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import type { ReactElement, ReactNode, Ref, RefAttributes } from 'react';
+import type { ComponentType, ReactElement, Ref, RefAttributes } from 'react';
 import {
-  useEffect,
   forwardRef,
   memo,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
+import type { HotkeyAction, HotKeyOptions } from '../../../hooks/useHotKey';
+import { useHotKey } from '../../../hooks/useHotKey';
 import { sidebarCollapsedAtom } from '../../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
@@ -38,11 +40,12 @@ export interface TreeProps<T extends { id: string }> {
   treeId: string;
   getItemKey: (item: T) => string;
   getContextMenu?: (items: T[]) => Promise<ContextMenuProps['items']>;
-  renderItem: (item: T) => ReactNode;
-  renderLeftSlot?: (item: T) => ReactNode;
+  ItemInner: ComponentType<{ treeId: string; item: T }>;
+  ItemLeftSlot?: ComponentType<{ treeId: string; item: T }>;
   className?: string;
   onActivate?: (items: T[]) => void;
   onDragEnd?: (opt: { items: T[]; parent: T; children: T[]; insertAt: number }) => void;
+  hotkeys?: { actions: Partial<Record<HotkeyAction, (items: T[]) => void>> } & HotKeyOptions;
   getEditOptions?: (item: T) => {
     defaultValue: string;
     placeholder?: string;
@@ -61,10 +64,11 @@ function TreeInner<T extends { id: string }>(
     getContextMenu,
     getEditOptions,
     getItemKey,
+    hotkeys,
     onActivate,
     onDragEnd,
-    renderItem,
-    renderLeftSlot,
+    ItemInner,
+    ItemLeftSlot,
     root,
     treeId,
   }: TreeProps<T>,
@@ -139,11 +143,17 @@ function TreeInner<T extends { id: string }>(
         if (currIndex > anchorIndex) {
           // Selecting down
           const itemsToSelect = selectableItems.slice(anchorIndex, currIndex + 1);
-          setSelected(itemsToSelect.map((v) => v.node.item.id), true);
+          setSelected(
+            itemsToSelect.map((v) => v.node.item.id),
+            true,
+          );
         } else if (currIndex < anchorIndex) {
           // Selecting up
           const itemsToSelect = selectableItems.slice(currIndex, anchorIndex + 1);
-          setSelected(itemsToSelect.map((v) => v.node.item.id), true);
+          setSelected(
+            itemsToSelect.map((v) => v.node.item.id),
+            true,
+          );
         } else {
           setSelected([item.id], true);
         }
@@ -357,12 +367,12 @@ function TreeInner<T extends { id: string }>(
     'node' | 'treeId' | 'activeIdAtom' | 'hoveredParent' | 'hoveredIndex'
   > = {
     depth: 0,
-    getItemKey: getItemKey,
+    getItemKey,
     getContextMenu: handleGetContextMenu,
     onClick: handleClick,
     getEditOptions,
-    renderItem: renderItem,
-    renderLeftSlot: renderLeftSlot,
+    ItemInner,
+    ItemLeftSlot,
   };
 
   const handleFocus = useCallback(function handleFocus() {
@@ -376,43 +386,46 @@ function TreeInner<T extends { id: string }>(
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={pointerWithin}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragCancel={clearDragState}
-      onDragAbort={clearDragState}
-      onDragMove={handleDragMove}
-      autoScroll
-    >
-      <div
-        ref={treeRef}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        className={classNames(
-          className,
-          'outline-none h-full',
-          'overflow-y-auto overflow-x-hidden',
-          'grid grid-rows-[auto_1fr]',
-          ' [&_.tree-item.selected]:text-text',
-          isFocused
-            ? '[&_.tree-item.selected]:bg-surface-active'
-            : '[&_.tree-item.selected]:bg-surface-highlight',
-        )}
+    <>
+      <TreeHotKeys treeId={treeId} hotkeys={hotkeys} selectableItems={selectableItems} />
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={clearDragState}
+        onDragAbort={clearDragState}
+        onDragMove={handleDragMove}
+        autoScroll
       >
-        <TreeItemList node={root} treeId={treeId} {...treeItemListProps} />
-        {/* Assign root ID so we can reuse our same move/end logic */}
-        <DropRegionAfterList id={root.item.id} />
-        <TreeDragOverlay
-          treeId={treeId}
-          root={root}
-          selectableItems={selectableItems}
-          renderItem={renderItem}
-          getItemKey={getItemKey}
-        />
-      </div>
-    </DndContext>
+        <div
+          ref={treeRef}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          className={classNames(
+            className,
+            'outline-none h-full',
+            'overflow-y-auto overflow-x-hidden',
+            'grid grid-rows-[auto_1fr]',
+            ' [&_.tree-item.selected]:text-text',
+            isFocused
+              ? '[&_.tree-item.selected]:bg-surface-active'
+              : '[&_.tree-item.selected]:bg-surface-highlight',
+          )}
+        >
+          <TreeItemList node={root} treeId={treeId} {...treeItemListProps} />
+          {/* Assign root ID so we can reuse our same move/end logic */}
+          <DropRegionAfterList id={root.item.id} />
+          <TreeDragOverlay
+            treeId={treeId}
+            root={root}
+            selectableItems={selectableItems}
+            ItemInner={ItemInner}
+            getItemKey={getItemKey}
+          />
+        </div>
+      </DndContext>
+    </>
   );
 }
 
@@ -493,4 +506,56 @@ function compute<T extends { id: string }>(
 
   next(root);
   return { treeParentMap, selectableItems };
+}
+
+interface TreeHotKeyProps<T extends { id: string }> extends HotKeyOptions {
+  action: HotkeyAction;
+  selectableItems: SelectableTreeNode<T>[];
+  treeId: string;
+  onDone: (items: T[]) => void;
+}
+
+function TreeHotKey<T extends { id: string }>({
+  treeId,
+  action,
+  onDone,
+  selectableItems,
+  ...options
+}: TreeHotKeyProps<T>) {
+  useHotKey(
+    action,
+    () => {
+      onDone(getSelectedItems(treeId, selectableItems));
+    },
+    options,
+  );
+  return null;
+}
+
+function TreeHotKeys<T extends { id: string }>({
+  treeId,
+  hotkeys,
+  selectableItems,
+}: {
+  treeId: string;
+  hotkeys: TreeProps<T>['hotkeys'];
+  selectableItems: SelectableTreeNode<T>[];
+}) {
+  if (hotkeys == null) return null;
+
+  return (
+    <>
+      {Object.entries(hotkeys.actions).map(([hotkey, onDone]) => (
+        <TreeHotKey
+          key={hotkey}
+          action={hotkey as HotkeyAction}
+          priority={hotkeys.priority}
+          enable={hotkeys.enable}
+          treeId={treeId}
+          onDone={onDone}
+          selectableItems={selectableItems}
+        />
+      ))}
+    </>
+  );
 }

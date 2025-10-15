@@ -6,6 +6,7 @@ import type {
   Workspace,
 } from '@yaakapp-internal/models';
 import {
+  duplicateModel,
   foldersAtom,
   getModel,
   httpResponsesAtom,
@@ -16,6 +17,7 @@ import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import React, { useCallback, useMemo, useRef } from 'react';
+import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
@@ -28,20 +30,19 @@ import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { deepEqualAtom } from '../lib/atoms';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFolderAndNavigate';
 import { jotaiStore } from '../lib/jotai';
 import { renameModelWithPrompt } from '../lib/renameModelWithPrompt';
 import { resolvedModelName } from '../lib/resolvedModelName';
+import { isSidebarFocused } from '../lib/scopes';
 import { navigateToRequestOrFolderOrWorkspace } from '../lib/setWorkspaceSearchParams';
-import { Banner } from './core/Banner';
-import type { ContextMenuProps } from './core/Dropdown';
+import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
 import { Icon } from './core/Icon';
 import { LoadingIcon } from './core/LoadingIcon';
-import { focusIdsFamily, isSelectedFamily } from './core/tree/atoms';
+import { isSelectedFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
-import type { TreeHandle } from './core/tree/Tree';
+import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
 import { GitDropdown } from './GitDropdown';
@@ -54,11 +55,35 @@ function getItemKey(item: Model) {
   const responses = jotaiStore.get(httpResponsesAtom);
   const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
   const url = 'url' in item ? item.url : 'n/a';
-  console.log('LATEST', latestResponse?.elapsed);
-  return [item.id, item.name, url, latestResponse?.elapsed, latestResponse?.id ?? 'n/a'].join('::');
+  const method = 'method' in item ? item.method : 'n/a';
+  return [
+    item.id,
+    item.name,
+    url,
+    method,
+    latestResponse?.elapsed,
+    latestResponse?.id ?? 'n/a',
+  ].join('::');
 }
 
-function SidebarItem(item: Model) {
+function SidebarLeftSlot({ treeId, item }: { treeId: string; item: Model }) {
+  if (item.model === 'folder') {
+    return <Icon icon="folder" />;
+  } else if (item.model === 'workspace') {
+    return null;
+  } else {
+    const isSelected = jotaiStore.get(isSelectedFamily({ treeId, itemId: item.id }));
+    return (
+      <HttpMethodTag
+        short
+        className={classNames('text-xs', !isSelected && opacitySubtle)}
+        request={item}
+      />
+    );
+  }
+}
+
+function SidebarInnerItem({ item }: { treeId: string; item: Model }) {
   const response = useAtomValue(
     useMemo(
       () =>
@@ -94,77 +119,13 @@ function NewSidebar({ className }: { className?: string }) {
   const wrapperRef = useRef<HTMLElement>(null);
   const treeRef = useRef<TreeHandle>(null);
 
-  const renderLeftSlot = useCallback(function renderLeftSlot(item: Model) {
-    if (item.model === 'folder') {
-      return <Icon icon="folder" />;
-    } else if (item.model === 'workspace') {
-      return null;
-    } else {
-      const isSelected = jotaiStore.get(isSelectedFamily({ treeId, itemId: item.id }));
-      return (
-        <HttpMethodTag
-          short
-          className={classNames('text-xs', !isSelected && opacitySubtle)}
-          request={item}
-        />
-      );
-    }
-  }, []);
-
-  const renderItem = SidebarItem;
-
-  // const renderItem = useCallback(function renderItem(item: Model) {
-  //   const responses = jotaiStore.get(httpResponsesAtom);
-  //   const latestHttpResponse = responses.find((r) => r.requestId === item.id) ?? null;
-  //   return (
-  //     <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
-  //       <div className="truncate">{resolvedModelName(item)}</div>
-  //       {latestHttpResponse && (
-  //         <div className="ml-auto">
-  //           {latestHttpResponse.state !== 'closed' ? (
-  //             <LoadingIcon size="sm" className="text-text-subtlest" />
-  //           ) : (
-  //             <HttpStatusTagForResponse short className="text-xs" responseId={latestHttpResponse.id} />
-  //           )}
-  //         </div>
-  //       )}
-  //     </div>
-  //   );
-  // }, []);
-
   const focusActiveItem = useCallback(() => {
     treeRef.current?.focus();
   }, []);
 
-  useHotKey('http_request.duplicate', async () => {
-    // TODO: Make this delete selected items when sidebar is active, or delete active request if not
-    const lastFocused = jotaiStore.get(focusIdsFamily(treeId)).lastId;
-    const activeId = jotaiStore.get(activeIdAtom);
-    const toFocus = lastFocused ?? activeId;
-    const model = toFocus
-      ? getModel(['http_request', 'websocket_request', 'grpc_request', 'folder'], toFocus)
-      : null;
-    if (model != null) {
-      await duplicateRequestOrFolderAndNavigate(model);
-    }
-  });
-
-  useHotKey('sidebar.delete_selected_item', async () => {
-    if (hidden || !wrapperRef.current?.contains(document.activeElement)) return;
-    const lastFocused = jotaiStore.get(focusIdsFamily(treeId)).lastId;
-    const activeId = jotaiStore.get(activeIdAtom);
-    const toDelete = lastFocused ?? activeId;
-    const model = toDelete
-      ? getModel(['http_request', 'websocket_request', 'grpc_request', 'folder'], toDelete)
-      : null;
-    if (model != null) {
-      await deleteModelWithConfirm(model);
-    }
-  });
-
   useHotKey('sidebar.focus', async function focusHotkey() {
     // Hide the sidebar if it's already focused
-    if (!hidden && wrapperRef.current?.contains(document.activeElement)) {
+    if (!hidden && isSidebarFocused()) {
       await setHidden(true);
       return;
     }
@@ -241,9 +202,10 @@ function NewSidebar({ className }: { className?: string }) {
         ref={handleTreeRefInit}
         root={tree}
         treeId={treeId}
+        hotkeys={hotkeys}
         getItemKey={getItemKey}
-        renderItem={renderItem}
-        renderLeftSlot={renderLeftSlot}
+        ItemInner={SidebarInnerItem}
+        ItemLeftSlot={SidebarLeftSlot}
         getContextMenu={getContextMenu}
         onActivate={handleActivate}
         getEditOptions={getEditOptions}
@@ -280,116 +242,6 @@ function handleActivate(items: Model[]) {
   if (items.length === 1 && item) {
     navigateToRequestOrFolderOrWorkspace(item.id, item.model);
   }
-}
-
-async function getContextMenu(items: Model[]): Promise<ContextMenuProps['items']> {
-  const child = items[0];
-  if (child == null) return [];
-  if (items.length > 1)
-    return [
-      {
-        type: 'content',
-        label: <Banner color="info">Multi-item context menu coming soon</Banner>,
-      },
-    ];
-
-  const workspaces = jotaiStore.get(workspacesAtom);
-
-  const initialItems: ContextMenuProps['items'] = [
-    {
-      label: 'Folder Settings',
-      hidden: !(items.length === 1 && child.model === 'folder'),
-      leftSlot: <Icon icon="folder_cog" />,
-      onSelect: () => openFolderSettings(child.id),
-    },
-    {
-      label: 'Send All',
-      hidden: !(items.length === 1 && child.model === 'folder'),
-      leftSlot: <Icon icon="send_horizontal" />,
-      onSelect: () => {
-        for (const item of items) {
-          sendAnyHttpRequest.mutate(item.id);
-        }
-      },
-    },
-    {
-      label: 'Send',
-      hotKeyAction: 'http_request.send',
-      hotKeyLabelOnly: true, // Already bound in URL bar
-      hidden: !(items.length === 1 && child.model === 'http_request'),
-      leftSlot: <Icon icon="send_horizontal" />,
-      onSelect: () => sendAnyHttpRequest.mutate(child.id),
-    },
-    ...(items.length === 1 && child.model === 'http_request'
-      ? await getHttpRequestActions()
-      : []
-    ).map((a) => ({
-      label: a.label,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
-      onSelect: async () => {
-        const request = getModel('http_request', child.id);
-        if (request != null) await a.call(request);
-      },
-    })),
-    ...(items.length === 1 && child.model === 'grpc_request'
-      ? await getGrpcRequestActions()
-      : []
-    ).map((a) => ({
-      label: a.label,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
-      onSelect: async () => {
-        const request = getModel('grpc_request', child.id);
-        if (request != null) await a.call(request);
-      },
-    })),
-  ];
-
-  const menuItems: ContextMenuProps['items'] = [
-    ...initialItems,
-    { type: 'separator', hidden: initialItems.filter((v) => !v.hidden).length === 0 },
-    {
-      label: 'Rename',
-      leftSlot: <Icon icon="pencil" />,
-      hidden: items.length > 1,
-      onSelect: async () => {
-        const request = getModel(
-          ['folder', 'http_request', 'grpc_request', 'websocket_request'],
-          child.id,
-        );
-        await renameModelWithPrompt(request);
-      },
-    },
-    {
-      label: 'Duplicate',
-      hotKeyAction: 'http_request.duplicate',
-      hotKeyLabelOnly: true, // Would trigger for every request (bad)
-      leftSlot: <Icon icon="copy" />,
-      onSelect: async () => {
-        const request = getModel(['http_request', 'grpc_request', 'websocket_request'], child.id);
-        await duplicateRequestOrFolderAndNavigate(request);
-      },
-    },
-    {
-      label: 'Move',
-      leftSlot: <Icon icon="arrow_right_circle" />,
-      hidden: workspaces.length <= 1,
-      // TODO
-      // onSelect: moveToWorkspace.mutate,
-    },
-    {
-      color: 'danger',
-      label: 'Delete',
-      hotKeyAction: 'sidebar.delete_selected_item',
-      hotKeyLabelOnly: true,
-      leftSlot: <Icon icon="trash" />,
-      onSelect: async () => {
-        await deleteModelWithConfirm(getModel(child.model, child.id));
-      },
-    },
-  ];
-  return menuItems;
 }
 
 const allPotentialChildrenAtom = atom<Model[]>((get) => {
@@ -444,3 +296,124 @@ const sidebarTreeAtom = atom((get) => {
     parent: null,
   });
 });
+
+const actions = {
+  'sidebar.delete_selected_item': async function (items: Model[]) {
+    await deleteModelWithConfirm(items);
+  },
+  'http_request.duplicate': async function (items: Model[]) {
+    await Promise.allSettled(items.map(duplicateModel));
+    if (items.length === 1) {
+      navigateToRequestOrFolderOrWorkspace(items[0]!.id, items[0]!.model);
+    }
+  },
+  'http_request.send': async function (items: Model[]) {
+    await Promise.allSettled(items.map((i) => sendAnyHttpRequest.mutate(i.id)));
+  },
+} as const;
+
+const hotkeys: TreeProps<Model>['hotkeys'] = {
+  priority: 10,
+  actions,
+  enable: () => isSidebarFocused(),
+};
+
+async function getContextMenu(items: Model[]): Promise<DropdownItem[]> {
+  const child = items[0];
+  if (child == null) return [];
+  const workspaces = jotaiStore.get(workspacesAtom);
+  const onlyHttpRequests = items.every((i) => i.model === 'http_request');
+
+  const initialItems: ContextMenuProps['items'] = [
+    {
+      label: 'Folder Settings',
+      hidden: !(items.length === 1 && child.model === 'folder'),
+      leftSlot: <Icon icon="folder_cog" />,
+      onSelect: () => openFolderSettings(child.id),
+    },
+    {
+      label: 'Send All',
+      hidden: !(items.length === 1 && child.model === 'folder'),
+      leftSlot: <Icon icon="send_horizontal" />,
+      onSelect: () => {
+        for (const item of items) {
+          sendAnyHttpRequest.mutate(item.id);
+        }
+      },
+    },
+    {
+      label: 'Send',
+      hotKeyAction: 'http_request.send',
+      hotKeyLabelOnly: true,
+      hidden: !onlyHttpRequests,
+      leftSlot: <Icon icon="send_horizontal" />,
+      onSelect: () => sendAnyHttpRequest.mutate(child.id),
+    },
+    ...(items.length === 1 && child.model === 'http_request'
+      ? await getHttpRequestActions()
+      : []
+    ).map((a) => ({
+      label: a.label,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+      onSelect: async () => {
+        const request = getModel('http_request', child.id);
+        if (request != null) await a.call(request);
+      },
+    })),
+    ...(items.length === 1 && child.model === 'grpc_request'
+      ? await getGrpcRequestActions()
+      : []
+    ).map((a) => ({
+      label: a.label,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+      onSelect: async () => {
+        const request = getModel('grpc_request', child.id);
+        if (request != null) await a.call(request);
+      },
+    })),
+  ];
+
+  const menuItems: ContextMenuProps['items'] = [
+    ...initialItems,
+    { type: 'separator', hidden: initialItems.filter((v) => !v.hidden).length === 0 },
+    {
+      label: 'Rename',
+      leftSlot: <Icon icon="pencil" />,
+      hidden: items.length > 1,
+      onSelect: async () => {
+        const request = getModel(
+          ['folder', 'http_request', 'grpc_request', 'websocket_request'],
+          child.id,
+        );
+        await renameModelWithPrompt(request);
+      },
+    },
+    {
+      label: 'Duplicate',
+      hotKeyAction: 'http_request.duplicate',
+      hotKeyLabelOnly: true, // Would trigger for every request (bad)
+      leftSlot: <Icon icon="copy" />,
+      onSelect: () => actions['http_request.duplicate'](items),
+    },
+    {
+      label: 'Move',
+      leftSlot: <Icon icon="arrow_right_circle" />,
+      hidden: workspaces.length <= 1 || items.length > 1 || child.model === 'folder' || child.model === 'workspace',
+      onSelect: () => {
+        if (child.model === 'folder' || child.model === 'workspace') return;
+        moveToWorkspace.mutate(child);
+      },
+    },
+    {
+      color: 'danger',
+      label: 'Delete',
+      hotKeyAction: 'sidebar.delete_selected_item',
+      hotKeyLabelOnly: true,
+      leftSlot: <Icon icon="trash" />,
+      onSelect: () => actions['sidebar.delete_selected_item'](items),
+    },
+  ];
+  return menuItems;
+}
