@@ -6,13 +6,13 @@ import type {
   Workspace,
 } from '@yaakapp-internal/models';
 import {
-  grpcConnectionsAtom,
-  websocketConnectionsAtom,
   duplicateModel,
   foldersAtom,
   getModel,
+  grpcConnectionsAtom,
   httpResponsesAtom,
   patchModel,
+  websocketConnectionsAtom,
   workspacesAtom,
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
@@ -21,6 +21,8 @@ import { selectAtom } from 'jotai/utils';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
+import { activeCookieJarAtom } from '../hooks/useActiveCookieJar';
+import { activeEnvironmentAtom } from '../hooks/useActiveEnvironment';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
@@ -37,6 +39,7 @@ import { renameModelWithPrompt } from '../lib/renameModelWithPrompt';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { isSidebarFocused } from '../lib/scopes';
 import { navigateToRequestOrFolderOrWorkspace } from '../lib/setWorkspaceSearchParams';
+import { invokeCmd } from '../lib/tauri';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
@@ -121,7 +124,8 @@ function SidebarInnerItem({ item }: { treeId: string; item: Model }) {
 function NewSidebar({ className }: { className?: string }) {
   const [hidden, setHidden] = useSidebarHidden();
   const tree = useAtomValue(sidebarTreeAtom);
-  const treeId = 'workspace.sidebar';
+  const activeWorkspaceId = useAtomValue(activeWorkspaceAtom)?.id;
+  const treeId = 'tree.' + (activeWorkspaceId ?? 'unknown');
   const wrapperRef = useRef<HTMLElement>(null);
   const treeRef = useRef<TreeHandle>(null);
 
@@ -353,9 +357,13 @@ async function getContextMenu(items: Model[]): Promise<DropdownItem[]> {
       hidden: !(items.length === 1 && child.model === 'folder'),
       leftSlot: <Icon icon="send_horizontal" />,
       onSelect: () => {
-        for (const item of items) {
-          sendAnyHttpRequest.mutate(item.id);
-        }
+        const environment = jotaiStore.get(activeEnvironmentAtom);
+        const cookieJar = jotaiStore.get(activeCookieJarAtom);
+        invokeCmd('cmd_send_folder', {
+          folderId: child.id,
+          environmentId: environment?.id,
+          cookieJarId: cookieJar?.id,
+        });
       },
     },
     {

@@ -180,6 +180,7 @@ function TreeInner<T extends { id: string }>(
       if (e.shiftKey || e.ctrlKey || e.metaKey) {
         handleSelect(item, e);
       } else {
+        handleSelect(item, e);
         onActivate?.(item);
       }
     },

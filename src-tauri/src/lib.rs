@@ -1008,6 +1008,35 @@ async fn cmd_save_response<R: Runtime>(
 }
 
 #[tauri::command]
+async fn cmd_send_folder<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+    environment_id: Option<String>,
+    cookie_jar_id: Option<String>,
+    folder_id: &str,
+) -> YaakResult<()> {
+    let requests = app_handle.db().list_http_requests_for_folder_recursive(folder_id)?;
+    for request in requests {
+        let app_handle = app_handle.clone();
+        let window = window.clone();
+        let environment_id = environment_id.clone();
+        let cookie_jar_id = cookie_jar_id.clone();
+        tokio::spawn(async move {
+            let _ = cmd_send_http_request(
+                app_handle,
+                window,
+                environment_id.as_deref(),
+                cookie_jar_id.as_deref(),
+                request,
+            )
+            .await;
+        });
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn cmd_send_http_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -1386,6 +1415,7 @@ pub fn run() {
             cmd_save_response,
             cmd_send_ephemeral_request,
             cmd_send_http_request,
+            cmd_send_folder,
             cmd_template_functions,
             cmd_template_tokens_to_string,
             //
@@ -1511,14 +1541,17 @@ fn monitor_plugin_events<R: Runtime>(app_handle: &AppHandle<R>) {
                     Ok(None) => return,
                     Err(e) => {
                         warn!("Failed to handle plugin event: {e:?}");
-                        let _ = app_handle.emit("show_toast", InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                            message: e.to_string(),
-                            color: Some(Color::Danger),
-                            icon: None,
-                            timeout: Some(30000),
-                        }));
+                        let _ = app_handle.emit(
+                            "show_toast",
+                            InternalEventPayload::ShowToastRequest(ShowToastRequest {
+                                message: e.to_string(),
+                                color: Some(Color::Danger),
+                                icon: None,
+                                timeout: Some(30000),
+                            }),
+                        );
                         return;
-                    },
+                    }
                 };
 
                 let plugin_manager: State<'_, PluginManager> = app_handle.state();
