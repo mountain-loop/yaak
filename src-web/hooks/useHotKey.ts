@@ -161,7 +161,6 @@ function handleKeyDown(e: KeyboardEvent) {
   if (e.ctrlKey) currentKeysWithModifiers.add('Control');
   if (e.metaKey) currentKeysWithModifiers.add('Meta');
   if (e.shiftKey) currentKeysWithModifiers.add('Shift');
-  console.log('KEY DOWN', currentKeysWithModifiers);
 
   for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
     if (
@@ -174,7 +173,7 @@ function handleKeyDown(e: KeyboardEvent) {
       continue;
     }
 
-    let executed = 0;
+    const executed: string[] = [];
     for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
       const enable = typeof options.enable === 'function' ? options.enable() : options.enable;
       if (enable === false) {
@@ -193,12 +192,12 @@ function handleKeyDown(e: KeyboardEvent) {
           e.preventDefault();
           e.stopPropagation();
           callback(e);
-          console.log('EXECUTING', action, options);
-          executed++;
+          executed.push(`${action} ${options.priority ?? 0}`);
         }
       }
     }
-    if (executed > 0) {
+    if (executed.length > 0) {
+      console.log('Executed hotkey', executed.join(', '));
       jotaiStore.set(currentKeysAtom, new Set([]));
     }
   }

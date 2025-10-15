@@ -16,7 +16,7 @@ import {
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
@@ -188,6 +188,14 @@ function NewSidebar({ className }: { className?: string }) {
     n.selectItem(activeId);
   }, []);
 
+  useEffect(() => {
+    return jotaiStore.sub(activeIdAtom, () => {
+      const activeId = jotaiStore.get(activeIdAtom);
+      if (activeId == null) return;
+      treeRef.current?.selectItem(activeId);
+    });
+  }, []);
+
   if (tree == null || hidden) {
     return null;
   }
@@ -237,9 +245,9 @@ async function handleSubmitEdit(item: Model, text: string) {
   await patchModel(item, { name: text });
 }
 
-function handleActivate(items: Model[]) {
-  const item = items[0];
-  if (items.length === 1 && item) {
+function handleActivate(item: Model) {
+  // TODO: Add folder layout support
+  if (item.model !== 'folder' && item.model !== 'workspace') {
     navigateToRequestOrFolderOrWorkspace(item.id, item.model);
   }
 }

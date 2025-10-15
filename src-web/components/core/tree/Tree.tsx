@@ -43,7 +43,7 @@ export interface TreeProps<T extends { id: string }> {
   ItemInner: ComponentType<{ treeId: string; item: T }>;
   ItemLeftSlot?: ComponentType<{ treeId: string; item: T }>;
   className?: string;
-  onActivate?: (items: T[]) => void;
+  onActivate?: (item: T) => void;
   onDragEnd?: (opt: { items: T[]; parent: T; children: T[]; insertAt: number }) => void;
   hotkeys?: { actions: Partial<Record<HotkeyAction, (items: T[]) => void>> } & HotKeyOptions;
   getEditOptions?: (item: T) => {
@@ -177,15 +177,13 @@ function TreeInner<T extends { id: string }>(
 
   const handleClick = useCallback<NonNullable<TreeItemProps<T>['onClick']>>(
     (item, e) => {
-      handleSelect(item, e);
-
-      // Only call onActivate if the user didn't use a modifier key to change the selection
-      if (!(e.shiftKey || e.ctrlKey || e.metaKey)) {
-        const items = getSelectedItems(treeId, selectableItems);
-        onActivate?.(items);
+      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+        handleSelect(item, e);
+      } else {
+        onActivate?.(item);
       }
     },
-    [handleSelect, onActivate, selectableItems, treeId],
+    [handleSelect, onActivate],
   );
 
   useKey(
@@ -216,15 +214,12 @@ function TreeInner<T extends { id: string }>(
     [selectableItems, handleSelect],
   );
 
-  useKeyPressEvent('Enter', async () => {
-    if (!treeRef.current?.contains(document.activeElement)) return;
-    const items = getSelectedItems(treeId, selectableItems);
-    onActivate?.(items);
-  });
-
   useKeyPressEvent('Escape', async () => {
     if (!treeRef.current?.contains(document.activeElement)) return;
     clearDragState();
+    const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
+    if (lastSelectedId == null) return;
+    setSelected([lastSelectedId], false);
   });
 
   const handleDragMove = useCallback(
