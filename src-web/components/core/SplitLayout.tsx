@@ -88,7 +88,7 @@ export function SplitLayout({
 
   const unsub = () => {
     if (moveState.current !== null) {
-      document.documentElement.removeEventListener('mousemove', moveState.current.move);
+      document.documentElement.removeEventListener('pointermove', moveState.current.move);
       document.documentElement.removeEventListener('pointerup', moveState.current.up);
     }
   };
@@ -138,8 +138,8 @@ export function SplitLayout({
           setIsResizing(false);
         },
       };
-      document.documentElement.addEventListener('mousemove', moveState.current.move);
-      document.documentElement.addEventListener('mouseup', moveState.current.up);
+      document.documentElement.addEventListener('pointermove', moveState.current.move);
+      document.documentElement.addEventListener('pointerup', moveState.current.up);
     },
     [width, height, vertical, minHeightPx, setHeight, minWidthPx, setWidth],
   );

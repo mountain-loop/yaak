@@ -316,9 +316,12 @@ const actions = {
     await deleteModelWithConfirm(items);
   },
   'model.duplicate': async function (items: Model[]) {
-    await Promise.all(items.map(duplicateModel));
     if (items.length === 1) {
-      navigateToRequestOrFolderOrWorkspace(items[0]!.id, items[0]!.model);
+      const item = items[0]!;
+      const newId = await duplicateModel(item);
+      navigateToRequestOrFolderOrWorkspace(newId, item.model);
+    } else {
+      await Promise.all(items.map(duplicateModel));
     }
   },
   'request.send': async function (items: Model[]) {

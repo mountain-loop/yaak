@@ -24,7 +24,7 @@ export const Route = createFileRoute('/workspaces/$workspaceId/')({
     };
 
     const requestId = search.request_id as string | undefined;
-    const folderId = search.request_id as string | undefined;
+    const folderId = search.folder_id as string | undefined;
     if (requestId != null) {
       return { ...base, request_id: requestId };
     } else if (folderId) {
