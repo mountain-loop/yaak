@@ -329,12 +329,14 @@ const actions = {
     }
   },
   'request.send': async function (items: Model[]) {
-    await Promise.all(items.map((i) => sendAnyHttpRequest.mutate(i.id)));
+    await Promise.all(
+      items.filter((i) => i.model === 'http_request').map((i) => sendAnyHttpRequest.mutate(i.id)),
+    );
   },
 } as const;
 
 const hotkeys: TreeProps<Model>['hotkeys'] = {
-  priority: 10,
+  priority: 10, // So these ones take precedence over global hotkeys when the sidebar is focused
   actions,
   enable: () => isSidebarFocused(),
 };
