@@ -6,6 +6,8 @@ import type {
   Workspace,
 } from '@yaakapp-internal/models';
 import {
+  grpcConnectionsAtom,
+  websocketConnectionsAtom,
   duplicateModel,
   foldersAtom,
   getModel,
@@ -88,7 +90,11 @@ function SidebarInnerItem({ item }: { treeId: string; item: Model }) {
     useMemo(
       () =>
         selectAtom(
-          httpResponsesAtom,
+          atom((get) => [
+            ...get(grpcConnectionsAtom),
+            ...get(httpResponsesAtom),
+            ...get(websocketConnectionsAtom),
+          ]),
           (responses) => responses.find((r) => r.requestId === item.id),
           (a, b) => a?.state === b?.state, // Only update when the response state changes updated
         ),
@@ -103,9 +109,9 @@ function SidebarInnerItem({ item }: { treeId: string; item: Model }) {
         <div className="ml-auto">
           {response.state !== 'closed' ? (
             <LoadingIcon size="sm" className="text-text-subtlest" />
-          ) : (
+          ) : response.model === 'http_response' ? (
             <HttpStatusTag short className="text-xs" response={response} />
-          )}
+          ) : null}
         </div>
       )}
     </div>
