@@ -31,7 +31,7 @@ export function SidebarActions() {
         icon={hidden ? 'left_panel_hidden' : 'left_panel_visible'}
         iconColor="secondary"
       />
-      <CreateDropdown hotKeyAction="http_request.create">
+      <CreateDropdown hotKeyAction="model.create">
         <IconButton size="sm" icon="plus_circle" iconColor="secondary" title="Add Resource" />
       </CreateDropdown>
     </HStack>

@@ -91,7 +91,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         onSelect: createWorkspace,
       },
       {
-        key: 'http_request.create',
+        key: 'model.create',
         label: 'Create HTTP Request',
         onSelect: () => createRequestAndNavigate({ model: 'http_request', workspaceId }),
       },
@@ -143,8 +143,8 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     if (activeRequest?.model === 'http_request') {
       commands.push({
-        key: 'http_request.send',
-        action: 'http_request.send',
+        key: 'request.send',
+        action: 'request.send',
         label: 'Send Request',
         onSelect: () => sendRequest(activeRequest.id),
       });

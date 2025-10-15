@@ -244,7 +244,7 @@ function WorkspaceBody() {
 
   return (
     <HotKeyList
-      hotkeys={['http_request.create', 'sidebar.focus', 'settings.show']}
+      hotkeys={['model.create', 'sidebar.focus', 'settings.show']}
       bottomSlot={
         <HStack space={1} justifyContent="center" className="mt-3">
           <Button variant="border" size="sm" onClick={() => importData.mutate()}>
@@ -279,7 +279,7 @@ function useGlobalWorkspaceHooks() {
   const toggleCommandPalette = useToggleCommandPalette();
   useHotKey('command_palette.toggle', toggleCommandPalette);
 
-  useHotKey('http_request.duplicate', () =>
+  useHotKey('model.duplicate', () =>
     duplicateRequestOrFolderAndNavigate(jotaiStore.get(activeRequestAtom)),
   );
 }

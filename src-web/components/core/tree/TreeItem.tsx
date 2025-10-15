@@ -206,7 +206,7 @@ export function TreeItem<T extends { id: string }>({
         'tree-item',
         isSelected && 'selected',
         'text-text-subtle',
-        'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded px-2',
+        'h-sm grid grid-cols-[auto_minmax(0,1fr)] items-center rounded-md px-1.5',
         editing && 'ring-1 focus-within:ring-focus',
         isDropHover && 'relative z-10 ring-2 ring-primary animate-blinkRing',
       )}

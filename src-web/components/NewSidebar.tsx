@@ -162,13 +162,13 @@ function NewSidebar({ className }: { className?: string }) {
       if (shouldUpdateAll) {
         // Add items to children at insertAt
         children.splice(insertAt, 0, ...items);
-        await Promise.allSettled(
+        await Promise.all(
           children.map((m, i) => patchModel(m, { sortPriority: i * 1000, folderId })),
         );
       } else {
         const range = afterPriority - beforePriority;
         const increment = range / (items.length + 2);
-        await Promise.allSettled(
+        await Promise.all(
           items.map((m, i) =>
             // Spread item sortPriority out over before/after range
             patchModel(m, { sortPriority: beforePriority + (i + 1) * increment, folderId }),
@@ -209,7 +209,7 @@ function NewSidebar({ className }: { className?: string }) {
         getContextMenu={getContextMenu}
         onActivate={handleActivate}
         getEditOptions={getEditOptions}
-        className="pl-0.5 pr-3 pt-2 pb-2"
+        className="pl-2 pr-3 pt-2 pb-2"
         onDragEnd={handleDragEnd}
       />
       <GitDropdown />
@@ -301,14 +301,14 @@ const actions = {
   'sidebar.delete_selected_item': async function (items: Model[]) {
     await deleteModelWithConfirm(items);
   },
-  'http_request.duplicate': async function (items: Model[]) {
-    await Promise.allSettled(items.map(duplicateModel));
+  'model.duplicate': async function (items: Model[]) {
+    await Promise.all(items.map(duplicateModel));
     if (items.length === 1) {
       navigateToRequestOrFolderOrWorkspace(items[0]!.id, items[0]!.model);
     }
   },
-  'http_request.send': async function (items: Model[]) {
-    await Promise.allSettled(items.map((i) => sendAnyHttpRequest.mutate(i.id)));
+  'request.send': async function (items: Model[]) {
+    await Promise.all(items.map((i) => sendAnyHttpRequest.mutate(i.id)));
   },
 } as const;
 
@@ -343,11 +343,11 @@ async function getContextMenu(items: Model[]): Promise<DropdownItem[]> {
     },
     {
       label: 'Send',
-      hotKeyAction: 'http_request.send',
+      hotKeyAction: 'request.send',
       hotKeyLabelOnly: true,
       hidden: !onlyHttpRequests,
       leftSlot: <Icon icon="send_horizontal" />,
-      onSelect: () => sendAnyHttpRequest.mutate(child.id),
+      onSelect: () => actions['request.send'](items),
     },
     ...(items.length === 1 && child.model === 'http_request'
       ? await getHttpRequestActions()
@@ -392,15 +392,19 @@ async function getContextMenu(items: Model[]): Promise<DropdownItem[]> {
     },
     {
       label: 'Duplicate',
-      hotKeyAction: 'http_request.duplicate',
+      hotKeyAction: 'model.duplicate',
       hotKeyLabelOnly: true, // Would trigger for every request (bad)
       leftSlot: <Icon icon="copy" />,
-      onSelect: () => actions['http_request.duplicate'](items),
+      onSelect: () => actions['model.duplicate'](items),
     },
     {
       label: 'Move',
       leftSlot: <Icon icon="arrow_right_circle" />,
-      hidden: workspaces.length <= 1 || items.length > 1 || child.model === 'folder' || child.model === 'workspace',
+      hidden:
+        workspaces.length <= 1 ||
+        items.length > 1 ||
+        child.model === 'folder' ||
+        child.model === 'workspace',
       onSelect: () => {
         if (child.model === 'folder' || child.model === 'workspace') return;
         moveToWorkspace.mutate(child);
