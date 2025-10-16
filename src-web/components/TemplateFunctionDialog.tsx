@@ -132,7 +132,6 @@ function InitializedTemplateFunctionDialog({
 
   const tagText = useTemplateTokensToString(tokens);
   const templateFunction = useTemplateFunctionConfig(name, argValues, model).data;
-  console.log('TEMPLATE FUNCTION RESOLVED', templateFunction);
 
   const handleDone = () => {
     if (tagText.data) {

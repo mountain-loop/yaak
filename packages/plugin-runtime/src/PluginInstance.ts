@@ -224,7 +224,6 @@ export class PluginInstance {
         for (const arg of templateFunction.args) {
           if (arg && 'dynamic' in arg) {
             const dynamicAttrs = await arg.dynamic(ctx, payload);
-            console.log("DYNAMIC ATTRS", dynamicAttrs);
             const { dynamic, ...other } = arg;
             resolvedArgs.push({ ...other, ...dynamicAttrs } as TemplateFunctionArg);
           } else if (arg) {
