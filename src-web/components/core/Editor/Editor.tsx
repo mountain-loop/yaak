@@ -28,6 +28,7 @@ import {
   useMemo,
   useRef,
 } from 'react';
+import { activeWorkspaceAtom } from '../../../hooks/useActiveWorkspace';
 import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
 import { useEnvironmentVariables } from '../../../hooks/useEnvironmentVariables';
 import { useRandomKey } from '../../../hooks/useRandomKey';
@@ -36,6 +37,7 @@ import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplate
 import { showDialog } from '../../../lib/dialog';
 import { editEnvironment } from '../../../lib/editEnvironment';
 import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
+import { jotaiStore } from '../../../lib/jotai';
 import { withEncryptionEnabled } from '../../../lib/setupOrConfigureEncryption';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { TemplateVariableDialog } from '../../TemplateVariableDialog';
@@ -292,18 +294,22 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
           size: 'md',
           title: <InlineCode>{fn.name}(…)</InlineCode>,
           description: fn.description,
-          render: ({ hide }) => (
-            <TemplateFunctionDialog
-              templateFunction={fn}
-              hide={hide}
-              initialTokens={initialTokens}
-              onChange={(insert) => {
-                cm.current?.view.dispatch({
-                  changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
-                });
-              }}
-            />
-          ),
+          render: ({ hide }) => {
+            const model = jotaiStore.get(activeWorkspaceAtom)!;
+            return (
+              <TemplateFunctionDialog
+                templateFunction={fn}
+                model={model}
+                hide={hide}
+                initialTokens={initialTokens}
+                onChange={(insert) => {
+                  cm.current?.view.dispatch({
+                    changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
+                  });
+                }}
+              />
+            );
+          },
         });
 
       if (fn.name === 'secure') {
