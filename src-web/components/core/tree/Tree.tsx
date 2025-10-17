@@ -9,31 +9,27 @@ import {
 } from '@dnd-kit/core';
 import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
 import type { ComponentType, ReactElement, Ref, RefAttributes } from 'react';
-import {
-  forwardRef,
-  memo,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { forwardRef, memo, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
 import type { HotkeyAction, HotKeyOptions } from '../../../hooks/useHotKey';
 import { useHotKey } from '../../../hooks/useHotKey';
-import { sidebarCollapsedAtom } from '../../../hooks/useSidebarItemCollapsed';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps } from '../Dropdown';
-import { draggingIdsFamily, focusIdsFamily, hoveredParentFamily, selectedIdsFamily } from './atoms';
+import {
+  collapsedFamily,
+  draggingIdsFamily,
+  focusIdsFamily,
+  hoveredParentFamily,
+  selectedIdsFamily,
+} from './atoms';
 import type { SelectableTreeNode, TreeNode } from './common';
 import { computeSideForDragMove, equalSubtree, getSelectedItems, hasAncestor } from './common';
 import { TreeDragOverlay } from './TreeDragOverlay';
 import type { TreeItemProps } from './TreeItem';
 import type { TreeItemListProps } from './TreeItemList';
 import { TreeItemList } from './TreeItemList';
+import { useSelectableItems } from './useSelectableItems';
 
 export interface TreeProps<T extends { id: string }> {
   root: TreeNode<T>;
@@ -75,8 +71,7 @@ function TreeInner<T extends { id: string }>(
   ref: Ref<TreeHandle>,
 ) {
   const treeRef = useRef<HTMLDivElement>(null);
-  const { treeParentMap, selectableItems } = useTreeParentMap(root, getItemKey);
-  const [isFocused, setIsFocused] = useState<boolean>(false);
+  const selectableItems = useSelectableItems(root);
 
   const tryFocus = useCallback(() => {
     treeRef.current?.querySelector<HTMLButtonElement>('.tree-item button[tabindex="0"]')?.focus();
@@ -228,7 +223,12 @@ function TreeInner<T extends { id: string }>(
       const over = e.over;
       if (!over) {
         // Clear the drop indicator when hovering outside the tree
-        jotaiStore.set(hoveredParentFamily(treeId), { parentId: null, index: null });
+        jotaiStore.set(hoveredParentFamily(treeId), {
+          parentId: null,
+          parentDepth: null,
+          childIndex: null,
+          index: null,
+        });
         return;
       }
 
@@ -242,39 +242,59 @@ function TreeInner<T extends { id: string }>(
       if (hoveringRoot) {
         jotaiStore.set(hoveredParentFamily(treeId), {
           parentId: root.item.id,
-          index: root.children?.length ?? 0,
+          parentDepth: root.depth,
+          index: selectableItems.length,
+          childIndex: selectableItems.length,
         });
         return;
       }
 
-      const node = selectableItems.find((i) => i.node.item.id === over.id)?.node ?? null;
-      if (node == null) {
+      const selectableItem = selectableItems.find((i) => i.node.item.id === over.id) ?? null;
+      if (selectableItem == null) {
         return;
       }
+      const node = selectableItem.node;
 
       const side = computeSideForDragMove(node, e);
 
       const item = node.item;
-      let hoveredParent = treeParentMap[item.id] ?? null;
-      const dragIndex = hoveredParent?.children?.findIndex((n) => n.item.id === item.id) ?? -99;
-      const hovered = hoveredParent?.children?.[dragIndex] ?? null;
-      let hoveredIndex = dragIndex + (side === 'above' ? 0 : 1);
+      let hoveredParent = node.parent;
+      const dragIndex = selectableItems.findIndex((n) => n.node.item.id === item.id) ?? -1;
+      const hovered = selectableItems[dragIndex]?.node ?? null;
+      const hoveredIndex = dragIndex + (side === 'above' ? 0 : 1);
+      let hoveredChildIndex = selectableItem.index + (side === 'above' ? 0 : 1);
 
-      const collapsedMap = jotaiStore.get(jotaiStore.get(sidebarCollapsedAtom));
+      const collapsedMap = jotaiStore.get(collapsedFamily(treeId));
       const isHoveredItemCollapsed = hovered != null ? collapsedMap[hovered.item.id] : false;
 
       if (hovered?.children != null && side === 'below' && !isHoveredItemCollapsed) {
         // Move into the folder if it's open and we're moving below it
-        hoveredParent = hoveredParent?.children?.find((n) => n.item.id === item.id) ?? null;
-        hoveredIndex = 0;
+        hoveredParent = hovered;
+        hoveredChildIndex = 0;
       }
 
-      jotaiStore.set(hoveredParentFamily(treeId), {
-        parentId: hoveredParent?.item.id ?? null,
-        index: hoveredIndex,
-      });
+      const parentId = hoveredParent?.item.id ?? null;
+      const parentDepth = hoveredParent?.depth ?? null;
+      const index = hoveredIndex;
+      const childIndex = hoveredChildIndex;
+      const existing = jotaiStore.get(hoveredParentFamily(treeId));
+      if (
+        !(
+          parentId === existing.parentId &&
+          parentDepth === existing.parentDepth &&
+          index === existing.index &&
+          childIndex === existing.childIndex
+        )
+      ) {
+        jotaiStore.set(hoveredParentFamily(treeId), {
+          parentId: hoveredParent?.item.id ?? null,
+          parentDepth: hoveredParent?.depth ?? null,
+          index: hoveredIndex,
+          childIndex: hoveredChildIndex,
+        });
+      }
     },
-    [root.children?.length, root.item.id, selectableItems, treeId, treeParentMap],
+    [root.depth, root.item.id, selectableItems, treeId],
   );
 
   const handleDragStart = useCallback(
@@ -299,46 +319,57 @@ function TreeInner<T extends { id: string }>(
   );
 
   const clearDragState = useCallback(() => {
-    jotaiStore.set(hoveredParentFamily(treeId), { parentId: null, index: null });
+    jotaiStore.set(hoveredParentFamily(treeId), {
+      parentId: null,
+      parentDepth: null,
+      index: null,
+      childIndex: null,
+    });
     jotaiStore.set(draggingIdsFamily(treeId), []);
   }, [treeId]);
 
   const handleDragEnd = useCallback(
     function handleDragEnd(e: DragEndEvent) {
       // Get this from the store so our callback doesn't change all the time
-      const hovered = jotaiStore.get(hoveredParentFamily(treeId));
+      const {
+        index: hoveredIndex,
+        parentId: hoveredParentId,
+        childIndex: hoveredChildIndex,
+      } = jotaiStore.get(hoveredParentFamily(treeId));
       const draggingItems = jotaiStore.get(draggingIdsFamily(treeId));
       clearDragState();
 
       // Dropped outside the tree?
-      if (e.over == null) return;
+      if (e.over == null) {
+        return;
+      }
 
-      const hoveredParent =
-        hovered.parentId == root.item.id
-          ? root
-          : selectableItems.find((n) => n.node.item.id === hovered.parentId)?.node;
+      const hoveredParentS =
+        hoveredParentId === root.item.id
+          ? { node: root, depth: 0, index: 0 }
+          : (selectableItems.find((i) => i.node.item.id === hoveredParentId) ?? null);
+      const hoveredParent = hoveredParentS?.node ?? null;
 
-      if (hoveredParent == null || hovered.index == null || !draggingItems?.length) return;
-
-      // Optional tiny guard: don't drop into itself
-      if (draggingItems.some((id) => id === hovered.parentId)) return;
+      if (hoveredParent == null || hoveredIndex == null || !draggingItems?.length) {
+        return;
+      }
 
       // Resolve the actual tree nodes for each dragged item (keeps order of draggingItems)
       const draggedNodes: TreeNode<T>[] = draggingItems
         .map((id) => {
-          const parent = treeParentMap[id];
-          const idx = parent?.children?.findIndex((n) => n.item.id === id) ?? -1;
-          return idx >= 0 ? parent!.children![idx]! : null;
+          return selectableItems.find((i) => i.node.item.id === id)?.node ?? null;
         })
         .filter((n) => n != null)
         // Filter out invalid drags (dragging into descendant)
-        .filter((n) => !hasAncestor(hoveredParent, n.item.id));
+        .filter(
+          (n) => hoveredParent.item.id !== n.item.id && !hasAncestor(hoveredParent, n.item.id),
+        );
 
       // Work on a local copy of target children
       const nextChildren = [...(hoveredParent.children ?? [])];
 
       // Remove any of the dragged nodes already in the target, adjusting hoveredIndex
-      let insertAt = hovered.index;
+      let insertAt = hoveredChildIndex ?? 0;
       for (const node of draggedNodes) {
         const i = nextChildren.findIndex((n) => n.item.id === node.item.id);
         if (i !== -1) {
@@ -355,14 +386,13 @@ function TreeInner<T extends { id: string }>(
         insertAt,
       });
     },
-    [treeId, clearDragState, root, selectableItems, onDragEnd, treeParentMap],
+    [treeId, clearDragState, selectableItems, root, onDragEnd],
   );
 
   const treeItemListProps: Omit<
     TreeItemListProps<T>,
-    'node' | 'treeId' | 'activeIdAtom' | 'hoveredParent' | 'hoveredIndex'
+    'nodes' | 'treeId' | 'activeIdAtom' | 'hoveredParent' | 'hoveredIndex'
   > = {
-    depth: 0,
     getItemKey,
     getContextMenu: handleGetContextMenu,
     onClick: handleClick,
@@ -370,14 +400,6 @@ function TreeInner<T extends { id: string }>(
     ItemInner,
     ItemLeftSlot,
   };
-
-  const handleFocus = useCallback(function handleFocus() {
-    setIsFocused(true);
-  }, []);
-
-  const handleBlur = useCallback(function handleBlur() {
-    setIsFocused(false);
-  }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -396,30 +418,37 @@ function TreeInner<T extends { id: string }>(
       >
         <div
           ref={treeRef}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
           className={classNames(
             className,
             'outline-none h-full',
             'overflow-y-auto overflow-x-hidden',
             'grid grid-rows-[auto_1fr]',
-            ' [&_.tree-item.selected]:text-text',
-            isFocused
-              ? '[&_.tree-item.selected]:bg-surface-active'
-              : '[&_.tree-item.selected]:bg-surface-highlight',
           )}
         >
-          <TreeItemList node={root} treeId={treeId} {...treeItemListProps} />
+          <div
+            className={classNames(
+              '[&_.tree-item-inner]:bg-surface',
+              '[&_.tree-item-selectable.selected]:text-text',
+              '[&:focus-within]:[&_.tree-item.selected]:bg-surface-active',
+              '[&:not(:focus-within)]:[&_.tree-item.selected]:bg-surface-highlight',
+
+              // Round the items, but only if the ends of the selection
+              '[&_.tree-item]:rounded-md',
+              '[&_.tree-item.selected+.tree-item.selected]:rounded-t-none',
+              '[&_.tree-item.selected:has(+.tree-item.selected)]:rounded-b-none',
+            )}
+          >
+            <TreeItemList nodes={selectableItems} treeId={treeId} {...treeItemListProps} />
+          </div>
           {/* Assign root ID so we can reuse our same move/end logic */}
           <DropRegionAfterList id={root.item.id} />
-          <TreeDragOverlay
-            treeId={treeId}
-            root={root}
-            selectableItems={selectableItems}
-            ItemInner={ItemInner}
-            getItemKey={getItemKey}
-          />
         </div>
+        <TreeDragOverlay
+          treeId={treeId}
+          selectableItems={selectableItems}
+          ItemInner={ItemInner}
+          getItemKey={getItemKey}
+        />
       </DndContext>
     </>
   );
@@ -445,63 +474,6 @@ export const Tree = memo(
 function DropRegionAfterList({ id }: { id: string }) {
   const { setNodeRef } = useDroppable({ id });
   return <div ref={setNodeRef} />;
-}
-
-function useTreeParentMap<T extends { id: string }>(
-  root: TreeNode<T>,
-  getItemKey: (item: T) => string,
-) {
-  const collapsedMap = useAtomValue(useAtomValue(sidebarCollapsedAtom));
-  const [{ treeParentMap, selectableItems }, setData] = useState(() => {
-    return compute(root, collapsedMap);
-  });
-
-  const prevRoot = useRef<TreeNode<T> | null>(null);
-
-  useEffect(() => {
-    const shouldRecompute =
-      root == null || prevRoot.current == null || !equalSubtree(root, prevRoot.current, getItemKey);
-    if (!shouldRecompute) return;
-    setData(compute(root, collapsedMap));
-    prevRoot.current = root;
-  }, [collapsedMap, getItemKey, root]);
-
-  return { treeParentMap, selectableItems };
-}
-
-function compute<T extends { id: string }>(
-  root: TreeNode<T>,
-  collapsedMap: Record<string, boolean>,
-) {
-  const treeParentMap: Record<string, TreeNode<T>> = {};
-  const selectableItems: SelectableTreeNode<T>[] = [];
-
-  // Put requests and folders into a tree structure
-  const next = (node: TreeNode<T>, depth: number = 0) => {
-    const isCollapsed = collapsedMap[node.item.id] === true;
-    // console.log("IS COLLAPSED", node.item.name, isCollapsed);
-    if (node.children == null) {
-      return;
-    }
-
-    // Recurse to children
-    let selectableIndex = 0;
-    for (const child of node.children) {
-      treeParentMap[child.item.id] = node;
-      if (!isCollapsed) {
-        selectableItems.push({
-          node: child,
-          index: selectableIndex++,
-          depth,
-        });
-      }
-
-      next(child, depth + 1);
-    }
-  };
-
-  next(root);
-  return { treeParentMap, selectableItems };
 }
 
 interface TreeHotKeyProps<T extends { id: string }> extends HotKeyOptions {
