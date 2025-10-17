@@ -20,25 +20,7 @@ export function useGrpcRequestActions() {
   const actionsResult = useQuery<CallableGrpcRequestAction[]>({
     queryKey: ['grpc_request_actions', pluginsKey],
     queryFn: async () => {
-      const responses = await invokeCmd<GetGrpcRequestActionsResponse[]>(
-        'cmd_grpc_request_actions',
-      );
-
-      return responses.flatMap((r) =>
-        r.actions.map((a, i) => ({
-          label: a.label,
-          icon: a.icon,
-          call: async (grpcRequest: GrpcRequest) => {
-            const protoFiles = await getGrpcProtoFiles(grpcRequest.id);
-            const payload: CallGrpcRequestActionRequest = {
-              index: i,
-              pluginRefId: r.pluginRefId,
-              args: { grpcRequest, protoFiles },
-            };
-            await invokeCmd('cmd_call_grpc_request_action', { req: payload });
-          },
-        })),
-      );
+      return getGrpcRequestActions();
     },
   });
 
@@ -48,4 +30,24 @@ export function useGrpcRequestActions() {
   }, [JSON.stringify(actionsResult.data)]);
 
   return actions;
+}
+
+export async function getGrpcRequestActions() {
+  const responses = await invokeCmd<GetGrpcRequestActionsResponse[]>('cmd_grpc_request_actions');
+
+  return responses.flatMap((r) =>
+    r.actions.map((a, i) => ({
+      label: a.label,
+      icon: a.icon,
+      call: async (grpcRequest: GrpcRequest) => {
+        const protoFiles = await getGrpcProtoFiles(grpcRequest.id);
+        const payload: CallGrpcRequestActionRequest = {
+          index: i,
+          pluginRefId: r.pluginRefId,
+          args: { grpcRequest, protoFiles },
+        };
+        await invokeCmd('cmd_call_grpc_request_action', { req: payload });
+      },
+    })),
+  );
 }

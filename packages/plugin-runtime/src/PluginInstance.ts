@@ -186,20 +186,55 @@ export class PluginInstance {
       }
 
       if (
-        payload.type === 'get_template_functions_request' &&
+        payload.type === 'get_template_function_summary_request' &&
         Array.isArray(this.#mod?.templateFunctions)
       ) {
-        const reply: TemplateFunction[] = this.#mod.templateFunctions.map((templateFunction) => {
-          return {
-            ...migrateTemplateFunctionSelectOptions(templateFunction),
-            // Add everything except render
-            onRender: undefined,
-          };
-        });
+        const functions: TemplateFunction[] = this.#mod.templateFunctions.map(
+          (templateFunction) => {
+            return {
+              ...migrateTemplateFunctionSelectOptions(templateFunction),
+              // Add everything except render
+              onRender: undefined,
+            };
+          },
+        );
         const replyPayload: InternalEventPayload = {
-          type: 'get_template_functions_response',
+          type: 'get_template_function_summary_response',
           pluginRefId: this.#workerData.pluginRefId,
-          functions: reply,
+          functions,
+        };
+        this.#sendPayload(windowContext, replyPayload, replyId);
+        return;
+      }
+
+      if (
+        payload.type === 'get_template_function_config_request' &&
+        Array.isArray(this.#mod?.templateFunctions)
+      ) {
+        let templateFunction = this.#mod.templateFunctions.find((f) => f.name === payload.name);
+        if (templateFunction == null) {
+          this.#sendEmpty(windowContext, replyId);
+          return;
+        }
+
+        templateFunction = migrateTemplateFunctionSelectOptions(templateFunction);
+        // @ts-ignore
+        delete templateFunction.onRender;
+        const resolvedArgs: TemplateFunctionArg[] = [];
+        for (const arg of templateFunction.args) {
+          if (arg && 'dynamic' in arg) {
+            const dynamicAttrs = await arg.dynamic(ctx, payload);
+            const { dynamic, ...other } = arg;
+            resolvedArgs.push({ ...other, ...dynamicAttrs } as TemplateFunctionArg);
+          } else if (arg) {
+            resolvedArgs.push(arg);
+          }
+          templateFunction.args = resolvedArgs;
+        }
+        const replyPayload: InternalEventPayload = {
+          type: 'get_template_function_config_response',
+          pluginRefId: this.#workerData.pluginRefId,
+          function: templateFunction,
         };
         this.#sendPayload(windowContext, replyPayload, replyId);
         return;
@@ -454,6 +489,8 @@ export class PluginInstance {
         show: async (args) => {
           await this.#sendAndWaitForReply(windowContext, {
             type: 'show_toast_request',
+            // Handle default here because null/undefined both convert to None in Rust translation
+            timeout: args.timeout === undefined ? 5000 : args.timeout,
             ...args,
           });
         },

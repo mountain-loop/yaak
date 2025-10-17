@@ -16,7 +16,7 @@ import { ImportCurlButton } from './ImportCurlButton';
 import { LicenseBadge } from './LicenseBadge';
 import { RecentRequestsDropdown } from './RecentRequestsDropdown';
 import { SettingsDropdown } from './SettingsDropdown';
-import { SidebarActions } from './sidebar/SidebarActions';
+import { SidebarActions } from './SidebarActions';
 import { WorkspaceActionsDropdown } from './WorkspaceActionsDropdown';
 
 interface Props {

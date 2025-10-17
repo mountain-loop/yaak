@@ -1,6 +1,8 @@
-import { TemplateFunction } from '@yaakapp/api';
+import { TemplateFunctionPlugin } from '@yaakapp/api/lib/plugins/TemplateFunctionPlugin';
 
-export function migrateTemplateFunctionSelectOptions(f: TemplateFunction): TemplateFunction {
+export function migrateTemplateFunctionSelectOptions(
+  f: TemplateFunctionPlugin,
+): TemplateFunctionPlugin {
   const migratedArgs = f.args.map((a) => {
     if (a.type === 'select') {
       a.options = a.options.map((o) => ({

@@ -1,7 +1,7 @@
 use crate::error::Error::UnknownModel;
 use crate::error::Result;
 use chrono::NaiveDateTime;
-use log::warn;
+use log::{debug, warn};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_yaml::{Mapping, Value};
 use sha1::{Digest, Sha1};
@@ -86,7 +86,7 @@ impl<'de> Deserialize<'de> for SyncModel {
 fn migrate_environment(obj: &mut Mapping) {
     match (obj.get("base"), obj.get("parentModel")) {
         (Some(Value::Bool(base)), None) => {
-            println!("Migrating legacy environment {}", serde_yaml::to_string(obj).unwrap());
+            debug!("Migrating legacy environment {:?}", obj.get("id"));
             if *base {
                 obj.insert("parentModel".into(), "workspace".into());
             } else {

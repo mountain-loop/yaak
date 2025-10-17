@@ -1,12 +1,21 @@
 import {
   CallTemplateFunctionArgs,
+  FormInput,
+  GetHttpAuthenticationConfigRequest,
   TemplateFunction,
-} from "../bindings/gen_events";
-import { Context } from "./Context";
+  TemplateFunctionArg,
+} from '../bindings/gen_events';
+import { MaybePromise } from '../helpers';
+import { Context } from './Context';
+
+export type DynamicTemplateFunctionArg = FormInput & {
+  dynamic(
+    ctx: Context,
+    args: GetHttpAuthenticationConfigRequest,
+  ): MaybePromise<Partial<FormInput> | undefined | null>;
+};
 
 export type TemplateFunctionPlugin = TemplateFunction & {
-  onRender(
-    ctx: Context,
-    args: CallTemplateFunctionArgs,
-  ): Promise<string | null>;
+  args: (TemplateFunctionArg | DynamicTemplateFunctionArg)[];
+  onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null>;
 };

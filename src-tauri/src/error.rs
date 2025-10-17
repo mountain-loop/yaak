@@ -35,6 +35,9 @@ pub enum Error {
     #[error(transparent)]
     CommonError(#[from] yaak_common::error::Error),
 
+    #[error(transparent)]
+    ClipboardError(#[from] tauri_plugin_clipboard_manager::Error),
+
     #[error("Updater error: {0}")]
     UpdaterError(#[from] tauri_plugin_updater::Error),
 

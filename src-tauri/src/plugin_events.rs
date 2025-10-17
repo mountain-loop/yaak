@@ -1,3 +1,4 @@
+use crate::error::Result;
 use crate::http_request::send_http_request;
 use crate::render::{render_grpc_request, render_http_request, render_json_value};
 use crate::window::{CreateWindowConfig, create_window};
@@ -7,10 +8,12 @@ use crate::{
 };
 use chrono::Utc;
 use cookie::Cookie;
-use log::{error, warn};
-use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use log::error;
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::models::{HttpResponse, Plugin};
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
@@ -20,108 +23,119 @@ use yaak_plugins::events::{
     RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest,
     TemplateRenderResponse, WindowNavigateEvent,
 };
-use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
+use yaak_templates::{RenderErrorBehavior, RenderOptions};
 
 pub(crate) async fn handle_plugin_event<R: Runtime>(
     app_handle: &AppHandle<R>,
     event: &InternalEvent,
     plugin_handle: &PluginHandle,
-) {
+) -> Result<Option<InternalEventPayload>> {
     // debug!("Got event to app {event:?}");
     let window_context = event.window_context.to_owned();
-    let response_event: Option<InternalEventPayload> = match event.clone().payload {
+    match event.clone().payload {
         InternalEventPayload::CopyTextRequest(req) => {
-            app_handle
-                .clipboard()
-                .write_text(req.text.as_str())
-                .expect("Failed to write text to clipboard");
-            Some(InternalEventPayload::CopyTextResponse(EmptyPayload {}))
+            app_handle.clipboard().write_text(req.text.as_str())?;
+            Ok(Some(InternalEventPayload::CopyTextResponse(EmptyPayload {})))
         }
         InternalEventPayload::ShowToastRequest(req) => {
             match window_context {
-                PluginWindowContext::Label { label, .. } => app_handle
-                    .emit_to(label, "show_toast", req)
-                    .expect("Failed to emit show_toast to window"),
-                _ => app_handle.emit("show_toast", req).expect("Failed to emit show_toast"),
+                PluginWindowContext::Label { label, .. } => {
+                    app_handle.emit_to(label, "show_toast", req)?
+                }
+                _ => app_handle.emit("show_toast", req)?,
             };
-            Some(InternalEventPayload::ShowToastResponse(EmptyPayload {}))
+            Ok(Some(InternalEventPayload::ShowToastResponse(EmptyPayload {})))
         }
         InternalEventPayload::PromptTextRequest(_) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render");
-            call_frontend(&window, event).await
+            let window = get_window_from_window_context(app_handle, &window_context)?;
+            Ok(call_frontend(&window, event).await)
         }
         InternalEventPayload::FindHttpResponsesRequest(req) => {
             let http_responses = app_handle
                 .db()
                 .list_http_responses_for_request(&req.request_id, req.limit.map(|l| l as u64))
                 .unwrap_or_default();
-            Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
+            Ok(Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
                 http_responses,
-            }))
+            })))
         }
         InternalEventPayload::GetHttpRequestByIdRequest(req) => {
             let http_request = app_handle.db().get_http_request(&req.id).ok();
-            Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
+            Ok(Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
                 http_request,
-            }))
+            })))
         }
         InternalEventPayload::RenderGrpcRequestRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render grpc request");
+            let window = get_window_from_window_context(app_handle, &window_context)?;
 
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let environment_id = environment_from_window(&window).map(|e| e.id);
-            let environment_chain = window
-                .db()
-                .resolve_environments(&workspace.id, None, environment_id.as_deref())
-                .expect("Failed to resolve environments");
+            let environment_chain = window.db().resolve_environments(
+                &workspace.id,
+                req.grpc_request.folder_id.as_deref(),
+                environment_id.as_deref(),
+            )?;
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let grpc_request = render_grpc_request(&req.grpc_request, environment_chain, &cb)
-                .await
-                .expect("Failed to render grpc request");
-            Some(InternalEventPayload::RenderGrpcRequestResponse(RenderGrpcRequestResponse {
+            let opt = RenderOptions {
+                error_behavior: RenderErrorBehavior::Throw,
+            };
+            let grpc_request =
+                render_grpc_request(&req.grpc_request, environment_chain, &cb, &opt).await?;
+            Ok(Some(InternalEventPayload::RenderGrpcRequestResponse(RenderGrpcRequestResponse {
                 grpc_request,
-            }))
+            })))
         }
         InternalEventPayload::RenderHttpRequestRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render http request");
+            let window = get_window_from_window_context(app_handle, &window_context)?;
 
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let environment_id = environment_from_window(&window).map(|e| e.id);
-            let environment_chain = window
-                .db()
-                .resolve_environments(&workspace.id, None, environment_id.as_deref())
-                .expect("Failed to resolve environments");
+            let environment_chain = window.db().resolve_environments(
+                &workspace.id,
+                req.http_request.folder_id.as_deref(),
+                environment_id.as_deref(),
+            )?;
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let http_request = render_http_request(&req.http_request, environment_chain, &cb)
-                .await
-                .expect("Failed to render http request");
-            Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
+            let opt = &RenderOptions {
+                error_behavior: RenderErrorBehavior::Throw,
+            };
+            let http_request =
+                render_http_request(&req.http_request, environment_chain, &cb, &opt).await?;
+            Ok(Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
                 http_request,
-            }))
+            })))
         }
         InternalEventPayload::TemplateRenderRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for render");
+            let window = get_window_from_window_context(app_handle, &window_context)?;
 
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let environment_id = environment_from_window(&window).map(|e| e.id);
-            let environment_chain = window
-                .db()
-                .resolve_environments(&workspace.id, None, environment_id.as_deref())
-                .expect("Failed to resolve environments");
+            let folder_id = if let Some(id) = window.request_id() {
+                match window.db().get_any_request(&id) {
+                    Ok(AnyRequest::HttpRequest(r)) => r.folder_id,
+                    Ok(AnyRequest::GrpcRequest(r)) => r.folder_id,
+                    Ok(AnyRequest::WebsocketRequest(r)) => r.folder_id,
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
+            let environment_chain = window.db().resolve_environments(
+                &workspace.id,
+                folder_id.as_deref(),
+                environment_id.as_deref(),
+            )?;
             let cb = PluginTemplateCallback::new(app_handle, &window_context, req.purpose);
-            let data = render_json_value(req.data, environment_chain, &cb)
-                .await
-                .expect("Failed to render template");
-            Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data }))
+            let opt = RenderOptions {
+                error_behavior: RenderErrorBehavior::Throw,
+            };
+            let data = render_json_value(req.data, environment_chain, &cb, &opt).await?;
+            Ok(Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data })))
         }
         InternalEventPayload::ErrorResponse(resp) => {
             error!("Plugin error: {}: {:?}", resp.error, resp);
@@ -134,16 +148,15 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                         resp.error
                     ),
                     color: Some(Color::Danger),
-                    timeout: None,
+                    timeout: Some(30000),
                     ..Default::default()
                 }),
                 None,
             );
-            Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await;
-            None
+            Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await
         }
         InternalEventPayload::ReloadResponse(req) => {
-            let plugins = app_handle.db().list_plugins().unwrap();
+            let plugins = app_handle.db().list_plugins()?;
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {
                     continue;
@@ -153,7 +166,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     updated_at: Utc::now().naive_utc(), // TODO: Add reloaded_at field to use instead
                     ..plugin
                 };
-                app_handle.db().upsert_plugin(&new_plugin, &UpdateSource::Plugin).unwrap();
+                app_handle.db().upsert_plugin(&new_plugin, &UpdateSource::Plugin)?;
             }
 
             if !req.silent {
@@ -168,13 +181,13 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     }),
                     None,
                 );
-                Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await;
+                Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await
+            } else {
+                Ok(None)
             }
-            None
         }
         InternalEventPayload::SendHttpRequestRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for sending HTTP request");
+            let window = get_window_from_window_context(app_handle, &window_context)?;
             let mut http_request = req.http_request;
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
@@ -188,20 +201,17 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let http_response = if http_request.id.is_empty() {
                 HttpResponse::default()
             } else {
-                window
-                    .db()
-                    .upsert_http_response(
-                        &HttpResponse {
-                            request_id: http_request.id.clone(),
-                            workspace_id: http_request.workspace_id.clone(),
-                            ..Default::default()
-                        },
-                        &UpdateSource::Plugin,
-                    )
-                    .unwrap()
+                window.db().upsert_http_response(
+                    &HttpResponse {
+                        request_id: http_request.id.clone(),
+                        workspace_id: http_request.workspace_id.clone(),
+                        ..Default::default()
+                    },
+                    &UpdateSource::Plugin,
+                )?
             };
 
-            let result = send_http_request(
+            let http_response = send_http_request(
                 &window,
                 &http_request,
                 &http_response,
@@ -209,16 +219,11 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 cookie_jar,
                 &mut tokio::sync::watch::channel(false).1, // No-op cancel channel
             )
-            .await;
+            .await?;
 
-            let http_response = match result {
-                Ok(r) => r,
-                Err(_e) => return,
-            };
-
-            Some(InternalEventPayload::SendHttpRequestResponse(SendHttpRequestResponse {
+            Ok(Some(InternalEventPayload::SendHttpRequestResponse(SendHttpRequestResponse {
                 http_response,
-            }))
+            })))
         }
         InternalEventPayload::OpenWindowRequest(req) => {
             let (navigation_tx, mut navigation_rx) = tokio::sync::mpsc::channel(128);
@@ -241,8 +246,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     }),
                     None,
                 );
-                Box::pin(handle_plugin_event(app_handle, &error_event, plugin_handle)).await;
-                return;
+                return Box::pin(handle_plugin_event(app_handle, &error_event, plugin_handle))
+                    .await;
             }
 
             {
@@ -278,32 +283,33 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 });
             }
 
-            None
+            Ok(None)
         }
         InternalEventPayload::CloseWindowRequest(req) => {
             if let Some(window) = app_handle.webview_windows().get(&req.label) {
-                window.close().expect("Failed to close window");
+                window.close()?;
             }
-            None
+            Ok(None)
         }
         InternalEventPayload::SetKeyValueRequest(req) => {
             let name = plugin_handle.info().name;
             app_handle.db().set_plugin_key_value(&name, &req.key, &req.value);
-            Some(InternalEventPayload::SetKeyValueResponse(SetKeyValueResponse {}))
+            Ok(Some(InternalEventPayload::SetKeyValueResponse(SetKeyValueResponse {})))
         }
         InternalEventPayload::GetKeyValueRequest(req) => {
             let name = plugin_handle.info().name;
             let value = app_handle.db().get_plugin_key_value(&name, &req.key).map(|v| v.value);
-            Some(InternalEventPayload::GetKeyValueResponse(GetKeyValueResponse { value }))
+            Ok(Some(InternalEventPayload::GetKeyValueResponse(GetKeyValueResponse { value })))
         }
         InternalEventPayload::DeleteKeyValueRequest(req) => {
             let name = plugin_handle.info().name;
-            let deleted = app_handle.db().delete_plugin_key_value(&name, &req.key).unwrap();
-            Some(InternalEventPayload::DeleteKeyValueResponse(DeleteKeyValueResponse { deleted }))
+            let deleted = app_handle.db().delete_plugin_key_value(&name, &req.key)?;
+            Ok(Some(InternalEventPayload::DeleteKeyValueResponse(DeleteKeyValueResponse {
+                deleted,
+            })))
         }
         InternalEventPayload::ListCookieNamesRequest(_req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for listing cookies");
+            let window = get_window_from_window_context(app_handle, &window_context)?;
             let names = match cookie_jar_from_window(&window) {
                 None => Vec::new(),
                 Some(j) => j
@@ -312,11 +318,12 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     .filter_map(|c| Cookie::parse(c.raw_cookie).ok().map(|c| c.name().to_string()))
                     .collect(),
             };
-            Some(InternalEventPayload::ListCookieNamesResponse(ListCookieNamesResponse { names }))
+            Ok(Some(InternalEventPayload::ListCookieNamesResponse(ListCookieNamesResponse {
+                names,
+            })))
         }
         InternalEventPayload::GetCookieValueRequest(req) => {
-            let window = get_window_from_window_context(app_handle, &window_context)
-                .expect("Failed to find window for listing cookies");
+            let window = get_window_from_window_context(app_handle, &window_context)?;
             let value = match cookie_jar_from_window(&window) {
                 None => None,
                 Some(j) => j.cookies.into_iter().find_map(|c| match Cookie::parse(c.raw_cookie) {
@@ -326,15 +333,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     _ => None,
                 }),
             };
-            Some(InternalEventPayload::GetCookieValueResponse(GetCookieValueResponse { value }))
+            Ok(Some(InternalEventPayload::GetCookieValueResponse(GetCookieValueResponse { value })))
         }
-        _ => None,
-    };
-
-    if let Some(e) = response_event {
-        let plugin_manager: State<'_, PluginManager> = app_handle.state();
-        if let Err(e) = plugin_manager.reply(&event, &e).await {
-            warn!("Failed to reply to plugin manager: {:?}", e)
-        }
+        _ => Ok(None),
     }
 }

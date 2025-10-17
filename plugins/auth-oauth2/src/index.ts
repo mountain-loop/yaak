@@ -273,6 +273,12 @@ export const plugin: PluginDefinition = {
           { type: 'text', name: 'scope', label: 'Scope', optional: true },
           {
             type: 'text',
+            name: 'headerName',
+            label: 'Header Name',
+            defaultValue: 'Authorization',
+          },
+          {
+            type: 'text',
             name: 'headerPrefix',
             label: 'Header Prefix',
             optional: true,
@@ -397,15 +403,9 @@ export const plugin: PluginDefinition = {
         throw new Error('Invalid grant type ' + grantType);
       }
 
+      const headerName = stringArg(values, 'headerName') || 'Authorization';
       const headerValue = `${headerPrefix} ${token.response[tokenName]}`.trim();
-      return {
-        setHeaders: [
-          {
-            name: 'Authorization',
-            value: headerValue,
-          },
-        ],
-      };
+      return { setHeaders: [{ name: headerName, value: headerValue }] };
     },
   },
 };

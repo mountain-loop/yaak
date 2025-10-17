@@ -1,6 +1,7 @@
 use crate::error::Error::{RenderStackExceededError, VariableNotFound};
 use crate::error::Result;
 use crate::{Parser, Token, Tokens, Val};
+use log::warn;
 use serde_json::json;
 use std::collections::HashMap;
 use std::future::Future;
@@ -21,21 +22,22 @@ pub async fn render_json_value_raw<T: TemplateCallback>(
     v: serde_json::Value,
     vars: &HashMap<String, String>,
     cb: &T,
+    opt: &RenderOptions,
 ) -> Result<serde_json::Value> {
     let v = match v {
-        serde_json::Value::String(s) => json!(parse_and_render(&s, vars, cb).await?),
+        serde_json::Value::String(s) => json!(parse_and_render(&s, vars, cb, opt).await?),
         serde_json::Value::Array(a) => {
             let mut new_a = Vec::new();
             for v in a {
-                new_a.push(Box::pin(render_json_value_raw(v, vars, cb)).await?)
+                new_a.push(Box::pin(render_json_value_raw(v, vars, cb, opt)).await?)
             }
             json!(new_a)
         }
         serde_json::Value::Object(o) => {
             let mut new_o = serde_json::Map::new();
             for (k, v) in o {
-                let key = Box::pin(parse_and_render(&k, vars, cb)).await?;
-                let value = Box::pin(render_json_value_raw(v, vars, cb)).await?;
+                let key = Box::pin(parse_and_render(&k, vars, cb, opt)).await?;
+                let value = Box::pin(render_json_value_raw(v, vars, cb, opt)).await?;
                 new_o.insert(key, value);
             }
             json!(new_o)
@@ -49,30 +51,55 @@ async fn parse_and_render_at_depth<T: TemplateCallback>(
     template: &str,
     vars: &HashMap<String, String>,
     cb: &T,
+    opt: &RenderOptions,
     depth: usize,
 ) -> Result<String> {
     let mut p = Parser::new(template);
     let tokens = p.parse()?;
-    render(tokens, vars, cb, depth + 1).await
+    render(tokens, vars, cb, opt, depth + 1).await
 }
 
 pub async fn parse_and_render<T: TemplateCallback>(
     template: &str,
     vars: &HashMap<String, String>,
     cb: &T,
+    opt: &RenderOptions,
 ) -> Result<String> {
-    parse_and_render_at_depth(template, vars, cb, 1).await
+    parse_and_render_at_depth(template, vars, cb, opt, 1).await
+}
+
+pub enum RenderErrorBehavior {
+    Throw,
+    ReturnEmpty,
+}
+
+pub struct RenderOptions {
+    pub error_behavior: RenderErrorBehavior,
+}
+
+impl RenderErrorBehavior {
+    pub fn handle(&self, r: Result<String>) -> Result<String> {
+        match (self, r) {
+            (_, Ok(v)) => Ok(v),
+            (RenderErrorBehavior::Throw, Err(e)) => Err(e),
+            (RenderErrorBehavior::ReturnEmpty, Err(e)) => {
+                warn!("Error rendering string: {}", e);
+                Ok("".to_string())
+            }
+        }
+    }
 }
 
 pub async fn render<T: TemplateCallback>(
     tokens: Tokens,
     vars: &HashMap<String, String>,
     cb: &T,
+    opt: &RenderOptions,
     mut depth: usize,
 ) -> Result<String> {
     depth += 1;
     if depth > MAX_DEPTH {
-        return Err(RenderStackExceededError);
+        return opt.error_behavior.handle(Err(RenderStackExceededError));
     }
 
     let mut doc_str: Vec<String> = Vec::new();
@@ -80,7 +107,10 @@ pub async fn render<T: TemplateCallback>(
     for t in tokens.tokens {
         match t {
             Token::Raw { text } => doc_str.push(text),
-            Token::Tag { val } => doc_str.push(render_value(val, &vars, cb, depth).await?),
+            Token::Tag { val } => {
+                let val = render_value(val, &vars, cb, opt, depth).await;
+                doc_str.push(opt.error_behavior.handle(val)?)
+            }
             Token::Eof => {}
         }
     }
@@ -92,16 +122,17 @@ async fn render_value<T: TemplateCallback>(
     val: Val,
     vars: &HashMap<String, String>,
     cb: &T,
+    opt: &RenderOptions,
     depth: usize,
 ) -> Result<String> {
     let v = match val {
         Val::Str { text } => {
-            let r = Box::pin(parse_and_render_at_depth(&text, vars, cb, depth)).await?;
+            let r = Box::pin(parse_and_render_at_depth(&text, vars, cb, opt, depth)).await?;
             r.to_string()
         }
         Val::Var { name } => match vars.get(name.as_str()) {
             Some(v) => {
-                let r = Box::pin(parse_and_render_at_depth(v, vars, cb, depth)).await?;
+                let r = Box::pin(parse_and_render_at_depth(v, vars, cb, opt, depth)).await?;
                 r.to_string()
             }
             None => return Err(VariableNotFound(name)),
@@ -113,13 +144,13 @@ async fn render_value<T: TemplateCallback>(
                     Val::Bool { value } => serde_json::Value::Bool(value),
                     Val::Null => serde_json::Value::Null,
                     _ => serde_json::Value::String(
-                        Box::pin(render_value(a.value, vars, cb, depth)).await?,
+                        Box::pin(render_value(a.value, vars, cb, opt, depth)).await?,
                     ),
                 };
                 resolved_args.insert(a.name, v);
             }
             let result = cb.run(name.as_str(), resolved_args.clone()).await?;
-            Box::pin(parse_and_render_at_depth(&result, vars, cb, depth)).await?
+            Box::pin(parse_and_render_at_depth(&result, vars, cb, opt, depth)).await?
         }
         Val::Bool { value } => value.to_string(),
         Val::Null => "".into(),
@@ -163,7 +194,10 @@ mod parse_and_render_tests {
         let template = "";
         let vars = HashMap::new();
         let result = "";
-        assert_eq!(parse_and_render(template, &vars, &empty_cb).await?, result.to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
+        assert_eq!(parse_and_render(template, &vars, &empty_cb, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -173,7 +207,10 @@ mod parse_and_render_tests {
         let template = "Hello World!";
         let vars = HashMap::new();
         let result = "Hello World!";
-        assert_eq!(parse_and_render(template, &vars, &empty_cb).await?, result.to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
+        assert_eq!(parse_and_render(template, &vars, &empty_cb, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -183,7 +220,10 @@ mod parse_and_render_tests {
         let template = "${[ foo ]}";
         let vars = HashMap::from([("foo".to_string(), "bar".to_string())]);
         let result = "bar";
-        assert_eq!(parse_and_render(template, &vars, &empty_cb).await?, result.to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
+        assert_eq!(parse_and_render(template, &vars, &empty_cb, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -197,7 +237,10 @@ mod parse_and_render_tests {
         vars.insert("baz".to_string(), "baz".to_string());
 
         let result = "foo: bar: baz";
-        assert_eq!(parse_and_render(template, &vars, &empty_cb).await?, result.to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
+        assert_eq!(parse_and_render(template, &vars, &empty_cb, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -206,9 +249,11 @@ mod parse_and_render_tests {
         let empty_cb = EmptyCB {};
         let template = "${[ foo ]}";
         let vars = HashMap::new();
-
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
         assert_eq!(
-            parse_and_render(template, &vars, &empty_cb).await,
+            parse_and_render(template, &vars, &empty_cb, &opt).await,
             Err(VariableNotFound("foo".to_string()))
         );
         Ok(())
@@ -220,9 +265,11 @@ mod parse_and_render_tests {
         let template = "${[ foo ]}";
         let mut vars = HashMap::new();
         vars.insert("foo".to_string(), "${[ foo ]}".to_string());
-
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
         assert_eq!(
-            parse_and_render(template, &vars, &empty_cb).await,
+            parse_and_render(template, &vars, &empty_cb, &opt).await,
             Err(RenderStackExceededError)
         );
         Ok(())
@@ -234,7 +281,10 @@ mod parse_and_render_tests {
         let template = "hello ${[ word ]} world!";
         let vars = HashMap::from([("word".to_string(), "cruel".to_string())]);
         let result = "hello cruel world!";
-        assert_eq!(parse_and_render(template, &vars, &empty_cb).await?, result.to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
+        assert_eq!(parse_and_render(template, &vars, &empty_cb, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -243,6 +293,9 @@ mod parse_and_render_tests {
         let vars = HashMap::new();
         let template = r#"${[ say_hello(a='John', b='Kate') ]}"#;
         let result = r#"say_hello: 2, Some(String("John")) Some(String("Kate"))"#;
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
 
         struct CB {}
         impl TemplateCallback for CB {
@@ -263,7 +316,7 @@ mod parse_and_render_tests {
                 Ok(arg_value.to_string())
             }
         }
-        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result);
+        assert_eq!(parse_and_render(template, &vars, &CB {}, &opt).await?, result);
         Ok(())
     }
 
@@ -272,6 +325,9 @@ mod parse_and_render_tests {
         let vars = HashMap::new();
         let template = r#"${[ upper(foo='bar') ]}"#;
         let result = r#""BAR""#;
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
         struct CB {}
         impl TemplateCallback for CB {
             async fn run(
@@ -296,7 +352,7 @@ mod parse_and_render_tests {
             }
         }
 
-        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        assert_eq!(parse_and_render(template, &vars, &CB {}, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -306,9 +362,16 @@ mod parse_and_render_tests {
         vars.insert("foo".to_string(), "bar".to_string());
         let template = r#"${[ upper(foo=b64'Zm9vICdiYXInIGJheg') ]}"#;
         let result = r#""FOO 'BAR' BAZ""#;
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
         struct CB {}
         impl TemplateCallback for CB {
-            async fn run(&self, fn_name: &str, args: HashMap<String, serde_json::Value>) -> Result<String> {
+            async fn run(
+                &self,
+                fn_name: &str,
+                args: HashMap<String, serde_json::Value>,
+            ) -> Result<String> {
                 Ok(match fn_name {
                     "upper" => args["foo"].to_string().to_uppercase(),
                     _ => "".to_string(),
@@ -325,7 +388,7 @@ mod parse_and_render_tests {
             }
         }
 
-        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        assert_eq!(parse_and_render(template, &vars, &CB {}, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -335,9 +398,17 @@ mod parse_and_render_tests {
         vars.insert("foo".to_string(), "bar".to_string());
         let template = r#"${[ upper(foo='${[ foo ]}') ]}"#;
         let result = r#""BAR""#;
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
+
         struct CB {}
         impl TemplateCallback for CB {
-            async fn run(&self, fn_name: &str, args: HashMap<String, serde_json::Value>) -> Result<String> {
+            async fn run(
+                &self,
+                fn_name: &str,
+                args: HashMap<String, serde_json::Value>,
+            ) -> Result<String> {
                 Ok(match fn_name {
                     "secret" => "abc".to_string(),
                     "upper" => args["foo"].to_string().to_uppercase(),
@@ -355,7 +426,7 @@ mod parse_and_render_tests {
             }
         }
 
-        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        assert_eq!(parse_and_render(template, &vars, &CB {}, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -365,9 +436,17 @@ mod parse_and_render_tests {
         vars.insert("foo".to_string(), "bar".to_string());
         let template = r#"${[ no_op(inner='${[ foo ]}') ]}"#;
         let result = r#""bar""#;
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
+
         struct CB {}
         impl TemplateCallback for CB {
-            async fn run(&self, fn_name: &str, args: HashMap<String, serde_json::Value>) -> Result<String> {
+            async fn run(
+                &self,
+                fn_name: &str,
+                args: HashMap<String, serde_json::Value>,
+            ) -> Result<String> {
                 Ok(match fn_name {
                     "no_op" => args["inner"].to_string(),
                     _ => "".to_string(),
@@ -384,7 +463,7 @@ mod parse_and_render_tests {
             }
         }
 
-        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        assert_eq!(parse_and_render(template, &vars, &CB {}, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -393,9 +472,17 @@ mod parse_and_render_tests {
         let vars = HashMap::new();
         let template = r#"${[ upper(foo=secret()) ]}"#;
         let result = r#""ABC""#;
+
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
         struct CB {}
         impl TemplateCallback for CB {
-            async fn run(&self, fn_name: &str, args: HashMap<String, serde_json::Value>) -> Result<String> {
+            async fn run(
+                &self,
+                fn_name: &str,
+                args: HashMap<String, serde_json::Value>,
+            ) -> Result<String> {
                 Ok(match fn_name {
                     "secret" => "abc".to_string(),
                     "upper" => args["foo"].to_string().to_uppercase(),
@@ -412,8 +499,7 @@ mod parse_and_render_tests {
                 Ok(arg_value.to_string())
             }
         }
-
-        assert_eq!(parse_and_render(template, &vars, &CB {}).await?, result.to_string());
+        assert_eq!(parse_and_render(template, &vars, &CB {}, &opt).await?, result.to_string());
         Ok(())
     }
 
@@ -421,10 +507,17 @@ mod parse_and_render_tests {
     async fn render_fn_err() -> Result<()> {
         let vars = HashMap::new();
         let template = r#"hello ${[ error() ]}"#;
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
 
         struct CB {}
         impl TemplateCallback for CB {
-            async fn run(&self, _fn_name: &str, _args: HashMap<String, serde_json::Value>) -> Result<String> {
+            async fn run(
+                &self,
+                _fn_name: &str,
+                _args: HashMap<String, serde_json::Value>,
+            ) -> Result<String> {
                 Err(RenderError("Failed to do it!".to_string()))
             }
 
@@ -439,7 +532,7 @@ mod parse_and_render_tests {
         }
 
         assert_eq!(
-            parse_and_render(template, &vars, &CB {}).await,
+            parse_and_render(template, &vars, &CB {}, &opt).await,
             Err(RenderError("Failed to do it!".to_string()))
         );
         Ok(())
@@ -449,14 +542,21 @@ mod parse_and_render_tests {
 #[cfg(test)]
 mod render_json_value_raw_tests {
     use crate::error::Result;
-    use crate::{TemplateCallback, render_json_value_raw};
+    use crate::{
+        RenderErrorBehavior, RenderOptions, TemplateCallback, parse_and_render,
+        render_json_value_raw,
+    };
     use serde_json::json;
     use std::collections::HashMap;
 
     struct EmptyCB {}
 
     impl TemplateCallback for EmptyCB {
-        async fn run(&self, _fn_name: &str, _args: HashMap<String, serde_json::Value>) -> Result<String> {
+        async fn run(
+            &self,
+            _fn_name: &str,
+            _args: HashMap<String, serde_json::Value>,
+        ) -> Result<String> {
             todo!()
         }
 
@@ -475,8 +575,11 @@ mod render_json_value_raw_tests {
         let v = json!("${[a]}");
         let mut vars = HashMap::new();
         vars.insert("a".to_string(), "aaa".to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
 
-        assert_eq!(render_json_value_raw(v, &vars, &EmptyCB {}).await?, json!("aaa"));
+        assert_eq!(render_json_value_raw(v, &vars, &EmptyCB {}, &opt).await?, json!("aaa"));
         Ok(())
     }
 
@@ -485,8 +588,11 @@ mod render_json_value_raw_tests {
         let v = json!(["${[a]}", "${[a]}"]);
         let mut vars = HashMap::new();
         vars.insert("a".to_string(), "aaa".to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
 
-        let result = render_json_value_raw(v, &vars, &EmptyCB {}).await?;
+        let result = render_json_value_raw(v, &vars, &EmptyCB {}, &opt).await?;
         assert_eq!(result, json!(["aaa", "aaa"]));
 
         Ok(())
@@ -497,8 +603,11 @@ mod render_json_value_raw_tests {
         let v = json!({"${[a]}": "${[a]}"});
         let mut vars = HashMap::new();
         vars.insert("a".to_string(), "aaa".to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
 
-        let result = render_json_value_raw(v, &vars, &EmptyCB {}).await?;
+        let result = render_json_value_raw(v, &vars, &EmptyCB {}, &opt).await?;
         assert_eq!(result, json!({"aaa": "aaa"}));
 
         Ok(())
@@ -516,8 +625,11 @@ mod render_json_value_raw_tests {
         ]);
         let mut vars = HashMap::new();
         vars.insert("a".to_string(), "aaa".to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
 
-        let result = render_json_value_raw(v, &vars, &EmptyCB {}).await?;
+        let result = render_json_value_raw(v, &vars, &EmptyCB {}, &opt).await?;
         assert_eq!(
             result,
             json!([
@@ -529,6 +641,19 @@ mod render_json_value_raw_tests {
                 {"x": ["aaa"]}
             ])
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn render_opt_return_empty() -> Result<()> {
+        let vars = HashMap::new();
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::ReturnEmpty,
+        };
+
+        let result = parse_and_render("DNE: ${[hello]}", &vars, &EmptyCB {}, &opt).await?;
+        assert_eq!(result, "DNE: ".to_string());
 
         Ok(())
     }

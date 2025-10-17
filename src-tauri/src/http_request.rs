@@ -32,6 +32,7 @@ use yaak_plugins::events::{
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
+use yaak_templates::{RenderErrorBehavior, RenderOptions};
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -76,7 +77,11 @@ pub async fn send_http_request<R: Runtime>(
         RenderPurpose::Send,
     );
 
-    let request = match render_http_request(&resolved_request, environment_chain, &cb).await {
+    let opt = RenderOptions {
+        error_behavior: RenderErrorBehavior::Throw,
+    };
+
+    let request = match render_http_request(&resolved_request, environment_chain, &cb, &opt).await {
         Ok(r) => r,
         Err(e) => {
             return Ok(response_err(

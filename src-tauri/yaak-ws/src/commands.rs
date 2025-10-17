@@ -22,6 +22,7 @@ use yaak_plugins::events::{
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
+use yaak_templates::{RenderErrorBehavior, RenderOptions};
 
 #[tauri::command]
 pub(crate) async fn upsert_request<R: Runtime>(
@@ -126,6 +127,9 @@ pub(crate) async fn send<R: Runtime>(
             &PluginWindowContext::new(&window),
             RenderPurpose::Send,
         ),
+        &RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        },
     )
     .await?;
 
@@ -202,6 +206,9 @@ pub(crate) async fn connect<R: Runtime>(
             &PluginWindowContext::new(&window),
             RenderPurpose::Send,
         ),
+        &RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        },
     )
     .await?;
 

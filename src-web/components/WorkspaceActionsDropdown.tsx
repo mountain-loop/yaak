@@ -7,7 +7,11 @@ import { memo, useCallback, useMemo } from 'react';
 import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
 import { switchWorkspace } from '../commands/switchWorkspace';
-import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
+import {
+  activeWorkspaceAtom,
+  activeWorkspaceIdAtom,
+  activeWorkspaceMetaAtom,
+} from '../hooks/useActiveWorkspace';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
 import { showDialog } from '../lib/dialog';
@@ -95,7 +99,12 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     if (workspaceId == null) return;
 
     const settings = jotaiStore.get(settingsAtom);
-    if (typeof settings.openWorkspaceNewWindow === 'boolean') {
+    const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+    if (workspaceId === activeWorkspaceId) {
+      // Always open a new window if the selected one is already active
+      switchWorkspace.mutate({ workspaceId, inNewWindow: true });
+      return;
+    } else if (typeof settings.openWorkspaceNewWindow === 'boolean') {
       switchWorkspace.mutate({ workspaceId, inNewWindow: settings.openWorkspaceNewWindow });
       return;
     }

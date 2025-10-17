@@ -21,6 +21,8 @@ export function languageFromContentType(
   } else if (justContentType.includes('javascript')) {
     // Sometimes `application/javascript` returns JSON, so try detecting that
     return detectFromContent(content, 'javascript');
+  } else if (justContentType.includes('markdown')) {
+    return 'markdown';
   }
 
   return detectFromContent(content, 'text');

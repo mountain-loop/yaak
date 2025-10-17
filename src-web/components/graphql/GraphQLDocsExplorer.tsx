@@ -177,7 +177,7 @@ function GraphQLExplorerHeader({
   };
   const crumbs = findIt(item);
   return (
-    <nav className="pl-2 pr-1 h-lg grid grid-rows-1 grid-cols-[minmax(0,1fr)_auto] items-center min-w-0 gap-1">
+    <nav className="pl-2 pr-1 h-lg grid grid-rows-1 grid-cols-[minmax(0,1fr)_auto] items-center min-w-0 gap-1 z-10">
       <div className="@container w-full relative pl-2 pr-1 h-lg grid grid-rows-1 grid-cols-[minmax(0,min-content)_auto] items-center gap-1">
         <div className="whitespace-nowrap flex items-center gap-2 text-text-subtle text-sm overflow-x-auto hide-scrollbars">
           <Icon icon="book_open_text" />
@@ -210,7 +210,7 @@ function GraphQLExplorerHeader({
         />
       </div>
       <div className="ml-auto flex gap-1 [&>*]:text-text-subtle">
-        <IconButton icon="x" size="sm" title="Close documenation explorer" onClick={onClose} />
+        <IconButton icon="x" size="sm" title="Close documentation explorer" onClick={onClose} />
       </div>
     </nav>
   );

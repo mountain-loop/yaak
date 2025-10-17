@@ -5,6 +5,7 @@ pub trait WorkspaceWindowTrait {
     fn workspace_id(&self) -> Option<String>;
     fn cookie_jar_id(&self) -> Option<String>;
     fn environment_id(&self) -> Option<String>;
+    fn request_id(&self) -> Option<String>;
 }
 
 impl<R: Runtime> WorkspaceWindowTrait for WebviewWindow<R> {
@@ -27,5 +28,11 @@ impl<R: Runtime> WorkspaceWindowTrait for WebviewWindow<R> {
         let url = self.url().unwrap();
         let mut query_pairs = url.query_pairs();
         query_pairs.find(|(k, _v)| k == "environment_id").map(|(_k, v)| v.to_string())
+    }
+
+    fn request_id(&self) -> Option<String> {
+        let url = self.url().unwrap();
+        let mut query_pairs = url.query_pairs();
+        query_pairs.find(|(k, _v)| k == "request_id").map(|(_k, v)| v.to_string())
     }
 }

@@ -67,7 +67,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
         </EmptyStateText>
       );
     } else {
-      return <EmptyStateText>Authentication not configured</EmptyStateText>;
+      return <EmptyStateText>No authentication</EmptyStateText>;
     }
   }
 

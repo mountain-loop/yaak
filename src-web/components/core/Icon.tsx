@@ -1,7 +1,7 @@
 import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import * as lucide from 'lucide-react';
-import type { HTMLAttributes } from 'react';
+import type { CSSProperties, HTMLAttributes } from 'react';
 import { memo } from 'react';
 
 const icons = {
@@ -39,6 +39,7 @@ const icons = {
   code: lucide.CodeIcon,
   columns_2: lucide.Columns2Icon,
   command: lucide.CommandIcon,
+  corner_right_up: lucide.CornerRightUpIcon,
   credit_card: lucide.CreditCardIcon,
   cookie: lucide.CookieIcon,
   copy: lucide.CopyIcon,
@@ -54,6 +55,7 @@ const icons = {
   flame: lucide.FlameIcon,
   flask: lucide.FlaskConicalIcon,
   folder: lucide.FolderIcon,
+  folder_cog: lucide.FolderCogIcon,
   folder_code: lucide.FolderCodeIcon,
   folder_git: lucide.FolderGitIcon,
   folder_input: lucide.FolderInputIcon,
@@ -61,6 +63,7 @@ const icons = {
   folder_output: lucide.FolderOutputIcon,
   folder_symlink: lucide.FolderSymlinkIcon,
   folder_sync: lucide.FolderSyncIcon,
+  folder_up: lucide.FolderUpIcon,
   git_branch: lucide.GitBranchIcon,
   git_branch_plus: lucide.GitBranchPlusIcon,
   git_commit: lucide.GitCommitIcon,
@@ -118,12 +121,13 @@ const icons = {
   x: lucide.XIcon,
   _unknown: lucide.ShieldAlertIcon,
 
-  empty: (props: HTMLAttributes<HTMLSpanElement>) => <span {...props} />,
+  empty: (props: HTMLAttributes<HTMLSpanElement>) => <div {...props} />,
 };
 
 export interface IconProps {
   icon: keyof typeof icons;
   className?: string;
+  style?: CSSProperties;
   size?: '2xs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   spin?: boolean;
   title?: string;
@@ -135,12 +139,14 @@ export const Icon = memo(function Icon({
   color = 'default',
   spin,
   size = 'md',
+  style,
   className,
   title,
 }: IconProps) {
   const Component = icons[icon] ?? icons._unknown;
   return (
     <Component
+      style={style}
       title={title}
       className={classNames(
         className,

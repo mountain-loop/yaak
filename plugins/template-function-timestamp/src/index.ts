@@ -155,7 +155,7 @@ export function formatDatetime(args: {
   format?: string;
   in?: ContextFn<Date>;
 }): string {
-  const { date, format = 'yyyy-MM-dd HH:mm:ss' } = args;
+  const { date, format } = args;
   const d = parseDateString(date ?? '');
-  return formatDate(d, String(format), { in: args.in });
+  return formatDate(d, String(format || 'yyyy-MM-dd HH:mm:ss'), { in: args.in });
 }

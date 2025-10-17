@@ -160,7 +160,11 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             { label: 'GraphQL', value: BODY_TYPE_GRAPHQL },
             { label: 'JSON', value: BODY_TYPE_JSON },
             { label: 'XML', value: BODY_TYPE_XML },
-            { label: 'Other', value: BODY_TYPE_OTHER },
+            {
+              label: 'Other',
+              value: BODY_TYPE_OTHER,
+              shortLabel: nameOfContentTypeOr(contentType, 'Other'),
+            },
             { type: 'separator', label: 'Other' },
             { label: 'Binary File', value: BODY_TYPE_BINARY },
             { label: 'No Body', shortLabel: 'Body', value: BODY_TYPE_NONE },
@@ -229,6 +233,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     [
       activeRequest,
       authTab,
+      contentType,
       handleContentTypeChange,
       headersTab,
       numParams,
@@ -351,7 +356,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             label="Request"
             onChangeValue={setActiveTab}
             tabs={tabs}
-            tabListClassName="mt-1 !mb-1.5"
+            tabListClassName="mt-1 mb-1.5"
           >
             <TabContent value={TAB_AUTH}>
               <HttpAuthenticationEditor model={activeRequest} />
@@ -470,4 +475,12 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
       )}
     </div>
   );
+}
+
+function nameOfContentTypeOr(contentType: string | null, fallback: string) {
+  const language = languageFromContentType(contentType);
+  if (language === 'markdown') {
+    return 'Markdown';
+  }
+  return fallback;
 }
