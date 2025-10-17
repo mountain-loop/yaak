@@ -2,23 +2,14 @@ import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaaka
 import fs from 'node:fs';
 
 const options = [
-  'ascii',
-  'utf8',
-  'utf-8',
-  'utf16le',
-  'utf-16le',
-  'ucs2',
-  'ucs-2',
-  'base64',
-  'base64url',
-  'latin1',
-  'binary',
-  'hex',
-].map((it) => ({
-  label: it,
-  value: it,
-}));
-
+  { label: 'ASCII', value: 'ascii' },
+  { label: 'UTF-8', value: 'utf8' },
+  { label: 'UTF-16 LE', value: 'utf16le' },
+  { label: 'Base64', value: 'base64' },
+  { label: 'Base64 URL-safe', value: 'base64url' },
+  { label: 'Latin-1', value: 'latin1' },
+  { label: 'Hexadecimal', value: 'hex' },
+];
 export const plugin: PluginDefinition = {
   templateFunctions: [
     {
