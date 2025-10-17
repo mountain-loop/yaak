@@ -77,7 +77,9 @@ export function urlMatchesRedirect(url: URL, redirectUrl: string | null): boolea
   };
 
   // Require redirect path to be a prefix of the navigated URL path
-  const pathMatches = normPath(url.pathname).startsWith(normPath(redirect.pathname));
+  const urlPath = normPath(url.pathname);
+  const redirectPath = normPath(redirect.pathname);
+  const pathMatches = urlPath === redirectPath || urlPath.startsWith(`${redirectPath}/`);
 
   return sameProtocol && sameHost && samePort && pathMatches;
 }

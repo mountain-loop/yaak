@@ -8,6 +8,12 @@ describe('extractCode', () => {
     expect(extractCode(url, redirect)).toBe('abc123');
   });
 
+  test('extracts code from query with weird path', () => {
+    const url = 'https://app.example.com/cbwithextra?code=abc123&state=xyz';
+    const redirect = 'https://app.example.com/cb';
+    expect(extractCode(url, redirect)).toBeNull();
+  });
+
   test('allows trailing slash differences', () => {
     expect(extractCode('https://app.example.com/cb/?code=abc', 'https://app.example.com/cb')).toBe(
       'abc',
