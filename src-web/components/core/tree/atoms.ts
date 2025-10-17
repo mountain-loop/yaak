@@ -32,43 +32,40 @@ export const draggingIdsFamily = atomFamily((_treeId: string) => {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const hoveredParentFamily = atomFamily((_treeId: string) => {
-  return atom<{ index: number | null; parentId: string | null }>({ index: null, parentId: null });
+  return atom<{
+    index: number | null;
+    childIndex: number | null;
+    parentId: string | null;
+    parentDepth: number | null;
+  }>({
+    index: null,
+    childIndex: null,
+    parentId: null,
+    parentDepth: null,
+  });
 });
 
-export const isParentHoveredFamily = atomFamily(
-  ({ treeId, parentId }: { treeId: string; parentId: string | null | undefined }) =>
-    selectAtom(hoveredParentFamily(treeId), (v) => v.parentId === parentId, Object.is),
-  (a, b) => a.treeId === b.treeId && a.parentId === b.parentId,
+export const isIndexHoveredFamily = atomFamily(
+  ({ treeId, index }: { treeId: string; index: number}) =>
+    selectAtom(hoveredParentFamily(treeId), (v) => v.index === index, Object.is),
+  (a, b) => a.treeId === b.treeId && a.index === b.index,
 );
 
-export const isItemHoveredFamily = atomFamily(
-  ({
-    treeId,
-    parentId,
-    index,
-  }: {
-    treeId: string;
-    parentId: string | null | undefined;
-    index: number | null;
-  }) =>
-    selectAtom(
-      hoveredParentFamily(treeId),
-      (v) => v.parentId === parentId && v.index === index,
-      Object.is,
-    ),
-  (a, b) => a.treeId === b.treeId && a.parentId === b.parentId && a.index === b.index,
+export const hoveredParentDepthFamily = atomFamily((treeId: string) =>
+  selectAtom(
+    hoveredParentFamily(treeId),
+    (s) => s.parentDepth,
+    (a, b) => Object.is(a, b) // prevents re-render unless the value changes
+  )
 );
-
-function kvKey(workspaceId: string | null) {
-  return ['sidebar_collapsed', workspaceId ?? 'n/a'];
-}
 
 export const collapsedFamily = atomFamily((workspaceId: string) => {
-  return atomWithKVStorage<Record<string, boolean>>(kvKey(workspaceId), {});
+  const key = ['sidebar_collapsed', workspaceId ?? 'n/a'];
+  return atomWithKVStorage<Record<string, boolean>>(key, {});
 });
 
 export const isCollapsedFamily = atomFamily(
-  ({ treeId, itemId }: { treeId: string; itemId: string }) =>
+  ({ treeId, itemId = 'n/a' }: { treeId: string; itemId: string | undefined }) =>
     atom(
       // --- getter ---
       (get) => !!get(collapsedFamily(treeId))[itemId],

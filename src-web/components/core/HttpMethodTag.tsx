@@ -2,6 +2,7 @@ import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-intern
 import { settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
+import { memo } from 'react';
 
 interface Props {
   request: HttpRequest | GrpcRequest | WebsocketRequest;
@@ -23,7 +24,7 @@ const methodNames: Record<string, string> = {
   websocket: 'WS',
 };
 
-export function HttpMethodTag({ request, className, short }: Props) {
+export const HttpMethodTag = memo(function HttpMethodTag({ request, className, short }: Props) {
   const settings = useAtomValue(settingsAtom);
   const method =
     request.model === 'http_request' && request.bodyType === 'graphql'
@@ -42,9 +43,9 @@ export function HttpMethodTag({ request, className, short }: Props) {
       short={short}
     />
   );
-}
+});
 
-export function HttpMethodTagRaw({
+function HttpMethodTagRaw({
   className,
   method,
   colored,

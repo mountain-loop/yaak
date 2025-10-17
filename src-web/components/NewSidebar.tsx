@@ -18,7 +18,7 @@ import {
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeCookieJarAtom } from '../hooks/useActiveCookieJar';
@@ -71,7 +71,13 @@ function getItemKey(item: Model) {
   ].join('::');
 }
 
-function SidebarLeftSlot({ treeId, item }: { treeId: string; item: Model }) {
+const SidebarLeftSlot = memo(function SidebarLeftSlot({
+  treeId,
+  item,
+}: {
+  treeId: string;
+  item: Model;
+}) {
   if (item.model === 'folder') {
     return <Icon icon="folder" />;
   } else if (item.model === 'workspace') {
@@ -86,9 +92,9 @@ function SidebarLeftSlot({ treeId, item }: { treeId: string; item: Model }) {
       />
     );
   }
-}
+});
 
-function SidebarInnerItem({ item }: { treeId: string; item: Model }) {
+const SidebarInnerItem = memo(function SidebarInnerItem({ item }: { treeId: string; item: Model }) {
   const response = useAtomValue(
     useMemo(
       () =>
@@ -119,7 +125,7 @@ function SidebarInnerItem({ item }: { treeId: string; item: Model }) {
       )}
     </div>
   );
-}
+});
 
 function NewSidebar({ className }: { className?: string }) {
   const [hidden, setHidden] = useSidebarHidden();
@@ -292,7 +298,7 @@ const sidebarTreeAtom = atom((get) => {
   }
 
   // Put requests and folders into a tree structure
-  const next = (node: TreeNode<Model>): TreeNode<Model> => {
+  const next = (node: TreeNode<Model>, depth: number): TreeNode<Model> => {
     const childItems = childrenMap[node.item.id] ?? [];
 
     // Recurse to children
@@ -301,18 +307,22 @@ const sidebarTreeAtom = atom((get) => {
       node.children = node.children ?? [];
       for (const item of childItems) {
         treeParentMap[item.id] = node;
-        node.children.push(next({ item, parent: node }));
+        node.children.push(next({ item, parent: node, depth }, depth + 1));
       }
     }
 
     return node;
   };
 
-  return next({
-    item: activeWorkspace,
-    children: [],
-    parent: null,
-  });
+  return next(
+    {
+      item: activeWorkspace,
+      children: [],
+      parent: null,
+      depth: 0,
+    },
+    1,
+  );
 });
 
 const actions = {

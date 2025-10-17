@@ -1,7 +1,7 @@
 import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import * as lucide from 'lucide-react';
-import type { HTMLAttributes } from 'react';
+import type { CSSProperties, HTMLAttributes } from 'react';
 import { memo } from 'react';
 
 const icons = {
@@ -127,6 +127,7 @@ const icons = {
 export interface IconProps {
   icon: keyof typeof icons;
   className?: string;
+  style?: CSSProperties;
   size?: '2xs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   spin?: boolean;
   title?: string;
@@ -138,12 +139,14 @@ export const Icon = memo(function Icon({
   color = 'default',
   spin,
   size = 'md',
+  style,
   className,
   title,
 }: IconProps) {
   const Component = icons[icon] ?? icons._unknown;
   return (
     <Component
+      style={style}
       title={title}
       className={classNames(
         className,
