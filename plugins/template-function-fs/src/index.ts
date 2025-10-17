@@ -22,8 +22,9 @@ export const plugin: PluginDefinition = {
           type: 'select',
           name: 'encoding',
           label: 'Encoding',
+          defaultValue: 'utf8',
+          description: 'Specifies how the file’s bytes are decoded into text when read',
           options,
-          defaultValue: 'utf-8',
         },
       ],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
