@@ -6,8 +6,8 @@ import type {
   PluginDefinition,
 } from '@yaakapp/api';
 import {
-  genPkceCodeVerifier,
   DEFAULT_PKCE_METHOD,
+  genPkceCodeVerifier,
   getAuthorizationCode,
   PKCE_PLAIN,
   PKCE_SHA256,
@@ -123,17 +123,6 @@ export const plugin: PluginDefinition = {
         label: 'Clear Window Session',
         async onSelect(ctx, { contextId }) {
           await resetDataDirKey(ctx, contextId);
-        },
-      },
-      {
-        label: 'Toggle Debug Logs',
-        async onSelect(ctx) {
-          const enableLogs = !(await ctx.store.get('enable_logs'));
-          await ctx.store.set('enable_logs', enableLogs);
-          await ctx.toast.show({
-            message: `Debug logs ${enableLogs ? 'enabled' : 'disabled'}`,
-            color: 'info',
-          });
         },
       },
     ],
