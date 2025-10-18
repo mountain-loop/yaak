@@ -1,6 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import type { GetTemplateFunctionsResponse, TemplateFunction } from '@yaakapp-internal/plugins';
-import { atom, useAtomValue , useSetAtom } from 'jotai';
+import type {
+  GetTemplateFunctionSummaryResponse,
+  TemplateFunction,
+} from '@yaakapp-internal/plugins';
+import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { useMemo, useState } from 'react';
 import type { TwigCompletionOption } from '../components/core/Editor/twig/completion';
 import { invokeCmd } from '../lib/tauri';
@@ -55,7 +58,9 @@ export function useSubscribeTemplateFunctions() {
     refetchInterval: numFns > 0 ? Infinity : 1000,
     refetchOnMount: true,
     queryFn: async () => {
-      const result = await invokeCmd<GetTemplateFunctionsResponse[]>('cmd_template_functions');
+      const result = await invokeCmd<GetTemplateFunctionSummaryResponse[]>(
+        'cmd_template_function_summaries',
+      );
       setNumFns(result.length);
       const functions = result.flatMap((r) => r.functions) ?? [];
       setAtom(functions);

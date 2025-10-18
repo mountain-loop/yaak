@@ -74,7 +74,7 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
       firstSlot={() =>
         activeConnection == null ? (
           <HotKeyList
-            hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'url_bar.focus']}
+            hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']}
           />
         ) : (
           <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 items-center">

@@ -1,9 +1,17 @@
+import type {
+  Folder,
+  GrpcRequest,
+  HttpRequest,
+  WebsocketRequest,
+  Workspace,
+} from '@yaakapp-internal/models';
 import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
+import { useTemplateFunctionConfig } from '../hooks/useTemplateFunctionConfig';
 import {
   templateTokensToString,
   useTemplateTokensToString,
@@ -24,6 +32,7 @@ interface Props {
   initialTokens: Tokens;
   hide: () => void;
   onChange: (insert: string) => void;
+  model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace;
 }
 
 export function TemplateFunctionDialog({ initialTokens, templateFunction, ...props }: Props) {
@@ -84,14 +93,15 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
 }
 
 function InitializedTemplateFunctionDialog({
-  templateFunction,
-  hide,
+  templateFunction: { name },
   initialArgValues,
+  hide,
   onChange,
+  model,
 }: Omit<Props, 'initialTokens'> & {
   initialArgValues: Record<string, string | boolean>;
 }) {
-  const enablePreview = templateFunction.name !== 'secure';
+  const enablePreview = name !== 'secure';
   const [showSecretsInPreview, toggleShowSecretsInPreview] = useToggle(false);
   const [argValues, setArgValues] = useState<Record<string, string | boolean>>(initialArgValues);
 
@@ -112,15 +122,16 @@ function InitializedTemplateFunctionDialog({
           type: 'tag',
           val: {
             type: 'fn',
-            name: templateFunction.name,
+            name,
             args: argTokens,
           },
         },
       ],
     };
-  }, [argValues, templateFunction.name]);
+  }, [argValues, name]);
 
   const tagText = useTemplateTokensToString(tokens);
+  const templateFunction = useTemplateFunctionConfig(name, argValues, model).data;
 
   const handleDone = () => {
     if (tagText.data) {
@@ -134,7 +145,7 @@ function InitializedTemplateFunctionDialog({
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
   const dataContainsSecrets = useMemo(() => {
     for (const [name, value] of Object.entries(argValues)) {
-      const arg = templateFunction.args.find((a) => 'name' in a && a.name === name);
+      const arg = templateFunction?.args.find((a) => 'name' in a && a.name === name);
       const isTextPassword = arg?.type === 'text' && arg.password;
       if (isTextPassword && typeof value === 'string' && value && rendered.data?.includes(value)) {
         return true;
@@ -144,6 +155,8 @@ function InitializedTemplateFunctionDialog({
     // Only update this on rendered data change to keep secrets hidden on input change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendered.data]);
+
+  if (templateFunction == null) return null;
 
   return (
     <VStack
@@ -155,7 +168,7 @@ function InitializedTemplateFunctionDialog({
         handleDone();
       }}
     >
-      {templateFunction.name === 'secure' ? (
+      {name === 'secure' ? (
         <PlainInput
           required
           label="Value"

@@ -221,7 +221,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   );
 });
 
-interface ContextMenuProps {
+export interface ContextMenuProps {
   triggerPosition: { x: number; y: number } | null;
   className?: string;
   items: DropdownProps['items'];

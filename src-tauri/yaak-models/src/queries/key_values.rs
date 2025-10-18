@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{KeyValue, KeyValueIden, UpsertModelInfo};
@@ -22,7 +23,7 @@ impl<'a> DbContext<'a> {
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
-    pub fn get_key_value_string(&self, namespace: &str, key: &str, default: &str) -> String {
+    pub fn get_key_value_str(&self, namespace: &str, key: &str, default: &str) -> String {
         match self.get_key_value_raw(namespace, key) {
             None => default.to_string(),
             Some(v) => {
@@ -32,6 +33,22 @@ impl<'a> DbContext<'a> {
                     Err(e) => {
                         error!("Failed to parse string key value: {}", e);
                         default.to_string()
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn get_key_value_dte(&self, namespace: &str, key: &str, default: NaiveDateTime) -> NaiveDateTime {
+        match self.get_key_value_raw(namespace, key) {
+            None => default,
+            Some(v) => {
+                let result = serde_json::from_str(&v.value);
+                match result {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("Failed to parse date key value: {}", e);
+                        default
                     }
                 }
             }
@@ -67,7 +84,18 @@ impl<'a> DbContext<'a> {
         self.conn.resolve().query_row(sql.as_str(), &*params.as_params(), KeyValue::from_row).ok()
     }
 
-    pub fn set_key_value_string(
+    pub fn set_key_value_dte(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: NaiveDateTime,
+        source: &UpdateSource,
+    ) -> (KeyValue, bool) {
+        let encoded = serde_json::to_string(&value).unwrap();
+        self.set_key_value_raw(namespace, key, &encoded, source)
+    }
+
+    pub fn set_key_value_str(
         &self,
         namespace: &str,
         key: &str,

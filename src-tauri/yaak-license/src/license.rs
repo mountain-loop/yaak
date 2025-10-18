@@ -88,7 +88,7 @@ pub async fn activate_license<R: Runtime>(
     }
 
     let body: ActivateLicenseResponsePayload = response.json().await?;
-    window.app_handle().db().set_key_value_string(
+    window.app_handle().db().set_key_value_str(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         body.activation_id.as_str(),
@@ -207,5 +207,5 @@ fn build_url(path: &str) -> String {
 }
 
 pub async fn get_activation_id<R: Runtime>(app_handle: &AppHandle<R>) -> String {
-    app_handle.db().get_key_value_string(KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
+    app_handle.db().get_key_value_str(KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
 }

@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { useFloatingSidebarHidden } from '../../hooks/useFloatingSidebarHidden';
-import { useShouldFloatSidebar } from '../../hooks/useShouldFloatSidebar';
-import { useSidebarHidden } from '../../hooks/useSidebarHidden';
-import { IconButton } from '../core/IconButton';
-import { HStack } from '../core/Stacks';
-import { CreateDropdown } from '../CreateDropdown';
+import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
+import { useShouldFloatSidebar } from '../hooks/useShouldFloatSidebar';
+import { useSidebarHidden } from '../hooks/useSidebarHidden';
+import { IconButton } from './core/IconButton';
+import { HStack } from './core/Stacks';
+import { CreateDropdown } from './CreateDropdown';
 
 export function SidebarActions() {
   const floating = useShouldFloatSidebar();
@@ -31,7 +31,7 @@ export function SidebarActions() {
         icon={hidden ? 'left_panel_hidden' : 'left_panel_visible'}
         iconColor="secondary"
       />
-      <CreateDropdown hotKeyAction="http_request.create">
+      <CreateDropdown hotKeyAction="model.create">
         <IconButton size="sm" icon="plus_circle" iconColor="secondary" title="Add Resource" />
       </CreateDropdown>
     </HStack>

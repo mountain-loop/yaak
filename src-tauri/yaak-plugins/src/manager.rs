@@ -10,7 +10,8 @@ use crate::events::{
     FilterRequest, FilterResponse, GetGrpcRequestActionsResponse,
     GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
     GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
-    GetTemplateFunctionsResponse, GetThemesRequest, GetThemesResponse, ImportRequest,
+    GetTemplateFunctionConfigRequest, GetTemplateFunctionConfigResponse,
+    GetTemplateFunctionSummaryResponse, GetThemesRequest, GetThemesResponse, ImportRequest,
     ImportResponse, InternalEvent, InternalEventPayload, JsonPrimitive, PluginWindowContext,
     RenderPurpose,
 };
@@ -489,35 +490,59 @@ impl PluginManager {
         Ok(all_actions)
     }
 
-    pub async fn get_template_functions<R: Runtime>(
+    pub async fn get_template_function_config<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
-    ) -> Result<Vec<GetTemplateFunctionsResponse>> {
-        self.get_template_functions_with_context(&PluginWindowContext::new(&window)).await
-    }
+        fn_name: &str,
+        environment_chain: Vec<Environment>,
+        values: HashMap<String, JsonPrimitive>,
+        model_id: &str,
+    ) -> Result<GetTemplateFunctionConfigResponse> {
+        let results = self.get_template_function_summaries(window).await?;
+        let r = results
+            .iter()
+            .find(|r| r.functions.iter().any(|f| f.name == fn_name))
+            .ok_or_else(|| PluginNotFoundErr(fn_name.into()))?;
+        let plugin = self
+            .get_plugin_by_ref_id(&r.plugin_ref_id)
+            .await
+            .ok_or_else(|| PluginNotFoundErr(r.plugin_ref_id.clone()))?;
 
-    pub async fn get_template_functions_with_context(
-        &self,
-        window_context: &PluginWindowContext,
-    ) -> Result<Vec<GetTemplateFunctionsResponse>> {
-        let reply_events = self
-            .send_and_wait(window_context, &InternalEventPayload::GetTemplateFunctionsRequest)
+        let window_context = &PluginWindowContext::new(&window);
+        let vars = &make_vars_hashmap(environment_chain);
+        let cb = PluginTemplateCallback::new(
+            window.app_handle(),
+            &window_context,
+            RenderPurpose::Preview,
+        );
+        // We don't want to fail for this op because the UI will not be able to list any auth types then
+        let render_opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::ReturnEmpty,
+        };
+        let rendered_values = render_json_value_raw(json!(values), vars, &cb, &render_opt).await?;
+        let context_id = format!("{:x}", md5::compute(model_id.to_string()));
+
+        let event = self
+            .send_to_plugin_and_wait(
+                &PluginWindowContext::new(window),
+                &plugin,
+                &InternalEventPayload::GetTemplateFunctionConfigRequest(
+                    GetTemplateFunctionConfigRequest {
+                        values: serde_json::from_value(rendered_values)?,
+                        name: fn_name.to_string(),
+                        context_id,
+                    },
+                ),
+            )
             .await?;
-
-        let mut result = Vec::new();
-        for event in reply_events {
-            if let InternalEventPayload::GetTemplateFunctionsResponse(resp) = event.payload {
-                result.push(resp.clone());
+        match event.payload {
+            InternalEventPayload::GetTemplateFunctionConfigResponse(resp) => Ok(resp),
+            InternalEventPayload::EmptyResponse(_) => {
+                Err(PluginErr("Template function plugin returned empty".to_string()))
             }
+            InternalEventPayload::ErrorResponse(e) => Err(PluginErr(e.error)),
+            e => Err(PluginErr(format!("Template function plugin returned invalid event {:?}", e))),
         }
-
-        // Add Rust-based functions
-        result.push(GetTemplateFunctionsResponse {
-            plugin_ref_id: "__NATIVE__".to_string(), // Meh
-            functions: vec![template_function_secure(), template_function_keyring()],
-        });
-
-        Ok(result)
     }
 
     pub async fn call_http_request_action<R: Runtime>(
@@ -587,7 +612,7 @@ impl PluginManager {
         environment_chain: Vec<Environment>,
         auth_name: &str,
         values: HashMap<String, JsonPrimitive>,
-        request_id: &str,
+        model_id: &str,
     ) -> Result<GetHttpAuthenticationConfigResponse> {
         let results = self.get_http_authentication_summaries(window).await?;
         let plugin = results
@@ -606,7 +631,7 @@ impl PluginManager {
             error_behavior: RenderErrorBehavior::ReturnEmpty,
         };
         let rendered_values = render_json_value_raw(json!(values), vars, &cb, &render_opt).await?;
-        let context_id = format!("{:x}", md5::compute(request_id.to_string()));
+        let context_id = format!("{:x}", md5::compute(model_id.to_string()));
         let event = self
             .send_to_plugin_and_wait(
                 &PluginWindowContext::new(window),
@@ -718,6 +743,34 @@ impl PluginManager {
             InternalEventPayload::ErrorResponse(e) => Err(PluginErr(e.error)),
             e => Err(PluginErr(format!("Auth plugin returned invalid event {:?}", e))),
         }
+    }
+
+    pub async fn get_template_function_summaries<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+    ) -> Result<Vec<GetTemplateFunctionSummaryResponse>> {
+        let window_context = PluginWindowContext::new(window);
+        let reply_events = self
+            .send_and_wait(
+                &window_context,
+                &InternalEventPayload::GetTemplateFunctionSummaryRequest(EmptyPayload {}),
+            )
+            .await?;
+
+        let mut results = Vec::new();
+        for event in reply_events {
+            if let InternalEventPayload::GetTemplateFunctionSummaryResponse(resp) = event.payload {
+                results.push(resp.clone());
+            }
+        }
+
+        // Add Rust-based functions
+        results.push(GetTemplateFunctionSummaryResponse {
+            plugin_ref_id: "__NATIVE__".to_string(), // Meh
+            functions: vec![template_function_secure(), template_function_keyring()],
+        });
+
+        Ok(results)
     }
 
     pub async fn call_template_function(

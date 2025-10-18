@@ -1,7 +1,7 @@
 use std::time::SystemTime;
 
 use crate::error::Result;
-use crate::history::get_num_launches;
+use crate::history::get_or_upsert_launch_info;
 use chrono::{DateTime, Utc};
 use log::debug;
 use reqwest::Method;
@@ -79,7 +79,7 @@ impl YaakNotifier {
 
         #[cfg(feature = "license")]
         let license_check = {
-            use yaak_license::{LicenseCheckStatus, check_license};
+            use yaak_license::{check_license, LicenseCheckStatus};
             match check_license(window).await {
                 Ok(LicenseCheckStatus::PersonalUse { .. }) => "personal".to_string(),
                 Ok(LicenseCheckStatus::CommercialUse) => "commercial".to_string(),
@@ -91,17 +91,17 @@ impl YaakNotifier {
         #[cfg(not(feature = "license"))]
         let license_check = "disabled".to_string();
 
-        let settings = window.db().get_settings();
-        let num_launches = get_num_launches(app_handle).await;
-        let info = app_handle.package_info().clone();
+        let launch_info = get_or_upsert_launch_info(app_handle);
         let req = yaak_api_client(app_handle)?
             .request(Method::GET, "https://notify.yaak.app/notifications")
             .query(&[
-                ("version", info.version.to_string().as_str()),
-                ("launches", num_launches.to_string().as_str()),
-                ("installed", settings.created_at.format("%Y-%m-%d").to_string().as_str()),
+                ("version", &launch_info.current_version),
+                ("version_prev", &launch_info.previous_version),
+                ("launches", &launch_info.num_launches.to_string()),
+                ("installed", &launch_info.user_since.format("%Y-%m-%d").to_string()),
                 ("license", &license_check),
-                ("platform", get_os()),
+                ("updates", &get_updater_status(app_handle).to_string()),
+                ("platform", &get_os().to_string()),
             ]);
         let resp = req.send().await?;
         if resp.status() != 200 {
@@ -129,5 +129,34 @@ async fn get_kv<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<String>> {
     match app_handle.db().get_key_value_raw("notifications", "seen") {
         None => Ok(Vec::new()),
         Some(v) => Ok(serde_json::from_str(&v.value)?),
+    }
+}
+
+fn get_updater_status<R: Runtime>(app_handle: &AppHandle<R>) -> &'static str {
+    #[cfg(not(feature = "updater"))]
+    {
+        // Updater is not enabled as a Rust feature
+        return "missing";
+    }
+
+    #[cfg(all(feature = "updater", target_os = "linux"))]
+    {
+        let settings = app_handle.db().get_settings();
+        if !settings.autoupdate {
+            // Updates are explicitly disabled
+            "disabled"
+        } else if std::env::var("APPIMAGE").is_err() {
+            // Updates are enabled, but unsupported
+            "unsupported"
+        } else {
+            // Updates are enabled and supported
+            "enabled"
+        }
+    }
+
+    #[cfg(all(feature = "updater", not(target_os = "linux")))]
+    {
+        let settings = app_handle.db().get_settings();
+        if settings.autoupdate { "enabled" } else { "disabled" }
     }
 }

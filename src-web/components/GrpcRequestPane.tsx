@@ -240,7 +240,7 @@ export function GrpcRequestPane({
                 size="sm"
                 variant="border"
                 title={isStreaming ? 'Connect' : 'Send'}
-                hotkeyAction="grpc_request.send"
+                hotkeyAction="request.send"
                 onClick={isStreaming ? handleSend : handleConnect}
                 icon={isStreaming ? 'send_horizontal' : 'arrow_up_down'}
               />
@@ -250,7 +250,7 @@ export function GrpcRequestPane({
               size="sm"
               variant="border"
               title={methodType === 'unary' ? 'Send' : 'Connect'}
-              hotkeyAction="grpc_request.send"
+              hotkeyAction="request.send"
               onClick={isStreaming ? onCancel : handleConnect}
               disabled={methodType === 'no-schema' || methodType === 'no-method'}
               icon={

@@ -16,8 +16,8 @@ import { useAllRequests } from '../hooks/useAllRequests';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDebouncedState } from '../hooks/useDebouncedState';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
+import { useGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import type { HotkeyAction } from '../hooks/useHotKey';
-import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { useRecentRequests } from '../hooks/useRecentRequests';
@@ -61,6 +61,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const activeEnvironment = useActiveEnvironment();
   const httpRequestActions = useHttpRequestActions();
+  const grpcRequestActions = useGrpcRequestActions();
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const workspaces = useAtomValue(workspacesAtom);
   const { baseEnvironment, subEnvironments } = useEnvironmentsBreakdown();
@@ -90,7 +91,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         onSelect: createWorkspace,
       },
       {
-        key: 'http_request.create',
+        key: 'model.create',
         label: 'Create HTTP Request',
         onSelect: () => createRequestAndNavigate({ model: 'http_request', workspaceId }),
       },
@@ -142,8 +143,8 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     if (activeRequest?.model === 'http_request') {
       commands.push({
-        key: 'http_request.send',
-        action: 'http_request.send',
+        key: 'request.send',
+        action: 'request.send',
         label: 'Send Request',
         onSelect: () => sendRequest(activeRequest.id),
       });
@@ -151,6 +152,17 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         const a = httpRequestActions[i]!;
         commands.push({
           key: `http_request_action.${i}`,
+          label: a.label,
+          onSelect: () => a.call(activeRequest),
+        });
+      }
+    }
+
+    if (activeRequest?.model === 'grpc_request') {
+      for (let i = 0; i < grpcRequestActions.length; i++) {
+        const a = grpcRequestActions[i]!;
+        commands.push({
+          key: `grpc_request_action.${i}`,
           label: a.label,
           onSelect: () => a.call(activeRequest),
         });
@@ -182,6 +194,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     activeRequest,
     baseEnvironment,
     createWorkspace,
+    grpcRequestActions,
     httpRequestActions,
     sendRequest,
     setSidebarHidden,
@@ -369,7 +382,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       const index = filteredAllItems.findIndex((v) => v.key === selectedItem?.key);
-
       if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) {
         const next = filteredAllItems[index + 1] ?? filteredAllItems[0];
         setSelectedItemKey(next?.key ?? null);
@@ -417,9 +429,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
                 active={v.key === selectedItem?.key}
                 key={v.key}
                 onClick={() => handleSelectAndClose(v.onSelect)}
-                rightSlot={
-                  v.action && <CommandPaletteAction action={v.action} onAction={v.onSelect} />
-                }
+                rightSlot={v.action && <CommandPaletteAction action={v.action} />}
               >
                 {v.label}
               </CommandPaletteItem>
@@ -465,13 +475,6 @@ function CommandPaletteItem({
   );
 }
 
-function CommandPaletteAction({
-  action,
-  onAction,
-}: {
-  action: HotkeyAction;
-  onAction: () => void;
-}) {
-  useHotKey(action, onAction);
+function CommandPaletteAction({ action }: { action: HotkeyAction }) {
   return <HotKey className="ml-auto" action={action} />;
 }

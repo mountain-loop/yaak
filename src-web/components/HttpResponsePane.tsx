@@ -107,7 +107,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     >
       {activeResponse == null ? (
         <HotKeyList
-          hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'url_bar.focus']}
+          hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']}
         />
       ) : (
         <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">

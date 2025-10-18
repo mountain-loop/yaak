@@ -3,13 +3,19 @@ import type {
   CallTemplateFunctionArgs,
   Context,
   FormInput,
+  GetHttpAuthenticationConfigRequest,
   HttpResponse,
   PluginDefinition,
   RenderPurpose,
 } from '@yaakapp/api';
+import type { DynamicTemplateFunctionArg } from '@yaakapp/api/lib/plugins/TemplateFunctionPlugin';
 import { JSONPath } from 'jsonpath-plus';
 import { readFileSync } from 'node:fs';
 import xpath from 'xpath';
+
+const BEHAVIOR_TTL = 'ttl';
+const BEHAVIOR_ALWAYS = 'always';
+const BEHAVIOR_SMART = 'smart';
 
 const behaviorArg: FormInput = {
   type: 'select',
@@ -17,9 +23,22 @@ const behaviorArg: FormInput = {
   label: 'Sending Behavior',
   defaultValue: 'smart',
   options: [
-    { label: 'When no responses', value: 'smart' },
-    { label: 'Always', value: 'always' },
+    { label: 'When no responses', value: BEHAVIOR_SMART },
+    { label: 'Always', value: BEHAVIOR_ALWAYS },
+    { label: 'When expired', value: BEHAVIOR_TTL },
   ],
+};
+
+const ttlArg: DynamicTemplateFunctionArg = {
+  type: 'text',
+  name: 'ttl',
+  label: 'Expiration Time (seconds)',
+  placeholder: '0',
+  description: 'Resend the request when the latest response is older than this many seconds, or if there are no responses yet.',
+  dynamic(_ctx: Context, { values }: GetHttpAuthenticationConfigRequest) {
+    const show = values.behavior === BEHAVIOR_TTL;
+    return { hidden: !show };
+  },
 };
 
 const requestArg: FormInput = {
@@ -42,6 +61,7 @@ export const plugin: PluginDefinition = {
           placeholder: 'Content-Type',
         },
         behaviorArg,
+        ttlArg,
       ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         if (!args.values.request || !args.values.header) return null;
@@ -50,6 +70,7 @@ export const plugin: PluginDefinition = {
           requestId: String(args.values.request || ''),
           purpose: args.purpose,
           behavior: args.values.behavior ? String(args.values.behavior) : null,
+          ttl: String(args.values.ttl || ''),
         });
         if (response == null) return null;
 
@@ -72,6 +93,7 @@ export const plugin: PluginDefinition = {
           placeholder: '$.books[0].id or /books[0]/id',
         },
         behaviorArg,
+        ttlArg,
       ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         if (!args.values.request || !args.values.path) return null;
@@ -80,6 +102,7 @@ export const plugin: PluginDefinition = {
           requestId: String(args.values.request || ''),
           purpose: args.purpose,
           behavior: args.values.behavior ? String(args.values.behavior) : null,
+          ttl: String(args.values.ttl || ''),
         });
         if (response == null) return null;
 
@@ -113,7 +136,7 @@ export const plugin: PluginDefinition = {
       name: 'response.body.raw',
       description: 'Access the entire response body, as text',
       aliases: ['response'],
-      args: [requestArg, behaviorArg],
+      args: [requestArg, behaviorArg, ttlArg],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         if (!args.values.request) return null;
 
@@ -121,6 +144,7 @@ export const plugin: PluginDefinition = {
           requestId: String(args.values.request || ''),
           purpose: args.purpose,
           behavior: args.values.behavior ? String(args.values.behavior) : null,
+          ttl: String(args.values.ttl || ''),
         });
         if (response == null) return null;
 
@@ -177,9 +201,11 @@ async function getResponse(
     requestId,
     behavior,
     purpose,
+    ttl,
   }: {
     requestId: string;
     behavior: string | null;
+    ttl: string | null;
     purpose: RenderPurpose;
   },
 ): Promise<HttpResponse | null> {
@@ -203,11 +229,24 @@ async function getResponse(
   const finalBehavior = behavior === 'always' && purpose === 'preview' ? 'smart' : behavior;
 
   // Send if no responses and "smart," or "always"
-  if ((finalBehavior === 'smart' && response == null) || finalBehavior === 'always') {
+  if (
+    (finalBehavior === 'smart' && response == null) ||
+    finalBehavior === 'always' ||
+    (finalBehavior === BEHAVIOR_TTL && shouldSendExpired(response, ttl))
+  ) {
     // NOTE: Render inside this conditional, or we'll get infinite recursion (render->render->...)
     const renderedHttpRequest = await ctx.httpRequest.render({ httpRequest, purpose });
     response = await ctx.httpRequest.send({ httpRequest: renderedHttpRequest });
   }
 
   return response;
+}
+
+function shouldSendExpired(response: HttpResponse | null, ttl: string | null): boolean {
+  if (response == null) return true;
+  const ttlSeconds = parseInt(ttl || '0');
+  if (isNaN(ttlSeconds)) throw new Error(`Invalid TTL "${ttl}"`);
+  const nowMillis = Date.now();
+  const respMillis = new Date(response.createdAt + 'Z').getTime();
+  return respMillis + ttlSeconds * 1000 < nowMillis;
 }

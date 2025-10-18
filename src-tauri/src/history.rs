@@ -1,48 +1,74 @@
+use chrono::{NaiveDateTime, Utc};
+use log::debug;
+use std::sync::OnceLock;
 use tauri::{AppHandle, Runtime};
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 
 const NAMESPACE: &str = "analytics";
 const NUM_LAUNCHES_KEY: &str = "num_launches";
+const LAST_VERSION_KEY: &str = "last_tracked_version";
+const PREV_VERSION_KEY: &str = "last_tracked_version_prev";
+const VERSION_SINCE_KEY: &str = "last_tracked_version_since";
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct LaunchEventInfo {
     pub current_version: String,
     pub previous_version: String,
     pub launched_after_update: bool,
+    pub version_since: NaiveDateTime,
+    pub user_since: NaiveDateTime,
     pub num_launches: i32,
 }
 
-pub async fn store_launch_history<R: Runtime>(app_handle: &AppHandle<R>) -> LaunchEventInfo {
-    let last_tracked_version_key = "last_tracked_version";
+static LAUNCH_INFO: OnceLock<LaunchEventInfo> = OnceLock::new();
 
-    let mut info = LaunchEventInfo::default();
+pub fn get_or_upsert_launch_info<R: Runtime>(app_handle: &AppHandle<R>) -> &LaunchEventInfo {
+    LAUNCH_INFO.get_or_init(|| {
+        let now = Utc::now().naive_utc();
+        let mut info = LaunchEventInfo {
+            version_since: app_handle.db().get_key_value_dte(NAMESPACE, VERSION_SINCE_KEY, now),
+            current_version: app_handle.package_info().version.to_string(),
+            user_since: app_handle.db().get_settings().created_at,
+            num_launches: app_handle.db().get_key_value_int(NAMESPACE, NUM_LAUNCHES_KEY, 0) + 1,
 
-    info.num_launches = get_num_launches(app_handle).await + 1;
-    info.current_version = app_handle.package_info().version.to_string();
+            // The rest will be set below
+            ..Default::default()
+        };
 
-    app_handle
-        .with_tx(|tx| {
-            info.previous_version =
-                tx.get_key_value_string(NAMESPACE, last_tracked_version_key, "");
+        app_handle
+            .with_tx(|tx| {
+                // Load the previously tracked version
+                let curr_db = tx.get_key_value_str(NAMESPACE, LAST_VERSION_KEY, "");
+                let prev_db = tx.get_key_value_str(NAMESPACE, PREV_VERSION_KEY, "");
 
-            if !info.previous_version.is_empty() {
-                info.launched_after_update = info.current_version != info.previous_version;
-            };
+                // We just updated if the app version is different from the last tracked version we stored
+                if !curr_db.is_empty() && info.current_version != curr_db {
+                    info.launched_after_update = true;
+                }
 
-            // Update key values
+                // If we just updated, track the previous version as the "previous" current version
+                if info.launched_after_update {
+                    info.previous_version = curr_db.clone();
+                    info.version_since = now;
+                } else {
+                    info.previous_version = prev_db.clone();
+                }
 
-            let source = &UpdateSource::Background;
-            let version = info.current_version.as_str();
-            tx.set_key_value_string(NAMESPACE, last_tracked_version_key, version, source);
-            tx.set_key_value_int(NAMESPACE, NUM_LAUNCHES_KEY, info.num_launches, source);
-            Ok(())
-        })
-        .unwrap();
+                // Rotate stored versions: move previous into the "prev" slot before overwriting
+                let source = &UpdateSource::Background;
 
-    info
-}
+                tx.set_key_value_str(NAMESPACE, PREV_VERSION_KEY, &info.previous_version, source);
+                tx.set_key_value_str(NAMESPACE, LAST_VERSION_KEY, &info.current_version, source);
+                tx.set_key_value_dte(NAMESPACE, VERSION_SINCE_KEY, info.version_since, source);
+                tx.set_key_value_int(NAMESPACE, NUM_LAUNCHES_KEY, info.num_launches, source);
 
-pub async fn get_num_launches<R: Runtime>(app_handle: &AppHandle<R>) -> i32 {
-    app_handle.db().get_key_value_int(NAMESPACE, NUM_LAUNCHES_KEY, 0)
+                Ok(())
+            })
+            .unwrap();
+
+        debug!("Initialized launch info");
+
+        info
+    })
 }

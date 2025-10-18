@@ -37,9 +37,11 @@ type TauriCmd =
   | 'cmd_save_response'
   | 'cmd_secure_template'
   | 'cmd_send_ephemeral_request'
+  | 'cmd_send_folder'
   | 'cmd_send_http_request'
   | 'cmd_show_workspace_key'
-  | 'cmd_template_functions'
+  | 'cmd_template_function_summaries'
+  | 'cmd_template_function_config'
   | 'cmd_template_tokens_to_string';
 
 export async function invokeCmd<T>(cmd: TauriCmd, args?: InvokeArgs): Promise<T> {

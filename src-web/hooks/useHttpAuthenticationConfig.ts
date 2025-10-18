@@ -18,7 +18,7 @@ import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 export function useHttpAuthenticationConfig(
   authName: string | null,
   values: Record<string, JsonPrimitive>,
-  request: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
+  model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
 ) {
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const environmentId = useAtomValue(activeEnvironmentIdAtom);
@@ -37,7 +37,7 @@ export function useHttpAuthenticationConfig(
   return useQuery({
     queryKey: [
       'http_authentication_config',
-      request,
+      model,
       authName,
       values,
       responseKey,
@@ -53,7 +53,7 @@ export function useHttpAuthenticationConfig(
         {
           authName,
           values,
-          request,
+          model,
           environmentId,
         },
       );

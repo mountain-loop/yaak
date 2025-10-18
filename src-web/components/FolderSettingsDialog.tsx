@@ -68,14 +68,15 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
       value={activeTab}
       onChangeValue={setActiveTab}
       label="Folder Settings"
-      className="px-1.5 pb-2"
+      className="pt-2 pb-2 pl-3 pr-1"
+      layout="horizontal"
       addBorders
       tabs={tabs}
     >
-      <TabContent value={TAB_AUTH} className="pt-3 overflow-y-auto h-full px-4">
+      <TabContent value={TAB_AUTH} className="overflow-y-auto h-full px-4">
         <HttpAuthenticationEditor model={folder} />
       </TabContent>
-      <TabContent value={TAB_GENERAL} className="pt-3 overflow-y-auto h-full px-4">
+      <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-4">
         <VStack space={3} className="pb-3 h-full">
           <Input
             label="Folder Name"
@@ -93,7 +94,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
           />
         </VStack>
       </TabContent>
-      <TabContent value={TAB_HEADERS} className="pt-3 overflow-y-auto h-full px-4">
+      <TabContent value={TAB_HEADERS} className="overflow-y-auto h-full px-4">
         <HeadersEditor
           inheritedHeaders={inheritedHeaders}
           forceUpdateKey={folder.id}
@@ -102,7 +103,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
           stateKey={`headers.${folder.id}`}
         />
       </TabContent>
-      <TabContent value={TAB_VARIABLES} className="pt-3 overflow-y-auto h-full px-4">
+      <TabContent value={TAB_VARIABLES} className="overflow-y-auto h-full px-4">
         {folderEnvironment == null ? (
           <EmptyStateText>
             <VStack alignItems="center" space={1.5}>

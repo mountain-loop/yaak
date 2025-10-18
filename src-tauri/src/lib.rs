@@ -38,13 +38,7 @@ use yaak_models::models::{
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
-use yaak_plugins::events::{
-    CallGrpcRequestActionArgs, CallGrpcRequestActionRequest, CallHttpRequestActionArgs,
-    CallHttpRequestActionRequest, Color, FilterResponse, GetGrpcRequestActionsResponse,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionsResponse, InternalEvent,
-    InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose, ShowToastRequest,
-};
+use yaak_plugins::events::{CallGrpcRequestActionArgs, CallGrpcRequestActionRequest, CallHttpRequestActionArgs, CallHttpRequestActionRequest, Color, FilterResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse, GetTemplateFunctionSummaryResponse, GetTemplateFunctionConfigResponse, InternalEvent, InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose, ShowToastRequest};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -827,11 +821,36 @@ async fn cmd_grpc_request_actions<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_template_functions<R: Runtime>(
+async fn cmd_template_function_summaries<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetTemplateFunctionsResponse>> {
-    Ok(plugin_manager.get_template_functions(&window).await?)
+) -> YaakResult<Vec<GetTemplateFunctionSummaryResponse>> {
+    let results = plugin_manager.get_template_function_summaries(&window).await?;
+    Ok(results)
+}
+
+#[tauri::command]
+async fn cmd_template_function_config<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+    function_name: &str,
+    values: HashMap<String, JsonPrimitive>,
+    model: AnyModel,
+    environment_id: Option<&str>,
+) -> YaakResult<GetTemplateFunctionConfigResponse> {
+    let (workspace_id, folder_id) = match model.clone() {
+        AnyModel::HttpRequest(m) => (m.workspace_id, m.folder_id),
+        AnyModel::GrpcRequest(m) => (m.workspace_id, m.folder_id),
+        AnyModel::WebsocketRequest(m) => (m.workspace_id, m.folder_id),
+        AnyModel::Folder(m) => (m.workspace_id, m.folder_id),
+        AnyModel::Workspace(m) => (m.id, None),
+        m => {
+            return Err(GenericError(format!("Unsupported model to call template functions {m:?}")));
+        }
+    };
+    let environment_chain =
+        window.db().resolve_environments(&workspace_id, folder_id.as_deref(), environment_id)?;
+    Ok(plugin_manager.get_template_function_config(&window, function_name, environment_chain, values, model.id()).await?)
 }
 
 #[tauri::command]
@@ -849,10 +868,10 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
     auth_name: &str,
     values: HashMap<String, JsonPrimitive>,
-    request: AnyModel,
+    model: AnyModel,
     environment_id: Option<&str>,
 ) -> YaakResult<GetHttpAuthenticationConfigResponse> {
-    let (workspace_id, folder_id) = match request.clone() {
+    let (workspace_id, folder_id) = match model.clone() {
         AnyModel::HttpRequest(m) => (m.workspace_id, m.folder_id),
         AnyModel::GrpcRequest(m) => (m.workspace_id, m.folder_id),
         AnyModel::WebsocketRequest(m) => (m.workspace_id, m.folder_id),
@@ -867,7 +886,7 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
         window.db().resolve_environments(&workspace_id, folder_id.as_deref(), environment_id)?;
 
     Ok(plugin_manager
-        .get_http_authentication_config(&window, environment_chain, auth_name, values, request.id())
+        .get_http_authentication_config(&window, environment_chain, auth_name, values, model.id())
         .await?)
 }
 
@@ -1003,6 +1022,35 @@ async fn cmd_save_response<R: Runtime>(
     let body_path =
         response.body_path.ok_or(GenericError("Response does not have a body".to_string()))?;
     fs::copy(body_path, filepath).map_err(|e| GenericError(e.to_string()))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn cmd_send_folder<R: Runtime>(
+    app_handle: AppHandle<R>,
+    window: WebviewWindow<R>,
+    environment_id: Option<String>,
+    cookie_jar_id: Option<String>,
+    folder_id: &str,
+) -> YaakResult<()> {
+    let requests = app_handle.db().list_http_requests_for_folder_recursive(folder_id)?;
+    for request in requests {
+        let app_handle = app_handle.clone();
+        let window = window.clone();
+        let environment_id = environment_id.clone();
+        let cookie_jar_id = cookie_jar_id.clone();
+        tokio::spawn(async move {
+            let _ = cmd_send_http_request(
+                app_handle,
+                window,
+                environment_id.as_deref(),
+                cookie_jar_id.as_deref(),
+                request,
+            )
+            .await;
+        });
+    }
 
     Ok(())
 }
@@ -1386,7 +1434,9 @@ pub fn run() {
             cmd_save_response,
             cmd_send_ephemeral_request,
             cmd_send_http_request,
-            cmd_template_functions,
+            cmd_send_folder,
+            cmd_template_function_config,
+            cmd_template_function_summaries,
             cmd_template_tokens_to_string,
             //
             //
@@ -1404,7 +1454,7 @@ pub fn run() {
                     let _ = window::create_main_window(app_handle, "/");
                     let h = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        let info = history::store_launch_history(&h).await;
+                        let info = history::get_or_upsert_launch_info(&h);
                         debug!("Launched Yaak {:?}", info);
                     });
 
@@ -1511,14 +1561,17 @@ fn monitor_plugin_events<R: Runtime>(app_handle: &AppHandle<R>) {
                     Ok(None) => return,
                     Err(e) => {
                         warn!("Failed to handle plugin event: {e:?}");
-                        let _ = app_handle.emit("show_toast", InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                            message: e.to_string(),
-                            color: Some(Color::Danger),
-                            icon: None,
-                            timeout: Some(30000),
-                        }));
+                        let _ = app_handle.emit(
+                            "show_toast",
+                            InternalEventPayload::ShowToastRequest(ShowToastRequest {
+                                message: e.to_string(),
+                                color: Some(Color::Danger),
+                                icon: None,
+                                timeout: Some(30000),
+                            }),
+                        );
                         return;
-                    },
+                    }
                 };
 
                 let plugin_manager: State<'_, PluginManager> = app_handle.state();

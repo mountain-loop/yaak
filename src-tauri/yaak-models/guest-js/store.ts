@@ -81,11 +81,12 @@ export function getAnyModel(id: string): AnyModel | null {
 }
 
 export function getModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
-  modelType: M | M[],
+  modelType: M | ReadonlyArray<M>,
   id: string,
 ): T | null {
   let data = mustStore().get(modelStoreDataAtom);
-  for (const t of Array.isArray(modelType) ? modelType : [modelType]) {
+  const types: ReadonlyArray<M> = Array.isArray(modelType) ? modelType : [modelType];
+  for (const t of types) {
     let v = data[t][id];
     if (v?.model === t) return v as T;
   }
@@ -139,7 +140,7 @@ export async function deleteModel<M extends AnyModel['model'], T extends Extract
 export function duplicateModelById<
   M extends AnyModel['model'],
   T extends ExtractModel<AnyModel, M>,
->(modelType: M | M[], id: string) {
+>(modelType: M | ReadonlyArray<M>, id: string) {
   let model = getModel<M, T>(modelType, id);
   return duplicateModel(model);
 }
@@ -150,6 +151,8 @@ export function duplicateModel<M extends AnyModel['model'], T extends ExtractMod
   if (model == null) {
     throw new Error('Failed to delete null model');
   }
+  if ('sortPriority' in model) model.sortPriority = model.sortPriority + 0.0001;
+
   return invoke<string>('plugin:yaak-models|duplicate', { model });
 }
 

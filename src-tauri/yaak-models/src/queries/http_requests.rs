@@ -1,6 +1,6 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{HttpRequest, HttpRequestHeader, HttpRequestIden};
+use crate::models::{Folder, FolderIden, HttpRequest, HttpRequestHeader, HttpRequestIden};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -88,5 +88,19 @@ impl<'a> DbContext<'a> {
         headers.append(&mut http_request.headers.clone());
 
         Ok(headers)
+    }
+
+    pub fn list_http_requests_for_folder_recursive(
+        &self,
+        folder_id: &str,
+    ) -> Result<Vec<HttpRequest>> {
+        let mut children = Vec::new();
+        for m in self.find_many::<Folder>(FolderIden::FolderId, folder_id, None)? {
+            children.extend(self.list_http_requests_for_folder_recursive(&m.id)?);
+        }
+        for m in self.find_many::<HttpRequest>(FolderIden::FolderId, folder_id, None)? {
+            children.push(m);
+        }
+        Ok(children)
     }
 }

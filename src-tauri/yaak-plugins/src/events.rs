@@ -99,8 +99,10 @@ pub enum InternalEventPayload {
     CallGrpcRequestActionRequest(CallGrpcRequestActionRequest),
 
     // Template Functions
-    GetTemplateFunctionsRequest,
-    GetTemplateFunctionsResponse(GetTemplateFunctionsResponse),
+    GetTemplateFunctionSummaryRequest(EmptyPayload),
+    GetTemplateFunctionSummaryResponse(GetTemplateFunctionSummaryResponse),
+    GetTemplateFunctionConfigRequest(GetTemplateFunctionConfigRequest),
+    GetTemplateFunctionConfigResponse(GetTemplateFunctionConfigResponse),
     CallTemplateFunctionRequest(CallTemplateFunctionRequest),
     CallTemplateFunctionResponse(CallTemplateFunctionResponse),
 
@@ -673,8 +675,25 @@ pub struct CallHttpAuthenticationResponse {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
-pub struct GetTemplateFunctionsResponse {
+pub struct GetTemplateFunctionSummaryResponse {
     pub functions: Vec<TemplateFunction>,
+    pub plugin_ref_id: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GetTemplateFunctionConfigRequest {
+    pub context_id: String,
+    pub name: String,
+    pub values: HashMap<String, JsonPrimitive>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GetTemplateFunctionConfigResponse {
+    pub function: TemplateFunction,
     pub plugin_ref_id: String,
 }
 

@@ -32,7 +32,7 @@ export function RedirectToLatestWorkspace() {
         request_id: requestId,
       };
 
-      console.log("Redirecting to workspace", params, search);
+      console.log('Redirecting to workspace', params, search);
       await router.navigate({ to: '/workspaces/$workspaceId', params, search });
     })();
   }, [recentWorkspaces, workspaces, workspaces.length]);
