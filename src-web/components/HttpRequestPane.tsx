@@ -327,24 +327,26 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     >
       {activeRequest && (
         <>
-          <UrlBar
-            stateKey={`url.${activeRequest.id}`}
-            key={forceUpdateKey + urlKey}
-            url={activeRequest.url}
-            placeholder="https://example.com"
-            onPasteOverwrite={handlePaste}
-            autocomplete={autocomplete}
-            onSend={handleSend}
-            onCancel={cancelResponse}
-            onUrlChange={handleUrlChange}
-            leftSlot={
-              <div className="py-0.5">
-                <RequestMethodDropdown request={activeRequest} className="ml-0.5 !h-full" />
-              </div>
-            }
-            forceUpdateKey={updateKey}
-            isLoading={activeResponse != null && activeResponse.state !== 'closed'}
-          />
+          <div className="flex flex-col">
+            <div className="py-0.5">
+              <RequestMethodDropdown request={activeRequest} className="!h-full" />
+            </div>
+            <div className="py-0.5">
+              <UrlBar
+                stateKey={`url.${activeRequest.id}`}
+                key={forceUpdateKey + urlKey}
+                url={activeRequest.url}
+                placeholder="https://example.com"
+                onPasteOverwrite={handlePaste}
+                autocomplete={autocomplete}
+                onSend={handleSend}
+                onCancel={cancelResponse}
+                onUrlChange={handleUrlChange}
+                forceUpdateKey={updateKey}
+                isLoading={activeResponse != null && activeResponse.state !== 'closed'}
+              />
+            </div>
+          </div>
           <Tabs
             key={activeRequest.id} // Freshen tabs on request change
             value={activeTab}
@@ -352,6 +354,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             onChangeValue={setActiveTab}
             tabs={tabs}
             tabListClassName="mt-1 mb-1.5"
+            className='ml-0.5'
           >
             <TabContent value={TAB_AUTH}>
               <HttpAuthenticationEditor model={activeRequest} />

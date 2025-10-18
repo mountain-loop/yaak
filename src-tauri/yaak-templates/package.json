@@ -5,7 +5,7 @@
   "main": "index.ts",
   "scripts": {
     "bootstrap": "npm run build",
-    "build": "wasm-pack build --target bundler"
+    "build": ". $HOME/.cargo/env && wasm-pack build --target bundler"
   },
   "devDependencies": {
     "wasm-pack": "^0.13.1"
