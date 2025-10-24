@@ -128,7 +128,7 @@ export function SettingsGeneral() {
 
         <Checkbox
           checked={workspace.settingValidateCertificates}
-          help="When disabled, skip validatation of server certificates, useful when interacting with self-signed certs."
+          help="When disabled, skip validation of server certificates, useful when interacting with self-signed certs."
           title="Validate TLS Certificates"
           onChange={(settingValidateCertificates) =>
             patchModel(workspace, { settingValidateCertificates })
