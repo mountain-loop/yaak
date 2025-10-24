@@ -88,7 +88,7 @@ export type HotKeyOptions = {
 
 interface Callback {
   action: HotkeyAction;
-  callback: (e: KeyboardEvent) => boolean | void;
+  callback: (e: KeyboardEvent) => void;
   options: HotKeyOptions;
 }
 

@@ -128,10 +128,8 @@ function TreeInner<T extends { id: string }>(
   const treeHandle = useMemo<TreeHandle>(
     () => ({
       focus: tryFocus,
-      renameItem(id) {
-        return treeItemRefs.current[id]?.rename() ?? false;
-      },
-      selectItem(id) {
+      renameItem: (id) => treeItemRefs.current[id]?.rename(),
+      selectItem: (id) => {
         setSelected([id], false);
         jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
       },
@@ -608,7 +606,7 @@ function TreeHotKeys<T extends { id: string }>({
 
   return (
     <>
-      {Object.entries(hotkeys.actions).map(([hotkey, {cb, ...options}]) => (
+      {Object.entries(hotkeys.actions).map(([hotkey, { cb, ...options }]) => (
         <TreeHotKey
           key={hotkey}
           action={hotkey as HotkeyAction}

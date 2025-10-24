@@ -28,6 +28,7 @@ export function GlobalHooks() {
     'request.rename',
     async () => {
       const model = jotaiStore.get(activeRequestAtom);
+      if (model == null) return;
       await renameModelWithPrompt(model);
     },
     { allowDefault: true },
