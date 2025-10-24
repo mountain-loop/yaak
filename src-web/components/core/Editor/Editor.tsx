@@ -665,19 +665,26 @@ function getExtensions({
 
     // Cache editor state
     EditorView.updateListener.of((update) => {
-      saveCachedEditorState(stateKey, update.state);
-    }),
-  ];
-}
+  const handleCopyClick = async () => {
+    if (!editorRef.current) {
+      return;
+    }
 
-const placeholderElFromText = (text: string | undefined) => {
-  const el = document.createElement('div');
-  // Default to <SPACE> because codemirror needs it for sizing. I'm not sure why, but probably something
-  // to do with how Yaak "hacks" it with CSS for single line input.
-  el.innerHTML = text ? text.replaceAll('\n', '<br/>') : ' ';
-  return el;
-};
+    if (!navigator.clipboard) {
+      toast.error('Clipboard API not available. Please use a modern browser and a secure connection (HTTPS).');
+      return;
+    }
 
+    const editor = editorRef.current.getEditor();
+    const text = editor.getValue();
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Copied to clipboard');
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+      toast.error('Failed to copy to clipboard');
+    }
+  };
 function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
   if (!stateKey || state == null) return;
   const stateObj = state.toJSON(stateFields);
