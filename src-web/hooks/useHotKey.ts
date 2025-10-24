@@ -6,6 +6,7 @@ import { capitalize } from '../lib/capitalize';
 import { jotaiStore } from '../lib/jotai';
 
 const HOLD_KEYS = ['Shift', 'Control', 'Command', 'Alt', 'Meta'];
+const SINGLE_WHITELIST = ['Delete', 'Enter', 'Backspace'];
 
 export type HotkeyAction =
   | 'app.zoom_in'
@@ -17,11 +18,14 @@ export type HotkeyAction =
   | 'model.create'
   | 'model.duplicate'
   | 'request.send'
-  | 'request_switcher.next'
-  | 'request_switcher.prev'
-  | 'request_switcher.toggle'
+  | 'request.rename'
+  | 'switcher.next'
+  | 'switcher.prev'
+  | 'switcher.toggle'
   | 'settings.show'
-  | 'sidebar.delete_selected_item'
+  | 'sidebar.selected.delete'
+  | 'sidebar.selected.duplicate'
+  | 'sidebar.selected.rename'
   | 'sidebar.focus'
   | 'url_bar.focus'
   | 'workspace_settings.show';
@@ -32,15 +36,18 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'app.zoom_reset': ['CmdCtrl+0'],
   'command_palette.toggle': ['CmdCtrl+k'],
   'environmentEditor.toggle': ['CmdCtrl+Shift+E', 'CmdCtrl+Shift+e'],
+  'request.rename': type() === 'macos' ? ['Control+Shift+r'] : ['F2'],
   'request.send': ['CmdCtrl+Enter', 'CmdCtrl+r'],
   'hotkeys.showHelp': ['CmdCtrl+Shift+/', 'CmdCtrl+Shift+?'], // when shift is pressed, it might be a question mark
   'model.create': ['CmdCtrl+n'],
   'model.duplicate': ['CmdCtrl+d'],
-  'request_switcher.next': ['Control+Shift+Tab'],
-  'request_switcher.prev': ['Control+Tab'],
-  'request_switcher.toggle': ['CmdCtrl+p'],
+  'switcher.next': ['Control+Shift+Tab'],
+  'switcher.prev': ['Control+Tab'],
+  'switcher.toggle': ['CmdCtrl+p'],
   'settings.show': ['CmdCtrl+,'],
-  'sidebar.delete_selected_item': ['Delete', 'CmdCtrl+Backspace'],
+  'sidebar.selected.delete': ['Delete', 'CmdCtrl+Backspace'],
+  'sidebar.selected.duplicate': ['CmdCtrl+d'],
+  'sidebar.selected.rename': ['Enter'],
   'sidebar.focus': ['CmdCtrl+b'],
   'url_bar.focus': ['CmdCtrl+l'],
   'workspace_settings.show': ['CmdCtrl+;'],
@@ -55,12 +62,15 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'hotkeys.showHelp': 'Show Keyboard Shortcuts',
   'model.create': 'New Request',
   'model.duplicate': 'Duplicate Request',
+  'request.rename': 'Rename',
   'request.send': 'Send',
-  'request_switcher.next': 'Go To Previous Request',
-  'request_switcher.prev': 'Go To Next Request',
-  'request_switcher.toggle': 'Toggle Request Switcher',
+  'switcher.next': 'Go To Previous Request',
+  'switcher.prev': 'Go To Next Request',
+  'switcher.toggle': 'Toggle Request Switcher',
   'settings.show': 'Open Settings',
-  'sidebar.delete_selected_item': 'Delete Request',
+  'sidebar.selected.delete': 'Delete',
+  'sidebar.selected.duplicate': 'Duplicate',
+  'sidebar.selected.rename': 'Rename',
   'sidebar.focus': 'Focus or Toggle Sidebar',
   'url_bar.focus': 'Focus URL',
   'workspace_settings.show': 'Open Workspace Settings',
@@ -73,11 +83,12 @@ export const hotkeyActions: HotkeyAction[] = Object.keys(hotkeys) as (keyof type
 export type HotKeyOptions = {
   enable?: boolean | (() => boolean);
   priority?: number;
+  allowDefault?: boolean;
 };
 
 interface Callback {
   action: HotkeyAction;
-  callback: (e: KeyboardEvent) => void;
+  callback: (e: KeyboardEvent) => boolean | void;
   options: HotKeyOptions;
 }
 
@@ -142,7 +153,7 @@ function handleKeyUp(e: KeyboardEvent) {
 function handleKeyDown(e: KeyboardEvent) {
   // Don't add key if not holding modifier
   const isValidKeymapKey =
-    e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.key === 'Backspace' || e.key === 'Delete';
+    e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || SINGLE_WHITELIST.includes(e.key);
   if (!isValidKeymapKey) {
     return;
   }
@@ -162,7 +173,7 @@ function handleKeyDown(e: KeyboardEvent) {
   if (e.metaKey) currentKeysWithModifiers.add('Meta');
   if (e.shiftKey) currentKeysWithModifiers.add('Shift');
 
-  for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
+  outer: for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
     if (
       (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
       currentKeysWithModifiers.size === 1 &&
@@ -175,24 +186,24 @@ function handleKeyDown(e: KeyboardEvent) {
 
     const executed: string[] = [];
     for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
-      const enable = typeof options.enable === 'function' ? options.enable() : options.enable;
-      if (enable === false) {
+      if (hkAction !== action) {
         continue;
       }
-      if (hkAction !== action) {
+      const enable = typeof options.enable === 'function' ? options.enable() : options.enable;
+      if (enable === false) {
         continue;
       }
 
       for (const hkKey of hkKeys) {
         const keys = hkKey.split('+').map(resolveHotkeyKey);
-        if (
-          keys.length === currentKeysWithModifiers.size &&
-          keys.every((key) => currentKeysWithModifiers.has(key))
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
+        if (compareKeys(keys, Array.from(currentKeysWithModifiers))) {
+          if (!options.allowDefault) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
           callback(e);
           executed.push(`${action} ${options.priority ?? 0}`);
+          break outer;
         }
       }
     }
@@ -258,3 +269,10 @@ const resolveHotkeyKey = (key: string) => {
   else if (key === 'CmdCtrl') return 'Control';
   else return key;
 };
+
+function compareKeys(keysA: string[], keysB: string[]) {
+  if (keysA.length !== keysB.length) return false;
+  const sortedA = keysA.map((k) => k.toLowerCase()).sort().join('::');
+  const sortedB = keysB.map((k) => k.toLowerCase()).sort().join('::');
+  return sortedA === sortedB;
+}

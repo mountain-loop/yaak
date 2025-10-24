@@ -86,6 +86,11 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         onSelect: () => openSettings.mutate(null),
       },
       {
+        key: 'folder.create',
+        label: 'Create Folder',
+        onSelect: () => createFolder.mutate({}),
+      },
+      {
         key: 'app.create',
         label: 'Create Workspace',
         onSelect: createWorkspace,
@@ -177,7 +182,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       });
 
       commands.push({
-        key: 'sidebar.delete_selected_item',
+        key: 'sidebar.selected.delete',
         label: 'Delete Request',
         onSelect: () => deleteModelWithConfirm(activeRequest),
       });

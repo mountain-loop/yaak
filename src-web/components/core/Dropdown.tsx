@@ -413,7 +413,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
         close: handleClose,
         prev: handlePrev,
         next: handleNext,
-        async select() {
+        select: async () => {
           const item = items[selectedIndexRef.current ?? -1] ?? null;
           if (!item) return;
           await handleSelect(item);
@@ -569,10 +569,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                       <div
                         key={i}
                         className={classNames('my-1 mx-2 max-w-xs')}
-                        onClick={() => {
-                          // Ensure the dropdown is closed when anything in the content is clicked
-                          onClose();
-                        }}
+                        onClick={onClose}
                       >
                         {item.label}
                       </div>

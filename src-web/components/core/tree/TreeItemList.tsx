@@ -3,7 +3,7 @@ import { Fragment, memo } from 'react';
 import type { SelectableTreeNode } from './common';
 import type { TreeProps } from './Tree';
 import { TreeDropMarker } from './TreeDropMarker';
-import type { TreeItemProps } from './TreeItem';
+import type { TreeItemHandle, TreeItemProps } from './TreeItem';
 import { TreeItem } from './TreeItem';
 
 export type TreeItemListProps<T extends { id: string }> = Pick<
@@ -15,6 +15,7 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
     style?: CSSProperties;
     className?: string;
     forceDepth?: number;
+    addTreeItemRef?: (item: T, n: TreeItemHandle | null) => void;
   };
 
 function TreeItemList_<T extends { id: string }>({
@@ -29,6 +30,7 @@ function TreeItemList_<T extends { id: string }>({
   style,
   treeId,
   forceDepth,
+  addTreeItemRef,
 }: TreeItemListProps<T>) {
   return (
     <ul role="tree" style={style} className={className}>
@@ -36,6 +38,7 @@ function TreeItemList_<T extends { id: string }>({
       {nodes.map((child, i) => (
         <Fragment key={getItemKey(child.node.item)}>
           <TreeItem
+            addRef={addTreeItemRef}
             treeId={treeId}
             node={child.node}
             ItemInner={ItemInner}
@@ -46,7 +49,7 @@ function TreeItemList_<T extends { id: string }>({
             getItemKey={getItemKey}
             depth={forceDepth == null ? child.depth : forceDepth}
           />
-          <TreeDropMarker node={child.node} treeId={treeId} index={i+1} />
+          <TreeDropMarker node={child.node} treeId={treeId} index={i + 1} />
         </Fragment>
       ))}
     </ul>

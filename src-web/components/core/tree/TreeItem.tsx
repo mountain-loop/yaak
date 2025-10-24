@@ -3,8 +3,8 @@ import { useDndMonitor, useDraggable, useDroppable } from '@dnd-kit/core';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
-import type { MouseEvent, PointerEvent } from 'react';
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent, PointerEvent, ReactElement, RefAttributes } from 'react';
+import React, { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { computeSideForDragMove } from '../../../lib/dnd';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps, DropdownItem } from '../Dropdown';
@@ -30,11 +30,17 @@ export type TreeItemProps<T extends { id: string }> = Pick<
   onClick?: (item: T, e: OnClickEvent) => void;
   getContextMenu?: (item: T) => Promise<ContextMenuProps['items']>;
   depth: number;
+  addRef?: (item: T, n: TreeItemHandle | null) => void;
 };
+
+export interface TreeItemHandle {
+  rename: () => void;
+  isRenaming: boolean;
+}
 
 const HOVER_CLOSED_FOLDER_DELAY = 800;
 
-function TreeItem_<T extends { id: string }>({
+function TreeItemInner<T extends { id: string }>({
   treeId,
   node,
   ItemInner,
@@ -44,8 +50,9 @@ function TreeItem_<T extends { id: string }>({
   getEditOptions,
   className,
   depth,
+  addRef,
 }: TreeItemProps<T>) {
-  const ref = useRef<HTMLLIElement>(null);
+  const listItemRef = useRef<HTMLLIElement>(null);
   const draggableRef = useRef<HTMLButtonElement>(null);
   const isSelected = useAtomValue(isSelectedFamily({ treeId, itemId: node.item.id }));
   const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
@@ -53,6 +60,17 @@ function TreeItem_<T extends { id: string }>({
   const [editing, setEditing] = useState<boolean>(false);
   const [dropHover, setDropHover] = useState<null | 'drop' | 'animate'>(null);
   const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
+
+  useEffect(() => {
+    addRef?.(node.item, {
+      rename: () => {
+        if (getEditOptions != null) {
+          setEditing(true);
+        }
+      },
+      isRenaming: editing,
+    });
+  }, [addRef, editing, getEditOptions, node.item]);
 
   const isAncestorCollapsedAtom = useMemo(
     () =>
@@ -80,7 +98,7 @@ function TreeItem_<T extends { id: string }>({
   useEffect(
     function scrollIntoViewWhenSelected() {
       return jotaiStore.sub(isSelectedFamily({ treeId, itemId: node.item.id }), () => {
-        ref.current?.scrollIntoView({ block: 'nearest' });
+        listItemRef.current?.scrollIntoView({ block: 'nearest' });
       });
     },
     [node.item.id, treeId],
@@ -103,10 +121,11 @@ function TreeItem_<T extends { id: string }>({
   const handleSubmitNameEdit = useCallback(
     async function submitNameEdit(el: HTMLInputElement) {
       getEditOptions?.(node.item).onChange(node.item, el.value);
+      onClick?.(node.item, { shiftKey: false, ctrlKey: false, metaKey: false });
       // Slight delay for the model to propagate to the local store
       setTimeout(() => setEditing(false), 200);
     },
-    [getEditOptions, node.item],
+    [getEditOptions, node.item, onClick],
   );
 
   const handleEditFocus = useCallback(function handleEditFocus(el: HTMLInputElement | null) {
@@ -126,8 +145,10 @@ function TreeItem_<T extends { id: string }>({
       e.stopPropagation();
       switch (e.key) {
         case 'Enter':
-          e.preventDefault();
-          await handleSubmitNameEdit(e.currentTarget);
+          if (editing) {
+            e.preventDefault();
+            await handleSubmitNameEdit(e.currentTarget);
+          }
           break;
         case 'Escape':
           e.preventDefault();
@@ -135,7 +156,7 @@ function TreeItem_<T extends { id: string }>({
           break;
       }
     },
-    [handleSubmitNameEdit],
+    [editing, handleSubmitNameEdit],
   );
 
   const handleDoubleClick = useCallback(() => {
@@ -222,7 +243,7 @@ function TreeItem_<T extends { id: string }>({
 
   return (
     <li
-      ref={ref}
+      ref={listItemRef}
       role="treeitem"
       aria-level={depth + 1}
       aria-expanded={node.children == null ? undefined : !isCollapsed}
@@ -303,6 +324,11 @@ function TreeItem_<T extends { id: string }>({
     </li>
   );
 }
+
+// 1) Preserve generics through forwardRef:
+const TreeItem_ = forwardRef(TreeItemInner) as <T extends { id: string }>(
+  props: TreeItemProps<T> & RefAttributes<TreeItemHandle>,
+) => ReactElement | null;
 
 export const TreeItem = memo(
   TreeItem_,

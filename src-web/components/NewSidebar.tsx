@@ -256,38 +256,53 @@ const sidebarTreeAtom = atom((get) => {
 });
 
 const actions = {
-  'sidebar.delete_selected_item': async function (items: SidebarModel[]) {
-    await deleteModelWithConfirm(items);
+  'sidebar.selected.delete': {
+    enable: isSidebarFocused,
+    cb: async function (_: TreeHandle, items: SidebarModel[]) {
+      await deleteModelWithConfirm(items);
+    },
   },
-  'model.duplicate': async function (items: SidebarModel[]) {
-    if (items.length === 1) {
-      const item = items[0]!;
-      const newId = await duplicateModel(item);
-      navigateToRequestOrFolderOrWorkspace(newId, item.model);
-    } else {
-      await Promise.all(items.map(duplicateModel));
-    }
+  'sidebar.selected.rename': {
+    enable: isSidebarFocused,
+    allowDefault: true,
+    cb: async function (tree: TreeHandle, items: SidebarModel[]) {
+      const item = items[0];
+      if (items.length === 1 && item != null) {
+        tree.renameItem(item.id);
+      }
+    },
   },
-  'request.send': async function (items: SidebarModel[]) {
-    await Promise.all(
-      items.filter((i) => i.model === 'http_request').map((i) => sendAnyHttpRequest.mutate(i.id)),
-    );
+  'sidebar.selected.duplicate': {
+    priority: 999,
+    enable: isSidebarFocused,
+    cb: async function (_: TreeHandle, items: SidebarModel[]) {
+      if (items.length === 1) {
+        const item = items[0]!;
+        const newId = await duplicateModel(item);
+        navigateToRequestOrFolderOrWorkspace(newId, item.model);
+      } else {
+        await Promise.all(items.map(duplicateModel));
+      }
+    },
+  },
+  'request.send': {
+    enable: isSidebarFocused,
+    cb: async function (_: TreeHandle, items: SidebarModel[]) {
+      await Promise.all(
+        items.filter((i) => i.model === 'http_request').map((i) => sendAnyHttpRequest.mutate(i.id)),
+      );
+    },
   },
 } as const;
 
-const hotkeys: TreeProps<SidebarModel>['hotkeys'] = {
-  priority: 10, // So these ones take precedence over global hotkeys when the sidebar is focused
-  actions,
-  enable: () => isSidebarFocused(),
-};
+const hotkeys: TreeProps<SidebarModel>['hotkeys'] = { actions };
 
-async function getContextMenu(items: SidebarModel[]): Promise<DropdownItem[]> {
+async function getContextMenu(tree: TreeHandle, items: SidebarModel[]): Promise<DropdownItem[]> {
   const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
   const child = items[0];
 
   // No children means we're in the root
   if (child == null) {
-    console.log('HELLO', child);
     return getCreateDropdownItems({ workspaceId, activeRequest: null, folderId: null });
   }
 
@@ -321,7 +336,7 @@ async function getContextMenu(items: SidebarModel[]): Promise<DropdownItem[]> {
       hotKeyLabelOnly: true,
       hidden: !onlyHttpRequests,
       leftSlot: <Icon icon="send_horizontal" />,
-      onSelect: () => actions['request.send'](items),
+      onSelect: () => actions['request.send'].cb(tree, items),
     },
     ...(items.length === 1 && child.model === 'http_request'
       ? await getHttpRequestActions()
@@ -362,6 +377,8 @@ async function getContextMenu(items: SidebarModel[]): Promise<DropdownItem[]> {
       label: 'Rename',
       leftSlot: <Icon icon="pencil" />,
       hidden: items.length > 1,
+      hotKeyAction: 'sidebar.selected.rename',
+      hotKeyLabelOnly: true,
       onSelect: async () => {
         const request = getModel(
           ['folder', 'http_request', 'grpc_request', 'websocket_request'],
@@ -375,7 +392,7 @@ async function getContextMenu(items: SidebarModel[]): Promise<DropdownItem[]> {
       hotKeyAction: 'model.duplicate',
       hotKeyLabelOnly: true, // Would trigger for every request (bad)
       leftSlot: <Icon icon="copy" />,
-      onSelect: () => actions['model.duplicate'](items),
+      onSelect: () => actions['sidebar.selected.duplicate'].cb(tree, items),
     },
     {
       label: 'Move',
@@ -393,10 +410,10 @@ async function getContextMenu(items: SidebarModel[]): Promise<DropdownItem[]> {
     {
       color: 'danger',
       label: 'Delete',
-      hotKeyAction: 'sidebar.delete_selected_item',
+      hotKeyAction: 'sidebar.selected.delete',
       hotKeyLabelOnly: true,
       leftSlot: <Icon icon="trash" />,
-      onSelect: () => actions['sidebar.delete_selected_item'](items),
+      onSelect: () => actions['sidebar.selected.delete'].cb(tree, items),
     },
     ...modelCreationItems,
   ];
