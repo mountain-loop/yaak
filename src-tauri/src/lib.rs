@@ -60,6 +60,7 @@ mod updates;
 mod uri_scheme;
 mod window;
 mod window_menu;
+mod dns;
 
 #[derive(serde::Serialize)]
 #[serde(default, rename_all = "camelCase")]

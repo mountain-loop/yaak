@@ -33,6 +33,7 @@ use yaak_plugins::events::{
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
+use crate::dns::LocalhostResolver;
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -110,6 +111,7 @@ pub async fn send_http_request<R: Runtime>(
         .gzip(true)
         .brotli(true)
         .deflate(true)
+        .dns_resolver(LocalhostResolver::new())
         .referer(false)
         .tls_info(true);
 
