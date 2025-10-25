@@ -77,11 +77,14 @@ mkdirSync(dstDir, { recursive: true });
   chmodSync(binDst, newMode);
 
   console.log('Downloaded protoc to', binDst);
-})().catch((err) => console.log('Script failed:', err));
+})().catch((err) => {
+  console.log('Script failed:', err);
+  process.exit(1);
+});
 
 function tryExecSync(cmd) {
   try {
-    return execSync(cmd, { stdio: 'inherit' }).toString('utf-8');
+    return execSync(cmd, { stdio: 'pipe' }).toString('utf-8');
   } catch (_) {
     return '';
   }
