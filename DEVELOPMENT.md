@@ -54,7 +54,7 @@ Rerun the app to apply the migrations.
 
 _Note: For safety, development builds use a separate database location from production builds._
 
-## Lezer Grammer Generation
+## Lezer Grammar Generation
 
 ```sh
 # Example
