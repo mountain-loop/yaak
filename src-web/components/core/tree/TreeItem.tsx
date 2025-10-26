@@ -12,6 +12,7 @@ import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
 import { collapsedFamily, isCollapsedFamily, isLastFocusedFamily, isSelectedFamily } from './atoms';
 import type { TreeNode } from './common';
+import { getNodeKey } from './common';
 import type { TreeProps } from './Tree';
 import { TreeIndentGuide } from './TreeIndentGuide';
 
@@ -266,7 +267,7 @@ function TreeItem_<T extends { id: string }>({
         'tree-item',
         'h-sm',
         'grid grid-cols-[auto_minmax(0,1fr)]',
-        isAncestorCollapsed && 'hidden',
+        (isAncestorCollapsed || node.hidden) && 'hidden',
         editing && 'ring-1 focus-within:ring-focus',
         dropHover != null && 'relative z-10 ring-2 ring-primary',
         dropHover === 'animate' && 'animate-blinkRing',
@@ -350,6 +351,9 @@ export const TreeItem = memo(
     if (nonEqualKeys.length > 0) {
       return false;
     }
-    return nextProps.getItemKey(prevNode.item) === nextProps.getItemKey(nextNode.item);
+
+    return (
+      getNodeKey(prevNode, prevProps.getItemKey) === getNodeKey(nextNode, nextProps.getItemKey)
+    );
   },
 ) as typeof TreeItem_;

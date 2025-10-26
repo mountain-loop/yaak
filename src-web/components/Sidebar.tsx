@@ -16,7 +16,7 @@ import {
   workspacesAtom,
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import { atom, useAtomValue } from 'jotai';
+import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
@@ -45,7 +45,9 @@ import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
 import { Icon } from './core/Icon';
+import { IconButton } from './core/IconButton';
 import { LoadingIcon } from './core/LoadingIcon';
+import { PlainInput } from './core/PlainInput';
 import { isSelectedFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
@@ -57,11 +59,12 @@ type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRe
 
 const OPACITY_SUBTLE = 'opacity-80';
 
-function NewSidebar({ className }: { className?: string }) {
+function Sidebar({ className }: { className?: string }) {
   const [hidden, setHidden] = useSidebarHidden();
-  const tree = useAtomValue(sidebarTreeAtom);
   const activeWorkspaceId = useAtomValue(activeWorkspaceAtom)?.id;
   const treeId = 'tree.' + (activeWorkspaceId ?? 'unknown');
+  const setFilter = useSetAtom(sidebarFilterAtom);
+  const tree = useAtomValue(sidebarTreeAtom);
   const wrapperRef = useRef<HTMLElement>(null);
   const treeRef = useRef<TreeHandle>(null);
 
@@ -150,8 +153,18 @@ function NewSidebar({ className }: { className?: string }) {
     <aside
       ref={wrapperRef}
       aria-hidden={hidden ?? undefined}
-      className={classNames(className, 'h-full grid grid-rows-[minmax(0,1fr)_auto]')}
+      className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)_auto]')}
     >
+      <div className="p-1 pb-0">
+        <PlainInput
+          size="sm"
+          label="filter"
+          placeholder="Search requests"
+          hideLabel
+          onChange={setFilter}
+          rightSlot={<IconButton tabIndex={-1} icon="x" title="Clear filter" onClick={() => setFilter('')} />}
+        />
+      </div>
       <Tree
         ref={handleTreeRefInit}
         root={tree}
@@ -171,7 +184,7 @@ function NewSidebar({ className }: { className?: string }) {
   );
 }
 
-export default NewSidebar;
+export default Sidebar;
 
 const activeIdAtom = atom<string | null>((get) => {
   return get(activeRequestIdAtom) || get(activeFolderIdAtom);
@@ -206,9 +219,12 @@ const allPotentialChildrenAtom = atom<SidebarModel[]>((get) => {
 
 const memoAllPotentialChildrenAtom = deepEqualAtom(allPotentialChildrenAtom);
 
+const sidebarFilterAtom = atom<string>('');
+
 const sidebarTreeAtom = atom((get) => {
   const allModels = get(memoAllPotentialChildrenAtom);
   const activeWorkspace = get(activeWorkspaceAtom);
+  const filter = get(sidebarFilterAtom);
 
   const childrenMap: Record<string, Exclude<SidebarModel, Workspace>[]> = {};
   for (const item of allModels) {
@@ -221,38 +237,53 @@ const sidebarTreeAtom = atom((get) => {
     }
   }
 
-  const treeParentMap: Record<string, TreeNode<SidebarModel>> = {};
-
   if (activeWorkspace == null) {
     return null;
   }
 
-  // Put requests and folders into a tree structure
-  const next = (node: TreeNode<SidebarModel>, depth: number): TreeNode<SidebarModel> => {
+  // returns true if this node OR any child matches filter
+  const build = (node: TreeNode<SidebarModel>, depth: number): boolean => {
     const childItems = childrenMap[node.item.id] ?? [];
+    const matchesSelf =
+      !filter || resolvedModelName(node.item).toLowerCase().includes(filter.toLowerCase());
+
+    let matchesChild = false;
 
     // Recurse to children
-    childItems.sort((a, b) => a.sortPriority - b.sortPriority);
-    if (node.item.model === 'folder' || node.item.model === 'workspace') {
-      node.children = node.children ?? [];
+    node.children =
+      node.item.model === 'folder' || node.item.model === 'workspace' ? [] : undefined;
+    if (node.children != null) {
+      childItems.sort((a, b) => a.sortPriority - b.sortPriority);
+
       for (const item of childItems) {
-        treeParentMap[item.id] = node;
-        node.children.push(next({ item, parent: node, depth }, depth + 1));
+        const childNode = { item, parent: node, depth };
+        const childMatches = build(childNode, depth + 1);
+        if (childMatches) {
+          matchesChild = true;
+          node.children.push(childNode);
+        }
       }
     }
 
-    return node;
+    const anyMatch = matchesSelf || matchesChild;
+
+    // hide node *only if* nothing in its subtree matches
+    node.hidden = !anyMatch;
+
+    return anyMatch;
   };
 
-  return next(
-    {
-      item: activeWorkspace,
-      children: [],
-      parent: null,
-      depth: 0,
-    },
-    1,
-  );
+  const root = {
+    item: activeWorkspace,
+    parent: null,
+    children: [],
+    depth: 0,
+  };
+
+  // Build tree and mark visibility in one pass
+  build(root, 1);
+
+  return root;
 });
 
 const actions = {
