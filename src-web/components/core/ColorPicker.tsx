@@ -77,7 +77,13 @@ export function ColorPickerWithThemeColors({ onChange, color, className }: Props
               selectedColor === color && 'scale-[1.15]',
               selectedColor === color ? 'opacity-100' : 'opacity-60',
               color === null && 'border border-text-subtle',
-              color !== 'custom' && color !== null && 'bg-' + color,
+              color === 'primary' && 'bg-primary',
+              color === 'secondary' && 'bg-secondary',
+              color === 'success' && 'bg-success',
+              color === 'notice' && 'bg-notice',
+              color === 'warning' && 'bg-warning',
+              color === 'danger' && 'bg-danger',
+              color === 'info' && 'bg-info',
               color === 'custom' &&
                 'bg-[conic-gradient(var(--danger),var(--warning),var(--notice),var(--success),var(--info),var(--primary),var(--danger))]',
             )}

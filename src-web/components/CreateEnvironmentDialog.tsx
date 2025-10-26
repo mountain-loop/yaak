@@ -1,7 +1,9 @@
 import { createWorkspaceModel } from '@yaakapp-internal/models';
 import { useState } from 'react';
+import { useToggle } from '../hooks/useToggle';
 import { ColorIndicator } from './ColorIndicator';
 import { Button } from './core/Button';
+import { Checkbox } from './core/Checkbox';
 import { ColorPickerWithThemeColors } from './core/ColorPicker';
 import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
@@ -15,6 +17,7 @@ interface Props {
 export function CreateEnvironmentDialog({ workspaceId, hide, onCreate }: Props) {
   const [name, setName] = useState<string>('');
   const [color, setColor] = useState<string | null>(null);
+  const [sharable, toggleSharable] = useToggle(false);
   return (
     <form
       className="pb-3 flex flex-col gap-3"
@@ -25,6 +28,7 @@ export function CreateEnvironmentDialog({ workspaceId, hide, onCreate }: Props) 
           name,
           color,
           variables: [],
+          public: sharable,
           workspaceId,
           parentModel: 'environment',
         });
@@ -32,7 +36,19 @@ export function CreateEnvironmentDialog({ workspaceId, hide, onCreate }: Props) 
         onCreate(id);
       }}
     >
-      <PlainInput label="Name" required defaultValue={name} onChange={setName} placeholder="Production" />
+      <PlainInput
+        label="Name"
+        required
+        defaultValue={name}
+        onChange={setName}
+        placeholder="Production"
+      />
+      <Checkbox
+        checked={sharable}
+        title="Share this environment"
+        help="Sharable environments are included in data export and directory sync."
+        onChange={toggleSharable}
+      />
       <div>
         <Label
           htmlFor="color"
