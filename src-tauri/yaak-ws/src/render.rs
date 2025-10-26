@@ -1,6 +1,6 @@
 use crate::error::Result;
 use std::collections::BTreeMap;
-use yaak_models::models::{Environment, HttpRequestHeader, WebsocketRequest};
+use yaak_models::models::{Environment, HttpRequestHeader, HttpUrlParameter, WebsocketRequest};
 use yaak_models::render::make_vars_hashmap;
 use yaak_templates::{parse_and_render, render_json_value_raw, RenderOptions, TemplateCallback};
 
@@ -11,6 +11,16 @@ pub async fn render_websocket_request<T: TemplateCallback>(
     opt: &RenderOptions,
 ) -> Result<WebsocketRequest> {
     let vars = &make_vars_hashmap(environment_chain);
+
+    let mut url_parameters = Vec::new();
+    for p in r.url_parameters.clone() {
+        url_parameters.push(HttpUrlParameter {
+            enabled: p.enabled,
+            name: parse_and_render(&p.name, vars, cb, opt).await?,
+            value: parse_and_render(&p.value, vars, cb, opt).await?,
+            id: p.id,
+        })
+    }
 
     let mut headers = Vec::new();
     for p in r.headers.clone() {
@@ -33,6 +43,7 @@ pub async fn render_websocket_request<T: TemplateCallback>(
 
     Ok(WebsocketRequest {
         url,
+        url_parameters,
         headers,
         authentication,
         message,
