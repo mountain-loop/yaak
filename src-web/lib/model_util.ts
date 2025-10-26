@@ -49,7 +49,7 @@ export function getCharsetFromContentType(headers: HttpResponseHeader[]): string
 }
 
 export function isBaseEnvironment(environment: Environment): boolean {
-  return environment.parentId == null;
+  return environment.parentModel == 'workspace';
 }
 
 export function isSubEnvironment(environment: Environment): boolean {

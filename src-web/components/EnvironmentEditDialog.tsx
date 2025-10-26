@@ -232,17 +232,14 @@ function EnvironmentDialogSidebarButton({
               await patchModel(environment, { name });
             },
           },
-          ...((duplicateEnvironment
-            ? [
-                {
-                  label: 'Duplicate',
-                  leftSlot: <Icon icon="copy" />,
-                  onSelect: () => {
-                    duplicateEnvironment?.(environment);
-                  },
-                },
-              ]
-            : []) as DropdownItem[]),
+          {
+            label: 'Duplicate',
+            leftSlot: <Icon icon="copy" />,
+            hidden: isBaseEnvironment(environment),
+            onSelect: () => {
+              duplicateEnvironment?.(environment);
+            },
+          },
           {
             label: environment.color ? 'Change Color' : 'Assign Color',
             leftSlot: <Icon icon="palette" />,

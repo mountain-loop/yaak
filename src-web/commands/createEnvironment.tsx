@@ -1,8 +1,9 @@
-import { createWorkspaceModel, type Environment } from '@yaakapp-internal/models';
+import { type Environment } from '@yaakapp-internal/models';
+import { CreateEnvironmentDialog } from '../components/CreateEnvironmentDialog';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
+import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
-import { showPrompt } from '../lib/prompt';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 
 export const createSubEnvironmentAndActivate = createFastMutation<
@@ -21,24 +22,23 @@ export const createSubEnvironmentAndActivate = createFastMutation<
       throw new Error('Cannot create environment when no active workspace');
     }
 
-    const name = await showPrompt({
-      id: 'new-environment',
-      title: 'New Environment',
-      description: 'Create multiple environments with different sets of variables',
-      label: 'Name',
-      placeholder: 'My Environment',
-      defaultValue: 'My Environment',
-      confirmText: 'Create',
-    });
-    if (name == null) return null;
-
-    return createWorkspaceModel({
-      model: 'environment',
-      name,
-      variables: [],
-      workspaceId,
-      parentId: baseEnvironment.id,
-      parentModel: 'environment',
+    return new Promise<string | null>((resolve) => {
+      showDialog({
+        id: 'new-environment',
+        title: 'New Environment',
+        description: 'Create multiple environments with different sets of variables',
+        size: 'sm',
+        onClose: () => resolve(null),
+        render: ({ hide }) => (
+          <CreateEnvironmentDialog
+            workspaceId={workspaceId}
+            hide={hide}
+            onCreate={(id: string) => {
+              resolve(id);
+            }}
+          />
+        ),
+      });
     });
   },
   onSuccess: async (environmentId) => {
