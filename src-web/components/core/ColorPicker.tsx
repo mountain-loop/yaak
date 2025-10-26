@@ -39,11 +39,11 @@ const colors = [
   null,
   'danger',
   'warning',
-  'success',
-  'info',
-  'primary',
-  'secondary',
   'notice',
+  'success',
+  'primary',
+  'info',
+  'secondary',
   'custom',
 ] as const;
 
