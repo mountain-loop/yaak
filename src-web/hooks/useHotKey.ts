@@ -23,6 +23,7 @@ export type HotkeyAction =
   | 'switcher.prev'
   | 'switcher.toggle'
   | 'settings.show'
+  | 'sidebar.filter'
   | 'sidebar.selected.delete'
   | 'sidebar.selected.duplicate'
   | 'sidebar.selected.rename'
@@ -45,6 +46,7 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'switcher.prev': ['Control+Tab'],
   'switcher.toggle': ['CmdCtrl+p'],
   'settings.show': ['CmdCtrl+,'],
+  'sidebar.filter': ['CmdCtrl+f'],
   'sidebar.selected.delete': ['Delete', 'CmdCtrl+Backspace'],
   'sidebar.selected.duplicate': ['CmdCtrl+d'],
   'sidebar.selected.rename': ['Enter'],
@@ -62,15 +64,16 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'hotkeys.showHelp': 'Show Keyboard Shortcuts',
   'model.create': 'New Request',
   'model.duplicate': 'Duplicate Request',
-  'request.rename': 'Rename',
-  'request.send': 'Send',
+  'request.rename': 'Rename Active Request',
+  'request.send': 'Send Active Request',
   'switcher.next': 'Go To Previous Request',
   'switcher.prev': 'Go To Next Request',
   'switcher.toggle': 'Toggle Request Switcher',
   'settings.show': 'Open Settings',
-  'sidebar.selected.delete': 'Delete',
-  'sidebar.selected.duplicate': 'Duplicate',
-  'sidebar.selected.rename': 'Rename',
+  'sidebar.filter': 'Filter Selected Sidebar Item',
+  'sidebar.selected.delete': 'Delete Selected sidebar Item',
+  'sidebar.selected.duplicate': 'Duplicate Selected Sidebar Item',
+  'sidebar.selected.rename': 'Rename Selected Sidebar Item',
   'sidebar.focus': 'Focus or Toggle Sidebar',
   'url_bar.focus': 'Focus URL',
   'workspace_settings.show': 'Open Workspace Settings',
@@ -178,7 +181,7 @@ function handleKeyDown(e: KeyboardEvent) {
     if (
       (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
       currentKeysWithModifiers.size === 1 &&
-      currentKeysWithModifiers.has('Backspace')
+      (currentKeysWithModifiers.has('Backspace') || currentKeysWithModifiers.has('Delete'))
     ) {
       // Don't support Backspace-only modifiers within input fields. This is fairly brittle, so maybe there's a
       // better way to do stuff like this in the future.
@@ -244,6 +247,10 @@ export function useFormattedHotkey(action: HotkeyAction | null): string[] | null
         labelParts.push('⇥');
       } else if (p === 'Backspace') {
         labelParts.push('⌫');
+      } else if (p === 'Minus') {
+        labelParts.push('-');
+      } else if (p === 'Equal') {
+        labelParts.push('=');
       } else {
         labelParts.push(capitalize(p));
       }

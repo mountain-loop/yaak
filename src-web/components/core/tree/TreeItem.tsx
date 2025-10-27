@@ -16,7 +16,7 @@ import { getNodeKey } from './common';
 import type { TreeProps } from './Tree';
 import { TreeIndentGuide } from './TreeIndentGuide';
 
-interface OnClickEvent {
+export interface TreeItemClickEvent {
   shiftKey: boolean;
   ctrlKey: boolean;
   metaKey: boolean;
@@ -28,7 +28,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
 > & {
   node: TreeNode<T>;
   className?: string;
-  onClick?: (item: T, e: OnClickEvent) => void;
+  onClick?: (item: T, e: TreeItemClickEvent) => void;
   getContextMenu?: (item: T) => Promise<ContextMenuProps['items']>;
   depth: number;
   addRef?: (item: T, n: TreeItemHandle | null) => void;
@@ -158,8 +158,10 @@ function TreeItem_<T extends { id: string }>({
           }
           break;
         case 'Escape':
-          e.preventDefault();
-          setEditing(false);
+          if (editing) {
+            e.preventDefault();
+            setEditing(false);
+          }
           break;
       }
     },
@@ -254,6 +256,8 @@ function TreeItem_<T extends { id: string }>({
     [setDraggableRef, setDroppableRef],
   );
 
+  if (node.hidden || isAncestorCollapsed) return null;
+
   return (
     <li
       ref={listItemRef}
@@ -267,7 +271,6 @@ function TreeItem_<T extends { id: string }>({
         'tree-item',
         'h-sm',
         'grid grid-cols-[auto_minmax(0,1fr)]',
-        (isAncestorCollapsed || node.hidden) && 'hidden',
         editing && 'ring-1 focus-within:ring-focus',
         dropHover != null && 'relative z-10 ring-2 ring-primary',
         dropHover === 'animate' && 'animate-blinkRing',

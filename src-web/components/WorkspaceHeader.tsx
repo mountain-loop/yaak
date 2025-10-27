@@ -1,4 +1,3 @@
-import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
 import React, { memo } from 'react';
@@ -75,9 +74,10 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
           }
         />
         <IconButton
-          icon={type() == 'macos' ? 'command' : 'square_terminal'}
+          icon="search"
           title="Search or execute a command"
           size="sm"
+          hotkeyAction="command_palette.toggle"
           iconColor="secondary"
           onClick={togglePalette}
         />

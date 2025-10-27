@@ -1,11 +1,12 @@
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { useLocalStorage } from 'react-use';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useContainerSize } from '../../hooks/useContainerQuery';
 import { clamp } from '../../lib/clamp';
+import type { ResizeHandleEvent } from '../ResizeHandle';
 import { ResizeHandle } from '../ResizeHandle';
 
 export type SplitLayoutLayout = 'responsive' | 'horizontal' | 'vertical';
@@ -55,10 +56,6 @@ export function SplitLayout({
   );
   const width = widthRaw ?? defaultRatio;
   let height = heightRaw ?? defaultRatio;
-  const [isResizing, setIsResizing] = useState<boolean>(false);
-  const moveState = useRef<{ move: (e: MouseEvent) => void; up: (e: MouseEvent) => void } | null>(
-    null,
-  );
 
   if (!secondSlot) {
     height = 0;
@@ -86,60 +83,37 @@ export function SplitLayout({
     };
   }, [style, vertical, height, minHeightPx, width]);
 
-  const unsub = () => {
-    if (moveState.current !== null) {
-      document.documentElement.removeEventListener('pointermove', moveState.current.move);
-      document.documentElement.removeEventListener('pointerup', moveState.current.up);
-    }
-  };
-
   const handleReset = useCallback(() => {
     if (vertical) setHeight(defaultRatio);
     else setWidth(defaultRatio);
   }, [vertical, setHeight, defaultRatio, setWidth]);
 
-  const handleResizeStart = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
+  const handleResizeMove = useCallback(
+    (e: ResizeHandleEvent) => {
       if (containerRef.current === null) return;
-      unsub();
 
-      const containerRect = containerRef.current.getBoundingClientRect();
+      // const containerRect = containerRef.current.getBoundingClientRect();
+      const { paddingLeft, paddingRight, paddingTop, paddingBottom } = getComputedStyle(
+        containerRef.current,
+      );
+      const $c = containerRef.current;
+      const containerWidth = $c.clientWidth - parseFloat(paddingLeft) - parseFloat(paddingRight);
+      const containerHeight = $c.clientHeight - parseFloat(paddingTop) - parseFloat(paddingBottom);
 
-      const mouseStartX = e.clientX;
-      const mouseStartY = e.clientY;
-      const startWidth = containerRect.width * width;
-      const startHeight = containerRect.height * height;
+      const mouseStartX = e.xStart;
+      const mouseStartY = e.yStart;
+      const startWidth = containerWidth * width;
+      const startHeight = containerHeight * height;
 
-      moveState.current = {
-        move: (e: MouseEvent) => {
-          setIsResizing(true); // Set this here so we don't block double-clicks
-          e.preventDefault(); // Prevent text selection and things
-          if (vertical) {
-            const maxHeightPx = containerRect.height - minHeightPx;
-            const newHeightPx = clamp(
-              startHeight - (e.clientY - mouseStartY),
-              minHeightPx,
-              maxHeightPx,
-            );
-            setHeight(newHeightPx / containerRect.height);
-          } else {
-            const maxWidthPx = containerRect.width - minWidthPx;
-            const newWidthPx = clamp(
-              startWidth - (e.clientX - mouseStartX),
-              minWidthPx,
-              maxWidthPx,
-            );
-            setWidth(newWidthPx / containerRect.width);
-          }
-        },
-        up: (e: MouseEvent) => {
-          e.preventDefault();
-          unsub();
-          setIsResizing(false);
-        },
-      };
-      document.documentElement.addEventListener('pointermove', moveState.current.move);
-      document.documentElement.addEventListener('pointerup', moveState.current.up);
+      if (vertical) {
+        const maxHeightPx = containerHeight - minHeightPx;
+        const newHeightPx = clamp(startHeight - (e.y - mouseStartY), minHeightPx, maxHeightPx);
+        setHeight(newHeightPx / containerHeight);
+      } else {
+        const maxWidthPx = containerWidth - minWidthPx;
+        const newWidthPx = clamp(startWidth - (e.x - mouseStartX), minWidthPx, maxWidthPx);
+        setWidth(newWidthPx / containerWidth);
+      }
     },
     [width, height, vertical, minHeightPx, setHeight, minWidthPx, setWidth],
   );
@@ -155,9 +129,8 @@ export function SplitLayout({
         <>
           <ResizeHandle
             style={areaD}
-            isResizing={isResizing}
             className={classNames(vertical ? '-translate-y-1' : '-translate-x-1')}
-            onResizeStart={handleResizeStart}
+            onResizeMove={handleResizeMove}
             onReset={handleReset}
             side={vertical ? 'top' : 'left'}
             justify="center"

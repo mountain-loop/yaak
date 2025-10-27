@@ -21,7 +21,7 @@ export const TreeIndentGuide = memo(function TreeIndentGuide({
         <div
           key={i}
           className={classNames(
-            'w-[1rem] border-r border-r-text-subtlest',
+            'w-[calc(1rem+0.5px)] border-r border-r-text-subtlest',
             !(parentDepth === i + 1 && isHovered) && 'opacity-30',
           )}
         />

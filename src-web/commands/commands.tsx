@@ -34,7 +34,7 @@ export const createFolder = createFastMutation<
         confirmText: 'Create',
         placeholder: 'Name',
       });
-      if (name == null) throw new Error('No name provided to create folder');
+      if (name == null) return;
 
       patch.name = name;
     }

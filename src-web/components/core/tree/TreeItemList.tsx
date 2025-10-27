@@ -1,5 +1,5 @@
-import type { CSSProperties } from 'react';
-import { Fragment, memo } from 'react';
+import type { CSSProperties} from 'react';
+import { Fragment } from 'react';
 import type { SelectableTreeNode } from './common';
 import type { TreeProps } from './Tree';
 import { TreeDropMarker } from './TreeDropMarker';
@@ -18,7 +18,7 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
     addTreeItemRef?: (item: T, n: TreeItemHandle | null) => void;
   };
 
-function TreeItemList_<T extends { id: string }>({
+export function TreeItemList<T extends { id: string }>({
   className,
   getContextMenu,
   getEditOptions,
@@ -55,33 +55,3 @@ function TreeItemList_<T extends { id: string }>({
     </ul>
   );
 }
-
-export const TreeItemList = memo(
-  TreeItemList_,
-  (
-    { nodes: prevNodes, getItemKey: prevGetItemKey, ...prevProps },
-    { nodes: nextNodes, getItemKey: nextGetItemKey, ...nextProps },
-  ) => {
-    const nonEqualKeys = [];
-    for (const key of Object.keys(prevProps)) {
-      if (prevProps[key as keyof typeof prevProps] !== nextProps[key as keyof typeof nextProps]) {
-        nonEqualKeys.push(key);
-      }
-    }
-    if (nonEqualKeys.length > 0) {
-      // console.log('TreeItemList: ', nonEqualKeys);
-      return false;
-    }
-    if (prevNodes.length !== nextNodes.length) return false;
-
-    for (let i = 0; i < prevNodes.length; i++) {
-      const prev = prevNodes[i]!;
-      const next = nextNodes[i]!;
-      if (prevGetItemKey(prev.node.item) !== nextGetItemKey(next.node.item)) {
-        return false;
-      }
-    }
-
-    return true;
-  },
-) as typeof TreeItemList_;
