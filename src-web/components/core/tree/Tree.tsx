@@ -250,7 +250,6 @@ function TreeInner<T extends { id: string }>(
       const item = validSelectableItems[index + 1];
       if (item != null) {
         handleSelect(item.node.item, e);
-        handleSelect(item.node.item, e);
       }
     },
     [handleSelect, selectableItems, treeId],
