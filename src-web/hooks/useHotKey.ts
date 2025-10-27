@@ -70,7 +70,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'switcher.prev': 'Go To Next Request',
   'switcher.toggle': 'Toggle Request Switcher',
   'settings.show': 'Open Settings',
-  'sidebar.filter': 'Filter Selected Sidebar Item',
+  'sidebar.filter': 'Filter Sidebar',
   'sidebar.selected.delete': 'Delete Selected Sidebar Item',
   'sidebar.selected.duplicate': 'Duplicate Selected Sidebar Item',
   'sidebar.selected.rename': 'Rename Selected Sidebar Item',
