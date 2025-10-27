@@ -314,7 +314,7 @@ function TreeInner<T extends { id: string }>(
     [selectableItems, handleSelect],
   );
 
-  // If the selected item in a folder, select its parent.
+  // If the selected item is in a folder, select its parent.
   // If the selected item is an expanded folder, collapse it.
   useKey(
     'ArrowLeft',
