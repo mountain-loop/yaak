@@ -139,7 +139,7 @@ export function duplicateModel<M extends AnyModel['model'], T extends ExtractMod
   model: T | null,
 ) {
   if (model == null) {
-    throw new Error('Failed to delete null model');
+    throw new Error('Failed to duplicate null model');
   }
 
   // If the model has a name, try to duplicate it with a name that doesn't conflict
