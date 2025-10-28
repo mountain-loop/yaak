@@ -73,8 +73,8 @@ function Sidebar({ className }: { className?: string }) {
   const filterRef = useRef<HTMLInputElement>(null);
   const allHidden = useMemo(() => {
     if (tree?.children?.length === 0) return false;
-    else if (filter) return false;
-    else return tree?.children?.every((c) => c.hidden);
+    else if (filter) return tree?.children?.every((c) => c.hidden);
+    else return true;
   }, [filter, tree?.children]);
 
   const focusActiveItem = useCallback(() => {
@@ -229,7 +229,7 @@ function Sidebar({ className }: { className?: string }) {
         )}
       </div>
       {allHidden ? (
-        <div className="italic text-text-subtle p-3 mt-2 text-sm text-center">
+        <div className="italic text-text-subtle p-3 text-sm text-center">
           No results for <InlineCode>{filter.text}</InlineCode>
         </div>
       ) : (
