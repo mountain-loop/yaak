@@ -1,5 +1,5 @@
 import classNames from 'classnames';
-import type { FocusEvent, HTMLAttributes } from 'react';
+import type { FocusEvent, HTMLAttributes, ReactNode } from 'react';
 import {
   forwardRef,
   useCallback,
@@ -21,6 +21,7 @@ export type PlainInputProps = Omit<InputProps, 'wrapLines' | 'onKeyDown' | 'type
     type?: 'text' | 'password' | 'number';
     step?: number;
     hideObscureToggle?: boolean;
+    labelRightSlot?: ReactNode;
   };
 
 export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(function PlainInput(
@@ -37,6 +38,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     label,
     labelClassName,
     labelPosition = 'top',
+    labelRightSlot,
     leftSlot,
     name,
     onBlur,
@@ -91,10 +93,11 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
 
   // Force input to update when receiving change and not in focus
   useLayoutEffect(() => {
-    if (!focused) {
+    const isFocused = document.activeElement === inputRef.current;
+    if (defaultValue != null && !isFocused) {
       regenerateFocusedUpdateKey();
     }
-  }, [focused, regenerateFocusedUpdateKey, defaultValue]);
+  }, [regenerateFocusedUpdateKey, defaultValue]);
 
   const id = `input-${name}`;
   const commonClassName = classNames(
@@ -136,6 +139,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
         visuallyHidden={hideLabel}
         required={required}
         help={help}
+        rightSlot={labelRightSlot}
       >
         {label}
       </Label>
