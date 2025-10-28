@@ -18,11 +18,11 @@ impl<'a> DbContext<'a> {
             updated_at: Default::default(),
 
             appearance: "system".to_string(),
-            editor_font_size: 13,
+            editor_font_size: 12,
             editor_font: None,
             editor_keymap: EditorKeymap::Default,
             editor_soft_wrap: true,
-            interface_font_size: 15,
+            interface_font_size: 14,
             interface_scale: 1.0,
             interface_font: None,
             hide_window_controls: false,
