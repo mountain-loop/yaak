@@ -179,18 +179,22 @@ function handleKeyDown(e: KeyboardEvent) {
   if (e.metaKey) currentKeysWithModifiers.add('Meta');
   if (e.shiftKey) currentKeysWithModifiers.add('Shift');
 
+  // Don't trigger if the user is focused within an element that explicitly disableds hotkeys
+  if (document.activeElement?.closest('[data-disable-hotkey]')) {
+    return;
+  }
+
+  // Don't support certain single-key combinrations within inputs
+  if (
+    (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
+    currentKeysWithModifiers.size === 1 &&
+    (currentKeysWithModifiers.has('Backspace') || currentKeysWithModifiers.has('Delete'))
+  ) {
+    return;
+  }
+
   const executed: string[] = [];
   outer: for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
-    if (
-      (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
-      currentKeysWithModifiers.size === 1 &&
-      (currentKeysWithModifiers.has('Backspace') || currentKeysWithModifiers.has('Delete'))
-    ) {
-      // Don't support Backspace-only modifiers within input fields. This is fairly brittle, so maybe there's a
-      // better way to do stuff like this in the future.
-      continue;
-    }
-
     for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
       if (hkAction !== action) {
         continue;

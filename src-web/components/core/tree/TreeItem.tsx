@@ -156,7 +156,7 @@ function TreeItem_<T extends { id: string }>({
 
   const handleEditKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLInputElement>) => {
-      e.stopPropagation();
+      e.stopPropagation(); // Don't trigger other tree keys (like arrows)
       switch (e.key) {
         case 'Enter':
           if (editing) {
@@ -331,6 +331,7 @@ function TreeItem_<T extends { id: string }>({
               const { defaultValue, placeholder } = getEditOptions(node.item);
               return (
                 <input
+                  data-disable-hotkey
                   ref={handleEditFocus}
                   defaultValue={defaultValue}
                   placeholder={placeholder}
