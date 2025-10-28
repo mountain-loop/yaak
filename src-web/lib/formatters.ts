@@ -1,3 +1,4 @@
+import vkBeautify from 'vkbeautify';
 import { invokeCmd } from './tauri';
 
 export async function tryFormatJson(text: string): Promise<string> {
@@ -23,8 +24,7 @@ export async function tryFormatXml(text: string): Promise<string> {
   if (text === '') return text;
 
   try {
-    const result = await invokeCmd<string>('cmd_format_xml', { text });
-    return result;
+    return vkBeautify.xml(text, '  ');
   } catch (err) {
     console.warn('Failed to format XML', err);
   }
