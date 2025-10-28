@@ -25,7 +25,6 @@ const methodNames: Record<string, string> = {
 };
 
 export const HttpMethodTag = memo(function HttpMethodTag({ request, className, short }: Props) {
-  const settings = useAtomValue(settingsAtom);
   const method =
     request.model === 'http_request' && request.bodyType === 'graphql'
       ? 'graphql'
@@ -35,25 +34,16 @@ export const HttpMethodTag = memo(function HttpMethodTag({ request, className, s
           ? 'websocket'
           : request.method;
 
-  return (
-    <HttpMethodTagRaw
-      method={method}
-      colored={settings.coloredMethods}
-      className={className}
-      short={short}
-    />
-  );
+  return <HttpMethodTagRaw method={method} className={className} short={short} />;
 });
 
-function HttpMethodTagRaw({
+export function HttpMethodTagRaw({
   className,
   method,
-  colored,
   short,
 }: {
   method: string;
   className?: string;
-  colored: boolean;
   short?: boolean;
 }) {
   let label = method.toUpperCase();
@@ -64,6 +54,8 @@ function HttpMethodTagRaw({
 
   const m = method.toUpperCase();
 
+  const colored = useAtomValue(settingsAtom).coloredMethods;
+
   return (
     <span
       className={classNames(
@@ -72,9 +64,9 @@ function HttpMethodTagRaw({
         colored && m === 'GRAPHQL' && 'text-info',
         colored && m === 'WEBSOCKET' && 'text-info',
         colored && m === 'GRPC' && 'text-info',
-        colored && m === 'QUERY' && 'text-secondary',
+        colored && m === 'QUERY' && 'text-text-subtle',
         colored && m === 'OPTIONS' && 'text-info',
-        colored && m === 'HEAD' && 'text-secondary',
+        colored && m === 'HEAD' && 'text-text-subtle',
         colored && m === 'GET' && 'text-primary',
         colored && m === 'PUT' && 'text-warning',
         colored && m === 'PATCH' && 'text-notice',

@@ -5,7 +5,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { showPrompt } from '../lib/prompt';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
-import { HttpMethodTag } from './core/HttpMethodTag';
+import { HttpMethodTag, HttpMethodTagRaw } from './core/HttpMethodTag';
 import { Icon } from './core/Icon';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
@@ -26,7 +26,7 @@ const radioItems: RadioDropdownItem<string>[] = [
   'HEAD',
 ].map((m) => ({
   value: m,
-  label: m,
+  label: <HttpMethodTagRaw method={m} />,
 }));
 
 export const RequestMethodDropdown = memo(function RequestMethodDropdown({
