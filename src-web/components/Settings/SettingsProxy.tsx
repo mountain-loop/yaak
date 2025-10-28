@@ -38,9 +38,9 @@ export function SettingsProxy() {
           }
         }}
         options={[
-          { label: 'Automatic Proxy Detection', value: 'automatic' },
-          { label: 'Custom Proxy Configuration', value: 'enabled' },
-          { label: 'No Proxy', value: 'disabled' },
+          { label: 'Automatic proxy detection', value: 'automatic' },
+          { label: 'Custom proxy configuration', value: 'enabled' },
+          { label: 'No proxy', value: 'disabled' },
         ]}
       />
       {settings.proxy?.type === 'enabled' && (

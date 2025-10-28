@@ -3,7 +3,7 @@ use std::time::SystemTime;
 use crate::error::Result;
 use crate::history::get_or_upsert_launch_info;
 use chrono::{DateTime, Utc};
-use log::debug;
+use log::{debug, info};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
@@ -76,6 +76,13 @@ impl YaakNotifier {
         }
 
         self.last_check = SystemTime::now();
+
+        if !app_handle.db().get_settings().check_notifications {
+            info!("Notifications are disabled. Skipping check.");
+            return Ok(());
+        }
+
+        debug!("Checking for notifications");
 
         #[cfg(feature = "license")]
         let license_check = {

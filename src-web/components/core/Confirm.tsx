@@ -44,19 +44,19 @@ export function Confirm({
           autoFocus
           onChange={setConfirm}
           placeholder={requireTyping}
+          labelRightSlot={
+            <CopyIconButton
+              text={requireTyping}
+              title="Copy name"
+              className="text-text-subtlest"
+              iconSize="sm"
+              size="2xs"
+            />
+          }
           label={
-            <div className="flex items-center justify-between">
-              <p>
-                Type <strong>{requireTyping}</strong> to confirm
-              </p>
-              <CopyIconButton
-                text={requireTyping}
-                title="Copy name"
-                className="text-text-subtlest ml-auto"
-                iconSize="sm"
-                size="2xs"
-              />
-            </div>
+            <>
+              Type <strong>{requireTyping}</strong> to confirm
+            </>
           }
         />
       )}

@@ -9,6 +9,7 @@ export function Label({
   visuallyHidden,
   tags = [],
   required,
+  rightSlot,
   help,
   ...props
 }: HTMLAttributes<HTMLLabelElement> & {
@@ -16,6 +17,7 @@ export function Label({
   required?: boolean;
   tags?: string[];
   visuallyHidden?: boolean;
+  rightSlot?: ReactNode;
   children: ReactNode;
   help?: ReactNode;
 }) {
@@ -30,7 +32,7 @@ export function Label({
       )}
       {...props}
     >
-      <span className="inline-block w-full">
+      <span>
         {children}
         {required === true && <span className="text-text-subtlest">*</span>}
       </span>
@@ -40,6 +42,7 @@ export function Label({
         </span>
       ))}
       {help && <IconTooltip tabIndex={-1} content={help} />}
+      {rightSlot && <div className="ml-auto">{rightSlot}</div>}
     </label>
   );
 }
