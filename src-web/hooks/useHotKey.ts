@@ -28,6 +28,7 @@ export type HotkeyAction =
   | 'sidebar.selected.duplicate'
   | 'sidebar.selected.rename'
   | 'sidebar.focus'
+  | 'sidebar.context_menu'
   | 'url_bar.focus'
   | 'workspace_settings.show';
 
@@ -51,6 +52,7 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'sidebar.selected.duplicate': ['CmdCtrl+d'],
   'sidebar.selected.rename': ['Enter'],
   'sidebar.focus': ['CmdCtrl+b'],
+  'sidebar.context_menu': type() === 'macos' ? ['Control+Enter'] : ['Alt+Insert'],
   'url_bar.focus': ['CmdCtrl+l'],
   'workspace_settings.show': ['CmdCtrl+;'],
 };
@@ -75,6 +77,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'sidebar.selected.duplicate': 'Duplicate Selected Sidebar Item',
   'sidebar.selected.rename': 'Rename Selected Sidebar Item',
   'sidebar.focus': 'Focus or Toggle Sidebar',
+  'sidebar.context_menu': 'Show Context Menu',
   'url_bar.focus': 'Focus URL',
   'workspace_settings.show': 'Open Workspace Settings',
 };

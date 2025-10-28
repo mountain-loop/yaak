@@ -104,7 +104,7 @@ function Sidebar({ className }: { className?: string }) {
     }
 
     // Select the 0th index on focus if none selected
-    focusActiveItem();
+    setTimeout(focusActiveItem, 100);
   });
 
   const handleDragEnd = useCallback(async function handleDragEnd({
@@ -360,6 +360,12 @@ const sidebarTreeAtom = atom<TreeNode<SidebarModel> | null>((get) => {
 });
 
 const actions = {
+  'sidebar.context_menu': {
+    enable: isSidebarFocused,
+    cb: async function (tree: TreeHandle) {
+      tree.showContextMenu();
+    },
+  },
   'sidebar.selected.delete': {
     enable: isSidebarFocused,
     cb: async function (_: TreeHandle, items: SidebarModel[]) {

@@ -37,6 +37,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
 export interface TreeItemHandle {
   rename: () => void;
   isRenaming: boolean;
+  rect: () => DOMRect;
 }
 
 const HOVER_CLOSED_FOLDER_DELAY = 800;
@@ -70,6 +71,12 @@ function TreeItem_<T extends { id: string }>({
         }
       },
       isRenaming: editing,
+      rect: () => {
+        if (listItemRef.current == null) {
+          return new DOMRect(0, 0, 0, 0);
+        }
+        return listItemRef.current.getBoundingClientRect();
+      },
     });
   }, [addRef, editing, getEditOptions, node.item]);
 
@@ -225,7 +232,7 @@ function TreeItem_<T extends { id: string }>({
       e.preventDefault();
       e.stopPropagation();
       const items = await getContextMenu(node.item);
-      setShowContextMenu({ items, x: e.clientX, y: e.clientY });
+      setShowContextMenu({ items, x: e.clientX ?? 100, y: e.clientY ?? 100 });
     },
     [getContextMenu, node.item],
   );

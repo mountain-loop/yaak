@@ -76,9 +76,11 @@ export interface TreeProps<T extends { id: string }> {
 }
 
 export interface TreeHandle {
+  treeId: string;
   focus: () => void;
   selectItem: (id: string) => void;
   renameItem: (id: string) => void;
+  showContextMenu: () => void;
 }
 
 function TreeInner<T extends { id: string }>(
@@ -132,14 +134,24 @@ function TreeInner<T extends { id: string }>(
 
   const treeHandle = useMemo<TreeHandle>(
     () => ({
+      treeId,
       focus: tryFocus,
       renameItem: (id) => treeItemRefs.current[id]?.rename(),
       selectItem: (id) => {
         setSelected([id], false);
         jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
       },
+      showContextMenu: async () => {
+        if (getContextMenu == null) return;
+        const items = getSelectedItems(treeId, selectableItems);
+        const menuItems = await getContextMenu(treeHandle, items);
+        const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
+        const rect = lastSelectedId ? treeItemRefs.current[lastSelectedId]?.rect() : null;
+        if (rect == null) return;
+        setShowContextMenu({ items: menuItems, x: rect.x, y: rect.y });
+      },
     }),
-    [setSelected, treeId, tryFocus],
+    [getContextMenu, selectableItems, setSelected, treeId, tryFocus],
   );
 
   useImperativeHandle(ref, (): TreeHandle => treeHandle, [treeHandle]);
@@ -268,7 +280,7 @@ function TreeInner<T extends { id: string }>(
   );
 
   useKey(
-    'ArrowUp',
+    (e) => e.key === 'ArrowUp' || e.key.toLowerCase() === 'k',
     (e) => {
       if (!isSidebarFocused()) return;
       e.preventDefault();
@@ -279,7 +291,7 @@ function TreeInner<T extends { id: string }>(
   );
 
   useKey(
-    'ArrowDown',
+    (e) => e.key === 'ArrowDown' || e.key.toLowerCase() === 'j',
     (e) => {
       if (!isSidebarFocused()) return;
       e.preventDefault();
@@ -291,7 +303,7 @@ function TreeInner<T extends { id: string }>(
 
   // If the selected item is a collapsed folder, expand it. Otherwise, select next item
   useKey(
-    'ArrowRight',
+    (e) => e.key === 'ArrowRight' || e.key.toLowerCase() === 'l',
     (e) => {
       if (!isSidebarFocused()) return;
       e.preventDefault();
@@ -317,7 +329,7 @@ function TreeInner<T extends { id: string }>(
   // If the selected item is in a folder, select its parent.
   // If the selected item is an expanded folder, collapse it.
   useKey(
-    'ArrowLeft',
+    (e) => e.key === 'ArrowLeft' || e.key.toLowerCase() === 'h',
     (e) => {
       if (!isSidebarFocused()) return;
       e.preventDefault();
