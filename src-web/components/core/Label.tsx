@@ -30,7 +30,7 @@ export function Label({
       )}
       {...props}
     >
-      <span>
+      <span className="inline-block w-full">
         {children}
         {required === true && <span className="text-text-subtlest">*</span>}
       </span>
