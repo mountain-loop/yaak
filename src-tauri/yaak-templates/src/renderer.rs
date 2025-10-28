@@ -260,6 +260,22 @@ mod parse_and_render_tests {
     }
 
     #[tokio::test]
+    async fn render_empty_var() -> Result<()> {
+        let empty_cb = EmptyCB {};
+        let template = "${[ foo ]}";
+        let mut vars = HashMap::new();
+        vars.insert("foo".to_string(), "".to_string());
+        let opt = RenderOptions {
+            error_behavior: RenderErrorBehavior::Throw,
+        };
+        assert_eq!(
+            parse_and_render(template, &vars, &empty_cb, &opt).await,
+            Ok("".to_string())
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn render_self_referencing_var() -> Result<()> {
         let empty_cb = EmptyCB {};
         let template = "${[ foo ]}";

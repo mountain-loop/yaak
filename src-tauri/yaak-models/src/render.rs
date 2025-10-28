@@ -17,7 +17,7 @@ fn add_variable_to_map(
 ) -> HashMap<String, String> {
     let mut map = m.clone();
     for variable in variables {
-        if !variable.enabled || variable.value.is_empty() {
+        if !variable.enabled {
             continue;
         }
         let name = variable.name.as_str();
