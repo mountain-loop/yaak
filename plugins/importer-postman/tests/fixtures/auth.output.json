@@ -248,6 +248,7 @@
         "headers": [],
         "authenticationType": "awsv4",
         "authentication": {
+          "accessKeyId": "access",
           "secretAccessKey": "secret",
           "sessionToken": "session",
           "region": "us-west-1",

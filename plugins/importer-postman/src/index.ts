@@ -273,7 +273,7 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'aut
     return {
       authenticationType: 'awsv4',
       authentication: {
-        accessKeyId: a.accessKeyId != null ? String(a.accessKeyId) : undefined,
+        accessKeyId: a.accessKey != null ? String(a.accessKey) : undefined,
         secretAccessKey: a.secretKey != null ? String(a.secretKey) : undefined,
         sessionToken: a.sessionToken != null ? String(a.sessionToken) : undefined,
         region: a.region != null ? String(a.region) : undefined,
