@@ -173,6 +173,7 @@ function Sidebar({ className }: { className?: string }) {
 
   const handleFilterKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
+      e.stopPropagation(); // Don't trigger tree navigation hotkeys
       if (e.key === 'Escape') {
         e.preventDefault();
         clearFilterText();
