@@ -56,8 +56,8 @@ function SettingsLicenseCmp() {
             <h2 className="text-lg font-bold">Hey, I&apos;m Greg 👋🏼</h2>
             <p>
               Yaak is free for personal projects and learning.{' '}
-              {check.data?.type === 'trialing' ? 'After your trial, a ' : 'A '}
-              license is required for work or commercial use.
+              {check.data?.type === 'trialing' ? 'Once your trial ends, a ' : 'A '}
+              license will be required for work or commercial use.
             </p>
             <p>
               <Link

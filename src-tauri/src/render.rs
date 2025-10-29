@@ -70,6 +70,9 @@ pub async fn render_http_request<T: TemplateCallback>(
 
     let mut url_parameters = Vec::new();
     for p in r.url_parameters.clone() {
+        if !p.enabled {
+            continue;
+        }
         url_parameters.push(HttpUrlParameter {
             enabled: p.enabled,
             name: parse_and_render(p.name.as_str(), vars, cb, &opt).await?,
@@ -80,6 +83,9 @@ pub async fn render_http_request<T: TemplateCallback>(
 
     let mut headers = Vec::new();
     for p in r.headers.clone() {
+        if !p.enabled {
+            continue;
+        }
         headers.push(HttpRequestHeader {
             enabled: p.enabled,
             name: parse_and_render(p.name.as_str(), vars, cb, &opt).await?,

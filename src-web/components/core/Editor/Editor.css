@@ -205,18 +205,8 @@
   @apply bg-transparent;
 }
 
-.cm-wrapper:not(.cm-readonly) .cm-editor {
-  &.cm-focused .cm-activeLineGutter {
-    @apply text-text-subtle;
-  }
-}
-
 /* Cursor and mouse cursor for readonly mode */
 .cm-wrapper.cm-readonly {
-  .cm-editor .cm-cursor {
-    @apply hidden !important;
-  }
-
   &.cm-singleline * {
     @apply cursor-default;
   }

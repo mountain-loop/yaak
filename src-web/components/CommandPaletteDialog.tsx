@@ -86,11 +86,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         onSelect: () => openSettings.mutate(null),
       },
       {
-        key: 'folder.create',
-        label: 'Create Folder',
-        onSelect: () => createFolder.mutate({}),
-      },
-      {
         key: 'app.create',
         label: 'Create Workspace',
         onSelect: createWorkspace,

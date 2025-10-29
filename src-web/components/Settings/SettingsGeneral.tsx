@@ -71,37 +71,25 @@ export function SettingsGeneral() {
           disabled={!settings.autoupdate}
           help="Automatically download Yaak updates (!50MB) in the background, so they will be immediately ready to install."
           title="Automatically download updates"
-          onChange={(autoDownloadUpdates) =>
-            patchModel(settings, { autoDownloadUpdates })
-          }
+          onChange={(autoDownloadUpdates) => patchModel(settings, { autoDownloadUpdates })}
         />
-        <Separator className="my-4" />
-      </CargoFeature>
 
-      <Select
-        name="switchWorkspaceBehavior"
-        label="Workspace Window Behavior"
-        labelPosition="left"
-        labelClassName="w-[14rem]"
-        size="sm"
-        value={
-          settings.openWorkspaceNewWindow === true
-            ? 'new'
-            : settings.openWorkspaceNewWindow === false
-              ? 'current'
-              : 'ask'
-        }
-        onChange={async (v) => {
-          if (v === 'current') await patchModel(settings, { openWorkspaceNewWindow: false });
-          else if (v === 'new') await patchModel(settings, { openWorkspaceNewWindow: true });
-          else await patchModel(settings, { openWorkspaceNewWindow: null });
-        }}
-        options={[
-          { label: 'Always ask', value: 'ask' },
-          { label: 'Open in current window', value: 'current' },
-          { label: 'Open in new window', value: 'new' },
-        ]}
-      />
+        <Checkbox
+          className="pl-2 mt-1 ml-[14rem]"
+          checked={settings.checkNotifications}
+          title="Check for notifications"
+          help="Periodically ping Yaak servers to check for relevant notifications."
+          onChange={(checkNotifications) => patchModel(settings, { checkNotifications })}
+        />
+        <Checkbox
+          disabled
+          className="pl-2 mt-1 ml-[14rem]"
+          checked={false}
+          title="Send anonymous usage statistics"
+          help="Yaak is local-first and does not collect analytics or usage data 🔐"
+          onChange={(checkNotifications) => patchModel(settings, { checkNotifications })}
+        />
+      </CargoFeature>
 
       <Separator className="my-4" />
 
@@ -129,7 +117,7 @@ export function SettingsGeneral() {
         <Checkbox
           checked={workspace.settingValidateCertificates}
           help="When disabled, skip validation of server certificates, useful when interacting with self-signed certs."
-          title="Validate TLS Certificates"
+          title="Validate TLS certificates"
           onChange={(settingValidateCertificates) =>
             patchModel(workspace, { settingValidateCertificates })
           }
@@ -137,7 +125,7 @@ export function SettingsGeneral() {
 
         <Checkbox
           checked={workspace.settingFollowRedirects}
-          title="Follow Redirects"
+          title="Follow redirects"
           onChange={(settingFollowRedirects) =>
             patchModel(workspace, {
               settingFollowRedirects,

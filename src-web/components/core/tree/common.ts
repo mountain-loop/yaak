@@ -4,6 +4,7 @@ import { selectedIdsFamily } from './atoms';
 export interface TreeNode<T extends { id: string }> {
   children?: TreeNode<T>[];
   item: T;
+  hidden?: boolean;
   parent: TreeNode<T> | null;
   depth: number;
 }
@@ -27,17 +28,21 @@ export function getSelectedItems<T extends { id: string }>(
 export function equalSubtree<T extends { id: string }>(
   a: TreeNode<T>,
   b: TreeNode<T>,
-  getKey: (t: T) => string,
+  getItemKey: (t: T) => string,
 ): boolean {
-  if (getKey(a.item) !== getKey(b.item)) return false;
+  if (getNodeKey(a, getItemKey) !== getNodeKey(b, getItemKey)) return false;
   const ak = a.children ?? [];
   const bk = b.children ?? [];
   if (ak.length !== bk.length) return false;
   for (let i = 0; i < ak.length; i++) {
-    if (!equalSubtree(ak[i]!, bk[i]!, getKey)) return false;
+    if (!equalSubtree(ak[i]!, bk[i]!, getItemKey)) return false;
   }
 
   return true;
+}
+
+export function getNodeKey<T extends { id: string }>(a: TreeNode<T>, getItemKey: (i: T) => string) {
+  return getItemKey(a.item) + a.hidden;
 }
 
 export function hasAncestor<T extends { id: string }>(node: TreeNode<T>, ancestorId: string) {

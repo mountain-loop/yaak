@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { resolvedModelName } from '@yaakapp/app/lib/resolvedModelName';
 import { AnyModel, ModelPayload } from '../bindings/gen_models';
 import { modelStoreDataAtom } from './atoms';
 import { ExtractModel, JotaiStore, ModelStoreData } from './types';
@@ -69,15 +70,12 @@ export async function changeModelStoreWorkspace(workspaceId: string | null) {
   _activeWorkspaceId = workspaceId;
 }
 
-export function getAnyModel(id: string): AnyModel | null {
+export function listModels<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+  modelType: M | ReadonlyArray<M>,
+): T[] {
   let data = mustStore().get(modelStoreDataAtom);
-  for (const modelData of Object.values(data)) {
-    let model = modelData[id];
-    if (model != null) {
-      return model;
-    }
-  }
-  return null;
+  const types: ReadonlyArray<M> = Array.isArray(modelType) ? modelType : [modelType];
+  return types.flatMap((t) => Object.values(data[t]) as T[]);
 }
 
 export function getModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
@@ -137,23 +135,43 @@ export async function deleteModel<M extends AnyModel['model'], T extends Extract
   await invoke<string>('plugin:yaak-models|delete', { model });
 }
 
-export function duplicateModelById<
-  M extends AnyModel['model'],
-  T extends ExtractModel<AnyModel, M>,
->(modelType: M | ReadonlyArray<M>, id: string) {
-  let model = getModel<M, T>(modelType, id);
-  return duplicateModel(model);
-}
-
 export function duplicateModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
   model: T | null,
 ) {
   if (model == null) {
-    throw new Error('Failed to delete null model');
+    throw new Error('Failed to duplicate null model');
   }
-  if ('sortPriority' in model) model.sortPriority = model.sortPriority + 0.0001;
 
-  return invoke<string>('plugin:yaak-models|duplicate', { model });
+  // If the model has a name, try to duplicate it with a name that doesn't conflict
+  let name = 'name' in model ? resolvedModelName(model) : undefined;
+  if (name != null) {
+    const existingModels = listModels(model.model);
+    for (let i = 0; i < 100; i++) {
+      const hasConflict = existingModels.some((m) => {
+        if ('folderId' in m && 'folderId' in model && model.folderId !== m.folderId) {
+          return false;
+        } else if (resolvedModelName(m) !== name) {
+          return false;
+        }
+        return true;
+      });
+      if (!hasConflict) {
+        break;
+      }
+
+      // Name conflict. Try another one
+      const m: RegExpMatchArray | null = name.match(/ Copy( (?<n>\d+))?$/);
+      if (m != null && m.groups?.n == null) {
+        name = name.substring(0, m.index) + ' Copy 2';
+      } else if (m != null && m.groups?.n != null) {
+        name = name.substring(0, m.index) + ` Copy ${parseInt(m.groups.n) + 1}`;
+      } else {
+        name = `${name} Copy`;
+      }
+    }
+  }
+
+  return invoke<string>('plugin:yaak-models|duplicate', { model: { ...model, name } });
 }
 
 export async function createGlobalModel<T extends Exclude<AnyModel, { workspaceId: string }>>(

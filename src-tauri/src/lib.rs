@@ -38,16 +38,23 @@ use yaak_models::models::{
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
-use yaak_plugins::events::{CallGrpcRequestActionArgs, CallGrpcRequestActionRequest, CallHttpRequestActionArgs, CallHttpRequestActionRequest, Color, FilterResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse, GetTemplateFunctionSummaryResponse, GetTemplateFunctionConfigResponse, InternalEvent, InternalEventPayload, JsonPrimitive, PluginWindowContext, RenderPurpose, ShowToastRequest};
+use yaak_plugins::events::{
+    CallGrpcRequestActionArgs, CallGrpcRequestActionRequest, CallHttpRequestActionArgs,
+    CallHttpRequestActionRequest, Color, FilterResponse, GetGrpcRequestActionsResponse,
+    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
+    GetHttpRequestActionsResponse, GetTemplateFunctionConfigResponse,
+    GetTemplateFunctionSummaryResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
+    PluginWindowContext, RenderPurpose, ShowToastRequest,
+};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
-use yaak_templates::format::format_json;
+use yaak_templates::format_json::format_json;
 use yaak_templates::{RenderErrorBehavior, RenderOptions, Tokens, transform_args};
-use yaak_templates::format_xml::format_xml;
 
 mod commands;
+mod dns;
 mod encoding;
 mod error;
 mod grpc;
@@ -61,7 +68,6 @@ mod updates;
 mod uri_scheme;
 mod window;
 mod window_menu;
-mod dns;
 
 #[derive(serde::Serialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -741,11 +747,6 @@ async fn cmd_format_json(text: &str) -> YaakResult<String> {
 }
 
 #[tauri::command]
-async fn cmd_format_xml(text: &str) -> YaakResult<String> {
-    Ok(format_xml(text, "  "))
-}
-
-#[tauri::command]
 async fn cmd_http_response_body<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -852,12 +853,16 @@ async fn cmd_template_function_config<R: Runtime>(
         AnyModel::Folder(m) => (m.workspace_id, m.folder_id),
         AnyModel::Workspace(m) => (m.id, None),
         m => {
-            return Err(GenericError(format!("Unsupported model to call template functions {m:?}")));
+            return Err(GenericError(format!(
+                "Unsupported model to call template functions {m:?}"
+            )));
         }
     };
     let environment_chain =
         window.db().resolve_environments(&workspace_id, folder_id.as_deref(), environment_id)?;
-    Ok(plugin_manager.get_template_function_config(&window, function_name, environment_chain, values, model.id()).await?)
+    Ok(plugin_manager
+        .get_template_function_config(&window, function_name, environment_chain, values, model.id())
+        .await?)
 }
 
 #[tauri::command]
@@ -1421,7 +1426,6 @@ pub fn run() {
             cmd_export_data,
             cmd_http_response_body,
             cmd_format_json,
-            cmd_format_xml,
             cmd_get_http_authentication_summaries,
             cmd_get_http_authentication_config,
             cmd_get_sse_events,

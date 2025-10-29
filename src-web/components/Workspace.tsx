@@ -2,7 +2,7 @@ import { workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
+import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   useEnsureActiveCookieJar,
@@ -27,7 +27,6 @@ import { useShouldFloatSidebar } from '../hooks/useShouldFloatSidebar';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
-import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFolderAndNavigate';
 import { importData } from '../lib/importData';
 import { jotaiStore } from '../lib/jotai';
@@ -42,9 +41,10 @@ import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
 import { HeaderSize } from './HeaderSize';
 import { HttpRequestLayout } from './HttpRequestLayout';
-import NewSidebar from './NewSidebar';
 import { Overlay } from './Overlay';
+import type { ResizeHandleEvent } from './ResizeHandle';
 import { ResizeHandle } from './ResizeHandle';
+import Sidebar from './Sidebar';
 import { SidebarActions } from './SidebarActions';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
@@ -59,54 +59,39 @@ export function Workspace() {
   useGlobalWorkspaceHooks();
 
   const workspaces = useAtomValue(workspacesAtom);
-  const { setWidth, width, resetWidth } = useSidebarWidth();
+  const [width, setWidth, resetWidth] = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
   const activeEnvironment = useAtomValue(activeEnvironmentAtom);
   const floating = useShouldFloatSidebar();
   const [isResizing, setIsResizing] = useState<boolean>(false);
-  const moveState = useRef<{ move: (e: MouseEvent) => void; up: (e: MouseEvent) => void } | null>(
-    null,
-  );
+  const startWidth = useRef<number | null>(null);
 
-  const unsub = () => {
-    if (moveState.current !== null) {
-      document.documentElement.removeEventListener('mousemove', moveState.current.move);
-      document.documentElement.removeEventListener('mouseup', moveState.current.up);
-    }
-  };
+  const handleResizeMove = useCallback(
+    async ({ x, xStart }: ResizeHandleEvent) => {
+      if (width == null || startWidth.current == null) return;
 
-  const handleResizeStart = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
-      if (width === undefined) return;
-
-      unsub();
-      const mouseStartX = e.clientX;
-      const startWidth = width;
-      moveState.current = {
-        move: async (e: MouseEvent) => {
-          e.preventDefault(); // Prevent text selection and things
-          const newWidth = startWidth + (e.clientX - mouseStartX);
-          if (newWidth < 50) {
-            await setSidebarHidden(true);
-            resetWidth();
-          } else {
-            await setSidebarHidden(false);
-            setWidth(newWidth);
-          }
-        },
-        up: (e: MouseEvent) => {
-          e.preventDefault();
-          unsub();
-          setIsResizing(false);
-        },
-      };
-      document.documentElement.addEventListener('mousemove', moveState.current.move);
-      document.documentElement.addEventListener('mouseup', moveState.current.up);
-      setIsResizing(true);
+      const newWidth = startWidth.current + (x - xStart);
+      if (newWidth < 50) {
+        await setSidebarHidden(true);
+        resetWidth();
+      } else {
+        await setSidebarHidden(false);
+        setWidth(newWidth);
+      }
     },
     [width, setSidebarHidden, resetWidth, setWidth],
   );
+
+  const handleResizeStart = useCallback(() => {
+    startWidth.current = width ?? null;
+    setIsResizing(true);
+  }, [width]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+    startWidth.current = null;
+  }, []);
 
   const sideWidth = sidebarHidden ? 0 : width;
   const styles = useMemo<CSSProperties>(
@@ -164,7 +149,7 @@ export function Workspace() {
               <SidebarActions />
             </HeaderSize>
             <ErrorBoundary name="Sidebar (Floating)">
-              <NewSidebar />
+              <Sidebar />
             </ErrorBoundary>
           </m.div>
         </Overlay>
@@ -172,15 +157,17 @@ export function Workspace() {
         <>
           <div style={side} className={classNames('x-theme-sidebar', 'overflow-hidden bg-surface')}>
             <ErrorBoundary name="Sidebar">
-              <NewSidebar className="border-r border-border-subtle" />
+              <Sidebar className="border-r border-border-subtle" />
             </ErrorBoundary>
           </div>
           <ResizeHandle
-            className="-translate-x-[50%]"
+            style={drag}
+            className="-translate-x-[1px]"
             justify="end"
             side="right"
-            isResizing={isResizing}
             onResizeStart={handleResizeStart}
+            onResizeEnd={handleResizeEnd}
+            onResizeMove={handleResizeMove}
             onReset={resetWidth}
           />
         </>
@@ -275,9 +262,6 @@ function useGlobalWorkspaceHooks() {
   useSubscribeRecentCookieJars();
 
   useSyncWorkspaceRequestTitle();
-
-  const toggleCommandPalette = useToggleCommandPalette();
-  useHotKey('command_palette.toggle', toggleCommandPalette);
 
   useHotKey('model.duplicate', () =>
     duplicateRequestOrFolderAndNavigate(jotaiStore.get(activeRequestAtom)),

@@ -23,10 +23,12 @@ export type HotkeyAction =
   | 'switcher.prev'
   | 'switcher.toggle'
   | 'settings.show'
+  | 'sidebar.filter'
   | 'sidebar.selected.delete'
   | 'sidebar.selected.duplicate'
   | 'sidebar.selected.rename'
   | 'sidebar.focus'
+  | 'sidebar.context_menu'
   | 'url_bar.focus'
   | 'workspace_settings.show';
 
@@ -45,10 +47,12 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'switcher.prev': ['Control+Tab'],
   'switcher.toggle': ['CmdCtrl+p'],
   'settings.show': ['CmdCtrl+,'],
+  'sidebar.filter': ['CmdCtrl+f'],
   'sidebar.selected.delete': ['Delete', 'CmdCtrl+Backspace'],
   'sidebar.selected.duplicate': ['CmdCtrl+d'],
   'sidebar.selected.rename': ['Enter'],
   'sidebar.focus': ['CmdCtrl+b'],
+  'sidebar.context_menu': type() === 'macos' ? ['Control+Enter'] : ['Alt+Insert'],
   'url_bar.focus': ['CmdCtrl+l'],
   'workspace_settings.show': ['CmdCtrl+;'],
 };
@@ -62,16 +66,18 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'hotkeys.showHelp': 'Show Keyboard Shortcuts',
   'model.create': 'New Request',
   'model.duplicate': 'Duplicate Request',
-  'request.rename': 'Rename',
-  'request.send': 'Send',
+  'request.rename': 'Rename Active Request',
+  'request.send': 'Send Active Request',
   'switcher.next': 'Go To Previous Request',
   'switcher.prev': 'Go To Next Request',
   'switcher.toggle': 'Toggle Request Switcher',
   'settings.show': 'Open Settings',
-  'sidebar.selected.delete': 'Delete',
-  'sidebar.selected.duplicate': 'Duplicate',
-  'sidebar.selected.rename': 'Rename',
+  'sidebar.filter': 'Filter Sidebar',
+  'sidebar.selected.delete': 'Delete Selected Sidebar Item',
+  'sidebar.selected.duplicate': 'Duplicate Selected Sidebar Item',
+  'sidebar.selected.rename': 'Rename Selected Sidebar Item',
   'sidebar.focus': 'Focus or Toggle Sidebar',
+  'sidebar.context_menu': 'Show Context Menu',
   'url_bar.focus': 'Focus URL',
   'workspace_settings.show': 'Open Workspace Settings',
 };
@@ -173,18 +179,22 @@ function handleKeyDown(e: KeyboardEvent) {
   if (e.metaKey) currentKeysWithModifiers.add('Meta');
   if (e.shiftKey) currentKeysWithModifiers.add('Shift');
 
+  // Don't trigger if the user is focused within an element that explicitly disableds hotkeys
+  if (document.activeElement?.closest('[data-disable-hotkey]')) {
+    return;
+  }
+
+  // Don't support certain single-key combinrations within inputs
+  if (
+    (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
+    currentKeysWithModifiers.size === 1 &&
+    (currentKeysWithModifiers.has('Backspace') || currentKeysWithModifiers.has('Delete'))
+  ) {
+    return;
+  }
+
   const executed: string[] = [];
   outer: for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
-    if (
-      (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
-      currentKeysWithModifiers.size === 1 &&
-      currentKeysWithModifiers.has('Backspace')
-    ) {
-      // Don't support Backspace-only modifiers within input fields. This is fairly brittle, so maybe there's a
-      // better way to do stuff like this in the future.
-      continue;
-    }
-
     for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
       if (hkAction !== action) {
         continue;
@@ -244,6 +254,10 @@ export function useFormattedHotkey(action: HotkeyAction | null): string[] | null
         labelParts.push('⇥');
       } else if (p === 'Backspace') {
         labelParts.push('⌫');
+      } else if (p === 'Minus') {
+        labelParts.push('-');
+      } else if (p === 'Equal') {
+        labelParts.push('=');
       } else {
         labelParts.push(capitalize(p));
       }

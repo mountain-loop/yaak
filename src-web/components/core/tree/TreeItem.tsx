@@ -12,10 +12,11 @@ import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
 import { collapsedFamily, isCollapsedFamily, isLastFocusedFamily, isSelectedFamily } from './atoms';
 import type { TreeNode } from './common';
+import { getNodeKey } from './common';
 import type { TreeProps } from './Tree';
 import { TreeIndentGuide } from './TreeIndentGuide';
 
-interface OnClickEvent {
+export interface TreeItemClickEvent {
   shiftKey: boolean;
   ctrlKey: boolean;
   metaKey: boolean;
@@ -27,7 +28,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
 > & {
   node: TreeNode<T>;
   className?: string;
-  onClick?: (item: T, e: OnClickEvent) => void;
+  onClick?: (item: T, e: TreeItemClickEvent) => void;
   getContextMenu?: (item: T) => Promise<ContextMenuProps['items']>;
   depth: number;
   addRef?: (item: T, n: TreeItemHandle | null) => void;
@@ -36,6 +37,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
 export interface TreeItemHandle {
   rename: () => void;
   isRenaming: boolean;
+  rect: () => DOMRect;
 }
 
 const HOVER_CLOSED_FOLDER_DELAY = 800;
@@ -69,6 +71,12 @@ function TreeItem_<T extends { id: string }>({
         }
       },
       isRenaming: editing,
+      rect: () => {
+        if (listItemRef.current == null) {
+          return new DOMRect(0, 0, 0, 0);
+        }
+        return listItemRef.current.getBoundingClientRect();
+      },
     });
   }, [addRef, editing, getEditOptions, node.item]);
 
@@ -148,7 +156,7 @@ function TreeItem_<T extends { id: string }>({
 
   const handleEditKeyDown = useCallback(
     async (e: React.KeyboardEvent<HTMLInputElement>) => {
-      e.stopPropagation();
+      e.stopPropagation(); // Don't trigger other tree keys (like arrows)
       switch (e.key) {
         case 'Enter':
           if (editing) {
@@ -157,8 +165,10 @@ function TreeItem_<T extends { id: string }>({
           }
           break;
         case 'Escape':
-          e.preventDefault();
-          setEditing(false);
+          if (editing) {
+            e.preventDefault();
+            setEditing(false);
+          }
           break;
       }
     },
@@ -222,7 +232,7 @@ function TreeItem_<T extends { id: string }>({
       e.preventDefault();
       e.stopPropagation();
       const items = await getContextMenu(node.item);
-      setShowContextMenu({ items, x: e.clientX, y: e.clientY });
+      setShowContextMenu({ items, x: e.clientX ?? 100, y: e.clientY ?? 100 });
     },
     [getContextMenu, node.item],
   );
@@ -253,6 +263,8 @@ function TreeItem_<T extends { id: string }>({
     [setDraggableRef, setDroppableRef],
   );
 
+  if (node.hidden || isAncestorCollapsed) return null;
+
   return (
     <li
       ref={listItemRef}
@@ -266,7 +278,6 @@ function TreeItem_<T extends { id: string }>({
         'tree-item',
         'h-sm',
         'grid grid-cols-[auto_minmax(0,1fr)]',
-        isAncestorCollapsed && 'hidden',
         editing && 'ring-1 focus-within:ring-focus',
         dropHover != null && 'relative z-10 ring-2 ring-primary',
         dropHover === 'animate' && 'animate-blinkRing',
@@ -320,6 +331,7 @@ function TreeItem_<T extends { id: string }>({
               const { defaultValue, placeholder } = getEditOptions(node.item);
               return (
                 <input
+                  data-disable-hotkey
                   ref={handleEditFocus}
                   defaultValue={defaultValue}
                   placeholder={placeholder}
@@ -350,6 +362,9 @@ export const TreeItem = memo(
     if (nonEqualKeys.length > 0) {
       return false;
     }
-    return nextProps.getItemKey(prevNode.item) === nextProps.getItemKey(nextNode.item);
+
+    return (
+      getNodeKey(prevNode, prevProps.getItemKey) === getNodeKey(nextNode, nextProps.getItemKey)
+    );
   },
 ) as typeof TreeItem_;

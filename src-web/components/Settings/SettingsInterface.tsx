@@ -39,15 +39,38 @@ export function SettingsInterface() {
 
   return (
     <VStack space={3} className="mb-4">
+      <Select
+        name="switchWorkspaceBehavior"
+        label="Open workspace behavior"
+        size="sm"
+        help="When opening a workspace, should it open in the current window or a new window?"
+        value={
+          settings.openWorkspaceNewWindow === true
+            ? 'new'
+            : settings.openWorkspaceNewWindow === false
+              ? 'current'
+              : 'ask'
+        }
+        onChange={async (v) => {
+          if (v === 'current') await patchModel(settings, { openWorkspaceNewWindow: false });
+          else if (v === 'new') await patchModel(settings, { openWorkspaceNewWindow: true });
+          else await patchModel(settings, { openWorkspaceNewWindow: null });
+        }}
+        options={[
+          { label: 'Always ask', value: 'ask' },
+          { label: 'Open in current window', value: 'current' },
+          { label: 'Open in new window', value: 'new' },
+        ]}
+      />
       <HStack space={2} alignItems="end">
         {fonts.data && (
           <Select
             size="sm"
             name="uiFont"
-            label="Interface Font"
+            label="Interface font"
             value={settings.interfaceFont ?? NULL_FONT_VALUE}
             options={[
-              { label: 'System Default', value: NULL_FONT_VALUE },
+              { label: 'System default', value: NULL_FONT_VALUE },
               ...(fonts.data.uiFonts.map((f) => ({
                 label: f,
                 value: f,
@@ -69,7 +92,7 @@ export function SettingsInterface() {
           size="sm"
           name="interfaceFontSize"
           label="Interface Font Size"
-          defaultValue="15"
+          defaultValue="14"
           value={`${settings.interfaceFontSize}`}
           options={fontSizeOptions}
           onChange={(v) => patchModel(settings, { interfaceFontSize: parseInt(v) })}
@@ -80,10 +103,10 @@ export function SettingsInterface() {
           <Select
             size="sm"
             name="editorFont"
-            label="Editor Font"
+            label="Editor font"
             value={settings.editorFont ?? NULL_FONT_VALUE}
             options={[
-              { label: 'System Default', value: NULL_FONT_VALUE },
+              { label: 'System default', value: NULL_FONT_VALUE },
               ...(fonts.data.editorFonts.map((f) => ({
                 label: f,
                 value: f,
@@ -100,7 +123,7 @@ export function SettingsInterface() {
           size="sm"
           name="editorFontSize"
           label="Editor Font Size"
-          defaultValue="13"
+          defaultValue="12"
           value={`${settings.editorFontSize}`}
           options={fontSizeOptions}
           onChange={(v) =>
@@ -112,19 +135,19 @@ export function SettingsInterface() {
         leftSlot={<Icon icon="keyboard" color="secondary" />}
         size="sm"
         name="editorKeymap"
-        label="Editor Keymap"
+        label="Editor keymap"
         value={`${settings.editorKeymap}`}
         options={keymaps}
         onChange={(v) => patchModel(settings, { editorKeymap: v })}
       />
       <Checkbox
         checked={settings.editorSoftWrap}
-        title="Wrap Editor Lines"
+        title="Wrap editor lines"
         onChange={(editorSoftWrap) => patchModel(settings, { editorSoftWrap })}
       />
       <Checkbox
         checked={settings.coloredMethods}
-        title="Colorize Request Methods"
+        title="Colorize request methods"
         onChange={(coloredMethods) => patchModel(settings, { coloredMethods })}
       />
       <CargoFeature feature="license">
@@ -134,7 +157,7 @@ export function SettingsInterface() {
       {type() !== 'macos' && (
         <Checkbox
           checked={settings.hideWindowControls}
-          title="Hide Window Controls"
+          title="Hide window controls"
           help="Hide the close/maximize/minimize controls on Windows or Linux"
           onChange={(hideWindowControls) => patchModel(settings, { hideWindowControls })}
         />

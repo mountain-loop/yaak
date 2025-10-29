@@ -15,7 +15,6 @@ type TauriCmd =
   | 'cmd_dismiss_notification'
   | 'cmd_export_data'
   | 'cmd_format_json'
-  | 'cmd_format_xml'
   | 'cmd_get_http_authentication_config'
   | 'cmd_get_http_authentication_summaries'
   | 'cmd_get_sse_events'

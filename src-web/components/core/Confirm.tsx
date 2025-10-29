@@ -1,6 +1,7 @@
 import type { Color } from '@yaakapp-internal/plugins';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import { CopyIconButton } from '../CopyIconButton';
 import { Button } from './Button';
 import { PlainInput } from './PlainInput';
 import { HStack } from './Stacks';
@@ -42,9 +43,19 @@ export function Confirm({
         <PlainInput
           autoFocus
           onChange={setConfirm}
+          placeholder={requireTyping}
+          labelRightSlot={
+            <CopyIconButton
+              text={requireTyping}
+              title="Copy name"
+              className="text-text-subtlest"
+              iconSize="sm"
+              size="2xs"
+            />
+          }
           label={
             <>
-              Type <strong className="!select-auto cursor-auto">{requireTyping}</strong> to confirm
+              Type <strong>{requireTyping}</strong> to confirm
             </>
           }
         />
