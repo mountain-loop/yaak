@@ -6,7 +6,7 @@ import { URL } from 'node:url';
 
 export const plugin: PluginDefinition = {
   authentication: {
-    name: 'auth-aws-sig-v4',
+    name: 'awsv4',
     label: 'AWS Signature',
     shortLabel: 'AWS v4',
     args: [

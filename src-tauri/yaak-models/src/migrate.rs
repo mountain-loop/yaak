@@ -1,7 +1,7 @@
 use crate::error::Error::MigrationError;
 use crate::error::Result;
 use include_dir::{Dir, DirEntry, include_dir};
-use log::info;
+use log::{debug, info};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
@@ -86,6 +86,7 @@ fn run_migration(migration_path: &DirEntry, tx: &mut rusqlite::Transaction) -> R
         .optional()?;
 
     if row.is_some() {
+        debug!("Skipping already run migration {description}");
         return Ok(false); // Migration was already run
     }
 

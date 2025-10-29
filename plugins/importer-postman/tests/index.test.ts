@@ -17,7 +17,9 @@ describe('importer-postman', () => {
       const expected = fs.readFileSync(path.join(p, fixture.replace('.input', '.output')), 'utf-8');
       const result = convertPostman(contents);
       // console.log(JSON.stringify(result, null, 2))
-      expect(result).toEqual(JSON.parse(expected));
+      expect(JSON.stringify(result, null, 2)).toEqual(
+        JSON.stringify(JSON.parse(expected), null, 2),
+      );
     });
   }
 });

@@ -3,18 +3,23 @@
     "workspaces": [
       {
         "model": "workspace",
-        "id": "GENERATE_ID::WORKSPACE_1",
-        "name": "New Collection"
+        "id": "GENERATE_ID::WORKSPACE_2",
+        "name": "New Collection",
+        "authenticationType": "basic",
+        "authentication": {
+          "username": "globaluser",
+          "password": "globalpass"
+        }
       }
     ],
     "environments": [
       {
-        "id": "GENERATE_ID::ENVIRONMENT_1",
-        "workspaceId": "GENERATE_ID::WORKSPACE_1",
         "model": "environment",
+        "id": "GENERATE_ID::ENVIRONMENT_2",
         "name": "Global Variables",
-        "parentId": null,
+        "workspaceId": "GENERATE_ID::WORKSPACE_2",
         "parentModel": "workspace",
+        "parentId": null,
         "variables": [
           {
             "name": "COLLECTION VARIABLE",
@@ -26,11 +31,10 @@
     "httpRequests": [
       {
         "model": "http_request",
-        "id": "GENERATE_ID::HTTP_REQUEST_3",
-        "workspaceId": "GENERATE_ID::WORKSPACE_1",
+        "id": "GENERATE_ID::HTTP_REQUEST_13",
+        "workspaceId": "GENERATE_ID::WORKSPACE_2",
         "folderId": null,
         "name": "Form URL",
-        "sortPriority": 0,
         "method": "POST",
         "url": "example.com/:foo/:bar",
         "urlParameters": [
@@ -71,10 +75,7 @@
           ]
         },
         "bodyType": "multipart/form-data",
-        "authentication": {
-          "token": ""
-        },
-        "authenticationType": "bearer",
+        "sortPriority": 0,
         "headers": [
           {
             "name": "X-foo",
@@ -91,7 +92,11 @@
             "value": "multipart/form-data",
             "enabled": true
           }
-        ]
+        ],
+        "authenticationType": "bearer",
+        "authentication": {
+          "token": "my-token"
+        }
       }
     ],
     "folders": []

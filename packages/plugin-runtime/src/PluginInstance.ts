@@ -241,12 +241,10 @@ export class PluginInstance {
       }
 
       if (payload.type === 'get_http_authentication_summary_request' && this.#mod?.authentication) {
-        const { name, shortLabel, label } = this.#mod.authentication;
+
         const replyPayload: InternalEventPayload = {
           type: 'get_http_authentication_summary_response',
-          name,
-          label,
-          shortLabel,
+          ...this.#mod.authentication,
         };
 
         this.#sendPayload(windowContext, replyPayload, replyId);
