@@ -35,7 +35,7 @@ export function DismissibleBanner({
             color={a.color ?? props.color}
             size="xs"
             onClick={a.onClick}
-            title="Dismiss message"
+            title={a.label}
           >
             {a.label}
           </Button>
