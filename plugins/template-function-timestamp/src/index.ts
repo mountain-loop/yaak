@@ -52,21 +52,30 @@ export const plugin: PluginDefinition = {
   templateFunctions: [
     {
       name: 'timestamp.unix',
-      description: 'Get the current timestamp in seconds',
-      args: [],
-      onRender: async () => String(Math.floor(Date.now() / 1000)),
+      description: 'Get the timestamp in seconds',
+      args: [dateArg],
+      onRender: async (_ctx, args) => {
+        const d = parseDateString(String(args.values.date ?? ''));
+        return String(Math.floor(d.getTime() / 1000));
+      },
     },
     {
       name: 'timestamp.unixMillis',
-      description: 'Get the current timestamp in milliseconds',
-      args: [],
-      onRender: async () => String(Date.now()),
+      description: 'Get the timestamp in milliseconds',
+      args: [dateArg],
+      onRender: async (_ctx, args) => {
+        const d = parseDateString(String(args.values.date ?? ''));
+        return String(d.getTime());
+      },
     },
     {
       name: 'timestamp.iso8601',
-      description: 'Get the current date in ISO8601 format',
-      args: [],
-      onRender: async () => new Date().toISOString(),
+      description: 'Get the date in ISO8601 format',
+      args: [dateArg],
+      onRender: async (_ctx, args) => {
+        const d = parseDateString(String(args.values.date ?? ''));
+        return d.toISOString();
+      },
     },
     {
       name: 'timestamp.format',
