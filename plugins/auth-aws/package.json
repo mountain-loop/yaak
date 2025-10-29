@@ -15,6 +15,7 @@
     "lint": "tsc --noEmit && eslint . --ext .ts,.tsx"
   },
   "dependencies": {
+    "@aws-sdk/credential-providers": "^3.919.0",
     "aws4": "^1.13.2"
   },
   "devDependencies": {
