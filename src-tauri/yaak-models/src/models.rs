@@ -942,6 +942,7 @@ pub struct WebsocketConnection {
     pub state: WebsocketConnectionState,
     pub status: i32,
     pub url: String,
+    pub environment_id: Option<String>,
 }
 
 impl UpsertModelInfo for WebsocketConnection {
@@ -1006,6 +1007,7 @@ impl UpsertModelInfo for WebsocketConnection {
             id: row.get("id")?,
             model: row.get("model")?,
             workspace_id: row.get("workspace_id")?,
+            environment_id: row.get("environment_id")?,
             request_id: row.get("request_id")?,
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
@@ -1298,6 +1300,7 @@ pub struct HttpResponse {
     pub state: HttpResponseState,
     pub url: String,
     pub version: Option<String>,
+    pub environment_id: Option<String>,
 }
 
 impl UpsertModelInfo for HttpResponse {
@@ -1343,6 +1346,7 @@ impl UpsertModelInfo for HttpResponse {
             (StatusReason, self.status_reason.into()),
             (Url, self.url.into()),
             (Version, self.version.into()),
+            (EnvironmentId, self.environment_id.into()),
         ])
     }
 
@@ -1361,6 +1365,7 @@ impl UpsertModelInfo for HttpResponse {
             HttpResponseIden::StatusReason,
             HttpResponseIden::Url,
             HttpResponseIden::Version,
+            HttpResponseIden::EnvironmentId,
         ]
     }
 
@@ -1389,6 +1394,7 @@ impl UpsertModelInfo for HttpResponse {
             state: serde_json::from_str(format!(r#""{state}""#).as_str()).unwrap(),
             body_path: r.get("body_path")?,
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            environment_id: r.get("environment_id")?,
         })
     }
 }
@@ -1617,6 +1623,7 @@ pub struct GrpcConnection {
     pub state: GrpcConnectionState,
     pub trailers: BTreeMap<String, String>,
     pub url: String,
+    pub environment_id: Option<String>,
 }
 
 impl UpsertModelInfo for GrpcConnection {
@@ -1658,6 +1665,7 @@ impl UpsertModelInfo for GrpcConnection {
             (Error, self.error.as_ref().map(|s| s.as_str()).into()),
             (Trailers, serde_json::to_string(&self.trailers)?.into()),
             (Url, self.url.into()),
+            (EnvironmentId, self.environment_id.into()),
         ])
     }
 
@@ -1672,6 +1680,7 @@ impl UpsertModelInfo for GrpcConnection {
             GrpcConnectionIden::Error,
             GrpcConnectionIden::Trailers,
             GrpcConnectionIden::Url,
+            GrpcConnectionIden::EnvironmentId,
         ]
     }
 
@@ -1696,6 +1705,7 @@ impl UpsertModelInfo for GrpcConnection {
             url: row.get("url")?,
             error: row.get("error")?,
             trailers: serde_json::from_str(trailers.as_str()).unwrap_or_default(),
+            environment_id: row.get("environment_id")?,
         })
     }
 }

@@ -17,6 +17,9 @@ const BEHAVIOR_TTL = 'ttl';
 const BEHAVIOR_ALWAYS = 'always';
 const BEHAVIOR_SMART = 'smart';
 
+const ENVIRONMENTS_ACTIVE = 'active';
+const ENVIRONMENTS_ALL = 'all';
+
 const behaviorArg: FormInput = {
   type: 'select',
   name: 'behavior',
@@ -29,12 +32,24 @@ const behaviorArg: FormInput = {
   ],
 };
 
+const environmentArg: FormInput = {
+  type: 'select',
+  name: 'environmentBehavior',
+  label: 'Include responses from',
+  defaultValue: 'all',
+  options: [
+    { label: 'Any environments', value: ENVIRONMENTS_ALL },
+    { label: 'The currently active environment', value: ENVIRONMENTS_ACTIVE },
+  ],
+};
+
 const ttlArg: DynamicTemplateFunctionArg = {
   type: 'text',
   name: 'ttl',
   label: 'Expiration Time (seconds)',
   placeholder: '0',
-  description: 'Resend the request when the latest response is older than this many seconds, or if there are no responses yet.',
+  description:
+    'Resend the request when the latest response is older than this many seconds, or if there are no responses yet.',
   dynamic(_ctx: Context, { values }: GetHttpAuthenticationConfigRequest) {
     const show = values.behavior === BEHAVIOR_TTL;
     return { hidden: !show };
@@ -60,6 +75,7 @@ export const plugin: PluginDefinition = {
           label: 'Header Name',
           placeholder: 'Content-Type',
         },
+        environmentArg,
         behaviorArg,
         ttlArg,
       ],
@@ -71,6 +87,7 @@ export const plugin: PluginDefinition = {
           purpose: args.purpose,
           behavior: args.values.behavior ? String(args.values.behavior) : null,
           ttl: String(args.values.ttl || ''),
+          filterByEnvironment: args.values.environmentBehavior === ENVIRONMENTS_ACTIVE,
         });
         if (response == null) return null;
 
@@ -92,6 +109,7 @@ export const plugin: PluginDefinition = {
           label: 'JSONPath or XPath',
           placeholder: '$.books[0].id or /books[0]/id',
         },
+        environmentArg,
         behaviorArg,
         ttlArg,
       ],
@@ -103,6 +121,7 @@ export const plugin: PluginDefinition = {
           purpose: args.purpose,
           behavior: args.values.behavior ? String(args.values.behavior) : null,
           ttl: String(args.values.ttl || ''),
+          filterByEnvironment: args.values.environmentBehavior === ENVIRONMENTS_ACTIVE,
         });
         if (response == null) return null;
 
@@ -136,7 +155,7 @@ export const plugin: PluginDefinition = {
       name: 'response.body.raw',
       description: 'Access the entire response body, as text',
       aliases: ['response'],
-      args: [requestArg, behaviorArg, ttlArg],
+      args: [requestArg, environmentArg, behaviorArg, ttlArg],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         if (!args.values.request) return null;
 
@@ -145,6 +164,7 @@ export const plugin: PluginDefinition = {
           purpose: args.purpose,
           behavior: args.values.behavior ? String(args.values.behavior) : null,
           ttl: String(args.values.ttl || ''),
+          filterByEnvironment: args.values.environmentBehavior === ENVIRONMENTS_ACTIVE,
         });
         if (response == null) return null;
 
@@ -202,11 +222,13 @@ async function getResponse(
     behavior,
     purpose,
     ttl,
+    filterByEnvironment,
   }: {
     requestId: string;
     behavior: string | null;
     ttl: string | null;
     purpose: RenderPurpose;
+    filterByEnvironment: boolean;
   },
 ): Promise<HttpResponse | null> {
   if (!requestId) return null;
@@ -216,7 +238,11 @@ async function getResponse(
     return null;
   }
 
-  const responses = await ctx.httpResponse.find({ requestId: httpRequest.id, limit: 1 });
+  const responses = await ctx.httpResponse.find({
+    requestId: httpRequest.id,
+    limit: 1,
+    filterByEnvironment,
+  });
 
   if (behavior === 'never' && responses.length === 0) {
     return null;

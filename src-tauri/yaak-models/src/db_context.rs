@@ -38,14 +38,12 @@ impl<'a> DbContext<'a> {
         let mut stmt = self.conn.prepare(sql.as_str()).expect("Failed to prepare query");
         match stmt.query_row(&*params.as_params(), M::from_row) {
             Ok(result) => Ok(result),
-            Err(rusqlite::Error::QueryReturnedNoRows) => {
-                Err(ModelNotFound(format!(
-                    r#"table "{}" {} == {}"#,
-                    M::table_name().into_iden().to_string(),
-                    col.into_iden().to_string(),
-                    value_debug
-                )))
-            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Err(ModelNotFound(format!(
+                r#"table "{}" {} == {}"#,
+                M::table_name().into_iden().to_string(),
+                col.into_iden().to_string(),
+                value_debug
+            ))),
             Err(e) => Err(crate::error::Error::SqlError(e)),
         }
     }
@@ -93,25 +91,20 @@ impl<'a> DbContext<'a> {
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
-        // TODO: Figure out how to do this conditional builder better
         let (order_by_col, order_by_dir) = M::order_by();
-        let (sql, params) = if let Some(limit) = limit {
-            Query::select()
-                .from(M::table_name())
-                .column(Asterisk)
-                .cond_where(Expr::col(col).eq(value))
-                .limit(limit)
-                .order_by(order_by_col, order_by_dir)
-                .build_rusqlite(SqliteQueryBuilder)
-        } else {
-            Query::select()
-                .from(M::table_name())
-                .column(Asterisk)
-                .cond_where(Expr::col(col).eq(value))
-                .order_by(order_by_col, order_by_dir)
-                .build_rusqlite(SqliteQueryBuilder)
-        };
 
+        let mut select = Query::select();
+        let mut q = select
+            .from(M::table_name())
+            .column(Asterisk)
+            .cond_where(Expr::col(col).eq(value))
+            .order_by(order_by_col, order_by_dir);
+
+        if let Some(l) = limit {
+            q = q.limit(l);
+        }
+
+        let (sql, params) = q.build_rusqlite(SqliteQueryBuilder);
         let mut stmt = self.conn.resolve().prepare(sql.as_str())?;
         let items = stmt.query_map(&*params.as_params(), M::from_row)?;
         Ok(items.map(|v| v.unwrap()).collect())

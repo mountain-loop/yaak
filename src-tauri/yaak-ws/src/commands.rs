@@ -215,6 +215,7 @@ pub(crate) async fn connect<R: Runtime>(
     let connection = app_handle.db().upsert_websocket_connection(
         &WebsocketConnection {
             workspace_id: request.workspace_id.clone(),
+            environment_id: environment_id.map(|id| id.to_string()),
             request_id: request_id.to_string(),
             ..Default::default()
         },

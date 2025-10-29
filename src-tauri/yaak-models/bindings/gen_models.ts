@@ -22,7 +22,7 @@ export type Folder = { model: "folder", id: string, createdAt: string, updatedAt
 
 export type GraphQlIntrospection = { model: "graphql_introspection", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, content: string | null, };
 
-export type GrpcConnection = { model: "grpc_connection", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, elapsed: number, error: string | null, method: string, service: string, status: number, state: GrpcConnectionState, trailers: { [key in string]?: string }, url: string, };
+export type GrpcConnection = { model: "grpc_connection", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, elapsed: number, error: string | null, method: string, service: string, status: number, state: GrpcConnectionState, trailers: { [key in string]?: string }, url: string, environmentId: string | null, };
 
 export type GrpcConnectionState = "initialized" | "connected" | "closed";
 
@@ -36,7 +36,7 @@ export type HttpRequest = { model: "http_request", id: string, createdAt: string
 
 export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, id?: string, };
 
-export type HttpResponse = { model: "http_response", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, bodyPath: string | null, contentLength: number | null, elapsed: number, elapsedHeaders: number, error: string | null, headers: Array<HttpResponseHeader>, remoteAddr: string | null, status: number, statusReason: string | null, state: HttpResponseState, url: string, version: string | null, };
+export type HttpResponse = { model: "http_response", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, bodyPath: string | null, contentLength: number | null, elapsed: number, elapsedHeaders: number, error: string | null, headers: Array<HttpResponseHeader>, remoteAddr: string | null, status: number, statusReason: string | null, state: HttpResponseState, url: string, version: string | null, environmentId: string | null, };
 
 export type HttpResponseHeader = { name: string, value: string, };
 
@@ -68,7 +68,7 @@ export type SyncState = { model: "sync_state", id: string, workspaceId: string, 
 
 export type UpdateSource = { "type": "background" } | { "type": "import" } | { "type": "plugin" } | { "type": "sync" } | { "type": "window", label: string, };
 
-export type WebsocketConnection = { model: "websocket_connection", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, elapsed: number, error: string | null, headers: Array<HttpResponseHeader>, state: WebsocketConnectionState, status: number, url: string, };
+export type WebsocketConnection = { model: "websocket_connection", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, elapsed: number, error: string | null, headers: Array<HttpResponseHeader>, state: WebsocketConnectionState, status: number, url: string, environmentId: string | null, };
 
 export type WebsocketConnectionState = "initialized" | "connected" | "closing" | "closed";
 

@@ -86,7 +86,7 @@ impl YaakNotifier {
 
         #[cfg(feature = "license")]
         let license_check = {
-            use yaak_license::{check_license, LicenseCheckStatus};
+            use yaak_license::{LicenseCheckStatus, check_license};
             match check_license(window).await {
                 Ok(LicenseCheckStatus::PersonalUse { .. }) => "personal".to_string(),
                 Ok(LicenseCheckStatus::CommercialUse) => "commercial".to_string(),
@@ -139,6 +139,7 @@ async fn get_kv<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<String>> {
     }
 }
 
+#[allow(unused)]
 fn get_updater_status<R: Runtime>(app_handle: &AppHandle<R>) -> &'static str {
     #[cfg(not(feature = "updater"))]
     {

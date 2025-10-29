@@ -1,12 +1,12 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{HttpResponse, HttpResponseIden, HttpResponseState};
+use crate::models::{HttpResponse, HttpResponseIden, HttpResponseState, UpsertModelInfo};
+use crate::queries::MAX_HISTORY_ITEMS;
 use crate::util::UpdateSource;
 use log::{debug, error};
-use sea_query::{Expr, Query, SqliteQueryBuilder};
+use sea_query::{Asterisk, Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 use std::fs;
-use crate::db_context::DbContext;
-use crate::queries::MAX_HISTORY_ITEMS;
 
 impl<'a> DbContext<'a> {
     pub fn get_http_response(&self, id: &str) -> Result<HttpResponse> {
@@ -16,9 +16,30 @@ impl<'a> DbContext<'a> {
     pub fn list_http_responses_for_request(
         &self,
         request_id: &str,
+        environment_id: Option<&str>,
         limit: Option<u64>,
     ) -> Result<Vec<HttpResponse>> {
-        self.find_many(HttpResponseIden::RequestId, request_id, limit)
+        let (order_by_col, order_by_dir) = HttpResponse::order_by();
+        let mut select = Query::select();
+        let mut q = select
+            .from(HttpResponse::table_name())
+            .column(Asterisk)
+            .cond_where(Expr::col(HttpResponseIden::RequestId).eq(request_id))
+            .order_by(order_by_col, order_by_dir);
+
+        if let Some(limit) = limit {
+            q = q.limit(limit);
+        }
+
+        if let Some(eid) = environment_id {
+            q = q.cond_where(Expr::col(HttpResponseIden::EnvironmentId).eq(eid))
+        }
+
+        let (sql, params) = q.build_rusqlite(SqliteQueryBuilder);
+
+        let mut stmt = self.conn.resolve().prepare(sql.as_str())?;
+        let items = stmt.query_map(&*params.as_params(), HttpResponse::from_row)?;
+        Ok(items.map(|v| v.unwrap()).collect())
     }
 
     pub fn list_http_responses(
@@ -34,7 +55,7 @@ impl<'a> DbContext<'a> {
         request_id: &str,
         source: &UpdateSource,
     ) -> Result<()> {
-        let responses = self.list_http_responses_for_request(request_id, None)?;
+        let responses = self.list_http_responses_for_request(request_id, None, None)?;
         for m in responses {
             self.delete(&m, source)?;
         }
@@ -74,7 +95,8 @@ impl<'a> DbContext<'a> {
         http_response: &HttpResponse,
         source: &UpdateSource,
     ) -> Result<HttpResponse> {
-        let responses = self.list_http_responses_for_request(&http_response.request_id, None)?;
+        let responses =
+            self.list_http_responses_for_request(&http_response.request_id, None, None)?;
 
         for m in responses.iter().skip(MAX_HISTORY_ITEMS - 1) {
             debug!("Deleting old HTTP response {}", http_response.id);
@@ -101,10 +123,6 @@ impl<'a> DbContext<'a> {
         response: &HttpResponse,
         source: &UpdateSource,
     ) -> Result<HttpResponse> {
-        if response.id.is_empty() {
-            Ok(response.clone())
-        } else {
-            self.upsert(response, source)
-        }
+        if response.id.is_empty() { Ok(response.clone()) } else { self.upsert(response, source) }
     }
 }
