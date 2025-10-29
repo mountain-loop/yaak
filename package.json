@@ -32,6 +32,7 @@
     "plugins/template-function-hash",
     "plugins/template-function-json",
     "plugins/template-function-prompt",
+    "plugins/template-function-random",
     "plugins/template-function-regex",
     "plugins/template-function-request",
     "plugins/template-function-response",
