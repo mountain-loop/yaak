@@ -303,7 +303,7 @@ function TreeInner<T extends { id: string }>(
 
   // If the selected item is a collapsed folder, expand it. Otherwise, select next item
   useKey(
-    (e) => e.key === 'ArrowRight' || e.key.toLowerCase() === 'l',
+    (e) => e.key === 'ArrowRight' || e.key === 'l',
     (e) => {
       if (!isSidebarFocused()) return;
       e.preventDefault();
@@ -329,7 +329,7 @@ function TreeInner<T extends { id: string }>(
   // If the selected item is in a folder, select its parent.
   // If the selected item is an expanded folder, collapse it.
   useKey(
-    (e) => e.key === 'ArrowLeft' || e.key.toLowerCase() === 'h',
+    (e) => e.key === 'ArrowLeft' || e.key === 'h',
     (e) => {
       if (!isSidebarFocused()) return;
       e.preventDefault();

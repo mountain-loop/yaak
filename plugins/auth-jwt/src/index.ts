@@ -47,6 +47,50 @@ export const plugin: PluginDefinition = {
         label: 'Secret is base64 encoded',
       },
       {
+        type: 'select',
+        name: 'location',
+        label: 'Behavior',
+        defaultValue: 'header',
+        options: [
+          { label: 'Insert Header', value: 'header' },
+          { label: 'Append Query Parameter', value: 'query' },
+        ],
+      },
+      {
+        type: 'text',
+        name: 'name',
+        label: 'Header Name',
+        defaultValue: 'Authorization',
+        optional: true,
+        dynamic(_ctx, args) {
+          if (args.values.location === 'query') {
+            return {
+              label: 'Parameter Name',
+              description: 'The name of the query parameter to add to the request',
+            };
+          } else {
+            return {
+              label: 'Header Name',
+              description: 'The name of the header to add to the request',
+            };
+          }
+        },
+      },
+      {
+        type: 'text',
+        name: 'headerPrefix',
+        label: 'Header Prefix',
+        optional: true,
+        defaultValue: 'Bearer',
+        dynamic(_ctx, args) {
+          if (args.values.location === 'query') {
+            return {
+              hidden: true,
+            };
+          }
+        },
+      },
+      {
         type: 'editor',
         name: 'payload',
         label: 'Payload',
@@ -61,8 +105,17 @@ export const plugin: PluginDefinition = {
       const token = jwt.sign(`${payload}`, secret, {
         algorithm: algorithm as (typeof algorithms)[number],
       });
-      const value = `Bearer ${token}`;
-      return { setHeaders: [{ name: 'Authorization', value }] };
+
+      if (values.location === 'query') {
+        const paramName = String(values.name || 'token');
+        const paramValue = String(values.value || '');
+        return { setQueryParameters: [{ name: paramName, value: paramValue }] };
+      } else {
+        const headerPrefix = values.headerPrefix != null ? values.headerPrefix : 'Bearer';
+        const headerName = String(values.name || 'Authorization');
+        const headerValue = `${headerPrefix} ${token}`.trim();
+        return { setHeaders: [{ name: headerName, value: headerValue }] };
+      }
     },
   },
 };

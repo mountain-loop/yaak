@@ -173,6 +173,7 @@ function Sidebar({ className }: { className?: string }) {
 
   const handleFilterKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
+      e.stopPropagation(); // Don't trigger tree navigation hotkeys
       if (e.key === 'Escape') {
         e.preventDefault();
         clearFilterText();
@@ -197,9 +198,10 @@ function Sidebar({ className }: { className?: string }) {
     <aside
       ref={wrapperRef}
       aria-hidden={hidden ?? undefined}
-      className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)_auto]')}
+      className={classNames(className, 'h-full grid grid-rows-[minmax(0,1fr)_auto]')}
     >
-      <div className="px-2 py-1.5 pb-0">
+      {/* TODO: Show the filter */}
+      <div className="px-2 py-1.5 pb-0 hidden">
         {(tree.children?.length ?? 0) > 0 && (
           <PlainInput
             hideLabel

@@ -1,0 +1,828 @@
+{
+	"info": {
+		"_postman_id": "9e6dfada-256c-49ea-a38f-7d1b05b7ca2d",
+		"name": "Authentication",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "18798"
+	},
+	"item": [
+		{
+			"name": "No Auth",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://yaak.app/x/echo",
+					"protocol": "https",
+					"host": [
+						"yaak",
+						"app"
+					],
+					"path": [
+						"x",
+						"echo"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Inherit",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://yaak.app/x/echo",
+					"protocol": "https",
+					"host": [
+						"yaak",
+						"app"
+					],
+					"path": [
+						"x",
+						"echo"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "OAuth 2 Auth Code",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "oauth2",
+					"oauth2": [
+						{
+							"key": "grant_type",
+							"value": "authorization_code",
+							"type": "string"
+						},
+						{
+							"key": "headerPrefix",
+							"value": "Bearer",
+							"type": "string"
+						},
+						{
+							"key": "client_authentication",
+							"value": "header",
+							"type": "string"
+						},
+						{
+							"key": "challengeAlgorithm",
+							"value": "S256",
+							"type": "string"
+						},
+						{
+							"key": "refreshTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "state",
+							"value": "state",
+							"type": "string"
+						},
+						{
+							"key": "scope",
+							"value": "scope",
+							"type": "string"
+						},
+						{
+							"key": "code_verifier",
+							"value": "verifier",
+							"type": "string"
+						},
+						{
+							"key": "clientSecret",
+							"value": "clientsecet",
+							"type": "string"
+						},
+						{
+							"key": "clientId",
+							"value": "cliend id",
+							"type": "string"
+						},
+						{
+							"key": "authUrl",
+							"value": "https://github.com/login/oauth/authorize",
+							"type": "string"
+						},
+						{
+							"key": "accessTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "useBrowser",
+							"value": true,
+							"type": "boolean"
+						},
+						{
+							"key": "redirect_uri",
+							"value": "https://callback",
+							"type": "string"
+						},
+						{
+							"key": "tokenName",
+							"value": "name",
+							"type": "string"
+						},
+						{
+							"key": "addTokenTo",
+							"value": "header",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"hello\": \"world\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{vault:hello}}",
+					"host": [
+						"{{vault:hello}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "OAuth 2 Auth Code (PKCE)",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "oauth2",
+					"oauth2": [
+						{
+							"key": "headerPrefix",
+							"value": "Bearer",
+							"type": "string"
+						},
+						{
+							"key": "client_authentication",
+							"value": "header",
+							"type": "string"
+						},
+						{
+							"key": "challengeAlgorithm",
+							"value": "S256",
+							"type": "string"
+						},
+						{
+							"key": "refreshTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "state",
+							"value": "state",
+							"type": "string"
+						},
+						{
+							"key": "scope",
+							"value": "scope",
+							"type": "string"
+						},
+						{
+							"key": "code_verifier",
+							"value": "verifier",
+							"type": "string"
+						},
+						{
+							"key": "grant_type",
+							"value": "authorization_code_with_pkce",
+							"type": "string"
+						},
+						{
+							"key": "clientSecret",
+							"value": "clientsecet",
+							"type": "string"
+						},
+						{
+							"key": "clientId",
+							"value": "cliend id",
+							"type": "string"
+						},
+						{
+							"key": "authUrl",
+							"value": "https://github.com/login/oauth/authorize",
+							"type": "string"
+						},
+						{
+							"key": "accessTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "useBrowser",
+							"value": true,
+							"type": "boolean"
+						},
+						{
+							"key": "redirect_uri",
+							"value": "https://callback",
+							"type": "string"
+						},
+						{
+							"key": "tokenName",
+							"value": "name",
+							"type": "string"
+						},
+						{
+							"key": "addTokenTo",
+							"value": "header",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"hello\": \"world\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{vault:hello}}",
+					"host": [
+						"{{vault:hello}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "OAuth 2 Implicit",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "oauth2",
+					"oauth2": [
+						{
+							"key": "client_authentication",
+							"value": "header",
+							"type": "string"
+						},
+						{
+							"key": "redirect_uri",
+							"value": "https://yaak.app/x/echo",
+							"type": "string"
+						},
+						{
+							"key": "useBrowser",
+							"value": false,
+							"type": "boolean"
+						},
+						{
+							"key": "grant_type",
+							"value": "implicit",
+							"type": "string"
+						},
+						{
+							"key": "headerPrefix",
+							"value": "Bearer",
+							"type": "string"
+						},
+						{
+							"key": "challengeAlgorithm",
+							"value": "S256",
+							"type": "string"
+						},
+						{
+							"key": "refreshTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "state",
+							"value": "state",
+							"type": "string"
+						},
+						{
+							"key": "scope",
+							"value": "scope",
+							"type": "string"
+						},
+						{
+							"key": "code_verifier",
+							"value": "verifier",
+							"type": "string"
+						},
+						{
+							"key": "clientSecret",
+							"value": "clientsecet",
+							"type": "string"
+						},
+						{
+							"key": "clientId",
+							"value": "cliend id",
+							"type": "string"
+						},
+						{
+							"key": "authUrl",
+							"value": "https://github.com/login/oauth/authorize",
+							"type": "string"
+						},
+						{
+							"key": "accessTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "tokenName",
+							"value": "name",
+							"type": "string"
+						},
+						{
+							"key": "addTokenTo",
+							"value": "header",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"hello\": \"world\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{vault:hello}}",
+					"host": [
+						"{{vault:hello}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "OAuth 2 Password",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "oauth2",
+					"oauth2": [
+						{
+							"key": "password",
+							"value": "password",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "username",
+							"type": "string"
+						},
+						{
+							"key": "clientSecret",
+							"value": "clientsecret",
+							"type": "string"
+						},
+						{
+							"key": "clientId",
+							"value": "clientid",
+							"type": "string"
+						},
+						{
+							"key": "grant_type",
+							"value": "password_credentials",
+							"type": "string"
+						},
+						{
+							"key": "client_authentication",
+							"value": "header",
+							"type": "string"
+						},
+						{
+							"key": "redirect_uri",
+							"value": "https://yaak.app/x/echo",
+							"type": "string"
+						},
+						{
+							"key": "useBrowser",
+							"value": false,
+							"type": "boolean"
+						},
+						{
+							"key": "headerPrefix",
+							"value": "Bearer",
+							"type": "string"
+						},
+						{
+							"key": "challengeAlgorithm",
+							"value": "S256",
+							"type": "string"
+						},
+						{
+							"key": "refreshTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "state",
+							"value": "state",
+							"type": "string"
+						},
+						{
+							"key": "scope",
+							"value": "scope",
+							"type": "string"
+						},
+						{
+							"key": "code_verifier",
+							"value": "verifier",
+							"type": "string"
+						},
+						{
+							"key": "authUrl",
+							"value": "https://github.com/login/oauth/authorize",
+							"type": "string"
+						},
+						{
+							"key": "accessTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "tokenName",
+							"value": "name",
+							"type": "string"
+						},
+						{
+							"key": "addTokenTo",
+							"value": "header",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"hello\": \"world\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{vault:hello}}",
+					"host": [
+						"{{vault:hello}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "OAuth 2 Client Credentials",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "oauth2",
+					"oauth2": [
+						{
+							"key": "grant_type",
+							"value": "client_credentials",
+							"type": "string"
+						},
+						{
+							"key": "password",
+							"value": "password",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "username",
+							"type": "string"
+						},
+						{
+							"key": "clientSecret",
+							"value": "clientsecret",
+							"type": "string"
+						},
+						{
+							"key": "clientId",
+							"value": "clientid",
+							"type": "string"
+						},
+						{
+							"key": "client_authentication",
+							"value": "header",
+							"type": "string"
+						},
+						{
+							"key": "redirect_uri",
+							"value": "https://yaak.app/x/echo",
+							"type": "string"
+						},
+						{
+							"key": "useBrowser",
+							"value": false,
+							"type": "boolean"
+						},
+						{
+							"key": "headerPrefix",
+							"value": "Bearer",
+							"type": "string"
+						},
+						{
+							"key": "challengeAlgorithm",
+							"value": "S256",
+							"type": "string"
+						},
+						{
+							"key": "refreshTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "state",
+							"value": "state",
+							"type": "string"
+						},
+						{
+							"key": "scope",
+							"value": "scope",
+							"type": "string"
+						},
+						{
+							"key": "code_verifier",
+							"value": "verifier",
+							"type": "string"
+						},
+						{
+							"key": "authUrl",
+							"value": "https://github.com/login/oauth/authorize",
+							"type": "string"
+						},
+						{
+							"key": "accessTokenUrl",
+							"value": "https://github.com/login/oauth/access_token",
+							"type": "string"
+						},
+						{
+							"key": "tokenName",
+							"value": "name",
+							"type": "string"
+						},
+						{
+							"key": "addTokenTo",
+							"value": "header",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"hello\": \"world\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{vault:hello}}",
+					"host": [
+						"{{vault:hello}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "AWS V4",
+			"request": {
+				"auth": {
+					"type": "awsv4",
+					"awsv4": [
+						{
+							"key": "sessionToken",
+							"value": "session",
+							"type": "string"
+						},
+						{
+							"key": "service",
+							"value": "s3",
+							"type": "string"
+						},
+						{
+							"key": "region",
+							"value": "us-west-1",
+							"type": "string"
+						},
+						{
+							"key": "secretKey",
+							"value": "secret",
+							"type": "string"
+						},
+						{
+							"key": "accessKey",
+							"value": "access",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://yaak.app/x/echo",
+					"protocol": "https",
+					"host": [
+						"yaak",
+						"app"
+					],
+					"path": [
+						"x",
+						"echo"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "API Key",
+			"request": {
+				"auth": {
+					"type": "apikey",
+					"apikey": [
+						{
+							"key": "in",
+							"value": "query",
+							"type": "string"
+						},
+						{
+							"key": "value",
+							"value": "value",
+							"type": "string"
+						},
+						{
+							"key": "key",
+							"value": "key",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://yaak.app/x/echo",
+					"protocol": "https",
+					"host": [
+						"yaak",
+						"app"
+					],
+					"path": [
+						"x",
+						"echo"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "JWT",
+			"request": {
+				"auth": {
+					"type": "jwt",
+					"jwt": [
+						{
+							"key": "header",
+							"value": "{\n    \"header\": \"foo\"\n}",
+							"type": "string"
+						},
+						{
+							"key": "headerPrefix",
+							"value": "Bearer",
+							"type": "string"
+						},
+						{
+							"key": "payload",
+							"value": "{\n    \"my\": \"payload\"\n}",
+							"type": "string"
+						},
+						{
+							"key": "isSecretBase64Encoded",
+							"value": false,
+							"type": "boolean"
+						},
+						{
+							"key": "secret",
+							"value": "mysecret",
+							"type": "string"
+						},
+						{
+							"key": "algorithm",
+							"value": "HS384",
+							"type": "string"
+						},
+						{
+							"key": "addTokenTo",
+							"value": "header",
+							"type": "string"
+						},
+						{
+							"key": "queryParamKey",
+							"value": "token",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://yaak.app/x/echo",
+					"protocol": "https",
+					"host": [
+						"yaak",
+						"app"
+					],
+					"path": [
+						"x",
+						"echo"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "basic",
+		"basic": [
+			{
+				"key": "password",
+				"value": "workspace_secret",
+				"type": "string"
+			},
+			{
+				"key": "username",
+				"value": "workspace",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "COLLECTION VARIABLE",
+			"value": "collection variable"
+		}
+	]
+}

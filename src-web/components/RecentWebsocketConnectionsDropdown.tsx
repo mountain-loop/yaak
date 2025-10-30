@@ -55,7 +55,7 @@ export function RecentWebsocketConnectionsDropdown({
     >
       <IconButton
         title="Show connection history"
-        icon={activeConnection?.id === latestConnectionId ? 'chevron_down' : 'pin'}
+        icon={activeConnection?.id === latestConnectionId ? 'history' : 'pin'}
         className="m-0.5 text-text-subtle"
         size="sm"
         iconSize="md"

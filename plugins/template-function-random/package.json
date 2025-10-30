@@ -1,0 +1,12 @@
+{
+  "name": "@yaak/template-function-random",
+  "displayName": "Random Template Functions",
+  "description": "Template functions for generating random values",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev",
+    "lint":"tsc --noEmit && eslint . --ext .ts,.tsx"
+  }
+}

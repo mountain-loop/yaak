@@ -14,7 +14,7 @@
           "bearer": [
             {
               "key": "token",
-              "value": "baeare",
+              "value": "my-token",
               "type": "string"
             }
           ]

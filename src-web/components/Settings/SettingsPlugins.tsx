@@ -198,7 +198,7 @@ function PluginTableRow({
             <Button
               variant="border"
               color="primary"
-              title={`Install ${latestVersion}`}
+              title={`Install ${version}`}
               size="xs"
               isLoading={installPluginMutation.isPending}
               onClick={() => installPluginMutation.mutate(name)}
