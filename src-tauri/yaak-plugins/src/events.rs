@@ -1119,7 +1119,7 @@ pub struct FindHttpResponsesRequest {
     pub request_id: String,
     #[ts(optional)]
     pub limit: Option<i32>,
-    /// Filter responses, returning only the ones that have been send under the current active environment
+    /// Filter responses, returning only the ones that have been sent under the current active environment
     #[ts(optional)]
     pub filter_by_environment: Option<bool>,
 }
