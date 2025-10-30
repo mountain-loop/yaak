@@ -32,7 +32,7 @@ impl<'a> DbContext<'a> {
         }
 
         if let Some(eid) = environment_id {
-            q = q.cond_where(Expr::col(HttpResponseIden::EnvironmentId).eq(eid))
+            q = q.cond_where(Expr::col(HttpResponseIden::EnvironmentId).eq(eid));
         }
 
         let (sql, params) = q.build_rusqlite(SqliteQueryBuilder);
