@@ -62,21 +62,24 @@ export const plugin: PluginDefinition = {
     async onApply(_ctx, {values, ...args}): Promise<CallHttpAuthenticationResponse> {
 
       const profileName = String(values.profile || '') || undefined;
+      const service = String(values.service || 'sts')
       let accessKeyId = String(values.accessKeyId || '');
       let secretAccessKey = String(values.secretAccessKey || '');
       let sessionToken = String(values.sessionToken || '') || undefined;
 
-      try {
-        const credentialsProvider = fromIni({
-          profile: profileName,
-          ignoreCache: true
-        });
-        const credentials = await credentialsProvider();
-        accessKeyId = credentials.accessKeyId;
-        secretAccessKey = credentials.secretAccessKey;
-        sessionToken = credentials.sessionToken;
-      } catch {
-        console.error('Failed to fetch credentials from AWS profile.');
+      if (!accessKeyId || !secretAccessKey) {
+        try {
+          const credentialsProvider = fromIni({
+            profile: profileName,
+            ignoreCache: true
+          });
+          const credentials = await credentialsProvider();
+          accessKeyId = credentials.accessKeyId;
+          secretAccessKey = credentials.secretAccessKey;
+          sessionToken = credentials.sessionToken;
+        } catch {
+          throw Error(`Failed to fetch credentials from AWS profile.`);
+        }
       }
 
       const url = new URL(args.url);
@@ -89,13 +92,18 @@ export const plugin: PluginDefinition = {
         }
       }
 
+      if (service !== 'lambda') {
+        headers['x-amz-content-sha256'] = 'UNSIGNED-PAYLOAD';
+      }
+
       const signature = aws4.sign(
         {
           host: url.host,
           method: args.method,
           path: url.pathname + (url.search || ''),
-          service: String(values.service || 'sts'),
+          service: service,
           region: values.region ? String(values.region) : undefined,
+          headers: headers,
         },
         {
           accessKeyId,
