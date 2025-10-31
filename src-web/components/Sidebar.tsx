@@ -438,7 +438,6 @@ function Sidebar({ className }: { className?: string }) {
               size="sm"
               label="filter"
               language={null} // Explicitly disable
-              containerClassName="px-1"
               placeholder="Search"
               onChange={handleFilterChange}
               defaultValue={filterText.text}
