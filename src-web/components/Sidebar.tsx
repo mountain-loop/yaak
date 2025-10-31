@@ -429,7 +429,7 @@ function Sidebar({ className }: { className?: string }) {
       aria-hidden={hidden ?? undefined}
       className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)_auto]')}
     >
-      <div className="px-2 py-1.5 pb-0 grid grid-cols-[1fr_auto] items-center -mr-1.5">
+      <div className="px-3 pt-3 grid grid-cols-[1fr_auto] items-center -mr-2.5">
         {(tree.children?.length ?? 0) > 0 && (
           <>
             <Input
