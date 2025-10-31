@@ -286,24 +286,7 @@ function Sidebar({ className }: { className?: string }) {
 
       // No children means we're in the root
       if (child == null) {
-        return [
-          ...getCreateDropdownItems({ workspaceId, activeRequest: null, folderId: null }),
-          { type: 'separator' },
-          {
-            label: 'Expand All Folders',
-            leftSlot: <Icon icon="chevrons_up_down" />,
-            onSelect: actions['sidebar.expand_all'].cb,
-            hotKeyAction: 'sidebar.expand_all',
-            hotKeyLabelOnly: true,
-          },
-          {
-            label: 'Collapse All Folders',
-            leftSlot: <Icon icon="chevrons_down_up" />,
-            onSelect: actions['sidebar.collapse_all'].cb,
-            hotKeyAction: 'sidebar.collapse_all',
-            hotKeyLabelOnly: true,
-          },
-        ];
+        return getCreateDropdownItems({ workspaceId, activeRequest: null, folderId: null });
       }
 
       const workspaces = jotaiStore.get(workspacesAtom);

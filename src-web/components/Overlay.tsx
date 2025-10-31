@@ -66,7 +66,7 @@ export function Overlay({
                   '[tabindex]:not([tabindex="-1"])',
                   '[contenteditable]:not([contenteditable="false"])',
                 ].join(', '),
-              ) ?? undefined,
+              ) ?? false,
           }}
         >
           <m.div
