@@ -164,6 +164,7 @@ function Sidebar({ className }: { className?: string }) {
     n.selectItem(activeId);
   }, []);
 
+  // Ensure active id is always selected when it changes
   useEffect(() => {
     return jotaiStore.sub(activeIdAtom, () => {
       const activeId = jotaiStore.get(activeIdAtom);
@@ -252,7 +253,7 @@ function Sidebar({ className }: { className?: string }) {
         },
       },
       'sidebar.selected.duplicate': {
-        priority: 999,
+        priority: 10,
         enable,
         cb: async function (items: SidebarModel[]) {
           if (items.length === 1) {
@@ -285,24 +286,7 @@ function Sidebar({ className }: { className?: string }) {
 
       // No children means we're in the root
       if (child == null) {
-        return [
-          ...getCreateDropdownItems({ workspaceId, activeRequest: null, folderId: null }),
-          { type: 'separator' },
-          {
-            label: 'Expand All Folders',
-            leftSlot: <Icon icon="chevrons_up_down" />,
-            onSelect: actions['sidebar.expand_all'].cb,
-            hotKeyAction: 'sidebar.expand_all',
-            hotKeyLabelOnly: true,
-          },
-          {
-            label: 'Collapse All Folders',
-            leftSlot: <Icon icon="chevrons_down_up" />,
-            onSelect: actions['sidebar.collapse_all'].cb,
-            hotKeyAction: 'sidebar.collapse_all',
-            hotKeyLabelOnly: true,
-          },
-        ];
+        return getCreateDropdownItems({ workspaceId, activeRequest: null, folderId: null });
       }
 
       const workspaces = jotaiStore.get(workspacesAtom);
@@ -429,7 +413,7 @@ function Sidebar({ className }: { className?: string }) {
   }
 
   useEffect(() => {
-    const view = filterRef.current; // your EditorView
+    const view = filterRef.current;
     if (!view) return;
     const ext = filter({ fields: allFields ?? [] });
     view.dispatch({ effects: filterLanguageCompartmentRef.current.reconfigure(ext) });
@@ -445,16 +429,15 @@ function Sidebar({ className }: { className?: string }) {
       aria-hidden={hidden ?? undefined}
       className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)_auto]')}
     >
-      <div className="px-2 py-1.5 pb-0 grid grid-cols-[1fr_auto] items-center -mr-1.5">
+      <div className="px-3 pt-3 grid grid-cols-[1fr_auto] items-center -mr-2.5">
         {(tree.children?.length ?? 0) > 0 && (
           <>
             <Input
               hideLabel
               ref={filterRef}
-              size="xs"
+              size="sm"
               label="filter"
               language={null} // Explicitly disable
-              containerClassName="!rounded-full px-1"
               placeholder="Search"
               onChange={handleFilterChange}
               defaultValue={filterText.text}
@@ -515,7 +498,7 @@ function Sidebar({ className }: { className?: string }) {
           hotkeys={hotkeys}
           getItemKey={getItemKey}
           ItemInner={SidebarInnerItem}
-          ItemLeftSlot={SidebarLeftSlot}
+          ItemLeftSlotInner={SidebarLeftSlot}
           getContextMenu={getContextMenu}
           onActivate={handleActivate}
           getEditOptions={getEditOptions}
@@ -683,7 +666,7 @@ const SidebarLeftSlot = memo(function SidebarLeftSlot({
     return (
       <HttpMethodTag
         short
-        className={classNames('text-xs', !isSelected && OPACITY_SUBTLE)}
+        className={classNames('text-xs pl-1.5', !isSelected && OPACITY_SUBTLE)}
         request={item}
       />
     );

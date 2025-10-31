@@ -26,6 +26,7 @@ interface Props {
   minHeightPx?: number;
   minWidthPx?: number;
   layout?: SplitLayoutLayout;
+  resizeHandleClassName?: string;
 }
 
 const baseProperties = { minWidth: 0 };
@@ -42,6 +43,7 @@ export function SplitLayout({
   className,
   name,
   layout = 'responsive',
+  resizeHandleClassName,
   defaultRatio = 0.5,
   minHeightPx = 10,
   minWidthPx = 10,
@@ -129,7 +131,10 @@ export function SplitLayout({
         <>
           <ResizeHandle
             style={areaD}
-            className={classNames(vertical ? '-translate-y-1' : '-translate-x-1')}
+            className={classNames(
+              resizeHandleClassName,
+              vertical ? '-translate-y-1' : '-translate-x-1',
+            )}
             onResizeMove={handleResizeMove}
             onReset={handleReset}
             side={vertical ? 'top' : 'left'}

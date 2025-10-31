@@ -1178,7 +1178,7 @@ async fn cmd_install_plugin<R: Runtime>(
 async fn cmd_create_grpc_request<R: Runtime>(
     workspace_id: &str,
     name: &str,
-    sort_priority: f32,
+    sort_priority: f64,
     folder_id: Option<&str>,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,

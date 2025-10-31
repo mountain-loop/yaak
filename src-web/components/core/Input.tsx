@@ -229,7 +229,6 @@ const BaseInput = forwardRef<InputHandle, InputProps>(function InputBase(
     (e: KeyboardEvent) => {
       if (e.key !== 'Enter') return;
 
-      console.log('HELLO?');
       const form = wrapperRef.current?.closest('form');
       if (!isValid || form == null) return;
 
@@ -375,7 +374,7 @@ function EncryptionInput({
     security: ReturnType<typeof analyzeTemplate> | null;
     obscured: boolean;
     error: string | null;
-  }>({ fieldType: 'encrypted', value: null, security: null, obscured: true, error: null }, [
+  }>({ fieldType: 'text', value: null, security: null, obscured: true, error: null }, [
     ogForceUpdateKey,
   ]);
 

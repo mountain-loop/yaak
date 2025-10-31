@@ -90,7 +90,7 @@ export function ResizeHandle({
         className,
         'group z-10 flex select-none transition-colors hover:bg-surface-active rounded-full',
         // 'bg-info', // For debugging
-        vertical ? 'w-full h-2 cursor-row-resize' : 'h-full w-2 cursor-col-resize',
+        vertical ? 'w-full h-1.5 cursor-row-resize' : 'h-full w-1.5 cursor-col-resize',
         justify === 'center' && 'justify-center',
         justify === 'end' && 'justify-end',
         justify === 'start' && 'justify-start',

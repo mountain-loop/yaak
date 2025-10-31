@@ -98,10 +98,10 @@ export function EnvironmentEditor({
   };
 
   return (
-    <div className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] gap-2')}>
+    <div className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] gap-2 pr-3 pb-3')}>
       <div className="flex flex-col gap-4">
         <Heading className="w-full flex items-center gap-0.5">
-          <EnvironmentColorIndicator clickToEdit environment={environment ?? null} />
+          <EnvironmentColorIndicator className="mr-2" clickToEdit environment={environment ?? null} />
           {!hideName && <div className="mr-2">{environment?.name}</div>}
           {isEncryptionEnabled ? (
             !allVariableAreEncrypted ? (
