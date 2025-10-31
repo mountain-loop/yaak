@@ -2,6 +2,8 @@ import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { ErrorBoundary } from '../../ErrorBoundary';
+import type { ButtonProps } from '../Button';
+import { Button } from '../Button';
 import { Icon } from '../Icon';
 import type { RadioDropdownProps } from '../RadioDropdown';
 import { RadioDropdown } from '../RadioDropdown';
@@ -103,18 +105,28 @@ export function Tabs({
             }
 
             const isActive = t.value === value;
-            const btnClassName = classNames(
-              'h-sm flex items-center rounded whitespace-nowrap',
-              '!px-2 ml-[1px] hocus:text-text',
-              addBorders && 'border hocus:bg-surface-highlight',
-              isActive ? 'text-text' : 'text-text-subtle',
-              isActive && addBorders
-                ? 'border-surface-active bg-surface-active'
-                : layout === 'vertical'
-                  ? 'border-border-subtle'
-                  : 'border-transparent',
-              layout === 'horizontal' && 'flex justify-between min-w-[10rem]',
-            );
+
+            const btnProps: Partial<ButtonProps> = {
+              size: 'sm',
+              color: 'custom',
+              justify: layout === 'horizontal' ? 'start' : 'center',
+              onClick: isActive ? undefined : () => onChangeValue(t.value),
+              className: classNames(
+                'flex items-center rounded whitespace-nowrap',
+                '!px-2 ml-[1px]',
+                'outline-none',
+                'ring-none',
+                'focus-visible-or-class:outline-2',
+                addBorders && 'border focus-visible:bg-surface-highlight',
+                isActive ? 'text-text' : 'text-text-subtle',
+                isActive && addBorders
+                  ? 'border-surface-active bg-surface-active'
+                  : layout === 'vertical'
+                    ? 'border-border-subtle'
+                    : 'border-transparent',
+                layout === 'horizontal' && 'min-w-[10rem]',
+              ),
+            };
 
             if ('options' in t) {
               const option = t.options.items.find(
@@ -129,35 +141,33 @@ export function Tabs({
                   value={t.options.value}
                   onChange={t.options.onChange}
                 >
-                  <button
-                    onClick={isActive ? undefined : () => onChangeValue(t.value)}
-                    className={classNames(btnClassName)}
+                  <Button
+                    rightSlot={
+                      <>
+                        {t.rightSlot}
+                        <Icon
+                          size="sm"
+                          icon="chevron_down"
+                          className={classNames(
+                            'ml-1',
+                            isActive ? 'text-text-subtle' : 'text-text-subtlest',
+                          )}
+                        />
+                      </>
+                    }
+                    {...btnProps}
                   >
                     {option && 'shortLabel' in option && option.shortLabel
                       ? option.shortLabel
                       : (option?.label ?? 'Unknown')}
-                    {t.rightSlot}
-                    <Icon
-                      size="sm"
-                      icon="chevron_down"
-                      className={classNames(
-                        'ml-1',
-                        isActive ? 'text-text-subtle' : 'text-text-subtlest',
-                      )}
-                    />
-                  </button>
+                  </Button>
                 </RadioDropdown>
               );
             } else {
               return (
-                <button
-                  key={t.value}
-                  onClick={isActive ? undefined : () => onChangeValue(t.value)}
-                  className={btnClassName}
-                >
+                <Button key={t.value} rightSlot={t.rightSlot} {...btnProps}>
                   {t.label}
-                  {t.rightSlot}
-                </button>
+                </Button>
               );
             }
           })}

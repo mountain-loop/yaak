@@ -75,13 +75,22 @@ export type InputProps = Pick<
   rightSlot?: ReactNode;
   size?: '2xs' | 'xs' | 'sm' | 'md' | 'auto';
   stateKey: EditorProps['stateKey'];
+  extraExtensions?: EditorProps['extraExtensions'];
   tint?: Color;
   type?: 'text' | 'password';
   validate?: boolean | ((v: string) => boolean);
   wrapLines?: boolean;
 };
 
-export const Input = forwardRef<EditorView, InputProps>(function Input({ type, ...props }, ref) {
+export interface InputHandle {
+  focus: () => void;
+  isFocused: () => boolean;
+  value: () => string;
+  selectAll: () => void;
+  dispatch: EditorView['dispatch'];
+}
+
+export const Input = forwardRef<InputHandle, InputProps>(function Input({ type, ...props }, ref) {
   // If it's a password and template functions are supported (ie. secure(...)) then
   // use the encrypted input component.
   if (type === 'password' && props.autocompleteFunctions) {
@@ -91,7 +100,7 @@ export const Input = forwardRef<EditorView, InputProps>(function Input({ type, .
   }
 });
 
-const BaseInput = forwardRef<EditorView, InputProps>(function InputBase(
+const BaseInput = forwardRef<InputHandle, InputProps>(function InputBase(
   {
     className,
     containerClassName,
@@ -132,7 +141,29 @@ const BaseInput = forwardRef<EditorView, InputProps>(function InputBase(
   const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [forceUpdateKey]);
   const editorRef = useRef<EditorView | null>(null);
 
-  useImperativeHandle<EditorView | null, EditorView | null>(ref, () => editorRef.current);
+  const inputHandle = useMemo<InputHandle>(
+    () => ({
+      focus: () => {
+        editorRef.current?.focus();
+      },
+      isFocused: () => editorRef.current?.hasFocus ?? false,
+      value: () => editorRef.current?.state.doc.toString() ?? '',
+      dispatch: (...args) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        editorRef.current?.dispatch(...(args as any));
+      },
+      selectAll() {
+        const head = editorRef.current?.state.doc.length ?? 0;
+        editorRef.current?.dispatch({
+          selection: { anchor: 0, head },
+        });
+        editorRef.current?.focus();
+      },
+    }),
+    [],
+  );
+
+  useImperativeHandle(ref, (): InputHandle => inputHandle, [inputHandle]);
 
   const lastWindowFocus = useRef<number>(0);
   useEffect(() => {
@@ -198,6 +229,7 @@ const BaseInput = forwardRef<EditorView, InputProps>(function InputBase(
     (e: KeyboardEvent) => {
       if (e.key !== 'Enter') return;
 
+      console.log('HELLO?');
       const form = wrapperRef.current?.closest('form');
       if (!isValid || form == null) return;
 

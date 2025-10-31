@@ -37,7 +37,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full h-full',
       )}
     >
-      <HStack space={0.5} className="flex-1 pointer-events-none">
+      <HStack space={0.5} className={classNames("flex-1 pointer-events-none")}>
         <SidebarActions />
         <CookieDropdown />
         <HStack className="min-w-0">

@@ -17,12 +17,12 @@ import { useAtomValue } from 'jotai';
 import { md5 } from 'js-md5';
 import type { ReactNode, RefObject } from 'react';
 import {
+  useEffect,
   Children,
   cloneElement,
   forwardRef,
   isValidElement,
   useCallback,
-  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -75,14 +75,14 @@ export interface EditorProps {
   defaultValue?: string | null;
   disableTabIndent?: boolean;
   disabled?: boolean;
-  extraExtensions?: Extension[];
+  extraExtensions?: Extension[] | Extension;
   forcedEnvironmentId?: string;
   forceUpdateKey?: string | number;
   format?: (v: string) => Promise<string>;
   heightMode?: 'auto' | 'full';
   hideGutter?: boolean;
   id?: string;
-  language?: EditorLanguage | 'pairs' | 'url';
+  language?: EditorLanguage | 'pairs' | 'url' | null;
   graphQLSchema?: GraphQLSchema | null;
   onBlur?: () => void;
   onChange?: (value: string) => void;
@@ -439,7 +439,11 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
             onBlur: handleBlur,
             onKeyDown: handleKeyDown,
           }),
-          ...(extraExtensions ?? []),
+          ...(Array.isArray(extraExtensions)
+            ? extraExtensions
+            : extraExtensions
+              ? [extraExtensions]
+              : []),
         ];
 
         const cachedJsonState = getCachedEditorState(defaultValue ?? '', stateKey);
@@ -470,8 +474,16 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [forceUpdateKey],
+    [],
   );
+
+  // Update editor doc when force update key changes
+  useEffect(() => {
+    if (cm.current?.view != null) {
+      updateContents(cm.current.view, defaultValue || '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceUpdateKey]);
 
   // For read-only mode, update content when `defaultValue` changes
   useEffect(

@@ -38,6 +38,7 @@ export interface TreeItemHandle {
   rename: () => void;
   isRenaming: boolean;
   rect: () => DOMRect;
+  focus: () => void;
 }
 
 const HOVER_CLOSED_FOLDER_DELAY = 800;
@@ -62,9 +63,11 @@ function TreeItem_<T extends { id: string }>({
   const [editing, setEditing] = useState<boolean>(false);
   const [dropHover, setDropHover] = useState<null | 'drop' | 'animate'>(null);
   const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
-
-  useEffect(() => {
-    addRef?.(node.item, {
+  const handle = useMemo<TreeItemHandle>(
+    () => ({
+      focus: () => {
+        draggableRef.current?.focus();
+      },
       rename: () => {
         if (getEditOptions != null) {
           setEditing(true);
@@ -77,8 +80,13 @@ function TreeItem_<T extends { id: string }>({
         }
         return listItemRef.current.getBoundingClientRect();
       },
-    });
-  }, [addRef, editing, getEditOptions, node.item]);
+    }),
+    [editing, getEditOptions],
+  );
+
+  useEffect(() => {
+    addRef?.(node.item, handle);
+  }, [addRef, handle, node.item]);
 
   const ancestorIds = useMemo(() => {
     const ids: string[] = [];
@@ -110,27 +118,21 @@ function TreeItem_<T extends { id: string }>({
   } | null>(null);
 
   useEffect(
-    function scrollIntoViewWhenSelected() {
-      return jotaiStore.sub(isSelectedFamily({ treeId, itemId: node.item.id }), () => {
+    () =>
+      jotaiStore.sub(isSelectedFamily({ treeId, itemId: node.item.id }), () => {
         listItemRef.current?.scrollIntoView({ block: 'nearest' });
-      });
-    },
+      }),
     [node.item.id, treeId],
   );
 
   const handleClick = useCallback(
-    function handleClick(e: MouseEvent<HTMLButtonElement>) {
-      onClick?.(node.item, e);
-    },
+    (e: MouseEvent<HTMLButtonElement>) => onClick?.(node.item, e),
     [node, onClick],
   );
 
-  const toggleCollapsed = useCallback(
-    function toggleCollapsed() {
-      jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
-    },
-    [node.item.id, treeId],
-  );
+  const toggleCollapsed = useCallback(() => {
+    jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
+  }, [node.item.id, treeId]);
 
   const handleSubmitNameEdit = useCallback(
     async function submitNameEdit(el: HTMLInputElement) {

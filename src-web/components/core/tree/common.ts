@@ -1,5 +1,5 @@
 import { jotaiStore } from '../../../lib/jotai';
-import { selectedIdsFamily } from './atoms';
+import { collapsedFamily, selectedIdsFamily } from './atoms';
 
 export interface TreeNode<T extends { id: string }> {
   children?: TreeNode<T>[];
@@ -51,4 +51,27 @@ export function hasAncestor<T extends { id: string }>(node: TreeNode<T>, ancesto
 
   // Check parents recursively
   return hasAncestor(node.parent, ancestorId);
+}
+
+export function isVisibleNode<T extends { id: string }>(treeId: string, node: TreeNode<T>) {
+  const collapsed = jotaiStore.get(collapsedFamily(treeId));
+  let p = node.parent;
+  while (p) {
+    if (collapsed[p.item.id]) return false; // any collapsed ancestor hides this node
+    p = p.parent;
+  }
+  return true;
+}
+
+export function closestVisibleNode<T extends { id: string }>(
+  treeId: string,
+  node: TreeNode<T>,
+): TreeNode<T> | null {
+  let n: TreeNode<T> | null = node;
+  while (n) {
+    if (isVisibleNode(treeId, n) && !n.hidden) return n;
+    if (n.parent == null) return null;
+    n = n.parent;
+  }
+  return null;
 }

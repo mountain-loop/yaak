@@ -57,14 +57,18 @@ export function HeaderSize({
       style={finalStyle}
       className={classNames(
         className,
-        'px-1', // Give it some space on either end
         'pt-[1px]', // Make up for bottom border
         'select-none relative',
         'w-full border-b border-border-subtle min-w-0',
       )}
     >
       {/* NOTE: This needs display:grid or else the element shrinks (even though scrollable) */}
-      <div className="pointer-events-none h-full w-full overflow-x-auto hide-scrollbars grid">
+      <div
+        className={classNames(
+          'pointer-events-none h-full w-full overflow-x-auto hide-scrollbars grid',
+          'px-1', // Give it some space on either end for focus outlines
+        )}
+      >
         {children}
       </div>
       <WindowControls onlyX={onlyXWindowControl} />
