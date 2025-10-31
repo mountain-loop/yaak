@@ -8,7 +8,7 @@ type TemplateFunctionPlugin = NonNullable<PluginDefinition['templateFunctions']>
 
 const hashFunctions: TemplateFunctionPlugin[] = algorithms.map(algorithm => ({
   name: `hash.${algorithm}`,
-  description: 'Hash a value to its hexidecimal representation',
+  description: 'Hash a value to its hexadecimal representation',
   args: [
     {
       type: 'text',
