@@ -190,9 +190,7 @@ function importEnvironment(
     createdAt: e.created ? new Date(e.created).toISOString().replace('Z', '') : undefined,
     updatedAt: e.modified ? new Date(e.modified).toISOString().replace('Z', '') : undefined,
     workspaceId: convertId(workspaceId),
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error
-    sortPriority: e.metaSortKey, // Will be added to Yaak later
+    sortPriority: e.metaSortKey,
     parentModel: isParent ? 'workspace' : 'environment',
     parentId: null,
     model: 'environment',

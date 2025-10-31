@@ -54,7 +54,6 @@ export function Overlay({
           focusTrapOptions={{
             allowOutsideClick: true, // So we can still click toasts and things
             delayInitialFocus: true,
-            fallbackFocus: () => containerRef.current!, // always have a target
             initialFocus: () =>
               // Doing this explicitly seems to work better than the default behavior for some reason
               containerRef.current?.querySelector<HTMLElement>(
@@ -67,12 +66,11 @@ export function Overlay({
                   '[tabindex]:not([tabindex="-1"])',
                   '[contenteditable]:not([contenteditable="false"])',
                 ].join(', '),
-              ) ?? undefined,
+              ) ?? false,
           }}
         >
           <m.div
             ref={containerRef}
-            tabIndex={-1}
             className={classNames('fixed inset-0', zIndexes[zIndex])}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

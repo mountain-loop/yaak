@@ -27,13 +27,15 @@ export type HotkeyAction =
   | 'sidebar.selected.delete'
   | 'sidebar.selected.duplicate'
   | 'sidebar.selected.rename'
+  | 'sidebar.expand_all'
+  | 'sidebar.collapse_all'
   | 'sidebar.focus'
   | 'sidebar.context_menu'
   | 'url_bar.focus'
   | 'workspace_settings.show';
 
 const hotkeys: Record<HotkeyAction, string[]> = {
-  'app.zoom_in': ['CmdCtrl+Equal'],
+  'app.zoom_in': ['CmdCtrl+Plus'],
   'app.zoom_out': ['CmdCtrl+Minus'],
   'app.zoom_reset': ['CmdCtrl+0'],
   'command_palette.toggle': ['CmdCtrl+k'],
@@ -48,6 +50,8 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'switcher.toggle': ['CmdCtrl+p'],
   'settings.show': ['CmdCtrl+,'],
   'sidebar.filter': ['CmdCtrl+f'],
+  'sidebar.expand_all': ['CmdCtrl+Shift+Plus'],
+  'sidebar.collapse_all': ['CmdCtrl+Shift+Minus'],
   'sidebar.selected.delete': ['Delete', 'CmdCtrl+Backspace'],
   'sidebar.selected.duplicate': ['CmdCtrl+d'],
   'sidebar.selected.rename': ['Enter'],
@@ -73,6 +77,8 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'switcher.toggle': 'Toggle Request Switcher',
   'settings.show': 'Open Settings',
   'sidebar.filter': 'Filter Sidebar',
+  'sidebar.expand_all': 'Expand All Folders',
+  'sidebar.collapse_all': 'Collapse All Folders',
   'sidebar.selected.delete': 'Delete Selected Sidebar Item',
   'sidebar.selected.duplicate': 'Duplicate Selected Sidebar Item',
   'sidebar.selected.rename': 'Rename Selected Sidebar Item',
@@ -205,8 +211,18 @@ function handleKeyDown(e: KeyboardEvent) {
       }
 
       for (const hkKey of hkKeys) {
-        const keys = hkKey.split('+').map(resolveHotkeyKey);
-        if (compareKeys(keys, Array.from(currentKeysWithModifiers))) {
+        const keys = hkKey.split('+');
+        const adjustedKeys = keys
+          .map((k) => {
+            // Special case for Plus
+            if (keys.includes('Shift') && k === 'Plus') {
+              return 'Equal';
+            } else {
+              return k;
+            }
+          })
+          .map(resolveHotkeyKey);
+        if (compareKeys(adjustedKeys, Array.from(currentKeysWithModifiers))) {
           if (!options.allowDefault) {
             e.preventDefault();
             e.stopPropagation();
@@ -256,6 +272,8 @@ export function useFormattedHotkey(action: HotkeyAction | null): string[] | null
         labelParts.push('⌫');
       } else if (p === 'Minus') {
         labelParts.push('-');
+      } else if (p === 'Plus') {
+        labelParts.push('+');
       } else if (p === 'Equal') {
         labelParts.push('=');
       } else {

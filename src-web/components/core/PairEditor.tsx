@@ -1,4 +1,3 @@
-import type { EditorView } from '@codemirror/view';
 import type { DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   DndContext,
@@ -39,7 +38,7 @@ import type { GenericCompletionConfig } from './Editor/genericCompletion';
 import { Editor } from './Editor/LazyEditor';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
-import type { InputProps } from './Input';
+import type { InputHandle, InputProps } from './Input';
 import { Input } from './Input';
 import { ensurePairId } from './PairEditor.util';
 import { PlainInput } from './PlainInput';
@@ -421,8 +420,8 @@ export function PairEditorRow({
   valueType,
   valueValidate,
 }: PairEditorRowProps) {
-  const nameInputRef = useRef<EditorView>(null);
-  const valueInputRef = useRef<EditorView>(null);
+  const nameInputRef = useRef<InputHandle>(null);
+  const valueInputRef = useRef<InputHandle>(null);
 
   useEffect(() => {
     if (forceFocusNamePairId === pair.id) {

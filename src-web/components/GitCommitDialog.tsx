@@ -31,11 +31,11 @@ interface Props {
   workspace: Workspace;
 }
 
-interface TreeNode {
+interface CommitTreeNode {
   model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Environment | Workspace;
   status: GitStatusEntry;
-  children: TreeNode[];
-  ancestors: TreeNode[];
+  children: CommitTreeNode[];
+  ancestors: CommitTreeNode[];
 }
 
 export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
@@ -80,14 +80,14 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   const hasAddedAnything = allEntries.find((e) => e.staged) != null;
   const hasAnythingToAdd = allEntries.find((e) => e.status !== 'current') != null;
 
-  const tree: TreeNode | null = useMemo(() => {
-    const next = (model: TreeNode['model'], ancestors: TreeNode[]): TreeNode | null => {
+  const tree: CommitTreeNode | null = useMemo(() => {
+    const next = (model: CommitTreeNode['model'], ancestors: CommitTreeNode[]): CommitTreeNode | null => {
       const statusEntry = internalEntries?.find((s) => s.relaPath.includes(model.id));
       if (statusEntry == null) {
         return null;
       }
 
-      const node: TreeNode = {
+      const node: CommitTreeNode = {
         model,
         status: statusEntry,
         children: [],
@@ -128,7 +128,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     return <EmptyStateText>No changes since last commit</EmptyStateText>;
   }
 
-  const checkNode = (treeNode: TreeNode) => {
+  const checkNode = (treeNode: CommitTreeNode) => {
     const checked = nodeCheckedStatus(treeNode);
     const newChecked = checked === 'indeterminate' ? true : !checked;
     setCheckedAndChildren(treeNode, newChecked, unstage.mutate, add.mutate);
@@ -211,9 +211,9 @@ function TreeNodeChildren({
   depth,
   onCheck,
 }: {
-  node: TreeNode | null;
+  node: CommitTreeNode | null;
   depth: number;
-  onCheck: (node: TreeNode, checked: boolean) => void;
+  onCheck: (node: CommitTreeNode, checked: boolean) => void;
 }) {
   if (node === null) return null;
   if (!isNodeRelevant(node)) return null;
@@ -318,12 +318,12 @@ function ExternalTreeNode({
   );
 }
 
-function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
+function nodeCheckedStatus(root: CommitTreeNode): CheckboxProps['checked'] {
   let numVisited = 0;
   let numChecked = 0;
   let numCurrent = 0;
 
-  const visitChildren = (n: TreeNode) => {
+  const visitChildren = (n: CommitTreeNode) => {
     numVisited += 1;
     if (n.status.status === 'current') {
       numCurrent += 1;
@@ -347,7 +347,7 @@ function nodeCheckedStatus(root: TreeNode): CheckboxProps['checked'] {
 }
 
 function setCheckedAndChildren(
-  node: TreeNode,
+  node: CommitTreeNode,
   checked: boolean,
   unstage: (args: { relaPaths: string[] }) => void,
   add: (args: { relaPaths: string[] }) => void,
@@ -355,7 +355,7 @@ function setCheckedAndChildren(
   const toAdd: string[] = [];
   const toUnstage: string[] = [];
 
-  const next = (node: TreeNode) => {
+  const next = (node: CommitTreeNode) => {
     for (const child of node.children) {
       next(child);
     }
@@ -375,7 +375,7 @@ function setCheckedAndChildren(
   if (toUnstage.length > 0) unstage({ relaPaths: toUnstage });
 }
 
-function isNodeRelevant(node: TreeNode): boolean {
+function isNodeRelevant(node: CommitTreeNode): boolean {
   if (node.status.status !== 'current') {
     return true;
   }

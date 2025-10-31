@@ -306,7 +306,7 @@ const GitMenuButton = forwardRef<HTMLButtonElement, HTMLAttributes<HTMLButtonEle
         ref={ref}
         className={classNames(
           className,
-          'px-3 h-md border-t border-border flex items-center justify-between text-text-subtle',
+          'px-3 h-md border-t border-border flex items-center justify-between text-text-subtle outline-none focus-visible:bg-surface-highlight',
         )}
         {...props}
       />

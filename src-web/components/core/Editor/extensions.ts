@@ -10,7 +10,8 @@ import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
-import  { bracketMatching ,
+import {
+  bracketMatching,
   codeFolding,
   foldGutter,
   foldKeymap,
@@ -152,8 +153,11 @@ export function getLanguageExtension({
     ];
   }
 
-  const base_ = syntaxExtensions[language ?? 'text'] ?? text();
-  const base = typeof base_ === 'function' ? base_() : text();
+  const maybeBase = language ? syntaxExtensions[language] : null;
+  const base = typeof maybeBase === 'function' ? maybeBase() : null;
+  if (base == null) {
+    return [];
+  }
 
   if (!useTemplating) {
     return [base, extraExtensions];

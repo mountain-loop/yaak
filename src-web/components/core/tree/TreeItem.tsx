@@ -24,12 +24,12 @@ export interface TreeItemClickEvent {
 
 export type TreeItemProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'ItemInner' | 'ItemLeftSlot' | 'treeId' | 'getEditOptions' | 'getItemKey'
+  'ItemInner' | 'ItemLeftSlotInner' | 'ItemRightSlot' | 'treeId' | 'getEditOptions' | 'getItemKey'
 > & {
   node: TreeNode<T>;
   className?: string;
   onClick?: (item: T, e: TreeItemClickEvent) => void;
-  getContextMenu?: (item: T) => Promise<ContextMenuProps['items']>;
+  getContextMenu?: (item: T) => ContextMenuProps['items'] | Promise<ContextMenuProps['items']>;
   depth: number;
   addRef?: (item: T, n: TreeItemHandle | null) => void;
 };
@@ -38,6 +38,7 @@ export interface TreeItemHandle {
   rename: () => void;
   isRenaming: boolean;
   rect: () => DOMRect;
+  focus: () => void;
 }
 
 const HOVER_CLOSED_FOLDER_DELAY = 800;
@@ -46,7 +47,8 @@ function TreeItem_<T extends { id: string }>({
   treeId,
   node,
   ItemInner,
-  ItemLeftSlot,
+  ItemLeftSlotInner,
+  ItemRightSlot,
   getContextMenu,
   onClick,
   getEditOptions,
@@ -62,9 +64,11 @@ function TreeItem_<T extends { id: string }>({
   const [editing, setEditing] = useState<boolean>(false);
   const [dropHover, setDropHover] = useState<null | 'drop' | 'animate'>(null);
   const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
-
-  useEffect(() => {
-    addRef?.(node.item, {
+  const handle = useMemo<TreeItemHandle>(
+    () => ({
+      focus: () => {
+        draggableRef.current?.focus();
+      },
       rename: () => {
         if (getEditOptions != null) {
           setEditing(true);
@@ -77,8 +81,13 @@ function TreeItem_<T extends { id: string }>({
         }
         return listItemRef.current.getBoundingClientRect();
       },
-    });
-  }, [addRef, editing, getEditOptions, node.item]);
+    }),
+    [editing, getEditOptions],
+  );
+
+  useEffect(() => {
+    addRef?.(node.item, handle);
+  }, [addRef, handle, node.item]);
 
   const ancestorIds = useMemo(() => {
     const ids: string[] = [];
@@ -110,30 +119,24 @@ function TreeItem_<T extends { id: string }>({
   } | null>(null);
 
   useEffect(
-    function scrollIntoViewWhenSelected() {
-      return jotaiStore.sub(isSelectedFamily({ treeId, itemId: node.item.id }), () => {
+    () =>
+      jotaiStore.sub(isSelectedFamily({ treeId, itemId: node.item.id }), () => {
         listItemRef.current?.scrollIntoView({ block: 'nearest' });
-      });
-    },
+      }),
     [node.item.id, treeId],
   );
 
   const handleClick = useCallback(
-    function handleClick(e: MouseEvent<HTMLButtonElement>) {
-      onClick?.(node.item, e);
-    },
+    (e: MouseEvent<HTMLButtonElement>) => onClick?.(node.item, e),
     [node, onClick],
   );
 
-  const toggleCollapsed = useCallback(
-    function toggleCollapsed() {
-      jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
-    },
-    [node.item.id, treeId],
-  );
+  const toggleCollapsed = useCallback(() => {
+    jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
+  }, [node.item.id, treeId]);
 
   const handleSubmitNameEdit = useCallback(
-    async function submitNameEdit(el: HTMLInputElement) {
+    async (el: HTMLInputElement) => {
       getEditOptions?.(node.item).onChange(node.item, el.value);
       onClick?.(node.item, { shiftKey: false, ctrlKey: false, metaKey: false });
       // Slight delay for the model to propagate to the local store
@@ -241,7 +244,12 @@ function TreeItem_<T extends { id: string }>({
     setShowContextMenu(null);
   }, []);
 
-  const { attributes, listeners, setNodeRef: setDraggableRef } = useDraggable({ id: node.item.id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableRef,
+  } = useDraggable({ id: node.item.id, disabled: node.draggable === false });
+
   const { setNodeRef: setDroppableRef } = useDroppable({ id: node.item.id });
 
   const handlePointerDown = useCallback(
@@ -288,7 +296,7 @@ function TreeItem_<T extends { id: string }>({
       <div
         className={classNames(
           'text-text-subtle',
-          'grid grid-cols-[auto_minmax(0,1fr)] items-center rounded-md',
+          'grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2 items-center rounded-md',
         )}
       >
         {showContextMenu && (
@@ -299,7 +307,11 @@ function TreeItem_<T extends { id: string }>({
           />
         )}
         {node.children != null ? (
-          <button tabIndex={-1} className="h-full pl-[0.5rem]" onClick={toggleCollapsed}>
+          <button
+            tabIndex={-1}
+            className="h-full pl-[0.5rem] outline-none"
+            onClick={toggleCollapsed}
+          >
             <Icon
               icon={node.children.length === 0 ? 'dot' : 'chevron_right'}
               className={classNames(
@@ -320,12 +332,12 @@ function TreeItem_<T extends { id: string }>({
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           disabled={editing}
-          className="cursor-default tree-item-inner px-2 focus:outline-none flex items-center gap-2 h-full whitespace-nowrap"
+          className="cursor-default tree-item-inner pr-1 focus:outline-none flex items-center gap-2 h-full whitespace-nowrap"
           {...attributes}
           {...listeners}
           tabIndex={isLastSelected ? 0 : -1}
         >
-          {ItemLeftSlot != null && <ItemLeftSlot treeId={treeId} item={node.item} />}
+          {ItemLeftSlotInner != null && <ItemLeftSlotInner treeId={treeId} item={node.item} />}
           {getEditOptions != null && editing ? (
             (() => {
               const { defaultValue, placeholder } = getEditOptions(node.item);
@@ -345,6 +357,11 @@ function TreeItem_<T extends { id: string }>({
             <ItemInner treeId={treeId} item={node.item} />
           )}
         </button>
+        {ItemRightSlot != null ? (
+          <ItemRightSlot treeId={treeId} item={node.item} />
+        ) : (
+          <span aria-hidden />
+        )}
       </div>
     </li>
   );

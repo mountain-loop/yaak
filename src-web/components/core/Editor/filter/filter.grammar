@@ -1,0 +1,76 @@
+@top Query { Expr }
+
+@skip { space+ }
+@tokens {
+  space { std.whitespace+ }
+
+  LParen { "(" }
+  RParen { ")" }
+  Colon  { ":" }
+  Not  { "-" | "NOT" }
+
+  // Keywords (case-insensitive)
+  And    { "AND" }
+  Or     { "OR" }
+
+  // "quoted phrase" with simple escapes: \" and \\
+  Phrase { '"' (!["\\] | "\\" _)* '"' }
+
+  // field/word characters (keep generous for URLs/paths)
+  Word { $[A-Za-z0-9_]+ }
+
+  @precedence { Not, And, Or, Word }
+}
+
+@detectDelim
+
+// Precedence: NOT (highest) > AND > OR (lowest)
+// We also allow implicit AND in your parser/evaluator, but for highlighting,
+// this grammar parses explicit AND/OR/NOT + adjacency as a sequence (Seq).
+Expr {
+  OrExpr
+}
+
+OrExpr {
+  AndExpr (Or AndExpr)*
+}
+
+AndExpr {
+  Unary (And Unary | Unary)*  // allow implicit AND by adjacency: Unary Unary
+}
+
+Unary {
+  Not Unary
+| Primary
+}
+
+Primary {
+  Group
+| Field
+| Phrase
+| Term
+}
+
+Group {
+  LParen Expr RParen
+}
+
+Field {
+  FieldName Colon FieldValue
+}
+
+FieldName {
+  Word
+}
+
+FieldValue {
+  Phrase
+| Term
+| Group
+}
+
+Term {
+  Word
+}
+
+@external propSource highlight from "./highlight"
