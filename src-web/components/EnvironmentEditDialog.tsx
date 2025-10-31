@@ -372,7 +372,7 @@ function ItemInner({ item }: { item: TreeModel }) {
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] w-full items-center">
       {item.model === 'environment' && item.public ? (
-        <div className="ml-auto mr-2 flex items-center">{sharableTooltip}</div>
+        <div className="mr-2 flex items-center">{sharableTooltip}</div>
       ) : (
         <span aria-hidden />
       )}
