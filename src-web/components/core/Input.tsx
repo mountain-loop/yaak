@@ -375,7 +375,7 @@ function EncryptionInput({
     security: ReturnType<typeof analyzeTemplate> | null;
     obscured: boolean;
     error: string | null;
-  }>({ fieldType: 'encrypted', value: null, security: null, obscured: true, error: null }, [
+  }>({ fieldType: 'text', value: null, security: null, obscured: true, error: null }, [
     ogForceUpdateKey,
   ]);
 
@@ -462,6 +462,7 @@ function EncryptionInput({
         return;
       }
 
+      console.log(" FIELD TYPE CHANGE")
       withEncryptionEnabled(async () => {
         const newValue = await convertTemplateToInsecure(value);
         handleChange(newValue, newFieldType);

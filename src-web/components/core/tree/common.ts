@@ -7,6 +7,8 @@ export interface TreeNode<T extends { id: string }> {
   hidden?: boolean;
   parent: TreeNode<T> | null;
   depth: number;
+  draggable?: boolean;
+  localDrag?: boolean;
 }
 
 export interface SelectableTreeNode<T extends { id: string }> {

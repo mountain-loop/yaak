@@ -1,4 +1,4 @@
-import type { CSSProperties} from 'react';
+import type { CSSProperties } from 'react';
 import { Fragment } from 'react';
 import type { SelectableTreeNode } from './common';
 import type { TreeProps } from './Tree';
@@ -8,7 +8,7 @@ import { TreeItem } from './TreeItem';
 
 export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'ItemInner' | 'ItemLeftSlot' | 'treeId' | 'getItemKey' | 'getEditOptions'
+  'ItemInner' | 'ItemLeftSlotInner' | 'ItemRightSlot' | 'treeId' | 'getItemKey' | 'getEditOptions'
 > &
   Pick<TreeItemProps<T>, 'onClick' | 'getContextMenu'> & {
     nodes: SelectableTreeNode<T>[];
@@ -20,17 +20,13 @@ export type TreeItemListProps<T extends { id: string }> = Pick<
 
 export function TreeItemList<T extends { id: string }>({
   className,
-  getContextMenu,
-  getEditOptions,
   getItemKey,
   nodes,
-  onClick,
-  ItemInner,
-  ItemLeftSlot,
   style,
   treeId,
   forceDepth,
   addTreeItemRef,
+  ...props
 }: TreeItemListProps<T>) {
   return (
     <ul role="tree" style={style} className={className}>
@@ -38,16 +34,12 @@ export function TreeItemList<T extends { id: string }>({
       {nodes.map((child, i) => (
         <Fragment key={getItemKey(child.node.item)}>
           <TreeItem
-            addRef={addTreeItemRef}
             treeId={treeId}
+            addRef={addTreeItemRef}
             node={child.node}
-            ItemInner={ItemInner}
-            ItemLeftSlot={ItemLeftSlot}
-            onClick={onClick}
-            getEditOptions={getEditOptions}
-            getContextMenu={getContextMenu}
             getItemKey={getItemKey}
             depth={forceDepth == null ? child.depth : forceDepth}
+            {...props}
           />
           <TreeDropMarker node={child.node} treeId={treeId} index={i + 1} />
         </Fragment>

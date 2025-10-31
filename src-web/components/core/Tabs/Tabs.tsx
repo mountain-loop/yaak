@@ -57,7 +57,6 @@ export function Tabs({
       if (parent !== ref.current) {
         // Tab is part of a nested tab container, so ignore it
       } else if (v === value) {
-        tab.setAttribute('tabindex', '-1');
         tab.setAttribute('data-state', 'active');
         tab.setAttribute('aria-hidden', 'false');
         tab.style.display = 'block';

@@ -164,6 +164,7 @@ function Sidebar({ className }: { className?: string }) {
     n.selectItem(activeId);
   }, []);
 
+  // Ensure active id is always selected when it changes
   useEffect(() => {
     return jotaiStore.sub(activeIdAtom, () => {
       const activeId = jotaiStore.get(activeIdAtom);
@@ -252,7 +253,7 @@ function Sidebar({ className }: { className?: string }) {
         },
       },
       'sidebar.selected.duplicate': {
-        priority: 999,
+        priority: 10,
         enable,
         cb: async function (items: SidebarModel[]) {
           if (items.length === 1) {
@@ -429,7 +430,7 @@ function Sidebar({ className }: { className?: string }) {
   }
 
   useEffect(() => {
-    const view = filterRef.current; // your EditorView
+    const view = filterRef.current;
     if (!view) return;
     const ext = filter({ fields: allFields ?? [] });
     view.dispatch({ effects: filterLanguageCompartmentRef.current.reconfigure(ext) });
@@ -515,7 +516,7 @@ function Sidebar({ className }: { className?: string }) {
           hotkeys={hotkeys}
           getItemKey={getItemKey}
           ItemInner={SidebarInnerItem}
-          ItemLeftSlot={SidebarLeftSlot}
+          ItemLeftSlotInner={SidebarLeftSlot}
           getContextMenu={getContextMenu}
           onActivate={handleActivate}
           getEditOptions={getEditOptions}

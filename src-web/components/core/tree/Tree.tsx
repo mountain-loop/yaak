@@ -51,9 +51,10 @@ export interface TreeProps<T extends { id: string }> {
   root: TreeNode<T>;
   treeId: string;
   getItemKey: (item: T) => string;
-  getContextMenu?: (items: T[]) => Promise<ContextMenuProps['items']>;
+  getContextMenu?: (items: T[]) => ContextMenuProps['items'] | Promise<ContextMenuProps['items']>;
   ItemInner: ComponentType<{ treeId: string; item: T }>;
-  ItemLeftSlot?: ComponentType<{ treeId: string; item: T }>;
+  ItemLeftSlotInner?: ComponentType<{ treeId: string; item: T }>;
+  ItemRightSlot?: ComponentType<{ treeId: string; item: T }>;
   className?: string;
   onActivate?: (item: T) => void;
   onDragEnd?: (opt: { items: T[]; parent: T; children: T[]; insertAt: number }) => void;
@@ -86,7 +87,8 @@ function TreeInner<T extends { id: string }>(
     onActivate,
     onDragEnd,
     ItemInner,
-    ItemLeftSlot,
+    ItemLeftSlotInner,
+    ItemRightSlot,
     root,
     treeId,
   }: TreeProps<T>,
@@ -107,6 +109,20 @@ function TreeInner<T extends { id: string }>(
       treeItemRefs.current[item.id] = r;
     }
   }, []);
+
+  // Select the first item on first render
+  useEffect(() => {
+    const ids = jotaiStore.get(selectedIdsFamily(treeId));
+    const fallback = selectableItems[0];
+    if (ids.length === 0 && fallback != null) {
+      jotaiStore.set(selectedIdsFamily(treeId), [fallback.node.item.id]);
+      jotaiStore.set(focusIdsFamily(treeId), {
+        anchorId: fallback.node.item.id,
+        lastId: fallback.node.item.id,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treeId]);
 
   const handleCloseContextMenu = useCallback(() => {
     setShowContextMenu(null);
@@ -152,6 +168,7 @@ function TreeInner<T extends { id: string }>(
   // Ensure there's always a tabbable item after render
   useEffect(() => {
     requestAnimationFrame(ensureTabbableItem);
+    ensureTabbableItem();
   });
 
   const setSelected = useCallback(
@@ -199,12 +216,12 @@ function TreeInner<T extends { id: string }>(
       } else {
         // If right-clicked an item that was NOT in the multiple-selection, just use that one
         // Also update the selection with it
-        jotaiStore.set(selectedIdsFamily(treeId), [item.id]);
+        setSelected([item.id], false);
         jotaiStore.set(focusIdsFamily(treeId), (prev) => ({ ...prev, lastId: item.id }));
         return getContextMenu([item]);
       }
     };
-  }, [getContextMenu, selectableItems, treeId]);
+  }, [getContextMenu, selectableItems, setSelected, treeId]);
 
   const handleSelect = useCallback<NonNullable<TreeItemProps<T>['onClick']>>(
     (item, { shiftKey, metaKey, ctrlKey }) => {
@@ -411,6 +428,24 @@ function TreeInner<T extends { id: string }>(
         return;
       }
 
+      const overSelectableItem = selectableItems.find((i) => i.node.item.id === over.id) ?? null;
+      if (overSelectableItem == null) {
+        return;
+      }
+
+      const draggingItems = jotaiStore.get(draggingIdsFamily(treeId));
+      for (const id of draggingItems) {
+        const item = selectableItems.find((i) => i.node.item.id === id)?.node ?? null;
+        if (item == null) {
+          return;
+        }
+
+        const isSameParent = item.parent?.item.id === overSelectableItem.node.parent?.item.id;
+        if (item.localDrag && !isSameParent) {
+          return;
+        }
+      }
+
       // Root is anything past the end of the list, so set it to the end
       const hoveringRoot = over.id === root.item.id;
       if (hoveringRoot) {
@@ -423,12 +458,7 @@ function TreeInner<T extends { id: string }>(
         return;
       }
 
-      const selectableItem = selectableItems.find((i) => i.node.item.id === over.id) ?? null;
-      if (selectableItem == null) {
-        return;
-      }
-
-      const node = selectableItem.node;
+      const node = overSelectableItem.node;
       const side = computeSideForDragMove(node.item.id, e);
 
       const item = node.item;
@@ -436,7 +466,7 @@ function TreeInner<T extends { id: string }>(
       const dragIndex = selectableItems.findIndex((n) => n.node.item.id === item.id) ?? -1;
       const hovered = selectableItems[dragIndex]?.node ?? null;
       const hoveredIndex = dragIndex + (side === 'above' ? 0 : 1);
-      let hoveredChildIndex = selectableItem.index + (side === 'above' ? 0 : 1);
+      let hoveredChildIndex = overSelectableItem.index + (side === 'above' ? 0 : 1);
 
       // Move into the folder if it's open and we're moving below it
       if (hovered?.children != null && side === 'below') {
@@ -567,7 +597,8 @@ function TreeInner<T extends { id: string }>(
     onClick: handleClick,
     getEditOptions,
     ItemInner,
-    ItemLeftSlot,
+    ItemLeftSlotInner,
+    ItemRightSlot,
   };
 
   const handleContextMenu = useCallback(

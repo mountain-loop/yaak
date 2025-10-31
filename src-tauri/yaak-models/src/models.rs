@@ -554,6 +554,7 @@ pub struct Environment {
     pub parent_id: Option<String>,
     pub variables: Vec<EnvironmentVariable>,
     pub color: Option<String>,
+    pub sort_priority: f64,
 }
 
 impl UpsertModelInfo for Environment {
@@ -591,6 +592,7 @@ impl UpsertModelInfo for Environment {
             (Color, self.color.into()),
             (Name, self.name.trim().into()),
             (Public, self.public.into()),
+            (SortPriority, self.sort_priority.into()),
             (Variables, serde_json::to_string(&self.variables)?.into()),
         ])
     }
@@ -604,6 +606,7 @@ impl UpsertModelInfo for Environment {
             EnvironmentIden::Name,
             EnvironmentIden::Public,
             EnvironmentIden::Variables,
+            EnvironmentIden::SortPriority,
         ]
     }
 
@@ -626,6 +629,7 @@ impl UpsertModelInfo for Environment {
             name: row.get("name")?,
             public: row.get("public")?,
             variables: serde_json::from_str(variables.as_str()).unwrap_or_default(),
+            sort_priority: row.get("sort_priority")?,
 
             // Deprecated field, but we need to keep it around for a couple of versions
             // for compatibility because sync/export don't have a schema field
@@ -683,7 +687,7 @@ pub struct Folder {
     pub description: String,
     pub headers: Vec<HttpRequestHeader>,
     pub name: String,
-    pub sort_priority: f32,
+    pub sort_priority: f64,
 }
 
 impl UpsertModelInfo for Folder {
@@ -1053,7 +1057,7 @@ pub struct WebsocketRequest {
     pub headers: Vec<HttpRequestHeader>,
     pub message: String,
     pub name: String,
-    pub sort_priority: f32,
+    pub sort_priority: f64,
     pub url: String,
     pub url_parameters: Vec<HttpUrlParameter>,
 }
@@ -1488,7 +1492,7 @@ pub struct GrpcRequest {
     pub method: Option<String>,
     pub name: String,
     pub service: Option<String>,
-    pub sort_priority: f32,
+    pub sort_priority: f64,
     pub url: String,
 }
 

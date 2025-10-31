@@ -78,7 +78,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 
     // Solids
     variant === 'solid' && 'border-transparent',
-    variant === 'solid' && color === 'custom' && 'outline-border-focus',
+    variant === 'solid' && color === 'custom' && 'focus-visible:outline-2 outline-border-focus',
     variant === 'solid' &&
       color !== 'custom' &&
       'enabled:hocus:text-text enabled:hocus:bg-surface-highlight outline-border-subtle',
