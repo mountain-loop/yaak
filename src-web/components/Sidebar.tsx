@@ -435,10 +435,10 @@ function Sidebar({ className }: { className?: string }) {
             <Input
               hideLabel
               ref={filterRef}
-              size="xs"
+              size="sm"
               label="filter"
               language={null} // Explicitly disable
-              containerClassName="!rounded-full px-1"
+              containerClassName="px-1"
               placeholder="Search"
               onChange={handleFilterChange}
               defaultValue={filterText.text}
