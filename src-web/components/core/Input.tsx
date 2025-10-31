@@ -229,7 +229,6 @@ const BaseInput = forwardRef<InputHandle, InputProps>(function InputBase(
     (e: KeyboardEvent) => {
       if (e.key !== 'Enter') return;
 
-      console.log('HELLO?');
       const form = wrapperRef.current?.closest('form');
       if (!isValid || form == null) return;
 
@@ -462,7 +461,6 @@ function EncryptionInput({
         return;
       }
 
-      console.log(" FIELD TYPE CHANGE")
       withEncryptionEnabled(async () => {
         const newValue = await convertTemplateToInsecure(value);
         handleChange(newValue, newFieldType);

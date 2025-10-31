@@ -684,7 +684,7 @@ const SidebarLeftSlot = memo(function SidebarLeftSlot({
     return (
       <HttpMethodTag
         short
-        className={classNames('text-xs', !isSelected && OPACITY_SUBTLE)}
+        className={classNames('text-xs pl-1.5', !isSelected && OPACITY_SUBTLE)}
         request={item}
       />
     );
