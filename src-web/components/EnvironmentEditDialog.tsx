@@ -1,13 +1,10 @@
-import type { Environment, Workspace } from '@yaakapp-internal/models';
+import type { Environment, EnvironmentVariable, Workspace } from '@yaakapp-internal/models';
 import { duplicateModel, patchModel } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
-import {
-  environmentsBreakdownAtom,
-  useEnvironmentsBreakdown,
-} from '../hooks/useEnvironmentsBreakdown';
+import { environmentsBreakdownAtom, useEnvironmentsBreakdown, } from '../hooks/useEnvironmentsBreakdown';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { jotaiStore } from '../lib/jotai';
 import { isBaseEnvironment } from '../lib/model_util';
@@ -28,15 +25,16 @@ import { EnvironmentEditor } from './EnvironmentEditor';
 import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 
 interface Props {
-  initialEnvironment: Environment | null;
+  initialEnvironmentId: string | null;
+  addOrFocusVariable?: EnvironmentVariable;
 }
 
 type TreeModel = Environment | Workspace;
 
-export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
+export function EnvironmentEditDialog({ initialEnvironmentId, addOrFocusVariable }: Props) {
   const { allEnvironments, baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(
-    initialEnvironment?.id ?? null,
+    initialEnvironmentId ?? null,
   );
 
   const selectedEnvironment =
@@ -76,16 +74,21 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
               </Banner>
             </div>
           ) : (
-            <EnvironmentEditor className="pl-4 pt-3" environment={selectedEnvironment} />
+            <EnvironmentEditor
+              className="pl-4 pt-3"
+              environment={selectedEnvironment}
+              addOrFocusVariable={addOrFocusVariable}
+            />
           )}
         </div>
       )}
     />
   );
-};
+}
 
 const sharableTooltip = (
   <IconTooltip
+    tabIndex={-1}
     icon="eye"
     iconSize="sm"
     content="This environment will be included in Directory Sync and data exports"

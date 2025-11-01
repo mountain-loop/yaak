@@ -35,7 +35,7 @@ export function TreeItemList<T extends { id: string }>({
         <Fragment key={getItemKey(child.node.item)}>
           <TreeItem
             treeId={treeId}
-            addRef={addTreeItemRef}
+            setRef={addTreeItemRef}
             node={child.node}
             getItemKey={getItemKey}
             depth={forceDepth == null ? child.depth : forceDepth}

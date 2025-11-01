@@ -1,4 +1,4 @@
-import type { Environment } from '@yaakapp-internal/models';
+import type { Environment, EnvironmentVariable } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
@@ -17,21 +17,20 @@ import { BadgeButton } from './core/BadgeButton';
 import { DismissibleBanner } from './core/DismissibleBanner';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import { Heading } from './core/Heading';
-import type { PairWithId } from './core/PairEditor';
+import type { Pair, PairEditorHandle, PairWithId } from './core/PairEditor';
 import { ensurePairId } from './core/PairEditor.util';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 
-export function EnvironmentEditor({
-  environment,
-  hideName,
-  className,
-}: {
+interface Props {
   environment: Environment;
   hideName?: boolean;
   className?: string;
-}) {
+  addOrFocusVariable?: EnvironmentVariable;
+}
+
+export function EnvironmentEditor({ environment, hideName, className, addOrFocusVariable }: Props) {
   const workspaceId = environment.workspaceId;
   const isEncryptionEnabled = useIsEncryptionEnabled();
   const valueVisibility = useKeyValue<boolean>({
@@ -97,11 +96,54 @@ export function EnvironmentEditor({
     });
   };
 
+  const { pairs, autoFocusValue } = useMemo<{
+    pairs: Pair[];
+    autoFocusValue?: string;
+  }>(() => {
+    if (addOrFocusVariable != null) {
+      const existing = environment.variables.find(
+        (v) => v.id === addOrFocusVariable.id || v.name === addOrFocusVariable.name,
+      );
+      if (existing) {
+        return {
+          pairs: environment.variables,
+          autoFocusValue: existing.id,
+        };
+      } else {
+        const newPair = ensurePairId(addOrFocusVariable);
+        return {
+          pairs: [...environment.variables, newPair],
+          autoFocusValue: newPair.id,
+        };
+      }
+    } else {
+      return { pairs: environment.variables };
+    }
+  }, [addOrFocusVariable, environment.variables]);
+
+  const initPairEditor = useCallback(
+    (n: PairEditorHandle | null) => {
+      if (n && autoFocusValue) {
+        n.focusValue(autoFocusValue);
+      }
+    },
+    [autoFocusValue],
+  );
+
   return (
-    <div className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] gap-2 pr-3 pb-3')}>
+    <div
+      className={classNames(
+        className,
+        'h-full grid grid-rows-[auto_minmax(0,1fr)] gap-2 pr-3 pb-3',
+      )}
+    >
       <div className="flex flex-col gap-4">
         <Heading className="w-full flex items-center gap-0.5">
-          <EnvironmentColorIndicator className="mr-2" clickToEdit environment={environment ?? null} />
+          <EnvironmentColorIndicator
+            className="mr-2"
+            clickToEdit
+            environment={environment ?? null}
+          />
           {!hideName && <div className="mr-2">{environment?.name}</div>}
           {isEncryptionEnabled ? (
             !allVariableAreEncrypted ? (
@@ -146,6 +188,7 @@ export function EnvironmentEditor({
         )}
       </div>
       <PairOrBulkEditor
+        setRef={initPairEditor}
         className="h-full"
         allowMultilineValues
         preferenceName="environment"
@@ -156,7 +199,7 @@ export function EnvironmentEditor({
         valueAutocompleteVariables="environment"
         valueAutocompleteFunctions
         forceUpdateKey={`${environment.id}::${forceUpdateKey}`}
-        pairs={environment.variables}
+        pairs={pairs}
         onChange={handleChange}
         stateKey={`environment.${environment.id}`}
         forcedEnvironmentId={environment.id}

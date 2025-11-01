@@ -10,7 +10,7 @@ import {
   stateExtensions,
   updateSchema,
 } from 'codemirror-json-schema';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { showAlert } from '../lib/alert';
 import { showDialog } from '../lib/dialog';
@@ -40,6 +40,9 @@ export function GrpcEditor({
   ...extraEditorProps
 }: Props) {
   const editorViewRef = useRef<EditorView>(null);
+  const handleInitEditorViewRef = useCallback((h: EditorView | null) => {
+    editorViewRef.current = h;
+  }, []);
 
   // Find the schema for the selected service and method and update the editor
   useEffect(() => {
@@ -167,6 +170,7 @@ export function GrpcEditor({
   return (
     <div className="h-full w-full grid grid-cols-1 grid-rows-[minmax(0,100%)_auto_auto_minmax(0,auto)]">
       <Editor
+        setRef={handleInitEditorViewRef}
         language="json"
         autocompleteFunctions
         autocompleteVariables
@@ -174,7 +178,6 @@ export function GrpcEditor({
         defaultValue={request.message}
         heightMode="auto"
         placeholder="..."
-        ref={editorViewRef}
         extraExtensions={extraExtensions}
         actions={actions}
         stateKey={`grpc_message.${request.id}`}

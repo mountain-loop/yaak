@@ -403,6 +403,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     <div className="h-full w-[400px] grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden py-2">
       <div className="px-2 w-full">
         <PlainInput
+          autoFocus
           hideLabel
           leftSlot={
             <div className="h-md w-10 flex justify-center items-center">

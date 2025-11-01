@@ -1,13 +1,12 @@
-import type { EditorView } from '@codemirror/view';
-import { forwardRef, lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import type { EditorProps } from './Editor';
 
 const Editor_ = lazy(() => import('./Editor').then((m) => ({ default: m.Editor })));
 
-export const Editor = forwardRef<EditorView, EditorProps>(function LazyEditor(props, ref) {
+export function Editor(props: EditorProps) {
   return (
     <Suspense>
-      <Editor_ ref={ref} {...props} />
+      <Editor_ {...props} />
     </Suspense>
   );
-});
+}

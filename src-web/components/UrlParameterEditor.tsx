@@ -1,7 +1,7 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
-import { useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import type { PairEditorProps, PairEditorRef } from './core/PairEditor';
+import type { PairEditorHandle, PairEditorProps } from './core/PairEditor';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { VStack } from './core/Stacks';
 
@@ -13,15 +13,19 @@ type Props = {
 };
 
 export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey }: Props) {
-  const pairEditor = useRef<PairEditorRef>(null);
+  const pairEditorRef = useRef<PairEditorHandle>(null);
+  const handleInitPairEditorRef = useCallback((ref: PairEditorHandle) => {
+    return (pairEditorRef.current = ref);
+  }, []);
+
   const [{ urlParametersKey }] = useRequestEditor();
 
   useRequestEditorEvent(
     'request_params.focus_value',
     (name) => {
-      const pairIndex = pairs.findIndex((p) => p.name === name);
-      if (pairIndex >= 0) {
-        pairEditor.current?.focusValue(pairIndex);
+      const pair = pairs.find((p) => p.name === name);
+      if (pair?.id != null) {
+        pairEditorRef.current?.focusValue(pair.id);
       } else {
         console.log(`Couldn't find pair to focus`, { name, pairs });
       }
@@ -32,7 +36,7 @@ export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey 
   return (
     <VStack className="h-full">
       <PairOrBulkEditor
-        ref={pairEditor}
+        setRef={handleInitPairEditorRef}
         allowMultilineValues
         forceUpdateKey={forceUpdateKey + urlParametersKey}
         nameAutocompleteFunctions

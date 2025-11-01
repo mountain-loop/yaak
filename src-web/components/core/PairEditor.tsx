@@ -10,16 +10,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import classNames from 'classnames';
-import {
-  forwardRef,
-  Fragment,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WrappedEnvironmentVariable } from '../../hooks/useEnvironmentVariables';
 import { useRandomKey } from '../../hooks/useRandomKey';
 import { useToggle } from '../../hooks/useToggle';
@@ -45,8 +36,9 @@ import { PlainInput } from './PlainInput';
 import type { RadioDropdownItem } from './RadioDropdown';
 import { RadioDropdown } from './RadioDropdown';
 
-export interface PairEditorRef {
-  focusValue(index: number): void;
+export interface PairEditorHandle {
+  focusName(id: string): void;
+  focusValue(id: string): void;
 }
 
 export type PairEditorProps = {
@@ -64,6 +56,7 @@ export type PairEditorProps = {
   onChange: (pairs: PairWithId[]) => void;
   pairs: Pair[];
   stateKey: InputProps['stateKey'];
+  setRef?: (n: PairEditorHandle) => void;
   valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
   valueAutocompleteFunctions?: boolean;
   valueAutocompleteVariables?: boolean | 'environment';
@@ -89,33 +82,29 @@ export type PairWithId = Pair & {
 /** Max number of pairs to show before prompting the user to reveal the rest */
 const MAX_INITIAL_PAIRS = 50;
 
-export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function PairEditor(
-  {
-    allowFileValues,
-    allowMultilineValues,
-    className,
-    forcedEnvironmentId,
-    forceUpdateKey,
-    nameAutocomplete,
-    nameAutocompleteFunctions,
-    nameAutocompleteVariables,
-    namePlaceholder,
-    nameValidate,
-    noScroll,
-    onChange,
-    pairs: originalPairs,
-    stateKey,
-    valueAutocomplete,
-    valueAutocompleteFunctions,
-    valueAutocompleteVariables,
-    valuePlaceholder,
-    valueType,
-    valueValidate,
-  }: PairEditorProps,
-  ref,
-) {
-  const [forceFocusNamePairId, setForceFocusNamePairId] = useState<string | null>(null);
-  const [forceFocusValuePairId, setForceFocusValuePairId] = useState<string | null>(null);
+export function PairEditor({
+  allowFileValues,
+  allowMultilineValues,
+  className,
+  forcedEnvironmentId,
+  forceUpdateKey,
+  nameAutocomplete,
+  nameAutocompleteFunctions,
+  nameAutocompleteVariables,
+  namePlaceholder,
+  nameValidate,
+  noScroll,
+  onChange,
+  pairs: originalPairs,
+  stateKey,
+  valueAutocomplete,
+  valueAutocompleteFunctions,
+  valueAutocompleteVariables,
+  valuePlaceholder,
+  valueType,
+  valueValidate,
+  setRef,
+}: PairEditorProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState<PairWithId | null>(null);
   const [pairs, setPairs] = useState<PairWithId[]>([]);
@@ -124,15 +113,30 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   //  we simply pass forceUpdateKey to the editor, the data set by useEffect will be stale.
   const [localForceUpdateKey, regenerateLocalForceUpdateKey] = useRandomKey();
 
-  useImperativeHandle(
-    ref,
+  const rowsRef = useRef<Record<string, RowHandle | null>>({});
+
+  const handle = useMemo<PairEditorHandle>(
     () => ({
-      focusValue(index: number) {
-        const id = pairs[index]?.id ?? 'n/a';
-        setForceFocusValuePairId(id);
+      focusName(id: string) {
+        rowsRef.current[id]?.focusName();
+      },
+      focusValue(id: string) {
+        rowsRef.current[id]?.focusValue();
       },
     }),
-    [pairs],
+    [],
+  );
+
+  const initPairEditorRow = useCallback(
+    (id: string, n: RowHandle | null) => {
+      rowsRef.current[id] = n;
+      const ready =
+        Object.values(rowsRef.current).filter((v) => v != null).length === pairs.length - 1; // Ignore the last placeholder pair
+      if (ready) {
+        setRef?.(handle);
+      }
+    },
+    [handle, pairs.length, setRef],
   );
 
   useEffect(() => {
@@ -179,21 +183,19 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
       if (focusPrevious) {
         const index = pairs.findIndex((p) => p.id === pair.id);
         const id = pairs[index - 1]?.id ?? null;
-        setForceFocusNamePairId(id);
+        rowsRef.current[id ?? 'n/a']?.focusName();
       }
       return setPairsAndSave((oldPairs) => oldPairs.filter((p) => p.id !== pair.id));
     },
-    [setPairsAndSave, setForceFocusNamePairId, pairs],
+    [setPairsAndSave, pairs],
   );
 
   const handleFocusName = useCallback((pair: Pair) => {
-    setForceFocusNamePairId(null); // Remove focus override when something focused
-    setForceFocusValuePairId(null); // Remove focus override when something focused
     setPairs((pairs) => {
       const isLast = pair.id === pairs[pairs.length - 1]?.id;
       if (isLast) {
         const prevPair = pairs[pairs.length - 1];
-        setTimeout(() => setForceFocusNamePairId(prevPair?.id ?? null));
+        rowsRef.current[prevPair?.id ?? 'n/a']?.focusName();
         return [...pairs, emptyPair()];
       } else {
         return pairs;
@@ -202,13 +204,11 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   }, []);
 
   const handleFocusValue = useCallback((pair: Pair) => {
-    setForceFocusNamePairId(null); // Remove focus override when something focused
-    setForceFocusValuePairId(null); // Remove focus override when something focused
     setPairs((pairs) => {
       const isLast = pair.id === pairs[pairs.length - 1]?.id;
       if (isLast) {
         const prevPair = pairs[pairs.length - 1];
-        setTimeout(() => setForceFocusValuePairId(prevPair?.id ?? null));
+        rowsRef.current[prevPair?.id ?? 'n/a']?.focusValue();
         return [...pairs, emptyPair()];
       } else {
         return pairs;
@@ -301,12 +301,11 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
             <Fragment key={p.id}>
               {hoveredIndex === i && <DropMarker />}
               <PairEditorRow
+                setRef={initPairEditorRow}
                 allowFileValues={allowFileValues}
                 allowMultilineValues={allowMultilineValues}
                 className="py-1"
                 forcedEnvironmentId={forcedEnvironmentId}
-                forceFocusNamePairId={forceFocusNamePairId}
-                forceFocusValuePairId={forceFocusValuePairId}
                 forceUpdateKey={localForceUpdateKey}
                 index={i}
                 isLast={isLast}
@@ -352,7 +351,7 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
       </DndContext>
     </div>
   );
-});
+}
 
 type PairEditorRowProps = {
   className?: string;
@@ -369,6 +368,7 @@ type PairEditorRowProps = {
   disableDrag?: boolean;
   index: number;
   isDraggingGlobal?: boolean;
+  setRef?: (id: string, n: RowHandle | null) => void;
 } & Pick<
   PairEditorProps,
   | 'allowFileValues'
@@ -389,14 +389,17 @@ type PairEditorRowProps = {
   | 'valueValidate'
 >;
 
+interface RowHandle {
+  focusName(): void;
+  focusValue(): void;
+}
+
 export function PairEditorRow({
   allowFileValues,
   allowMultilineValues,
   className,
   disableDrag,
   disabled,
-  forceFocusNamePairId,
-  forceFocusValuePairId,
   forceUpdateKey,
   forcedEnvironmentId,
   index,
@@ -419,21 +422,38 @@ export function PairEditorRow({
   valuePlaceholder,
   valueType,
   valueValidate,
+  setRef,
 }: PairEditorRowProps) {
   const nameInputRef = useRef<InputHandle>(null);
   const valueInputRef = useRef<InputHandle>(null);
-
-  useEffect(() => {
-    if (forceFocusNamePairId === pair.id) {
+  const handle = useRef<RowHandle>({
+    focusName() {
       nameInputRef.current?.focus();
-    }
-  }, [forceFocusNamePairId, pair.id]);
-
-  useEffect(() => {
-    if (forceFocusValuePairId === pair.id) {
+    },
+    focusValue() {
       valueInputRef.current?.focus();
-    }
-  }, [forceFocusValuePairId, pair.id]);
+    },
+  });
+
+  const initNameInputRef = useCallback(
+    (n: InputHandle | null) => {
+      nameInputRef.current = n;
+      if (nameInputRef.current && valueInputRef.current) {
+        setRef?.(pair.id, handle.current);
+      }
+    },
+    [pair.id, setRef],
+  );
+
+  const initValueInputRef = useCallback(
+    (n: InputHandle | null) => {
+      valueInputRef.current = n;
+      if (nameInputRef.current && valueInputRef.current) {
+        setRef?.(pair.id, handle.current);
+      }
+    },
+    [pair.id, setRef],
+  );
 
   const handleFocusName = useCallback(() => onFocusName?.(pair), [onFocusName, pair]);
   const handleFocusValue = useCallback(() => onFocusValue?.(pair), [onFocusValue, pair]);
@@ -574,7 +594,7 @@ export function PairEditorRow({
           />
         ) : (
           <Input
-            ref={nameInputRef}
+            setRef={initNameInputRef}
             hideLabel
             stateKey={`name.${pair.id}.${stateKey}`}
             disabled={disabled}
@@ -632,7 +652,7 @@ export function PairEditorRow({
             </Button>
           ) : (
             <Input
-              ref={valueInputRef}
+              setRef={initValueInputRef}
               hideLabel
               stateKey={`value.${pair.id}.${stateKey}`}
               wrapLines={false}

@@ -31,7 +31,7 @@ export type TreeItemProps<T extends { id: string }> = Pick<
   onClick?: (item: T, e: TreeItemClickEvent) => void;
   getContextMenu?: (item: T) => ContextMenuProps['items'] | Promise<ContextMenuProps['items']>;
   depth: number;
-  addRef?: (item: T, n: TreeItemHandle | null) => void;
+  setRef?: (item: T, n: TreeItemHandle | null) => void;
 };
 
 export interface TreeItemHandle {
@@ -54,7 +54,7 @@ function TreeItem_<T extends { id: string }>({
   getEditOptions,
   className,
   depth,
-  addRef,
+  setRef,
 }: TreeItemProps<T>) {
   const listItemRef = useRef<HTMLLIElement>(null);
   const draggableRef = useRef<HTMLButtonElement>(null);
@@ -86,8 +86,8 @@ function TreeItem_<T extends { id: string }>({
   );
 
   useEffect(() => {
-    addRef?.(node.item, handle);
-  }, [addRef, handle, node.item]);
+    setRef?.(node.item, handle);
+  }, [setRef, handle, node.item]);
 
   const ancestorIds = useMemo(() => {
     const ids: string[] = [];

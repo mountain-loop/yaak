@@ -53,20 +53,6 @@ export function Overlay({
         <FocusTrap
           focusTrapOptions={{
             allowOutsideClick: true, // So we can still click toasts and things
-            delayInitialFocus: true,
-            initialFocus: () =>
-              // Doing this explicitly seems to work better than the default behavior for some reason
-              containerRef.current?.querySelector<HTMLElement>(
-                [
-                  'a[href]',
-                  'input:not([disabled])',
-                  'select:not([disabled])',
-                  'textarea:not([disabled])',
-                  'button:not([disabled])',
-                  '[tabindex]:not([tabindex="-1"])',
-                  '[contenteditable]:not([contenteditable="false"])',
-                ].join(', '),
-              ) ?? false,
           }}
         >
           <m.div

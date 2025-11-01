@@ -77,6 +77,9 @@ function Sidebar({ className }: { className?: string }) {
   const wrapperRef = useRef<HTMLElement>(null);
   const treeRef = useRef<TreeHandle>(null);
   const filterRef = useRef<InputHandle>(null);
+  const setFilterRef = useCallback((h: InputHandle | null) => {
+    filterRef.current = h;
+  }, []);
   const allHidden = useMemo(() => {
     if (tree?.children?.length === 0) return false;
     else if (filterText) return tree?.children?.every((c) => c.hidden);
@@ -434,7 +437,7 @@ function Sidebar({ className }: { className?: string }) {
           <>
             <Input
               hideLabel
-              ref={filterRef}
+              setRef={setFilterRef}
               size="sm"
               label="filter"
               language={null} // Explicitly disable

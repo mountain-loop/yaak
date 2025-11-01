@@ -1,7 +1,7 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { FormEvent, ReactNode } from 'react';
-import { memo, useRef, useState } from 'react';
+import { useCallback, memo, useRef, useState } from 'react';
 import { useHotKey } from '../hooks/useHotKey';
 import type { IconProps } from './core/Icon';
 import { IconButton } from './core/IconButton';
@@ -46,6 +46,10 @@ export const UrlBar = memo(function UrlBar({
   const inputRef = useRef<InputHandle>(null);
   const [isFocused, setIsFocused] = useState<boolean>(false);
 
+  const handleInitInputRef = useCallback((h: InputHandle | null) => {
+    inputRef.current = h;
+  }, []);
+
   useHotKey('url_bar.focus', () => {
     inputRef.current?.selectAll();
   });
@@ -59,7 +63,7 @@ export const UrlBar = memo(function UrlBar({
   return (
     <form onSubmit={handleSubmit} className={classNames('x-theme-urlBar', className)}>
       <Input
-        ref={inputRef}
+        setRef={handleInitInputRef}
         autocompleteFunctions
         autocompleteVariables
         stateKey={stateKey}
