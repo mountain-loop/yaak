@@ -320,14 +320,14 @@ export function Editor({
   const onClickVariable = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async (v: WrappedEnvironmentVariable, _tagValue: string, _startPos: number) => {
-      editEnvironment(v.environment, { addOrFocusVariable: v.variable });
+      await editEnvironment(v.environment, { addOrFocusVariable: v.variable });
     },
     [],
   );
 
   const onClickMissingVariable = useCallback(async (name: string) => {
     const activeEnvironment = jotaiStore.get(activeEnvironmentAtom);
-    editEnvironment(activeEnvironment, { addOrFocusVariable: { name, value: '', enabled: true } });
+    await editEnvironment(activeEnvironment, { addOrFocusVariable: { name, value: '', enabled: true } });
   }, []);
 
   const [, { focusParamValue }] = useRequestEditor();

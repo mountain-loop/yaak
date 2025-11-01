@@ -1,10 +1,13 @@
-import type { Environment, EnvironmentVariable, Workspace } from '@yaakapp-internal/models';
+import type { Environment, Workspace } from '@yaakapp-internal/models';
 import { duplicateModel, patchModel } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
-import { environmentsBreakdownAtom, useEnvironmentsBreakdown, } from '../hooks/useEnvironmentsBreakdown';
+import {
+  environmentsBreakdownAtom,
+  useEnvironmentsBreakdown,
+} from '../hooks/useEnvironmentsBreakdown';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { jotaiStore } from '../lib/jotai';
 import { isBaseEnvironment } from '../lib/model_util';
@@ -16,6 +19,7 @@ import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
+import type { PairEditorHandle } from './core/PairEditor';
 import { SplitLayout } from './core/SplitLayout';
 import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
@@ -26,12 +30,12 @@ import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 
 interface Props {
   initialEnvironmentId: string | null;
-  addOrFocusVariable?: EnvironmentVariable;
+  setRef?: (ref: PairEditorHandle | null) => void;
 }
 
 type TreeModel = Environment | Workspace;
 
-export function EnvironmentEditDialog({ initialEnvironmentId, addOrFocusVariable }: Props) {
+export function EnvironmentEditDialog({ initialEnvironmentId, setRef }: Props) {
   const { allEnvironments, baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(
     initialEnvironmentId ?? null,
@@ -75,9 +79,9 @@ export function EnvironmentEditDialog({ initialEnvironmentId, addOrFocusVariable
             </div>
           ) : (
             <EnvironmentEditor
+              setRef={setRef}
               className="pl-4 pt-3"
               environment={selectedEnvironment}
-              addOrFocusVariable={addOrFocusVariable}
             />
           )}
         </div>

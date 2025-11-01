@@ -131,42 +131,44 @@ function BaseInput({
   const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
   const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [forceUpdateKey]);
   const editorRef = useRef<EditorView | null>(null);
+  const skipNextFocus = useRef<boolean>(false);
 
-  const initEditorRef = useCallback(
-    (cm: EditorView | null) => {
-      editorRef.current = cm;
-      if (cm == null) {
-        setRef?.(null);
-        return;
-      }
-      const handle: InputHandle = {
-        focus: () => {
-          cm.focus();
-          cm.dispatch({ selection: { anchor: cm.state.doc.length, head: cm.state.doc.length } });
-        },
-        isFocused: () => cm.hasFocus ?? false,
-        value: () => cm.state.doc.toString() ?? '',
-        dispatch: (...args) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          cm.dispatch(...(args as any));
-        },
-        selectAll() {
-          cm.focus();
-
-          cm.dispatch({
-            selection: { anchor: 0, head: cm.state.doc.length },
-          });
-        },
-      };
-
-      setRef?.(handle);
-    },
-    [setRef],
+  const handle = useMemo<InputHandle>(
+    () => ({
+      focus: () => {
+        if (editorRef.current == null) return;
+        const anchor = editorRef.current.state.doc.length;
+        skipNextFocus.current = true;
+        editorRef.current.focus();
+        editorRef.current.dispatch({ selection: { anchor, head: anchor }, scrollIntoView: true });
+      },
+      isFocused: () => editorRef.current?.hasFocus ?? false,
+      value: () => editorRef.current?.state.doc.toString() ?? '',
+      dispatch: (...args) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        editorRef.current?.dispatch(...(args as any));
+      },
+      selectAll() {
+        if (editorRef.current == null) return;
+        editorRef.current.focus();
+        editorRef.current.dispatch({
+          selection: { anchor: 0, head: editorRef.current.state.doc.length },
+        });
+      },
+    }),
+    [],
   );
 
-  const lastWindowFocus = useRef<number>(0);
+  const setEditorRef = useCallback(
+    (h: EditorView | null) => {
+      editorRef.current = h;
+      setRef?.(handle);
+    },
+    [handle, setRef],
+  );
+
   useEffect(() => {
-    const fn = () => (lastWindowFocus.current = Date.now());
+    const fn = () => (skipNextFocus.current = true);
     window.addEventListener('focus', fn);
     return () => {
       window.removeEventListener('focus', fn);
@@ -176,11 +178,7 @@ function BaseInput({
   const handleFocus = useCallback(() => {
     if (readOnly) return;
 
-    // Select all text of input when it's focused to match standard browser behavior.
-    // This should not, however, select when the input is focused due to a window focus event, so
-    // we handle that case as well.
-    const windowJustFocused = Date.now() - lastWindowFocus.current < 200;
-    if (!windowJustFocused) {
+    if (!skipNextFocus.current) {
       editorRef.current?.dispatch({
         selection: { anchor: 0, head: editorRef.current.state.doc.length },
       });
@@ -188,6 +186,7 @@ function BaseInput({
 
     setFocused(true);
     onFocus?.();
+    skipNextFocus.current = false;
   }, [onFocus, readOnly]);
 
   const handleBlur = useCallback(async () => {
@@ -299,7 +298,7 @@ function BaseInput({
           )}
         >
           <Editor
-            setRef={initEditorRef}
+            setRef={setEditorRef}
             id={id.current}
             hideGutter
             singleLine={!multiLine}
@@ -402,6 +401,7 @@ function EncryptionInput({
           setState({ fieldType: 'encrypted', security, value, obscured: true, error: null });
           // We're calling this here because we want the input to be fully initialized so the caller
           // can do stuff like change the selection.
+          console.log('INIT FIRST');
           setRef?.(inputRef.current);
         },
         onError: (value) => {
@@ -415,10 +415,12 @@ function EncryptionInput({
         },
       });
     } else if (isEncryptionEnabled && !defaultValue) {
+      console.log('INIT SECOND');
       // Default to encrypted field for new encrypted inputs
       setState({ fieldType: 'encrypted', security, value: '', obscured: true, error: null });
-      setRef?.(inputRef.current);
+      requestAnimationFrame(() => setRef?.(inputRef.current));
     } else if (isEncryptionEnabled) {
+      console.log('INIT THIRD');
       // Don't obscure plain text when encryption is enabled
       setState({
         fieldType: 'text',
@@ -427,7 +429,9 @@ function EncryptionInput({
         obscured: false,
         error: null,
       });
+      requestAnimationFrame(() => setRef?.(inputRef.current));
     } else {
+      console.log('INIT FOURTH');
       // Don't obscure plain text when encryption is disabled
       setState({
         fieldType: 'text',
@@ -436,7 +440,7 @@ function EncryptionInput({
         obscured: true,
         error: null,
       });
-      setRef?.(inputRef.current);
+      requestAnimationFrame(() => setRef?.(inputRef.current));
     }
   }, [defaultValue, isEncryptionEnabled, setRef, setState, state.value]);
 
@@ -467,7 +471,7 @@ function EncryptionInput({
     [handleChange, state],
   );
 
-  const handleSetInputRef = useCallback((h: InputHandle | null) => {
+  const setInputRef = useCallback((h: InputHandle | null) => {
     inputRef.current = h;
   }, []);
 
@@ -580,7 +584,7 @@ function EncryptionInput({
 
   return (
     <BaseInput
-      setRef={handleSetInputRef}
+      setRef={setInputRef}
       disableObscureToggle
       autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
