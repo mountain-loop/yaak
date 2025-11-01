@@ -234,6 +234,7 @@ async fn cmd_grpc_go<R: Runtime>(
         &GrpcConnection {
             workspace_id: request.workspace_id.clone(),
             request_id: request.id.clone(),
+            environment_id: environment_id.map(|id| id.to_string()),
             status: -1,
             elapsed: 0,
             state: GrpcConnectionState::Initialized,
@@ -1080,6 +1081,7 @@ async fn cmd_send_http_request<R: Runtime>(
 ) -> YaakResult<HttpResponse> {
     let response = app_handle.db().upsert_http_response(
         &HttpResponse {
+            environment_id: environment_id.map(|id| id.to_string()),
             request_id: request.id.clone(),
             workspace_id: request.workspace_id.clone(),
             ..Default::default()

@@ -70,7 +70,11 @@ export type FilterRequest = { content: string, filter: string, };
 
 export type FilterResponse = { content: string, error?: string, };
 
-export type FindHttpResponsesRequest = { requestId: string, limit?: number, };
+export type FindHttpResponsesRequest = { requestId: string, limit?: number, 
+/**
+ * Filter responses, returning only the ones that have been send under the current active environment
+ */
+filterByEnvironment?: boolean, };
 
 export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
 

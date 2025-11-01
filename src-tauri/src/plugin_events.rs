@@ -53,9 +53,16 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             Ok(call_frontend(&window, event).await)
         }
         InternalEventPayload::FindHttpResponsesRequest(req) => {
+            let window = get_window_from_window_context(app_handle, &window_context)?;
+            let environment_id = if let Some(true) = req.filter_by_environment {
+                window.environment_id()
+            } else {
+                None
+            };
+            let limit = req.limit.map(|l| l as u64);
             let http_responses = app_handle
                 .db()
-                .list_http_responses_for_request(&req.request_id, req.limit.map(|l| l as u64))
+                .list_http_responses_for_request(&req.request_id, environment_id.as_deref(), limit)
                 .unwrap_or_default();
             Ok(Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
                 http_responses,
@@ -201,10 +208,12 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let http_response = if http_request.id.is_empty() {
                 HttpResponse::default()
             } else {
+                let environment_id = environment.clone().map(|e| e.id);
                 window.db().upsert_http_response(
                     &HttpResponse {
                         request_id: http_request.id.clone(),
                         workspace_id: http_request.workspace_id.clone(),
+                        environment_id,
                         ..Default::default()
                     },
                     &UpdateSource::Plugin,
