@@ -401,7 +401,6 @@ function EncryptionInput({
           setState({ fieldType: 'encrypted', security, value, obscured: true, error: null });
           // We're calling this here because we want the input to be fully initialized so the caller
           // can do stuff like change the selection.
-          console.log('INIT FIRST');
           setRef?.(inputRef.current);
         },
         onError: (value) => {
@@ -415,12 +414,10 @@ function EncryptionInput({
         },
       });
     } else if (isEncryptionEnabled && !defaultValue) {
-      console.log('INIT SECOND');
       // Default to encrypted field for new encrypted inputs
       setState({ fieldType: 'encrypted', security, value: '', obscured: true, error: null });
       requestAnimationFrame(() => setRef?.(inputRef.current));
     } else if (isEncryptionEnabled) {
-      console.log('INIT THIRD');
       // Don't obscure plain text when encryption is enabled
       setState({
         fieldType: 'text',
@@ -431,7 +428,6 @@ function EncryptionInput({
       });
       requestAnimationFrame(() => setRef?.(inputRef.current));
     } else {
-      console.log('INIT FOURTH');
       // Don't obscure plain text when encryption is disabled
       setState({
         fieldType: 'text',
