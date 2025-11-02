@@ -327,7 +327,9 @@ export function Editor({
 
   const onClickMissingVariable = useCallback(async (name: string) => {
     const activeEnvironment = jotaiStore.get(activeEnvironmentAtom);
-    await editEnvironment(activeEnvironment, { addOrFocusVariable: { name, value: '', enabled: true } });
+    await editEnvironment(activeEnvironment, {
+      addOrFocusVariable: { name, value: '', enabled: true },
+    });
   }, []);
 
   const [, { focusParamValue }] = useRequestEditor();
@@ -374,7 +376,7 @@ export function Editor({
 
   // Initialize the editor when ref mounts
   const initEditorRef = useCallback(
-    function initEditorRef(container: HTMLDivElement | null) {
+    function initializeCodemirror(container: HTMLDivElement | null) {
       if (container === null) {
         cm.current?.view.destroy();
         cm.current = null;
@@ -627,15 +629,13 @@ function getExtensions({
     // Things that must be last //
     // ------------------------ //
 
-    // Fire onChange event
     EditorView.updateListener.of((update) => {
+      if (update.startState === update.state) return;
+
       if (onChange && update.docChanged) {
         onChange.current?.(update.state.doc.toString());
       }
-    }),
 
-    // Cache editor state
-    EditorView.updateListener.of((update) => {
       saveCachedEditorState(stateKey, update.state);
     }),
   ];
