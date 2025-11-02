@@ -32,7 +32,6 @@ import { IconButton } from './IconButton';
 import type { InputHandle, InputProps } from './Input';
 import { Input } from './Input';
 import { ensurePairId } from './PairEditor.util';
-import { PlainInput } from './PlainInput';
 import type { RadioDropdownItem } from './RadioDropdown';
 import { RadioDropdown } from './RadioDropdown';
 
@@ -80,7 +79,7 @@ export type PairWithId = Pair & {
 };
 
 /** Max number of pairs to show before prompting the user to reveal the rest */
-const MAX_INITIAL_PAIRS = 50;
+const MAX_INITIAL_PAIRS = 30;
 
 export function PairEditor({
   allowFileValues,
@@ -190,31 +189,21 @@ export function PairEditor({
     [setPairsAndSave, pairs],
   );
 
-  const handleFocusName = useCallback((pair: Pair) => {
-    setPairs((pairs) => {
+  const handleFocusName = useCallback(
+    (pair: Pair) => {
       const isLast = pair.id === pairs[pairs.length - 1]?.id;
-      if (isLast) {
-        const prevPair = pairs[pairs.length - 1];
-        rowsRef.current[prevPair?.id ?? 'n/a']?.focusName();
-        return [...pairs, emptyPair()];
-      } else {
-        return pairs;
-      }
-    });
-  }, []);
+      if (isLast) setPairs([...pairs, emptyPair()]);
+    },
+    [pairs],
+  );
 
-  const handleFocusValue = useCallback((pair: Pair) => {
-    setPairs((pairs) => {
+  const handleFocusValue = useCallback(
+    (pair: Pair) => {
       const isLast = pair.id === pairs[pairs.length - 1]?.id;
-      if (isLast) {
-        const prevPair = pairs[pairs.length - 1];
-        rowsRef.current[prevPair?.id ?? 'n/a']?.focusValue();
-        return [...pairs, emptyPair()];
-      } else {
-        return pairs;
-      }
-    });
-  }, []);
+      if (isLast) setPairs([...pairs, emptyPair()]);
+    },
+    [pairs],
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -282,73 +271,86 @@ export function PairEditor({
         '-mr-2 pr-2',
         // Pad to make room for the drag divider
         'pt-0.5',
+        'grid grid-rows-[auto_1fr]',
       )}
     >
-      <DndContext
-        autoScroll
-        sensors={sensors}
-        onDragMove={onDragMove}
-        onDragEnd={onDragEnd}
-        onDragStart={onDragStart}
-        onDragCancel={onDragCancel}
-        collisionDetection={pointerWithin}
-      >
-        {pairs.map((p, i) => {
-          if (!showAll && i > MAX_INITIAL_PAIRS) return null;
+      <div>
+        <DndContext
+          autoScroll
+          sensors={sensors}
+          onDragMove={onDragMove}
+          onDragEnd={onDragEnd}
+          onDragStart={onDragStart}
+          onDragCancel={onDragCancel}
+          collisionDetection={pointerWithin}
+        >
+          {pairs.map((p, i) => {
+            if (!showAll && i > MAX_INITIAL_PAIRS) return null;
 
-          const isLast = i === pairs.length - 1;
-          return (
-            <Fragment key={p.id}>
-              {hoveredIndex === i && <DropMarker />}
-              <PairEditorRow
-                setRef={initPairEditorRow}
-                allowFileValues={allowFileValues}
-                allowMultilineValues={allowMultilineValues}
-                className="py-1"
-                forcedEnvironmentId={forcedEnvironmentId}
-                forceUpdateKey={localForceUpdateKey}
-                index={i}
-                isLast={isLast}
-                isDraggingGlobal={!!isDragging}
-                nameAutocomplete={nameAutocomplete}
-                nameAutocompleteFunctions={nameAutocompleteFunctions}
-                nameAutocompleteVariables={nameAutocompleteVariables}
-                namePlaceholder={namePlaceholder}
-                nameValidate={nameValidate}
-                onChange={handleChange}
-                onDelete={handleDelete}
-                onFocusName={handleFocusName}
-                onFocusValue={handleFocusValue}
-                pair={p}
-                stateKey={stateKey}
-                valueAutocomplete={valueAutocomplete}
-                valueAutocompleteFunctions={valueAutocompleteFunctions}
-                valueAutocompleteVariables={valueAutocompleteVariables}
-                valuePlaceholder={valuePlaceholder}
-                valueType={valueType}
-                valueValidate={valueValidate}
-              />
-            </Fragment>
-          );
-        })}
-        {!showAll && pairs.length > MAX_INITIAL_PAIRS && (
-          <Button onClick={toggleShowAll} variant="border" className="m-2" size="xs">
-            Show {pairs.length - MAX_INITIAL_PAIRS} More
-          </Button>
-        )}
-        <DragOverlay dropAnimation={null}>
-          {isDragging && (
-            <PairEditorRow
-              namePlaceholder={namePlaceholder}
-              valuePlaceholder={valuePlaceholder}
-              className="opacity-80"
-              pair={isDragging}
-              index={0}
-              stateKey={null}
-            />
+            const isLast = i === pairs.length - 1;
+            return (
+              <Fragment key={p.id}>
+                {hoveredIndex === i && <DropMarker />}
+                <PairEditorRow
+                  setRef={initPairEditorRow}
+                  allowFileValues={allowFileValues}
+                  allowMultilineValues={allowMultilineValues}
+                  className="py-1"
+                  forcedEnvironmentId={forcedEnvironmentId}
+                  forceUpdateKey={localForceUpdateKey}
+                  index={i}
+                  isLast={isLast}
+                  isDraggingGlobal={!!isDragging}
+                  nameAutocomplete={nameAutocomplete}
+                  nameAutocompleteFunctions={nameAutocompleteFunctions}
+                  nameAutocompleteVariables={nameAutocompleteVariables}
+                  namePlaceholder={namePlaceholder}
+                  nameValidate={nameValidate}
+                  onChange={handleChange}
+                  onDelete={handleDelete}
+                  onFocusName={handleFocusName}
+                  onFocusValue={handleFocusValue}
+                  pair={p}
+                  stateKey={stateKey}
+                  valueAutocomplete={valueAutocomplete}
+                  valueAutocompleteFunctions={valueAutocompleteFunctions}
+                  valueAutocompleteVariables={valueAutocompleteVariables}
+                  valuePlaceholder={valuePlaceholder}
+                  valueType={valueType}
+                  valueValidate={valueValidate}
+                />
+              </Fragment>
+            );
+          })}
+          {!showAll && pairs.length > MAX_INITIAL_PAIRS && (
+            <Button onClick={toggleShowAll} variant="border" className="m-2" size="xs">
+              Show {pairs.length - MAX_INITIAL_PAIRS} More
+            </Button>
           )}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay dropAnimation={null}>
+            {isDragging && (
+              <PairEditorRow
+                namePlaceholder={namePlaceholder}
+                valuePlaceholder={valuePlaceholder}
+                className="opacity-80"
+                pair={isDragging}
+                index={0}
+                stateKey={null}
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
+      </div>
+
+      <div
+        // There's a weird bug where clicking below one of the above Codemirror inputs will cause
+        // it to focus. Putting this element here prevents that
+        aria-hidden
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      />
     </div>
   );
 }
@@ -579,44 +581,29 @@ export function PairEditorRow({
           'gap-0.5 grid-cols-1 grid-rows-2',
         )}
       >
-        {isLast ? (
-          // Use PlainInput for last ones because there's a unique bug where clicking below
-          // the Codemirror input focuses it.
-          <PlainInput
-            hideLabel
-            size="sm"
-            containerClassName={classNames(isLast && 'border-dashed')}
-            className={classNames(isDraggingGlobal && 'pointer-events-none')}
-            label="Name"
-            name={`name[${index}]`}
-            onFocus={handleFocusName}
-            placeholder={namePlaceholder ?? 'name'}
-          />
-        ) : (
-          <Input
-            setRef={initNameInputRef}
-            hideLabel
-            stateKey={`name.${pair.id}.${stateKey}`}
-            disabled={disabled}
-            wrapLines={false}
-            readOnly={pair.readOnlyName || isDraggingGlobal}
-            size="sm"
-            required={!isLast && !!pair.enabled && !!pair.value}
-            validate={nameValidate}
-            forcedEnvironmentId={forcedEnvironmentId}
-            forceUpdateKey={forceUpdateKey}
-            containerClassName={classNames('bg-surface', isLast && 'border-dashed')}
-            defaultValue={pair.name}
-            label="Name"
-            name={`name[${index}]`}
-            onChange={handleChangeName}
-            onFocus={handleFocusName}
-            placeholder={namePlaceholder ?? 'name'}
-            autocomplete={nameAutocomplete}
-            autocompleteVariables={nameAutocompleteVariables}
-            autocompleteFunctions={nameAutocompleteFunctions}
-          />
-        )}
+        <Input
+          setRef={initNameInputRef}
+          hideLabel
+          stateKey={`name.${pair.id}.${stateKey}`}
+          disabled={disabled}
+          wrapLines={false}
+          readOnly={pair.readOnlyName || isDraggingGlobal}
+          size="sm"
+          required={!isLast && !!pair.enabled && !!pair.value}
+          validate={nameValidate}
+          forcedEnvironmentId={forcedEnvironmentId}
+          forceUpdateKey={forceUpdateKey}
+          containerClassName={classNames('bg-surface', isLast && 'border-dashed')}
+          defaultValue={pair.name}
+          label="Name"
+          name={`name[${index}]`}
+          onChange={handleChangeName}
+          onFocus={handleFocusName}
+          placeholder={namePlaceholder ?? 'name'}
+          autocomplete={nameAutocomplete}
+          autocompleteVariables={nameAutocompleteVariables}
+          autocompleteFunctions={nameAutocompleteFunctions}
+        />
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
           {pair.isFile ? (
             <SelectFile
@@ -625,20 +612,6 @@ export function PairEditorRow({
               size="xs"
               filePath={pair.value}
               onChange={handleChangeValueFile}
-            />
-          ) : isLast ? (
-            // Use PlainInput for last ones because there's a unique bug where clicking below
-            // the Codemirror input focuses it.
-            <PlainInput
-              hideLabel
-              disabled={disabled}
-              size="sm"
-              containerClassName={classNames(isLast && 'border-dashed')}
-              label="Value"
-              name={`value[${index}]`}
-              className={classNames(isDraggingGlobal && 'pointer-events-none')}
-              onFocus={handleFocusValue}
-              placeholder={valuePlaceholder ?? 'value'}
             />
           ) : pair.value.includes('\n') ? (
             <Button
