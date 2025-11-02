@@ -7,10 +7,10 @@ use log::{info, warn};
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
 use tauri::{AppHandle, Runtime, State, Url, WebviewWindow};
-use tokio::sync::{Mutex, mpsc};
-use tokio_tungstenite::tungstenite::Message;
+use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::http::HeaderValue;
-use yaak_http::apply_path_placeholders;
+use tokio_tungstenite::tungstenite::Message;
+use yaak_http::path_placeholders::apply_path_placeholders;
 use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
     WebsocketEventType, WebsocketRequest,

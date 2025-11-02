@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tower_service::Service;
 
 #[derive(Clone)]
-pub(crate) struct LocalhostResolver {
+pub struct LocalhostResolver {
     fallback: HyperGaiResolver,
 }
 

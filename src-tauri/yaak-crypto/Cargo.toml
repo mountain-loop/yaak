@@ -10,7 +10,7 @@ base32 = "0.5.1" # For encoding human-readable key
 base64 = "0.22.1" # For encoding in the database
 chacha20poly1305 = "0.10.1"
 keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
-log = "0.4.26"
+log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tauri = { workspace = true }
 thiserror = { workspace = true }

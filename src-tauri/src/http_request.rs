@@ -6,9 +6,9 @@ use http::header::{ACCEPT, USER_AGENT};
 use http::{HeaderMap, HeaderName, HeaderValue};
 use log::{debug, error, warn};
 use mime_guess::Mime;
-use reqwest::redirect::Policy;
-use reqwest::{Method, NoProxy, Response};
-use reqwest::{Proxy, Url, multipart};
+use reqwest::{multipart, Url};
+use reqwest::{Method, Response};
+use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -17,23 +17,26 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs;
-use tokio::fs::{File, create_dir_all};
+use tokio::fs::{create_dir_all, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
+use yaak_http::client::{
+    HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
+};
+use yaak_http::manager::HttpConnectionManager;
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::query_manager::QueryManagerExt;
-use yaak_models::util::UpdateSource;
+use yaak_models::util::{generate_id, UpdateSource};
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
-use crate::dns::LocalhostResolver;
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -45,6 +48,7 @@ pub async fn send_http_request<R: Runtime>(
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
+    let connection_manager = app_handle.state::<HttpConnectionManager>();
     let settings = window.db().get_settings();
     let workspace = window.db().get_workspace(&unrendered_request.workspace_id)?;
     let environment_id = environment.map(|e| e.id);
@@ -102,65 +106,33 @@ pub async fn send_http_request<R: Runtime>(
     }
     debug!("Sending request to {} {url_string}", request.method);
 
-    let mut client_builder = reqwest::Client::builder()
-        .redirect(match workspace.setting_follow_redirects {
-            true => Policy::limited(10), // TODO: Handle redirects natively
-            false => Policy::none(),
-        })
-        .connection_verbose(true)
-        .gzip(true)
-        .brotli(true)
-        .deflate(true)
-        .dns_resolver(LocalhostResolver::new())
-        .referer(false)
-        .tls_info(true);
-
-    let tls_config = yaak_http::tls::get_config(workspace.setting_validate_certificates, true);
-    client_builder = client_builder.use_preconfigured_tls(tls_config);
-
-    match settings.proxy {
-        Some(ProxySetting::Disabled) => client_builder = client_builder.no_proxy(),
+    let proxy_setting = match settings.proxy {
+        None => HttpConnectionProxySetting::System,
+        Some(ProxySetting::Disabled) => HttpConnectionProxySetting::Disabled,
         Some(ProxySetting::Enabled {
             http,
             https,
             auth,
-            disabled,
             bypass,
-        }) if !disabled => {
-            debug!("Using proxy http={http} https={https} bypass={bypass}");
-            if !http.is_empty() {
-                match Proxy::http(http) {
-                    Ok(mut proxy) => {
-                        if let Some(ProxySettingAuth { user, password }) = auth.clone() {
-                            debug!("Using http proxy auth");
-                            proxy = proxy.basic_auth(user.as_str(), password.as_str());
+            disabled,
+        }) => {
+            if disabled {
+                HttpConnectionProxySetting::System
+            } else {
+                HttpConnectionProxySetting::Enabled {
+                    http,
+                    https,
+                    bypass,
+                    auth: match auth {
+                        None => None,
+                        Some(ProxySettingAuth { user, password }) => {
+                            Some(HttpConnectionProxySettingAuth { user, password })
                         }
-                        proxy = proxy.no_proxy(NoProxy::from_string(&bypass));
-                        client_builder = client_builder.proxy(proxy);
-                    }
-                    Err(e) => {
-                        warn!("Failed to apply http proxy {e:?}");
-                    }
-                };
-            }
-            if !https.is_empty() {
-                match Proxy::https(https) {
-                    Ok(mut proxy) => {
-                        if let Some(ProxySettingAuth { user, password }) = auth {
-                            debug!("Using https proxy auth");
-                            proxy = proxy.basic_auth(user.as_str(), password.as_str());
-                        }
-                        proxy = proxy.no_proxy(NoProxy::from_string(&bypass));
-                        client_builder = client_builder.proxy(proxy);
-                    }
-                    Err(e) => {
-                        warn!("Failed to apply https proxy {e:?}");
-                    }
-                };
+                    },
+                }
             }
         }
-        _ => {} // Nothing to do for this one, as it is the default
-    }
+    };
 
     // Add cookie store if specified
     let maybe_cookie_manager = match cookie_jar.clone() {
@@ -179,23 +151,33 @@ pub async fn send_http_request<R: Runtime>(
                 .map(|c| Ok(c))
                 .collect::<Vec<Result<_>>>();
 
-            let store = reqwest_cookie_store::CookieStore::from_cookies(cookies, true)?;
-            let cookie_store = reqwest_cookie_store::CookieStoreMutex::new(store);
+            let cookie_store = CookieStore::from_cookies(cookies, true)?;
+            let cookie_store = CookieStoreMutex::new(cookie_store);
             let cookie_store = Arc::new(cookie_store);
-            client_builder = client_builder.cookie_provider(Arc::clone(&cookie_store));
-
-            Some((cookie_store, cj))
+            let cookie_provider = Arc::clone(&cookie_store);
+            Some((cookie_provider, cj))
         }
         None => None,
     };
 
-    if workspace.setting_request_timeout > 0 {
-        client_builder = client_builder.timeout(Duration::from_millis(
-            workspace.setting_request_timeout.unsigned_abs() as u64,
-        ));
-    }
-
-    let client = client_builder.build()?;
+    let client = connection_manager
+        .get_client(
+            &request.id,
+            &HttpConnectionOptions {
+                follow_redirects: workspace.setting_follow_redirects,
+                validate_certificates: workspace.setting_validate_certificates,
+                proxy: proxy_setting,
+                cookie_provider: maybe_cookie_manager.as_ref().map(|(p, _)| Arc::clone(&p)),
+                timeout: if workspace.setting_request_timeout > 0 {
+                    Some(Duration::from_millis(
+                        workspace.setting_request_timeout.unsigned_abs() as u64
+                    ))
+                } else {
+                    None
+                },
+            },
+        )
+        .await?;
 
     // Render query parameters
     let mut query_params = Vec::new();

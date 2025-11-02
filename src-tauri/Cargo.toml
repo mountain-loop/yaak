@@ -48,7 +48,7 @@ chrono = { workspace = true, features = ["serde"] }
 cookie = "0.18.1"
 eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.14.0" }
 http = { version = "1.2.0", default-features = false }
-log = "0.4.27"
+log = { workspace = true }
 md5 = "0.8.0"
 mime_guess = "2.0.5"
 rand = "0.9.0"
@@ -68,8 +68,6 @@ tauri-plugin-shell = { workspace = true }
 tauri-plugin-single-instance = { version = "2.3.4", features = ["deep-link"] }
 tauri-plugin-updater = "2.9.0"
 tauri-plugin-window-state = "2.4.0"
-hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
-tower-service = "0.3.3"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tokio-stream = "0.1.17"
@@ -96,15 +94,16 @@ hex = "0.4.3"
 keyring = "3.6.3"
 reqwest = "0.12.20"
 reqwest_cookie_store = "0.8.0"
-rustls = { version = "0.23.33", default-features = false }
-rustls-platform-verifier = "0.6.1"
+rustls = { version = "0.23.34", default-features = false }
+rustls-platform-verifier = "0.6.2"
 serde = "1.0.228"
 serde_json = "1.0.145"
 sha2 = "0.10.9"
-tauri = "2.9.0"
-tauri-plugin = "2.5.0"
-tauri-plugin-dialog = "2.4.0"
-tauri-plugin-shell = "2.3.1"
+log = "0.4.28"
+tauri = "2.9.2"
+tauri-plugin = "2.5.1"
+tauri-plugin-dialog = "2.4.2"
+tauri-plugin-shell = "2.3.3"
 thiserror = "2.0.17"
 tokio = "1.48.0"
 ts-rs = "11.1.0"

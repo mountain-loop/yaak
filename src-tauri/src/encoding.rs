@@ -7,9 +7,7 @@ use tokio::fs;
 pub async fn read_response_body(body_path: impl AsRef<Path>, content_type: &str) -> Option<String> {
     let body = fs::read(body_path).await.ok()?;
     let body_charset = parse_charset(content_type).unwrap_or("utf-8".to_string());
-    debug!("body_charset: {}", body_charset);
     if let Some(decoder) = charset::Charset::for_label(body_charset.as_bytes()) {
-        debug!("Using decoder for charset: {}", body_charset);
         let (cow, real_encoding, exist_replace) = decoder.decode(&body);
         debug!(
             "Decoded body with charset: {}, real_encoding: {:?}, exist_replace: {}",

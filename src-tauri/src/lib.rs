@@ -23,7 +23,7 @@ use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
-use tauri_plugin_log::{Builder, Target, TargetKind};
+use tauri_plugin_log::{log, Builder, Target, TargetKind};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
@@ -54,7 +54,6 @@ use yaak_templates::format_json::format_json;
 use yaak_templates::{RenderErrorBehavior, RenderOptions, Tokens, transform_args};
 
 mod commands;
-mod dns;
 mod encoding;
 mod error;
 mod grpc;
@@ -1351,6 +1350,7 @@ pub fn run() {
         .plugin(yaak_crypto::init())
         .plugin(yaak_fonts::init())
         .plugin(yaak_git::init())
+        .plugin(yaak_http::init())
         .plugin(yaak_ws::init())
         .plugin(yaak_sync::init());
 
