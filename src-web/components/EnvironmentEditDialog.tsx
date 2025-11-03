@@ -331,12 +331,7 @@ const treeAtom = atom<TreeNode<TreeModel> | null>((get) => {
 
   const parent = root.children?.[0];
   if (baseEnvironments.length <= 1 && parent != null) {
-    const sortedEnvironments = [...subEnvironments].sort((a, b) => {
-      if (a.sortPriority === b.sortPriority) return a.updatedAt > b.updatedAt ? 1 : -1;
-      else return a.sortPriority - b.sortPriority;
-    });
-
-    parent.children = sortedEnvironments.map((item) => ({
+    parent.children = subEnvironments.map((item) => ({
       item,
       parent,
       depth: 1,

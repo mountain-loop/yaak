@@ -8,7 +8,7 @@ import { newStoreData } from './util';
 export const modelStoreDataAtom = atom(newStoreData());
 
 export const cookieJarsAtom = createOrderedModelAtom('cookie_jar', 'name', 'asc');
-export const environmentsAtom = createOrderedModelAtom('environment', 'name', 'asc');
+export const environmentsAtom = createOrderedModelAtom('environment', 'sortPriority', 'asc');
 export const foldersAtom = createModelAtom('folder');
 export const grpcConnectionsAtom = createOrderedModelAtom('grpc_connection', 'createdAt', 'desc');
 export const grpcEventsAtom = createOrderedModelAtom('grpc_event', 'createdAt', 'asc');
