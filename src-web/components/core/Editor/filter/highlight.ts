@@ -14,11 +14,8 @@ export const highlight = styleTags({
 
   // Literals
   Phrase: t.string, // "quoted string"
-  Term: t.variableName, // bare terms like foo, bar
 
   // Fields
-  'FieldName/Word': t.tagName,
-
-  // Grouping
-  Group: t.paren,
+  'FieldName/Word': t.attributeName,
+  'FieldValue/Term/Word': t.attributeValue,
 });

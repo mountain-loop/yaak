@@ -57,7 +57,7 @@ import { InlineCode } from './core/InlineCode';
 import type { InputHandle } from './core/Input';
 import { Input } from './core/Input';
 import { LoadingIcon } from './core/LoadingIcon';
-import { collapsedFamily, isSelectedFamily } from './core/tree/atoms';
+import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
@@ -77,6 +77,9 @@ function Sidebar({ className }: { className?: string }) {
   const wrapperRef = useRef<HTMLElement>(null);
   const treeRef = useRef<TreeHandle>(null);
   const filterRef = useRef<InputHandle>(null);
+  const setFilterRef = useCallback((h: InputHandle | null) => {
+    filterRef.current = h;
+  }, []);
   const allHidden = useMemo(() => {
     if (tree?.children?.length === 0) return false;
     else if (filterText) return tree?.children?.every((c) => c.hidden);
@@ -161,8 +164,10 @@ function Sidebar({ className }: { className?: string }) {
     if (n == null) return;
     const activeId = jotaiStore.get(activeIdAtom);
     if (activeId == null) return;
+    const selectedIds = jotaiStore.get(selectedIdsFamily(treeId));
+    if (selectedIds.length > 0) return;
     n.selectItem(activeId);
-  }, []);
+  }, [treeId]);
 
   // Ensure active id is always selected when it changes
   useEffect(() => {
@@ -434,7 +439,7 @@ function Sidebar({ className }: { className?: string }) {
           <>
             <Input
               hideLabel
-              ref={filterRef}
+              setRef={setFilterRef}
               size="sm"
               label="filter"
               language={null} // Explicitly disable
@@ -449,7 +454,7 @@ function Sidebar({ className }: { className?: string }) {
               rightSlot={
                 filterText.text && (
                   <IconButton
-                    className="!h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
+                    className="!bg-transparent !h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
                     icon="x"
                     title="Clear filter"
                     onClick={clearFilterText}

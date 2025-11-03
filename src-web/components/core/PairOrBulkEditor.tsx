@@ -1,9 +1,8 @@
 import classNames from 'classnames';
-import { forwardRef } from 'react';
 import { useKeyValue } from '../../hooks/useKeyValue';
 import { BulkPairEditor } from './BulkPairEditor';
 import { IconButton } from './IconButton';
-import type { PairEditorProps, PairEditorRef } from './PairEditor';
+import type { PairEditorProps } from './PairEditor';
 import { PairEditor } from './PairEditor';
 
 interface Props extends PairEditorProps {
@@ -11,10 +10,7 @@ interface Props extends PairEditorProps {
   forcedEnvironmentId?: string;
 }
 
-export const PairOrBulkEditor = forwardRef<PairEditorRef, Props>(function PairOrBulkEditor(
-  { preferenceName, ...props }: Props,
-  ref,
-) {
+export function PairOrBulkEditor({ preferenceName, ...props }: Props) {
   const { value: useBulk, set: setUseBulk } = useKeyValue<boolean>({
     namespace: 'global',
     key: ['bulk_edit', preferenceName],
@@ -23,7 +19,7 @@ export const PairOrBulkEditor = forwardRef<PairEditorRef, Props>(function PairOr
 
   return (
     <div className="relative h-full w-full group/wrapper">
-      {useBulk ? <BulkPairEditor {...props} /> : <PairEditor ref={ref} {...props} />}
+      {useBulk ? <BulkPairEditor {...props} /> : <PairEditor {...props} />}
       <div className="absolute right-0 bottom-0">
         <IconButton
           size="sm"
@@ -39,4 +35,4 @@ export const PairOrBulkEditor = forwardRef<PairEditorRef, Props>(function PairOr
       </div>
     </div>
   );
-});
+}

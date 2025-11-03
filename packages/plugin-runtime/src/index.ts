@@ -8,10 +8,15 @@ if (!port) {
   throw new Error('Plugin runtime missing PORT')
 }
 
+const host = process.env.HOST;
+if (!host) {
+  throw new Error('Plugin runtime missing HOST')
+}
+
 const pluginToAppEvents = new EventChannel();
 const plugins: Record<string, PluginHandle> = {};
 
-const ws = new WebSocket(`ws://localhost:${port}`);
+const ws = new WebSocket(`ws://${host}:${port}`);
 
 ws.on('message', async (e: Buffer) => {
   try {

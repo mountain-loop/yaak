@@ -1,12 +1,13 @@
 import { useAtomValue } from 'jotai';
-import React from 'react';
+import type { ComponentType } from 'react';
+import React, { useCallback } from 'react';
 import { dialogsAtom, hideDialog } from '../lib/dialog';
 import { Dialog, type DialogProps } from './core/Dialog';
 import { ErrorBoundary } from './ErrorBoundary';
 
 export type DialogInstance = {
   id: string;
-  render: ({ hide }: { hide: () => void }) => React.ReactNode;
+  render: ComponentType<{ hide: () => void }>;
 } & Omit<DialogProps, 'open' | 'children'>;
 
 export function Dialogs() {
@@ -20,19 +21,20 @@ export function Dialogs() {
   );
 }
 
-function DialogInstance({ render, onClose, id, ...props }: DialogInstance) {
-  const children = render({ hide: () => hideDialog(id) });
+function DialogInstance({ render: Component, onClose, id, ...props }: DialogInstance) {
+  const hide = useCallback(() => {
+    hideDialog(id);
+  }, [id]);
+
+  const handleClose = useCallback(() => {
+    onClose?.();
+    hideDialog(id);
+  }, [id, onClose]);
+
   return (
     <ErrorBoundary name={`Dialog ${id}`}>
-      <Dialog
-        open
-        onClose={() => {
-          onClose?.();
-          hideDialog(id);
-        }}
-        {...props}
-      >
-        {children}
+      <Dialog open onClose={handleClose} {...props}>
+        <Component hide={hide} {...props} />
       </Dialog>
     </ErrorBoundary>
   );

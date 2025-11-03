@@ -132,6 +132,7 @@ export function TextViewer({ language, text, response, requestId, pretty, classN
       language={language}
       actions={actions}
       extraExtensions={extraExtensions}
+      // State key for storing fold state
       stateKey={'response.body.' + response.id}
     />
   );

@@ -38,14 +38,12 @@ impl<'a> DbContext<'a> {
         let mut stmt = self.conn.prepare(sql.as_str()).expect("Failed to prepare query");
         match stmt.query_row(&*params.as_params(), M::from_row) {
             Ok(result) => Ok(result),
-            Err(rusqlite::Error::QueryReturnedNoRows) => {
-                Err(ModelNotFound(format!(
-                    r#"table "{}" {} == {}"#,
-                    M::table_name().into_iden().to_string(),
-                    col.into_iden().to_string(),
-                    value_debug
-                )))
-            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Err(ModelNotFound(format!(
+                r#"table "{}" {} == {}"#,
+                M::table_name().into_iden().to_string(),
+                col.into_iden().to_string(),
+                value_debug
+            ))),
             Err(e) => Err(crate::error::Error::SqlError(e)),
         }
     }
@@ -69,7 +67,7 @@ impl<'a> DbContext<'a> {
             .expect("Failed to run find on DB")
     }
 
-    pub fn find_all<'s, M>(&self) -> crate::error::Result<Vec<M>>
+    pub fn find_all<'s, M>(&self) -> Result<Vec<M>>
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {
@@ -117,7 +115,7 @@ impl<'a> DbContext<'a> {
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
-    pub fn upsert<M>(&self, model: &M, source: &UpdateSource) -> crate::error::Result<M>
+    pub fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
     where
         M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
     {
@@ -139,7 +137,7 @@ impl<'a> DbContext<'a> {
         other_values: Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>,
         update_columns: Vec<impl IntoIden>,
         source: &UpdateSource,
-    ) -> crate::error::Result<M>
+    ) -> Result<M>
     where
         M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
     {
@@ -178,7 +176,7 @@ impl<'a> DbContext<'a> {
         Ok(m)
     }
 
-    pub(crate) fn delete<'s, M>(&self, m: &M, source: &UpdateSource) -> crate::error::Result<M>
+    pub(crate) fn delete<'s, M>(&self, m: &M, source: &UpdateSource) -> Result<M>
     where
         M: Into<AnyModel> + Clone + UpsertModelInfo,
     {

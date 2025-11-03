@@ -17,21 +17,20 @@ import { BadgeButton } from './core/BadgeButton';
 import { DismissibleBanner } from './core/DismissibleBanner';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import { Heading } from './core/Heading';
-import type { PairWithId } from './core/PairEditor';
+import type { PairEditorHandle, PairWithId } from './core/PairEditor';
 import { ensurePairId } from './core/PairEditor.util';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 
-export function EnvironmentEditor({
-  environment,
-  hideName,
-  className,
-}: {
+interface Props {
   environment: Environment;
   hideName?: boolean;
   className?: string;
-}) {
+  setRef?: (n: PairEditorHandle | null) => void;
+}
+
+export function EnvironmentEditor({ environment, hideName, className, setRef }: Props) {
   const workspaceId = environment.workspaceId;
   const isEncryptionEnabled = useIsEncryptionEnabled();
   const valueVisibility = useKeyValue<boolean>({
@@ -98,10 +97,19 @@ export function EnvironmentEditor({
   };
 
   return (
-    <div className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] gap-2 pr-3 pb-3')}>
+    <div
+      className={classNames(
+        className,
+        'h-full grid grid-rows-[auto_minmax(0,1fr)] gap-2 pr-3 pb-3',
+      )}
+    >
       <div className="flex flex-col gap-4">
         <Heading className="w-full flex items-center gap-0.5">
-          <EnvironmentColorIndicator className="mr-2" clickToEdit environment={environment ?? null} />
+          <EnvironmentColorIndicator
+            className="mr-2"
+            clickToEdit
+            environment={environment ?? null}
+          />
           {!hideName && <div className="mr-2">{environment?.name}</div>}
           {isEncryptionEnabled ? (
             !allVariableAreEncrypted ? (
@@ -146,6 +154,7 @@ export function EnvironmentEditor({
         )}
       </div>
       <PairOrBulkEditor
+        setRef={setRef}
         className="h-full"
         allowMultilineValues
         preferenceName="environment"

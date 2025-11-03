@@ -2,15 +2,7 @@ import type { EditorView } from '@codemirror/view';
 import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createFastMutation } from '../../hooks/useFastMutation';
 import { useIsEncryptionEnabled } from '../../hooks/useIsEncryptionEnabled';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
@@ -80,6 +72,7 @@ export type InputProps = Pick<
   type?: 'text' | 'password';
   validate?: boolean | ((v: string) => boolean);
   wrapLines?: boolean;
+  setRef?: (h: InputHandle | null) => void;
 };
 
 export interface InputHandle {
@@ -90,61 +83,64 @@ export interface InputHandle {
   dispatch: EditorView['dispatch'];
 }
 
-export const Input = forwardRef<InputHandle, InputProps>(function Input({ type, ...props }, ref) {
+export function Input({ type, ...props }: InputProps) {
   // If it's a password and template functions are supported (ie. secure(...)) then
   // use the encrypted input component.
   if (type === 'password' && props.autocompleteFunctions) {
     return <EncryptionInput {...props} />;
   } else {
-    return <BaseInput ref={ref} type={type} {...props} />;
+    return <BaseInput type={type} {...props} />;
   }
-});
+}
 
-const BaseInput = forwardRef<InputHandle, InputProps>(function InputBase(
-  {
-    className,
-    containerClassName,
-    defaultValue,
-    disableObscureToggle,
-    disabled,
-    forceUpdateKey,
-    fullHeight,
-    help,
-    hideLabel,
-    inputWrapperClassName,
-    label,
-    labelClassName,
-    labelPosition = 'top',
-    leftSlot,
-    multiLine,
-    onBlur,
-    onChange,
-    onFocus,
-    onPaste,
-    onPasteOverwrite,
-    placeholder,
-    readOnly,
-    required,
-    rightSlot,
-    size = 'md',
-    stateKey,
-    tint,
-    type = 'text',
-    validate,
-    wrapLines,
-    ...props
-  }: InputProps,
-  ref,
-) {
+function BaseInput({
+  className,
+  containerClassName,
+  defaultValue,
+  disableObscureToggle,
+  disabled,
+  forceUpdateKey,
+  fullHeight,
+  help,
+  hideLabel,
+  inputWrapperClassName,
+  label,
+  labelClassName,
+  labelPosition = 'top',
+  leftSlot,
+  multiLine,
+  onBlur,
+  onChange,
+  onFocus,
+  onPaste,
+  onPasteOverwrite,
+  placeholder,
+  readOnly,
+  required,
+  rightSlot,
+  size = 'md',
+  stateKey,
+  tint,
+  type = 'text',
+  validate,
+  wrapLines,
+  setRef,
+  ...props
+}: InputProps) {
   const [focused, setFocused] = useState(false);
   const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
   const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [forceUpdateKey]);
   const editorRef = useRef<EditorView | null>(null);
+  const skipNextFocus = useRef<boolean>(false);
 
-  const inputHandle = useMemo<InputHandle>(
+  const handle = useMemo<InputHandle>(
     () => ({
       focus: () => {
-        editorRef.current?.focus();
+        if (editorRef.current == null) return;
+        const anchor = editorRef.current.state.doc.length;
+        skipNextFocus.current = true;
+        editorRef.current.focus();
+        editorRef.current.dispatch({ selection: { anchor, head: anchor }, scrollIntoView: true });
       },
       isFocused: () => editorRef.current?.hasFocus ?? false,
       value: () => editorRef.current?.state.doc.toString() ?? '',
@@ -153,21 +149,26 @@ const BaseInput = forwardRef<InputHandle, InputProps>(function InputBase(
         editorRef.current?.dispatch(...(args as any));
       },
       selectAll() {
-        const head = editorRef.current?.state.doc.length ?? 0;
-        editorRef.current?.dispatch({
-          selection: { anchor: 0, head },
+        if (editorRef.current == null) return;
+        editorRef.current.focus();
+        editorRef.current.dispatch({
+          selection: { anchor: 0, head: editorRef.current.state.doc.length },
         });
-        editorRef.current?.focus();
       },
     }),
     [],
   );
 
-  useImperativeHandle(ref, (): InputHandle => inputHandle, [inputHandle]);
+  const setEditorRef = useCallback(
+    (h: EditorView | null) => {
+      editorRef.current = h;
+      setRef?.(handle);
+    },
+    [handle, setRef],
+  );
 
-  const lastWindowFocus = useRef<number>(0);
   useEffect(() => {
-    const fn = () => (lastWindowFocus.current = Date.now());
+    const fn = () => (skipNextFocus.current = true);
     window.addEventListener('focus', fn);
     return () => {
       window.removeEventListener('focus', fn);
@@ -177,11 +178,7 @@ const BaseInput = forwardRef<InputHandle, InputProps>(function InputBase(
   const handleFocus = useCallback(() => {
     if (readOnly) return;
 
-    // Select all text of input when it's focused to match standard browser behavior.
-    // This should not, however, select when the input is focused due to a window focus event, so
-    // we handle that case as well.
-    const windowJustFocused = Date.now() - lastWindowFocus.current < 200;
-    if (!windowJustFocused) {
+    if (!skipNextFocus.current) {
       editorRef.current?.dispatch({
         selection: { anchor: 0, head: editorRef.current.state.doc.length },
       });
@@ -189,6 +186,7 @@ const BaseInput = forwardRef<InputHandle, InputProps>(function InputBase(
 
     setFocused(true);
     onFocus?.();
+    skipNextFocus.current = false;
   }, [onFocus, readOnly]);
 
   const handleBlur = useCallback(async () => {
@@ -300,7 +298,7 @@ const BaseInput = forwardRef<InputHandle, InputProps>(function InputBase(
           )}
         >
           <Editor
-            ref={editorRef}
+            setRef={setEditorRef}
             id={id.current}
             hideGutter
             singleLine={!multiLine}
@@ -351,7 +349,7 @@ const BaseInput = forwardRef<InputHandle, InputProps>(function InputBase(
       </HStack>
     </div>
   );
-});
+}
 
 function validateRequire(v: string) {
   return v.length > 0;
@@ -365,8 +363,9 @@ function EncryptionInput({
   autocompleteFunctions,
   autocompleteVariables,
   forceUpdateKey: ogForceUpdateKey,
+  setRef,
   ...props
-}: Omit<InputProps, 'type'>) {
+}: InputProps) {
   const isEncryptionEnabled = useIsEncryptionEnabled();
   const [state, setState] = useStateWithDeps<{
     fieldType: PasswordFieldType;
@@ -374,11 +373,19 @@ function EncryptionInput({
     security: ReturnType<typeof analyzeTemplate> | null;
     obscured: boolean;
     error: string | null;
-  }>({ fieldType: 'text', value: null, security: null, obscured: true, error: null }, [
-    ogForceUpdateKey,
-  ]);
+  }>(
+    {
+      fieldType: isEncryptionEnabled ? 'encrypted' : 'text',
+      value: null,
+      security: null,
+      obscured: true,
+      error: null,
+    },
+    [ogForceUpdateKey],
+  );
 
   const forceUpdateKey = `${ogForceUpdateKey}::${state.fieldType}::${state.value === null}`;
+  const inputRef = useRef<InputHandle>(null);
 
   useEffect(() => {
     if (state.value != null) {
@@ -392,6 +399,9 @@ function EncryptionInput({
       templateToInsecure.mutate(defaultValue ?? '', {
         onSuccess: (value) => {
           setState({ fieldType: 'encrypted', security, value, obscured: true, error: null });
+          // We're calling this here because we want the input to be fully initialized so the caller
+          // can do stuff like change the selection.
+          setRef?.(inputRef.current);
         },
         onError: (value) => {
           setState({
@@ -406,6 +416,7 @@ function EncryptionInput({
     } else if (isEncryptionEnabled && !defaultValue) {
       // Default to encrypted field for new encrypted inputs
       setState({ fieldType: 'encrypted', security, value: '', obscured: true, error: null });
+      requestAnimationFrame(() => setRef?.(inputRef.current));
     } else if (isEncryptionEnabled) {
       // Don't obscure plain text when encryption is enabled
       setState({
@@ -415,6 +426,7 @@ function EncryptionInput({
         obscured: false,
         error: null,
       });
+      requestAnimationFrame(() => setRef?.(inputRef.current));
     } else {
       // Don't obscure plain text when encryption is disabled
       setState({
@@ -424,8 +436,9 @@ function EncryptionInput({
         obscured: true,
         error: null,
       });
+      requestAnimationFrame(() => setRef?.(inputRef.current));
     }
-  }, [defaultValue, isEncryptionEnabled, setState, state.value]);
+  }, [defaultValue, isEncryptionEnabled, setRef, setState, state.value]);
 
   const handleChange = useCallback(
     (value: string, fieldType: PasswordFieldType) => {
@@ -453,6 +466,10 @@ function EncryptionInput({
     },
     [handleChange, state],
   );
+
+  const setInputRef = useCallback((h: InputHandle | null) => {
+    inputRef.current = h;
+  }, []);
 
   const handleFieldTypeChange = useCallback(
     (newFieldType: PasswordFieldType) => {
@@ -563,6 +580,7 @@ function EncryptionInput({
 
   return (
     <BaseInput
+      setRef={setInputRef}
       disableObscureToggle
       autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}

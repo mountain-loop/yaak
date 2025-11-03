@@ -43,6 +43,26 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
     finalUrl = base + separator + queryString + (hash ? `#${hash}` : '');
   }
 
+  // Add API key authentication
+  if (request.authenticationType === 'apikey') {
+    if (request.authentication?.location === 'query') {
+      const sep = request.url?.includes('?') ? '&' : '?';
+      finalUrl = [
+        finalUrl,
+        sep,
+        encodeURIComponent(request.authentication?.key ?? 'token'),
+        '=',
+        encodeURIComponent(request.authentication?.value ?? ''),
+      ].join('');
+    } else {
+      request.headers = request.headers ?? [];
+      request.headers.push({
+        name: request.authentication?.key ?? 'X-Api-Key',
+        value: request.authentication?.value ?? '',
+      });
+    }
+  }
+
   xs.push(quote(finalUrl));
   xs.push(NEWLINE);
 

@@ -17,17 +17,16 @@ import { useAtomValue } from 'jotai';
 import { md5 } from 'js-md5';
 import type { ReactNode, RefObject } from 'react';
 import {
-  useEffect,
   Children,
   cloneElement,
-  forwardRef,
   isValidElement,
   useCallback,
-  useImperativeHandle,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
 } from 'react';
+import { activeEnvironmentAtom } from '../../../hooks/useActiveEnvironment';
 import { activeWorkspaceAtom } from '../../../hooks/useActiveWorkspace';
 import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
 import { useEnvironmentVariables } from '../../../hooks/useEnvironmentVariables';
@@ -40,7 +39,6 @@ import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
 import { jotaiStore } from '../../../lib/jotai';
 import { withEncryptionEnabled } from '../../../lib/setupOrConfigureEncryption';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
-import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
 import { InlineCode } from '../InlineCode';
 import { HStack } from '../Stacks';
@@ -97,6 +95,7 @@ export interface EditorProps {
   tooltipContainer?: HTMLElement;
   type?: 'text' | 'password';
   wrapLines?: boolean;
+  setRef?: (view: EditorView | null) => void;
 }
 
 const stateFields = { history: historyField, folds: foldState };
@@ -104,41 +103,39 @@ const stateFields = { history: historyField, folds: foldState };
 const emptyVariables: WrappedEnvironmentVariable[] = [];
 const emptyExtension: Extension = [];
 
-export const Editor = forwardRef<EditorView | undefined, EditorProps>(function Editor(
-  {
-    actions,
-    autoFocus,
-    autoSelect,
-    autocomplete,
-    autocompleteFunctions,
-    autocompleteVariables,
-    className,
-    defaultValue,
-    disableTabIndent,
-    disabled,
-    extraExtensions,
-    forcedEnvironmentId,
-    forceUpdateKey: forceUpdateKeyFromAbove,
-    format,
-    heightMode,
-    hideGutter,
-    graphQLSchema,
-    language,
-    onBlur,
-    onChange,
-    onFocus,
-    onKeyDown,
-    onPaste,
-    onPasteOverwrite,
-    placeholder,
-    readOnly,
-    singleLine,
-    stateKey,
-    type,
-    wrapLines,
-  }: EditorProps,
-  ref,
-) {
+export function Editor({
+  actions,
+  autoFocus,
+  autoSelect,
+  autocomplete,
+  autocompleteFunctions,
+  autocompleteVariables,
+  className,
+  defaultValue,
+  disableTabIndent,
+  disabled,
+  extraExtensions,
+  forcedEnvironmentId,
+  forceUpdateKey: forceUpdateKeyFromAbove,
+  format,
+  heightMode,
+  hideGutter,
+  graphQLSchema,
+  language,
+  onBlur,
+  onChange,
+  onFocus,
+  onKeyDown,
+  onPaste,
+  onPasteOverwrite,
+  placeholder,
+  readOnly,
+  singleLine,
+  stateKey,
+  type,
+  wrapLines,
+  setRef,
+}: EditorProps) {
   const settings = useAtomValue(settingsAtom);
 
   const allEnvironmentVariables = useEnvironmentVariables(forcedEnvironmentId ?? null);
@@ -182,7 +179,6 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   }
 
   const cm = useRef<{ view: EditorView; languageCompartment: Compartment } | null>(null);
-  useImperativeHandle(ref, () => cm.current?.view, []);
 
   // Use ref so we can update the handler without re-initializing the editor
   const handleChange = useRef<EditorProps['onChange']>(onChange);
@@ -324,33 +320,17 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   const onClickVariable = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async (v: WrappedEnvironmentVariable, _tagValue: string, _startPos: number) => {
-      editEnvironment(v.environment);
+      await editEnvironment(v.environment, { addOrFocusVariable: v.variable });
     },
     [],
   );
 
-  const onClickMissingVariable = useCallback(
-    async (_name: string, tagValue: string, startPos: number) => {
-      const initialTokens = parseTemplate(tagValue);
-      showDialog({
-        size: 'dynamic',
-        id: 'template-variable',
-        title: 'Configure Variable',
-        render: ({ hide }) => (
-          <TemplateVariableDialog
-            hide={hide}
-            initialTokens={initialTokens}
-            onChange={(insert) => {
-              cm.current?.view.dispatch({
-                changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
-              });
-            }}
-          />
-        ),
-      });
-    },
-    [],
-  );
+  const onClickMissingVariable = useCallback(async (name: string) => {
+    const activeEnvironment = jotaiStore.get(activeEnvironmentAtom);
+    await editEnvironment(activeEnvironment, {
+      addOrFocusVariable: { name, value: '', enabled: true },
+    });
+  }, []);
 
   const [, { focusParamValue }] = useRequestEditor();
   const onClickPathParameter = useCallback(
@@ -396,7 +376,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   // Initialize the editor when ref mounts
   const initEditorRef = useCallback(
-    function initEditorRef(container: HTMLDivElement | null) {
+    function initializeCodemirror(container: HTMLDivElement | null) {
       if (container === null) {
         cm.current?.view.destroy();
         cm.current = null;
@@ -469,6 +449,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
         if (autoSelect) {
           view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
         }
+        setRef?.(view);
       } catch (e) {
         console.log('Failed to initialize Codemirror', e);
       }
@@ -588,7 +569,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       )}
     </div>
   );
-});
+}
 
 function getExtensions({
   stateKey,
@@ -648,15 +629,13 @@ function getExtensions({
     // Things that must be last //
     // ------------------------ //
 
-    // Fire onChange event
     EditorView.updateListener.of((update) => {
+      if (update.startState === update.state) return;
+
       if (onChange && update.docChanged) {
         onChange.current?.(update.state.doc.toString());
       }
-    }),
 
-    // Cache editor state
-    EditorView.updateListener.of((update) => {
       saveCachedEditorState(stateKey, update.state);
     }),
   ];

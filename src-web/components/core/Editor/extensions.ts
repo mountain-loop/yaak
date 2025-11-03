@@ -62,7 +62,7 @@ export const syntaxHighlightStyle = HighlightStyle.define([
     textDecoration: 'underline',
   },
   {
-    tag: [t.paren, t.bracket, t.squareBracket, t.brace, t.separator],
+    tag: [t.paren, t.bracket, t.squareBracket, t.brace, t.separator, t.punctuation],
     color: 'var(--textSubtle)',
   },
   {

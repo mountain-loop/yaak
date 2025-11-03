@@ -19,6 +19,7 @@ import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
+import type { PairEditorHandle } from './core/PairEditor';
 import { SplitLayout } from './core/SplitLayout';
 import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
@@ -28,15 +29,16 @@ import { EnvironmentEditor } from './EnvironmentEditor';
 import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 
 interface Props {
-  initialEnvironment: Environment | null;
+  initialEnvironmentId: string | null;
+  setRef?: (ref: PairEditorHandle | null) => void;
 }
 
 type TreeModel = Environment | Workspace;
 
-export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
+export function EnvironmentEditDialog({ initialEnvironmentId, setRef }: Props) {
   const { allEnvironments, baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(
-    initialEnvironment?.id ?? null,
+    initialEnvironmentId ?? null,
   );
 
   const selectedEnvironment =
@@ -76,16 +78,21 @@ export const EnvironmentEditDialog = function ({ initialEnvironment }: Props) {
               </Banner>
             </div>
           ) : (
-            <EnvironmentEditor className="pl-4 pt-3" environment={selectedEnvironment} />
+            <EnvironmentEditor
+              setRef={setRef}
+              className="pl-4 pt-3"
+              environment={selectedEnvironment}
+            />
           )}
         </div>
       )}
     />
   );
-};
+}
 
 const sharableTooltip = (
   <IconTooltip
+    tabIndex={-1}
     icon="eye"
     iconSize="sm"
     content="This environment will be included in Directory Sync and data exports"

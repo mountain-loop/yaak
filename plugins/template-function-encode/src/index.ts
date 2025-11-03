@@ -5,9 +5,29 @@ export const plugin: PluginDefinition = {
     {
       name: 'base64.encode',
       description: 'Encode a value to base64',
-      args: [{ label: 'Plain Text', type: 'text', name: 'value', multiLine: true }],
+      args: [
+        {
+          label: 'Encoding',
+          type: 'select',
+          name: 'encoding',
+          defaultValue: 'base64',
+          options: [
+            {
+              label: 'Base64',
+              value: 'base64',
+            },
+            {
+              label: 'Base64 URL-safe',
+              value: 'base64url',
+            },
+          ],
+        },
+        { label: 'Plain Text', type: 'text', name: 'value', multiLine: true },
+      ],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
-        return Buffer.from(String(args.values.value ?? '')).toString('base64');
+        return Buffer.from(String(args.values.value ?? '')).toString(
+          args.values.encoding === 'base64url' ? 'base64url' : 'base64',
+        );
       },
     },
     {

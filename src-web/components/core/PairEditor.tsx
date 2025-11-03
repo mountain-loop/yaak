@@ -10,16 +10,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import classNames from 'classnames';
-import {
-  forwardRef,
-  Fragment,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WrappedEnvironmentVariable } from '../../hooks/useEnvironmentVariables';
 import { useRandomKey } from '../../hooks/useRandomKey';
 import { useToggle } from '../../hooks/useToggle';
@@ -41,12 +32,12 @@ import { IconButton } from './IconButton';
 import type { InputHandle, InputProps } from './Input';
 import { Input } from './Input';
 import { ensurePairId } from './PairEditor.util';
-import { PlainInput } from './PlainInput';
 import type { RadioDropdownItem } from './RadioDropdown';
 import { RadioDropdown } from './RadioDropdown';
 
-export interface PairEditorRef {
-  focusValue(index: number): void;
+export interface PairEditorHandle {
+  focusName(id: string): void;
+  focusValue(id: string): void;
 }
 
 export type PairEditorProps = {
@@ -64,6 +55,7 @@ export type PairEditorProps = {
   onChange: (pairs: PairWithId[]) => void;
   pairs: Pair[];
   stateKey: InputProps['stateKey'];
+  setRef?: (n: PairEditorHandle) => void;
   valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
   valueAutocompleteFunctions?: boolean;
   valueAutocompleteVariables?: boolean | 'environment';
@@ -87,35 +79,31 @@ export type PairWithId = Pair & {
 };
 
 /** Max number of pairs to show before prompting the user to reveal the rest */
-const MAX_INITIAL_PAIRS = 50;
+const MAX_INITIAL_PAIRS = 30;
 
-export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function PairEditor(
-  {
-    allowFileValues,
-    allowMultilineValues,
-    className,
-    forcedEnvironmentId,
-    forceUpdateKey,
-    nameAutocomplete,
-    nameAutocompleteFunctions,
-    nameAutocompleteVariables,
-    namePlaceholder,
-    nameValidate,
-    noScroll,
-    onChange,
-    pairs: originalPairs,
-    stateKey,
-    valueAutocomplete,
-    valueAutocompleteFunctions,
-    valueAutocompleteVariables,
-    valuePlaceholder,
-    valueType,
-    valueValidate,
-  }: PairEditorProps,
-  ref,
-) {
-  const [forceFocusNamePairId, setForceFocusNamePairId] = useState<string | null>(null);
-  const [forceFocusValuePairId, setForceFocusValuePairId] = useState<string | null>(null);
+export function PairEditor({
+  allowFileValues,
+  allowMultilineValues,
+  className,
+  forcedEnvironmentId,
+  forceUpdateKey,
+  nameAutocomplete,
+  nameAutocompleteFunctions,
+  nameAutocompleteVariables,
+  namePlaceholder,
+  nameValidate,
+  noScroll,
+  onChange,
+  pairs: originalPairs,
+  stateKey,
+  valueAutocomplete,
+  valueAutocompleteFunctions,
+  valueAutocompleteVariables,
+  valuePlaceholder,
+  valueType,
+  valueValidate,
+  setRef,
+}: PairEditorProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState<PairWithId | null>(null);
   const [pairs, setPairs] = useState<PairWithId[]>([]);
@@ -124,15 +112,30 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
   //  we simply pass forceUpdateKey to the editor, the data set by useEffect will be stale.
   const [localForceUpdateKey, regenerateLocalForceUpdateKey] = useRandomKey();
 
-  useImperativeHandle(
-    ref,
+  const rowsRef = useRef<Record<string, RowHandle | null>>({});
+
+  const handle = useMemo<PairEditorHandle>(
     () => ({
-      focusValue(index: number) {
-        const id = pairs[index]?.id ?? 'n/a';
-        setForceFocusValuePairId(id);
+      focusName(id: string) {
+        rowsRef.current[id]?.focusName();
+      },
+      focusValue(id: string) {
+        rowsRef.current[id]?.focusValue();
       },
     }),
-    [pairs],
+    [],
+  );
+
+  const initPairEditorRow = useCallback(
+    (id: string, n: RowHandle | null) => {
+      rowsRef.current[id] = n;
+      const ready =
+        Object.values(rowsRef.current).filter((v) => v != null).length === pairs.length - 1; // Ignore the last placeholder pair
+      if (ready) {
+        setRef?.(handle);
+      }
+    },
+    [handle, pairs.length, setRef],
   );
 
   useEffect(() => {
@@ -179,42 +182,28 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
       if (focusPrevious) {
         const index = pairs.findIndex((p) => p.id === pair.id);
         const id = pairs[index - 1]?.id ?? null;
-        setForceFocusNamePairId(id);
+        rowsRef.current[id ?? 'n/a']?.focusName();
       }
       return setPairsAndSave((oldPairs) => oldPairs.filter((p) => p.id !== pair.id));
     },
-    [setPairsAndSave, setForceFocusNamePairId, pairs],
+    [setPairsAndSave, pairs],
   );
 
-  const handleFocusName = useCallback((pair: Pair) => {
-    setForceFocusNamePairId(null); // Remove focus override when something focused
-    setForceFocusValuePairId(null); // Remove focus override when something focused
-    setPairs((pairs) => {
+  const handleFocusName = useCallback(
+    (pair: Pair) => {
       const isLast = pair.id === pairs[pairs.length - 1]?.id;
-      if (isLast) {
-        const prevPair = pairs[pairs.length - 1];
-        setTimeout(() => setForceFocusNamePairId(prevPair?.id ?? null));
-        return [...pairs, emptyPair()];
-      } else {
-        return pairs;
-      }
-    });
-  }, []);
+      if (isLast) setPairs([...pairs, emptyPair()]);
+    },
+    [pairs],
+  );
 
-  const handleFocusValue = useCallback((pair: Pair) => {
-    setForceFocusNamePairId(null); // Remove focus override when something focused
-    setForceFocusValuePairId(null); // Remove focus override when something focused
-    setPairs((pairs) => {
+  const handleFocusValue = useCallback(
+    (pair: Pair) => {
       const isLast = pair.id === pairs[pairs.length - 1]?.id;
-      if (isLast) {
-        const prevPair = pairs[pairs.length - 1];
-        setTimeout(() => setForceFocusValuePairId(prevPair?.id ?? null));
-        return [...pairs, emptyPair()];
-      } else {
-        return pairs;
-      }
-    });
-  }, []);
+      if (isLast) setPairs([...pairs, emptyPair()]);
+    },
+    [pairs],
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -282,77 +271,89 @@ export const PairEditor = forwardRef<PairEditorRef, PairEditorProps>(function Pa
         '-mr-2 pr-2',
         // Pad to make room for the drag divider
         'pt-0.5',
+        'grid grid-rows-[auto_1fr]',
       )}
     >
-      <DndContext
-        autoScroll
-        sensors={sensors}
-        onDragMove={onDragMove}
-        onDragEnd={onDragEnd}
-        onDragStart={onDragStart}
-        onDragCancel={onDragCancel}
-        collisionDetection={pointerWithin}
-      >
-        {pairs.map((p, i) => {
-          if (!showAll && i > MAX_INITIAL_PAIRS) return null;
+      <div>
+        <DndContext
+          autoScroll
+          sensors={sensors}
+          onDragMove={onDragMove}
+          onDragEnd={onDragEnd}
+          onDragStart={onDragStart}
+          onDragCancel={onDragCancel}
+          collisionDetection={pointerWithin}
+        >
+          {pairs.map((p, i) => {
+            if (!showAll && i > MAX_INITIAL_PAIRS) return null;
 
-          const isLast = i === pairs.length - 1;
-          return (
-            <Fragment key={p.id}>
-              {hoveredIndex === i && <DropMarker />}
-              <PairEditorRow
-                allowFileValues={allowFileValues}
-                allowMultilineValues={allowMultilineValues}
-                className="py-1"
-                forcedEnvironmentId={forcedEnvironmentId}
-                forceFocusNamePairId={forceFocusNamePairId}
-                forceFocusValuePairId={forceFocusValuePairId}
-                forceUpdateKey={localForceUpdateKey}
-                index={i}
-                isLast={isLast}
-                isDraggingGlobal={!!isDragging}
-                nameAutocomplete={nameAutocomplete}
-                nameAutocompleteFunctions={nameAutocompleteFunctions}
-                nameAutocompleteVariables={nameAutocompleteVariables}
-                namePlaceholder={namePlaceholder}
-                nameValidate={nameValidate}
-                onChange={handleChange}
-                onDelete={handleDelete}
-                onFocusName={handleFocusName}
-                onFocusValue={handleFocusValue}
-                pair={p}
-                stateKey={stateKey}
-                valueAutocomplete={valueAutocomplete}
-                valueAutocompleteFunctions={valueAutocompleteFunctions}
-                valueAutocompleteVariables={valueAutocompleteVariables}
-                valuePlaceholder={valuePlaceholder}
-                valueType={valueType}
-                valueValidate={valueValidate}
-              />
-            </Fragment>
-          );
-        })}
-        {!showAll && pairs.length > MAX_INITIAL_PAIRS && (
-          <Button onClick={toggleShowAll} variant="border" className="m-2" size="xs">
-            Show {pairs.length - MAX_INITIAL_PAIRS} More
-          </Button>
-        )}
-        <DragOverlay dropAnimation={null}>
-          {isDragging && (
-            <PairEditorRow
-              namePlaceholder={namePlaceholder}
-              valuePlaceholder={valuePlaceholder}
-              className="opacity-80"
-              pair={isDragging}
-              index={0}
-              stateKey={null}
-            />
+            const isLast = i === pairs.length - 1;
+            return (
+              <Fragment key={p.id}>
+                {hoveredIndex === i && <DropMarker />}
+                <PairEditorRow
+                  setRef={initPairEditorRow}
+                  allowFileValues={allowFileValues}
+                  allowMultilineValues={allowMultilineValues}
+                  className="py-1"
+                  forcedEnvironmentId={forcedEnvironmentId}
+                  forceUpdateKey={localForceUpdateKey}
+                  index={i}
+                  isLast={isLast}
+                  isDraggingGlobal={!!isDragging}
+                  nameAutocomplete={nameAutocomplete}
+                  nameAutocompleteFunctions={nameAutocompleteFunctions}
+                  nameAutocompleteVariables={nameAutocompleteVariables}
+                  namePlaceholder={namePlaceholder}
+                  nameValidate={nameValidate}
+                  onChange={handleChange}
+                  onDelete={handleDelete}
+                  onFocusName={handleFocusName}
+                  onFocusValue={handleFocusValue}
+                  pair={p}
+                  stateKey={stateKey}
+                  valueAutocomplete={valueAutocomplete}
+                  valueAutocompleteFunctions={valueAutocompleteFunctions}
+                  valueAutocompleteVariables={valueAutocompleteVariables}
+                  valuePlaceholder={valuePlaceholder}
+                  valueType={valueType}
+                  valueValidate={valueValidate}
+                />
+              </Fragment>
+            );
+          })}
+          {!showAll && pairs.length > MAX_INITIAL_PAIRS && (
+            <Button onClick={toggleShowAll} variant="border" className="m-2" size="xs">
+              Show {pairs.length - MAX_INITIAL_PAIRS} More
+            </Button>
           )}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay dropAnimation={null}>
+            {isDragging && (
+              <PairEditorRow
+                namePlaceholder={namePlaceholder}
+                valuePlaceholder={valuePlaceholder}
+                className="opacity-80"
+                pair={isDragging}
+                index={0}
+                stateKey={null}
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
+      </div>
+
+      <div
+        // There's a weird bug where clicking below one of the above Codemirror inputs will cause
+        // it to focus. Putting this element here prevents that
+        aria-hidden
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      />
     </div>
   );
-});
+}
 
 type PairEditorRowProps = {
   className?: string;
@@ -369,6 +370,7 @@ type PairEditorRowProps = {
   disableDrag?: boolean;
   index: number;
   isDraggingGlobal?: boolean;
+  setRef?: (id: string, n: RowHandle | null) => void;
 } & Pick<
   PairEditorProps,
   | 'allowFileValues'
@@ -389,14 +391,17 @@ type PairEditorRowProps = {
   | 'valueValidate'
 >;
 
+interface RowHandle {
+  focusName(): void;
+  focusValue(): void;
+}
+
 export function PairEditorRow({
   allowFileValues,
   allowMultilineValues,
   className,
   disableDrag,
   disabled,
-  forceFocusNamePairId,
-  forceFocusValuePairId,
   forceUpdateKey,
   forcedEnvironmentId,
   index,
@@ -419,21 +424,38 @@ export function PairEditorRow({
   valuePlaceholder,
   valueType,
   valueValidate,
+  setRef,
 }: PairEditorRowProps) {
   const nameInputRef = useRef<InputHandle>(null);
   const valueInputRef = useRef<InputHandle>(null);
-
-  useEffect(() => {
-    if (forceFocusNamePairId === pair.id) {
+  const handle = useRef<RowHandle>({
+    focusName() {
       nameInputRef.current?.focus();
-    }
-  }, [forceFocusNamePairId, pair.id]);
-
-  useEffect(() => {
-    if (forceFocusValuePairId === pair.id) {
+    },
+    focusValue() {
       valueInputRef.current?.focus();
-    }
-  }, [forceFocusValuePairId, pair.id]);
+    },
+  });
+
+  const initNameInputRef = useCallback(
+    (n: InputHandle | null) => {
+      nameInputRef.current = n;
+      if (nameInputRef.current && valueInputRef.current) {
+        setRef?.(pair.id, handle.current);
+      }
+    },
+    [pair.id, setRef],
+  );
+
+  const initValueInputRef = useCallback(
+    (n: InputHandle | null) => {
+      valueInputRef.current = n;
+      if (nameInputRef.current && valueInputRef.current) {
+        setRef?.(pair.id, handle.current);
+      }
+    },
+    [pair.id, setRef],
+  );
 
   const handleFocusName = useCallback(() => onFocusName?.(pair), [onFocusName, pair]);
   const handleFocusValue = useCallback(() => onFocusValue?.(pair), [onFocusValue, pair]);
@@ -559,44 +581,29 @@ export function PairEditorRow({
           'gap-0.5 grid-cols-1 grid-rows-2',
         )}
       >
-        {isLast ? (
-          // Use PlainInput for last ones because there's a unique bug where clicking below
-          // the Codemirror input focuses it.
-          <PlainInput
-            hideLabel
-            size="sm"
-            containerClassName={classNames(isLast && 'border-dashed')}
-            className={classNames(isDraggingGlobal && 'pointer-events-none')}
-            label="Name"
-            name={`name[${index}]`}
-            onFocus={handleFocusName}
-            placeholder={namePlaceholder ?? 'name'}
-          />
-        ) : (
-          <Input
-            ref={nameInputRef}
-            hideLabel
-            stateKey={`name.${pair.id}.${stateKey}`}
-            disabled={disabled}
-            wrapLines={false}
-            readOnly={pair.readOnlyName || isDraggingGlobal}
-            size="sm"
-            required={!isLast && !!pair.enabled && !!pair.value}
-            validate={nameValidate}
-            forcedEnvironmentId={forcedEnvironmentId}
-            forceUpdateKey={forceUpdateKey}
-            containerClassName={classNames('bg-surface', isLast && 'border-dashed')}
-            defaultValue={pair.name}
-            label="Name"
-            name={`name[${index}]`}
-            onChange={handleChangeName}
-            onFocus={handleFocusName}
-            placeholder={namePlaceholder ?? 'name'}
-            autocomplete={nameAutocomplete}
-            autocompleteVariables={nameAutocompleteVariables}
-            autocompleteFunctions={nameAutocompleteFunctions}
-          />
-        )}
+        <Input
+          setRef={initNameInputRef}
+          hideLabel
+          stateKey={`name.${pair.id}.${stateKey}`}
+          disabled={disabled}
+          wrapLines={false}
+          readOnly={pair.readOnlyName || isDraggingGlobal}
+          size="sm"
+          required={!isLast && !!pair.enabled && !!pair.value}
+          validate={nameValidate}
+          forcedEnvironmentId={forcedEnvironmentId}
+          forceUpdateKey={forceUpdateKey}
+          containerClassName={classNames('bg-surface', isLast && 'border-dashed')}
+          defaultValue={pair.name}
+          label="Name"
+          name={`name[${index}]`}
+          onChange={handleChangeName}
+          onFocus={handleFocusName}
+          placeholder={namePlaceholder ?? 'name'}
+          autocomplete={nameAutocomplete}
+          autocompleteVariables={nameAutocompleteVariables}
+          autocompleteFunctions={nameAutocompleteFunctions}
+        />
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
           {pair.isFile ? (
             <SelectFile
@@ -605,20 +612,6 @@ export function PairEditorRow({
               size="xs"
               filePath={pair.value}
               onChange={handleChangeValueFile}
-            />
-          ) : isLast ? (
-            // Use PlainInput for last ones because there's a unique bug where clicking below
-            // the Codemirror input focuses it.
-            <PlainInput
-              hideLabel
-              disabled={disabled}
-              size="sm"
-              containerClassName={classNames(isLast && 'border-dashed')}
-              label="Value"
-              name={`value[${index}]`}
-              className={classNames(isDraggingGlobal && 'pointer-events-none')}
-              onFocus={handleFocusValue}
-              placeholder={valuePlaceholder ?? 'value'}
             />
           ) : pair.value.includes('\n') ? (
             <Button
@@ -632,7 +625,7 @@ export function PairEditorRow({
             </Button>
           ) : (
             <Input
-              ref={valueInputRef}
+              setRef={initValueInputRef}
               hideLabel
               stateKey={`value.${pair.id}.${stateKey}`}
               wrapLines={false}

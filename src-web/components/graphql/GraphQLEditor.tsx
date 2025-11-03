@@ -1,9 +1,8 @@
-import type { EditorView } from '@codemirror/view';
 import type { HttpRequest } from '@yaakapp-internal/models';
 
 import { formatSdl } from 'format-graphql';
 import { useAtom } from 'jotai';
-import { useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { useLocalStorage } from 'react-use';
 import { useIntrospectGraphQL } from '../../hooks/useIntrospectGraphQL';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
@@ -26,7 +25,6 @@ type Props = Pick<EditorProps, 'heightMode' | 'className' | 'forceUpdateKey'> & 
 };
 
 export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorProps }: Props) {
-  const editorViewRef = useRef<EditorView>(null);
   const [autoIntrospectDisabled, setAutoIntrospectDisabled] = useLocalStorage<
     Record<string, boolean>
   >('graphQLAutoIntrospectDisabled', {});
@@ -199,7 +197,6 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
         defaultValue={currentBody.query}
         onChange={handleChangeQuery}
         placeholder="..."
-        ref={editorViewRef}
         actions={actions}
         stateKey={'graphql_body.' + request.id}
         {...extraEditorProps}
