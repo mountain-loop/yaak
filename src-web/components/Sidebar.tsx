@@ -454,7 +454,7 @@ function Sidebar({ className }: { className?: string }) {
               rightSlot={
                 filterText.text && (
                   <IconButton
-                    className="!h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
+                    className="!bg-transparent !h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
                     icon="x"
                     title="Clear filter"
                     onClick={clearFilterText}
