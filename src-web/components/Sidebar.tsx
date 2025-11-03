@@ -57,7 +57,7 @@ import { InlineCode } from './core/InlineCode';
 import type { InputHandle } from './core/Input';
 import { Input } from './core/Input';
 import { LoadingIcon } from './core/LoadingIcon';
-import { collapsedFamily, isSelectedFamily } from './core/tree/atoms';
+import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
@@ -164,8 +164,10 @@ function Sidebar({ className }: { className?: string }) {
     if (n == null) return;
     const activeId = jotaiStore.get(activeIdAtom);
     if (activeId == null) return;
+    const selectedIds = jotaiStore.get(selectedIdsFamily(treeId));
+    if (selectedIds.length > 0) return;
     n.selectItem(activeId);
-  }, []);
+  }, [treeId]);
 
   // Ensure active id is always selected when it changes
   useEffect(() => {
