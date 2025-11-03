@@ -177,14 +177,23 @@ function TreeInner<T extends { id: string }>(
   const ensureTabbableItem = useCallback(() => {
     const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
     const lastSelectedItem = selectableItems.find((i) =>
-      i.node.item.id === lastSelectedId
+      i.node.item.id === lastSelectedId && !i.node.hidden
     );
+
+    // If no item found, default to selecting the first item (prefer leaf node);
     if (lastSelectedItem == null) {
-      return false;
+      const firstLeafItem = selectableItems.find((i) => !i.node.hidden && i.node.children == null);
+      const firstItem = firstLeafItem ?? selectableItems.find((i) => !i.node.hidden);
+      if (firstItem != null) {
+        const id = firstItem.node.item.id;
+        jotaiStore.set(selectedIdsFamily(treeId), [id]);
+        jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
+      }
+      return;
     }
 
     const closest = closestVisibleNode(treeId, lastSelectedItem.node);
-    if (closest != null && closest !== lastSelectedItem.node) {
+    if (closest != null) {
       const id = closest.item.id;
       jotaiStore.set(selectedIdsFamily(treeId), [id]);
       jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
@@ -200,7 +209,6 @@ function TreeInner<T extends { id: string }>(
   // Ensure there's always a tabbable item after render
   useEffect(() => {
     requestAnimationFrame(ensureTabbableItem);
-    ensureTabbableItem();
   });
 
   const setSelected = useCallback(
@@ -220,6 +228,10 @@ function TreeInner<T extends { id: string }>(
         treeRef.current?.contains(document.activeElement) ?? false,
       renameItem: (id) => treeItemRefs.current[id]?.rename(),
       selectItem: (id) => {
+        if (jotaiStore.get(selectedIdsFamily(treeId)).includes(id)) {
+          // Already selected
+          return;
+        }
         setSelected([id], false);
         jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
       },
@@ -823,9 +835,7 @@ function DropRegionAfterList({
   onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
 }) {
   const { setNodeRef } = useDroppable({ id });
-  return (
-    <div ref={setNodeRef} onContextMenu={onContextMenu} />
-  );
+  return <div ref={setNodeRef} onContextMenu={onContextMenu} />;
 }
 
 interface TreeHotKeyProps<T extends { id: string }> {
