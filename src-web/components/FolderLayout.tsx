@@ -31,10 +31,17 @@ export function FolderLayout({ folder, style }: Props) {
   const folders = useAtomValue(foldersAtom);
   const requests = useAtomValue(allRequestsAtom);
   const children = useMemo(() => {
-    return [
+    const childItems = [
       ...folders.filter((f) => f.folderId === folder.id),
       ...requests.filter((r) => r.folderId === folder.id),
     ];
+    childItems.sort((a, b) => {
+      if (a.sortPriority === b.sortPriority) {
+        return a.updatedAt > b.updatedAt ? 1 : -1;
+      }
+      return a.sortPriority - b.sortPriority;
+    });
+    return childItems;
   }, [folder.id, folders, requests]);
 
   return (
