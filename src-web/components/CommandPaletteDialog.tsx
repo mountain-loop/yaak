@@ -30,7 +30,10 @@ import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { showDialog } from '../lib/dialog';
 import { editEnvironment } from '../lib/editEnvironment';
 import { renameModelWithPrompt } from '../lib/renameModelWithPrompt';
-import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
+import {
+  resolvedModelNameWithFolders,
+  resolvedModelNameWithFoldersArray,
+} from '../lib/resolvedModelName';
 import { router } from '../lib/router';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import { CookieDialog } from './CookieDialog';
@@ -40,7 +43,6 @@ import { HotKey } from './core/HotKey';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { Icon } from './core/Icon';
 import { PlainInput } from './core/PlainInput';
-import { HStack } from './core/Stacks';
 
 interface CommandPaletteGroup {
   key: string;
@@ -275,10 +277,17 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         key: `switch-request-${r.id}`,
         searchText: resolvedModelNameWithFolders(r),
         label: (
-          <HStack space={2}>
-            <HttpMethodTag short className="text-xs" request={r} />
-            <div className="truncate">{resolvedModelNameWithFolders(r)}</div>
-          </HStack>
+          <div className="flex items-center gap-x-0.5">
+            <HttpMethodTag short className="text-xs mr-2" request={r} />
+            {resolvedModelNameWithFoldersArray(r).map((name, i, all) => (
+              <>
+                {i !== 0 && (
+                  <Icon icon="chevron_right" className="opacity-80"/>
+                )}
+                <div className={classNames(i < all.length - 1 && 'truncate')}>{name}</div>
+              </>
+            ))}
+          </div>
         ),
         onSelect: async () => {
           await router.navigate({
@@ -400,7 +409,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <div className="h-full w-[400px] grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden py-2">
+    <div className="h-full w-[min(700px,80vw)] grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden py-2">
       <div className="px-2 w-full">
         <PlainInput
           autoFocus

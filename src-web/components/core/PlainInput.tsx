@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { useRandomKey } from '../../hooks/useRandomKey';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
+import { generateId } from '../../lib/generateId';
 import { IconButton } from './IconButton';
 import type { InputProps } from './Input';
 import { Label } from './Label';
@@ -99,7 +100,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     }
   }, [regenerateFocusedUpdateKey, defaultValue]);
 
-  const id = `input-${name}`;
+  const id = useRef(`input-${generateId()}`);
   const commonClassName = classNames(
     className,
     '!bg-transparent min-w-0 w-full focus:outline-none placeholder:text-placeholder',
@@ -134,7 +135,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
       )}
     >
       <Label
-        htmlFor={id}
+        htmlFor={id.current}
         className={labelClassName}
         visuallyHidden={hideLabel}
         required={required}
@@ -177,10 +178,11 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
           )}
         >
           <input
-            id={id}
+            id={id.current}
             ref={inputRef}
             key={forceUpdateKey}
             type={type === 'password' && !obscured ? 'text' : type}
+            name={name}
             defaultValue={defaultValue ?? undefined}
             autoComplete="off"
             autoCapitalize="off"

@@ -1,4 +1,4 @@
-import type { AnyModel} from '@yaakapp-internal/models';
+import type { AnyModel } from '@yaakapp-internal/models';
 import { foldersAtom } from '@yaakapp-internal/models';
 import { jotaiStore } from './jotai';
 
@@ -39,7 +39,11 @@ export function resolvedModelName(r: AnyModel | null): string {
 }
 
 export function resolvedModelNameWithFolders(model: AnyModel | null): string {
-  if (model == null) return '';
+  return resolvedModelNameWithFoldersArray(model).join(' / ');
+}
+
+export function resolvedModelNameWithFoldersArray(model: AnyModel | null): string[] {
+  if (model == null) return [];
   const folders = jotaiStore.get(foldersAtom) ?? [];
 
   const getParents = (m: AnyModel, names: string[]) => {
@@ -47,11 +51,11 @@ export function resolvedModelNameWithFolders(model: AnyModel | null): string {
     if ('folderId' in m) {
       const parent = folders.find((f) => f.id === m.folderId);
       if (parent) {
-        names = [resolvedModelName(parent), ...names];
+        names = [...resolvedModelNameWithFoldersArray(parent), ...names];
       }
     }
     return names;
   };
 
-  return getParents(model, []).join(' / ');
+  return getParents(model, []);
 }
