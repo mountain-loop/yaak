@@ -76,6 +76,7 @@
         "sortPriority": -1747414129276,
         "updatedAt": "2025-05-16T16:48:49.313",
         "url": "https://httpbin.org/post",
+        "urlParameters": [],
         "workspaceId": "GENERATE_ID::wrk_9717dd1c9e0c4b2e9ed6d2abcf3bd45c"
       },
       {
@@ -98,6 +99,7 @@
         "name": "New Request",
         "sortPriority": -1747414160498,
         "updatedAt": "2025-05-16T16:49:20.497",
+        "urlParameters": [],
         "workspaceId": "GENERATE_ID::wrk_9717dd1c9e0c4b2e9ed6d2abcf3bd45c"
       }
     ],

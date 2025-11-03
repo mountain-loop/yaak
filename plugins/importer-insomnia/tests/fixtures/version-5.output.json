@@ -135,6 +135,13 @@
         "name": "New Request",
         "sortPriority": -1736781406672,
         "url": "${[BASE_URL ]}/foo/:id",
+        "urlParameters": [
+          {
+            "name": "query",
+            "value": "qqq",
+            "enabled": true
+          }
+        ],
         "workspaceId": "GENERATE_ID::wrk_c1eacfa750a04f3ea9985ef28043fa53"
       }
     ],
