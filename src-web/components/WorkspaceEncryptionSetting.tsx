@@ -127,7 +127,6 @@ export function WorkspaceEncryptionSetting(
         onClick={async () => {
           setError(null);
           try {
-            throw new Error("Platform secure storage error");
             await enableEncryption(workspaceMeta.workspaceId);
             setJustEnabledEncryption(true);
           } catch (err) {
