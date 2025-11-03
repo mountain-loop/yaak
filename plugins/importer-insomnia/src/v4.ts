@@ -160,7 +160,7 @@ function importGrpcRequest(r: any, workspaceId: string): PartialImportResources[
       .map((h: any) => ({
         enabled: !h.disabled,
         name: h.name ?? '',
-        value: h.value ?? '',
+        value: convertSyntax(h.value) ?? '',
       }))
       .filter(({ name, value }: any) => name !== '' || value !== ''),
   };
