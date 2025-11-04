@@ -265,6 +265,7 @@ export function GrpcRequestPane({
         </HStack>
       </div>
       <Tabs
+        key={forceUpdateKey}
         value={activeTab}
         label="Request"
         onChangeValue={setActiveTab}
