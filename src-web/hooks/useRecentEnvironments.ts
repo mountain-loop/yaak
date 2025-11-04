@@ -1,9 +1,7 @@
-import { useAtomValue } from 'jotai';
 import { useEffect, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
-import { activeEnvironmentIdAtom } from './useActiveEnvironment';
-import { activeWorkspaceAtom, activeWorkspaceIdAtom } from './useActiveWorkspace';
+import { activeEnvironmentAtom } from './useActiveEnvironment';
 import { useEnvironmentsBreakdown } from './useEnvironmentsBreakdown';
 import { useKeyValue } from './useKeyValue';
 
@@ -12,10 +10,9 @@ const namespace = 'global';
 const fallback: string[] = [];
 
 export function useRecentEnvironments() {
-  const { subEnvironments } = useEnvironmentsBreakdown();
-  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
+  const { subEnvironments, allEnvironments } = useEnvironmentsBreakdown();
   const kv = useKeyValue<string[]>({
-    key: kvKey(activeWorkspace?.id ?? 'n/a'),
+    key: kvKey(allEnvironments[0]?.workspaceId ?? 'n/a'),
     namespace,
     fallback,
   });
@@ -30,19 +27,16 @@ export function useRecentEnvironments() {
 
 export function useSubscribeRecentEnvironments() {
   useEffect(() => {
-    return jotaiStore.sub(activeEnvironmentIdAtom, async () => {
-      const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-      const activeEnvironmentId = jotaiStore.get(activeEnvironmentIdAtom);
-      if (activeWorkspaceId == null) return;
-      if (activeEnvironmentId == null) return;
+    return jotaiStore.sub(activeEnvironmentAtom, async () => {
+      const activeEnvironment = jotaiStore.get(activeEnvironmentAtom);
+      if (activeEnvironment == null) return;
 
-      const key = kvKey(activeWorkspaceId);
-
+      const key = kvKey(activeEnvironment.workspaceId);
       const recentIds = getKeyValue<string[]>({ namespace, key, fallback });
-      if (recentIds[0] === activeEnvironmentId) return; // Short-circuit
+      if (recentIds[0] === activeEnvironment.id) return; // Short-circuit
 
-      const withoutActiveId = recentIds.filter((id) => id !== activeEnvironmentId);
-      const value = [activeEnvironmentId, ...withoutActiveId];
+      const withoutActiveId = recentIds.filter((id) => id !== activeEnvironment.id);
+      const value = [activeEnvironment.id, ...withoutActiveId];
       await setKeyValue({ namespace, key, value });
     });
   }, []);

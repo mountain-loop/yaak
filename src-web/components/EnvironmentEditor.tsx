@@ -2,7 +2,7 @@ import type { Environment } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useIsEncryptionEnabled } from '../hooks/useIsEncryptionEnabled';
 import { useKeyValue } from '../hooks/useKeyValue';

@@ -4,7 +4,18 @@ import { atom, useAtomValue } from 'jotai';
 export const environmentsBreakdownAtom = atom((get) => {
   const allEnvironments = get(environmentsAtom);
   const baseEnvironments = allEnvironments.filter((e) => e.parentModel === 'workspace') ?? [];
-  const subEnvironments = allEnvironments.filter((e) => e.parentModel === 'environment') ?? [];
+
+  const subEnvironments =
+    allEnvironments
+      .filter((e) => e.parentModel === 'environment')
+      ?.sort((a, b) => {
+        if (a.sortPriority === b.sortPriority) {
+          return a.updatedAt > b.updatedAt ? 1 : -1;
+        } else {
+          return a.sortPriority - b.sortPriority;
+        }
+      }) ?? [];
+
   const folderEnvironments =
     allEnvironments.filter((e) => e.parentModel === 'folder' && e.parentId != null) ?? [];
 
