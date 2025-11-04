@@ -154,9 +154,8 @@ function Sidebar({ className }: { className?: string }) {
               folderId,
             }),
           ),
-      );
-      op>
-    }
+        );
+      }
     } catch (e) {
       console.error(e);
     }
