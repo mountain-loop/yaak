@@ -75,7 +75,7 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
         name: p.name ?? '',
-        value: p.value ?? '',
+        value: convertSyntax(p.value) ?? '',
       })),
     };
   } else if (r.body?.mimeType === 'multipart/form-data') {
@@ -84,7 +84,7 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
         name: p.name ?? '',
-        value: p.value ?? '',
+        value: convertSyntax(p.value) ?? '',
         file: p.fileName ?? null,
       })),
     };
@@ -125,8 +125,8 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
     urlParameters: (r.parameters ?? [])
       .map((p: any) => ({
         enabled: !p.disabled,
-        name: p.name ?? '',
-        value: p.value ?? '',
+        name: convertSyntax(p.name) ?? '',
+        value: convertSyntax(p.value) ?? '',
       })),
     body,
     bodyType,
@@ -136,8 +136,8 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
     headers: (r.headers ?? [])
       .map((h: any) => ({
         enabled: !h.disabled,
-        name: h.name ?? '',
-        value: h.value ?? '',
+        name: convertSyntax(h.name) ?? '',
+        value: convertSyntax(h.value) ?? '',
       }))
       .filter(({ name, value }: any) => name !== '' || value !== ''),
   };

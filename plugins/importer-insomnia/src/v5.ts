@@ -92,8 +92,8 @@ function importHttpRequest(
     body = {
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
-        name: p.name ?? '',
-        value: p.value ?? '',
+        name: convertSyntax(p.name) ?? '',
+        value: convertSyntax(p.value) ?? '',
       })),
     };
   } else if (r.body?.mimeType === 'multipart/form-data') {
@@ -101,8 +101,8 @@ function importHttpRequest(
     body = {
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
-        name: p.name ?? '',
-        value: p.value ?? '',
+        name: convertSyntax(p.name) ?? '',
+        value: convertSyntax(p.value) ?? '',
         file: p.fileName ?? null,
       })),
     };
@@ -128,8 +128,8 @@ function importHttpRequest(
     urlParameters: (r.parameters ?? [])
       .map((p: any) => ({
         enabled: !p.disabled,
-        name: p.name ?? '',
-        value: p.value ?? '',
+        name: convertSyntax(p.name) ?? '',
+        value: convertSyntax(p.value) ?? '',
       })),
     body,
     bodyType,
@@ -208,7 +208,7 @@ function importHeaders(obj: any) {
   const headers = (obj.headers ?? [])
     .map((h: any) => ({
       enabled: !h.disabled,
-      name: h.name ?? '',
+      name: convertSyntax(h.name) ?? '',
       value: convertSyntax(h.value) ?? '',
     }))
     .filter(({ name, value }: any) => name !== '' || value !== '');
