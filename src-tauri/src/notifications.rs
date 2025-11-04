@@ -139,6 +139,7 @@ async fn get_kv<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<String>> {
     }
 }
 
+#[allow(unused)]
 fn get_updater_status<R: Runtime>(app_handle: &AppHandle<R>) -> &'static str {
     #[cfg(not(feature = "updater"))]
     {

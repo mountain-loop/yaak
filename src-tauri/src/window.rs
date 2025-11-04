@@ -3,7 +3,7 @@ use crate::window_menu::app_menu;
 use log::{info, warn};
 use rand::random;
 use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, Runtime, WebviewUrl, WebviewWindow, WindowEvent,
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalSize, Runtime, WebviewUrl, WebviewWindow, WindowEvent
 };
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
@@ -160,6 +160,11 @@ pub(crate) fn create_window<R: Runtime>(
             "dev.reset_size" => webview_window
                 .set_size(LogicalSize::new(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT))
                 .unwrap(),
+            "dev.reset_size_record" => {
+                let width = webview_window.outer_size().unwrap().width;
+                let height = width * 9 / 16;
+                webview_window.set_size(PhysicalSize::new(width, height)).unwrap()
+            }
             "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
             "dev.generate_theme_css" => {
                 w.emit("generate_theme_css", true).unwrap();
