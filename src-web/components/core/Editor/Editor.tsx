@@ -376,7 +376,7 @@ export function Editor({
 
   // Initialize the editor when ref mounts
   const initEditorRef = useCallback(
-    function initializeCodemirror(container: HTMLDivElement | null) {
+    function initEditorRef(container: HTMLDivElement | null) {
       if (container === null) {
         cm.current?.view.destroy();
         cm.current = null;
@@ -455,16 +455,8 @@ export function Editor({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [forceUpdateKey],
   );
-
-  // Update editor doc when force update key changes
-  useEffect(() => {
-    if (cm.current?.view != null) {
-      updateContents(cm.current.view, defaultValue || '');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [forceUpdateKey]);
 
   // For read-only mode, update content when `defaultValue` changes
   useEffect(

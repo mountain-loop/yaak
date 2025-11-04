@@ -354,7 +354,6 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             isLoading={activeResponse != null && activeResponse.state !== 'closed'}
           />
           <Tabs
-            key={activeRequest.id} // Freshen tabs on request change
             value={activeTab}
             label="Request"
             onChangeValue={setActiveTab}
