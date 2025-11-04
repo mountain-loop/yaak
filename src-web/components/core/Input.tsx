@@ -401,7 +401,7 @@ function EncryptionInput({
           setState({ fieldType: 'encrypted', security, value, obscured: true, error: null });
           // We're calling this here because we want the input to be fully initialized so the caller
           // can do stuff like change the selection.
-          setRef?.(inputRef.current);
+          requestAnimationFrame(() => setRef?.(inputRef.current));
         },
         onError: (value) => {
           setState({
