@@ -130,7 +130,7 @@
           },
           {
             "enabled": true,
-            "name": "X-API-Header",
+            "name": "${[ApiHeaderName ]}",
             "value": "${[ApiKey ]}"
           }
         ],
