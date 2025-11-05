@@ -247,6 +247,7 @@ function TextArg({
       name={arg.name}
       multiLine={arg.multiLine}
       onChange={onChange}
+      className={arg.multiLine ? 'min-h-[4rem]' : undefined}
       defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
       required={!arg.optional}
       disabled={arg.disabled}
