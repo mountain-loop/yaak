@@ -148,7 +148,7 @@ export const plugin: PluginDefinition = {
       if (values.timestamp) requestData.data.oauth_timestamp = String(values.timestamp);
       if (values.verifier) requestData.data.oauth_verifier = String(values.verifier);
 
-      let token: OAuth.Token | { key: string } | undefined = undefined;
+      let token: OAuth.Token | { key: string } | undefined;
 
       if (pkSigs.includes(signatureMethod)) {
         token = {
