@@ -223,10 +223,12 @@ function Sidebar({ className }: { className?: string }) {
             for (const n of node.children ?? []) {
               if (n.item.model !== 'folder') continue;
               collapsed[n.item.id] = true;
+              collapsed = next(n, collapsed);
             }
             return collapsed;
           };
-          jotaiStore.set(collapsedFamily(treeId), next(tree, {}));
+          const collapsed = next(tree, {});
+          jotaiStore.set(collapsedFamily(treeId), collapsed);
         },
       },
       'sidebar.selected.delete': {
@@ -435,7 +437,7 @@ function Sidebar({ className }: { className?: string }) {
       aria-hidden={hidden ?? undefined}
       className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)_auto]')}
     >
-      <div className="w-full px-3 pt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center -mr-2.5">
+      <div className="w-full pl-3 pr-0.5 pt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center">
         {(tree.children?.length ?? 0) > 0 && (
           <>
             <Input
@@ -485,7 +487,6 @@ function Sidebar({ className }: { className?: string }) {
                 size="xs"
                 className="ml-0.5 text-text-subtle hover:text-text"
                 icon="ellipsis_vertical"
-                hotkeyAction="sidebar.collapse_all"
                 title="Show sidebar actions menu"
               />
             </Dropdown>
@@ -630,7 +631,7 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
 
   const root: TreeNode<SidebarModel> = {
     item: activeWorkspace,
-    parent: null, 
+    parent: null,
     children: [],
     depth: 0,
   };
