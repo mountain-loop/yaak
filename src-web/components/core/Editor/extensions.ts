@@ -19,11 +19,13 @@ import {
   indentOnInput,
   syntaxHighlighting,
 } from '@codemirror/language';
-import { lintKeymap } from '@codemirror/lint';
+import { linter, lintKeymap } from '@codemirror/lint';
 
 import { search, searchKeymap } from '@codemirror/search';
 import type { Extension } from '@codemirror/state';
 import { EditorState } from '@codemirror/state';
+import type { Diagnostic } from '@codemirror/lint';
+import * as jsonc from 'jsonc-parser';
 import {
   crosshairCursor,
   drawSelection,
@@ -99,6 +101,52 @@ const syntaxExtensions: Record<
 
 const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ['json', 'javascript', 'graphql'];
 
+// Custom JSON linter that provides precise error locations
+function jsonLinter() {
+  return (view: EditorView): Diagnostic[] => {
+    const doc = view.state.doc.toString();
+    const errors: jsonc.ParseError[] = [];
+    
+    // Parse JSON and collect errors
+    jsonc.parse(doc, errors, { allowTrailingComma: false });
+    
+    // Map of error codes to human-readable messages
+    const errorMessages: Record<number, string> = {
+      1: 'Invalid symbol',
+      2: 'Invalid number format',
+      3: 'Property name expected',
+      4: 'Value expected',
+      5: 'Colon expected',
+      6: 'Comma Expected',
+      7: 'Closing brace expected',
+      8: 'Closing bracket expected',
+      9: 'End of file expected',
+      10: 'Invalid comment token',
+      11: 'Unexpected end of comment',
+      12: 'Unexpected end of string',
+      13: 'Unexpected end of number',
+      14: 'Invalid unicode sequence',
+      15: 'Invalid escape character',
+      16: 'Invalid character',
+    };
+    
+    // Convert jsonc-parser errors to CodeMirror diagnostics
+    return errors.map(error => {
+      const from = error.offset;
+      const to = Math.min(from + Math.max(error.length, 1), doc.length);
+      const baseMessage = errorMessages[error.error] || 'JSON Parse error';
+      const message = `${baseMessage} (${from})`;
+      
+      return {
+        from,
+        to,
+        severity: 'error' as const,
+        message,
+      };
+    });
+  };
+}
+
 export function getLanguageExtension({
   useTemplating,
   language = 'text',
@@ -122,6 +170,15 @@ export function getLanguageExtension({
 
   if (language === 'url') {
     extraExtensions.push(pathParametersPlugin(onClickPathParameter));
+  }
+
+  // Add JSON syntax validation with precise error locations
+  if (language === 'json') {
+    extraExtensions.push(
+      linter(jsonLinter(), {
+        delay: 300,
+      }),
+    );
   }
 
   // Only close brackets on languages that need it
