@@ -131,19 +131,35 @@ function jsonLinter() {
     };
     
     // Convert jsonc-parser errors to CodeMirror diagnostics
-    return errors.map(error => {
+    // Group errors by position and keep only the highest priority (lowest error code)
+    const diagnosticMap = new Map<number, { diagnostic: Diagnostic; errorCode: number }>();
+    
+    errors.forEach(error => {
       const from = error.offset;
       const to = Math.min(from + Math.max(error.length, 1), doc.length);
-      const baseMessage = errorMessages[error.error] || 'JSON Parse error';
-      const message = `${baseMessage} (${from})`;
       
-      return {
-        from,
-        to,
-        severity: 'error' as const,
-        message,
-      };
+      // Check if we already have an error at this position
+      const existing = diagnosticMap.get(from);
+      
+      // Only keep this error if it's higher priority (lower error code) or no error exists yet
+      if (!existing || error.error < existing.errorCode) {
+        const baseMessage = errorMessages[error.error] || 'JSON Parse error';
+        const message = `${baseMessage} (${from})`;
+        
+        diagnosticMap.set(from, {
+          diagnostic: {
+            from,
+            to,
+            severity: 'error' as const,
+            message,
+          },
+          errorCode: error.error,
+        });
+      }
     });
+    
+    // Extract just the diagnostics
+    return Array.from(diagnosticMap.values()).map(item => item.diagnostic);
   };
 }
 
