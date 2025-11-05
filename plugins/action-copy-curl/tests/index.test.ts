@@ -275,11 +275,9 @@ describe('exporter-curl', () => {
         },
       }),
     ).toEqual(
-      [
-        `curl 'https://yaak.app'`,
-        `--aws-sigv4 aws:amz:us-east-1:s3`,
-        `--user 'ak:sk'`,
-      ].join(` \\\n  `),
+      [`curl 'https://yaak.app'`, `--aws-sigv4 aws:amz:us-east-1:s3`, `--user 'ak:sk'`].join(
+        ` \\\n  `,
+      ),
     );
   });
 
@@ -314,15 +312,40 @@ describe('exporter-curl', () => {
         authentication: {
           location: 'header',
           key: 'X-Header',
-          value: 'my-token'
+          value: 'my-token',
         },
       }),
-    ).toEqual(
-      [
-        `curl 'https://yaak.app'`,
-        `--header 'X-Header: my-token'`,
-      ].join(` \\\n  `),
-    );
+    ).toEqual([`curl 'https://yaak.app'`, `--header 'X-Header: my-token'`].join(` \\\n  `));
+  });
+
+  test('API key auth header query', async () => {
+    expect(
+      await convertToCurl({
+        url: 'https://yaak.app?hi=there',
+        urlParameters: [{ name: 'param', value: 'hi' }],
+        authenticationType: 'apikey',
+        authentication: {
+          location: 'query',
+          key: 'foo',
+          value: 'bar',
+        },
+      }),
+    ).toEqual([`curl 'https://yaak.app?hi=there&param=hi&foo=bar'`].join(` \\\n  `));
+  });
+
+  test('API key auth header query with params', async () => {
+    expect(
+      await convertToCurl({
+        url: 'https://yaak.app',
+        urlParameters: [{ name: 'param', value: 'hi' }],
+        authenticationType: 'apikey',
+        authentication: {
+          location: 'query',
+          key: 'foo',
+          value: 'bar',
+        },
+      }),
+    ).toEqual([`curl 'https://yaak.app?param=hi&foo=bar'`].join(` \\\n  `));
   });
 
   test('API key auth header default', async () => {
@@ -334,12 +357,7 @@ describe('exporter-curl', () => {
           location: 'header',
         },
       }),
-    ).toEqual(
-      [
-        `curl 'https://yaak.app'`,
-        `--header 'X-Api-Key: '`,
-      ].join(` \\\n  `),
-    );
+    ).toEqual([`curl 'https://yaak.app'`, `--header 'X-Api-Key: '`].join(` \\\n  `));
   });
 
   test('API key auth query', async () => {
@@ -350,14 +368,10 @@ describe('exporter-curl', () => {
         authentication: {
           location: 'query',
           key: 'foo',
-          value: 'bar-baz'
+          value: 'bar-baz',
         },
       }),
-    ).toEqual(
-      [
-        `curl 'https://yaak.app?foo=bar-baz'`,
-      ].join(` \\\n  `),
-    );
+    ).toEqual([`curl 'https://yaak.app?foo=bar-baz'`].join(` \\\n  `));
   });
 
   test('API key auth query with existing', async () => {
@@ -368,14 +382,10 @@ describe('exporter-curl', () => {
         authentication: {
           location: 'query',
           key: 'hi',
-          value: 'there'
+          value: 'there',
         },
       }),
-    ).toEqual(
-      [
-        `curl 'https://yaak.app?foo=bar&baz=qux&hi=there'`,
-      ].join(` \\\n  `),
-    );
+    ).toEqual([`curl 'https://yaak.app?foo=bar&baz=qux&hi=there'`].join(` \\\n  `));
   });
 
   test('API key auth query default', async () => {
@@ -387,11 +397,7 @@ describe('exporter-curl', () => {
           location: 'query',
         },
       }),
-    ).toEqual(
-      [
-        `curl 'https://yaak.app?foo=bar&baz=qux&token='`,
-      ].join(` \\\n  `),
-    );
+    ).toEqual([`curl 'https://yaak.app?foo=bar&baz=qux&token='`].join(` \\\n  `));
   });
 
   test('Stale body data', async () => {
