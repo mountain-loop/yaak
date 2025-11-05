@@ -1,0 +1,20 @@
+{
+  "name": "@yaak/auth-oauth1",
+  "displayName": "OAuth 1.0",
+  "description": "Authenticate requests using OAuth 1.0a",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mountain-loop/yaak.git",
+    "directory": "plugins/auth-oauth1"
+  },
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev",
+    "lint": "tsc --noEmit && eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "oauth-1.0a": "^2.2.6"
+  }
+}

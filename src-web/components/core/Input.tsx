@@ -302,6 +302,7 @@ function BaseInput({
             id={id.current}
             hideGutter
             singleLine={!multiLine}
+            containerOnly
             stateKey={stateKey}
             wrapLines={wrapLines}
             heightMode="auto"

@@ -91,6 +91,7 @@ export interface EditorProps {
   placeholder?: string;
   readOnly?: boolean;
   singleLine?: boolean;
+  containerOnly?: boolean;
   stateKey: string | null;
   tooltipContainer?: HTMLElement;
   type?: 'text' | 'password';
@@ -131,6 +132,7 @@ export function Editor({
   placeholder,
   readOnly,
   singleLine,
+  containerOnly,
   stateKey,
   type,
   wrapLines,
@@ -540,7 +542,7 @@ export function Editor({
     />
   );
 
-  if (singleLine) {
+  if (singleLine || containerOnly) {
     return cmContainer;
   }
 
