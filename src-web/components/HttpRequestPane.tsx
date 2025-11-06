@@ -409,6 +409,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 ) : activeRequest.bodyType === BODY_TYPE_GRAPHQL ? (
                   <Suspense>
                     <GraphQLEditor
+                      key={forceUpdateKey}
                       forceUpdateKey={forceUpdateKey}
                       baseRequest={activeRequest}
                       request={activeRequest}
