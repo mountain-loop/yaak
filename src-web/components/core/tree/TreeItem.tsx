@@ -248,7 +248,7 @@ function TreeItem_<T extends { id: string }>({
     attributes,
     listeners,
     setNodeRef: setDraggableRef,
-  } = useDraggable({ id: node.item.id, disabled: node.draggable === false });
+  } = useDraggable({ id: node.item.id, disabled: node.draggable === false || editing });
 
   const { setNodeRef: setDroppableRef } = useDroppable({ id: node.item.id });
 
