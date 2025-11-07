@@ -229,7 +229,6 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             />
           </div>
           <Tabs
-            key={activeRequest.id} // Freshen tabs on request change
             value={activeTab}
             label="Request"
             onChangeValue={setActiveTab}

@@ -2,7 +2,7 @@ import type { HttpRequest } from '@yaakapp-internal/models';
 
 import { formatSdl } from 'format-graphql';
 import { useAtom } from 'jotai';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useLocalStorage } from 'react-use';
 import { useIntrospectGraphQL } from '../../hooks/useIntrospectGraphQL';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
@@ -45,20 +45,31 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
 
     return { query: request.body.query ?? '', variables: request.body.variables ?? '' };
   }, [extraEditorProps.forceUpdateKey]);
+
   const [isDocOpenRecord, setGraphqlDocStateAtomValue] = useAtom(showGraphQLDocExplorerAtom);
   const isDocOpen = isDocOpenRecord[request.id] !== undefined;
 
-  const handleChangeQuery = (query: string) => {
-    const newBody = { query, variables: currentBody.variables || undefined };
-    setCurrentBody(newBody);
-    onChange(newBody);
-  };
+  const handleChangeQuery = useCallback(
+    (query: string) => {
+      setCurrentBody(({ variables }) => {
+        const newBody = { query, variables };
+        onChange(newBody);
+        return newBody;
+      });
+    },
+    [onChange, setCurrentBody],
+  );
 
-  const handleChangeVariables = (variables: string) => {
-    const newBody = { query: currentBody.query, variables: variables || undefined };
-    setCurrentBody(newBody);
-    onChange(newBody);
-  };
+  const handleChangeVariables = useCallback(
+    (variables: string) => {
+      setCurrentBody(({ query }) => {
+        const newBody = { query, variables: variables || undefined };
+        onChange(newBody);
+        return newBody;
+      });
+    },
+    [onChange, setCurrentBody],
+  );
 
   const actions = useMemo<EditorProps['actions']>(
     () => [

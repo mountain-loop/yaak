@@ -35,7 +35,7 @@ export type HotkeyAction =
   | 'workspace_settings.show';
 
 const hotkeys: Record<HotkeyAction, string[]> = {
-  'app.zoom_in': ['CmdCtrl+Plus'],
+  'app.zoom_in': ['CmdCtrl+Equal'],
   'app.zoom_out': ['CmdCtrl+Minus'],
   'app.zoom_reset': ['CmdCtrl+0'],
   'command_palette.toggle': ['CmdCtrl+k'],
@@ -50,7 +50,7 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'switcher.toggle': ['CmdCtrl+p'],
   'settings.show': ['CmdCtrl+,'],
   'sidebar.filter': ['CmdCtrl+f'],
-  'sidebar.expand_all': ['CmdCtrl+Shift+Plus'],
+  'sidebar.expand_all': ['CmdCtrl+Shift+Equal'],
   'sidebar.collapse_all': ['CmdCtrl+Shift+Minus'],
   'sidebar.selected.delete': ['Delete', 'CmdCtrl+Backspace'],
   'sidebar.selected.duplicate': ['CmdCtrl+d'],
@@ -190,7 +190,7 @@ function handleKeyDown(e: KeyboardEvent) {
     return;
   }
 
-  // Don't support certain single-key combinrations within inputs
+  // Don't support certain single-key combinations within inputs
   if (
     (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
     currentKeysWithModifiers.size === 1 &&
@@ -212,16 +212,7 @@ function handleKeyDown(e: KeyboardEvent) {
 
       for (const hkKey of hkKeys) {
         const keys = hkKey.split('+');
-        const adjustedKeys = keys
-          .map((k) => {
-            // Special case for Plus
-            if (keys.includes('Shift') && k === 'Plus') {
-              return 'Equal';
-            } else {
-              return k;
-            }
-          })
-          .map(resolveHotkeyKey);
+        const adjustedKeys = keys.map(resolveHotkeyKey);
         if (compareKeys(adjustedKeys, Array.from(currentKeysWithModifiers))) {
           if (!options.allowDefault) {
             e.preventDefault();

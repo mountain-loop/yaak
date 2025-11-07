@@ -51,7 +51,7 @@ export function KeyValueRow({
         <span className="select-text cursor-text">{label}</span>
       </td>
       <td className="select-none py-0.5 break-all align-top max-w-[15rem]">
-        <div className="select-text cursor-text max-h-[5rem] overflow-y-auto grid grid-cols-[auto_minmax(0,1fr)_auto]">
+        <div className="select-text cursor-text max-h-[12rem] overflow-y-auto grid grid-cols-[auto_minmax(0,1fr)_auto]">
           {leftSlot ?? <span aria-hidden />}
           {children}
           {rightSlot ? <div className="ml-1.5">{rightSlot}</div> : <span aria-hidden />}

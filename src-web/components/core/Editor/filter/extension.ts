@@ -112,7 +112,6 @@ function fieldValueCompletions(
 ): Completion[] | null {
   if (!def || !def.values) return null;
   const vals = Array.isArray(def.values) ? def.values : def.values();
-  // console.log("HELLO", v, v.match(IDENT));
   return vals.map((v) => ({
     label: v.match(IDENT_ONLY) ? v : `"${v}"`,
     displayLabel: v,

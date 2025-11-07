@@ -21,8 +21,7 @@ import {
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
-import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useKey } from 'react-use';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeCookieJarAtom } from '../hooks/useActiveCookieJar';
@@ -57,7 +56,7 @@ import { InlineCode } from './core/InlineCode';
 import type { InputHandle } from './core/Input';
 import { Input } from './core/Input';
 import { LoadingIcon } from './core/LoadingIcon';
-import { collapsedFamily, isSelectedFamily } from './core/tree/atoms';
+import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
@@ -150,7 +149,10 @@ function Sidebar({ className }: { className?: string }) {
         await Promise.all(
           items.map((m, i) =>
             // Spread item sortPriority out over before/after range
-            patchModel(m, { sortPriority: beforePriority + (i + 1) * increment, folderId }),
+            patchModel(m, {
+              sortPriority: beforePriority + (i + 1) * increment,
+              folderId,
+            }),
           ),
         );
       }
@@ -159,22 +161,18 @@ function Sidebar({ className }: { className?: string }) {
     }
   }, []);
 
-  const handleTreeRefInit = useCallback((n: TreeHandle) => {
-    treeRef.current = n;
-    if (n == null) return;
-    const activeId = jotaiStore.get(activeIdAtom);
-    if (activeId == null) return;
-    n.selectItem(activeId);
-  }, []);
-
-  // Ensure active id is always selected when it changes
-  useEffect(() => {
-    return jotaiStore.sub(activeIdAtom, () => {
+  const handleTreeRefInit = useCallback(
+    (n: TreeHandle) => {
+      treeRef.current = n;
+      if (n == null) return;
       const activeId = jotaiStore.get(activeIdAtom);
       if (activeId == null) return;
-      treeRef.current?.selectItem(activeId);
-    });
-  }, []);
+      const selectedIds = jotaiStore.get(selectedIdsFamily(treeId));
+      if (selectedIds.length > 0) return;
+      n.selectItem(activeId);
+    },
+    [treeId],
+  );
 
   const clearFilterText = useCallback(() => {
     jotaiStore.set(sidebarFilterAtom, { text: '', key: `${Math.random()}` });
@@ -202,14 +200,6 @@ function Sidebar({ className }: { className?: string }) {
     [],
   );
 
-  // Focus the first sidebar item on arrow down from filter
-  useKey('ArrowDown', (e) => {
-    if (e.key === 'ArrowDown' && filterRef.current?.isFocused()) {
-      e.preventDefault();
-      treeRef.current?.focus();
-    }
-  });
-
   const actions = useMemo(() => {
     const enable = () => treeRef.current?.hasFocus() ?? false;
 
@@ -233,10 +223,12 @@ function Sidebar({ className }: { className?: string }) {
             for (const n of node.children ?? []) {
               if (n.item.model !== 'folder') continue;
               collapsed[n.item.id] = true;
+              collapsed = next(n, collapsed);
             }
             return collapsed;
           };
-          jotaiStore.set(collapsedFamily(treeId), next(tree, {}));
+          const collapsed = next(tree, {});
+          jotaiStore.set(collapsedFamily(treeId), collapsed);
         },
       },
       'sidebar.selected.delete': {
@@ -289,7 +281,11 @@ function Sidebar({ className }: { className?: string }) {
 
       // No children means we're in the root
       if (child == null) {
-        return getCreateDropdownItems({ workspaceId, activeRequest: null, folderId: null });
+        return getCreateDropdownItems({
+          workspaceId,
+          activeRequest: null,
+          folderId: null,
+        });
       }
 
       const workspaces = jotaiStore.get(workspacesAtom);
@@ -353,12 +349,19 @@ function Sidebar({ className }: { className?: string }) {
         items.length === 1 && child.model === 'folder'
           ? [
               { type: 'separator' },
-              ...getCreateDropdownItems({ workspaceId, activeRequest: null, folderId: child.id }),
+              ...getCreateDropdownItems({
+                workspaceId,
+                activeRequest: null,
+                folderId: child.id,
+              }),
             ]
           : [];
       const menuItems: ContextMenuProps['items'] = [
         ...initialItems,
-        { type: 'separator', hidden: initialItems.filter((v) => !v.hidden).length === 0 },
+        {
+          type: 'separator',
+          hidden: initialItems.filter((v) => !v.hidden).length === 0,
+        },
         {
           label: 'Rename',
           leftSlot: <Icon icon="pencil" />,
@@ -419,7 +422,9 @@ function Sidebar({ className }: { className?: string }) {
     const view = filterRef.current;
     if (!view) return;
     const ext = filter({ fields: allFields ?? [] });
-    view.dispatch({ effects: filterLanguageCompartmentRef.current.reconfigure(ext) });
+    view.dispatch({
+      effects: filterLanguageCompartmentRef.current.reconfigure(ext),
+    });
   }, [allFields]);
 
   if (tree == null || hidden) {
@@ -432,7 +437,7 @@ function Sidebar({ className }: { className?: string }) {
       aria-hidden={hidden ?? undefined}
       className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)_auto]')}
     >
-      <div className="px-3 pt-3 grid grid-cols-[1fr_auto] items-center -mr-2.5">
+      <div className="w-full pl-3 pr-0.5 pt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center">
         {(tree.children?.length ?? 0) > 0 && (
           <>
             <Input
@@ -452,7 +457,7 @@ function Sidebar({ className }: { className?: string }) {
               rightSlot={
                 filterText.text && (
                   <IconButton
-                    className="!h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
+                    className="!bg-transparent !h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
                     icon="x"
                     title="Clear filter"
                     onClick={clearFilterText}
@@ -482,7 +487,6 @@ function Sidebar({ className }: { className?: string }) {
                 size="xs"
                 className="ml-0.5 text-text-subtle hover:text-text"
                 icon="ellipsis_vertical"
-                hotkeyAction="sidebar.collapse_all"
                 title="Show sidebar actions menu"
               />
             </Dropdown>
@@ -549,7 +553,10 @@ const allPotentialChildrenAtom = atom<SidebarModel[]>((get) => {
 
 const memoAllPotentialChildrenAtom = deepEqualAtom(allPotentialChildrenAtom);
 
-const sidebarFilterAtom = atom<{ text: string; key: string }>({ text: '', key: '' });
+const sidebarFilterAtom = atom<{ text: string; key: string }>({
+  text: '',
+  key: '',
+});
 
 const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) => {
   const allModels = get(memoAllPotentialChildrenAtom);
@@ -578,21 +585,24 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
   const build = (node: TreeNode<SidebarModel>, depth: number): boolean => {
     const childItems = childrenMap[node.item.id] ?? [];
     let matchesSelf = true;
-    const fields = getItemFields(node.item);
+    const fields = getItemFields(node);
+    const model = node.item.model;
+    const isLeafNode = !(model === 'folder' || model === 'workspace');
+
     for (const [field, value] of Object.entries(fields)) {
       if (!value) continue;
       allFields[field] = allFields[field] ?? new Set();
       allFields[field].add(value);
     }
+
     if (queryAst != null) {
-      matchesSelf = evaluate(queryAst, { text: getItemText(node.item), fields });
+      matchesSelf = isLeafNode && evaluate(queryAst, { text: getItemText(node.item), fields });
     }
 
     let matchesChild = false;
 
     // Recurse to children
-    const m = node.item.model;
-    node.children = m === 'folder' || m === 'workspace' ? [] : undefined;
+    node.children = !isLeafNode ? [] : undefined;
 
     if (node.children != null) {
       childItems.sort((a, b) => {
@@ -631,7 +641,10 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
 
   const fields: FieldDef[] = [];
   for (const [name, values] of Object.entries(allFields)) {
-    fields.push({ name, values: Array.from(values).filter((v) => v.length < 20) });
+    fields.push({
+      name,
+      values: Array.from(values).filter((v) => v.length < 20),
+    });
   }
   return [root, fields] as const;
 });
@@ -714,7 +727,9 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
   );
 });
 
-function getItemFields(item: SidebarModel): Record<string, string> {
+function getItemFields(node: TreeNode<SidebarModel>): Record<string, string> {
+  const item = node.item;
+
   if (item.model === 'workspace') return {};
 
   const fields: Record<string, string> = {};
@@ -734,9 +749,20 @@ function getItemFields(item: SidebarModel): Record<string, string> {
   if (item.model === 'grpc_request') fields.type = 'grpc';
   else if (item.model === 'websocket_request') fields.type = 'ws';
 
+  if (node.parent?.item.model === 'folder') {
+    fields.folder = node.parent.item.name;
+  }
+
   return fields;
 }
 
 function getItemText(item: SidebarModel): string {
-  return resolvedModelName(item);
+  const segments = [];
+  if (item.model === 'http_request') {
+    segments.push(item.method);
+  }
+
+  segments.push(resolvedModelName(item));
+
+  return segments.join(' ');
 }

@@ -1,11 +1,9 @@
-import { useAtomValue } from 'jotai';
 import { useEffect, useMemo } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
-import { activeRequestIdAtom } from './useActiveRequestId';
-import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 import { useKeyValue } from './useKeyValue';
 import { useAllRequests } from './useAllRequests';
+import { activeRequestAtom } from './useActiveRequest';
 
 const kvKey = (workspaceId: string) => 'recent_requests::' + workspaceId;
 const namespace = 'global';
@@ -13,10 +11,9 @@ const fallback: string[] = [];
 
 export function useRecentRequests() {
   const requests = useAllRequests();
-  const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom);
 
   const { set: setRecentRequests, value: recentRequests } = useKeyValue<string[]>({
-    key: kvKey(activeWorkspaceId ?? 'n/a'),
+    key: kvKey(requests[0]?.workspaceId ?? 'n/a'),
     namespace,
     fallback,
   });
@@ -31,19 +28,17 @@ export function useRecentRequests() {
 
 export function useSubscribeRecentRequests() {
   useEffect(() => {
-    return jotaiStore.sub(activeRequestIdAtom, async () => {
-      const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-      const activeRequestId = jotaiStore.get(activeRequestIdAtom);
-      if (activeWorkspaceId == null) return;
-      if (activeRequestId == null) return;
+    return jotaiStore.sub(activeRequestAtom, async () => {
+      const activeRequest = jotaiStore.get(activeRequestAtom);
+      if (activeRequest == null) return;
 
-      const key = kvKey(activeWorkspaceId);
+      const key = kvKey(activeRequest.workspaceId);
 
       const recentIds = getKeyValue<string[]>({ namespace, key, fallback });
-      if (recentIds[0] === activeRequestId) return; // Short-circuit
+      if (recentIds[0] === activeRequest.id) return; // Short-circuit
 
-      const withoutActiveId = recentIds.filter((id) => id !== activeRequestId);
-      const value = [activeRequestId, ...withoutActiveId];
+      const withoutActiveId = recentIds.filter((id) => id !== activeRequest.id);
+      const value = [activeRequest.id, ...withoutActiveId];
       await setKeyValue({ namespace, key, value });
     });
   }, []);

@@ -11,7 +11,7 @@ import {
 import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import type { ComponentType, MouseEvent, ReactElement, Ref, RefAttributes } from 'react';
-import React, {
+import {
   forwardRef,
   memo,
   useCallback,
@@ -146,13 +146,24 @@ function TreeInner<T extends { id: string }>(
 
   const ensureTabbableItem = useCallback(() => {
     const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
-    const lastSelectedItem = selectableItems.find((i) => i.node.item.id === lastSelectedId);
+    const lastSelectedItem = selectableItems.find(
+      (i) => i.node.item.id === lastSelectedId && !i.node.hidden,
+    );
+
+    // If no item found, default to selecting the first item (prefer leaf node);
     if (lastSelectedItem == null) {
-      return false;
+      const firstLeafItem = selectableItems.find((i) => !i.node.hidden && i.node.children == null);
+      const firstItem = firstLeafItem ?? selectableItems.find((i) => !i.node.hidden);
+      if (firstItem != null) {
+        const id = firstItem.node.item.id;
+        jotaiStore.set(selectedIdsFamily(treeId), [id]);
+        jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
+      }
+      return;
     }
 
     const closest = closestVisibleNode(treeId, lastSelectedItem.node);
-    if (closest != null && closest !== lastSelectedItem.node) {
+    if (closest != null) {
       const id = closest.item.id;
       jotaiStore.set(selectedIdsFamily(treeId), [id]);
       jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
@@ -168,7 +179,6 @@ function TreeInner<T extends { id: string }>(
   // Ensure there's always a tabbable item after render
   useEffect(() => {
     requestAnimationFrame(ensureTabbableItem);
-    ensureTabbableItem();
   });
 
   const setSelected = useCallback(
@@ -187,6 +197,10 @@ function TreeInner<T extends { id: string }>(
       hasFocus: () => treeRef.current?.contains(document.activeElement) ?? false,
       renameItem: (id) => treeItemRefs.current[id]?.rename(),
       selectItem: (id) => {
+        if (jotaiStore.get(selectedIdsFamily(treeId)).includes(id)) {
+          // Already selected
+          return;
+        }
         setSelected([id], false);
         jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
       },
@@ -233,8 +247,10 @@ function TreeInner<T extends { id: string }>(
       jotaiStore.set(focusIdsFamily(treeId), (prev) => ({ ...prev, lastId: item.id }));
 
       if (shiftKey) {
-        const anchorIndex = selectableItems.findIndex((i) => i.node.item.id === anchorSelectedId);
-        const currIndex = selectableItems.findIndex((v) => v.node.item.id === item.id);
+        const validSelectableItems = getValidSelectableItems(treeId, selectableItems);
+        const anchorIndex = validSelectableItems.findIndex((i) => i.node.item.id === anchorSelectedId);
+        const currIndex = validSelectableItems.findIndex((v) => v.node.item.id === item.id);
+
         // Nothing was selected yet, so just select this item
         if (selectedIds.length === 0 || anchorIndex === -1 || currIndex === -1) {
           setSelected([item.id], true);
@@ -242,7 +258,6 @@ function TreeInner<T extends { id: string }>(
           return;
         }
 
-        const validSelectableItems = getValidSelectableItems(treeId, selectableItems);
         if (currIndex > anchorIndex) {
           // Selecting down
           const itemsToSelect = validSelectableItems.slice(anchorIndex, currIndex + 1);
@@ -428,6 +443,18 @@ function TreeInner<T extends { id: string }>(
         return;
       }
 
+      // Root is anything past the end of the list, so set it to the end
+      const hoveringRoot = over.id === root.item.id;
+      if (hoveringRoot) {
+        jotaiStore.set(hoveredParentFamily(treeId), {
+          parentId: root.item.id,
+          parentDepth: root.depth,
+          index: selectableItems.length,
+          childIndex: selectableItems.length,
+        });
+        return;
+      }
+
       const overSelectableItem = selectableItems.find((i) => i.node.item.id === over.id) ?? null;
       if (overSelectableItem == null) {
         return;
@@ -444,18 +471,6 @@ function TreeInner<T extends { id: string }>(
         if (item.localDrag && !isSameParent) {
           return;
         }
-      }
-
-      // Root is anything past the end of the list, so set it to the end
-      const hoveringRoot = over.id === root.item.id;
-      if (hoveringRoot) {
-        jotaiStore.set(hoveredParentFamily(treeId), {
-          parentId: root.item.id,
-          parentDepth: root.depth,
-          index: selectableItems.length,
-          childIndex: selectableItems.length,
-        });
-        return;
       }
 
       const node = overSelectableItem.node;
@@ -487,7 +502,12 @@ function TreeInner<T extends { id: string }>(
           childIndex === existing.childIndex
         )
       ) {
-        jotaiStore.set(hoveredParentFamily(treeId), { parentId, parentDepth, index, childIndex });
+        jotaiStore.set(hoveredParentFamily(treeId), {
+          parentId,
+          parentDepth,
+          index,
+          childIndex,
+        });
       }
     },
     [root.depth, root.item.id, selectableItems, treeId],
@@ -510,7 +530,11 @@ function TreeInner<T extends { id: string }>(
         if (activeItem != null) {
           jotaiStore.set(draggingIdsFamily(treeId), [activeItem.id]);
           // Also update selection to just be this one
-          handleSelect(activeItem, { shiftKey: false, metaKey: false, ctrlKey: false });
+          handleSelect(activeItem, {
+            shiftKey: false,
+            metaKey: false,
+            ctrlKey: false,
+          });
         }
       }
     },
@@ -632,8 +656,8 @@ function TreeInner<T extends { id: string }>(
         onDragEnd={handleDragEnd}
         onDragCancel={clearDragState}
         onDragAbort={clearDragState}
-        measuring={measuring}
         onDragMove={handleDragMove}
+        measuring={measuring}
         autoScroll
       >
         <div
@@ -650,7 +674,6 @@ function TreeInner<T extends { id: string }>(
               '[&_.tree-item.selected_.tree-item-inner]:text-text',
               '[&:focus-within]:[&_.tree-item.selected]:bg-surface-active',
               '[&:not(:focus-within)]:[&_.tree-item.selected]:bg-surface-highlight',
-
               // Round the items, but only if the ends of the selection.
               // Also account for the drop marker being in between items
               '[&_.tree-item]:rounded-md',

@@ -86,7 +86,7 @@ impl YaakNotifier {
 
         #[cfg(feature = "license")]
         let license_check = {
-            use yaak_license::{check_license, LicenseCheckStatus};
+            use yaak_license::{LicenseCheckStatus, check_license};
             match check_license(window).await {
                 Ok(LicenseCheckStatus::PersonalUse { .. }) => "personal".to_string(),
                 Ok(LicenseCheckStatus::CommercialUse) => "commercial".to_string(),

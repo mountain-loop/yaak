@@ -10,7 +10,7 @@ import {
 } from '../hooks/useEnvironmentsBreakdown';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { jotaiStore } from '../lib/jotai';
-import { isBaseEnvironment } from '../lib/model_util';
+import { isBaseEnvironment, isSubEnvironment } from '../lib/model_util';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { showColorPicker } from '../lib/showColorPicker';
 import { Banner } from './core/Banner';
@@ -170,7 +170,18 @@ function EnvironmentEditDialogSidebar({
   const getContextMenu = useCallback(
     (items: TreeModel[]): ContextMenuProps['items'] => {
       const environment = items[0];
-      if (environment == null || environment.model !== 'environment') return [];
+      const addEnvironmentItem: DropdownItem = {
+        label: 'Create Sub Environment',
+        leftSlot: <Icon icon="plus" />,
+        onSelect: async () => {
+          await createSubEnvironment();
+        },
+      };
+
+      if (environment == null || environment.model !== 'environment') {
+        return [addEnvironmentItem];
+      }
+
       const singleEnvironment = items.length === 1;
 
       const menuItems: DropdownItem[] = [
@@ -206,6 +217,7 @@ function EnvironmentEditDialogSidebar({
           label: `Make ${environment.public ? 'Private' : 'Sharable'}`,
           leftSlot: <Icon icon={environment.public ? 'eye_closed' : 'eye'} />,
           rightSlot: <EnvironmentSharableTooltip />,
+          hidden: items.length > 1,
           onSelect: async () => {
             await patchModel(environment, { public: !environment.public });
           },
@@ -215,22 +227,18 @@ function EnvironmentEditDialogSidebar({
           label: 'Delete',
           hotKeyAction: 'sidebar.selected.delete',
           hotKeyLabelOnly: true,
-          hidden: !(isBaseEnvironment(environment) && baseEnvironments.length > 1),
+          hidden:
+            (isBaseEnvironment(environment) && baseEnvironments.length <= 1) ||
+            !isSubEnvironment(environment),
           leftSlot: <Icon icon="trash" />,
           onSelect: () => handleDeleteEnvironment(environment),
         },
       ];
 
+      // Add sub environment to base environment
       if (isBaseEnvironment(environment) && singleEnvironment) {
         menuItems.push({ type: 'separator' });
-        menuItems.push({
-          label: 'Create Sub Environment',
-          leftSlot: <Icon icon="plus" />,
-          hidden: !isBaseEnvironment(environment),
-          onSelect: async () => {
-            await createSubEnvironment();
-          },
-        });
+        menuItems.push(addEnvironmentItem);
       }
 
       return menuItems;
@@ -331,12 +339,7 @@ const treeAtom = atom<TreeNode<TreeModel> | null>((get) => {
 
   const parent = root.children?.[0];
   if (baseEnvironments.length <= 1 && parent != null) {
-    const sortedEnvironments = [...subEnvironments].sort((a, b) => {
-      if (a.sortPriority === b.sortPriority) return a.updatedAt > b.updatedAt ? 1 : -1;
-      else return a.sortPriority - b.sortPriority;
-    });
-
-    parent.children = sortedEnvironments.map((item) => ({
+    parent.children = subEnvironments.map((item) => ({
       item,
       parent,
       depth: 1,

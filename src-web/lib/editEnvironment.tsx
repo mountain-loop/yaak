@@ -39,6 +39,8 @@ export async function editEnvironment(
       }
     }
 
+    let didFocusVariable = false;
+
     toggleDialog({
       id: 'environment-editor',
       noPadding: true,
@@ -48,8 +50,9 @@ export async function editEnvironment(
         <EnvironmentEditDialog
           initialEnvironmentId={environment?.id ?? null}
           setRef={(pairEditor: PairEditorHandle | null) => {
-            if (focusId) {
+            if (focusId && !didFocusVariable) {
               pairEditor?.focusValue(focusId);
+              didFocusVariable = true;
             }
           }}
         />

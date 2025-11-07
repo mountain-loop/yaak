@@ -142,7 +142,7 @@ export function Tabs({
                 >
                   <Button
                     rightSlot={
-                      <>
+                      <div className="flex items-center">
                         {t.rightSlot}
                         <Icon
                           size="sm"
@@ -152,7 +152,7 @@ export function Tabs({
                             isActive ? 'text-text-subtle' : 'text-text-subtlest',
                           )}
                         />
-                      </>
+                      </div>
                     }
                     {...btnProps}
                   >

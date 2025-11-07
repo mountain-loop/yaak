@@ -26,6 +26,7 @@ interface Props {
 
 export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEncryption }: Props) {
   const [justEnabledEncryption, setJustEnabledEncryption] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const workspace = useAtomValue(activeWorkspaceAtom);
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
@@ -111,12 +112,22 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         color={expanded ? 'info' : 'secondary'}
         size={size}
         onClick={async () => {
-          setJustEnabledEncryption(true);
-          await enableEncryption(workspaceMeta.workspaceId);
+          setError(null);
+          try {
+            await enableEncryption(workspaceMeta.workspaceId);
+            setJustEnabledEncryption(true);
+          } catch (err) {
+            setError('Failed to enable encryption: ' + err);
+          }
         }}
       >
         Enable Encryption
       </Button>
+      {error && (
+        <Banner color="danger" className="mb-2">
+          {error}
+        </Banner>
+      )}
       {expanded ? (
         <Banner color="info" className="mb-6">
           <EncryptionHelp />

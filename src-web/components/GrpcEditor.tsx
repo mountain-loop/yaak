@@ -174,7 +174,6 @@ export function GrpcEditor({
         language="json"
         autocompleteFunctions
         autocompleteVariables
-        forceUpdateKey={request.id}
         defaultValue={request.message}
         heightMode="auto"
         placeholder="..."

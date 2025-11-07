@@ -1,7 +1,6 @@
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React from 'react';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { appInfo } from '../../lib/appInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';

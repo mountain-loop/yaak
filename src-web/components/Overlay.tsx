@@ -52,7 +52,13 @@ export function Overlay({
       {open && (
         <FocusTrap
           focusTrapOptions={{
-            allowOutsideClick: true, // So we can still click toasts and things
+            // Allow outside click so we can click things like toasts
+            allowOutsideClick: true,
+            delayInitialFocus: true,
+            checkCanFocusTrap: async () => {
+              // Not sure why delayInitialFocus: true doesn't help, but having this no-op promise
+              // seems to be required to make things work.
+            },
           }}
         >
           <m.div

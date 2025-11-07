@@ -125,6 +125,12 @@ function importHttpRequest(
     name: r.name,
     description: r.meta?.description || undefined,
     url: convertSyntax(r.url),
+    urlParameters: (r.parameters ?? [])
+      .map((p: any) => ({
+        enabled: !p.disabled,
+        name: p.name ?? '',
+        value: p.value ?? '',
+      })),
     body,
     bodyType,
     method: r.method,

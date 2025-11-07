@@ -122,6 +122,12 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
     name: r.name,
     description: r.description || undefined,
     url: convertSyntax(r.url),
+    urlParameters: (r.parameters ?? [])
+      .map((p: any) => ({
+        enabled: !p.disabled,
+        name: p.name ?? '',
+        value: p.value ?? '',
+      })),
     body,
     bodyType,
     authentication,

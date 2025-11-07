@@ -141,11 +141,11 @@ export function Workspace() {
             animate={{ opacity: 1, x: 0 }}
             className={classNames(
               'x-theme-sidebar',
-              'absolute top-0 left-0 bottom-0 bg-surface border-r border-border-subtle w-[14rem]',
+              'absolute top-0 left-0 bottom-0 bg-surface border-r border-border-subtle w-[20rem]',
               'grid grid-rows-[auto_1fr]',
             )}
           >
-            <HeaderSize size="lg" className="border-transparent">
+            <HeaderSize hideControls size="lg" className="border-transparent flex items-center">
               <SidebarActions />
             </HeaderSize>
             <ErrorBoundary name="Sidebar (Floating)">

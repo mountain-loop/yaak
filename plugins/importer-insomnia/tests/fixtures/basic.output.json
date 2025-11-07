@@ -113,6 +113,13 @@
         "model": "http_request",
         "name": "New Request",
         "url": "${[BASE_URL ]}/foo/:id",
+        "urlParameters": [
+          {
+            "name": "query",
+            "value": "qqq",
+            "enabled": true
+          }
+        ],
         "workspaceId": "GENERATE_ID::wrk_d4d92f7c0ee947b89159243506687019"
       }
     ],

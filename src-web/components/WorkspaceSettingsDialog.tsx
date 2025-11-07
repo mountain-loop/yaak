@@ -73,7 +73,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
         { value: TAB_GENERAL, label: 'General' },
         {
           value: TAB_DATA,
-          label: 'Directory Sync',
+          label: 'Data',
         },
         ...headersTab,
         ...authTab,

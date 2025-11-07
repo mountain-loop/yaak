@@ -24,6 +24,7 @@ pub async fn start_nodejs_plugin_runtime<R: Runtime>(
     let cmd = app
         .shell()
         .sidecar("yaaknode")?
+        .env("HOST", addr.ip().to_string())
         .env("PORT", addr.port().to_string())
         .args(&[&plugin_runtime_main]);
 

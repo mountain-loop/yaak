@@ -128,14 +128,19 @@ export function PairEditor({
 
   const initPairEditorRow = useCallback(
     (id: string, n: RowHandle | null) => {
+      const isLast = id === pairs[pairs.length - 1]?.id;
+      if (isLast) return; // Never add the last pair
+
       rowsRef.current[id] = n;
-      const ready =
-        Object.values(rowsRef.current).filter((v) => v != null).length === pairs.length - 1; // Ignore the last placeholder pair
+      const validHandles = Object.values(rowsRef.current).filter((v) => v != null);
+
+      // NOTE: Ignore the last placeholder pair
+      const ready = validHandles.length === pairs.length - 1;
       if (ready) {
         setRef?.(handle);
       }
     },
-    [handle, pairs.length, setRef],
+    [handle, pairs, setRef],
   );
 
   useEffect(() => {
