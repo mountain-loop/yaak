@@ -6,7 +6,7 @@ import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { workspaceLayoutAtom } from '../lib/atoms';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
-import { BadgeButton } from './core/BadgeButton';
+import { PillButton } from './core/PillButton';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
@@ -52,9 +52,9 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
       <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-1">
         <ImportCurlButton />
         {showEncryptionSetup ? (
-          <BadgeButton color="danger" onClick={setupOrConfigureEncryption}>
+          <PillButton color="danger" onClick={setupOrConfigureEncryption}>
             Enter Encryption Key
-          </BadgeButton>
+          </PillButton>
         ) : (
           <LicenseBadge />
         )}

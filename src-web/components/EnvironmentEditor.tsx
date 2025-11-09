@@ -13,7 +13,7 @@ import {
   setupOrConfigureEncryption,
   withEncryptionEnabled,
 } from '../lib/setupOrConfigureEncryption';
-import { BadgeButton } from './core/BadgeButton';
+import { PillButton } from './core/PillButton';
 import { DismissibleBanner } from './core/DismissibleBanner';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import { Heading } from './core/Heading';
@@ -113,20 +113,20 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
           {!hideName && <div className="mr-2">{environment?.name}</div>}
           {isEncryptionEnabled ? (
             !allVariableAreEncrypted ? (
-              <BadgeButton color="notice" onClick={() => encryptEnvironment(environment)}>
+              <PillButton color="notice" onClick={() => encryptEnvironment(environment)}>
                 Encrypt All Variables
-              </BadgeButton>
+              </PillButton>
             ) : (
-              <BadgeButton color="secondary" onClick={setupOrConfigureEncryption}>
+              <PillButton color="secondary" onClick={setupOrConfigureEncryption}>
                 Encryption Settings
-              </BadgeButton>
+              </PillButton>
             )
           ) : (
-            <BadgeButton color="secondary" onClick={() => valueVisibility.set((v) => !v)}>
+            <PillButton color="secondary" onClick={() => valueVisibility.set((v) => !v)}>
               {valueVisibility.value ? 'Hide Values' : 'Show Values'}
-            </BadgeButton>
+            </PillButton>
           )}
-          <BadgeButton
+          <PillButton
             color="secondary"
             rightSlot={<EnvironmentSharableTooltip />}
             onClick={async () => {
@@ -134,7 +134,7 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
             }}
           >
             {environment.public ? 'Sharable' : 'Private'}
-          </BadgeButton>
+          </PillButton>
         </Heading>
         {environment.public && (!isEncryptionEnabled || !allVariableAreEncrypted) && (
           <DismissibleBanner
