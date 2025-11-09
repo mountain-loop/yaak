@@ -65,7 +65,7 @@ function SettingsLicenseCmp() {
             Your commercial-use trial has ended.
             <br />
             <span className="opacity-50">
-              You can continue using Yaak for personal use free, forever.
+              You may continue using Yaak for personal use free, forever.
               <br />
               A license is required for commercial use.
             </span>
