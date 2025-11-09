@@ -75,16 +75,16 @@ function SettingsLicenseCmp() {
       {check.error && <Banner color="danger">{check.error}</Banner>}
       {activate.error && <Banner color="danger">{activate.error}</Banner>}
 
+      {check.data?.type === 'invalid_license' && (
+        <Banner color="danger">
+          Your license is invalid. Please <Link href="https://yaak.app/dashboard">Sign In</Link> for
+          more details
+        </Banner>
+      )}
+
       {check.data?.type === 'commercial_use' ? (
         <HStack space={2}>
-          <Button
-            variant="border"
-            color="secondary"
-            size="sm"
-            onClick={() => {
-              deactivate.mutate();
-            }}
-          >
+          <Button variant="border" color="secondary" size="sm" onClick={() => deactivate.mutate()}>
             Deactivate License
           </Button>
           <Button
@@ -104,12 +104,12 @@ function SettingsLicenseCmp() {
           <Button
             size="sm"
             color="primary"
+            rightSlot={<Icon icon="external_link" />}
             onClick={() =>
               openUrl(
                 `https://yaak.app/pricing?s=purchase&ref=app.yaak.desktop&t=${check.data?.type ?? ''}`,
               )
             }
-            rightSlot={<Icon icon="external_link" />}
           >
             Purchase License
           </Button>

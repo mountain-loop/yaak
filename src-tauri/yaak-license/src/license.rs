@@ -67,6 +67,7 @@ pub async fn activate_license<R: Runtime>(
     window: &WebviewWindow<R>,
     license_key: &str,
 ) -> Result<()> {
+    info!("Activating license {}", license_key);
     let client = reqwest::Client::new();
     let payload = ActivateLicenseRequestPayload {
         license_key: license_key.to_string(),
@@ -103,6 +104,7 @@ pub async fn activate_license<R: Runtime>(
 }
 
 pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<()> {
+    info!("Deactivating activation");
     let app_handle = window.app_handle();
     let activation_id = get_activation_id(app_handle).await;
 
@@ -159,8 +161,6 @@ pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<Lice
     let settings = window.db().get_settings();
     let trial_end = settings.created_at.add(Duration::from_secs(TRIAL_SECONDS));
 
-    debug!("Trial ending at {trial_end:?}");
-
     let has_activation_id = !activation_id.is_empty();
     let trial_period_active = Utc::now().naive_utc() < trial_end;
 
@@ -185,11 +185,13 @@ pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<Lice
             }
 
             if response.status().is_server_error() {
+                warn!("Failed to check license {}", response.status());
                 return Err(ServerError);
             }
 
             let body: CheckActivationResponsePayload = response.json().await?;
             if !body.active {
+                info!("Inactive License {:?}", body);
                 return Ok(LicenseCheckStatus::InvalidLicense);
             }
 
