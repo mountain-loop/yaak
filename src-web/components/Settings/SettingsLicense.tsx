@@ -10,6 +10,7 @@ import { Button } from '../core/Button';
 import { Icon } from '../core/Icon';
 import { Link } from '../core/Link';
 import { PlainInput } from '../core/PlainInput';
+import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';
 import { LocalImage } from '../LocalImage';
 
@@ -34,43 +35,56 @@ function SettingsLicenseCmp() {
     <div className="flex flex-col gap-6 max-w-xl">
       {check.data?.type === 'commercial_use' ? (
         <Banner color="success">Your license is active 🥳</Banner>
-      ) : check.data?.type == 'trialing' ? (
-        <Banner color="info" className="flex flex-col gap-3 max-w-lg">
-          <p>
-            <strong>
-              {pluralizeCount('day', differenceInDays(check.data.end, new Date()))} remaining
-            </strong>{' '}
-            on your commercial-use trial
-          </p>
-        </Banner>
-      ) : check.data?.type == 'personal_use' ? (
-        <Banner color="notice" className="flex flex-col gap-3 max-w-lg">
-          <p>You are able to use Yaak for personal use only</p>
-        </Banner>
-      ) : null}
-
-      {check.data?.type !== 'commercial_use' && (
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-6 items-center my-3 ">
-          <LocalImage src="static/greg.jpeg" className="rounded-full h-20 w-20" />
-          <div className="flex flex-col gap-2">
-            <h2 className="text-lg font-bold">Hey, I&apos;m Greg 👋🏼</h2>
-            <p>
-              Yaak is free for personal projects and learning.{' '}
-              {check.data?.type === 'trialing' ? 'Once your trial ends, a ' : 'A '}
-              license will be required for work or commercial use.
-            </p>
-            <p>
+      ) : check.data?.type === 'trialing' ? (
+        <Banner color="info" className="@container flex items-center gap-x-5 max-w-xl">
+          <LocalImage src="static/greg.jpeg" className="hidden @sm:block rounded-full h-14 w-14" />
+          <p className="w-full">
+            <strong>{pluralizeCount('day', differenceInDays(check.data.end, new Date()))}</strong>{' '}
+            left to evaluate Yaak for commercial use.
+            <br />
+            <span className="opacity-50">Personal use is always free, forever.</span>
+            <Separator className="my-2" />
+            <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">
+              <Link noUnderline href="mailto:support@yaak.app">
+                Contact Support
+              </Link>
+              <Icon icon="dot" size="sm" color="secondary" />
               <Link
                 noUnderline
                 href={`https://yaak.app/pricing?s=learn&t=${check.data?.type ?? ''}`}
-                className="text-sm text-notice opacity-80 hover:opacity-100"
               >
                 Learn More
               </Link>
-            </p>
-          </div>
-        </div>
-      )}
+            </div>
+          </p>
+        </Banner>
+      ) : check.data?.type === 'personal_use' ? (
+        <Banner color="notice" className="@container flex items-center gap-x-5 max-w-xl">
+          <LocalImage src="static/greg.jpeg" className="hidden @sm:block rounded-full h-14 w-14" />
+          <p className="w-full">
+            Your commercial-use trial has ended.
+            <br />
+            <span className="opacity-50">
+              You can continue using Yaak for personal use free, forever.
+              <br />
+              A license is required for commercial use.
+            </span>
+            <Separator className="my-2" />
+            <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">
+              <Link noUnderline href="mailto:support@yaak.app">
+                Contact Support
+              </Link>
+              <Icon icon="dot" size="sm" color="secondary" />
+              <Link
+                noUnderline
+                href={`https://yaak.app/pricing?s=learn&t=${check.data?.type ?? ''}`}
+              >
+                Learn More
+              </Link>
+            </div>
+          </p>
+        </Banner>
+      ) : null}
 
       {check.error && <Banner color="danger">{check.error}</Banner>}
       {activate.error && <Banner color="danger">{activate.error}</Banner>}
