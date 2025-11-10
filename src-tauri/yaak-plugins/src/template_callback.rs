@@ -1,4 +1,4 @@
-use crate::events::{PluginWindowContext, RenderPurpose};
+use crate::events::{PluginContext, RenderPurpose};
 use crate::manager::PluginManager;
 use crate::native_template_functions::{
     template_function_keychain_run, template_function_secure_run,
@@ -13,19 +13,19 @@ use yaak_templates::error::Result;
 pub struct PluginTemplateCallback<R: Runtime> {
     app_handle: AppHandle<R>,
     render_purpose: RenderPurpose,
-    window_context: PluginWindowContext,
+    plugin_context: PluginContext,
 }
 
 impl<R: Runtime> PluginTemplateCallback<R> {
     pub fn new(
         app_handle: &AppHandle<R>,
-        window_context: &PluginWindowContext,
+        plugin_context: &PluginContext,
         render_purpose: RenderPurpose,
     ) -> PluginTemplateCallback<R> {
         PluginTemplateCallback {
             render_purpose,
             app_handle: app_handle.to_owned(),
-            window_context: window_context.to_owned(),
+            plugin_context: plugin_context.to_owned(),
         }
     }
 }
@@ -37,7 +37,7 @@ impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
         let fn_name = if fn_name == "Response" { "response" } else { fn_name };
 
         if fn_name == "secure" {
-            return template_function_secure_run(&self.app_handle, args, &self.window_context);
+            return template_function_secure_run(&self.app_handle, args, &self.plugin_context);
         } else if fn_name == "keychain" || fn_name == "keyring" {
             return template_function_keychain_run(args);
         }
@@ -45,7 +45,7 @@ impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
         let plugin_manager = &*self.app_handle.state::<PluginManager>();
         let resp = plugin_manager
             .call_template_function(
-                &self.window_context,
+                &self.plugin_context,
                 fn_name,
                 args,
                 self.render_purpose.to_owned(),
@@ -58,7 +58,7 @@ impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
         if fn_name == "secure" {
             return template_function_secure_transform_arg(
                 &self.app_handle,
-                &self.window_context,
+                &self.plugin_context,
                 arg_name,
                 arg_value,
             );

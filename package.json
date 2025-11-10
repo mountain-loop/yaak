@@ -17,6 +17,7 @@
     "plugins/auth-basic",
     "plugins/auth-bearer",
     "plugins/auth-jwt",
+    "plugins/auth-ntlm",
     "plugins/auth-oauth2",
     "plugins/auth-oauth1",
     "plugins/filter-jsonpath",

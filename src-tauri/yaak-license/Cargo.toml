@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 chrono = "0.4.38"
-log = "0.4.26"
+log = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

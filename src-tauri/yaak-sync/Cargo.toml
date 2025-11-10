@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 chrono = { workspace = true, features = ["serde"] }
 hex = { workspace = true }
-log = "0.4.22"
+log = { workspace = true }
 notify = "8.0.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

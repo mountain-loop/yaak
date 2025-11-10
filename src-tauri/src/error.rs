@@ -17,6 +17,9 @@ pub enum Error {
     CryptoError(#[from] yaak_crypto::error::Error),
 
     #[error(transparent)]
+    HttpError(#[from] yaak_http::error::Error),
+
+    #[error(transparent)]
     GitError(#[from] yaak_git::error::Error),
 
     #[error(transparent)]

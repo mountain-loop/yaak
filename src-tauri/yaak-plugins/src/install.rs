@@ -2,7 +2,7 @@ use crate::api::{PluginVersion, download_plugin_archive, get_plugin};
 use crate::checksum::compute_checksum;
 use crate::error::Error::PluginErr;
 use crate::error::Result;
-use crate::events::PluginWindowContext;
+use crate::events::PluginContext;
 use crate::manager::PluginManager;
 use chrono::Utc;
 use log::info;
@@ -19,7 +19,7 @@ pub async fn delete_and_uninstall<R: Runtime>(
 ) -> Result<Plugin> {
     let plugin_manager = window.state::<PluginManager>();
     let plugin = window.db().delete_plugin_by_id(plugin_id, &UpdateSource::from_window(&window))?;
-    plugin_manager.uninstall(&PluginWindowContext::new(&window), plugin.directory.as_str()).await?;
+    plugin_manager.uninstall(&PluginContext::new(&window), plugin.directory.as_str()).await?;
     Ok(plugin)
 }
 
@@ -55,7 +55,7 @@ pub async fn download_and_install<R: Runtime>(
     zip_extract::extract(Cursor::new(&bytes), &plugin_dir, true)?;
     info!("Extracted plugin {} to {}", plugin_version.id, plugin_dir_str);
 
-    plugin_manager.add_plugin_by_dir(&PluginWindowContext::new(&window), &plugin_dir_str).await?;
+    plugin_manager.add_plugin_by_dir(&PluginContext::new(&window), &plugin_dir_str).await?;
 
     window.db().upsert_plugin(
         &Plugin {

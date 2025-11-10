@@ -10,7 +10,7 @@ tauri-plugin = { workspace = true, features = ["build"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26.0"
-log = "0.4.27"
+log = { workspace = true }
 objc = "0.2.7"
 rand = "0.9.0"
 csscolorparser = "0.7.2"

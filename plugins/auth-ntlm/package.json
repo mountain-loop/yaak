@@ -1,0 +1,20 @@
+{
+  "name": "@yaak/auth-ntlm",
+  "displayName": "NTLM Authentication",
+  "description": "Authenticate requests using NTLM authentication",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mountain-loop/yaak.git",
+    "directory": "plugins/auth-ntlm"
+  },
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev",
+    "lint": "tsc --noEmit && eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "httpntlm": "^1.8.13"
+  }
+}

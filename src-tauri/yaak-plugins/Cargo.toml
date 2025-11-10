@@ -12,7 +12,7 @@ dunce = "1.0.4"
 futures-util = "0.3.30"
 hex = { workspace = true }
 keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
-log = "0.4.21"
+log = { workspace = true }
 md5 = "0.7.0"
 path-slash = "0.2.1"
 rand = "0.9.0"

@@ -1,3 +1,4 @@
+import { PluginContext } from '@yaakapp-internal/plugins';
 import type { BootRequest, InternalEvent } from '@yaakapp/api';
 import type { EventChannel } from './EventChannel';
 import { PluginInstance, PluginWorkerData } from './PluginInstance';
@@ -6,14 +7,12 @@ export class PluginHandle {
   #instance: PluginInstance;
 
   constructor(
-    readonly pluginRefId: string,
-    readonly bootRequest: BootRequest,
-    readonly pluginToAppEvents: EventChannel,
+    pluginRefId: string,
+    context: PluginContext,
+    bootRequest: BootRequest,
+    pluginToAppEvents: EventChannel,
   ) {
-    const workerData: PluginWorkerData = {
-      pluginRefId: this.pluginRefId,
-      bootRequest: this.bootRequest,
-    };
+    const workerData: PluginWorkerData = { pluginRefId, context, bootRequest };
     this.#instance = new PluginInstance(workerData, pluginToAppEvents);
   }
 

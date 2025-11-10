@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 futures-util = "0.3.31"
-log = "0.4.20"
+log = { workspace = true }
 md5 = "0.7.0"
 reqwest_cookie_store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
