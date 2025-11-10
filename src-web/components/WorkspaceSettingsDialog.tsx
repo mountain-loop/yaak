@@ -63,17 +63,17 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
 
   return (
     <Tabs
-      layout="horizontal"
       value={activeTab}
       onChangeValue={setActiveTab}
       label="Folder Settings"
-      className="pt-2 pb-2 pl-3 pr-1"
+      className="pt-4 pb-2 px-3"
+      tabListClassName="pl-4"
       addBorders
       tabs={[
-        { value: TAB_GENERAL, label: 'General' },
+        { value: TAB_GENERAL, label: 'Workspace' },
         {
           value: TAB_DATA,
-          label: 'Data',
+          label: 'Storage',
         },
         ...headersTab,
         ...authTab,
