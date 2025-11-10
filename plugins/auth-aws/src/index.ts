@@ -3,6 +3,7 @@ import type { PluginDefinition } from '@yaakapp/api';
 import aws4 from 'aws4';
 import type { Request } from 'aws4';
 import { URL } from 'node:url';
+import { fromIni } from "@aws-sdk/credential-providers";
 
 export const plugin: PluginDefinition = {
   authentication: {
@@ -10,12 +11,19 @@ export const plugin: PluginDefinition = {
     label: 'AWS Signature',
     shortLabel: 'AWS v4',
     args: [
-      { name: 'accessKeyId', label: 'Access Key ID', type: 'text', password: true },
+      {
+        name: 'accessKeyId',
+        label: 'Access Key ID',
+        type: 'text',
+        password: false,
+        optional: true,
+      },
       {
         name: 'secretAccessKey',
         label: 'Secret Access Key',
         type: 'text',
         password: true,
+        optional: true,
       },
       {
         name: 'service',
@@ -24,6 +32,7 @@ export const plugin: PluginDefinition = {
         defaultValue: 'sts',
         placeholder: 'sts',
         description: 'The service that is receiving the request (sts, s3, sqs, ...)',
+        optional: true,
       },
       {
         name: 'region',
@@ -41,11 +50,37 @@ export const plugin: PluginDefinition = {
         optional: true,
         description: 'Only required if you are using temporary credentials',
       },
+      {
+        name: 'profileName',
+        label: 'Profile Name',
+        type: 'text',
+        password: false,
+        optional: true,
+        description: 'If set, will load credentials from the AWS credentials file using this profile name (overrides other parameters)',
+      },
     ],
-    onApply(_ctx, { values, ...args }): CallHttpAuthenticationResponse {
-      const accessKeyId = String(values.accessKeyId || '');
-      const secretAccessKey = String(values.secretAccessKey || '');
-      const sessionToken = String(values.sessionToken || '') || undefined;
+    async onApply(_ctx, {values, ...args}): Promise<CallHttpAuthenticationResponse> {
+
+      const profileName = String(values.profile || '') || undefined;
+      const service = String(values.service || 'sts')
+      let accessKeyId = String(values.accessKeyId || '');
+      let secretAccessKey = String(values.secretAccessKey || '');
+      let sessionToken = String(values.sessionToken || '') || undefined;
+
+      if (!accessKeyId || !secretAccessKey) {
+        try {
+          const credentialsProvider = fromIni({
+            profile: profileName,
+            ignoreCache: true
+          });
+          const credentials = await credentialsProvider();
+          accessKeyId = credentials.accessKeyId;
+          secretAccessKey = credentials.secretAccessKey;
+          sessionToken = credentials.sessionToken;
+        } catch {
+          throw Error(`Failed to fetch credentials from AWS profile.`);
+        }
+      }
 
       const url = new URL(args.url);
 
@@ -57,7 +92,7 @@ export const plugin: PluginDefinition = {
         }
       }
 
-      if (args.method !== 'GET') {
+      if (service !== 'lambda') {
         headers['x-amz-content-sha256'] = 'UNSIGNED-PAYLOAD';
       }
 
@@ -66,9 +101,9 @@ export const plugin: PluginDefinition = {
           host: url.host,
           method: args.method,
           path: url.pathname + (url.search || ''),
-          service: String(values.service || 'sts'),
+          service: service,
           region: values.region ? String(values.region) : undefined,
-          headers,
+          headers: headers,
         },
         {
           accessKeyId,
