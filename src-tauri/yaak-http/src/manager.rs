@@ -1,9 +1,9 @@
 use crate::client::HttpConnectionOptions;
 use crate::error::Result;
+use log::info;
 use reqwest::Client;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use log::info;
 use tokio::sync::RwLock;
 
 pub struct HttpConnectionManager {
@@ -18,17 +18,14 @@ impl HttpConnectionManager {
     }
 
     pub async fn get_client(&self, id: &str, opt: &HttpConnectionOptions) -> Result<Client> {
-        {
-            let connections = self.connections.read().await;
-            if let Some(c) = connections.get(id).cloned() {
-                info!("Re-using HTTP client {id}");
-                return Ok(c);
-            }
+        let mut connections = self.connections.write().await;
+        if let Some(c) = connections.get(id).cloned() {
+            info!("Re-using HTTP client {id}");
+            return Ok(c);
         }
 
         info!("Building new HTTP client {id}");
         let c = opt.build_client()?;
-        let mut connections = self.connections.write().await;
         connections.insert(id.into(), c.clone());
         Ok(c)
     }
