@@ -66,8 +66,6 @@ jobs:
         with:
           repo: Levminer/trusted-signing-cli
           tag: v0.8.0
-          asset-name: trusted-signing-cli
-          platform: 'window'
 
       - name: Install NPM Dependencies
         run: npm ci
