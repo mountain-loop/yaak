@@ -1,5 +1,5 @@
 {
-  "name": "@yaak/auth-ntml",
+  "name": "@yaak/auth-ntlm",
   "displayName": "NTLM Authentication",
   "description": "Authenticate requests using NTLM authentication",
   "repository": {
