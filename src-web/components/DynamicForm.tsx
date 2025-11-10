@@ -187,7 +187,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                   summary={input.label}
                   className={classNames('!mb-auto', disabled && 'opacity-disabled')}
                 >
-                  <div className="mb-3 px-3">
+                  <div className="my-3">
                     <FormInputs
                       data={data}
                       disabled={disabled}

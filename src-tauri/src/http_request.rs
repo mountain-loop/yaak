@@ -160,9 +160,10 @@ pub async fn send_http_request<R: Runtime>(
         None => None,
     };
 
+    let txn_id = "TODO";
     let client = connection_manager
         .get_client(
-            &request.id,
+            txn_id,
             &HttpConnectionOptions {
                 follow_redirects: workspace.setting_follow_redirects,
                 validate_certificates: workspace.setting_validate_certificates,
