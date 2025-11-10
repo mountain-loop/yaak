@@ -1,4 +1,4 @@
-import type { HttpRequest, PluginDefinition } from '@yaakapp/api';
+import type { PluginDefinition } from '@yaakapp/api';
 
 import { ntlm } from 'httpntlm';
 
@@ -36,18 +36,27 @@ export const plugin: PluginDefinition = {
       const domain = values.domain ? String(values.domain) : undefined;
       const workstation = values.workstation ? String(values.workstation) : undefined;
 
-      const negotiateRequest = ntlm.createType1Message({});
-
-      const httpRequest: Partial<HttpRequest> = {
-        method,
+      const options = {
         url,
-        headers: [
-          { name: 'Authorization', value: negotiateRequest },
-          { name: 'Connection', value: 'keep-alive' },
-        ],
+        username,
+        password,
+        workstation,
+        domain,
       };
 
-      const negotiateResponse = await ctx.httpRequest.send({ httpRequest });
+      const type1 = ntlm.createType1Message(options);
+
+      const negotiateResponse = await ctx.httpRequest.send({
+        httpRequest: {
+          method,
+          url,
+          headers: [
+            { name: 'Authorization', value: type1 },
+            { name: 'Connection', value: 'keep-alive' },
+          ],
+        },
+      });
+
       const wwwAuthenticateHeader = negotiateResponse.headers.find(
         (h) => h.name.toLowerCase() === 'www-authenticate',
       );
@@ -56,8 +65,10 @@ export const plugin: PluginDefinition = {
         throw new Error('Unable to find www-authenticate response header for NTLM');
       }
 
-      const type2 = ntlm.parseType2Message(wwwAuthenticateHeader.value);
-      const type3 = ntlm.createType3Message(type2, { username, password, domain, workstation });
+      const type2 = ntlm.parseType2Message(wwwAuthenticateHeader.value, (err: Error | null) => {
+        if (err != null) throw err;
+      });
+      const type3 = ntlm.createType3Message(type2, options);
 
       return { setHeaders: [{ name: 'Authorization', value: type3 }] };
     },

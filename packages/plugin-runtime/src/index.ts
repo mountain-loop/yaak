@@ -39,7 +39,7 @@ async function handleIncoming(msg: string) {
   const pluginEvent: InternalEvent = JSON.parse(msg);
   // Handle special event to bootstrap plugin
   if (pluginEvent.payload.type === 'boot_request') {
-    const plugin = new PluginHandle(pluginEvent.pluginRefId, pluginEvent.payload, pluginToAppEvents);
+    const plugin = new PluginHandle(pluginEvent.pluginRefId, pluginEvent.context, pluginEvent.payload, pluginToAppEvents);
     plugins[pluginEvent.pluginRefId] = plugin;
   }
 

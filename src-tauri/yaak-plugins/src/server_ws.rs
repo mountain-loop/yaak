@@ -76,10 +76,11 @@ impl PluginRuntimeServerWebsocket {
                             return;
                         }
 
-                        let event = match serde_json::from_str::<InternalEventRawPayload>(&msg.into_text().unwrap()) {
+                        let msg_text = msg.into_text().unwrap();
+                        let event = match serde_json::from_str::<InternalEventRawPayload>(&msg_text) {
                             Ok(e) => e,
                             Err(e) => {
-                                error!("Failed to decode plugin event {e:?}");
+                                error!("Failed to decode plugin event {e:?} -> {msg_text}");
                                 continue;
                             }
                         };
@@ -98,7 +99,7 @@ impl PluginRuntimeServerWebsocket {
                             payload,
                             plugin_ref_id: event.plugin_ref_id,
                             plugin_name: event.plugin_name,
-                            window_context: event.window_context,
+                            context: event.context,
                             reply_id: event.reply_id,
                         };
 

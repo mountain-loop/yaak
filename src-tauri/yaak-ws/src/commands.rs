@@ -7,9 +7,9 @@ use log::{info, warn};
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
 use tauri::{AppHandle, Runtime, State, Url, WebviewWindow};
-use tokio::sync::{mpsc, Mutex};
-use tokio_tungstenite::tungstenite::http::HeaderValue;
+use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::http::HeaderValue;
 use yaak_http::path_placeholders::apply_path_placeholders;
 use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
@@ -18,7 +18,7 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
+    CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -124,7 +124,7 @@ pub(crate) async fn send<R: Runtime>(
         environment_chain,
         &PluginTemplateCallback::new(
             &app_handle,
-            &PluginWindowContext::new(&window),
+            &PluginContext::new(&window),
             RenderPurpose::Send,
         ),
         &RenderOptions {
@@ -203,7 +203,7 @@ pub(crate) async fn connect<R: Runtime>(
         environment_chain,
         &PluginTemplateCallback::new(
             &app_handle,
-            &PluginWindowContext::new(&window),
+            &PluginContext::new(&window),
             RenderPurpose::Send,
         ),
         &RenderOptions {
@@ -283,7 +283,12 @@ pub(crate) async fn connect<R: Runtime>(
                     .collect(),
             };
             let plugin_result = plugin_manager
-                .call_http_authentication(&window, &authentication_type, plugin_req)
+                .call_http_authentication(
+                    &window,
+                    &authentication_type,
+                    plugin_req,
+                    &PluginContext::new(&window),
+                )
                 .await?;
             for header in plugin_result.set_headers.unwrap_or_default() {
                 match (HeaderName::from_str(&header.name), HeaderValue::from_str(&header.value)) {

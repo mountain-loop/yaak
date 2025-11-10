@@ -6,6 +6,7 @@ use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::models::{
     Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest, Workspace,
 };
+use yaak_models::util::generate_prefixed_id;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -15,7 +16,7 @@ pub struct InternalEvent {
     pub plugin_ref_id: String,
     pub plugin_name: String,
     pub reply_id: Option<String>,
-    pub window_context: PluginWindowContext,
+    pub context: PluginContext,
     pub payload: InternalEventPayload,
 }
 
@@ -29,32 +30,32 @@ pub(crate) struct InternalEventRawPayload {
     pub plugin_ref_id: String,
     pub plugin_name: String,
     pub reply_id: Option<String>,
-    pub window_context: PluginWindowContext,
+    pub context: PluginContext,
     pub payload: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case", tag = "type")]
+#[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
-pub enum PluginWindowContext {
-    None,
-    Label {
-        label: String,
-        workspace_id: Option<String>,
-    },
+pub struct PluginContext {
+    pub id: String,
+    pub label: Option<String>,
+    pub workspace_id: Option<String>,
 }
 
-impl PluginWindowContext {
-    pub fn new<R: Runtime>(window: &WebviewWindow<R>) -> Self {
-        Self::Label {
-            label: window.label().to_string(),
-            workspace_id: window.workspace_id(),
+impl PluginContext {
+    pub fn new_empty() -> Self {
+        Self {
+            id: "default".to_string(),
+            label: None,
+            workspace_id: None,
         }
     }
-    pub fn new_no_workspace<R: Runtime>(window: &WebviewWindow<R>) -> Self {
-        Self::Label {
-            label: window.label().to_string(),
-            workspace_id: None,
+    pub fn new<R: Runtime>(window: &WebviewWindow<R>) -> Self {
+        Self {
+            label: Some(window.label().to_string()),
+            workspace_id: window.workspace_id(),
+            id: generate_prefixed_id("pctx"),
         }
     }
 }

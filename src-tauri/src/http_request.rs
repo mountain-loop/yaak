@@ -6,8 +6,8 @@ use http::header::{ACCEPT, USER_AGENT};
 use http::{HeaderMap, HeaderName, HeaderValue};
 use log::{debug, error, warn};
 use mime_guess::Mime;
-use reqwest::{multipart, Url};
 use reqwest::{Method, Response};
+use reqwest::{Url, multipart};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -17,10 +17,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs;
-use tokio::fs::{create_dir_all, File};
+use tokio::fs::{File, create_dir_all};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
@@ -30,9 +30,9 @@ use yaak_models::models::{
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::query_manager::QueryManagerExt;
-use yaak_models::util::{generate_id, UpdateSource};
+use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, PluginWindowContext, RenderPurpose,
+    CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -45,6 +45,27 @@ pub async fn send_http_request<R: Runtime>(
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
     cancelled_rx: &mut Receiver<bool>,
+) -> Result<HttpResponse> {
+    send_http_request_with_context(
+        window,
+        unrendered_request,
+        og_response,
+        environment,
+        cookie_jar,
+        cancelled_rx,
+        &PluginContext::new(window),
+    )
+    .await
+}
+
+pub async fn send_http_request_with_context<R: Runtime>(
+    window: &WebviewWindow<R>,
+    unrendered_request: &HttpRequest,
+    og_response: &HttpResponse,
+    environment: Option<Environment>,
+    cookie_jar: Option<CookieJar>,
+    cancelled_rx: &mut Receiver<bool>,
+    plugin_context: &PluginContext,
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
@@ -76,11 +97,7 @@ pub async fn send_http_request<R: Runtime>(
         }
     };
 
-    let cb = PluginTemplateCallback::new(
-        window.app_handle(),
-        &PluginWindowContext::new(window),
-        RenderPurpose::Send,
-    );
+    let cb = PluginTemplateCallback::new(window.app_handle(), &plugin_context, RenderPurpose::Send);
 
     let opt = RenderOptions {
         error_behavior: RenderErrorBehavior::Throw,
@@ -160,10 +177,9 @@ pub async fn send_http_request<R: Runtime>(
         None => None,
     };
 
-    let txn_id = "TODO";
     let client = connection_manager
         .get_client(
-            txn_id,
+            &plugin_context.id,
             &HttpConnectionOptions {
                 follow_redirects: workspace.setting_follow_redirects,
                 validate_certificates: workspace.setting_validate_certificates,
@@ -452,8 +468,9 @@ pub async fn send_http_request<R: Runtime>(
                     })
                     .collect(),
             };
-            let auth_result =
-                plugin_manager.call_http_authentication(&window, &authentication_type, req).await;
+            let auth_result = plugin_manager
+                .call_http_authentication(&window, &authentication_type, req, plugin_context)
+                .await;
             let plugin_result = match auth_result {
                 Ok(r) => r,
                 Err(e) => {

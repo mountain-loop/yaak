@@ -1,7 +1,7 @@
 use crate::error::Error::{ClientError, ServerError};
 use crate::error::Result;
 use chrono::{NaiveDateTime, Utc};
-use log::{debug, info, warn};
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::ops::Add;
 use std::time::Duration;

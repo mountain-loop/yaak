@@ -23,7 +23,7 @@ use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
-use tauri_plugin_log::{log, Builder, Target, TargetKind};
+use tauri_plugin_log::{Builder, Target, TargetKind, log};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
@@ -44,7 +44,7 @@ use yaak_plugins::events::{
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
     GetHttpRequestActionsResponse, GetTemplateFunctionConfigResponse,
     GetTemplateFunctionSummaryResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
-    PluginWindowContext, RenderPurpose, ShowToastRequest,
+    PluginContext, RenderPurpose, ShowToastRequest,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::PluginMetadata;
@@ -103,7 +103,7 @@ async fn cmd_template_tokens_to_string<R: Runtime>(
 ) -> YaakResult<String> {
     let cb = PluginTemplateCallback::new(
         &app_handle,
-        &PluginWindowContext::new(&window),
+        &PluginContext::new(&window),
         RenderPurpose::Preview,
     );
     let new_tokens = transform_args(tokens, &cb)?;
@@ -125,7 +125,7 @@ async fn cmd_render_template<R: Runtime>(
         environment_chain,
         &PluginTemplateCallback::new(
             &app_handle,
-            &PluginWindowContext::new(&window),
+            &PluginContext::new(&window),
             RenderPurpose::Preview,
         ),
         &RenderOptions {
@@ -169,7 +169,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
         environment_chain,
         &PluginTemplateCallback::new(
             &app_handle,
-            &PluginWindowContext::new(&window),
+            &PluginContext::new(&window),
             RenderPurpose::Send,
         ),
         &RenderOptions {
@@ -218,7 +218,7 @@ async fn cmd_grpc_go<R: Runtime>(
         environment_chain.clone(),
         &PluginTemplateCallback::new(
             &app_handle,
-            &PluginWindowContext::new(&window),
+            &PluginContext::new(&window),
             RenderPurpose::Send,
         ),
         &RenderOptions {
@@ -343,7 +343,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 environment_chain,
                                 &PluginTemplateCallback::new(
                                     &app_handle,
-                                    &PluginWindowContext::new(&window),
+                                    &PluginContext::new(&window),
                                     RenderPurpose::Send,
                                 ),
                                 &RenderOptions {
@@ -415,7 +415,7 @@ async fn cmd_grpc_go<R: Runtime>(
             environment_chain,
             &PluginTemplateCallback::new(
                 &app_handle,
-                &PluginWindowContext::new(&window),
+                &PluginContext::new(&window),
                 RenderPurpose::Send,
             ),
             &RenderOptions {
@@ -1161,7 +1161,7 @@ async fn cmd_install_plugin<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Plugin> {
-    plugin_manager.add_plugin_by_dir(&PluginWindowContext::new(&window), &directory).await?;
+    plugin_manager.add_plugin_by_dir(&PluginContext::new(&window), &directory).await?;
 
     Ok(app_handle.db().upsert_plugin(
         &Plugin {
@@ -1200,7 +1200,7 @@ async fn cmd_reload_plugins<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
 ) -> YaakResult<()> {
-    plugin_manager.initialize_all_plugins(&app_handle, &PluginWindowContext::new(&window)).await?;
+    plugin_manager.initialize_all_plugins(&app_handle, &PluginContext::new(&window)).await?;
     Ok(())
 }
 
@@ -1621,13 +1621,13 @@ async fn call_frontend<R: Runtime>(
     v.to_owned()
 }
 
-fn get_window_from_window_context<R: Runtime>(
+fn get_window_from_plugin_context<R: Runtime>(
     app_handle: &AppHandle<R>,
-    window_context: &PluginWindowContext,
+    plugin_context: &PluginContext,
 ) -> Result<WebviewWindow<R>> {
-    let label = match window_context {
-        PluginWindowContext::Label { label, .. } => label,
-        PluginWindowContext::None => {
+    let label = match &plugin_context.label {
+        Some(label) => label,
+        None => {
             return app_handle
                 .webview_windows()
                 .iter()
@@ -1643,7 +1643,7 @@ fn get_window_from_window_context<R: Runtime>(
         .find_map(|(_, w)| if w.label() == label { Some(w.to_owned()) } else { None });
 
     if window.is_none() {
-        error!("Failed to find window by {window_context:?}");
+        error!("Failed to find window by {plugin_context:?}");
     }
 
     Ok(window.ok_or(GenericError(format!("Failed to find window for {}", label)))?)

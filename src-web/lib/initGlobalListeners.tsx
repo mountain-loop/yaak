@@ -34,7 +34,7 @@ export function initGlobalListeners() {
         replyId: event.id,
         pluginName: event.pluginName,
         pluginRefId: event.pluginRefId,
-        windowContext: event.windowContext,
+        context: event.context,
         payload: {
           type: 'prompt_text_response',
           value,

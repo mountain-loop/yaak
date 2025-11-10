@@ -21,12 +21,12 @@ impl HttpConnectionManager {
         {
             let connections = self.connections.read().await;
             if let Some(c) = connections.get(id).cloned() {
-                info!("Re-using HTTP client");
+                info!("Re-using HTTP client {id}");
                 return Ok(c);
             }
         }
 
-        info!("Building new HTTP client");
+        info!("Building new HTTP client {id}");
         let c = opt.build_client()?;
         let mut connections = self.connections.write().await;
         connections.insert(id.into(), c.clone());

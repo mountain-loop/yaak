@@ -1,5 +1,5 @@
 use crate::events::{
-    FormInput, FormInputBase, FormInputText, PluginWindowContext, RenderPurpose, TemplateFunction,
+    FormInput, FormInputBase, FormInputText, PluginContext, RenderPurpose, TemplateFunction,
     TemplateFunctionArg,
 };
 use crate::template_callback::PluginTemplateCallback;
@@ -65,13 +65,10 @@ pub(crate) fn template_function_keyring() -> TemplateFunction {
 pub fn template_function_secure_run<R: Runtime>(
     app_handle: &AppHandle<R>,
     args: HashMap<String, serde_json::Value>,
-    window_context: &PluginWindowContext,
+    plugin_context: &PluginContext,
 ) -> Result<String> {
-    match window_context.clone() {
-        PluginWindowContext::Label {
-            workspace_id: Some(wid),
-            ..
-        } => {
+    match plugin_context.workspace_id.clone() {
+        Some(wid) => {
             let value = args.get("value").map(|v| v.to_owned()).unwrap_or_default();
             let value = match value {
                 serde_json::Value::String(s) => s,
@@ -97,13 +94,13 @@ pub fn template_function_secure_run<R: Runtime>(
             let r = String::from_utf8(r).map_err(|e| RenderError(e.to_string()))?;
             Ok(r)
         }
-        _ => Err(RenderError("workspace_id missing from window context".to_string())),
+        _ => Err(RenderError("workspace_id missing from plugin context".to_string())),
     }
 }
 
 pub fn template_function_secure_transform_arg<R: Runtime>(
     app_handle: &AppHandle<R>,
-    window_context: &PluginWindowContext,
+    plugin_context: &PluginContext,
     arg_name: &str,
     arg_value: &str,
 ) -> Result<String> {
@@ -111,11 +108,8 @@ pub fn template_function_secure_transform_arg<R: Runtime>(
         return Ok(arg_value.to_string());
     }
 
-    match window_context.clone() {
-        PluginWindowContext::Label {
-            workspace_id: Some(wid),
-            ..
-        } => {
+    match plugin_context.workspace_id.clone() {
+        Some(wid) => {
             if arg_value.is_empty() {
                 return Ok("".to_string());
             }
@@ -132,13 +126,13 @@ pub fn template_function_secure_transform_arg<R: Runtime>(
             let r = BASE64_STANDARD.encode(r);
             Ok(format!("YENC_{}", r))
         }
-        _ => Err(RenderError("workspace_id missing from window context".to_string())),
+        _ => Err(RenderError("workspace_id missing from plugin context".to_string())),
     }
 }
 
 pub fn decrypt_secure_template_function<R: Runtime>(
     app_handle: &AppHandle<R>,
-    window_context: &PluginWindowContext,
+    plugin_context: &PluginContext,
     template: &str,
 ) -> Result<String> {
     let mut parsed = Parser::new(template).parse()?;
@@ -159,7 +153,7 @@ pub fn decrypt_secure_template_function<R: Runtime>(
                     }
                 }
                 new_tokens.push(Token::Raw {
-                    text: template_function_secure_run(app_handle, args_map, window_context)?,
+                    text: template_function_secure_run(app_handle, args_map, plugin_context)?,
                 });
             }
             t => {
@@ -175,10 +169,10 @@ pub fn decrypt_secure_template_function<R: Runtime>(
 
 pub fn encrypt_secure_template_function<R: Runtime>(
     app_handle: &AppHandle<R>,
-    window_context: &PluginWindowContext,
+    plugin_context: &PluginContext,
     template: &str,
 ) -> Result<String> {
-    let decrypted = decrypt_secure_template_function(&app_handle, window_context, template)?;
+    let decrypted = decrypt_secure_template_function(&app_handle, plugin_context, template)?;
     let tokens = Tokens {
         tokens: vec![Token::Tag {
             val: Val::Fn {
@@ -193,7 +187,7 @@ pub fn encrypt_secure_template_function<R: Runtime>(
 
     Ok(transform_args(
         tokens,
-        &PluginTemplateCallback::new(app_handle, window_context, RenderPurpose::Preview),
+        &PluginTemplateCallback::new(app_handle, plugin_context, RenderPurpose::Preview),
     )?
     .to_string())
 }

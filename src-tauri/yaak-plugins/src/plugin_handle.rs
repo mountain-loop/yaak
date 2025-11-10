@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::events::{InternalEvent, InternalEventPayload, PluginWindowContext};
+use crate::events::{InternalEvent, InternalEventPayload, PluginContext};
 use crate::plugin_meta::{PluginMetadata, get_plugin_meta};
 use crate::util::gen_id;
 use std::path::Path;
@@ -33,16 +33,16 @@ impl PluginHandle {
 
     pub fn build_event_to_send(
         &self,
-        window_context: &PluginWindowContext,
+        plugin_context: &PluginContext,
         payload: &InternalEventPayload,
         reply_id: Option<String>,
     ) -> InternalEvent {
-        self.build_event_to_send_raw(window_context, payload, reply_id)
+        self.build_event_to_send_raw(plugin_context, payload, reply_id)
     }
 
     pub(crate) fn build_event_to_send_raw(
         &self,
-        window_context: &PluginWindowContext,
+        plugin_context: &PluginContext,
         payload: &InternalEventPayload,
         reply_id: Option<String>,
     ) -> InternalEvent {
@@ -53,7 +53,7 @@ impl PluginHandle {
             plugin_name: dir.file_name().unwrap().to_str().unwrap().to_string(),
             reply_id,
             payload: payload.clone(),
-            window_context: window_context.clone(),
+            context: plugin_context.clone(),
         }
     }
 

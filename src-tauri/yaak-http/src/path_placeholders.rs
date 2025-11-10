@@ -50,7 +50,7 @@ fn replace_path_placeholder(p: &HttpUrlParameter, url: &str) -> String {
 
 #[cfg(test)]
 mod placeholder_tests {
-    use crate::{apply_path_placeholders, replace_path_placeholder};
+    use crate::path_placeholders::{apply_path_placeholders, replace_path_placeholder};
     use yaak_models::models::{HttpRequest, HttpUrlParameter};
 
     #[test]

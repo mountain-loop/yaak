@@ -13,7 +13,7 @@ import {
   InternalEvent,
   InternalEventPayload,
   ListCookieNamesResponse,
-  PluginWindowContext,
+  PluginContext,
   PromptTextResponse,
   RenderGrpcRequestResponse,
   RenderHttpRequestResponse,
@@ -25,7 +25,7 @@ import {
 import { Context, PluginDefinition } from '@yaakapp/api';
 import { JsonValue } from '@yaakapp/api/lib/bindings/serde_json/JsonValue';
 import console from 'node:console';
-import { readFileSync, type Stats, statSync, watch } from 'node:fs';
+import { type Stats, statSync, watch } from 'node:fs';
 import path from 'node:path';
 import { EventChannel } from './EventChannel';
 import { migrateTemplateFunctionSelectOptions } from './migrations';
@@ -33,12 +33,12 @@ import { migrateTemplateFunctionSelectOptions } from './migrations';
 export interface PluginWorkerData {
   bootRequest: BootRequest;
   pluginRefId: string;
+  context: PluginContext;
 }
 
 export class PluginInstance {
   #workerData: PluginWorkerData;
   #mod: PluginDefinition;
-  #pkg: { name?: string; version?: string };
   #pluginToAppEvents: EventChannel;
   #appToPluginEvents: EventChannel;
 
@@ -52,18 +52,14 @@ export class PluginInstance {
       await this.#onMessage(event);
     });
 
-    // Reload plugin if the JS or package.json changes
-    const windowContextNone: PluginWindowContext = { type: 'none' };
-
     this.#mod = {} as any;
-    this.#pkg = JSON.parse(readFileSync(this.#pathPkg(), 'utf8'));
 
     const fileChangeCallback = async () => {
       await this.#mod?.dispose?.();
       this.#importModule();
-      await this.#mod?.init?.(this.#newCtx({ type: 'none' }));
+      await this.#mod?.init?.(this.#newCtx(workerData.context));
       return this.#sendPayload(
-        windowContextNone,
+        workerData.context,
         {
           type: 'reload_response',
           silent: false,
@@ -90,14 +86,14 @@ export class PluginInstance {
   }
 
   async #onMessage(event: InternalEvent) {
-    const ctx = this.#newCtx(event.windowContext);
+    const ctx = this.#newCtx(event.context);
 
-    const { windowContext, payload, id: replyId } = event;
+    const { context, payload, id: replyId } = event;
 
     try {
       if (payload.type === 'boot_request') {
         await this.#mod?.init?.(ctx);
-        this.#sendPayload(windowContext, { type: 'boot_response' }, replyId);
+        this.#sendPayload(context, { type: 'boot_response' }, replyId);
         return;
       }
 
@@ -106,7 +102,7 @@ export class PluginInstance {
           type: 'terminate_response',
         };
         await this.terminate();
-        this.#sendPayload(windowContext, payload, replyId);
+        this.#sendPayload(context, payload, replyId);
         return;
       }
 
@@ -123,10 +119,10 @@ export class PluginInstance {
             // deno-lint-ignore no-explicit-any
             resources: reply.resources as any,
           };
-          this.#sendPayload(windowContext, replyPayload, replyId);
+          this.#sendPayload(context, replyPayload, replyId);
           return;
         } else {
-          // Continue, to send back an empty reply
+          // Send back an empty reply (below)
         }
       }
 
@@ -136,7 +132,7 @@ export class PluginInstance {
           payload: payload.content,
           mimeType: payload.type,
         });
-        this.#sendPayload(windowContext, { type: 'filter_response', ...reply }, replyId);
+        this.#sendPayload(context, { type: 'filter_response', ...reply }, replyId);
         return;
       }
 
@@ -154,7 +150,7 @@ export class PluginInstance {
           pluginRefId: this.#workerData.pluginRefId,
           actions: reply,
         };
-        this.#sendPayload(windowContext, replyPayload, replyId);
+        this.#sendPayload(context, replyPayload, replyId);
         return;
       }
 
@@ -172,7 +168,7 @@ export class PluginInstance {
           pluginRefId: this.#workerData.pluginRefId,
           actions: reply,
         };
-        this.#sendPayload(windowContext, replyPayload, replyId);
+        this.#sendPayload(context, replyPayload, replyId);
         return;
       }
 
@@ -181,7 +177,7 @@ export class PluginInstance {
           type: 'get_themes_response',
           themes: this.#mod.themes,
         };
-        this.#sendPayload(windowContext, replyPayload, replyId);
+        this.#sendPayload(context, replyPayload, replyId);
         return;
       }
 
@@ -203,7 +199,7 @@ export class PluginInstance {
           pluginRefId: this.#workerData.pluginRefId,
           functions,
         };
-        this.#sendPayload(windowContext, replyPayload, replyId);
+        this.#sendPayload(context, replyPayload, replyId);
         return;
       }
 
@@ -213,7 +209,7 @@ export class PluginInstance {
       ) {
         let templateFunction = this.#mod.templateFunctions.find((f) => f.name === payload.name);
         if (templateFunction == null) {
-          this.#sendEmpty(windowContext, replyId);
+          this.#sendEmpty(context, replyId);
           return;
         }
 
@@ -236,18 +232,17 @@ export class PluginInstance {
           pluginRefId: this.#workerData.pluginRefId,
           function: templateFunction,
         };
-        this.#sendPayload(windowContext, replyPayload, replyId);
+        this.#sendPayload(context, replyPayload, replyId);
         return;
       }
 
       if (payload.type === 'get_http_authentication_summary_request' && this.#mod?.authentication) {
-
         const replyPayload: InternalEventPayload = {
           type: 'get_http_authentication_summary_response',
           ...this.#mod.authentication,
         };
 
-        this.#sendPayload(windowContext, replyPayload, replyId);
+        this.#sendPayload(context, replyPayload, replyId);
         return;
       }
 
@@ -275,7 +270,7 @@ export class PluginInstance {
           pluginRefId: this.#workerData.pluginRefId,
         };
 
-        this.#sendPayload(windowContext, replyPayload, replyId);
+        this.#sendPayload(context, replyPayload, replyId);
         return;
       }
 
@@ -284,7 +279,7 @@ export class PluginInstance {
         if (typeof auth?.onApply === 'function') {
           applyFormInputDefaults(auth.args, payload.values);
           this.#sendPayload(
-            windowContext,
+            context,
             {
               type: 'call_http_authentication_response',
               ...(await auth.onApply(ctx, payload)),
@@ -302,7 +297,7 @@ export class PluginInstance {
         const action = this.#mod.authentication.actions?.[payload.index];
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
-          this.#sendEmpty(windowContext, replyId);
+          this.#sendEmpty(context, replyId);
           return;
         }
       }
@@ -314,7 +309,7 @@ export class PluginInstance {
         const action = this.#mod.httpRequestActions[payload.index];
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
-          this.#sendEmpty(windowContext, replyId);
+          this.#sendEmpty(context, replyId);
           return;
         }
       }
@@ -326,7 +321,7 @@ export class PluginInstance {
         const action = this.#mod.grpcRequestActions[payload.index];
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
-          this.#sendEmpty(windowContext, replyId);
+          this.#sendEmpty(context, replyId);
           return;
         }
       }
@@ -341,7 +336,7 @@ export class PluginInstance {
           try {
             const result = await fn.onRender(ctx, payload.args);
             this.#sendPayload(
-              windowContext,
+              context,
               {
                 type: 'call_template_function_response',
                 value: result ?? null,
@@ -350,7 +345,7 @@ export class PluginInstance {
             );
           } catch (err) {
             this.#sendPayload(
-              windowContext,
+              context,
               {
                 type: 'call_template_function_response',
                 value: null,
@@ -365,12 +360,12 @@ export class PluginInstance {
     } catch (err) {
       const error = `${err}`.replace(/^Error:\s*/g, '');
       console.log('Plugin call threw exception', payload.type, '→', error);
-      this.#sendPayload(windowContext, { type: 'error_response', error }, replyId);
+      this.#sendPayload(context, { type: 'error_response', error }, replyId);
       return;
     }
 
     // No matches, so send back an empty response so the caller doesn't block forever
-    this.#sendEmpty(windowContext, replyId);
+    this.#sendEmpty(context, replyId);
   }
 
   #pathMod() {
@@ -393,7 +388,7 @@ export class PluginInstance {
   }
 
   #buildEventToSend(
-    windowContext: PluginWindowContext,
+    context: PluginContext,
     payload: InternalEventPayload,
     replyId: string | null = null,
   ): InternalEvent {
@@ -403,16 +398,16 @@ export class PluginInstance {
       id: genId(),
       replyId,
       payload,
-      windowContext,
+      context,
     };
   }
 
   #sendPayload(
-    windowContext: PluginWindowContext,
+    context: PluginContext,
     payload: InternalEventPayload,
     replyId: string | null,
   ): string {
-    const event = this.#buildEventToSend(windowContext, payload, replyId);
+    const event = this.#buildEventToSend(context, payload, replyId);
     this.#sendEvent(event);
     return event.id;
   }
@@ -424,16 +419,16 @@ export class PluginInstance {
     this.#pluginToAppEvents.emit(event);
   }
 
-  #sendEmpty(windowContext: PluginWindowContext, replyId: string | null = null): string {
-    return this.#sendPayload(windowContext, { type: 'empty_response' }, replyId);
+  #sendEmpty(context: PluginContext, replyId: string | null = null): string {
+    return this.#sendPayload(context, { type: 'empty_response' }, replyId);
   }
 
   #sendAndWaitForReply<T extends Omit<InternalEventPayload, 'type'>>(
-    windowContext: PluginWindowContext,
+    context: PluginContext,
     payload: InternalEventPayload,
   ): Promise<T> {
     // 1. Build event to send
-    const eventToSend = this.#buildEventToSend(windowContext, payload, null);
+    const eventToSend = this.#buildEventToSend(context, payload, null);
 
     // 2. Spawn listener in background
     const promise = new Promise<T>((resolve) => {
@@ -455,12 +450,12 @@ export class PluginInstance {
   }
 
   #sendAndListenForEvents(
-    windowContext: PluginWindowContext,
+    context: PluginContext,
     payload: InternalEventPayload,
     onEvent: (event: InternalEventPayload) => void,
   ): void {
     // 1. Build event to send
-    const eventToSend = this.#buildEventToSend(windowContext, payload, null);
+    const eventToSend = this.#buildEventToSend(context, payload, null);
 
     // 2. Listen for replies in the background
     this.#appToPluginEvents.listen((event: InternalEvent) => {
@@ -473,11 +468,11 @@ export class PluginInstance {
     this.#sendEvent(eventToSend);
   }
 
-  #newCtx(windowContext: PluginWindowContext): Context {
+  #newCtx(context: PluginContext): Context {
     return {
       clipboard: {
         copyText: async (text) => {
-          await this.#sendAndWaitForReply(windowContext, {
+          await this.#sendAndWaitForReply(context, {
             type: 'copy_text_request',
             text,
           });
@@ -485,7 +480,7 @@ export class PluginInstance {
       },
       toast: {
         show: async (args) => {
-          await this.#sendAndWaitForReply(windowContext, {
+          await this.#sendAndWaitForReply(context, {
             type: 'show_toast_request',
             // Handle default here because null/undefined both convert to None in Rust translation
             timeout: args.timeout === undefined ? 5000 : args.timeout,
@@ -504,21 +499,21 @@ export class PluginInstance {
               onClose?.();
             }
           };
-          this.#sendAndListenForEvents(windowContext, payload, onEvent);
+          this.#sendAndListenForEvents(context, payload, onEvent);
           return {
             close: () => {
               const closePayload: InternalEventPayload = {
                 type: 'close_window_request',
                 label: args.label,
               };
-              this.#sendPayload(windowContext, closePayload, null);
+              this.#sendPayload(context, closePayload, null);
             },
           };
         },
       },
       prompt: {
         text: async (args) => {
-          const reply: PromptTextResponse = await this.#sendAndWaitForReply(windowContext, {
+          const reply: PromptTextResponse = await this.#sendAndWaitForReply(context, {
             type: 'prompt_text_request',
             ...args,
           });
@@ -532,7 +527,7 @@ export class PluginInstance {
             ...args,
           } as const;
           const { httpResponses } = await this.#sendAndWaitForReply<FindHttpResponsesResponse>(
-            windowContext,
+            context,
             payload,
           );
           return httpResponses;
@@ -545,7 +540,7 @@ export class PluginInstance {
             ...args,
           } as const;
           const { grpcRequest } = await this.#sendAndWaitForReply<RenderGrpcRequestResponse>(
-            windowContext,
+            context,
             payload,
           );
           return grpcRequest;
@@ -558,7 +553,7 @@ export class PluginInstance {
             ...args,
           } as const;
           const { httpRequest } = await this.#sendAndWaitForReply<GetHttpRequestByIdResponse>(
-            windowContext,
+            context,
             payload,
           );
           return httpRequest;
@@ -569,7 +564,7 @@ export class PluginInstance {
             ...args,
           } as const;
           const { httpResponse } = await this.#sendAndWaitForReply<SendHttpRequestResponse>(
-            windowContext,
+            context,
             payload,
           );
           return httpResponse;
@@ -580,7 +575,7 @@ export class PluginInstance {
             ...args,
           } as const;
           const { httpRequest } = await this.#sendAndWaitForReply<RenderHttpRequestResponse>(
-            windowContext,
+            context,
             payload,
           );
           return httpRequest;
@@ -593,7 +588,7 @@ export class PluginInstance {
             ...args,
           } as const;
           const { value } = await this.#sendAndWaitForReply<GetCookieValueResponse>(
-            windowContext,
+            context,
             payload,
           );
           return value;
@@ -601,7 +596,7 @@ export class PluginInstance {
         listNames: async () => {
           const payload = { type: 'list_cookie_names_request' } as const;
           const { names } = await this.#sendAndWaitForReply<ListCookieNamesResponse>(
-            windowContext,
+            context,
             payload,
           );
           return names;
@@ -614,20 +609,14 @@ export class PluginInstance {
          */
         render: async (args) => {
           const payload = { type: 'template_render_request', ...args } as const;
-          const result = await this.#sendAndWaitForReply<TemplateRenderResponse>(
-            windowContext,
-            payload,
-          );
+          const result = await this.#sendAndWaitForReply<TemplateRenderResponse>(context, payload);
           return result.data as any;
         },
       },
       store: {
         get: async <T>(key: string) => {
           const payload = { type: 'get_key_value_request', key } as const;
-          const result = await this.#sendAndWaitForReply<GetKeyValueResponse>(
-            windowContext,
-            payload,
-          );
+          const result = await this.#sendAndWaitForReply<GetKeyValueResponse>(context, payload);
           return result.value ? (JSON.parse(result.value) as T) : undefined;
         },
         set: async <T>(key: string, value: T) => {
@@ -637,20 +626,17 @@ export class PluginInstance {
             key,
             value: valueStr,
           };
-          await this.#sendAndWaitForReply<GetKeyValueResponse>(windowContext, payload);
+          await this.#sendAndWaitForReply<GetKeyValueResponse>(context, payload);
         },
         delete: async (key: string) => {
           const payload = { type: 'delete_key_value_request', key } as const;
-          const result = await this.#sendAndWaitForReply<DeleteKeyValueResponse>(
-            windowContext,
-            payload,
-          );
+          const result = await this.#sendAndWaitForReply<DeleteKeyValueResponse>(context, payload);
           return result.deleted;
         },
       },
       plugin: {
         reload: () => {
-          this.#sendPayload({ type: 'none' }, { type: 'reload_response', silent: true }, null);
+          this.#sendPayload(context, { type: 'reload_response', silent: true }, null);
         },
       },
     };
