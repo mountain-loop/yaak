@@ -71,6 +71,7 @@ jobs:
           $exe = Join-Path $dir "trusted-signing-cli.exe"
           Invoke-WebRequest -Uri $url -OutFile $exe
           echo $dir >> $env:GITHUB_PATH
+          & $exe --version
 
       - name: Install NPM Dependencies
         run: npm ci
