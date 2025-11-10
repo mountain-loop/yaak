@@ -61,12 +61,16 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install trusted-signing-cli (Windows only)
-        uses: jaxxstorm/action-install-gh-release@v1.10.0
         if: matrix.platform == 'windows-latest'
-        with:
-          repo: Levminer/trusted-signing-cli
-          extension: "\\.exe"
-          tag: v0.8.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = "$env:USERPROFILE\trusted-signing"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $url = "https://github.com/Levminer/trusted-signing-cli/releases/download/0.8.0/trusted-signing-cli.exe"
+          $exe = Join-Path $dir "trusted-signing-cli.exe"
+          Invoke-WebRequest -Uri $url -OutFile $exe
+          echo $dir >> $env:GITHUB_PATH
 
       - name: Install NPM Dependencies
         run: npm ci
