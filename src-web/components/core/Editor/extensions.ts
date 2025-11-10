@@ -19,7 +19,7 @@ import {
   indentOnInput,
   syntaxHighlighting,
 } from '@codemirror/language';
-import { lintKeymap } from '@codemirror/lint';
+import { linter, lintGutter, lintKeymap } from '@codemirror/lint';
 
 import { search, searchKeymap } from '@codemirror/search';
 import type { Extension } from '@codemirror/state';
@@ -45,6 +45,7 @@ import { renderMarkdown } from '../../../lib/markdown';
 import { pluralizeCount } from '../../../lib/pluralize';
 import { showGraphQLDocExplorerAtom } from '../../graphql/graphqlAtoms';
 import type { EditorProps } from './Editor';
+import { jsonParseLinter } from './json-lint';
 import { pairs } from './pairs/extension';
 import { text } from './text/extension';
 import type { TwigCompletionOption } from './twig/completion';
@@ -62,7 +63,7 @@ export const syntaxHighlightStyle = HighlightStyle.define([
     textDecoration: 'underline',
   },
   {
-    tag: [t.paren, t.bracket, t.squareBracket, t.brace, t.separator, t.punctuation],
+    tag: [t.angleBracket, t.paren, t.bracket, t.squareBracket, t.brace, t.separator, t.punctuation],
     color: 'var(--textSubtle)',
   },
   {
@@ -151,6 +152,10 @@ export function getLanguageExtension({
       }),
       extraExtensions,
     ];
+  }
+
+  if (language === 'json') {
+    extraExtensions.push(linter(jsonParseLinter()), lintGutter());
   }
 
   const maybeBase = language ? syntaxExtensions[language] : null;

@@ -181,7 +181,7 @@ export function Workspace() {
         <div className="absolute inset-0 pointer-events-none">
           <div // Add subtle background
             style={environmentBgStyle}
-            className="absolute inset-0 opacity-5"
+            className="absolute inset-0 opacity-[0.07]"
           />
           <div // Add a subtle border bottom
             style={environmentBgStyle}

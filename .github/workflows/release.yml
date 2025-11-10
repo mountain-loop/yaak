@@ -60,9 +60,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: install dependencies (windows only)
+      - name: Install trusted-signing-cli
+        uses: jaxxstorm/action-install-gh-release@v1.10.0
         if: matrix.platform == 'windows-latest'
-        run: cargo install --force trusted-signing-cli
+        with:
+          repo: Levminer/trusted-signing-cli
+          tag: v0.8.0
+          asset-name: trusted-signing-cli
+          platform: 'window'
 
       - name: Install NPM Dependencies
         run: npm ci

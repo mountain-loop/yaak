@@ -9,6 +9,7 @@ export interface TooltipProps {
   content: ReactNode;
   tabIndex?: number;
   size?: 'md' | 'lg';
+  className?: string;
 }
 
 const hiddenStyles: CSSProperties = {
@@ -19,7 +20,7 @@ const hiddenStyles: CSSProperties = {
   opacity: 0,
 };
 
-export function Tooltip({ children, content, tabIndex, size = 'md' }: TooltipProps) {
+export function Tooltip({ children, className, content, tabIndex, size = 'md' }: TooltipProps) {
   const [isOpen, setIsOpen] = useState<CSSProperties>();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -94,8 +95,8 @@ export function Tooltip({ children, content, tabIndex, size = 'md' }: TooltipPro
         ref={triggerRef}
         role="button"
         aria-describedby={isOpen ? id.current : undefined}
-        tabIndex={tabIndex ?? 0}
-        className="flex-grow-0 flex items-center"
+        tabIndex={tabIndex ?? -1}
+        className={classNames(className, 'flex-grow-0 flex items-center')}
         onClick={handleToggleImmediate}
         onMouseEnter={handleOpen}
         onMouseLeave={handleClose}

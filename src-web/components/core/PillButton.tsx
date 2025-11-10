@@ -2,7 +2,7 @@ import classNames from 'classnames';
 import type { ButtonProps } from './Button';
 import { Button } from './Button';
 
-export function BadgeButton({ className, ...props }: ButtonProps) {
+export function PillButton({ className, ...props }: ButtonProps) {
   return (
     <Button
       size="2xs"

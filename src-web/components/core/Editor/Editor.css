@@ -20,6 +20,7 @@
     }
 
     /* Matching bracket */
+
     .cm-matchingBracket {
       @apply bg-transparent border-b border-b-text-subtle;
     }
@@ -76,6 +77,16 @@
       .cm-gutterElement {
         @apply cursor-default;
       }
+
+      .cm-lint-marker {
+        @apply cursor-default opacity-80 hover:opacity-100 transition-opacity;
+        @apply rounded-full w-[0.9em] h-[0.9em];
+        content: '';
+
+        &.cm-lint-marker-error {
+          @apply bg-danger;
+        }
+      }
     }
 
     .template-tag {
@@ -110,6 +121,7 @@
       @apply font-mono text-xs;
 
       /* Hide scrollbars */
+
       &::-webkit-scrollbar-corner,
       &::-webkit-scrollbar {
         @apply hidden !important;
@@ -202,7 +214,7 @@
 }
 
 .cm-editor .cm-activeLineGutter {
-  @apply bg-transparent;
+  @apply bg-transparent text-text-subtle;
 }
 
 /* Cursor and mouse cursor for readonly mode */
@@ -226,17 +238,35 @@
   }
 }
 
+.cm-tooltip-lint {
+  @apply font-mono text-editor rounded overflow-hidden bg-surface-highlight border border-border shadow !important;
+
+  .cm-diagnostic-error {
+    @apply border-l-danger px-4 py-2;
+  }
+}
+
+.cm-lintPoint {
+  &.cm-lintPoint-error {
+    &::after {
+      @apply border-b-danger;
+    }
+  }
+}
+
 .cm-tooltip.cm-tooltip-hover {
   @apply shadow-lg bg-surface rounded text-text-subtle border border-border-subtle z-50 pointer-events-auto text-sm;
   @apply p-1.5;
 
   /* Style the tooltip for popping up "open in browser" and other stuff */
+
   a, button {
     @apply text-text hover:bg-surface-highlight w-full h-sm flex items-center px-2 rounded;
   }
 
   a {
     @apply cursor-default !important;
+
     &::after {
       @apply text-text bg-text h-3 w-3 ml-1;
       content: '';
