@@ -83,6 +83,17 @@ export function getModel<M extends AnyModel['model'], T extends ExtractModel<Any
   return null;
 }
 
+export function getAnyModel(
+  id: string,
+): AnyModel | null {
+  let data = mustStore().get(modelStoreDataAtom);
+  for (const t of Object.keys(data)) {
+    let v = (data as any)[t]?.[id];
+    if (v?.model === t) return v;
+  }
+  return null;
+}
+
 export function patchModelById<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
   model: M,
   id: string,

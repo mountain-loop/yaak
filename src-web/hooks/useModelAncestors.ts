@@ -9,10 +9,10 @@ export function useModelAncestors(m: AnyModel | null) {
   const folders = useAtomValue(foldersAtom);
   const workspaces = useAtomValue(workspacesAtom);
 
-  return useMemo(() => getParents(folders, workspaces, m), [folders, workspaces, m]);
+  return useMemo(() => getModelAncestors(folders, workspaces, m), [folders, workspaces, m]);
 }
 
-function getParents(
+export function getModelAncestors(
   folders: Folder[],
   workspaces: Workspace[],
   currentModel: AnyModel | null,
@@ -25,7 +25,7 @@ function getParents(
       : null;
 
   if (parentFolder != null) {
-    return [parentFolder, ...getParents(folders, workspaces, parentFolder)];
+    return [parentFolder, ...getModelAncestors(folders, workspaces, parentFolder)];
   }
 
   const parentWorkspace =
@@ -34,7 +34,7 @@ function getParents(
       : null;
 
   if (parentWorkspace != null) {
-    return [parentWorkspace, ...getParents(folders, workspaces, parentWorkspace)];
+    return [parentWorkspace, ...getModelAncestors(folders, workspaces, parentWorkspace)];
   }
 
   return [];

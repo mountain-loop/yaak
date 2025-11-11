@@ -10,16 +10,6 @@ import type {
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
-import {
-  duplicateModel,
-  foldersAtom,
-  getModel,
-  grpcConnectionsAtom,
-  httpResponsesAtom,
-  patchModel,
-  websocketConnectionsAtom,
-  workspacesAtom,
-} from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
@@ -37,6 +27,7 @@ import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import { useHotKey } from '../hooks/useHotKey';
 import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
+import { getModelAncestors } from '../hooks/useModelAncestors';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { deepEqualAtom } from '../lib/atoms';
@@ -65,6 +56,17 @@ import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
 import { GitDropdown } from './GitDropdown';
+import {
+  getAnyModel,
+  duplicateModel,
+  foldersAtom,
+  getModel,
+  grpcConnectionsAtom,
+  httpResponsesAtom,
+  patchModel,
+  websocketConnectionsAtom,
+  workspacesAtom,
+} from '@yaakapp-internal/models';
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
 function isSidebarLeafModel(m: AnyModel): boolean {
@@ -486,6 +488,29 @@ function Sidebar({ className }: { className?: string }) {
             />
             <Dropdown
               items={[
+                {
+                  label: 'Select Open Request',
+                  leftSlot: <Icon icon="crosshair" />,
+                  onSelect: () => {
+                    const activeId = jotaiStore.get(activeIdAtom);
+                    if (activeId == null) return;
+
+                    const folders = jotaiStore.get(foldersAtom);
+                    const workspaces = jotaiStore.get(workspacesAtom);
+                    const currentModel = getAnyModel(activeId);
+                    const ancestors = getModelAncestors(folders, workspaces, currentModel);
+                    jotaiStore.set(collapsedFamily(treeId), (prev) => {
+                      const n = { ...prev };
+                      for (const ancestor of ancestors) {
+                        if (ancestor.model === 'folder') {
+                          delete n[ancestor.id];
+                        }
+                      }
+                      return n;
+                    });
+                    treeRef.current?.selectItem(activeId, true);
+                  },
+                },
                 {
                   label: 'Expand All Folders',
                   leftSlot: <Icon icon="chevrons_up_down" />,
