@@ -46,6 +46,10 @@ collection:
             name: X-Header
             value: xxxx
             disabled: false
+          - id: pair_ab4b870278e943cba6babf5a73e213e3
+            name: "{{ _.ApiHeaderName }}"
+            value: "{{ _.ApiKey }}"
+            disabled: false
         authentication:
           type: basic
           useISO88591: false

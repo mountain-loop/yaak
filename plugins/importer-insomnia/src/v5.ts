@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { PartialImportResources } from '@yaakapp/api';
-import { convertId, convertSyntax, isJSObject } from './common';
+import { convertId, convertTemplateSyntax, isJSObject } from './common';
 
 export function convertInsomniaV5(parsed: any) {
   // Assert parsed is object
@@ -69,7 +69,7 @@ export function convertInsomniaV5(parsed: any) {
   resources.environments = resources.environments.filter(Boolean);
   resources.workspaces = resources.workspaces.filter(Boolean);
 
-  return { resources };
+  return { resources: convertTemplateSyntax(resources) };
 }
 
 function importHttpRequest(
@@ -108,10 +108,10 @@ function importHttpRequest(
     };
   } else if (r.body?.mimeType === 'application/graphql') {
     bodyType = 'graphql';
-    body = { text: convertSyntax(r.body.text ?? '') };
+    body = { text: r.body.text ?? '' };
   } else if (r.body?.mimeType === 'application/json') {
     bodyType = 'application/json';
-    body = { text: convertSyntax(r.body.text ?? '') };
+    body = { text: r.body.text ?? '' };
   }
 
   return {
@@ -124,13 +124,12 @@ function importHttpRequest(
     model: 'http_request',
     name: r.name,
     description: r.meta?.description || undefined,
-    url: convertSyntax(r.url),
-    urlParameters: (r.parameters ?? [])
-      .map((p: any) => ({
-        enabled: !p.disabled,
-        name: p.name ?? '',
-        value: p.value ?? '',
-      })),
+    url: r.url,
+    urlParameters: (r.parameters ?? []).map((p: any) => ({
+      enabled: !p.disabled,
+      name: p.name ?? '',
+      value: p.value ?? '',
+    })),
     body,
     bodyType,
     method: r.method,
@@ -163,7 +162,7 @@ function importGrpcRequest(
     sortPriority: sortKey,
     name: r.name,
     description: r.description || undefined,
-    url: convertSyntax(r.url),
+    url: r.url,
     service,
     method,
     message: r.body?.text ?? '',
@@ -197,7 +196,7 @@ function importWebsocketRequest(
     sortPriority: sortKey,
     name: r.name,
     description: r.description || undefined,
-    url: convertSyntax(r.url),
+    url: r.url,
     message: r.body?.text ?? '',
     ...importHeaders(r),
     ...importAuthentication(r),
@@ -221,13 +220,13 @@ function importAuthentication(obj: any) {
   if (obj.authentication?.type === 'bearer') {
     authenticationType = 'bearer';
     authentication = {
-      token: convertSyntax(obj.authentication.token),
+      token: obj.authentication.token,
     };
   } else if (obj.authentication?.type === 'basic') {
     authenticationType = 'basic';
     authentication = {
-      username: convertSyntax(obj.authentication.username),
-      password: convertSyntax(obj.authentication.password),
+      username: obj.authentication.username,
+      password: obj.authentication.password,
     };
   }
 

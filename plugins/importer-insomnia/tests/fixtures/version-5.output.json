@@ -127,6 +127,11 @@
             "enabled": true,
             "name": "X-Header",
             "value": "xxxx"
+          },
+          {
+            "enabled": true,
+            "name": "${[ApiHeaderName ]}",
+            "value": "${[ApiKey ]}"
           }
         ],
         "id": "GENERATE_ID::req_d72fff2a6b104b91a2ebe9de9edd2785",
