@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { PartialImportResources } from '@yaakapp/api';
-import { convertId, convertSyntax, isJSObject } from './common';
+import { convertId, convertTemplateSyntax, isJSObject } from './common';
 
 export function convertInsomniaV4(parsed: any) {
   if (!Array.isArray(parsed.resources)) return null;
@@ -60,7 +60,7 @@ export function convertInsomniaV4(parsed: any) {
   resources.environments = resources.environments.filter(Boolean);
   resources.workspaces = resources.workspaces.filter(Boolean);
 
-  return { resources };
+  return { resources: convertTemplateSyntax(resources) };
 }
 
 function importHttpRequest(r: any, workspaceId: string): PartialImportResources['httpRequests'][0] {
@@ -75,7 +75,7 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
         name: p.name ?? '',
-        value: convertSyntax(p.value) ?? '',
+        value: p.value ?? '',
       })),
     };
   } else if (r.body?.mimeType === 'multipart/form-data') {
@@ -84,16 +84,16 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
         name: p.name ?? '',
-        value: convertSyntax(p.value) ?? '',
+        value: p.value ?? '',
         file: p.fileName ?? null,
       })),
     };
   } else if (r.body?.mimeType === 'application/graphql') {
     bodyType = 'graphql';
-    body = { text: convertSyntax(r.body.text ?? '') };
+    body = { text: r.body.text ?? '' };
   } else if (r.body?.mimeType === 'application/json') {
     bodyType = 'application/json';
-    body = { text: convertSyntax(r.body.text ?? '') };
+    body = { text: r.body.text ?? '' };
   }
 
   let authenticationType: string | null = null;
@@ -101,13 +101,13 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
   if (r.authentication.type === 'bearer') {
     authenticationType = 'bearer';
     authentication = {
-      token: convertSyntax(r.authentication.token),
+      token: r.authentication.token,
     };
   } else if (r.authentication.type === 'basic') {
     authenticationType = 'basic';
     authentication = {
-      username: convertSyntax(r.authentication.username),
-      password: convertSyntax(r.authentication.password),
+      username: r.authentication.username,
+      password: r.authentication.password,
     };
   }
 
@@ -121,13 +121,12 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
     sortPriority: r.metaSortKey,
     name: r.name,
     description: r.description || undefined,
-    url: convertSyntax(r.url),
-    urlParameters: (r.parameters ?? [])
-      .map((p: any) => ({
-        enabled: !p.disabled,
-        name: convertSyntax(p.name) ?? '',
-        value: convertSyntax(p.value) ?? '',
-      })),
+    url: r.url,
+    urlParameters: (r.parameters ?? []).map((p: any) => ({
+      enabled: !p.disabled,
+      name: p.name ?? '',
+      value: p.value ?? '',
+    })),
     body,
     bodyType,
     authentication,
@@ -136,8 +135,8 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
     headers: (r.headers ?? [])
       .map((h: any) => ({
         enabled: !h.disabled,
-        name: convertSyntax(h.name) ?? '',
-        value: convertSyntax(h.value) ?? '',
+        name: h.name ?? '',
+        value: h.value ?? '',
       }))
       .filter(({ name, value }: any) => name !== '' || value !== ''),
   };
@@ -158,7 +157,7 @@ function importGrpcRequest(r: any, workspaceId: string): PartialImportResources[
     sortPriority: r.metaSortKey,
     name: r.name,
     description: r.description || undefined,
-    url: convertSyntax(r.url),
+    url: r.url,
     service,
     method,
     message: r.body?.text ?? '',
@@ -166,7 +165,7 @@ function importGrpcRequest(r: any, workspaceId: string): PartialImportResources[
       .map((h: any) => ({
         enabled: !h.disabled,
         name: h.name ?? '',
-        value: convertSyntax(h.value) ?? '',
+        value: h.value ?? '',
       }))
       .filter(({ name, value }: any) => name !== '' || value !== ''),
   };
