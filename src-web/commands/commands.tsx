@@ -13,7 +13,7 @@ import { showPrompt } from '../lib/prompt';
 import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
 
 export const createFolder = createFastMutation<
-  void,
+  string | null,
   void,
   Partial<Pick<Folder, 'name' | 'sortPriority' | 'folderId'>>
 >({
@@ -34,13 +34,14 @@ export const createFolder = createFastMutation<
         confirmText: 'Create',
         placeholder: 'Name',
       });
-      if (name == null) return;
+      if (name == null) return null;
 
       patch.name = name;
     }
 
     patch.sortPriority = patch.sortPriority || -Date.now();
-    await createWorkspaceModel({ model: 'folder', workspaceId, ...patch });
+    const id = await createWorkspaceModel({ model: 'folder', workspaceId, ...patch });
+    return id;
   },
 });
 

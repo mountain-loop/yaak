@@ -2,9 +2,11 @@ import type { Extension } from '@codemirror/state';
 import { Compartment } from '@codemirror/state';
 import { debounce } from '@yaakapp-internal/lib';
 import type {
+  AnyModel,
   Folder,
   GrpcRequest,
   HttpRequest,
+  ModelPayload,
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
@@ -34,6 +36,7 @@ import { getCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import { useHotKey } from '../hooks/useHotKey';
 import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
+import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { deepEqualAtom } from '../lib/atoms';
@@ -64,6 +67,15 @@ import type { TreeItemProps } from './core/tree/TreeItem';
 import { GitDropdown } from './GitDropdown';
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
+function isSidebarLeafModel(m: AnyModel): boolean {
+  const modelMap: Record<Exclude<SidebarModel['model'], 'workspace'>, null> = {
+    http_request: null,
+    grpc_request: null,
+    websocket_request: null,
+    folder: null,
+  };
+  return m.model in modelMap;
+}
 
 const OPACITY_SUBTLE = 'opacity-80';
 
@@ -90,6 +102,13 @@ function Sidebar({ className }: { className?: string }) {
     // If we weren't able to focus any items, focus the filter bar
     if (!didFocus) filterRef.current?.focus();
   }, []);
+
+  // Focus any new sidebar models when created
+  useListenToTauriEvent<ModelPayload>('model_write', ({ payload }) => {
+    if (!isSidebarLeafModel(payload.model)) return;
+    if (!(payload.change.type === 'upsert' && payload.change.created)) return;
+    treeRef.current?.selectItem(payload.model.id, true);
+  });
 
   useHotKey(
     'sidebar.filter',

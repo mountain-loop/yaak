@@ -26,7 +26,9 @@ configureTheme().then(
 );
 
 // Listen for settings changes, the re-compute theme
-listen<ModelPayload>('upserted_model', async (event) => {
+listen<ModelPayload>('model_write', async (event) => {
+  if (event.payload.change.type !== 'upsert') return;
+
   const model = event.payload.model.model;
   if (model !== 'settings' && model !== 'plugin') return;
   await configureTheme();

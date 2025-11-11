@@ -12,31 +12,23 @@ export function initModelStore(store: JotaiStore) {
   _store = store;
 
   getCurrentWebviewWindow()
-    .listen<ModelPayload>('upserted_model', ({ payload }) => {
+    .listen<ModelPayload>('model_write', ({ payload }) => {
       if (shouldIgnoreModel(payload)) return;
 
       mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
-        return {
-          ...prev,
-          [payload.model.model]: {
-            ...prev[payload.model.model],
-            [payload.model.id]: payload.model,
-          },
-        };
-      });
-    })
-    .catch(console.error);
-
-  getCurrentWebviewWindow()
-    .listen<ModelPayload>('deleted_model', ({ payload }) => {
-      if (shouldIgnoreModel(payload)) return;
-
-      console.log('Delete model', payload);
-
-      mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
-        const modelData = { ...prev[payload.model.model] };
-        delete modelData[payload.model.id];
-        return { ...prev, [payload.model.model]: modelData };
+        if (payload.change.type === 'upsert') {
+          return {
+            ...prev,
+            [payload.model.model]: {
+              ...prev[payload.model.model],
+              [payload.model.id]: payload.model,
+            },
+          };
+        } else {
+          const modelData = { ...prev[payload.model.model] };
+          delete modelData[payload.model.id];
+          return { ...prev, [payload.model.model]: modelData };
+        }
       });
     })
     .catch(console.error);

@@ -3,11 +3,11 @@ use crate::error::Error::ModelNotFound;
 use crate::error::Result;
 use crate::models::{AnyModel, UpsertModelInfo};
 use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
-use log::error;
+use log::{error, warn};
 use rusqlite::OptionalExtension;
 use sea_query::{
-    Asterisk, Expr, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr,
-    SqliteQueryBuilder,
+    Alias, Asterisk, Expr, Func, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query,
+    ReturningClause, SimpleExpr, SqliteQueryBuilder,
 };
 use sea_query_rusqlite::RusqliteBinder;
 use std::fmt::Debug;
@@ -152,21 +152,32 @@ impl<'a> DbContext<'a> {
         }
 
         let on_conflict = OnConflict::column(id_iden).update_columns(update_columns).to_owned();
+
         let (sql, params) = Query::insert()
             .into_table(table)
             .columns(column_vec)
             .values_panic(value_vec)
             .on_conflict(on_conflict)
-            .returning_all()
+            .returning(Query::returning().exprs(vec![
+                Expr::col(Asterisk),
+                Expr::expr(Func::cust("last_insert_rowid")),
+                Expr::col("rowid"),
+            ]))
             .build_rusqlite(SqliteQueryBuilder);
 
         let mut stmt = self.conn.resolve().prepare(sql.as_str())?;
-        let m: M = stmt.query_row(&*params.as_params(), |row| M::from_row(row))?;
+        let (m, created): (M, bool) = stmt.query_row(&*params.as_params(), |row| {
+            M::from_row(row).and_then(|m| {
+                let rowid: i64 = row.get("rowid")?;
+                let last_rowid: i64 = row.get("last_insert_rowid()")?;
+                Ok((m, rowid == last_rowid))
+            })
+        })?;
 
         let payload = ModelPayload {
             model: m.clone().into(),
             update_source: source.clone(),
-            change: ModelChangeEvent::Upsert,
+            change: ModelChangeEvent::Upsert { created },
         };
 
         if let Err(e) = self.events_tx.send(payload.clone()) {

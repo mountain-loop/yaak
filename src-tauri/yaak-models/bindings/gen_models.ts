@@ -46,7 +46,7 @@ export type HttpUrlParameter = { enabled?: boolean, name: string, value: string,
 
 export type KeyValue = { model: "key_value", id: string, createdAt: string, updatedAt: string, key: string, namespace: string, value: string, };
 
-export type ModelChangeEvent = { "type": "upsert" } | { "type": "delete" };
+export type ModelChangeEvent = { "type": "upsert", created: boolean, } | { "type": "delete" };
 
 export type ModelPayload = { model: AnyModel, updateSource: UpdateSource, change: ModelChangeEvent, };
 
