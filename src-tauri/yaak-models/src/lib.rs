@@ -77,11 +77,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 let app_handle = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     for p in rx {
-                        let name = match p.change {
-                            ModelChangeEvent::Upsert => "upserted_model",
-                            ModelChangeEvent::Delete => "deleted_model",
-                        };
-                        app_handle.emit(name, p).unwrap();
+                        app_handle.emit("model_write", p).unwrap();
                     }
                 });
             }

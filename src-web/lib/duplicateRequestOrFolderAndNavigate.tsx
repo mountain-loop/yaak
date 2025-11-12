@@ -13,7 +13,7 @@ export async function duplicateRequestOrFolderAndNavigate(
 
   const newId = await duplicateModel(model);
   const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-  if (workspaceId == null) return;
+  if (workspaceId == null || model.model === 'folder') return;
 
   navigateToRequestOrFolderOrWorkspace(newId, model.model);
 }

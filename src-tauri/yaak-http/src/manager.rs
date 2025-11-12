@@ -16,7 +16,7 @@ impl HttpConnectionManager {
     pub fn new() -> Self {
         Self {
             connections: Arc::new(RwLock::new(BTreeMap::new())),
-            ttl: Duration::from_mins(10),
+            ttl: Duration::from_secs(10 * 60),
         }
     }
 

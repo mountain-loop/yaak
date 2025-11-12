@@ -2,21 +2,13 @@ import type { Extension } from '@codemirror/state';
 import { Compartment } from '@codemirror/state';
 import { debounce } from '@yaakapp-internal/lib';
 import type {
+  AnyModel,
   Folder,
   GrpcRequest,
   HttpRequest,
+  ModelPayload,
   WebsocketRequest,
   Workspace,
-} from '@yaakapp-internal/models';
-import {
-  duplicateModel,
-  foldersAtom,
-  getModel,
-  grpcConnectionsAtom,
-  httpResponsesAtom,
-  patchModel,
-  websocketConnectionsAtom,
-  workspacesAtom,
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
@@ -34,6 +26,8 @@ import { getCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import { useHotKey } from '../hooks/useHotKey';
 import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
+import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
+import { getModelAncestors } from '../hooks/useModelAncestors';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { deepEqualAtom } from '../lib/atoms';
@@ -62,8 +56,28 @@ import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
 import { GitDropdown } from './GitDropdown';
+import {
+  getAnyModel,
+  duplicateModel,
+  foldersAtom,
+  getModel,
+  grpcConnectionsAtom,
+  httpResponsesAtom,
+  patchModel,
+  websocketConnectionsAtom,
+  workspacesAtom,
+} from '@yaakapp-internal/models';
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
+function isSidebarLeafModel(m: AnyModel): boolean {
+  const modelMap: Record<Exclude<SidebarModel['model'], 'workspace'>, null> = {
+    http_request: null,
+    grpc_request: null,
+    websocket_request: null,
+    folder: null,
+  };
+  return m.model in modelMap;
+}
 
 const OPACITY_SUBTLE = 'opacity-80';
 
@@ -90,6 +104,13 @@ function Sidebar({ className }: { className?: string }) {
     // If we weren't able to focus any items, focus the filter bar
     if (!didFocus) filterRef.current?.focus();
   }, []);
+
+  // Focus any new sidebar models when created
+  useListenToTauriEvent<ModelPayload>('model_write', ({ payload }) => {
+    if (!isSidebarLeafModel(payload.model)) return;
+    if (!(payload.change.type === 'upsert' && payload.change.created)) return;
+    treeRef.current?.selectItem(payload.model.id, true);
+  });
 
   useHotKey(
     'sidebar.filter',
@@ -467,6 +488,29 @@ function Sidebar({ className }: { className?: string }) {
             />
             <Dropdown
               items={[
+                {
+                  label: 'Select Open Request',
+                  leftSlot: <Icon icon="crosshair" />,
+                  onSelect: () => {
+                    const activeId = jotaiStore.get(activeIdAtom);
+                    if (activeId == null) return;
+
+                    const folders = jotaiStore.get(foldersAtom);
+                    const workspaces = jotaiStore.get(workspacesAtom);
+                    const currentModel = getAnyModel(activeId);
+                    const ancestors = getModelAncestors(folders, workspaces, currentModel);
+                    jotaiStore.set(collapsedFamily(treeId), (prev) => {
+                      const n = { ...prev };
+                      for (const ancestor of ancestors) {
+                        if (ancestor.model === 'folder') {
+                          delete n[ancestor.id];
+                        }
+                      }
+                      return n;
+                    });
+                    treeRef.current?.selectItem(activeId, true);
+                  },
+                },
                 {
                   label: 'Expand All Folders',
                   leftSlot: <Icon icon="chevrons_up_down" />,

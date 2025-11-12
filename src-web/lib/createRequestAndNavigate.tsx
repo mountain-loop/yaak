@@ -11,8 +11,8 @@ export async function createRequestAndNavigate<
 
   if (patch.sortPriority === undefined) {
     if (activeRequest != null) {
-      // Place above currently active request
-      patch.sortPriority = activeRequest.sortPriority - 0.0001;
+      // Place below the currently active request
+      patch.sortPriority = activeRequest.sortPriority;
     } else {
       // Place at the very top
       patch.sortPriority = -Date.now();
@@ -27,4 +27,5 @@ export async function createRequestAndNavigate<
     params: { workspaceId: patch.workspaceId },
     search: (prev) => ({ ...prev, request_id: newId }),
   });
+  return newId;
 }

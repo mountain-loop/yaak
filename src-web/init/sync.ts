@@ -34,10 +34,7 @@ const debouncedSync = debounce(async () => {
  * simply add long-lived subscribers for the lifetime of the app.
  */
 function initModelListeners() {
-  listenToTauriEvent<ModelPayload>('upserted_model', (p) => {
-    if (isModelRelevant(p.payload.model)) debouncedSync();
-  });
-  listenToTauriEvent<ModelPayload>('deleted_model', (p) => {
+  listenToTauriEvent<ModelPayload>('model_write', (p) => {
     if (isModelRelevant(p.payload.model)) debouncedSync();
   });
 }
