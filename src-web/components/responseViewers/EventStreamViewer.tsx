@@ -81,7 +81,7 @@ function ActualEventStreamViewer({ response }: Props) {
                 <div className="pb-3 px-2">
                   <Separator />
                 </div>
-                <div className="pl-2 overflow-y-auto">
+                <div className="flex flex-col pl-2">
                   <HStack space={1.5} className="mb-2 font-semibold">
                     <EventLabels
                       className="text-sm"
