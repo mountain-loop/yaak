@@ -15,6 +15,7 @@ export const plugin: PluginDefinition = {
           placeholder: '{ "foo": "bar" }',
         },
         { type: 'text', name: 'query', label: 'Query', placeholder: '$..foo' },
+        { type: 'checkbox', name: 'array', label: 'Return as array' },
         { type: 'checkbox', name: 'formatted', label: 'Format Output' },
       ],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
@@ -22,7 +23,7 @@ export const plugin: PluginDefinition = {
           const parsed = JSON.parse(String(args.values.input));
           const query = String(args.values.query ?? '$').trim();
           let filtered = JSONPath({ path: query, json: parsed });
-          if (Array.isArray(filtered)) {
+          if (Array.isArray(filtered) && !args.values.array) {
             filtered = filtered[0];
           }
           if (typeof filtered === 'string') {

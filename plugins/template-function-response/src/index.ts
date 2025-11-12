@@ -92,6 +92,11 @@ export const plugin: PluginDefinition = {
           label: 'JSONPath or XPath',
           placeholder: '$.books[0].id or /books[0]/id',
         },
+        {
+          type: 'checkbox',
+          name: 'array',
+          label: 'Return as array'
+        },
         behaviorArg,
         ttlArg,
       ],
@@ -118,13 +123,13 @@ export const plugin: PluginDefinition = {
         }
 
         try {
-          return filterJSONPath(body, String(args.values.path || ''));
+          return filterJSONPath(body, String(args.values.path || ''), Boolean(args.values.array || false));
         } catch {
           // Probably not JSON, try XPath
         }
 
         try {
-          return filterXPath(body, String(args.values.path || ''));
+          return filterXPath(body, String(args.values.path || ''), Boolean(args.values.array || false));
         } catch {
           // Probably not XML
         }
@@ -165,9 +170,12 @@ export const plugin: PluginDefinition = {
   ],
 };
 
-function filterJSONPath(body: string, path: string): string {
+function filterJSONPath(body: string, path: string, returnAsArray: boolean): string {
   const parsed = JSON.parse(body);
-  const items = JSONPath({ path, json: parsed })[0];
+  let items = JSONPath({ path, json: parsed });
+  if (Array.isArray(items) && !returnAsArray) {
+    items = items[0];
+  }
   if (items == null) {
     return '';
   }
@@ -182,12 +190,12 @@ function filterJSONPath(body: string, path: string): string {
   }
 }
 
-function filterXPath(body: string, path: string): string {
+function filterXPath(body: string, path: string, returnAsArray: boolean): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc: any = new DOMParser().parseFromString(body, 'text/xml');
   const items = xpath.select(path, doc, false);
 
-  if (Array.isArray(items)) {
+  if (Array.isArray(items) && !returnAsArray) {
     return items[0] != null ? String(items[0].firstChild ?? '') : '';
   } else {
     // Not sure what cases this happens in (?)
