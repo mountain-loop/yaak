@@ -8,7 +8,7 @@ use crate::{
 };
 use chrono::Utc;
 use cookie::Cookie;
-use log::{debug, error};
+use log::error;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_common::window::WorkspaceWindowTrait;

@@ -36,46 +36,68 @@ export function getCreateDropdownItems({
   folderId: folderIdOption,
   workspaceId,
   activeRequest,
+  onCreate,
 }: {
   hideFolder?: boolean;
   hideIcons?: boolean;
   folderId?: string | null | 'active-folder';
   workspaceId: string | null;
   activeRequest: HttpRequest | GrpcRequest | WebsocketRequest | null;
+  onCreate?: (
+    model: 'http_request' | 'grpc_request' | 'websocket_request' | 'folder',
+    id: string,
+  ) => void;
 }): DropdownItem[] {
   const folderId =
     (folderIdOption === 'active-folder' ? activeRequest?.folderId : folderIdOption) ?? null;
-  if (workspaceId == null) return [];
+
+  if (workspaceId == null) {
+    return [];
+  }
 
   return [
     {
       label: 'HTTP',
       leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-      onSelect: () => createRequestAndNavigate({ model: 'http_request', workspaceId, folderId }),
+      onSelect: async () => {
+        const id = await createRequestAndNavigate({ model: 'http_request', workspaceId, folderId });
+        onCreate?.('http_request', id);
+      },
     },
     {
       label: 'GraphQL',
       leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-      onSelect: () =>
-        createRequestAndNavigate({
+      onSelect: async () => {
+        const id = await createRequestAndNavigate({
           model: 'http_request',
           workspaceId,
           folderId,
           bodyType: BODY_TYPE_GRAPHQL,
           method: 'POST',
           headers: [{ name: 'Content-Type', value: 'application/json', id: generateId() }],
-        }),
+        });
+        onCreate?.('http_request', id);
+      },
     },
     {
       label: 'gRPC',
       leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-      onSelect: () => createRequestAndNavigate({ model: 'grpc_request', workspaceId, folderId }),
+      onSelect: async () => {
+        const id = await createRequestAndNavigate({ model: 'grpc_request', workspaceId, folderId });
+        onCreate?.('grpc_request', id);
+      },
     },
     {
       label: 'WebSocket',
       leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-      onSelect: () =>
-        createRequestAndNavigate({ model: 'websocket_request', workspaceId, folderId }),
+      onSelect: async () => {
+        const id = await createRequestAndNavigate({
+          model: 'websocket_request',
+          workspaceId,
+          folderId,
+        });
+        onCreate?.('websocket_request', id);
+      },
     },
     ...((hideFolder
       ? []
@@ -84,7 +106,12 @@ export function getCreateDropdownItems({
           {
             label: 'Folder',
             leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
-            onSelect: () => createFolder.mutate({ folderId }),
+            onSelect: async () => {
+              const id = await createFolder.mutateAsync({ folderId });
+              if (id != null) {
+                onCreate?.('folder', id);
+              }
+            },
           },
         ]) as DropdownItem[]),
   ];

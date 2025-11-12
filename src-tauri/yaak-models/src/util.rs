@@ -3,7 +3,6 @@ use crate::models::{
     AnyModel, Environment, Folder, GrpcRequest, HttpRequest, UpsertModelInfo, WebsocketRequest,
     Workspace, WorkspaceIden,
 };
-use yaak_common::window::WorkspaceWindowTrait;
 use crate::query_manager::QueryManagerExt;
 use chrono::{NaiveDateTime, Utc};
 use log::warn;
@@ -12,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use tauri::{AppHandle, Listener, Runtime, WebviewWindow};
 use ts_rs::TS;
+use yaak_common::window::WorkspaceWindowTrait;
 
 pub fn generate_prefixed_id(prefix: &str) -> String {
     format!("{prefix}_{}", generate_id())
@@ -45,7 +45,7 @@ pub struct ModelPayload {
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum ModelChangeEvent {
-    Upsert,
+    Upsert { created: bool },
     Delete,
 }
 

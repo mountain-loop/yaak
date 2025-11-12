@@ -11,16 +11,7 @@ import {
 import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import type { ComponentType, MouseEvent, ReactElement, Ref, RefAttributes } from 'react';
-import {
-  forwardRef,
-  memo,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
 import type { HotkeyAction, HotKeyOptions } from '../../../hooks/useHotKey';
 import { useHotKey } from '../../../hooks/useHotKey';
@@ -72,7 +63,7 @@ export interface TreeHandle {
   treeId: string;
   focus: () => boolean;
   hasFocus: () => boolean;
-  selectItem: (id: string) => void;
+  selectItem: (id: string, focus?: boolean) => void;
   renameItem: (id: string) => void;
   showContextMenu: () => void;
 }
@@ -181,11 +172,16 @@ function TreeInner<T extends { id: string }>(
     requestAnimationFrame(ensureTabbableItem);
   });
 
+  const hasFocus = useCallback(() => {
+    return treeRef.current?.contains(document.activeElement) ?? false;
+  }, []);
+
   const setSelected = useCallback(
-    function setSelected(ids: string[], focus: boolean) {
+    (ids: string[], focus: boolean) => {
       jotaiStore.set(selectedIdsFamily(treeId), ids);
       // TODO: Figure out a better way than timeout
-      if (focus) setTimeout(tryFocus, 50);
+      if (!focus) return;
+      setTimeout(tryFocus, 50);
     },
     [treeId, tryFocus],
   );
@@ -194,15 +190,15 @@ function TreeInner<T extends { id: string }>(
     () => ({
       treeId,
       focus: tryFocus,
-      hasFocus: () => treeRef.current?.contains(document.activeElement) ?? false,
+      hasFocus: hasFocus,
       renameItem: (id) => treeItemRefs.current[id]?.rename(),
-      selectItem: (id) => {
+      selectItem: (id, focus) => {
         if (jotaiStore.get(selectedIdsFamily(treeId)).includes(id)) {
           // Already selected
           return;
         }
-        setSelected([id], false);
         jotaiStore.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
+        setSelected([id], focus === true);
       },
       showContextMenu: async () => {
         if (getContextMenu == null) return;
@@ -214,7 +210,7 @@ function TreeInner<T extends { id: string }>(
         setShowContextMenu({ items: menuItems, x: rect.x, y: rect.y });
       },
     }),
-    [getContextMenu, selectableItems, setSelected, treeId, tryFocus],
+    [getContextMenu, hasFocus, selectableItems, setSelected, treeId, tryFocus],
   );
 
   useImperativeHandle(ref, (): TreeHandle => treeHandle, [treeHandle]);
@@ -248,7 +244,9 @@ function TreeInner<T extends { id: string }>(
 
       if (shiftKey) {
         const validSelectableItems = getValidSelectableItems(treeId, selectableItems);
-        const anchorIndex = validSelectableItems.findIndex((i) => i.node.item.id === anchorSelectedId);
+        const anchorIndex = validSelectableItems.findIndex(
+          (i) => i.node.item.id === anchorSelectedId,
+        );
         const currIndex = validSelectableItems.findIndex((v) => v.node.item.id === item.id);
 
         // Nothing was selected yet, so just select this item

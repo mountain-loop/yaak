@@ -7,7 +7,9 @@ import { jotaiStore } from '../lib/jotai';
 const requestUpdateKeyAtom = atom<Record<string, string>>({});
 
 getCurrentWebviewWindow()
-  .listen<ModelPayload>('upserted_model', ({ payload }) => {
+  .listen<ModelPayload>('model_write', ({ payload }) => {
+    if (payload.change.type !== 'upsert') return;
+
     if (
       (payload.model.model === 'http_request' ||
         payload.model.model === 'grpc_request' ||
