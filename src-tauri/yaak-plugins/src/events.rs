@@ -147,6 +147,9 @@ pub enum InternalEventPayload {
     PromptTextRequest(PromptTextRequest),
     PromptTextResponse(PromptTextResponse),
 
+    WindowInfoRequest(WindowInfoRequest),
+    WindowInfoResponse(WindowInfoResponse),
+
     GetHttpRequestByIdRequest(GetHttpRequestByIdRequest),
     GetHttpRequestByIdResponse(GetHttpRequestByIdResponse),
 
@@ -534,6 +537,23 @@ pub struct PromptTextRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct PromptTextResponse {
     pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct WindowInfoRequest {
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct WindowInfoResponse {
+    pub request_id: Option<String>,
+    pub environment_id: Option<String>,
+    pub workspace_id: Option<String>,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

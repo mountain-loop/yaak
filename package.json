@@ -29,6 +29,7 @@
     "plugins/importer-postman-environment",
     "plugins/importer-yaak",
     "plugins/template-function-cookie",
+    "plugins/template-function-ctx",
     "plugins/template-function-encode",
     "plugins/template-function-fs",
     "plugins/template-function-hash",

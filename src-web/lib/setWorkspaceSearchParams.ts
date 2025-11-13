@@ -20,7 +20,13 @@ export function setWorkspaceSearchParams(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     search: (prev: any) => {
       // console.log('Navigating to', { prev, search });
-      return { ...prev, ...search };
+      const o =  { ...prev, ...search };
+      for (const k of Object.keys(o)) {
+        if (o[k] == null) {
+          delete o[k];
+        }
+      }
+      return o;
     },
   });
 }

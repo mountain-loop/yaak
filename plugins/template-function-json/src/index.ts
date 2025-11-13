@@ -58,7 +58,6 @@ export const plugin: PluginDefinition = {
       ],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         try {
-          console.log('formatted', args.values.formatted);
           return filterJSONPath(
             String(args.values.input),
             String(args.values.query),

@@ -1,0 +1,12 @@
+{
+  "name": "@yaak/template-function-ctx",
+  "displayName": "Window Template Functions",
+  "description": "Template functions for accessing attributes of the current window",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev",
+    "lint":"tsc --noEmit && eslint . --ext .ts,.tsx"
+  }
+}

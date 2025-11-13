@@ -723,6 +723,7 @@ function FileActionsDropdown({
             id: 'content-type',
             title: 'Override Content-Type',
             label: 'Content-Type',
+            required: false,
             placeholder: 'text/plain',
             defaultValue: pair.contentType ?? '',
             confirmText: 'Set',

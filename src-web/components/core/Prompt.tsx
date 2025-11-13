@@ -36,7 +36,6 @@ export function Prompt({
       onSubmit={handleSubmit}
     >
       <PlainInput
-        hideLabel
         autoSelect
         required={required}
         placeholder={placeholder ?? 'Enter text'}

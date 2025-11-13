@@ -16,12 +16,13 @@ use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
+use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, ErrorResponse, FindHttpResponsesResponse,
     GetCookieValueResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent,
     InternalEventPayload, ListCookieNamesResponse, RenderGrpcRequestResponse,
     RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest,
-    TemplateRenderResponse, WindowNavigateEvent,
+    TemplateRenderResponse, WindowInfoResponse, WindowNavigateEvent,
 };
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -333,6 +334,29 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 }),
             };
             Ok(Some(InternalEventPayload::GetCookieValueResponse(GetCookieValueResponse { value })))
+        }
+        InternalEventPayload::WindowInfoRequest(req) => {
+            let w = app_handle
+                .get_webview_window(&req.label)
+                .ok_or(PluginErr(format!("Failed to find window for {}", req.label)))?;
+
+            // Actually look up the data so we never return an invalid ID
+            let environment_id = environment_from_window(&w).map(|m| m.id);
+            let workspace_id = workspace_from_window(&w).map(|m| m.id);
+            let request_id =
+                match app_handle.db().get_any_request(&w.request_id().unwrap_or_default()) {
+                    Ok(AnyRequest::HttpRequest(r)) => Some(r.id),
+                    Ok(AnyRequest::WebsocketRequest(r)) => Some(r.id),
+                    Ok(AnyRequest::GrpcRequest(r)) => Some(r.id),
+                    Err(_) => None,
+                };
+
+            Ok(Some(InternalEventPayload::WindowInfoResponse(WindowInfoResponse {
+                label: w.label().to_string(),
+                request_id,
+                workspace_id,
+                environment_id,
+            })))
         }
         _ => Ok(None),
     }

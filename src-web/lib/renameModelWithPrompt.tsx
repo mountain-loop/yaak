@@ -11,6 +11,7 @@ export async function renameModelWithPrompt(model: Extract<AnyModel, { name: str
   const name = await showPrompt({
     id: 'rename-request',
     title: 'Rename Request',
+    required: false,
     description:
       model.name === '' ? (
         'Enter a new name'
