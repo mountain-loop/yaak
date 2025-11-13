@@ -658,6 +658,18 @@ pub enum JsonPrimitive {
     Null,
 }
 
+impl From<serde_json::Value> for JsonPrimitive {
+    fn from(value: serde_json::Value) -> Self {
+        match value {
+            serde_json::Value::Null => JsonPrimitive::Null,
+            serde_json::Value::Bool(b) => JsonPrimitive::Boolean(b),
+            serde_json::Value::Number(n) => JsonPrimitive::Number(n.as_f64().unwrap()),
+            serde_json::Value::String(s) => JsonPrimitive::String(s),
+            v => panic!("Unsupported JSON primitive type {:?}", v),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
@@ -733,6 +745,7 @@ pub enum FormInput {
     File(FormInputFile),
     HttpRequest(FormInputHttpRequest),
     Accordion(FormInputAccordion),
+    HStack(FormInputHStack),
     Banner(FormInputBanner),
     Markdown(FormInputMarkdown),
 }
@@ -895,7 +908,7 @@ pub struct FormInputFile {
     #[ts(optional)]
     pub directory: Option<bool>,
 
-    // Default file path for selection dialog
+    // Default file path for the selection dialog
     #[ts(optional)]
     pub default_path: Option<String>,
 
@@ -951,6 +964,14 @@ pub struct FormInputAccordion {
 
     #[ts(optional)]
     pub hidden: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct FormInputHStack {
+    #[ts(optional)]
+    pub inputs: Option<Vec<FormInput>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -1015,7 +1036,7 @@ pub struct CallTemplateFunctionResponse {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct CallTemplateFunctionArgs {
     pub purpose: RenderPurpose,
-    pub values: HashMap<String, serde_json::Value>,
+    pub values: HashMap<String, JsonPrimitive>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

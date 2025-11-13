@@ -26,7 +26,7 @@ import { IconButton } from './core/IconButton';
 import { Input } from './core/Input';
 import { Label } from './core/Label';
 import { Select } from './core/Select';
-import { VStack } from './core/Stacks';
+import { HStack, VStack } from './core/Stacks';
 import { Markdown } from './Markdown';
 import { SelectFile } from './SelectFile';
 
@@ -41,6 +41,7 @@ interface Props<T> {
   autocompleteFunctions?: boolean;
   autocompleteVariables?: boolean;
   stateKey: string;
+  className?: string;
   disabled?: boolean;
 }
 
@@ -51,6 +52,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
   autocompleteVariables,
   autocompleteFunctions,
   stateKey,
+  className,
   disabled,
 }: Props<T>) {
   const setDataAttr = useCallback(
@@ -61,7 +63,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
   );
 
   return (
-    <FormInputs
+    <FormInputsStack
       disabled={disabled}
       inputs={inputs}
       setDataAttr={setDataAttr}
@@ -69,28 +71,15 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
       autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
       data={data}
-      className="pb-4" // Pad the bottom to look nice
+      className={classNames(className, 'pb-4')} // Pad the bottom to look nice
     />
   );
 }
 
-function FormInputs<T extends Record<string, JsonPrimitive>>({
-  inputs,
-  autocompleteFunctions,
-  autocompleteVariables,
-  stateKey,
-  setDataAttr,
-  data,
-  disabled,
+function FormInputsStack<T extends Record<string, JsonPrimitive>>({
   className,
-}: Pick<
-  Props<T>,
-  'inputs' | 'autocompleteFunctions' | 'autocompleteVariables' | 'stateKey' | 'data'
-> & {
-  setDataAttr: (name: string, value: JsonPrimitive) => void;
-  disabled?: boolean;
-  className?: string;
-}) {
+  ...props
+}: FormInputsProps<T> & { className?: string }) {
   return (
     <VStack
       space={3}
@@ -100,6 +89,30 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
         'pr-1', // A bit of space between inputs and scrollbar
       )}
     >
+      <FormInputs {...props} />
+    </VStack>
+  );
+}
+
+type FormInputsProps<T> = Pick<
+  Props<T>,
+  'inputs' | 'autocompleteFunctions' | 'autocompleteVariables' | 'stateKey' | 'data'
+> & {
+  setDataAttr: (name: string, value: JsonPrimitive) => void;
+  disabled?: boolean;
+};
+
+function FormInputs<T extends Record<string, JsonPrimitive>>({
+  inputs,
+  autocompleteFunctions,
+  autocompleteVariables,
+  stateKey,
+  setDataAttr,
+  data,
+  disabled,
+}: FormInputsProps<T>) {
+  return (
+    <>
       {inputs?.map((input, i) => {
         if ('hidden' in input && input.hidden) {
           return null;
@@ -113,7 +126,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
           case 'select':
             return (
               <SelectArg
-                key={i + stateKey}
+                key={i}
                 arg={input}
                 onChange={(v) => setDataAttr(input.name, v)}
                 value={
@@ -126,7 +139,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
           case 'text':
             return (
               <TextArg
-                key={i}
+                key={i + stateKey}
                 stateKey={stateKey}
                 arg={input}
                 autocompleteFunctions={autocompleteFunctions || false}
@@ -140,7 +153,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
           case 'editor':
             return (
               <EditorArg
-                key={i}
+                key={i + stateKey}
                 stateKey={stateKey}
                 arg={input}
                 autocompleteFunctions={autocompleteFunctions || false}
@@ -182,13 +195,13 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
             );
           case 'accordion':
             return (
-              <div key={i}>
+              <div key={i + stateKey}>
                 <DetailsBanner
                   summary={input.label}
                   className={classNames('!mb-auto', disabled && 'opacity-disabled')}
                 >
                   <div className="my-3">
-                    <FormInputs
+                    <FormInputsStack
                       data={data}
                       disabled={disabled}
                       inputs={input.inputs}
@@ -201,14 +214,28 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 </DetailsBanner>
               </div>
             );
+          case 'h_stack':
+            return (
+              <HStack key={i + stateKey} alignItems="end" space={3}>
+                <FormInputs
+                  data={data}
+                  disabled={disabled}
+                  inputs={input.inputs}
+                  setDataAttr={setDataAttr}
+                  stateKey={stateKey}
+                  autocompleteFunctions={autocompleteFunctions || false}
+                  autocompleteVariables={autocompleteVariables}
+                />
+              </HStack>
+            );
           case 'banner':
             return (
               <Banner
-                key={i}
+                key={i + stateKey}
                 color={input.color}
                 className={classNames(disabled && 'opacity-disabled')}
               >
-                <FormInputs
+                <FormInputsStack
                   data={data}
                   disabled={disabled}
                   inputs={input.inputs}
@@ -220,10 +247,10 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               </Banner>
             );
           case 'markdown':
-            return <Markdown>{input.content}</Markdown>;
+            return <Markdown key={i + stateKey}>{input.content}</Markdown>;
         }
       })}
-    </VStack>
+    </>
   );
 }
 
@@ -255,7 +282,7 @@ function TextArg({
       type={arg.password ? 'password' : 'text'}
       label={arg.label ?? arg.name}
       size={INPUT_SIZE}
-      hideLabel={arg.label == null}
+      hideLabel={arg.hideLabel ?? arg.label == null}
       placeholder={arg.placeholder ?? undefined}
       autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
       autocompleteFunctions={autocompleteFunctions}
@@ -313,7 +340,9 @@ function EditorArg({
           language={arg.language}
           readOnly={arg.readOnly}
           onChange={onChange}
+          hideGutter
           heightMode="auto"
+          className="min-h-[3rem]"
           defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
           placeholder={arg.placeholder ?? undefined}
           autocompleteFunctions={autocompleteFunctions}
@@ -374,7 +403,6 @@ function EditorArg({
               />
             </div>
           }
-          hideGutter
         />
       </div>
     </div>
@@ -396,6 +424,7 @@ function SelectArg({
       name={arg.name}
       help={arg.description}
       onChange={onChange}
+      defaultValue={arg.defaultValue}
       hideLabel={arg.hideLabel}
       value={value}
       size={INPUT_SIZE}

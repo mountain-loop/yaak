@@ -45,16 +45,25 @@ export function useTemplateFunctionConfig(
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {
       if (functionName == null) return null;
-      const config = await invokeCmd<GetTemplateFunctionConfigResponse>(
-        'cmd_template_function_config',
-        {
-          functionName: functionName,
-          values,
-          model,
-          environmentId,
-        },
-      );
-      return config.function;
+      return getTemplateFunctionConfig(functionName, values, model, environmentId);
     },
   });
+}
+
+export async function getTemplateFunctionConfig(
+  functionName: string,
+  values: Record<string, JsonPrimitive>,
+  model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
+  environmentId: string | undefined,
+) {
+  const config = await invokeCmd<GetTemplateFunctionConfigResponse>(
+    'cmd_template_function_config',
+    {
+      functionName,
+      values,
+      model,
+      environmentId,
+    },
+  );
+  return config.function;
 }

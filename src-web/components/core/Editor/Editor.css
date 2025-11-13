@@ -78,9 +78,19 @@
         @apply cursor-default;
       }
 
+    }
+
+    .cm-gutter-lint {
+      @apply w-auto !important;
+
+      .cm-gutterElement {
+        @apply px-0;
+      }
+
       .cm-lint-marker {
         @apply cursor-default opacity-80 hover:opacity-100 transition-opacity;
         @apply rounded-full w-[0.9em] h-[0.9em];
+
         content: '';
 
         &.cm-lint-marker-error {

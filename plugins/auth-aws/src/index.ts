@@ -57,10 +57,6 @@ export const plugin: PluginDefinition = {
         }
       }
 
-      if (args.method !== 'GET') {
-        headers['x-amz-content-sha256'] = 'UNSIGNED-PAYLOAD';
-      }
-
       const signature = aws4.sign(
         {
           host: url.host,
@@ -68,6 +64,7 @@ export const plugin: PluginDefinition = {
           path: url.pathname + (url.search || ''),
           service: String(values.service || 'sts'),
           region: values.region ? String(values.region) : undefined,
+          body: values.body ? String(values.body) : undefined,
           headers,
         },
         {
@@ -76,11 +73,6 @@ export const plugin: PluginDefinition = {
           sessionToken,
         },
       );
-
-      // After signing, aws4 will set:
-      //  - opts.headers["Authorization"]
-      //  - opts.headers["X-Amz-Date"]
-      //  - optionally content sha256 header etc
 
       if (signature.headers == null) {
         return {};

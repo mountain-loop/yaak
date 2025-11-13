@@ -2,7 +2,6 @@ import {
   BootRequest,
   DeleteKeyValueResponse,
   FindHttpResponsesResponse,
-  FormInput,
   GetCookieValueRequest,
   GetCookieValueResponse,
   GetHttpRequestByIdResponse,
@@ -19,14 +18,13 @@ import {
   RenderHttpRequestResponse,
   SendHttpRequestResponse,
   TemplateFunction,
-  TemplateFunctionArg,
   TemplateRenderResponse,
 } from '@yaakapp-internal/plugins';
 import { Context, PluginDefinition } from '@yaakapp/api';
-import { JsonValue } from '@yaakapp/api/lib/bindings/serde_json/JsonValue';
 import console from 'node:console';
 import { type Stats, statSync, watch } from 'node:fs';
 import path from 'node:path';
+import { applyDynamicFormInput, applyFormInputDefaults } from './common';
 import { EventChannel } from './EventChannel';
 import { migrateTemplateFunctionSelectOptions } from './migrations';
 
@@ -213,24 +211,19 @@ export class PluginInstance {
           return;
         }
 
-        templateFunction = migrateTemplateFunctionSelectOptions(templateFunction);
-        // @ts-ignore
-        delete templateFunction.onRender;
-        const resolvedArgs: TemplateFunctionArg[] = [];
-        for (const arg of templateFunction.args) {
-          if (arg && 'dynamic' in arg) {
-            const dynamicAttrs = await arg.dynamic(ctx, payload);
-            const { dynamic, ...other } = arg;
-            resolvedArgs.push({ ...other, ...dynamicAttrs } as TemplateFunctionArg);
-          } else if (arg) {
-            resolvedArgs.push(arg);
-          }
-          templateFunction.args = resolvedArgs;
-        }
+        const fn = {
+          ...migrateTemplateFunctionSelectOptions(templateFunction),
+          onRender: undefined,
+        };
+
+        payload.values = applyFormInputDefaults(fn.args, payload.values);
+        const p = { ...payload, purpose: 'preview' } as const;
+        const resolvedArgs = await applyDynamicFormInput(ctx, fn.args, p);
+
         const replyPayload: InternalEventPayload = {
           type: 'get_template_function_config_response',
           pluginRefId: this.#workerData.pluginRefId,
-          function: templateFunction,
+          function: { ...fn, args: resolvedArgs },
         };
         this.#sendPayload(context, replyPayload, replyId);
         return;
@@ -248,16 +241,8 @@ export class PluginInstance {
 
       if (payload.type === 'get_http_authentication_config_request' && this.#mod?.authentication) {
         const { args, actions } = this.#mod.authentication;
-        const resolvedArgs: FormInput[] = [];
-        for (const v of args) {
-          if (v && 'dynamic' in v) {
-            const dynamicAttrs = await v.dynamic(ctx, payload);
-            const { dynamic, ...other } = v;
-            resolvedArgs.push({ ...other, ...dynamicAttrs } as FormInput);
-          } else if (v) {
-            resolvedArgs.push(v);
-          }
-        }
+        payload.values = applyFormInputDefaults(args, payload.values);
+        const resolvedArgs = await applyDynamicFormInput(ctx, args, payload);
         const resolvedActions: HttpAuthenticationAction[] = [];
         for (const { onSelect, ...action } of actions ?? []) {
           resolvedActions.push(action);
@@ -277,7 +262,8 @@ export class PluginInstance {
       if (payload.type === 'call_http_authentication_request' && this.#mod?.authentication) {
         const auth = this.#mod.authentication;
         if (typeof auth?.onApply === 'function') {
-          applyFormInputDefaults(auth.args, payload.values);
+          auth.args = await applyDynamicFormInput(ctx, auth.args, payload);
+          payload.values = applyFormInputDefaults(auth.args, payload.values);
           this.#sendPayload(
             context,
             {
@@ -332,7 +318,8 @@ export class PluginInstance {
       ) {
         const fn = this.#mod.templateFunctions.find((a) => a.name === payload.name);
         if (typeof fn?.onRender === 'function') {
-          applyFormInputDefaults(fn.args, payload.args.values);
+          const resolvedArgs = await applyDynamicFormInput(ctx, fn.args, payload.args);
+          payload.args.values = applyFormInputDefaults(resolvedArgs, payload.args.values);
           try {
             const result = await fn.onRender(ctx, payload.args);
             this.#sendPayload(
@@ -650,20 +637,6 @@ function genId(len = 5): string {
     id += alphabet[Math.floor(Math.random() * alphabet.length)];
   }
   return id;
-}
-
-/** Recursively apply form input defaults to a set of values */
-function applyFormInputDefaults(
-  inputs: TemplateFunctionArg[],
-  values: { [p: string]: JsonValue | undefined },
-) {
-  for (const input of inputs) {
-    if ('inputs' in input) {
-      applyFormInputDefaults(input.inputs ?? [], values);
-    } else if ('defaultValue' in input && values[input.name] === undefined) {
-      values[input.name] = input.defaultValue;
-    }
-  }
 }
 
 const watchedFiles: Record<string, Stats | null> = {};

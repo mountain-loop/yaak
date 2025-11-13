@@ -1,9 +1,10 @@
 import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 import fs from 'node:fs';
 
+const UTF8 = 'utf8';
 const options = [
   { label: 'ASCII', value: 'ascii' },
-  { label: 'UTF-8', value: 'utf8' },
+  { label: 'UTF-8', value: UTF8 },
   { label: 'UTF-16 LE', value: 'utf16le' },
   { label: 'Base64', value: 'base64' },
   { label: 'Base64 URL-safe', value: 'base64url' },
@@ -18,12 +19,11 @@ export const plugin: PluginDefinition = {
       args: [
         { title: 'Select File', type: 'file', name: 'path', label: 'File' },
         {
-          title: 'Select encoding',
           type: 'select',
           name: 'encoding',
           label: 'Encoding',
-          defaultValue: 'utf8',
-          description: 'Specifies how the file’s bytes are decoded into text when read',
+          defaultValue: UTF8,
+          description: "Specifies how the file's bytes are decoded into text when read",
           options,
         },
       ],

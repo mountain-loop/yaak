@@ -1,4 +1,4 @@
-use crate::events::{PluginContext, RenderPurpose};
+use crate::events::{JsonPrimitive, PluginContext, RenderPurpose};
 use crate::manager::PluginManager;
 use crate::native_template_functions::{
     template_function_keychain_run, template_function_secure_run,
@@ -42,12 +42,17 @@ impl<R: Runtime> TemplateCallback for PluginTemplateCallback<R> {
             return template_function_keychain_run(args);
         }
 
+        let mut primitive_args = HashMap::new();
+        for (key, value) in args {
+            primitive_args.insert(key, JsonPrimitive::from(value));
+        }
+
         let plugin_manager = &*self.app_handle.state::<PluginManager>();
         let resp = plugin_manager
             .call_template_function(
                 &self.plugin_context,
                 fn_name,
-                args,
+                primitive_args,
                 self.render_purpose.to_owned(),
             )
             .await?;

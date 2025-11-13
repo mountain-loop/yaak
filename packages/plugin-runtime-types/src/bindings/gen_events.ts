@@ -30,7 +30,7 @@ export type CallHttpRequestActionArgs = { httpRequest: HttpRequest, };
 
 export type CallHttpRequestActionRequest = { index: number, pluginRefId: string, args: CallHttpRequestActionArgs, };
 
-export type CallTemplateFunctionArgs = { purpose: RenderPurpose, values: { [key in string]?: JsonValue }, };
+export type CallTemplateFunctionArgs = { purpose: RenderPurpose, values: { [key in string]?: JsonPrimitive }, };
 
 export type CallTemplateFunctionRequest = { name: string, args: CallTemplateFunctionArgs, };
 
@@ -74,7 +74,7 @@ export type FindHttpResponsesRequest = { requestId: string, limit?: number, };
 
 export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
 
-export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
+export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "h_stack" } & FormInputHStack | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
 
 export type FormInputAccordion = { label: string, inputs?: Array<FormInput>, hidden?: boolean, };
 
@@ -223,6 +223,8 @@ defaultValue?: string, disabled?: boolean,
  * Longer description of the input, likely shown in a tooltip
  */
 description?: string, };
+
+export type FormInputHStack = { inputs?: Array<FormInput>, };
 
 export type FormInputHttpRequest = { 
 /**
