@@ -288,6 +288,7 @@ export const plugin: PluginDefinition = {
       {
         type: 'accordion',
         label: 'Access Token Response',
+        inputs: [],
         async dynamic(ctx, { contextId, values }) {
           const tokenArgs: TokenStoreArgs = {
             contextId,
@@ -304,6 +305,7 @@ export const plugin: PluginDefinition = {
             inputs: [
               {
                 type: 'editor',
+                name: 'response',
                 defaultValue: JSON.stringify(token.response, null, 2),
                 hideLabel: true,
                 readOnly: true,

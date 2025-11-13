@@ -47,7 +47,7 @@ export function useHttpAuthenticationConfig(
     ],
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {
-      if (authName == null) return null;
+      if (authName == null || authName === 'inherit') return null;
       const config = await invokeCmd<GetHttpAuthenticationConfigResponse>(
         'cmd_get_http_authentication_config',
         {

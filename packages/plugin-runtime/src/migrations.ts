@@ -1,4 +1,4 @@
-import { TemplateFunctionPlugin } from '@yaakapp/api/lib/plugins/TemplateFunctionPlugin';
+import type { TemplateFunctionPlugin } from '@yaakapp/api';
 
 export function migrateTemplateFunctionSelectOptions(
   f: TemplateFunctionPlugin,
@@ -13,8 +13,5 @@ export function migrateTemplateFunctionSelectOptions(
     return a;
   });
 
-  return {
-    ...f,
-    args: migratedArgs,
-  };
+  return { ...f, args: migratedArgs };
 }

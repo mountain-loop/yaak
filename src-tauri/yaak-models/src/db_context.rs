@@ -3,11 +3,11 @@ use crate::error::Error::ModelNotFound;
 use crate::error::Result;
 use crate::models::{AnyModel, UpsertModelInfo};
 use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
-use log::{error, warn};
+use log::error;
 use rusqlite::OptionalExtension;
 use sea_query::{
-    Alias, Asterisk, Expr, Func, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query,
-    ReturningClause, SimpleExpr, SqliteQueryBuilder,
+    Asterisk, Expr, Func, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr,
+    SqliteQueryBuilder,
 };
 use sea_query_rusqlite::RusqliteBinder;
 use std::fmt::Debug;

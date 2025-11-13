@@ -655,7 +655,7 @@ function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: Men
         className,
         'h-xs', // More compact
         'min-w-[8rem] outline-none px-2 mx-1.5 flex whitespace-nowrap',
-        'focus:bg-surface-highlight focus:text rounded',
+        'focus:bg-surface-highlight focus:text rounded focus:outline-none focus-visible:outline-1',
         item.color === 'danger' && '!text-danger',
         item.color === 'primary' && '!text-primary',
         item.color === 'success' && '!text-success',

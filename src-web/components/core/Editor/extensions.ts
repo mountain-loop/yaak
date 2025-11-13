@@ -105,6 +105,7 @@ export function getLanguageExtension({
   language = 'text',
   environmentVariables,
   autocomplete,
+  hideGutter,
   onClickVariable,
   onClickMissingVariable,
   onClickPathParameter,
@@ -118,7 +119,7 @@ export function getLanguageExtension({
   onClickPathParameter: (name: string) => void;
   completionOptions: TwigCompletionOption[];
   graphQLSchema: GraphQLSchema | null;
-} & Pick<EditorProps, 'language' | 'autocomplete'>) {
+} & Pick<EditorProps, 'language' | 'autocomplete' | 'hideGutter'>) {
   const extraExtensions: Extension[] = [];
 
   if (language === 'url') {
@@ -155,7 +156,10 @@ export function getLanguageExtension({
   }
 
   if (language === 'json') {
-    extraExtensions.push(linter(jsonParseLinter()), lintGutter());
+    extraExtensions.push(linter(jsonParseLinter()));
+    if (!hideGutter) {
+      extraExtensions.push(lintGutter());
+    }
   }
 
   const maybeBase = language ? syntaxExtensions[language] : null;

@@ -10,11 +10,6 @@
     "lint":"tsc --noEmit && eslint . --ext .ts,.tsx"
   },
   "dependencies": {
-    "jsonpath-plus": "^10.3.0",
-    "xpath": "^0.0.34",
-    "@xmldom/xmldom": "^0.9.8"
-  },
-  "devDependencies": {
-    "@types/jsonpath": "^0.2.4"
+    "@yaak/template-function-xml": "*"
   }
 }

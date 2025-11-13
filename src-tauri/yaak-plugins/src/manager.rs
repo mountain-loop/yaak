@@ -786,7 +786,7 @@ impl PluginManager {
         &self,
         plugin_context: &PluginContext,
         fn_name: &str,
-        values: HashMap<String, serde_json::Value>,
+        values: HashMap<String, JsonPrimitive>,
         purpose: RenderPurpose,
     ) -> TemplateResult<String> {
         let req = CallTemplateFunctionRequest {

@@ -1,7 +1,6 @@
 use crate::commands::*;
 use crate::migrate::migrate_db;
 use crate::query_manager::QueryManager;
-use crate::util::ModelChangeEvent;
 use log::error;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;

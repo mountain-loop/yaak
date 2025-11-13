@@ -32,7 +32,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
     event: &InternalEvent,
     plugin_handle: &PluginHandle,
 ) -> Result<Option<InternalEventPayload>> {
-    // debug!("Got event to app {event:?}");
+    // log::debug!("Got event to app {event:?}");
     let plugin_context = event.context.to_owned();
     match event.clone().payload {
         InternalEventPayload::CopyTextRequest(req) => {

@@ -290,6 +290,8 @@ export function Editor({
         showDialog({
           id: 'template-function-' + Math.random(), // Allow multiple at once
           size: 'md',
+          className: 'h-[90vh]',
+          noPadding: true,
           title: <InlineCode>{fn.name}(…)</InlineCode>,
           description: fn.description,
           render: ({ hide }) => {
@@ -354,6 +356,7 @@ export function Editor({
     const ext = getLanguageExtension({
       useTemplating,
       language,
+      hideGutter,
       environmentVariables,
       autocomplete,
       completionOptions,
@@ -374,6 +377,7 @@ export function Editor({
     completionOptions,
     useTemplating,
     graphQLSchema,
+    hideGutter,
   ]);
 
   // Initialize the editor when ref mounts
