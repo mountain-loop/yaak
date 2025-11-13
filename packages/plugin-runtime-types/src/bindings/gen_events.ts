@@ -445,7 +445,7 @@ export type SetKeyValueResponse = {};
 
 export type ShowToastRequest = { message: string, color?: Color, icon?: Icon, timeout?: number, };
 
-export type TemplateFunction = { name: string, description?: string, 
+export type TemplateFunction = { name: string, previewType?: TemplateFunctionPreviewType, description?: string, 
 /**
  * Also support alternative names. This is useful for not breaking existing
  * tags when changing the `name` property
@@ -456,6 +456,8 @@ aliases?: Array<string>, args: Array<TemplateFunctionArg>, };
  * Similar to FormInput, but contains
  */
 export type TemplateFunctionArg = FormInput;
+
+export type TemplateFunctionPreviewType = "live" | "click" | "none";
 
 export type TemplateRenderRequest = { data: JsonValue, purpose: RenderPurpose, };
 

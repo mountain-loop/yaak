@@ -14,8 +14,15 @@ export const plugin: PluginDefinition = {
     {
       name: 'prompt.text',
       description: 'Prompt the user for input when sending a request',
+      previewType: 'click',
       args: [
-        { type: 'text', name: 'title', label: 'Title', optional: true, defaultValue: 'Enter Value' },
+        {
+          type: 'text',
+          name: 'title',
+          label: 'Title',
+          optional: true,
+          defaultValue: 'Enter Value',
+        },
         {
           type: 'h_stack',
           inputs: [
@@ -66,8 +73,6 @@ export const plugin: PluginDefinition = {
         },
       ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
-        if (args.purpose !== 'send') return null;
-
         if (args.values.store !== STORE_NONE && !args.values.storageKey) {
           throw new Error('Storage key is required for storing prompt value');
         }

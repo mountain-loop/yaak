@@ -730,11 +730,23 @@ pub struct GetTemplateFunctionConfigResponse {
     pub plugin_ref_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_events.ts")]
+pub enum TemplateFunctionPreviewType {
+    Live,
+    Click,
+    None,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct TemplateFunction {
     pub name: String,
+
+    #[ts(optional)]
+    pub preview_type: Option<TemplateFunctionPreviewType>,
 
     #[ts(optional)]
     pub description: Option<String>,
