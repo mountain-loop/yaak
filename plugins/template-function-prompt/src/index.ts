@@ -102,6 +102,11 @@ export const plugin: PluginDefinition = {
       ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         if (args.purpose !== 'send') return null;
+
+        if (args.values.store !== STORE_NONE && !args.values.namespace) {
+          throw new Error('Namespace is required when storing values')
+        }
+
         const existing = await maybeGetValue(ctx, args);
         if (existing != null) {
           return existing;
@@ -161,9 +166,9 @@ async function maybeGetValue(ctx: Context, args: CallTemplateFunctionArgs) {
 }
 
 async function maybeSetValue(ctx: Context, args: CallTemplateFunctionArgs, value: string) {
-  if (args.values.store === STORE_NONE) return;
-  if (!args.values.namespace) {
-    throw new Error('Namespace is required for storing prompt value');
+  if (args.values.store === STORE_NONE) {
+    return;
   }
+
   await ctx.store.set<Saved>(buildKey(args), { value, createdAt: Date.now() });
 }
