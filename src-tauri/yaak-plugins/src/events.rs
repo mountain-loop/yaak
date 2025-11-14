@@ -524,6 +524,8 @@ pub struct PromptTextRequest {
     /// Text to add to the confirmation button
     #[ts(optional)]
     pub confirm_text: Option<String>,
+    #[ts(optional)]
+    pub password: Option<bool>,
     /// Text to add to the cancel button
     #[ts(optional)]
     pub cancel_text: Option<String>,
@@ -1004,6 +1006,9 @@ pub struct FormInputAccordion {
 pub struct FormInputHStack {
     #[ts(optional)]
     pub inputs: Option<Vec<FormInput>>,
+
+    #[ts(optional)]
+    pub hidden: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

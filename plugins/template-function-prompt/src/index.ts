@@ -1,4 +1,5 @@
 import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
+import slugify from 'slugify';
 
 const STORE_NONE = 'none';
 const STORE_FOREVER = 'forever';
@@ -16,37 +17,38 @@ export const plugin: PluginDefinition = {
       description: 'Prompt the user for input when sending a request',
       previewType: 'click',
       args: [
+        { type: 'text', name: 'label', label: 'Label' },
         {
-          type: 'text',
-          name: 'title',
-          label: 'Title',
-          optional: true,
-          defaultValue: 'Enter Value',
+          type: 'select',
+          name: 'store',
+          label: 'Store Input',
+          defaultValue: STORE_NONE,
+          options: [
+            { label: 'Never', value: STORE_NONE },
+            { label: 'Expire', value: STORE_EXPIRE },
+            { label: 'Forever', value: STORE_FOREVER },
+          ],
         },
         {
           type: 'h_stack',
+          dynamic(_ctx, args) {
+            return { hidden: args.values.store === STORE_NONE };
+          },
           inputs: [
             {
-              type: 'select',
-              name: 'store',
-              label: 'Store Input',
-              defaultValue: STORE_NONE,
-              options: [
-                { label: 'Never', value: STORE_NONE },
-                { label: 'Expire', value: STORE_EXPIRE },
-                { label: 'Forever', value: STORE_FOREVER },
-              ],
+              type: 'text',
+              name: 'namespace',
+              label: 'Namespace',
+              defaultValue: '${[ctx.workspace()]}',
+              optional: true,
             },
             {
               type: 'text',
-              name: 'storageKey',
-              label: 'Storage Key',
-              defaultValue: '${[ctx.workspace()]}',
+              name: 'key',
+              label: 'Key (defaults to Label)',
               optional: true,
-              description:
-                'Unique key to store the value under. Can be a template function like ctx.environment()',
               dynamic(_ctx, args) {
-                return { hidden: args.values.store === STORE_NONE };
+                return { placeholder: String(args.values.label || '') };
               },
             },
             {
@@ -63,35 +65,46 @@ export const plugin: PluginDefinition = {
           ],
         },
         {
+          type: 'banner',
+          color: 'info',
+          dynamic(_ctx, args) {
+            return { hidden: args.values.store === STORE_NONE };
+          },
+          inputs: [
+            {
+              type: 'markdown',
+              content: '',
+              async dynamic(_ctx, args) {
+                const key = buildKey(args);
+                return {
+                  content: ['Value will be saved under: `' + key + '`'].join('\n\n'),
+                };
+              },
+            },
+          ],
+        },
+        {
           type: 'accordion',
           label: 'Advanced',
           inputs: [
+            {
+              type: 'text',
+              name: 'title',
+              label: 'Prompt Title',
+              optional: true,
+              placeholder: 'Enter Value',
+            },
             { type: 'text', name: 'defaultValue', label: 'Default Value', optional: true },
-            { type: 'text', name: 'label', label: 'Label', optional: true },
-            { type: 'text', name: 'placeholder', label: 'Placeholder', optional: true },
+            { type: 'text', name: 'placeholder', label: 'Input Placeholder', optional: true },
+            { type: 'checkbox', name: 'password', label: 'Mask Value' },
           ],
         },
       ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
-        if (args.values.store !== STORE_NONE && !args.values.storageKey) {
-          throw new Error('Storage key is required for storing prompt value');
-        }
-
-        const ttlSeconds = parseInt(String(args.values.ttl)) || 0;
-
-        const key = ['prompt', args.values.storageKey].join('.');
-        const existing = args.values.store === STORE_NONE ? null : await ctx.store.get<Saved>(key);
-
+        if (args.purpose !== 'send') return null;
+        const existing = await maybeGetValue(ctx, args);
         if (existing != null) {
-          if (args.values.store === STORE_FOREVER) {
-            return existing.value;
-          }
-
-          const ageSeconds = (Date.now() - existing.createdAt) / 1000;
-          const expired = ageSeconds > ttlSeconds;
-          if (args.values.store === STORE_EXPIRE && !expired) {
-            return existing.value;
-          }
+          return existing;
         }
 
         const value = await ctx.prompt.text({
@@ -100,6 +113,7 @@ export const plugin: PluginDefinition = {
           title: String(args.values.title ?? 'Enter Value'),
           defaultValue: String(args.values.defaultValue ?? ''),
           placeholder: String(args.values.placeholder ?? ''),
+          password: Boolean(args.values.password),
           required: false,
         });
 
@@ -108,7 +122,7 @@ export const plugin: PluginDefinition = {
         }
 
         if (args.values.store !== STORE_NONE) {
-          await ctx.store.set<Saved>(key, { value, createdAt: Date.now() });
+          await maybeSetValue(ctx, args, value);
         }
 
         return value;
@@ -116,3 +130,40 @@ export const plugin: PluginDefinition = {
     },
   ],
 };
+
+function buildKey(args: CallTemplateFunctionArgs) {
+  return [args.values.namespace, args.values.key || args.values.label]
+    .filter((v) => !!v)
+    .map((v) => slugify(String(v), { lower: true, trim: true }))
+    .join('.');
+}
+
+async function maybeGetValue(ctx: Context, args: CallTemplateFunctionArgs) {
+  if (args.values.store === STORE_NONE) return null;
+
+  const existing = await ctx.store.get<Saved>(buildKey(args));
+  if (existing == null) {
+    return null;
+  }
+
+  if (args.values.store === STORE_FOREVER) {
+    return existing.value;
+  }
+
+  const ttlSeconds = parseInt(String(args.values.ttl)) || 0;
+  const ageSeconds = (Date.now() - existing.createdAt) / 1000;
+  if (ageSeconds > ttlSeconds) {
+    ctx.store.delete(buildKey(args)).catch(console.error);
+    return null;
+  }
+
+  return existing.value;
+}
+
+async function maybeSetValue(ctx: Context, args: CallTemplateFunctionArgs, value: string) {
+  if (args.values.store === STORE_NONE) return;
+  if (!args.values.namespace) {
+    throw new Error('Namespace is required for storing prompt value');
+  }
+  await ctx.store.set<Saved>(buildKey(args), { value, createdAt: Date.now() });
+}

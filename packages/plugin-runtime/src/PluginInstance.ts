@@ -318,7 +318,19 @@ export class PluginInstance {
         Array.isArray(this.#mod?.templateFunctions)
       ) {
         const fn = this.#mod.templateFunctions.find((a) => a.name === payload.name);
-        if (typeof fn?.onRender === 'function') {
+        if (
+          payload.args.purpose === 'preview' &&
+          (fn?.previewType === 'click' || fn?.previewType === 'none')
+        ) {
+          this.#sendPayload(
+            context,
+            {
+              type: 'call_template_function_response',
+              value: null,
+            },
+            replyId,
+          );
+        } else if (typeof fn?.onRender === 'function') {
           const resolvedArgs = await applyDynamicFormInput(ctx, fn.args, payload.args);
           payload.args.values = applyFormInputDefaults(resolvedArgs, payload.args.values);
           try {

@@ -224,7 +224,7 @@ defaultValue?: string, disabled?: boolean,
  */
 description?: string, };
 
-export type FormInputHStack = { inputs?: Array<FormInput>, };
+export type FormInputHStack = { inputs?: Array<FormInput>, hidden?: boolean, };
 
 export type FormInputHttpRequest = { 
 /**
@@ -411,7 +411,7 @@ export type PromptTextRequest = { id: string, title: string, label: string, desc
 /**
  * Text to add to the confirmation button
  */
-confirmText?: string, 
+confirmText?: string, password?: boolean, 
 /**
  * Text to add to the cancel button
  */

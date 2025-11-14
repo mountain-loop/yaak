@@ -275,8 +275,16 @@ function collectArgumentValues(initialTokens: Tokens, templateFunction: Template
     if (!('name' in arg)) return;
 
     const initialArg = initialArgs.find((a) => a.name === arg.name);
-    const initialArgValue = initialArg?.value.type === 'str' ? initialArg?.value.text : undefined;
-    initial[arg.name] = initialArgValue ?? arg.defaultValue ?? DYNAMIC_FORM_NULL_ARG;
+    const initialArgValue =
+      initialArg?.value.type === 'str'
+        ? initialArg?.value.text
+        : initialArg?.value.type === 'bool'
+          ? initialArg.value.value
+          : undefined;
+    const value = initialArgValue ?? arg.defaultValue;
+    if (value != null) {
+      initial[arg.name] = value;
+    }
   };
 
   templateFunction.args.forEach(processArg);

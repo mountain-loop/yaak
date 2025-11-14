@@ -9,7 +9,7 @@ export interface BannerProps {
 
 export function Banner({ children, className, color }: BannerProps) {
   return (
-    <div className="w-full mb-auto grid grid-rows-1 max-h-full">
+    <div className="w-auto grid grid-rows-1 max-h-full flex-0">
       <div
         className={classNames(
           className,
@@ -18,6 +18,7 @@ export function Banner({ children, className, color }: BannerProps) {
           'border border-border border-dashed',
           'px-4 py-2 rounded-lg select-auto',
           'overflow-auto text-text',
+          'mb-auto', // Don't stretch all the way down if the parent is in grid or flexbox
         )}
       >
         {children}
