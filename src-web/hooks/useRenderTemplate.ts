@@ -6,31 +6,20 @@ import { invokeCmd } from '../lib/tauri';
 import { useActiveEnvironment } from './useActiveEnvironment';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 
-export type RenderTemplateBehavior =
-  | { type: 'live' }
-  | { type: 'never' }
-  | { type: 'key_change'; key: string | null };
-
 export function useRenderTemplate(
   template: string,
-  behavior: RenderTemplateBehavior = { type: 'live' },
+  enabled: boolean,
+  purpose: RenderPurpose,
+  refreshKey: string | null,
 ) {
   const workspaceId = useAtomValue(activeWorkspaceIdAtom) ?? 'n/a';
   const environmentId = useActiveEnvironment()?.id ?? null;
-  const disabled =
-    behavior.type === 'never' || (behavior.type === 'key_change' && behavior.key == null);
-
-  let refreshKey: string = 'none';
-  if (behavior.type === 'key_change') refreshKey = behavior.key ?? 'none';
-  else if (behavior.type === 'live') refreshKey = template;
-
-  const purpose = behavior.type === 'key_change' ? 'send' : 'preview';
   return useQuery<string>({
     refetchOnWindowFocus: false,
-    enabled: !disabled,
+    enabled,
     queryKey: ['render_template', workspaceId, environmentId, refreshKey, purpose],
     queryFn: () =>
-      minPromiseMillis(renderTemplate({ template, workspaceId, environmentId, purpose }), 200),
+      minPromiseMillis(renderTemplate({ template, workspaceId, environmentId, purpose }), 300),
   });
 }
 

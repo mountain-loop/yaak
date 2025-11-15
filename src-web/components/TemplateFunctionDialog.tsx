@@ -10,7 +10,6 @@ import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import type { RenderTemplateBehavior } from '../hooks/useRenderTemplate';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateFunctionConfig } from '../hooks/useTemplateFunctionConfig';
 import {
@@ -127,17 +126,12 @@ function InitializedTemplateFunctionDialog({
 
   const debouncedTagText = useDebouncedValue(tagText.data ?? '', 400);
   const [renderKey, setRenderKey] = useState<string | null>(null);
-
-  const renderBehavior = useMemo<RenderTemplateBehavior>(() => {
-    if (previewType === 'live') {
-      return { type: 'key_change', key: renderKey + debouncedTagText };
-    } else if (previewType === 'click') {
-      return { type: 'key_change', key: renderKey };
-    }
-    return { type: 'never' };
-  }, [debouncedTagText, previewType, renderKey]);
-
-  const rendered = useRenderTemplate(debouncedTagText, renderBehavior);
+  const rendered = useRenderTemplate(
+    debouncedTagText,
+    previewType !== 'none',
+    previewType === 'click' ? 'send' : 'preview',
+    previewType === 'live' ? renderKey + debouncedTagText : renderKey,
+  );
 
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
   const dataContainsSecrets = useMemo(() => {

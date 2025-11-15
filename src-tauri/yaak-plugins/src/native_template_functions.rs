@@ -1,7 +1,10 @@
-use crate::events::{FormInput, FormInputBase, FormInputText, PluginContext, RenderPurpose, TemplateFunction, TemplateFunctionArg, TemplateFunctionPreviewType};
+use crate::events::{
+    FormInput, FormInputBase, FormInputText, PluginContext, RenderPurpose, TemplateFunction,
+    TemplateFunctionArg, TemplateFunctionPreviewType,
+};
 use crate::template_callback::PluginTemplateCallback;
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use keyring::Error::NoEntry;
 use log::{debug, info};
 use std::collections::HashMap;
@@ -9,7 +12,7 @@ use tauri::{AppHandle, Runtime};
 use yaak_crypto::manager::EncryptionManagerExt;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result;
-use yaak_templates::{transform_args, FnArg, Parser, Token, Tokens, Val};
+use yaak_templates::{FnArg, Parser, Token, Tokens, Val, transform_args};
 
 pub(crate) fn template_function_secure() -> TemplateFunction {
     TemplateFunction {
@@ -35,7 +38,7 @@ pub(crate) fn template_function_secure() -> TemplateFunction {
 pub(crate) fn template_function_keyring() -> TemplateFunction {
     TemplateFunction {
         name: "keychain".to_string(),
-        preview_type: None,
+        preview_type: Some(TemplateFunctionPreviewType::Live),
         description: Some("Get a password from the OS keychain or keyring".to_string()),
         aliases: Some(vec!["keyring".to_string()]),
         args: vec![

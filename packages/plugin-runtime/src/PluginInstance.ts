@@ -471,7 +471,7 @@ export class PluginInstance {
   #newCtx(context: PluginContext): Context {
     const _windowInfo = async () => {
       if (context.label == null) {
-        throw new Error("Can't get request ID without an active window");
+        throw new Error("Can't get window context without an active window");
       }
       const payload: InternalEventPayload = {
         type: 'window_info_request',
