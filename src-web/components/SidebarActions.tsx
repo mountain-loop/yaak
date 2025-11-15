@@ -27,7 +27,7 @@ export function SidebarActions() {
         }}
         className="pointer-events-auto"
         size="sm"
-        title="Show sidebar"
+        title="Toggle sidebar"
         icon={hidden ? 'left_panel_hidden' : 'left_panel_visible'}
         iconColor="secondary"
       />
