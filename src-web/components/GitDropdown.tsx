@@ -218,7 +218,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       leftSlot: <Icon icon="arrow_up_from_line" />,
       waitForOnSelect: true,
       async onSelect() {
-        push.mutate(undefined, {
+        await push.mutateAsync(undefined, {
           onSuccess(message) {
             if (message === 'nothing_to_push') {
               showToast({ id: 'push-success', message: 'Nothing to push', color: 'info' });

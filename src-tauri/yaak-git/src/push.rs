@@ -1,5 +1,7 @@
+use crate::binary::new_binary_command;
 use crate::branch::branch_set_upstream_after_push;
 use crate::callbacks::default_callbacks;
+use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::repository::open_repo;
 use git2::{ProxyOptions, PushOptions};
@@ -25,6 +27,31 @@ pub(crate) enum PushResult {
 }
 
 pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
+    let out = new_binary_command(dir)
+        .arg("push")
+        .arg("origin")
+        .arg("HEAD")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .map_err(|e| GenericError(format!("failed to run git push: {e}")))?;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = stdout + stderr;
+
+    if !out.status.success() {
+        return Err(GenericError(format!("Failed to push {combined}")));
+    }
+
+    if combined.contains("up-to-date") {
+        return Ok(PushResult::NothingToPush);
+    }
+
+    Ok(PushResult::Success)
+}
+
+#[allow(unused)]
+pub(crate) fn git_push_old(dir: &Path) -> Result<PushResult> {
     let repo = open_repo(dir)?;
     let head = repo.head()?;
     let branch = head.shorthand().unwrap();
@@ -32,15 +59,15 @@ pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
 
     let mut options = PushOptions::new();
     options.packbuilder_parallelism(0);
-    
+
     let push_result = Mutex::new(PushResult::NothingToPush);
-    
+
     let mut callbacks = default_callbacks();
     callbacks.push_transfer_progress(|_current, _total, _bytes| {
-        let mut push_result = push_result.lock().unwrap();   
+        let mut push_result = push_result.lock().unwrap();
         *push_result = PushResult::Success;
     });
-    
+
     options.remote_callbacks(default_callbacks());
 
     let mut proxy = ProxyOptions::new();

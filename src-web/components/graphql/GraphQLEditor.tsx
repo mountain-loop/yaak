@@ -24,7 +24,13 @@ type Props = Pick<EditorProps, 'heightMode' | 'className' | 'forceUpdateKey'> & 
   request: HttpRequest;
 };
 
-export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorProps }: Props) {
+export function GraphQLEditor(props: Props) {
+  // There's some weirdness with stale onChange being called when switching requests, so we'll
+  // key on the request ID as a workaround for now.
+  return <GraphQLEditorInner key={props.request.id} {...props} />;
+}
+
+function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProps }: Props) {
   const [autoIntrospectDisabled, setAutoIntrospectDisabled] = useLocalStorage<
     Record<string, boolean>
   >('graphQLAutoIntrospectDisabled', {});

@@ -1,21 +1,29 @@
-use crate::commands::{add, branch, checkout, commit, delete_branch, fetch_all, initialize, log, merge_branch, pull, push, status, unstage};
+use crate::commands::{
+    add, branch, checkout, commit, delete_branch, fetch_all, initialize, log, merge_branch, pull,
+    push, status, unstage,
+};
 use tauri::{
-    generate_handler,
+    Runtime, generate_handler,
     plugin::{Builder, TauriPlugin},
-    Runtime,
 };
 
+mod add;
+mod binary;
 mod branch;
 mod callbacks;
 mod commands;
-pub mod error;
+mod commit;
 mod fetch;
-mod git;
+mod init;
+mod log;
 mod merge;
 mod pull;
 mod push;
 mod repository;
+mod status;
+mod unstage;
 mod util;
+pub mod error;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-git")
