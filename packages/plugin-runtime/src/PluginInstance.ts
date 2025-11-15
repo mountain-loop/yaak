@@ -322,11 +322,13 @@ export class PluginInstance {
           payload.args.purpose === 'preview' &&
           (fn?.previewType === 'click' || fn?.previewType === 'none')
         ) {
+          // Send empty render response
           this.#sendPayload(
             context,
             {
               type: 'call_template_function_response',
               value: null,
+              error: 'Live preview disabled for this function',
             },
             replyId,
           );
