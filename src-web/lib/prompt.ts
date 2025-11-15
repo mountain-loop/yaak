@@ -6,7 +6,13 @@ import { showDialog } from './dialog';
 type PromptArgs = Pick<DialogProps, 'title' | 'description'> &
   Omit<PromptProps, 'onClose' | 'onCancel' | 'onResult'> & { id: string };
 
-export async function showPrompt({ id, title, description, ...props }: PromptArgs) {
+export async function showPrompt({
+  id,
+  title,
+  description,
+  required = true,
+  ...props
+}: PromptArgs) {
   return new Promise((resolve: PromptProps['onResult']) => {
     showDialog({
       id,
@@ -21,6 +27,7 @@ export async function showPrompt({ id, title, description, ...props }: PromptArg
       },
       render: ({ hide }) =>
         Prompt({
+          required,
           onCancel: () => {
             // Click cancel button within dialog
             resolve(null);

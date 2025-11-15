@@ -50,7 +50,6 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
           const newMethod = await showPrompt({
             id: 'custom-method',
             label: 'Http Method',
-            defaultValue: '',
             title: 'Custom Method',
             confirmText: 'Save',
             description: 'Enter a custom method name',

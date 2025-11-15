@@ -26,7 +26,7 @@ import { IconButton } from './core/IconButton';
 import { Input } from './core/Input';
 import { Label } from './core/Label';
 import { Select } from './core/Select';
-import { HStack, VStack } from './core/Stacks';
+import { VStack } from './core/Stacks';
 import { Markdown } from './Markdown';
 import { SelectFile } from './SelectFile';
 
@@ -216,7 +216,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
             );
           case 'h_stack':
             return (
-              <HStack key={i + stateKey} alignItems="end" space={3}>
+              <div className="flex flex-wrap sm:flex-nowrap gap-3 items-end" key={i + stateKey}>
                 <FormInputs
                   data={data}
                   disabled={disabled}
@@ -226,7 +226,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                   autocompleteFunctions={autocompleteFunctions || false}
                   autocompleteVariables={autocompleteVariables}
                 />
-              </HStack>
+              </div>
             );
           case 'banner':
             return (

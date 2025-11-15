@@ -18,7 +18,7 @@ import type {
   ShowToastRequest,
   TemplateRenderRequest,
 } from '../bindings/gen_events.ts';
-import { JsonValue } from '../bindings/serde_json/JsonValue';
+import type { JsonValue } from '../bindings/serde_json/JsonValue';
 
 export interface Context {
   clipboard: {
@@ -36,6 +36,9 @@ export interface Context {
     delete(key: string): Promise<boolean>;
   };
   window: {
+    requestId(): Promise<string | null>;
+    workspaceId(): Promise<string | null>;
+    environmentId(): Promise<string | null>;
     openUrl(
       args: OpenWindowRequest & {
         onNavigate?: (args: { url: string }) => void;

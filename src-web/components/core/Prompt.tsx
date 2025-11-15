@@ -16,6 +16,7 @@ export function Prompt({
   label,
   defaultValue,
   placeholder,
+  password,
   onResult,
   required,
   confirmText,
@@ -36,10 +37,10 @@ export function Prompt({
       onSubmit={handleSubmit}
     >
       <PlainInput
-        hideLabel
         autoSelect
         required={required}
         placeholder={placeholder ?? 'Enter text'}
+        type={password ? 'password' : 'text'}
         label={label}
         defaultValue={defaultValue}
         onChange={setValue}

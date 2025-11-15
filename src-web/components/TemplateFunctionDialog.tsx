@@ -54,7 +54,6 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
         initial.value = await convertTemplateToInsecure(template);
       }
 
-      console.log('INITIAL', initial);
       setInitialArgValues(initial);
     })().catch(console.error);
   }, [
@@ -78,7 +77,7 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
 }
 
 function InitializedTemplateFunctionDialog({
-  templateFunction: { name },
+  templateFunction: { name, previewType: ogPreviewType },
   initialArgValues,
   hide,
   onChange,
@@ -86,7 +85,7 @@ function InitializedTemplateFunctionDialog({
 }: Omit<Props, 'initialTokens'> & {
   initialArgValues: Record<string, string | boolean>;
 }) {
-  const enablePreview = name !== 'secure';
+  const previewType = ogPreviewType == null ? 'live' : ogPreviewType;
   const [showSecretsInPreview, toggleShowSecretsInPreview] = useToggle(false);
   const [argValues, setArgValues] = useState<Record<string, string | boolean>>(initialArgValues);
 
@@ -126,7 +125,14 @@ function InitializedTemplateFunctionDialog({
   };
 
   const debouncedTagText = useDebouncedValue(tagText.data ?? '', 400);
-  const rendered = useRenderTemplate(debouncedTagText);
+  const [renderKey, setRenderKey] = useState<string | null>(null);
+  const rendered = useRenderTemplate(
+    debouncedTagText,
+    previewType !== 'none',
+    previewType === 'click' ? 'send' : 'preview',
+    previewType === 'live' ? renderKey + debouncedTagText : renderKey,
+  );
+
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
   const dataContainsSecrets = useMemo(() => {
     for (const [name, value] of Object.entries(argValues)) {
@@ -174,12 +180,12 @@ function InitializedTemplateFunctionDialog({
         )}
       </div>
       <div className="px-6 border-t border-t-border py-3 bg-surface-highlight w-full flex flex-col gap-4">
-        {enablePreview ? (
+        {previewType !== 'none' ? (
           <VStack className="w-full">
             <HStack space={0.5}>
               <HStack className="text-sm text-text-subtle" space={1.5}>
                 Rendered Preview
-                {rendered.isPending && <LoadingIcon size="xs" />}
+                {rendered.isLoading && <LoadingIcon size="xs" />}
               </HStack>
               <IconButton
                 size="xs"
@@ -195,6 +201,7 @@ function InitializedTemplateFunctionDialog({
             </HStack>
             <InlineCode
               className={classNames(
+                'relative',
                 'whitespace-pre-wrap !select-text cursor-text max-h-[10rem] overflow-y-auto hide-scrollbars !border-text-subtlest',
                 tooLarge && 'italic text-danger',
               )}
@@ -212,6 +219,18 @@ function InitializedTemplateFunctionDialog({
               ) : (
                 rendered.data || <>&nbsp;</>
               )}
+              <div className="absolute right-0 top-0 bottom-0 flex items-center">
+                <IconButton
+                  size="xs"
+                  icon="refresh"
+                  className="text-text-subtle"
+                  title="Refresh preview"
+                  spin={rendered.isLoading}
+                  onClick={() => {
+                    setRenderKey(new Date().toISOString());
+                  }}
+                />
+              </div>
             </InlineCode>
           </VStack>
         ) : (
@@ -250,8 +269,16 @@ function collectArgumentValues(initialTokens: Tokens, templateFunction: Template
     if (!('name' in arg)) return;
 
     const initialArg = initialArgs.find((a) => a.name === arg.name);
-    const initialArgValue = initialArg?.value.type === 'str' ? initialArg?.value.text : undefined;
-    initial[arg.name] = initialArgValue ?? arg.defaultValue ?? DYNAMIC_FORM_NULL_ARG;
+    const initialArgValue =
+      initialArg?.value.type === 'str'
+        ? initialArg?.value.text
+        : initialArg?.value.type === 'bool'
+          ? initialArg.value.value
+          : undefined;
+    const value = initialArgValue ?? arg.defaultValue;
+    if (value != null) {
+      initial[arg.name] = value;
+    }
   };
 
   templateFunction.args.forEach(processArg);

@@ -19,6 +19,7 @@ import {
   SendHttpRequestResponse,
   TemplateFunction,
   TemplateRenderResponse,
+  WindowInfoResponse,
 } from '@yaakapp-internal/plugins';
 import { Context, PluginDefinition } from '@yaakapp/api';
 import console from 'node:console';
@@ -317,7 +318,21 @@ export class PluginInstance {
         Array.isArray(this.#mod?.templateFunctions)
       ) {
         const fn = this.#mod.templateFunctions.find((a) => a.name === payload.name);
-        if (typeof fn?.onRender === 'function') {
+        if (
+          payload.args.purpose === 'preview' &&
+          (fn?.previewType === 'click' || fn?.previewType === 'none')
+        ) {
+          // Send empty render response
+          this.#sendPayload(
+            context,
+            {
+              type: 'call_template_function_response',
+              value: null,
+              error: 'Live preview disabled for this function',
+            },
+            replyId,
+          );
+        } else if (typeof fn?.onRender === 'function') {
           const resolvedArgs = await applyDynamicFormInput(ctx, fn.args, payload.args);
           payload.args.values = applyFormInputDefaults(resolvedArgs, payload.args.values);
           try {
@@ -410,7 +425,7 @@ export class PluginInstance {
     return this.#sendPayload(context, { type: 'empty_response' }, replyId);
   }
 
-  #sendAndWaitForReply<T extends Omit<InternalEventPayload, 'type'>>(
+  #sendForReply<T extends Omit<InternalEventPayload, 'type'>>(
     context: PluginContext,
     payload: InternalEventPayload,
   ): Promise<T> {
@@ -456,10 +471,22 @@ export class PluginInstance {
   }
 
   #newCtx(context: PluginContext): Context {
+    const _windowInfo = async () => {
+      if (context.label == null) {
+        throw new Error("Can't get window context without an active window");
+      }
+      const payload: InternalEventPayload = {
+        type: 'window_info_request',
+        label: context.label,
+      };
+
+      return this.#sendForReply<WindowInfoResponse>(context, payload);
+    };
+
     return {
       clipboard: {
         copyText: async (text) => {
-          await this.#sendAndWaitForReply(context, {
+          await this.#sendForReply(context, {
             type: 'copy_text_request',
             text,
           });
@@ -467,7 +494,7 @@ export class PluginInstance {
       },
       toast: {
         show: async (args) => {
-          await this.#sendAndWaitForReply(context, {
+          await this.#sendForReply(context, {
             type: 'show_toast_request',
             // Handle default here because null/undefined both convert to None in Rust translation
             timeout: args.timeout === undefined ? 5000 : args.timeout,
@@ -476,6 +503,15 @@ export class PluginInstance {
         },
       },
       window: {
+        requestId: async () => {
+          return (await _windowInfo()).requestId;
+        },
+        async workspaceId(): Promise<string | null> {
+          return (await _windowInfo()).workspaceId;
+        },
+        async environmentId(): Promise<string | null> {
+          return (await _windowInfo()).environmentId;
+        },
         openUrl: async ({ onNavigate, onClose, ...args }) => {
           args.label = args.label || `${Math.random()}`;
           const payload: InternalEventPayload = { type: 'open_window_request', ...args };
@@ -500,7 +536,7 @@ export class PluginInstance {
       },
       prompt: {
         text: async (args) => {
-          const reply: PromptTextResponse = await this.#sendAndWaitForReply(context, {
+          const reply: PromptTextResponse = await this.#sendForReply(context, {
             type: 'prompt_text_request',
             ...args,
           });
@@ -513,7 +549,7 @@ export class PluginInstance {
             type: 'find_http_responses_request',
             ...args,
           } as const;
-          const { httpResponses } = await this.#sendAndWaitForReply<FindHttpResponsesResponse>(
+          const { httpResponses } = await this.#sendForReply<FindHttpResponsesResponse>(
             context,
             payload,
           );
@@ -526,7 +562,7 @@ export class PluginInstance {
             type: 'render_grpc_request_request',
             ...args,
           } as const;
-          const { grpcRequest } = await this.#sendAndWaitForReply<RenderGrpcRequestResponse>(
+          const { grpcRequest } = await this.#sendForReply<RenderGrpcRequestResponse>(
             context,
             payload,
           );
@@ -539,7 +575,7 @@ export class PluginInstance {
             type: 'get_http_request_by_id_request',
             ...args,
           } as const;
-          const { httpRequest } = await this.#sendAndWaitForReply<GetHttpRequestByIdResponse>(
+          const { httpRequest } = await this.#sendForReply<GetHttpRequestByIdResponse>(
             context,
             payload,
           );
@@ -550,7 +586,7 @@ export class PluginInstance {
             type: 'send_http_request_request',
             ...args,
           } as const;
-          const { httpResponse } = await this.#sendAndWaitForReply<SendHttpRequestResponse>(
+          const { httpResponse } = await this.#sendForReply<SendHttpRequestResponse>(
             context,
             payload,
           );
@@ -561,7 +597,7 @@ export class PluginInstance {
             type: 'render_http_request_request',
             ...args,
           } as const;
-          const { httpRequest } = await this.#sendAndWaitForReply<RenderHttpRequestResponse>(
+          const { httpRequest } = await this.#sendForReply<RenderHttpRequestResponse>(
             context,
             payload,
           );
@@ -574,18 +610,12 @@ export class PluginInstance {
             type: 'get_cookie_value_request',
             ...args,
           } as const;
-          const { value } = await this.#sendAndWaitForReply<GetCookieValueResponse>(
-            context,
-            payload,
-          );
+          const { value } = await this.#sendForReply<GetCookieValueResponse>(context, payload);
           return value;
         },
         listNames: async () => {
           const payload = { type: 'list_cookie_names_request' } as const;
-          const { names } = await this.#sendAndWaitForReply<ListCookieNamesResponse>(
-            context,
-            payload,
-          );
+          const { names } = await this.#sendForReply<ListCookieNamesResponse>(context, payload);
           return names;
         },
       },
@@ -596,14 +626,14 @@ export class PluginInstance {
          */
         render: async (args) => {
           const payload = { type: 'template_render_request', ...args } as const;
-          const result = await this.#sendAndWaitForReply<TemplateRenderResponse>(context, payload);
+          const result = await this.#sendForReply<TemplateRenderResponse>(context, payload);
           return result.data as any;
         },
       },
       store: {
         get: async <T>(key: string) => {
           const payload = { type: 'get_key_value_request', key } as const;
-          const result = await this.#sendAndWaitForReply<GetKeyValueResponse>(context, payload);
+          const result = await this.#sendForReply<GetKeyValueResponse>(context, payload);
           return result.value ? (JSON.parse(result.value) as T) : undefined;
         },
         set: async <T>(key: string, value: T) => {
@@ -613,11 +643,11 @@ export class PluginInstance {
             key,
             value: valueStr,
           };
-          await this.#sendAndWaitForReply<GetKeyValueResponse>(context, payload);
+          await this.#sendForReply<GetKeyValueResponse>(context, payload);
         },
         delete: async (key: string) => {
           const payload = { type: 'delete_key_value_request', key } as const;
-          const result = await this.#sendAndWaitForReply<DeleteKeyValueResponse>(context, payload);
+          const result = await this.#sendForReply<DeleteKeyValueResponse>(context, payload);
           return result.deleted;
         },
       },

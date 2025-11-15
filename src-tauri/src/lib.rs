@@ -117,6 +117,7 @@ async fn cmd_render_template<R: Runtime>(
     template: &str,
     workspace_id: &str,
     environment_id: Option<&str>,
+    purpose: Option<RenderPurpose>,
 ) -> YaakResult<String> {
     let environment_chain =
         app_handle.db().resolve_environments(workspace_id, None, environment_id)?;
@@ -126,7 +127,7 @@ async fn cmd_render_template<R: Runtime>(
         &PluginTemplateCallback::new(
             &app_handle,
             &PluginContext::new(&window),
-            RenderPurpose::Preview,
+            purpose.unwrap_or(RenderPurpose::Preview),
         ),
         &RenderOptions {
             error_behavior: RenderErrorBehavior::Throw,

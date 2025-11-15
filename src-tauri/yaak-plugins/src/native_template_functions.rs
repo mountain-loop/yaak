@@ -1,6 +1,6 @@
 use crate::events::{
     FormInput, FormInputBase, FormInputText, PluginContext, RenderPurpose, TemplateFunction,
-    TemplateFunctionArg,
+    TemplateFunctionArg, TemplateFunctionPreviewType,
 };
 use crate::template_callback::PluginTemplateCallback;
 use base64::Engine;
@@ -17,6 +17,7 @@ use yaak_templates::{FnArg, Parser, Token, Tokens, Val, transform_args};
 pub(crate) fn template_function_secure() -> TemplateFunction {
     TemplateFunction {
         name: "secure".to_string(),
+        preview_type: Some(TemplateFunctionPreviewType::None),
         description: Some("Securely store encrypted text".to_string()),
         aliases: None,
         args: vec![TemplateFunctionArg::FormInput(FormInput::Text(
@@ -37,6 +38,7 @@ pub(crate) fn template_function_secure() -> TemplateFunction {
 pub(crate) fn template_function_keyring() -> TemplateFunction {
     TemplateFunction {
         name: "keychain".to_string(),
+        preview_type: Some(TemplateFunctionPreviewType::Live),
         description: Some("Get a password from the OS keychain or keyring".to_string()),
         aliases: Some(vec!["keyring".to_string()]),
         args: vec![
