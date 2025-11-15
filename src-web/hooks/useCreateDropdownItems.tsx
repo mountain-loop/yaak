@@ -5,7 +5,9 @@ import { useMemo } from 'react';
 import { createFolder } from '../commands/commands';
 import type { DropdownItem } from '../components/core/Dropdown';
 import { Icon } from '../components/core/Icon';
+import { ImportCurlDialog } from '../components/ImportCurlDialog';
 import { createRequestAndNavigate } from '../lib/createRequestAndNavigate';
+import { showDialog } from '../lib/dialog';
 import { generateId } from '../lib/generateId';
 import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
 import { activeRequestAtom } from './useActiveRequest';
@@ -63,6 +65,17 @@ export function getCreateDropdownItems({
         const id = await createRequestAndNavigate({ model: 'http_request', workspaceId, folderId });
         onCreate?.('http_request', id);
       },
+    },
+    {
+      label: 'cURL',
+      leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
+      onSelect: () =>
+        showDialog({
+          id: 'import-curl',
+          title: 'Import cURL Command',
+          size: 'md',
+          render: ImportCurlDialog,
+        }),
     },
     {
       label: 'GraphQL',
