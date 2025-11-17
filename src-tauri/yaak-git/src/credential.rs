@@ -18,9 +18,8 @@ pub(crate) async fn git_add_credential(
     let host = url.host_str().unwrap();
     let path = Some(url.path());
 
-    let mut child = new_binary_command(dir)
-        .arg("credential")
-        .arg("approve")
+    let mut child = new_binary_command(dir)?
+        .args(["credential", "approve"])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .spawn()?;

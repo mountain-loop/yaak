@@ -4,7 +4,7 @@ use crate::error::Result;
 use std::path::Path;
 
 pub(crate) fn git_fetch_all(dir: &Path) -> Result<()> {
-    let out = new_binary_command(dir)
+    let out = new_binary_command(dir)?
         .args(["fetch", "--all", "--prune", "--tags"])
         .output()
         .map_err(|e| GenericError(format!("failed to run git pull: {e}")))?;

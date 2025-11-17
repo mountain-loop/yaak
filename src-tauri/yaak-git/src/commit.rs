@@ -4,7 +4,7 @@ use log::info;
 use std::path::Path;
 
 pub(crate) fn git_commit(dir: &Path, message: &str) -> crate::error::Result<()> {
-    let out = new_binary_command(dir).arg("commit").args(["--message", message]).output()?;
+    let out = new_binary_command(dir)?.args(["commit", "--message", message]).output()?;
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);

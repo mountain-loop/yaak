@@ -24,10 +24,8 @@ pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
     let remote_name = remote.name().ok_or(GenericError("Failed to get remote name".to_string()))?;
     let remote_url = remote.url().ok_or(GenericError("Failed to get remote url".to_string()))?;
 
-    let out = new_binary_command(dir)
-        .arg("push")
-        .arg(&remote_name)
-        .arg(&branch_name)
+    let out = new_binary_command(dir)?
+        .args(["push", &remote_name, &branch_name])
         .env("GIT_TERMINAL_PROMPT", "0")
         .output()
         .map_err(|e| GenericError(format!("failed to run git push: {e}")))?;

@@ -33,6 +33,9 @@ pub enum Error {
     #[error("Git error: {0}")]
     GenericError(String),
 
+    #[error("'git' not found. Please ensure it's installed and available in $PATH")]
+    GitNotFound,
+
     #[error("Credentials required: {0}")]
     CredentialsRequiredError(String),
 
