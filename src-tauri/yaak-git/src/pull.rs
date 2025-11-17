@@ -53,7 +53,7 @@ pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
     }
 
     if !out.status.success() {
-        return Err(GenericError(format!("Failed to push {combined}")));
+        return Err(GenericError(format!("Failed to pull {combined}")));
     }
 
     if combined.to_lowercase().contains("up-to-date") {
@@ -61,7 +61,7 @@ pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
     }
 
     Ok(PullResult::Success {
-        message: format!("Pushed to {}/{}", remote_name, branch_name),
+        message: format!("Pulled from {}/{}", remote_name, branch_name),
     })
 }
 
