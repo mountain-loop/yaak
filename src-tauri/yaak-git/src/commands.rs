@@ -1,11 +1,11 @@
 use crate::add::git_add;
 use crate::branch::{git_checkout_branch, git_create_branch, git_delete_branch, git_merge_branch};
-use crate::commit::{GitCommit, git_commit};
+use crate::commit::git_commit;
 use crate::credential::git_add_credential;
 use crate::error::Result;
 use crate::fetch::git_fetch_all;
 use crate::init::git_init;
-use crate::log::git_log;
+use crate::log::{GitCommit, git_log};
 use crate::pull::{PullResult, git_pull};
 use crate::push::{PushResult, git_push};
 use crate::remotes::{GitRemote, git_add_remote, git_remotes, git_rm_remote};
@@ -13,6 +13,7 @@ use crate::status::{GitStatusSummary, git_status};
 use crate::unstage::git_unstage;
 use std::path::{Path, PathBuf};
 use tauri::command;
+
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
 
 #[command]

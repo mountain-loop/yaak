@@ -1,7 +1,25 @@
-use crate::commit::{GitAuthor, GitCommit};
 use crate::repository::open_repo;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
+use ts_rs::TS;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_git.ts")]
+pub(crate) struct GitCommit {
+    pub author: GitAuthor,
+    pub when: DateTime<Utc>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_git.ts")]
+pub(crate) struct GitAuthor {
+    pub name: Option<String>,
+    pub email: Option<String>,
+}
 
 pub(crate) fn git_log(dir: &Path) -> crate::error::Result<Vec<GitCommit>> {
     let repo = open_repo(dir)?;
