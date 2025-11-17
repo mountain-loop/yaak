@@ -37,10 +37,13 @@ pub(crate) fn git_remotes(dir: &Path) -> Result<Vec<GitRemote>> {
     Ok(remotes)
 }
 
-pub(crate) fn git_add_remote(dir: &Path, name: &str, url: &str) -> Result<()> {
+pub(crate) fn git_add_remote(dir: &Path, name: &str, url: &str) -> Result<GitRemote> {
     let repo = open_repo(dir)?;
     repo.remote(name, url)?;
-    Ok(())
+    Ok(GitRemote {
+        name: name.to_string(),
+        url: Some(url.to_string()),
+    })
 }
 
 pub(crate) fn git_rm_remote(dir: &Path, name: &str) -> Result<()> {

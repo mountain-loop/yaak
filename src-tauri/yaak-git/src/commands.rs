@@ -103,7 +103,7 @@ pub async fn remotes(dir: &Path) -> Result<Vec<GitRemote>> {
 }
 
 #[command]
-pub async fn add_remote(dir: &Path, name: &str, url: &str) -> Result<()> {
+pub async fn add_remote(dir: &Path, name: &str, url: &str) -> Result<GitRemote> {
     git_add_remote(dir, name, url)
 }
 

@@ -44,6 +44,31 @@ export function useGit(dir: string, callbacks: GitCallbacks) {
 }
 
 export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
+  const push = async () => {
+    const remotes = await getRemotes(dir);
+    if (remotes.length === 0) {
+      const remote = await callbacks.addRemote();
+      if (remote == null) throw new Error('No remote found');
+    }
+
+    const result = await invoke<PushResult>('plugin:yaak-git|push', { dir });
+    if (result.type !== 'needs_credentials') return result;
+
+    // Needs credentials, prompt for them
+    const creds = await callbacks.promptCredentials(result);
+    if (creds == null) throw new Error('Canceled');
+
+    await invoke('plugin:yaak-git|add_credential', {
+      dir,
+      remoteUrl: result.url,
+      username: creds.username,
+      password: creds.password,
+    });
+
+    // Push again
+    return invoke<PushResult>('plugin:yaak-git|push', { dir });
+  };
+
   return {
     init: createFastMutation<void, string, void>({
       mutationKey: ['git', 'init'],
@@ -94,7 +119,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationKey: ['git', 'commit_push', dir],
       mutationFn: async (args) => {
         await invoke('plugin:yaak-git|commit', { dir, ...args });
-        return invoke('plugin:yaak-git|push', { dir });
+        return push();
       },
       onSuccess,
     }),
@@ -105,30 +130,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     }),
     push: createFastMutation<PushResult, string, void>({
       mutationKey: ['git', 'push', dir],
-      mutationFn: async () => {
-        const remotes = await getRemotes(dir);
-        if (remotes.length === 0) {
-          const remote = await callbacks.addRemote();
-          if (remote == null) throw new Error('No remote found');
-        }
-
-        const result = await invoke<PushResult>('plugin:yaak-git|push', { dir });
-        if (result.type !== 'needs_credentials') return result;
-
-        // Needs credentials, prompt for them
-        const creds = await callbacks.promptCredentials(result);
-        if (creds == null) throw new Error('Canceled');
-
-        await invoke('plugin:yaak-git|add_credential', {
-          dir,
-          remoteUrl: result.url,
-          username: creds.username,
-          password: creds.password,
-        });
-
-        // Push again
-        return invoke<PushResult>('plugin:yaak-git|push', { dir });
-      },
+      mutationFn: push,
       onSuccess,
     }),
     pull: createFastMutation<PullResult, string, void>({
