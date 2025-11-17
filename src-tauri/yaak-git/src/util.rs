@@ -25,7 +25,7 @@ pub(crate) fn get_current_branch_name(repo: &Repository) -> Result<String> {
 pub(crate) fn local_branch_names(repo: &Repository) -> Result<Vec<String>> {
     let mut branches = Vec::new();
     for branch in repo.branches(Some(BranchType::Local))? {
-        let branch = branch?.0;
+        let (branch, _) = branch?;
         let name = branch.name_bytes()?;
         let name = bytes_to_string(name)?;
         branches.push(name);
@@ -36,9 +36,12 @@ pub(crate) fn local_branch_names(repo: &Repository) -> Result<Vec<String>> {
 pub(crate) fn remote_branch_names(repo: &Repository) -> Result<Vec<String>> {
     let mut branches = Vec::new();
     for branch in repo.branches(Some(BranchType::Remote))? {
-        let branch = branch?.0;
+        let (branch, _) = branch?;
         let name = branch.name_bytes()?;
         let name = bytes_to_string(name)?;
+        if name.ends_with("/HEAD") {
+            continue;
+        }
         branches.push(name);
     }
     Ok(branches)
