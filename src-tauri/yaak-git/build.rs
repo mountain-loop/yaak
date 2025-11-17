@@ -1,5 +1,7 @@
 const COMMANDS: &[&str] = &[
     "add",
+    "add_credential",
+    "add_remote",
     "branch",
     "checkout",
     "commit",
@@ -10,6 +12,8 @@ const COMMANDS: &[&str] = &[
     "merge_branch",
     "pull",
     "push",
+    "remotes",
+    "rm_remote",
     "status",
     "unstage",
 ];

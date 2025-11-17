@@ -33,8 +33,17 @@ pub enum Error {
     #[error("Git error: {0}")]
     GenericError(String),
 
+    #[error("'git' not found. Please ensure it's installed and available in $PATH")]
+    GitNotFound,
+
+    #[error("Credentials required: {0}")]
+    CredentialsRequiredError(String),
+
     #[error("No default remote found")]
     NoDefaultRemoteFound,
+
+    #[error("No remotes found for repo")]
+    NoRemotesFound,
 
     #[error("Merge failed due to conflicts")]
     MergeConflicts,

@@ -16,7 +16,18 @@ import type { InputProps } from './Input';
 import { Label } from './Label';
 import { HStack } from './Stacks';
 
-export type PlainInputProps = Omit<InputProps, 'wrapLines' | 'onKeyDown' | 'type' | 'stateKey'> &
+export type PlainInputProps = Omit<
+  InputProps,
+  | 'wrapLines'
+  | 'onKeyDown'
+  | 'type'
+  | 'stateKey'
+  | 'autocompleteVariables'
+  | 'autocompleteFunctions'
+  | 'autocomplete'
+  | 'extraExtensions'
+  | 'forcedEnvironmentId'
+> &
   Pick<HTMLAttributes<HTMLInputElement>, 'onKeyDownCapture'> & {
     onFocusRaw?: HTMLAttributes<HTMLInputElement>['onFocus'];
     type?: 'text' | 'password' | 'number';

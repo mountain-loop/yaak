@@ -4,22 +4,25 @@ import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { HTMLAttributes } from 'react';
 import { forwardRef } from 'react';
-import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
-import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
-import { useKeyValue } from '../hooks/useKeyValue';
-import { sync } from '../init/sync';
-import { showConfirm, showConfirmDelete } from '../lib/confirm';
-import { showDialog } from '../lib/dialog';
-import { showPrompt } from '../lib/prompt';
-import { showErrorToast, showToast } from '../lib/toast';
-import { Banner } from './core/Banner';
-import type { DropdownItem } from './core/Dropdown';
-import { Dropdown } from './core/Dropdown';
-import { Icon } from './core/Icon';
-import { InlineCode } from './core/InlineCode';
-import { BranchSelectionDialog } from './git/BranchSelectionDialog';
-import { HistoryDialog } from './git/HistoryDialog';
+import { openWorkspaceSettings } from '../../commands/openWorkspaceSettings';
+import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../../hooks/useActiveWorkspace';
+import { useKeyValue } from '../../hooks/useKeyValue';
+import { sync } from '../../init/sync';
+import { showConfirm, showConfirmDelete } from '../../lib/confirm';
+import { showDialog } from '../../lib/dialog';
+import { showPrompt } from '../../lib/prompt';
+import { showErrorToast, showToast } from '../../lib/toast';
+import { Banner } from '../core/Banner';
+import type { DropdownItem } from '../core/Dropdown';
+import { Dropdown } from '../core/Dropdown';
+import { Icon } from '../core/Icon';
+import { InlineCode } from '../core/InlineCode';
+import { BranchSelectionDialog } from './BranchSelectionDialog';
+import { gitCallbacks } from './callbacks';
+import { handlePullResult } from './git-util';
 import { GitCommitDialog } from './GitCommitDialog';
+import { GitRemotesDialog } from './GitRemotesDialog';
+import { HistoryDialog } from './HistoryDialog';
 
 export function GitDropdown() {
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
@@ -37,7 +40,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const [
     { status, log },
     { branch, deleteBranch, fetchAll, mergeBranch, push, pull, checkout, init },
-  ] = useGit(syncDir);
+  ] = useGit(syncDir, gitCallbacks(syncDir));
 
   const localBranches = status.data?.localBranches ?? [];
   const remoteBranches = status.data?.remoteBranches ?? [];
@@ -52,9 +55,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
 
   const noRepo = status.error?.includes('not found');
   if (noRepo) {
-    return (
-      <SetupGitDropdown workspaceId={workspace.id} initRepo={() => init.mutate({ dir: syncDir })} />
-    );
+    return <SetupGitDropdown workspaceId={workspace.id} initRepo={init.mutate} />;
   }
 
   const tryCheckout = (branch: string, force: boolean) => {
@@ -111,6 +112,12 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       },
     },
     {
+      label: 'Manage Remotes',
+      leftSlot: <Icon icon="hard_drive_download" />,
+      onSelect: () => GitRemotesDialog.show(syncDir),
+    },
+    { type: 'separator' },
+    {
       label: 'New Branch',
       leftSlot: <Icon icon="git_branch_plus" />,
       async onSelect() {
@@ -119,17 +126,17 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           title: 'Create Branch',
           label: 'Branch Name',
         });
-        if (name) {
-          await branch.mutateAsync(
-            { branch: name },
-            {
-              onError: (err) => {
-                showErrorToast('git-branch-error', String(err));
-              },
+        if (!name) return;
+
+        await branch.mutateAsync(
+          { branch: name },
+          {
+            onError: (err) => {
+              showErrorToast('git-branch-error', String(err));
             },
-          );
-          tryCheckout(name, false);
-        }
+          },
+        );
+        tryCheckout(name, false);
       },
     },
     {
@@ -214,18 +221,11 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     { type: 'separator' },
     {
       label: 'Push',
-      hidden: (status.data?.origins ?? []).length === 0,
       leftSlot: <Icon icon="arrow_up_from_line" />,
       waitForOnSelect: true,
       async onSelect() {
-        push.mutate(undefined, {
-          onSuccess(message) {
-            if (message === 'nothing_to_push') {
-              showToast({ id: 'push-success', message: 'Nothing to push', color: 'info' });
-            } else {
-              showToast({ id: 'push-success', message: 'Push successful', color: 'success' });
-            }
-          },
+        await push.mutateAsync(undefined, {
+          onSuccess: handlePullResult,
           onError(err) {
             showErrorToast('git-pull-error', String(err));
           },
@@ -238,26 +238,17 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       leftSlot: <Icon icon="arrow_down_to_line" />,
       waitForOnSelect: true,
       async onSelect() {
-        const result = await pull.mutateAsync(undefined, {
+        await pull.mutateAsync(undefined, {
+          onSuccess: handlePullResult,
           onError(err) {
             showErrorToast('git-pull-error', String(err));
           },
         });
-        if (result.receivedObjects > 0) {
-          showToast({
-            id: 'git-pull-success',
-            message: `Pulled ${result.receivedObjects} objects`,
-            color: 'success',
-          });
-          await sync({ force: true });
-        } else {
-          showToast({ id: 'git-pull-success', message: 'Already up to date', color: 'info' });
-        }
       },
     },
     {
       label: 'Commit',
-      leftSlot: <Icon icon="git_branch" />,
+      leftSlot: <Icon icon="git_commit_vertical" />,
       onSelect() {
         showDialog({
           id: 'commit',

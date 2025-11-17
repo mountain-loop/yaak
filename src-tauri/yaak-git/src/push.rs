@@ -1,74 +1,64 @@
-use crate::branch::branch_set_upstream_after_push;
-use crate::callbacks::default_callbacks;
+use crate::binary::new_binary_command;
+use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::repository::open_repo;
-use git2::{ProxyOptions, PushOptions};
+use crate::util::{get_current_branch_name, get_default_remote_for_push_in_repo};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::sync::Mutex;
 use ts_rs::TS;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "gen_git.ts")]
-pub(crate) enum PushType {
-    Branch,
-    Tag,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "gen_git.ts")]
 pub(crate) enum PushResult {
-    Success,
-    NothingToPush,
+    Success { message: String },
+    UpToDate,
+    NeedsCredentials { url: String, error: Option<String> },
 }
 
 pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
     let repo = open_repo(dir)?;
-    let head = repo.head()?;
-    let branch = head.shorthand().unwrap();
-    let mut remote = repo.find_remote("origin")?;
+    let branch_name = get_current_branch_name(&repo)?;
+    let remote = get_default_remote_for_push_in_repo(&repo)?;
+    let remote_name = remote.name().ok_or(GenericError("Failed to get remote name".to_string()))?;
+    let remote_url = remote.url().ok_or(GenericError("Failed to get remote url".to_string()))?;
 
-    let mut options = PushOptions::new();
-    options.packbuilder_parallelism(0);
-    
-    let push_result = Mutex::new(PushResult::NothingToPush);
-    
-    let mut callbacks = default_callbacks();
-    callbacks.push_transfer_progress(|_current, _total, _bytes| {
-        let mut push_result = push_result.lock().unwrap();   
-        *push_result = PushResult::Success;
-    });
-    
-    options.remote_callbacks(default_callbacks());
+    let out = new_binary_command(dir)?
+        .args(["push", &remote_name, &branch_name])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .map_err(|e| GenericError(format!("failed to run git push: {e}")))?;
 
-    let mut proxy = ProxyOptions::new();
-    proxy.auto();
-    options.proxy_options(proxy);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = stdout + stderr;
 
-    // Push the current branch
-    let force = false;
-    let delete = false;
-    let branch_modifier = match (force, delete) {
-        (true, true) => "+:",
-        (false, true) => ":",
-        (true, false) => "+",
-        (false, false) => "",
-    };
+    info!("Pushed to repo status={} {combined}", out.status);
 
-    let ref_type = PushType::Branch;
+    if combined.to_lowercase().contains("could not read") {
+        return Ok(PushResult::NeedsCredentials {
+            url: remote_url.to_string(),
+            error: None,
+        });
+    }
 
-    let ref_type = match ref_type {
-        PushType::Branch => "heads",
-        PushType::Tag => "tags",
-    };
+    if combined.to_lowercase().contains("unable to access") {
+        return Ok(PushResult::NeedsCredentials {
+            url: remote_url.to_string(),
+            error: Some(combined.to_string()),
+        });
+    }
 
-    let refspec = format!("{branch_modifier}refs/{ref_type}/{branch}");
-    remote.push(&[refspec], Some(&mut options))?;
+    if combined.to_lowercase().contains("up-to-date") {
+        return Ok(PushResult::UpToDate);
+    }
 
-    branch_set_upstream_after_push(&repo, branch)?;
+    if !out.status.success() {
+        return Err(GenericError(format!("Failed to push {combined}")));
+    }
 
-    let push_result = push_result.lock().unwrap();
-    Ok(push_result.clone())
+    Ok(PushResult::Success {
+        message: format!("Pushed to {}/{}", remote_name, branch_name),
+    })
 }

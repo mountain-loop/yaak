@@ -42,7 +42,7 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
     [open],
   );
 
-  const toastIcon = icon === null ? null : icon ?? (color && color in ICONS && ICONS[color]);
+  const toastIcon = icon === null ? null : (icon ?? (color && color in ICONS && ICONS[color]));
 
   return (
     <m.div
@@ -64,7 +64,7 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
         <div className="px-3 py-3 flex items-start gap-2 w-full">
           {toastIcon && <Icon icon={toastIcon} color={color} className="mt-1" />}
           <VStack space={2} className="w-full">
-            <div>{children}</div>
+            <div className="select-auto">{children}</div>
             {action?.({ hide: onClose })}
           </VStack>
         </div>

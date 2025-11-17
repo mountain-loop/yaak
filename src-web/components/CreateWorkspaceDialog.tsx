@@ -1,4 +1,4 @@
-import { useGitInit } from '@yaakapp-internal/git';
+import { gitMutations } from '@yaakapp-internal/git';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import { createGlobalModel, updateModel } from '@yaakapp-internal/models';
 import { useState } from 'react';
@@ -12,6 +12,7 @@ import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
 import { EncryptionHelp } from './EncryptionHelp';
+import { gitCallbacks } from './git/callbacks';
 import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
 
 interface Props {
@@ -20,7 +21,6 @@ interface Props {
 
 export function CreateWorkspaceDialog({ hide }: Props) {
   const [name, setName] = useState<string>('');
-  const gitInit = useGitInit();
   const [syncConfig, setSyncConfig] = useState<{
     filePath: string | null;
     initGit?: boolean;
@@ -48,9 +48,11 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         });
 
         if (syncConfig.initGit && syncConfig.filePath) {
-          gitInit.mutateAsync({ dir: syncConfig.filePath }).catch((err) => {
-            showErrorToast('git-init-error', String(err));
-          });
+          gitMutations(syncConfig.filePath, gitCallbacks(syncConfig.filePath))
+            .init.mutateAsync()
+            .catch((err) => {
+              showErrorToast('git-init-error', String(err));
+            });
         }
 
         // Navigate to workspace

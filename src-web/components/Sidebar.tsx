@@ -10,6 +10,17 @@ import type {
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
+import {
+  duplicateModel,
+  foldersAtom,
+  getAnyModel,
+  getModel,
+  grpcConnectionsAtom,
+  httpResponsesAtom,
+  patchModel,
+  websocketConnectionsAtom,
+  workspacesAtom,
+} from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
@@ -55,18 +66,7 @@ import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
-import { GitDropdown } from './GitDropdown';
-import {
-  getAnyModel,
-  duplicateModel,
-  foldersAtom,
-  getModel,
-  grpcConnectionsAtom,
-  httpResponsesAtom,
-  patchModel,
-  websocketConnectionsAtom,
-  workspacesAtom,
-} from '@yaakapp-internal/models';
+import { GitDropdown } from './git/GitDropdown';
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
 function isSidebarLeafModel(m: AnyModel): boolean {

@@ -2,25 +2,11 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::merge::do_merge;
 use crate::repository::open_repo;
-use crate::util::{
-    bytes_to_string, get_branch_by_name, get_current_branch, get_default_remote_for_push_in_repo,
-};
+use crate::util::{bytes_to_string, get_branch_by_name, get_current_branch};
+use git2::BranchType;
 use git2::build::CheckoutBuilder;
-use git2::{BranchType, Repository};
 use log::info;
 use std::path::Path;
-
-pub(crate) fn branch_set_upstream_after_push(repo: &Repository, branch_name: &str) -> Result<()> {
-    let mut branch = repo.find_branch(branch_name, BranchType::Local)?;
-
-    if branch.upstream().is_err() {
-        let remote = get_default_remote_for_push_in_repo(repo)?;
-        let upstream_name = format!("{remote}/{branch_name}");
-        branch.set_upstream(Some(upstream_name.as_str()))?;
-    }
-
-    Ok(())
-}
 
 pub(crate) fn git_checkout_branch(dir: &Path, branch_name: &str, force: bool) -> Result<String> {
     if branch_name.starts_with("origin/") {
@@ -43,7 +29,11 @@ pub(crate) fn git_checkout_branch(dir: &Path, branch_name: &str, force: bool) ->
     Ok(branch_name.to_string())
 }
 
-pub(crate) fn git_checkout_remote_branch(dir: &Path, branch_name: &str, force: bool) -> Result<String> {
+pub(crate) fn git_checkout_remote_branch(
+    dir: &Path,
+    branch_name: &str,
+    force: bool,
+) -> Result<String> {
     let branch_name = branch_name.trim_start_matches("origin/");
     let repo = open_repo(dir)?;
 
@@ -55,7 +45,7 @@ pub(crate) fn git_checkout_remote_branch(dir: &Path, branch_name: &str, force: b
     let upstream_name = format!("origin/{}", branch_name);
     new_branch.set_upstream(Some(&upstream_name))?;
 
-    return git_checkout_branch(dir, branch_name, force)
+    git_checkout_branch(dir, branch_name, force)
 }
 
 pub(crate) fn git_create_branch(dir: &Path, name: &str) -> Result<()> {

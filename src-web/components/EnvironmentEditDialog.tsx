@@ -79,6 +79,7 @@ export function EnvironmentEditDialog({ initialEnvironmentId, setRef }: Props) {
             </div>
           ) : (
             <EnvironmentEditor
+              key={selectedEnvironment.id}
               setRef={setRef}
               className="pl-4 pt-3"
               environment={selectedEnvironment}
