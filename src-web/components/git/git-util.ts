@@ -7,7 +7,7 @@ export function handlePushResult(r: PushResult) {
       showToast({ id: 'push-error', message: 'Credentials not found', color: 'danger' });
       break;
     case 'success':
-      showToast({ id: 'push-success', message: r.output, color: 'success' });
+      showToast({ id: 'push-success', message: r.message, color: 'success' });
       break;
     case 'nothing_to_push':
       showToast({ id: 'push-nothing', message: 'Nothing to push', color: 'info' });

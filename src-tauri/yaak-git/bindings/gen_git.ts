@@ -13,6 +13,4 @@ export type GitStatusSummary = { path: string, headRef: string | null, headRefSh
 
 export type PullResult = { receivedBytes: number, receivedObjects: number, };
 
-export type PushResult = { "type": "success", output: string, } | { "type": "nothing_to_push" } | { "type": "needs_credentials", url: string, error: string | null, };
-
-export type PushType = "branch" | "tag";
+export type PushResult = { "type": "success", message: string, } | { "type": "nothing_to_push" } | { "type": "needs_credentials", url: string, error: string | null, };
