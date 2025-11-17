@@ -151,7 +151,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
         });
 
         // Pull again
-        return invoke<PushResult>('plugin:yaak-git|pull', { dir });
+        return invoke<PullResult>('plugin:yaak-git|pull', { dir });
       },
       onSuccess,
     }),

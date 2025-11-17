@@ -37,5 +37,5 @@ export async function showPrompt({
     confirmText,
   });
 
-  return result?.value ? String(result.valueOf()) : null;
+  return result?.value ? String(result.value) : null;
 }

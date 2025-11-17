@@ -48,7 +48,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         });
 
         if (syncConfig.initGit && syncConfig.filePath) {
-          gitMutations(syncConfig.filePath, gitCallbacks)
+          gitMutations(syncConfig.filePath, gitCallbacks(syncConfig.filePath))
             .init.mutateAsync()
             .catch((err) => {
               showErrorToast('git-init-error', String(err));

@@ -95,7 +95,7 @@ pub(crate) fn get_default_remote_in_repo(repo: &'_ Repository) -> Result<Remote<
 pub(crate) fn get_default_remote_name_in_repo(repo: &Repository) -> Result<String> {
     let remotes = repo.remotes()?;
 
-    if remotes.len() == 0 {
+    if remotes.is_empty() {
         return Err(NoDefaultRemoteFound);
     }
 

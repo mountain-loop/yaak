@@ -291,7 +291,7 @@ function TextArg({
     autocompleteFunctions,
     autocompleteVariables,
   };
-  if (autocompleteVariables || autocompleteVariables) {
+  if (autocompleteVariables || autocompleteFunctions) {
     return <Input {...props} />;
   } else {
     return <PlainInput {...props} />;
