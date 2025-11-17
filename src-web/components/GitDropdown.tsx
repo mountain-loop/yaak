@@ -11,6 +11,7 @@ import { sync } from '../init/sync';
 import { showConfirm, showConfirmDelete } from '../lib/confirm';
 import { showDialog } from '../lib/dialog';
 import { showPrompt } from '../lib/prompt';
+import { showPromptForm } from '../lib/prompt-form';
 import { showErrorToast, showToast } from '../lib/toast';
 import { Banner } from './core/Banner';
 import type { DropdownItem } from './core/Dropdown';
@@ -18,6 +19,7 @@ import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { InlineCode } from './core/InlineCode';
 import { BranchSelectionDialog } from './git/BranchSelectionDialog';
+import { handlePushResult } from './git/git-util';
 import { HistoryDialog } from './git/HistoryDialog';
 import { GitCommitDialog } from './GitCommitDialog';
 
@@ -119,17 +121,17 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           title: 'Create Branch',
           label: 'Branch Name',
         });
-        if (name) {
-          await branch.mutateAsync(
-            { branch: name },
-            {
-              onError: (err) => {
-                showErrorToast('git-branch-error', String(err));
-              },
+        if (!name) return;
+
+        await branch.mutateAsync(
+          { branch: name },
+          {
+            onError: (err) => {
+              showErrorToast('git-branch-error', String(err));
             },
-          );
-          tryCheckout(name, false);
-        }
+          },
+        );
+        tryCheckout(name, false);
       },
     },
     {
@@ -218,18 +220,53 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       leftSlot: <Icon icon="arrow_up_from_line" />,
       waitForOnSelect: true,
       async onSelect() {
-        await push.mutateAsync(undefined, {
-          onSuccess(message) {
-            if (message === 'nothing_to_push') {
-              showToast({ id: 'push-success', message: 'Nothing to push', color: 'info' });
-            } else {
-              showToast({ id: 'push-success', message: 'Push successful', color: 'success' });
-            }
+        await push.mutateAsync(
+          async ({ url: remoteUrl, error }) => {
+            const isGitHub = /github\.com/i.test(remoteUrl);
+            const userLabel = isGitHub ? 'GitHub Username' : 'Username';
+            const passLabel = isGitHub ? 'GitHub Personal Access Token' : 'Password / Token';
+            const userDescription = isGitHub
+              ? 'Use your GitHub username (not your email).'
+              : undefined;
+            const passDescription = isGitHub
+              ? 'GitHub requires a Personal Access Token (PAT) for write operations over HTTPS. Passwords are not supported.'
+              : 'Enter your password or access token for this Git server.';
+            const r = await showPromptForm({
+              id: 'git-credentials',
+              title: 'Credentials Required',
+              description: error ? (
+                <Banner color="danger">{error}</Banner>
+              ) : (
+                <>
+                  Enter credentials for <InlineCode>{remoteUrl}</InlineCode>
+                </>
+              ),
+              inputs: [
+                { type: 'text', name: 'username', label: userLabel, description: userDescription },
+                {
+                  type: 'text',
+                  name: 'password',
+                  label: passLabel,
+                  description: passDescription,
+                  password: true,
+                },
+              ],
+            });
+            if (r == null) throw new Error('Cancelled credentials prompt');
+
+            const username = String(r.username || '');
+            const password = String(r.password || '');
+            return { username, password };
           },
-          onError(err) {
-            showErrorToast('git-pull-error', String(err));
+          {
+            onSuccess(r) {
+              handlePushResult(r);
+            },
+            onError(err) {
+              showErrorToast('git-pull-error', String(err));
+            },
           },
-        });
+        );
       },
     },
     {

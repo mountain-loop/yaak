@@ -16,7 +16,7 @@ export function Banner({ children, className, color }: BannerProps) {
           color && 'bg-surface',
           `x-theme-banner--${color}`,
           'border border-border border-dashed',
-          'px-4 py-2 rounded-lg select-auto',
+          'px-4 py-2 rounded-lg select-auto cursor-auto',
           'overflow-auto text-text',
           'mb-auto', // Don't stretch all the way down if the parent is in grid or flexbox
         )}

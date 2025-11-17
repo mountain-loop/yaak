@@ -2,6 +2,7 @@
 description = "Default permissions for the plugin"
 permissions = [
     "allow-add",
+    "allow-add-credential",
     "allow-branch",
     "allow-checkout",
     "allow-commit",

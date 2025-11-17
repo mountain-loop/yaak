@@ -1,16 +1,18 @@
 use crate::add::git_add;
 use crate::branch::{git_checkout_branch, git_create_branch, git_delete_branch, git_merge_branch};
-use crate::commit::{git_commit, GitCommit};
+use crate::commit::{GitCommit, git_commit};
+use crate::credential::git_add_credential;
 use crate::error::Result;
 use crate::fetch::git_fetch_all;
 use crate::init::git_init;
 use crate::log::git_log;
-use crate::pull::{git_pull, PullResult};
-use crate::push::{git_push, PushResult};
-use crate::status::{git_status, GitStatusSummary};
+use crate::pull::{PullResult, git_pull};
+use crate::push::{PushResult, git_push};
+use crate::status::{GitStatusSummary, git_status};
 use crate::unstage::git_unstage;
 use std::path::{Path, PathBuf};
 use tauri::command;
+
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
 
 #[command]
@@ -82,4 +84,14 @@ pub async fn unstage(dir: &Path, rela_paths: Vec<PathBuf>) -> Result<()> {
         git_unstage(dir, &path)?;
     }
     Ok(())
+}
+
+#[command]
+pub async fn add_credential(
+    dir: &Path,
+    remote_url: &str,
+    username: &str,
+    password: &str,
+) -> Result<()> {
+    git_add_credential(dir, remote_url, username, password).await
 }

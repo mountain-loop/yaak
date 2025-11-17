@@ -33,6 +33,9 @@ pub enum Error {
     #[error("Git error: {0}")]
     GenericError(String),
 
+    #[error("Credentials required: {0}")]
+    CredentialsRequiredError(String),
+
     #[error("No default remote found")]
     NoDefaultRemoteFound,
 

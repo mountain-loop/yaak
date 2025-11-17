@@ -64,9 +64,35 @@ export function useGit(dir: string) {
         mutationFn: () => invoke('plugin:yaak-git|fetch_all', { dir }),
         onSuccess,
       }),
-      push: useMutation<PushResult, string, void>({
+      push: useMutation<
+        PushResult,
+        string,
+        (
+          result: Extract<PushResult, { type: 'needs_credentials' }>,
+        ) => Promise<null | { username: string; password: string }>
+      >({
         mutationKey: ['git', 'push', dir],
-        mutationFn: () => invoke('plugin:yaak-git|push', { dir }),
+        mutationFn: async (promptCreds) => {
+          const result = await invoke<PushResult>('plugin:yaak-git|push', { dir });
+          if (result.type !== 'needs_credentials') return result;
+
+          // Needs credentials, prompt for them
+          const creds = await promptCreds(result);
+          if (creds == null) throw new Error('Canceled');
+
+          await invoke('plugin:yaak-git|add_credential', {
+            dir,
+            remoteUrl: result.url,
+            username: creds.username,
+            password: creds.password,
+          });
+
+          // Push again
+          const newResult = await invoke<PushResult>('plugin:yaak-git|push', { dir });
+          if (newResult.type === 'needs_credentials')
+            throw new Error(`Failed to authenticate: ${result.error ?? 'unknown error'}`);
+          return newResult;
+        },
         onSuccess,
       }),
       pull: useMutation<PullResult, string, void>({

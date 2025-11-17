@@ -7909,6 +7909,7 @@ dependencies = [
  "serde_yaml",
  "tauri",
  "tauri-plugin",
+ "tauri-plugin-dialog",
  "thiserror 2.0.17",
  "ts-rs",
  "yaak-models",

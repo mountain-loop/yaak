@@ -12,7 +12,7 @@ import classNames from 'classnames';
 
 import { useMemo, useState } from 'react';
 import { resolvedModelName } from '../lib/resolvedModelName';
-import { showErrorToast, showToast } from '../lib/toast';
+import { showErrorToast } from '../lib/toast';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import type { CheckboxProps } from './core/Checkbox';
@@ -24,6 +24,7 @@ import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack } from './core/Stacks';
 import { EmptyStateText } from './EmptyStateText';
+import { handlePushResult } from './git/git-util';
 
 interface Props {
   syncDir: string;
@@ -53,8 +54,8 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
 
   const handleCreateCommitAndPush = async () => {
     try {
-      await commitAndPush.mutateAsync({ message });
-      showToast({ id: 'git-push-success', message: 'Pushed changes', color: 'success' });
+      const r = await commitAndPush.mutateAsync({ message });
+      handlePushResult(r);
       onDone();
     } catch (err) {
       showErrorToast('git-commit-and-push-error', String(err));
@@ -81,7 +82,10 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   const hasAnythingToAdd = allEntries.find((e) => e.status !== 'current') != null;
 
   const tree: CommitTreeNode | null = useMemo(() => {
-    const next = (model: CommitTreeNode['model'], ancestors: CommitTreeNode[]): CommitTreeNode | null => {
+    const next = (
+      model: CommitTreeNode['model'],
+      ancestors: CommitTreeNode[],
+    ): CommitTreeNode | null => {
       const statusEntry = internalEntries?.find((s) => s.relaPath.includes(model.id));
       if (statusEntry == null) {
         return null;

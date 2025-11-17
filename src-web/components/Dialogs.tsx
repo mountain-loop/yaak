@@ -32,10 +32,10 @@ function DialogInstance({ render: Component, onClose, id, ...props }: DialogInst
   }, [id, onClose]);
 
   return (
-    <ErrorBoundary name={`Dialog ${id}`}>
-      <Dialog open onClose={handleClose} {...props}>
+    <Dialog open onClose={handleClose} {...props}>
+      <ErrorBoundary name={`Dialog ${id}`}>
         <Component hide={hide} {...props} />
-      </Dialog>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </Dialog>
   );
 }

@@ -1,5 +1,6 @@
 const COMMANDS: &[&str] = &[
     "add",
+    "add_credential",
     "branch",
     "checkout",
     "commit",
