@@ -23,8 +23,10 @@ import { Checkbox } from './core/Checkbox';
 import { DetailsBanner } from './core/DetailsBanner';
 import { Editor } from './core/Editor/LazyEditor';
 import { IconButton } from './core/IconButton';
+import type { InputProps } from './core/Input';
 import { Input } from './core/Input';
 import { Label } from './core/Label';
+import { PlainInput } from './core/PlainInput';
 import { Select } from './core/Select';
 import { VStack } from './core/Stacks';
 import { Markdown } from './Markdown';
@@ -269,28 +271,31 @@ function TextArg({
   autocompleteVariables: boolean;
   stateKey: string;
 }) {
-  return (
-    <Input
-      name={arg.name}
-      multiLine={arg.multiLine}
-      onChange={onChange}
-      className={arg.multiLine ? 'min-h-[4rem]' : undefined}
-      defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
-      required={!arg.optional}
-      disabled={arg.disabled}
-      help={arg.description}
-      type={arg.password ? 'password' : 'text'}
-      label={arg.label ?? arg.name}
-      size={INPUT_SIZE}
-      hideLabel={arg.hideLabel ?? arg.label == null}
-      placeholder={arg.placeholder ?? undefined}
-      autocomplete={arg.completionOptions ? { options: arg.completionOptions } : undefined}
-      autocompleteFunctions={autocompleteFunctions}
-      autocompleteVariables={autocompleteVariables}
-      stateKey={stateKey}
-      forceUpdateKey={stateKey}
-    />
-  );
+  const props: InputProps = {
+    onChange,
+    name: arg.name,
+    multiLine: arg.multiLine,
+    className: arg.multiLine ? 'min-h-[4rem]' : undefined,
+    defaultValue: value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value,
+    required: !arg.optional,
+    disabled: arg.disabled,
+    help: arg.description,
+    type: arg.password ? 'password' : 'text',
+    label: arg.label ?? arg.name,
+    size: INPUT_SIZE,
+    hideLabel: arg.hideLabel ?? arg.label == null,
+    placeholder: arg.placeholder ?? undefined,
+    forceUpdateKey: stateKey,
+    autocomplete: arg.completionOptions ? { options: arg.completionOptions } : undefined,
+    stateKey,
+    autocompleteFunctions,
+    autocompleteVariables,
+  };
+  if (autocompleteVariables || autocompleteVariables) {
+    return <Input {...props} />;
+  } else {
+    return <PlainInput {...props} />;
+  }
 }
 
 function EditorArg({

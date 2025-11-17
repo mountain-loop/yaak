@@ -11,20 +11,21 @@ import type {
 import classNames from 'classnames';
 
 import { useMemo, useState } from 'react';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { showErrorToast } from '../lib/toast';
-import { Banner } from './core/Banner';
-import { Button } from './core/Button';
-import type { CheckboxProps } from './core/Checkbox';
-import { Checkbox } from './core/Checkbox';
-import { Icon } from './core/Icon';
-import { InlineCode } from './core/InlineCode';
-import { Input } from './core/Input';
-import { Separator } from './core/Separator';
-import { SplitLayout } from './core/SplitLayout';
-import { HStack } from './core/Stacks';
-import { EmptyStateText } from './EmptyStateText';
-import { handlePushResult } from './git/git-util';
+import { resolvedModelName } from '../../lib/resolvedModelName';
+import { showErrorToast } from '../../lib/toast';
+import { Banner } from '../core/Banner';
+import { Button } from '../core/Button';
+import type { CheckboxProps } from '../core/Checkbox';
+import { Checkbox } from '../core/Checkbox';
+import { Icon } from '../core/Icon';
+import { InlineCode } from '../core/InlineCode';
+import { Input } from '../core/Input';
+import { Separator } from '../core/Separator';
+import { SplitLayout } from '../core/SplitLayout';
+import { HStack } from '../core/Stacks';
+import { EmptyStateText } from '../EmptyStateText';
+import { handlePushResult } from './git-util';
+import { gitCallbacks } from './callbacks';
 
 interface Props {
   syncDir: string;
@@ -40,7 +41,7 @@ interface CommitTreeNode {
 }
 
 export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
-  const [{ status }, { commit, commitAndPush, add, unstage, push }] = useGit(syncDir);
+  const [{ status }, { commit, commitAndPush, add, unstage, push }] = useGit(syncDir, gitCallbacks);
   const [message, setMessage] = useState<string>('');
 
   const handleCreateCommit = async () => {

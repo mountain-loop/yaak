@@ -4,24 +4,25 @@ import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { HTMLAttributes } from 'react';
 import { forwardRef } from 'react';
-import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
-import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
-import { useKeyValue } from '../hooks/useKeyValue';
-import { sync } from '../init/sync';
-import { showConfirm, showConfirmDelete } from '../lib/confirm';
-import { showDialog } from '../lib/dialog';
-import { showPrompt } from '../lib/prompt';
-import { showPromptForm } from '../lib/prompt-form';
-import { showErrorToast, showToast } from '../lib/toast';
-import { Banner } from './core/Banner';
-import type { DropdownItem } from './core/Dropdown';
-import { Dropdown } from './core/Dropdown';
-import { Icon } from './core/Icon';
-import { InlineCode } from './core/InlineCode';
-import { BranchSelectionDialog } from './git/BranchSelectionDialog';
-import { handlePushResult } from './git/git-util';
-import { HistoryDialog } from './git/HistoryDialog';
+import { openWorkspaceSettings } from '../../commands/openWorkspaceSettings';
+import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../../hooks/useActiveWorkspace';
+import { useKeyValue } from '../../hooks/useKeyValue';
+import { sync } from '../../init/sync';
+import { showConfirm, showConfirmDelete } from '../../lib/confirm';
+import { showDialog } from '../../lib/dialog';
+import { showPrompt } from '../../lib/prompt';
+import { showErrorToast, showToast } from '../../lib/toast';
+import { Banner } from '../core/Banner';
+import type { DropdownItem } from '../core/Dropdown';
+import { Dropdown } from '../core/Dropdown';
+import { Icon } from '../core/Icon';
+import { InlineCode } from '../core/InlineCode';
+import { BranchSelectionDialog } from './BranchSelectionDialog';
+import { gitCallbacks } from './callbacks';
+import { handlePullResult } from './git-util';
 import { GitCommitDialog } from './GitCommitDialog';
+import { GitRemotesDialog } from './GitRemotesDialog';
+import { HistoryDialog } from './HistoryDialog';
 
 export function GitDropdown() {
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
@@ -39,7 +40,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const [
     { status, log },
     { branch, deleteBranch, fetchAll, mergeBranch, push, pull, checkout, init },
-  ] = useGit(syncDir);
+  ] = useGit(syncDir, gitCallbacks);
 
   const localBranches = status.data?.localBranches ?? [];
   const remoteBranches = status.data?.remoteBranches ?? [];
@@ -112,6 +113,12 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
         });
       },
     },
+    {
+      label: 'Manage Remotes',
+      leftSlot: <Icon icon="hard_drive_download" />,
+      onSelect: () => GitRemotesDialog.show(syncDir),
+    },
+    { type: 'separator' },
     {
       label: 'New Branch',
       leftSlot: <Icon icon="git_branch_plus" />,
@@ -220,53 +227,12 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       leftSlot: <Icon icon="arrow_up_from_line" />,
       waitForOnSelect: true,
       async onSelect() {
-        await push.mutateAsync(
-          async ({ url: remoteUrl, error }) => {
-            const isGitHub = /github\.com/i.test(remoteUrl);
-            const userLabel = isGitHub ? 'GitHub Username' : 'Username';
-            const passLabel = isGitHub ? 'GitHub Personal Access Token' : 'Password / Token';
-            const userDescription = isGitHub
-              ? 'Use your GitHub username (not your email).'
-              : undefined;
-            const passDescription = isGitHub
-              ? 'GitHub requires a Personal Access Token (PAT) for write operations over HTTPS. Passwords are not supported.'
-              : 'Enter your password or access token for this Git server.';
-            const r = await showPromptForm({
-              id: 'git-credentials',
-              title: 'Credentials Required',
-              description: error ? (
-                <Banner color="danger">{error}</Banner>
-              ) : (
-                <>
-                  Enter credentials for <InlineCode>{remoteUrl}</InlineCode>
-                </>
-              ),
-              inputs: [
-                { type: 'text', name: 'username', label: userLabel, description: userDescription },
-                {
-                  type: 'text',
-                  name: 'password',
-                  label: passLabel,
-                  description: passDescription,
-                  password: true,
-                },
-              ],
-            });
-            if (r == null) throw new Error('Cancelled credentials prompt');
-
-            const username = String(r.username || '');
-            const password = String(r.password || '');
-            return { username, password };
+        await push.mutateAsync(undefined, {
+          onSuccess: handlePullResult,
+          onError(err) {
+            showErrorToast('git-pull-error', String(err));
           },
-          {
-            onSuccess(r) {
-              handlePushResult(r);
-            },
-            onError(err) {
-              showErrorToast('git-pull-error', String(err));
-            },
-          },
-        );
+        });
       },
     },
     {
@@ -275,26 +241,17 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       leftSlot: <Icon icon="arrow_down_to_line" />,
       waitForOnSelect: true,
       async onSelect() {
-        const result = await pull.mutateAsync(undefined, {
+        await pull.mutateAsync(undefined, {
+          onSuccess: handlePullResult,
           onError(err) {
             showErrorToast('git-pull-error', String(err));
           },
         });
-        if (result.receivedObjects > 0) {
-          showToast({
-            id: 'git-pull-success',
-            message: `Pulled ${result.receivedObjects} objects`,
-            color: 'success',
-          });
-          await sync({ force: true });
-        } else {
-          showToast({ id: 'git-pull-success', message: 'Already up to date', color: 'info' });
-        }
       },
     },
     {
       label: 'Commit',
-      leftSlot: <Icon icon="git_branch" />,
+      leftSlot: <Icon icon="git_commit_vertical" />,
       onSelect() {
         showDialog({
           id: 'commit',

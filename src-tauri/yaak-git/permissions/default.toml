@@ -3,6 +3,7 @@ description = "Default permissions for the plugin"
 permissions = [
     "allow-add",
     "allow-add-credential",
+    "allow-add-remote",
     "allow-branch",
     "allow-checkout",
     "allow-commit",
@@ -13,6 +14,8 @@ permissions = [
     "allow-merge-branch",
     "allow-pull",
     "allow-push",
+    "allow-remotes",
+    "allow-rm-remote",
     "allow-status",
     "allow-unstage",
 ]

@@ -5,12 +5,14 @@ export type GitAuthor = { name: string | null, email: string | null, };
 
 export type GitCommit = { author: GitAuthor, when: string, message: string | null, };
 
+export type GitRemote = { name: string, url: string | null, };
+
 export type GitStatus = "untracked" | "conflict" | "current" | "modified" | "removed" | "renamed" | "type_change";
 
 export type GitStatusEntry = { relaPath: string, status: GitStatus, staged: boolean, prev: SyncModel | null, next: SyncModel | null, };
 
 export type GitStatusSummary = { path: string, headRef: string | null, headRefShorthand: string | null, entries: Array<GitStatusEntry>, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, };
 
-export type PullResult = { receivedBytes: number, receivedObjects: number, };
+export type PullResult = { "type": "success", message: string, } | { "type": "up_to_date" } | { "type": "needs_credentials", url: string, error: string | null, };
 
-export type PushResult = { "type": "success", message: string, } | { "type": "nothing_to_push" } | { "type": "needs_credentials", url: string, error: string | null, };
+export type PushResult = { "type": "success", message: string, } | { "type": "up_to_date" } | { "type": "needs_credentials", url: string, error: string | null, };

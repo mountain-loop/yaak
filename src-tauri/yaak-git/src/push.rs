@@ -2,6 +2,7 @@ use crate::binary::new_binary_command;
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::repository::open_repo;
+use crate::util::get_current_branch_name;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -12,22 +13,21 @@ use ts_rs::TS;
 #[ts(export, export_to = "gen_git.ts")]
 pub(crate) enum PushResult {
     Success { message: String },
-    NothingToPush,
+    UpToDate,
     NeedsCredentials { url: String, error: Option<String> },
 }
 
 pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
     let repo = open_repo(dir)?;
-    let head = repo.head()?;
-    let branch = head.shorthand().unwrap();
+    let branch_name = get_current_branch_name(&repo)?;
     let remote = repo.find_remote("origin")?;
     let remote_name = remote.name().ok_or(GenericError("Failed to get remote name".to_string()))?;
     let remote_url = remote.url().ok_or(GenericError("Failed to get remote url".to_string()))?;
 
     let out = new_binary_command(dir)
         .arg("push")
-        .arg(remote_name)
-        .arg(branch)
+        .arg(&remote_name)
+        .arg(&branch_name)
         .env("GIT_TERMINAL_PROMPT", "0")
         .output()
         .map_err(|e| GenericError(format!("failed to run git push: {e}")))?;
@@ -53,7 +53,7 @@ pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
     }
 
     if combined.to_lowercase().contains("up-to-date") {
-        return Ok(PushResult::NothingToPush);
+        return Ok(PushResult::UpToDate);
     }
 
     if !out.status.success() {
@@ -61,6 +61,6 @@ pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
     }
 
     Ok(PushResult::Success {
-        message: format!("Pushed to {}/{branch}", remote_name),
+        message: format!("Pushed to {}/{}", remote_name, branch_name),
     })
 }

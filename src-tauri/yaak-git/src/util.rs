@@ -34,6 +34,14 @@ pub(crate) fn get_current_branch(repo: &Repository) -> Result<Option<Branch<'_>>
     Ok(None)
 }
 
+pub(crate) fn get_current_branch_name(repo: &Repository) -> Result<String> {
+    Ok(get_current_branch(&repo)?
+        .ok_or(GenericError("Failed to get current branch".to_string()))?
+        .name()?
+        .ok_or(GenericError("Failed to get current branch name".to_string()))?
+        .to_string())
+}
+
 pub(crate) fn local_branch_names(repo: &Repository) -> Result<Vec<String>> {
     let mut branches = Vec::new();
     for branch in repo.branches(Some(BranchType::Local))? {

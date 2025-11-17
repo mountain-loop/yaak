@@ -8,11 +8,11 @@ use crate::init::git_init;
 use crate::log::git_log;
 use crate::pull::{PullResult, git_pull};
 use crate::push::{PushResult, git_push};
+use crate::remotes::{GitRemote, git_add_remote, git_remotes, git_rm_remote};
 use crate::status::{GitStatusSummary, git_status};
 use crate::unstage::git_unstage;
 use std::path::{Path, PathBuf};
 use tauri::command;
-
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
 
 #[command]
@@ -94,4 +94,19 @@ pub async fn add_credential(
     password: &str,
 ) -> Result<()> {
     git_add_credential(dir, remote_url, username, password).await
+}
+
+#[command]
+pub async fn remotes(dir: &Path) -> Result<Vec<GitRemote>> {
+    git_remotes(dir)
+}
+
+#[command]
+pub async fn add_remote(dir: &Path, name: &str, url: &str) -> Result<()> {
+    git_add_remote(dir, name, url)
+}
+
+#[command]
+pub async fn rm_remote(dir: &Path, name: &str) -> Result<()> {
+    git_rm_remote(dir, name)
 }

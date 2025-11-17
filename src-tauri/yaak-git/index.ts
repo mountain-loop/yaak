@@ -1,15 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
-import { GitCommit, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
+import { GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
 
 export * from './bindings/gen_git';
 
-export function useGit(dir: string) {
+export interface GitCredentials {
+  username: string;
+  password: string;
+}
+
+export interface GitCallbacks {
+  promptCredentials: (
+    result: Extract<PushResult, { type: 'needs_credentials' }>,
+  ) => Promise<null | GitCredentials>;
+}
+
+export function useGit(dir: string, callbacks: GitCallbacks) {
   const queryClient = useQueryClient();
   const onSuccess = () => queryClient.invalidateQueries({ queryKey: ['git'] });
 
   return [
     {
+      remotes: useQuery<void, string, GitRemote[]>({
+        queryKey: ['git', 'remotes', dir],
+        queryFn: () => invoke('plugin:yaak-git|remotes', { dir }),
+      }),
       log: useQuery<void, string, GitCommit[]>({
         queryKey: ['git', 'log', dir],
         queryFn: () => invoke('plugin:yaak-git|log', { dir }),
@@ -24,6 +39,16 @@ export function useGit(dir: string) {
       add: useMutation<void, string, { relaPaths: string[] }>({
         mutationKey: ['git', 'add', dir],
         mutationFn: (args) => invoke('plugin:yaak-git|add', { dir, ...args }),
+        onSuccess,
+      }),
+      addRemote: useMutation<void, string, { name: string; url: string }>({
+        mutationKey: ['git', 'add-remote', dir],
+        mutationFn: (args) => invoke('plugin:yaak-git|add_remote', { dir, ...args }),
+        onSuccess,
+      }),
+      rmRemote: useMutation<void, string, { name: string }>({
+        mutationKey: ['git', 'rm-remote', dir],
+        mutationFn: (args) => invoke('plugin:yaak-git|rm_remote', { dir, ...args }),
         onSuccess,
       }),
       branch: useMutation<void, string, { branch: string }>({
@@ -64,20 +89,14 @@ export function useGit(dir: string) {
         mutationFn: () => invoke('plugin:yaak-git|fetch_all', { dir }),
         onSuccess,
       }),
-      push: useMutation<
-        PushResult,
-        string,
-        (
-          result: Extract<PushResult, { type: 'needs_credentials' }>,
-        ) => Promise<null | { username: string; password: string }>
-      >({
+      push: useMutation<PushResult, string, void>({
         mutationKey: ['git', 'push', dir],
-        mutationFn: async (promptCreds) => {
+        mutationFn: async () => {
           const result = await invoke<PushResult>('plugin:yaak-git|push', { dir });
           if (result.type !== 'needs_credentials') return result;
 
           // Needs credentials, prompt for them
-          const creds = await promptCreds(result);
+          const creds = await callbacks.promptCredentials(result);
           if (creds == null) throw new Error('Canceled');
 
           await invoke('plugin:yaak-git|add_credential', {
@@ -88,16 +107,30 @@ export function useGit(dir: string) {
           });
 
           // Push again
-          const newResult = await invoke<PushResult>('plugin:yaak-git|push', { dir });
-          if (newResult.type === 'needs_credentials')
-            throw new Error(`Failed to authenticate: ${result.error ?? 'unknown error'}`);
-          return newResult;
+          return invoke<PushResult>('plugin:yaak-git|push', { dir });
         },
         onSuccess,
       }),
       pull: useMutation<PullResult, string, void>({
         mutationKey: ['git', 'pull', dir],
-        mutationFn: () => invoke('plugin:yaak-git|pull', { dir }),
+        async mutationFn() {
+          const result = await invoke<PullResult>('plugin:yaak-git|pull', { dir });
+          if (result.type !== 'needs_credentials') return result;
+
+          // Needs credentials, prompt for them
+          const creds = await callbacks.promptCredentials(result);
+          if (creds == null) throw new Error('Canceled');
+
+          await invoke('plugin:yaak-git|add_credential', {
+            dir,
+            remoteUrl: result.url,
+            username: creds.username,
+            password: creds.password,
+          });
+
+          // Pull again
+          return invoke<PushResult>('plugin:yaak-git|pull', { dir });
+        },
         onSuccess,
       }),
       unstage: useMutation<void, string, { relaPaths: string[] }>({
