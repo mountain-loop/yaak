@@ -1,6 +1,5 @@
 use crate::error::Result;
 use crate::repository::open_repo;
-use git2::{Error, Remote};
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::path::Path;

@@ -7,7 +7,6 @@ use tauri::{
 mod add;
 mod binary;
 mod branch;
-mod callbacks;
 mod commands;
 mod commit;
 mod credential;

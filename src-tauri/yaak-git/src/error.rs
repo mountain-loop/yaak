@@ -39,6 +39,9 @@ pub enum Error {
     #[error("No default remote found")]
     NoDefaultRemoteFound,
 
+    #[error("No remotes found for repo")]
+    NoRemotesFound,
+
     #[error("Merge failed due to conflicts")]
     MergeConflicts,
 

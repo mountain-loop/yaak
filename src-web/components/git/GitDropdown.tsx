@@ -40,7 +40,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const [
     { status, log },
     { branch, deleteBranch, fetchAll, mergeBranch, push, pull, checkout, init },
-  ] = useGit(syncDir, gitCallbacks);
+  ] = useGit(syncDir, gitCallbacks(syncDir));
 
   const localBranches = status.data?.localBranches ?? [];
   const remoteBranches = status.data?.remoteBranches ?? [];
@@ -55,9 +55,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
 
   const noRepo = status.error?.includes('not found');
   if (noRepo) {
-    return (
-      <SetupGitDropdown workspaceId={workspace.id} initRepo={() => init.mutate({ dir: syncDir })} />
-    );
+    return <SetupGitDropdown workspaceId={workspace.id} initRepo={init.mutate} />;
   }
 
   const tryCheckout = (branch: string, force: boolean) => {
@@ -223,7 +221,6 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     { type: 'separator' },
     {
       label: 'Push',
-      hidden: (status.data?.origins ?? []).length === 0,
       leftSlot: <Icon icon="arrow_up_from_line" />,
       waitForOnSelect: true,
       async onSelect() {

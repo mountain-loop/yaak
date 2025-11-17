@@ -2,7 +2,7 @@ use crate::binary::new_binary_command;
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::repository::open_repo;
-use crate::util::{get_current_branch, get_current_branch_name};
+use crate::util::{get_current_branch_name, get_default_remote_in_repo};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -20,7 +20,7 @@ pub(crate) enum PullResult {
 pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
     let repo = open_repo(dir)?;
     let branch_name = get_current_branch_name(&repo)?;
-    let remote = repo.find_remote("origin")?;
+    let remote = get_default_remote_in_repo(&repo)?;
     let remote_name = remote.name().ok_or(GenericError("Failed to get remote name".to_string()))?;
     let remote_url = remote.url().ok_or(GenericError("Failed to get remote url".to_string()))?;
 
@@ -56,7 +56,7 @@ pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
         return Err(GenericError(format!("Failed to pull {combined}")));
     }
 
-    if combined.to_lowercase().contains("up-to-date") {
+    if combined.to_lowercase().contains("up to date") {
         return Ok(PullResult::UpToDate);
     }
 

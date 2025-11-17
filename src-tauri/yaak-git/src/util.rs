@@ -1,28 +1,8 @@
 use crate::error::Error::{GenericError, NoDefaultRemoteFound};
 use crate::error::Result;
-use git2::{Branch, BranchType, Repository};
-use std::env;
-use std::path::{Path, PathBuf};
+use git2::{Branch, BranchType, Remote, Repository};
 
 const DEFAULT_REMOTE_NAME: &str = "origin";
-
-pub(crate) fn find_ssh_key() -> Option<PathBuf> {
-    let home_dir = env::var("HOME").ok()?;
-    let key_paths = [
-        format!("{}/.ssh/id_ed25519", home_dir),
-        format!("{}/.ssh/id_rsa", home_dir),
-        format!("{}/.ssh/id_ecdsa", home_dir),
-        format!("{}/.ssh/id_dsa", home_dir),
-    ];
-
-    for key_path in key_paths.iter() {
-        let path = Path::new(key_path);
-        if path.exists() {
-            return Some(path.to_path_buf());
-        }
-    }
-    None
-}
 
 pub(crate) fn get_current_branch(repo: &Repository) -> Result<Option<Branch<'_>>> {
     for b in repo.branches(None)? {
@@ -72,7 +52,13 @@ pub(crate) fn bytes_to_string(bytes: &[u8]) -> Result<String> {
     Ok(String::from_utf8(bytes.to_vec())?)
 }
 
-pub(crate) fn get_default_remote_for_push_in_repo(repo: &Repository) -> Result<String> {
+pub(crate) fn get_default_remote_for_push_in_repo(repo: &'_ Repository) -> Result<Remote<'_>> {
+    let name = get_default_remote_name_for_push_in_repo(repo)?;
+    let remote = repo.find_remote(&name)?;
+    Ok(remote)
+}
+
+pub(crate) fn get_default_remote_name_for_push_in_repo(repo: &Repository) -> Result<String> {
     let config = repo.config()?;
 
     let branch = get_current_branch(repo)?;
@@ -97,11 +83,21 @@ pub(crate) fn get_default_remote_for_push_in_repo(repo: &Repository) -> Result<S
         }
     }
 
-    get_default_remote_in_repo(repo)
+    get_default_remote_name_in_repo(repo)
 }
 
-pub(crate) fn get_default_remote_in_repo(repo: &Repository) -> Result<String> {
+pub(crate) fn get_default_remote_in_repo(repo: &'_ Repository) -> Result<Remote<'_>> {
+    let name = get_default_remote_name_in_repo(repo)?;
+    let remote = repo.find_remote(&name)?;
+    Ok(remote)
+}
+
+pub(crate) fn get_default_remote_name_in_repo(repo: &Repository) -> Result<String> {
     let remotes = repo.remotes()?;
+
+    if remotes.len() == 0 {
+        return Err(NoDefaultRemoteFound);
+    }
 
     // if `origin` exists return that
     let found_origin = remotes.iter().any(|r| r.is_some_and(|r| r == DEFAULT_REMOTE_NAME));

@@ -41,25 +41,34 @@ interface CommitTreeNode {
 }
 
 export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
-  const [{ status }, { commit, commitAndPush, add, unstage, push }] = useGit(syncDir, gitCallbacks);
+  const [{ status }, { commit, commitAndPush, add, unstage }] = useGit(
+    syncDir,
+    gitCallbacks(syncDir),
+  );
+  const [isPushing, setIsPushing] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
   const [message, setMessage] = useState<string>('');
 
   const handleCreateCommit = async () => {
+    setCommitError(null);
     try {
       await commit.mutateAsync({ message });
       onDone();
     } catch (err) {
-      showErrorToast('git-commit-error', String(err));
+      setCommitError(String(err));
     }
   };
 
   const handleCreateCommitAndPush = async () => {
+    setIsPushing(true);
     try {
       const r = await commitAndPush.mutateAsync({ message });
       handlePushResult(r);
       onDone();
     } catch (err) {
       showErrorToast('git-commit-and-push-error', String(err));
+    } finally {
+      setIsPushing(false);
     }
   };
 
@@ -152,7 +161,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         layout="vertical"
         defaultRatio={0.3}
         firstSlot={({ style }) => (
-          <div style={style} className="h-full overflow-y-auto -ml-1 pb-3">
+          <div style={style} className="h-full overflow-y-auto pb-3">
             <TreeNodeChildren node={tree} depth={0} onCheck={checkNode} />
             {externalEntries.find((e) => e.status !== 'current') && (
               <>
@@ -180,7 +189,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
               multiLine
               hideLabel
             />
-            {commit.error && <Banner color="danger">{commit.error}</Banner>}
+            {commitError && <Banner color="danger">{commitError}</Banner>}
             <HStack alignItems="center">
               <InlineCode>{status.data?.headRefShorthand}</InlineCode>
               <HStack space={2} className="ml-auto">
@@ -189,7 +198,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                   size="sm"
                   onClick={handleCreateCommit}
                   disabled={!hasAddedAnything}
-                  isLoading={push.isPending || commitAndPush.isPending || commit.isPending}
+                  isLoading={isPushing}
                 >
                   Commit
                 </Button>
@@ -198,7 +207,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                   size="sm"
                   disabled={!hasAddedAnything}
                   onClick={handleCreateCommitAndPush}
-                  isLoading={push.isPending || commitAndPush.isPending || commit.isPending}
+                  isLoading={isPushing}
                 >
                   Commit and Push
                 </Button>
