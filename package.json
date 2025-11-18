@@ -68,7 +68,7 @@
     "icons": "run-p icons:*",
     "icons:dev": "tauri icon src-tauri/icons/icon-dev.png --output src-tauri/icons/dev",
     "icons:release": "tauri icon src-tauri/icons/icon.png --output src-tauri/icons/release",
-    "bootstrap": "npm run --workspaces --if-present bootstrap && run-p bootstrap:*",
+    "bootstrap": "npm run build && run-p bootstrap:*",
     "bootstrap:vendor-node": "node scripts/vendor-node.cjs",
     "bootstrap:vendor-plugins": "node scripts/vendor-plugins.cjs",
     "bootstrap:vendor-protoc": "node scripts/vendor-protoc.cjs",
