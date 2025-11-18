@@ -112,6 +112,15 @@ function Sidebar({ className }: { className?: string }) {
     treeRef.current?.selectItem(payload.model.id, true);
   });
 
+  useEffect(() => {
+    return jotaiStore.sub(activeIdAtom, () => {
+      const activeId = jotaiStore.get(activeIdAtom);
+      if (activeId) {
+        treeRef.current?.selectItem(activeId, true);
+      }
+    });
+  }, [focusActiveItem]);
+
   useHotKey(
     'sidebar.filter',
     () => {
@@ -489,7 +498,7 @@ function Sidebar({ className }: { className?: string }) {
             <Dropdown
               items={[
                 {
-                  label: 'Select Open Request',
+                  label: 'Focus Active Request',
                   leftSlot: <Icon icon="crosshair" />,
                   onSelect: () => {
                     const activeId = jotaiStore.get(activeIdAtom);
@@ -508,7 +517,8 @@ function Sidebar({ className }: { className?: string }) {
                       }
                       return n;
                     });
-                    treeRef.current?.selectItem(activeId, true);
+                    treeRef.current?.selectItem(activeId, false);
+                    treeRef.current?.focus();
                   },
                 },
                 {

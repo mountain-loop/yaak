@@ -10,7 +10,7 @@ import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps, DropdownItem } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
-import { collapsedFamily, isCollapsedFamily, isLastFocusedFamily, isSelectedFamily } from './atoms';
+import { collapsedFamily, isCollapsedFamily, isLastFocusedFamily, isSelectedFamily, } from './atoms';
 import type { TreeNode } from './common';
 import { getNodeKey } from './common';
 import type { TreeProps } from './Tree';
@@ -39,6 +39,7 @@ export interface TreeItemHandle {
   isRenaming: boolean;
   rect: () => DOMRect;
   focus: () => void;
+  scrollIntoView: () => void;
 }
 
 const HOVER_CLOSED_FOLDER_DELAY = 800;
@@ -81,6 +82,9 @@ function TreeItem_<T extends { id: string }>({
         }
         return listItemRef.current.getBoundingClientRect();
       },
+      scrollIntoView: () => {
+        listItemRef.current?.scrollIntoView({ block: 'nearest' });
+      }
     }),
     [editing, getEditOptions],
   );
@@ -117,14 +121,6 @@ function TreeItem_<T extends { id: string }>({
     x: number;
     y: number;
   } | null>(null);
-
-  useEffect(
-    () =>
-      jotaiStore.sub(isSelectedFamily({ treeId, itemId: node.item.id }), () => {
-        listItemRef.current?.scrollIntoView({ block: 'nearest' });
-      }),
-    [node.item.id, treeId],
-  );
 
   const handleClick = useCallback(
     (e: MouseEvent<HTMLButtonElement>) => onClick?.(node.item, e),

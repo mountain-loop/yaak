@@ -130,7 +130,8 @@ function TreeInner<T extends { id: string }>(
     if ($el == null) {
       return false;
     } else {
-      $el?.focus();
+      $el.focus();
+      $el.scrollIntoView({ block: 'nearest' });
       return true;
     }
   }, []);
