@@ -1,7 +1,7 @@
-import type { JSONPathResult } from '../template-function-json';
-import { filterJSONPath } from '../template-function-json';
-import type { XPathResult } from '../template-function-xml';
-import { filterXPath } from '../template-function-xml';
+import type { JSONPathResult } from '../../template-function-json';
+import { filterJSONPath } from '../../template-function-json';
+import type { XPathResult } from '../../template-function-xml';
+import { filterXPath } from '../../template-function-xml';
 import type {
   CallTemplateFunctionArgs,
   Context,
