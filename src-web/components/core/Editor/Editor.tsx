@@ -290,7 +290,7 @@ export function Editor({
         showDialog({
           id: 'template-function-' + Math.random(), // Allow multiple at once
           size: 'md',
-          className: 'h-[90vh]',
+          className: 'h-[90vh] max-h-[60rem]',
           noPadding: true,
           title: <InlineCode>{fn.name}(…)</InlineCode>,
           description: fn.description,

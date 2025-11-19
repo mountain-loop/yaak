@@ -45,7 +45,7 @@ export async function editEnvironment(
       id: 'environment-editor',
       noPadding: true,
       size: 'lg',
-      className: 'h-[90vh]',
+      className: 'h-[90vh] max-h-[60rem]',
       render: () => (
         <EnvironmentEditDialog
           initialEnvironmentId={environment?.id ?? null}
