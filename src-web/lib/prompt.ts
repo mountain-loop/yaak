@@ -22,9 +22,9 @@ export async function showPrompt({
 }: PromptArgs) {
   const inputs: FormInput[] = [
     {
+      ...props,
       type: 'text',
       name: 'value',
-      ...props,
     },
   ];
 
