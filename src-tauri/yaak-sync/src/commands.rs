@@ -12,6 +12,7 @@ use tauri::ipc::Channel;
 use tauri::{command, AppHandle, Listener, Runtime};
 use tokio::sync::watch;
 use ts_rs::TS;
+use crate::error::Error::InvalidSyncDirectory;
 
 #[command]
 pub async fn calculate<R: Runtime>(
@@ -19,6 +20,10 @@ pub async fn calculate<R: Runtime>(
     workspace_id: &str,
     sync_dir: &Path,
 ) -> Result<Vec<SyncOp>> {
+    if !sync_dir.exists() {
+        return Err(InvalidSyncDirectory(sync_dir.to_string_lossy().to_string()))
+    }
+
     let db_candidates = get_db_candidates(&app_handle, workspace_id, sync_dir)?;
     let fs_candidates = get_fs_candidates(sync_dir)?
         .into_iter()

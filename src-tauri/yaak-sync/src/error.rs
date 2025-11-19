@@ -6,7 +6,7 @@ use thiserror::Error;
 pub enum Error {
     #[error("Yaml error: {0}")]
     YamlParseError(#[from] serde_yaml::Error),
-    
+
     #[error("Sync parse error: {0}")]
     ParseError(String),
 
@@ -24,6 +24,9 @@ pub enum Error {
 
     #[error("Invalid sync file: {0}")]
     InvalidSyncFile(String),
+
+    #[error("Invalid sync directory: {0}")]
+    InvalidSyncDirectory(String),
 
     #[error("Watch error: {0}")]
     NotifyError(#[from] notify::Error),
