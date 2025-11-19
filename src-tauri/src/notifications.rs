@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 use yaak_common::api_client::yaak_api_client;
-use yaak_common::platform::get_os;
+use yaak_common::platform::get_os_str;
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 
@@ -108,7 +108,7 @@ impl YaakNotifier {
                 ("installed", &launch_info.user_since.format("%Y-%m-%d").to_string()),
                 ("license", &license_check),
                 ("updates", &get_updater_status(app_handle).to_string()),
-                ("platform", &get_os().to_string()),
+                ("platform", &get_os_str().to_string()),
             ]);
         let resp = req.send().await?;
         if resp.status() != 200 {

@@ -1,18 +1,20 @@
 use crate::events::{
-    FormInput, FormInputBase, FormInputText, PluginContext, RenderPurpose, TemplateFunction,
-    TemplateFunctionArg, TemplateFunctionPreviewType,
+    Color, FormInput, FormInputBanner, FormInputBase, FormInputMarkdown, FormInputText,
+    PluginContext, RenderPurpose, TemplateFunction, TemplateFunctionArg,
+    TemplateFunctionPreviewType,
 };
 use crate::template_callback::PluginTemplateCallback;
-use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use keyring::Error::NoEntry;
 use log::{debug, info};
 use std::collections::HashMap;
 use tauri::{AppHandle, Runtime};
+use yaak_common::platform::{get_os, OperatingSystem};
 use yaak_crypto::manager::EncryptionManagerExt;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result;
-use yaak_templates::{FnArg, Parser, Token, Tokens, Val, transform_args};
+use yaak_templates::{transform_args, FnArg, Parser, Token, Tokens, Val};
 
 pub(crate) fn template_function_secure() -> TemplateFunction {
     TemplateFunction {
@@ -36,16 +38,49 @@ pub(crate) fn template_function_secure() -> TemplateFunction {
 }
 
 pub(crate) fn template_function_keyring() -> TemplateFunction {
+    struct Meta {
+        description: String,
+        service_label: String,
+        account_label: String,
+    }
+
+    let meta = match get_os() {
+        OperatingSystem::MacOS => Meta {
+            description:
+            "Access application passwords from the macOS Login keychain".to_string(),
+            service_label: "Where".to_string(),
+            account_label: "Account".to_string(),
+        },
+        OperatingSystem::Windows => Meta {
+            description: "Access a secret via Windows Credential Manager".to_string(),
+            service_label: "Target".to_string(),
+            account_label: "Username".to_string(),
+        },
+        _ => Meta {
+            description: "Access a secret via [Secret Service](https://specifications.freedesktop.org/secret-service/latest/) (eg. Gnome keyring or KWallet)".to_string(),
+            service_label: "Collection".to_string(),
+            account_label: "Account".to_string(),
+        },
+    };
+
     TemplateFunction {
         name: "keychain".to_string(),
         preview_type: Some(TemplateFunctionPreviewType::Live),
-        description: Some("Get a password from the OS keychain or keyring".to_string()),
+        description: Some(meta.description),
         aliases: Some(vec!["keyring".to_string()]),
         args: vec![
+            TemplateFunctionArg::FormInput(FormInput::Banner(FormInputBanner {
+                inputs: Some(vec![FormInput::Markdown(FormInputMarkdown {
+                    content: "For most cases, prefer the [`secure(…)`](https://yaak.app/help/encryption) template function, which encrypts values using a key stored in keychain".to_string(),
+                    hidden: None,
+                })]),
+                color: Some(Color::Info),
+                hidden: None,
+            })),
             TemplateFunctionArg::FormInput(FormInput::Text(FormInputText {
                 base: FormInputBase {
                     name: "service".to_string(),
-                    label: Some("Service".to_string()),
+                    label: Some(meta.service_label),
                     description: Some("App or URL for the password".to_string()),
                     ..Default::default()
                 },
@@ -54,7 +89,7 @@ pub(crate) fn template_function_keyring() -> TemplateFunction {
             TemplateFunctionArg::FormInput(FormInput::Text(FormInputText {
                 base: FormInputBase {
                     name: "account".to_string(),
-                    label: Some("Account".to_string()),
+                    label: Some(meta.account_label),
                     description: Some("Username or email address".to_string()),
                     ..Default::default()
                 },
@@ -191,7 +226,7 @@ pub fn encrypt_secure_template_function<R: Runtime>(
         tokens,
         &PluginTemplateCallback::new(app_handle, plugin_context, RenderPurpose::Preview),
     )?
-    .to_string())
+        .to_string())
 }
 
 pub fn template_function_keychain_run(args: HashMap<String, serde_json::Value>) -> Result<String> {

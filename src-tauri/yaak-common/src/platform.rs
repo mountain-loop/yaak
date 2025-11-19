@@ -1,12 +1,30 @@
-pub fn get_os() -> &'static str {
+use crate::platform::OperatingSystem::{Linux, MacOS, Unknown, Windows};
+
+pub enum OperatingSystem {
+    Windows,
+    MacOS,
+    Linux,
+    Unknown,
+}
+
+pub fn get_os() -> OperatingSystem {
     if cfg!(target_os = "windows") {
-        "windows"
+        Windows
     } else if cfg!(target_os = "macos") {
-        "macos"
+        MacOS
     } else if cfg!(target_os = "linux") {
-        "linux"
+        Linux
     } else {
-        "unknown"
+        Unknown
+    }
+}
+
+pub fn get_os_str() -> &'static str {
+    match get_os() {
+        Windows => "windows",
+        MacOS => "macos",
+        Linux => "linux",
+        Unknown => "unknown",
     }
 }
 
@@ -33,4 +51,5 @@ pub fn get_ua_arch() -> &'static str {
         "ARM64"
     } else {
         "Unknown"
-    }}
+    }
+}
