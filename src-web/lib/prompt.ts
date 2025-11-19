@@ -37,5 +37,7 @@ export async function showPrompt({
     confirmText,
   });
 
-  return result?.value ? String(result.value) : null;
+  if (result == null) return null; // Cancelled
+  if (typeof result.value === 'string') return result.value;
+  else return props.defaultValue ?? '';
 }
