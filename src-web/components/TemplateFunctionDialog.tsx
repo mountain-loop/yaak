@@ -1,3 +1,4 @@
+import type { EditorView } from '@codemirror/view';
 import type {
   Folder,
   GrpcRequest,
@@ -5,10 +6,12 @@ import type {
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
-import type { FormInput, TemplateFunction } from '@yaakapp-internal/plugins';
+import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
+import { parseTemplate } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
+import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateFunctionConfig } from '../hooks/useTemplateFunctionConfig';
@@ -17,14 +20,17 @@ import {
   useTemplateTokensToString,
 } from '../hooks/useTemplateTokensToString';
 import { useToggle } from '../hooks/useToggle';
+import { showDialog } from '../lib/dialog';
 import { convertTemplateToInsecure } from '../lib/encryption';
+import { jotaiStore } from '../lib/jotai';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { Button } from './core/Button';
+import { collectArgumentValues } from './core/Editor/twig/util';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import { LoadingIcon } from './core/LoadingIcon';
 import { PlainInput } from './core/PlainInput';
-import { HStack, VStack } from './core/Stacks';
+import { HStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 
 interface Props {
@@ -115,7 +121,7 @@ function InitializedTemplateFunctionDialog({
   }, [argValues, name]);
 
   const tagText = useTemplateTokensToString(tokens);
-  const templateFunction = useTemplateFunctionConfig(name, argValues, model).data;
+  const templateFunction = useTemplateFunctionConfig(name, argValues, model);
 
   const handleDone = () => {
     if (tagText.data) {
@@ -136,7 +142,7 @@ function InitializedTemplateFunctionDialog({
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
   const dataContainsSecrets = useMemo(() => {
     for (const [name, value] of Object.entries(argValues)) {
-      const arg = templateFunction?.args.find((a) => 'name' in a && a.name === name);
+      const arg = templateFunction.data?.args.find((a) => 'name' in a && a.name === name);
       const isTextPassword = arg?.type === 'text' && arg.password;
       if (isTextPassword && typeof value === 'string' && value && rendered.data?.includes(value)) {
         return true;
@@ -147,7 +153,13 @@ function InitializedTemplateFunctionDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendered.data]);
 
-  if (templateFunction == null) return null;
+  if (templateFunction.data == null || templateFunction.isPending) {
+    return (
+      <div className="h-full w-full flex items-center justify-center">
+        <LoadingIcon size="xl" className="text-text-subtlest" />
+      </div>
+    );
+  }
 
   return (
     <form
@@ -172,16 +184,16 @@ function InitializedTemplateFunctionDialog({
           <DynamicForm
             autocompleteVariables
             autocompleteFunctions
-            inputs={templateFunction.args}
+            inputs={templateFunction.data.args}
             data={argValues}
             onChange={setArgValues}
-            stateKey={`template_function.${templateFunction.name}`}
+            stateKey={`template_function.${templateFunction.data.name}`}
           />
         )}
       </div>
       <div className="px-6 border-t border-t-border py-3 bg-surface-highlight w-full flex flex-col gap-4">
         {previewType !== 'none' ? (
-          <VStack className="w-full">
+          <div className="w-full grid grid-cols-1 grid-rows-[auto_auto]">
             <HStack space={0.5}>
               <HStack className="text-sm text-text-subtle" space={1.5}>
                 Rendered Preview
@@ -202,7 +214,7 @@ function InitializedTemplateFunctionDialog({
             <InlineCode
               className={classNames(
                 'relative',
-                'whitespace-pre-wrap !select-text cursor-text max-h-[10rem] overflow-y-auto hide-scrollbars !border-text-subtlest',
+                'whitespace-pre-wrap !select-text cursor-text max-h-[10rem] overflow-auto hide-scrollbars !border-text-subtlest',
                 tooLarge && 'italic text-danger',
               )}
             >
@@ -219,25 +231,25 @@ function InitializedTemplateFunctionDialog({
               ) : (
                 rendered.data || <>&nbsp;</>
               )}
-              <div className="absolute right-0 top-0 bottom-0 flex items-center">
+              <div className="absolute right-0 top-0 flex items-center">
                 <IconButton
                   size="xs"
                   icon="refresh"
                   className="text-text-subtle"
                   title="Refresh preview"
-                  spin={rendered.isLoading}
+                  spin={rendered.isPending}
                   onClick={() => {
                     setRenderKey(new Date().toISOString());
                   }}
                 />
               </div>
             </InlineCode>
-          </VStack>
+          </div>
         ) : (
           <span />
         )}
         <div className="flex justify-stretch w-full flex-grow gap-2 [&>*]:flex-1">
-          {templateFunction.name === 'secure' && (
+          {templateFunction.data.name === 'secure' && (
             <Button variant="border" color="secondary" onClick={setupOrConfigureEncryption}>
               Reveal Encryption Key
             </Button>
@@ -251,37 +263,35 @@ function InitializedTemplateFunctionDialog({
   );
 }
 
-/**
- * Process the initial tokens from the template and merge those with the default values pulled from
- * the template function definition.
- */
-function collectArgumentValues(initialTokens: Tokens, templateFunction: TemplateFunction) {
-  const initial: Record<string, string | boolean> = {};
-  const initialArgs =
-    initialTokens.tokens[0]?.type === 'tag' && initialTokens.tokens[0]?.val.type === 'fn'
-      ? initialTokens.tokens[0]?.val.args
-      : [];
-
-  const processArg = (arg: FormInput) => {
-    if ('inputs' in arg && arg.inputs) {
-      arg.inputs.forEach(processArg);
-    }
-    if (!('name' in arg)) return;
-
-    const initialArg = initialArgs.find((a) => a.name === arg.name);
-    const initialArgValue =
-      initialArg?.value.type === 'str'
-        ? initialArg?.value.text
-        : initialArg?.value.type === 'bool'
-          ? initialArg.value.value
-          : undefined;
-    const value = initialArgValue ?? arg.defaultValue;
-    if (value != null) {
-      initial[arg.name] = value;
-    }
-  };
-
-  templateFunction.args.forEach(processArg);
-
-  return initial;
-}
+TemplateFunctionDialog.show = function (
+  fn: TemplateFunction,
+  tagValue: string,
+  startPos: number,
+  view: EditorView,
+) {
+  const initialTokens = parseTemplate(tagValue);
+  showDialog({
+    id: 'template-function-' + Math.random(), // Allow multiple at once
+    size: 'md',
+    className: 'h-[60rem]',
+    noPadding: true,
+    title: <InlineCode>{fn.name}(…)</InlineCode>,
+    description: fn.description,
+    render: ({ hide }) => {
+      const model = jotaiStore.get(activeWorkspaceAtom)!;
+      return (
+        <TemplateFunctionDialog
+          templateFunction={fn}
+          model={model}
+          hide={hide}
+          initialTokens={initialTokens}
+          onChange={(insert) => {
+            view.dispatch({
+              changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
+            });
+          }}
+        />
+      );
+    },
+  });
+};

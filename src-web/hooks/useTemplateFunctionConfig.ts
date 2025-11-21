@@ -6,7 +6,7 @@ import type {
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
-import { httpResponsesAtom } from '@yaakapp-internal/models';
+import { environmentsAtom, httpResponsesAtom } from '@yaakapp-internal/models';
 import type { GetTemplateFunctionConfigResponse, JsonPrimitive } from '@yaakapp-internal/plugins';
 import { useAtomValue } from 'jotai';
 import { md5 } from 'js-md5';
@@ -22,6 +22,8 @@ export function useTemplateFunctionConfig(
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const environmentId = useAtomValue(activeEnvironmentIdAtom);
   const responses = useAtomValue(httpResponsesAtom);
+  const environments = useAtomValue(environmentsAtom);
+  const environmentsKey = environments.map((e) => e.id + e.updatedAt).join(':');
 
   // Some auth handlers like OAuth 2.0 show the current token after a successful request. To
   // handle that, we'll force the auth to re-fetch after each new response closes
@@ -41,6 +43,7 @@ export function useTemplateFunctionConfig(
       responseKey,
       workspaceId,
       environmentId,
+      environmentsKey,
     ],
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {

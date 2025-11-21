@@ -25,7 +25,11 @@ import { Context, PluginDefinition } from '@yaakapp/api';
 import console from 'node:console';
 import { type Stats, statSync, watch } from 'node:fs';
 import path from 'node:path';
-import { applyDynamicFormInput, applyFormInputDefaults } from './common';
+import {
+  applyDynamicFormInput,
+  applyFormInputDefaults,
+  validateTemplateFunctionArgs,
+} from './common';
 import { EventChannel } from './EventChannel';
 import { migrateTemplateFunctionSelectOptions } from './migrations';
 
@@ -334,15 +338,22 @@ export class PluginInstance {
           );
         } else if (typeof fn?.onRender === 'function') {
           const resolvedArgs = await applyDynamicFormInput(ctx, fn.args, payload.args);
-          payload.args.values = applyFormInputDefaults(resolvedArgs, payload.args.values);
-          try {
-            const result = await fn.onRender(ctx, payload.args);
+          const values = applyFormInputDefaults(resolvedArgs, payload.args.values);
+          const error = validateTemplateFunctionArgs(fn.name, resolvedArgs, values);
+          if (error && payload.args.purpose !== 'preview') {
             this.#sendPayload(
               context,
-              {
-                type: 'call_template_function_response',
-                value: result ?? null,
-              },
+              { type: 'call_template_function_response', value: null, error },
+              replyId,
+            );
+            return;
+          }
+
+          try {
+            const result = await fn.onRender(ctx, { ...payload.args, values });
+            this.#sendPayload(
+              context,
+              { type: 'call_template_function_response', value: result ?? null },
               replyId,
             );
           } catch (err) {

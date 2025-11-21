@@ -24,6 +24,7 @@ export interface SelectProps<T extends string> {
   size?: ButtonProps['size'];
   className?: string;
   disabled?: boolean;
+  filterable?: boolean;
 }
 
 export function Select<T extends string>({
@@ -40,6 +41,7 @@ export function Select<T extends string>({
   onChange,
   className,
   defaultValue,
+  filterable,
   size = 'md',
 }: SelectProps<T>) {
   const [focused, setFocused] = useState<boolean>(false);
@@ -64,7 +66,7 @@ export function Select<T extends string>({
       <Label htmlFor={id} visuallyHidden={hideLabel} className={labelClassName} help={help}>
         {label}
       </Label>
-      {type() === 'macos' ? (
+      {type() === 'macos' && !filterable ? (
         <HStack
           space={2}
           className={classNames(

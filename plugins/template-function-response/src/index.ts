@@ -1,3 +1,4 @@
+import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import type { JSONPathResult } from '../../template-function-json';
 import { filterJSONPath } from '../../template-function-json';
 import type { XPathResult } from '../../template-function-xml';
@@ -68,7 +69,22 @@ export const plugin: PluginDefinition = {
           type: 'text',
           name: 'header',
           label: 'Header Name',
-          placeholder: 'Content-Type',
+          async dynamic(ctx, args) {
+            const response = await getResponse(ctx, {
+              requestId: String(args.values.request || ''),
+              purpose: args.purpose,
+              behavior: args.values.behavior ? String(args.values.behavior) : null,
+              ttl: String(args.values.ttl || ''),
+            });
+
+            return {
+              placeholder: response?.headers[0]?.name,
+              completionOptions: response?.headers.map<GenericCompletionOption>((h) => ({
+                label: h.name,
+                type: 'constant',
+              })),
+            };
+          },
         },
       ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {

@@ -11,5 +11,5 @@ for (const name of readdirSync(pluginsDir)) {
   const destDir = path.join(__dirname, '../src-tauri/vendored/plugins/', name);
   console.log(`Copying ${name} to ${destDir}`);
   cpSync(path.join(dir, 'package.json'), path.join(destDir, 'package.json'));
-  cpSync(path.join(dir, 'build/index.js'), path.join(destDir, 'build/index.js'));
+  cpSync(path.join(dir, 'build'), path.join(destDir, 'build'), { recursive: true });
 }

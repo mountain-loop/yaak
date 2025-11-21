@@ -1,4 +1,5 @@
 import type { AnyModel, HttpUrlParameter } from '@yaakapp-internal/models';
+import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 
 export const plugin: PluginDefinition = {
@@ -36,6 +37,21 @@ export const plugin: PluginDefinition = {
           name: 'header',
           label: 'Header Name',
           type: 'text',
+          async dynamic(ctx, args) {
+            if (typeof args.values.requestId !== 'string') return null;
+
+            const request = await ctx.httpRequest.getById({ id: args.values.requestId });
+            if (request == null) return null;
+
+            const validHeaders = request.headers.filter(h => h.enabled !== false && h.name);
+            return {
+              placeholder: validHeaders[0]?.name,
+              completionOptions: validHeaders.map<GenericCompletionOption>((h) => ({
+                label: h.name,
+                type: 'constant',
+              })),
+            };
+          },
         },
       ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {

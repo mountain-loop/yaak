@@ -3,7 +3,9 @@ import type { Range } from '@codemirror/state';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
 import { Decoration, ViewPlugin, WidgetType, EditorView } from '@codemirror/view';
 import type { SyntaxNodeRef } from '@lezer/common';
+import { parseTemplate } from '@yaakapp-internal/templates';
 import type { TwigCompletionOption } from './completion';
+import { collectArgumentValues } from './util';
 
 class TemplateTagWidget extends WidgetType {
   readonly #clickListenerCallback: () => void;
@@ -40,10 +42,7 @@ class TemplateTagWidget extends WidgetType {
     }`;
     elt.title = this.option.invalid ? 'Not Found' : (this.option.value ?? '');
     elt.setAttribute('data-tag-type', this.option.type);
-    elt.textContent =
-      this.option.type === 'function'
-        ? `${this.option.name}(${this.option.args.length ? '…' : ''})`
-        : this.option.name;
+    elt.textContent = this.option.label;
     elt.addEventListener('click', this.#clickListenerCallback);
     return elt;
   }
@@ -107,7 +106,20 @@ function templateTags(
             };
           }
 
-          const widget = new TemplateTagWidget(option, rawTag, node.from);
+          let invalid = false;
+          if (option.type === 'function') {
+            const tokens = parseTemplate(rawTag);
+            const values = collectArgumentValues(tokens, option);
+            for (const arg of option.args) {
+              if (!('optional' in arg)) continue;
+              if (!arg.optional && values[arg.name] == null) {
+                invalid = true;
+                break;
+              }
+            }
+          }
+
+          const widget = new TemplateTagWidget({ ...option, invalid }, rawTag, node.from);
           const deco = Decoration.replace({ widget, inclusive: true });
           widgets.push(deco.range(node.from, node.to));
         }

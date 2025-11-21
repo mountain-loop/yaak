@@ -335,7 +335,7 @@ impl Parser {
         while self.pos < self.chars.len() {
             let ch = self.peek_char();
             let is_valid = if start_pos == self.pos {
-                ch.is_alphabetic() || ch == '_' // First is more restrictive
+                ch.is_alphanumeric() || ch == '_' // The first char is more restrictive
             } else {
                 ch.is_alphanumeric() || ch == '_' || ch == '-'
             };

@@ -10,7 +10,6 @@ import { vscodeKeymap } from '@replit/codemirror-vscode-keymap';
 import type { EditorKeymap } from '@yaakapp-internal/models';
 import { settingsAtom } from '@yaakapp-internal/models';
 import type { EditorLanguage, TemplateFunction } from '@yaakapp-internal/plugins';
-import { parseTemplate } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import type { GraphQLSchema } from 'graphql';
 import { useAtomValue } from 'jotai';
@@ -27,20 +26,17 @@ import {
   useRef,
 } from 'react';
 import { activeEnvironmentAtom } from '../../../hooks/useActiveEnvironment';
-import { activeWorkspaceAtom } from '../../../hooks/useActiveWorkspace';
 import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
 import { useEnvironmentVariables } from '../../../hooks/useEnvironmentVariables';
 import { useRandomKey } from '../../../hooks/useRandomKey';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
-import { showDialog } from '../../../lib/dialog';
 import { editEnvironment } from '../../../lib/editEnvironment';
 import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
 import { jotaiStore } from '../../../lib/jotai';
 import { withEncryptionEnabled } from '../../../lib/setupOrConfigureEncryption';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { IconButton } from '../IconButton';
-import { InlineCode } from '../InlineCode';
 import { HStack } from '../Stacks';
 import './Editor.css';
 import {
@@ -285,32 +281,10 @@ export function Editor({
 
   const onClickFunction = useCallback(
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
-      const initialTokens = parseTemplate(tagValue);
-      const show = () =>
-        showDialog({
-          id: 'template-function-' + Math.random(), // Allow multiple at once
-          size: 'md',
-          className: 'h-[90vh] max-h-[60rem]',
-          noPadding: true,
-          title: <InlineCode>{fn.name}(…)</InlineCode>,
-          description: fn.description,
-          render: ({ hide }) => {
-            const model = jotaiStore.get(activeWorkspaceAtom)!;
-            return (
-              <TemplateFunctionDialog
-                templateFunction={fn}
-                model={model}
-                hide={hide}
-                initialTokens={initialTokens}
-                onChange={(insert) => {
-                  cm.current?.view.dispatch({
-                    changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
-                  });
-                }}
-              />
-            );
-          },
-        });
+      const show = () => {
+        if (cm.current === null) return;
+        TemplateFunctionDialog.show(fn, tagValue, startPos, cm.current.view);
+      };
 
       if (fn.name === 'secure') {
         withEncryptionEnabled(show);
