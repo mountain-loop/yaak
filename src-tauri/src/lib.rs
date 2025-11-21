@@ -29,8 +29,8 @@ use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
 use yaak_common::window::WorkspaceWindowTrait;
-use yaak_grpc::manager::{DynamicMessage, GrpcHandle};
-use yaak_grpc::{Code, ServiceDefinition, deserialize_message, serialize_message};
+use yaak_grpc::manager::GrpcHandle;
+use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
     GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, Plugin, Workspace,
@@ -252,7 +252,7 @@ async fn cmd_grpc_go<R: Runtime>(
         ..Default::default()
     };
 
-    let (in_msg_tx, in_msg_rx) = tauri::async_runtime::channel::<DynamicMessage>(16);
+    let (in_msg_tx, in_msg_rx) = tauri::async_runtime::channel::<String>(16);
     let maybe_in_msg_tx = std::sync::Mutex::new(Some(in_msg_tx.clone()));
     let (cancelled_tx, mut cancelled_rx) = tokio::sync::watch::channel(false);
 
@@ -298,7 +298,7 @@ async fn cmd_grpc_go<R: Runtime>(
     };
 
     let method_desc =
-        connection.method(&service, &method).map_err(|e| GenericError(e.to_string()))?;
+        connection.method(&service, &method).await.map_err(|e| GenericError(e.to_string()))?;
 
     #[derive(serde::Deserialize)]
     enum IncomingMsg {
@@ -313,7 +313,6 @@ async fn cmd_grpc_go<R: Runtime>(
         let environment_chain = environment_chain.clone();
         let window = window.clone();
         let base_msg = base_msg.clone();
-        let method_desc = method_desc.clone();
 
         move |ev: tauri::Event| {
             if *cancelled_rx.borrow() {
@@ -335,7 +334,6 @@ async fn cmd_grpc_go<R: Runtime>(
                     let window = window.clone();
                     let app_handle = app_handle.clone();
                     let base_msg = base_msg.clone();
-                    let method_desc = method_desc.clone();
                     let environment_chain = environment_chain.clone();
                     let msg = block_in_place(|| {
                         tauri::async_runtime::block_on(async {
@@ -355,27 +353,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             .expect("Failed to render template")
                         })
                     });
-                    let d_msg: DynamicMessage = match deserialize_message(msg.as_str(), method_desc)
-                    {
-                        Ok(d_msg) => d_msg,
-                        Err(e) => {
-                            tauri::async_runtime::spawn(async move {
-                                app_handle
-                                    .db()
-                                    .upsert_grpc_event(
-                                        &GrpcEvent {
-                                            event_type: GrpcEventType::Error,
-                                            content: e.to_string(),
-                                            ..base_msg.clone()
-                                        },
-                                        &UpdateSource::from_window(&window),
-                                    )
-                                    .unwrap();
-                            });
-                            return;
-                        }
-                    };
-                    in_msg_tx.try_send(d_msg).unwrap();
+                    in_msg_tx.try_send(msg.clone()).unwrap();
                     tauri::async_runtime::spawn(async move {
                         app_handle
                             .db()

@@ -8,6 +8,7 @@ mod json_schema;
 pub mod manager;
 mod reflection;
 mod transport;
+mod any;
 
 pub use tonic::metadata::*;
 pub use tonic::Code;

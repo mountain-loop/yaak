@@ -1,9 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
-use std::env::temp_dir;
-use std::ops::Deref;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-
+use crate::any::collect_any_types;
 use crate::client::AutoReflectionClient;
 use anyhow::anyhow;
 use async_recursion::async_recursion;
@@ -11,10 +6,17 @@ use log::{debug, info, warn};
 use prost::Message;
 use prost_reflect::{DescriptorPool, MethodDescriptor};
 use prost_types::{FileDescriptorProto, FileDescriptorSet};
+use std::collections::{BTreeMap, HashSet};
+use std::env::temp_dir;
+use std::ops::Deref;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::sync::Arc;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
 use tokio::fs;
+use tokio::sync::RwLock;
 use tonic::codegen::http::uri::PathAndQuery;
 use tonic::transport::Uri;
 use tonic_reflection::pb::v1::server_reflection_request::MessageRequest;
@@ -130,9 +132,9 @@ pub async fn fill_pool_from_reflection(
             continue;
         }
         if service == "grpc.reflection.v1.ServerReflection" {
-            // TODO: update reflection client to use v1
             continue;
         }
+        debug!("Fetching descriptors for {}", service);
         file_descriptor_set_from_service_name(&service, &mut pool, &mut client, metadata).await;
     }
 
@@ -188,8 +190,54 @@ async fn file_descriptor_set_from_service_name(
     .await;
 }
 
+pub(crate) async fn reflect_types_for_message(
+    pool: Arc<RwLock<DescriptorPool>>,
+    uri: &Uri,
+    json: &str,
+    metadata: &BTreeMap<String, String>,
+) -> Result<(), String> {
+    // 1. Collect all Any types in the JSON
+    let mut extra_types = Vec::new();
+    collect_any_types(json, &mut extra_types);
+
+    if extra_types.is_empty() {
+        return Ok(()); // nothing to do
+    }
+
+    let mut client = AutoReflectionClient::new(uri, false);
+    for extra_type in extra_types {
+        {
+            let guard = pool.read().await;
+            if guard.get_message_by_name(&extra_type).is_some() {
+                continue;
+            }
+        }
+        info!("Adding file descriptor for {:?} from reflection", extra_type);
+        let req = MessageRequest::FileContainingSymbol(extra_type.clone().into());
+        let resp = match client.send_reflection_request(req, metadata).await {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(format!(
+                    "Error sending reflection request for @type \"{extra_type}\": {e}",
+                ));
+            }
+        };
+        let files = match resp {
+            MessageResponse::FileDescriptorResponse(resp) => resp.file_descriptor_proto,
+            _ => panic!("Expected a FileDescriptorResponse variant"),
+        };
+
+        {
+            let mut guard = pool.write().await;
+            add_file_descriptors_to_pool(files, &mut *guard, &mut client, metadata).await;
+        }
+    }
+
+    Ok(())
+}
+
 #[async_recursion]
-async fn add_file_descriptors_to_pool(
+pub(crate) async fn add_file_descriptors_to_pool(
     fds: Vec<Vec<u8>>,
     pool: &mut DescriptorPool,
     client: &mut AutoReflectionClient,
