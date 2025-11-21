@@ -80,7 +80,8 @@
     "tauri-before-dev": "workspaces-run --parallel -- npm run --workspaces --if-present dev"
   },
   "dependencies": {
-    "jotai": "^2.12.2"
+    "jotai": "^2.12.2",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@eslint/compat": "^1.3.0",
