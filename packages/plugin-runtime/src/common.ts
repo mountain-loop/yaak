@@ -48,9 +48,36 @@ export async function applyDynamicFormInput(
       ...(typeof dynamic === 'function' ? await dynamic(ctx, callArgs as any) : undefined),
     };
     if ('inputs' in newArg && Array.isArray(newArg.inputs)) {
-      newArg.inputs = await applyDynamicFormInput(ctx, newArg.inputs, callArgs as any);
+      try {
+        newArg.inputs = await applyDynamicFormInput(ctx, newArg.inputs, callArgs as any);
+      } catch (e) {
+        console.error('Failed to apply dynamic form input', e);
+      }
     }
     resolvedArgs.push(newArg);
   }
   return resolvedArgs;
+}
+
+export function validateTemplateFunctionArgs(
+  fnName: string,
+  args: TemplateFunctionArg[],
+  values: CallTemplateFunctionArgs['values'],
+): string | null {
+  for (const arg of args) {
+    if ('inputs' in arg && arg.inputs) {
+      // Recurse down
+      const err = validateTemplateFunctionArgs(fnName, arg.inputs, values);
+      if (err) return err;
+    }
+    if (!('name' in arg)) continue;
+    if (arg.optional) continue;
+    if (arg.defaultValue != null) continue;
+    if (arg.hidden) continue;
+    if (values[arg.name] != null) continue;
+
+    return `Missing required argument "${arg.label || arg.name}" for template function ${fnName}()`;
+  }
+
+  return null;
 }

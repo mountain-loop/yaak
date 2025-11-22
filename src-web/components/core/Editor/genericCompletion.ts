@@ -1,5 +1,6 @@
 import type { CompletionContext } from '@codemirror/autocomplete';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
+import { defaultBoost } from './twig/completion';
 
 export interface GenericCompletionConfig {
   minMatch?: number;
@@ -23,7 +24,12 @@ export function genericCompletion(config?: GenericCompletionConfig) {
     const matchedMinimumLength = toMatch.to - toMatch.from >= minMatch;
     if (!matchedMinimumLength && !context.explicit) return null;
 
-    const optionsWithoutExactMatches = options.filter((o) => o.label !== toMatch.text);
+    const optionsWithoutExactMatches = options
+      .filter((o) => o.label !== toMatch.text)
+      .map((o) => ({
+        ...o,
+        boost: defaultBoost(o),
+      }));
     return {
       validFor: () => true, // Not really sure why this is all it needs
       from: toMatch.from,

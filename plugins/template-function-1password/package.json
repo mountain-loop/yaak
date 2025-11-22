@@ -1,0 +1,20 @@
+{
+  "name": "@yaak/template-function-1password",
+  "displayName": "1Password Template Functions",
+  "description": "Template function for accessing 1Password secrets",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "run-p build:*",
+    "build:1-build": "yaakcli build",
+    "build:2-cpywasm": "cpx '../../node_modules/@1password/sdk-core/nodejs/core_bg.*' build/",
+    "dev": "yaakcli dev",
+    "lint": "tsc --noEmit && eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "@1password/sdk": "^0.4.0-beta.2"
+  },
+  "devDependencies": {
+    "cpx": "^1.5.0"
+  }
+}
