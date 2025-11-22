@@ -48,7 +48,7 @@ export function HeadersEditor({
           <div className="pb-2">
             {validInheritedHeaders?.map((pair, i) => (
               <PairEditorRow
-                key={pair.id + '.' + i}
+                key={`${pair.id}.${i}`}
                 index={i}
                 disabled
                 disableDrag
@@ -109,9 +109,8 @@ const valueType = (pair: Pair): InputProps['type'] => {
     name === 'set-cookie'
   ) {
     return 'password';
-  } else {
-    return 'text';
   }
+  return 'text';
 };
 
 const valueAutocomplete = (headerName: string): GenericCompletionConfig | undefined => {

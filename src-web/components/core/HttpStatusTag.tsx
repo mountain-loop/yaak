@@ -11,7 +11,7 @@ interface Props {
 export function HttpStatusTag({ response, className, showReason, short }: Props) {
   const { status, state } = response;
 
-  let colorClass;
+  let colorClass: string;
   let label = `${status}`;
 
   if (state === 'initialized') {

@@ -5,18 +5,17 @@ import type { CSSProperties } from 'react';
 import React from 'react';
 import { useCurrentGraphQLSchema } from '../hooks/useIntrospectGraphQL';
 import { workspaceLayoutAtom } from '../lib/atoms';
+import { HttpRequestPane } from './HttpRequestPane';
+import { HttpResponsePane } from './HttpResponsePane';
 import type { SlotProps } from './core/SplitLayout';
 import { SplitLayout } from './core/SplitLayout';
 import { GraphQLDocsExplorer } from './graphql/GraphQLDocsExplorer';
 import { showGraphQLDocExplorerAtom } from './graphql/graphqlAtoms';
-import { HttpRequestPane } from './HttpRequestPane';
-import { HttpResponsePane } from './HttpResponsePane';
 
 interface Props {
   activeRequest: HttpRequest;
   style: CSSProperties;
 }
-
 
 export function HttpRequestLayout({ activeRequest, style }: Props) {
   const showGraphQLDocExplorer = useAtomValue(showGraphQLDocExplorerAtom);
@@ -56,7 +55,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
           <GraphQLDocsExplorer
             requestId={activeRequest.id}
             schema={graphQLSchema}
-            className={classNames(orientation == 'horizontal' && '!ml-0')}
+            className={classNames(orientation === 'horizontal' && '!ml-0')}
             style={style}
           />
         )}

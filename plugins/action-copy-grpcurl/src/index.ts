@@ -1,5 +1,5 @@
-import type { GrpcRequest, PluginDefinition } from '@yaakapp/api';
 import path from 'node:path';
+import type { GrpcRequest, PluginDefinition } from '@yaakapp/api';
 
 const NEWLINE = '\\\n ';
 

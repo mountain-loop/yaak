@@ -1,5 +1,5 @@
-import type { Context, GetHttpAuthenticationConfigRequest, PluginDefinition } from '@yaakapp/api';
 import crypto from 'node:crypto';
+import type { Context, GetHttpAuthenticationConfigRequest, PluginDefinition } from '@yaakapp/api';
 import OAuth from 'oauth-1.0a';
 
 const signatures = {
@@ -139,7 +139,9 @@ export const plugin: PluginDefinition = {
       for (const key of requestUrl.searchParams.keys()) {
         if (key.startsWith('oauth_')) continue;
         const all = requestUrl.searchParams.getAll(key);
-        requestData.data[key] = all.length > 1 ? all : all[0]!;
+        const first = all[0];
+        if (first == null) continue;
+        requestData.data[key] = all.length > 1 ? all : first;
       }
 
       // (2) Manual oauth_* overrides

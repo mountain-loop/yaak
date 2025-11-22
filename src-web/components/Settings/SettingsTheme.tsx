@@ -127,7 +127,7 @@ export function SettingsTheme() {
               color={c}
               size="2xs"
               iconSize="xs"
-              icon={icons[i % icons.length]!}
+              icon={icons[i % icons.length] ?? 'info'}
               iconClassName="text"
               title={`${c}`}
             />
@@ -139,7 +139,7 @@ export function SettingsTheme() {
               variant="border"
               size="2xs"
               iconSize="xs"
-              icon={icons[i % icons.length]!}
+              icon={icons[i % icons.length] ?? 'info'}
               iconClassName="text"
               title={`${c}`}
             />

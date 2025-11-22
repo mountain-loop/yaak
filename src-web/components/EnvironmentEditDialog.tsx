@@ -13,6 +13,9 @@ import { jotaiStore } from '../lib/jotai';
 import { isBaseEnvironment, isSubEnvironment } from '../lib/model_util';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { showColorPicker } from '../lib/showColorPicker';
+import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
+import { EnvironmentEditor } from './EnvironmentEditor';
+import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 import { Banner } from './core/Banner';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
@@ -21,12 +24,9 @@ import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
 import type { PairEditorHandle } from './core/PairEditor';
 import { SplitLayout } from './core/SplitLayout';
-import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
-import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
-import { EnvironmentEditor } from './EnvironmentEditor';
-import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
+import type { TreeNode } from './core/tree/common';
 
 interface Props {
   initialEnvironmentId: string | null;
@@ -112,11 +112,11 @@ function EnvironmentEditDialogSidebar({
   const treeRef = useRef<TreeHandle>(null);
   const { baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useLayoutEffect(() => {
     if (selectedEnvironmentId == null) return;
     treeRef.current?.selectItem(selectedEnvironmentId);
     treeRef.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDeleteEnvironment = useCallback(
@@ -137,7 +137,7 @@ function EnvironmentEditDialogSidebar({
         enable,
         allowDefault: true,
         priority: 100,
-        cb: async function (items: TreeModel[]) {
+        cb: async (items: TreeModel[]) => {
           const item = items[0];
           if (items.length === 1 && item != null) {
             treeRef.current?.renameItem(item.id);
@@ -152,9 +152,9 @@ function EnvironmentEditDialogSidebar({
       'sidebar.selected.duplicate': {
         priority: 100,
         enable,
-        cb: async function (items: TreeModel[]) {
-          if (items.length === 1) {
-            const item = items[0]!;
+        cb: async (items: TreeModel[]) => {
+          if (items.length === 1 && items[0]) {
+            const item = items[0];
             const newId = await duplicateModel(item);
             setSelectedEnvironmentId(newId);
           } else {

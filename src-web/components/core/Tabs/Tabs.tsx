@@ -50,7 +50,7 @@ export function Tabs({
 
   // Update tabs when value changes
   useEffect(() => {
-    const tabs = ref.current?.querySelectorAll<HTMLDivElement>(`[data-tab]`);
+    const tabs = ref.current?.querySelectorAll<HTMLDivElement>('[data-tab]');
     for (const tab of tabs ?? []) {
       const v = tab.getAttribute('data-tab');
       const parent = tab.closest('.tabs-container');
@@ -162,13 +162,12 @@ export function Tabs({
                   </Button>
                 </RadioDropdown>
               );
-            } else {
-              return (
-                <Button key={t.value} rightSlot={t.rightSlot} {...btnProps}>
-                  {t.label}
-                </Button>
-              );
             }
+            return (
+              <Button key={t.value} rightSlot={t.rightSlot} {...btnProps}>
+                {t.label}
+              </Button>
+            );
           })}
         </div>
       </div>

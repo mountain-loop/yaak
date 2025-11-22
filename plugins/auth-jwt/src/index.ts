@@ -68,12 +68,11 @@ export const plugin: PluginDefinition = {
               label: 'Parameter Name',
               description: 'The name of the query parameter to add to the request',
             };
-          } else {
-            return {
-              label: 'Header Name',
-              description: 'The name of the header to add to the request',
-            };
           }
+          return {
+            label: 'Header Name',
+            description: 'The name of the header to add to the request',
+          };
         },
       },
       {
@@ -110,12 +109,11 @@ export const plugin: PluginDefinition = {
         const paramName = String(values.name || 'token');
         const paramValue = String(values.value || '');
         return { setQueryParameters: [{ name: paramName, value: paramValue }] };
-      } else {
-        const headerPrefix = values.headerPrefix != null ? values.headerPrefix : 'Bearer';
-        const headerName = String(values.name || 'Authorization');
-        const headerValue = `${headerPrefix} ${token}`.trim();
-        return { setHeaders: [{ name: headerName, value: headerValue }] };
       }
+      const headerPrefix = values.headerPrefix != null ? values.headerPrefix : 'Bearer';
+      const headerName = String(values.name || 'Authorization');
+      const headerValue = `${headerPrefix} ${token}`.trim();
+      return { setHeaders: [{ name: headerName, value: headerValue }] };
     },
   },
 };

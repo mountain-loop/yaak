@@ -95,7 +95,7 @@ export function SettingsInterface() {
           defaultValue="14"
           value={`${settings.interfaceFontSize}`}
           options={fontSizeOptions}
-          onChange={(v) => patchModel(settings, { interfaceFontSize: parseInt(v) })}
+          onChange={(v) => patchModel(settings, { interfaceFontSize: Number.parseInt(v) })}
         />
       </HStack>
       <HStack space={2} alignItems="end">
@@ -127,7 +127,7 @@ export function SettingsInterface() {
           value={`${settings.editorFontSize}`}
           options={fontSizeOptions}
           onChange={(v) =>
-            patchModel(settings, { editorFontSize: clamp(parseInt(v) || 14, 8, 30) })
+            patchModel(settings, { editorFontSize: clamp(Number.parseInt(v) || 14, 8, 30) })
           }
         />
       </HStack>

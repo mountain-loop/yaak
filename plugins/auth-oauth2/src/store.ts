@@ -1,5 +1,5 @@
-import type { Context } from '@yaakapp/api';
 import { createHash } from 'node:crypto';
+import type { Context } from '@yaakapp/api';
 
 export async function storeToken(
   ctx: Context,

@@ -5,6 +5,11 @@ import { useAuthTab } from '../hooks/useAuthTab';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
+import { EmptyStateText } from './EmptyStateText';
+import { EnvironmentEditor } from './EnvironmentEditor';
+import { HeadersEditor } from './HeadersEditor';
+import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
+import { MarkdownEditor } from './MarkdownEditor';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
 import { Input } from './core/Input';
@@ -12,11 +17,6 @@ import { Link } from './core/Link';
 import { VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { EmptyStateText } from './EmptyStateText';
-import { EnvironmentEditor } from './EnvironmentEditor';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
 
 interface Props {
   folderId: string | null;
@@ -28,7 +28,11 @@ const TAB_HEADERS = 'headers';
 const TAB_VARIABLES = 'variables';
 const TAB_GENERAL = 'general';
 
-export type FolderSettingsTab = typeof TAB_AUTH | typeof TAB_HEADERS | typeof TAB_GENERAL | typeof TAB_VARIABLES;
+export type FolderSettingsTab =
+  | typeof TAB_AUTH
+  | typeof TAB_HEADERS
+  | typeof TAB_GENERAL
+  | typeof TAB_VARIABLES;
 
 export function FolderSettingsDialog({ folderId, tab }: Props) {
   const folders = useAtomValue(foldersAtom);

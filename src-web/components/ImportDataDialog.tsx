@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useLocalStorage } from 'react-use';
+import { SelectFile } from './SelectFile';
 import { Button } from './core/Button';
 import { VStack } from './core/Stacks';
-import { SelectFile } from './SelectFile';
 
 interface Props {
   importData: (filePath: string) => Promise<void>;

@@ -17,13 +17,13 @@ import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { revealInFinderText } from '../lib/reveal';
+import { SwitchWorkspaceDialog } from './SwitchWorkspaceDialog';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
-import { SwitchWorkspaceDialog } from './SwitchWorkspaceDialog';
 
 type Props = Pick<ButtonProps, 'className' | 'justify' | 'forDropdown' | 'leftSlot'>;
 
@@ -104,7 +104,8 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       // Always open a new window if the selected one is already active
       switchWorkspace.mutate({ workspaceId, inNewWindow: true });
       return;
-    } else if (typeof settings.openWorkspaceNewWindow === 'boolean') {
+    }
+    if (typeof settings.openWorkspaceNewWindow === 'boolean') {
       switchWorkspace.mutate({ workspaceId, inNewWindow: settings.openWorkspaceNewWindow });
       return;
     }

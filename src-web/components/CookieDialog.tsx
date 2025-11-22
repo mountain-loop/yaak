@@ -1,4 +1,4 @@
-import type { Cookie} from '@yaakapp-internal/models';
+import type { Cookie } from '@yaakapp-internal/models';
 import { cookieJarsAtom, patchModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { cookieDomain } from '../lib/model_util';
@@ -10,7 +10,7 @@ interface Props {
   cookieJarId: string | null;
 }
 
-export const CookieDialog = function ({ cookieJarId }: Props) {
+export const CookieDialog = ({ cookieJarId }: Props) => {
   const cookieJars = useAtomValue(cookieJarsAtom);
   const cookieJar = cookieJars?.find((c) => c.id === cookieJarId);
 
@@ -33,7 +33,7 @@ export const CookieDialog = function ({ cookieJarId }: Props) {
           <tr>
             <th className="py-2 text-left">Domain</th>
             <th className="py-2 text-left pl-4">Cookie</th>
-            <th className="py-2 pl-4"></th>
+            <th className="py-2 pl-4" />
           </tr>
         </thead>
         <tbody className="divide-y divide-surface-highlight">

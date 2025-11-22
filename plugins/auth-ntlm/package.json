@@ -12,7 +12,7 @@
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "lint": "tsc --noEmit && eslint . --ext .ts,.tsx"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "httpntlm": "^1.8.13"

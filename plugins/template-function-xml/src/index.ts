@@ -67,18 +67,19 @@ export function filterXPath(
   result: XPathResult,
   join: string | null,
 ): string {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
   const doc: any = new DOMParser().parseFromString(body, 'text/xml');
   const items = xpath.select(path, doc, false);
 
   if (!Array.isArray(items)) {
     return String(items);
-  } else if (!Array.isArray(items) || result === 'first') {
-    return items[0] != null ? String(items[0].firstChild ?? '') : '';
-  } else if (result === 'join') {
-    return items.map((item) => String(item.firstChild ?? '')).join(join ?? '');
-  } else {
-    // Not sure what cases this happens in (?)
-    return String(items);
   }
+  if (!Array.isArray(items) || result === 'first') {
+    return items[0] != null ? String(items[0].firstChild ?? '') : '';
+  }
+  if (result === 'join') {
+    return items.map((item) => String(item.firstChild ?? '')).join(join ?? '');
+  }
+  // Not sure what cases this happens in (?)
+  return String(items);
 }

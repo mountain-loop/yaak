@@ -14,10 +14,11 @@ export const plugin: PluginDefinition = {
 };
 
 export async function convertOpenApi(contents: string): Promise<ImportPluginResponse | undefined> {
-  let postmanCollection;
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  let postmanCollection: any;
   try {
     postmanCollection = await new Promise((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
       convert({ type: 'string', data: contents }, {}, (err, result: any) => {
         if (err != null) reject(err);
 

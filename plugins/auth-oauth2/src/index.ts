@@ -7,10 +7,10 @@ import type {
 } from '@yaakapp/api';
 import {
   DEFAULT_PKCE_METHOD,
-  genPkceCodeVerifier,
-  getAuthorizationCode,
   PKCE_PLAIN,
   PKCE_SHA256,
+  genPkceCodeVerifier,
+  getAuthorizationCode,
 } from './grants/authorizationCode';
 import { getClientCredentials } from './grants/clientCredentials';
 import { getImplicit } from './grants/implicit';
@@ -27,7 +27,7 @@ const grantTypes: FormInputSelectOption[] = [
   { label: 'Client Credentials', value: 'client_credentials' },
 ];
 
-const defaultGrantType = grantTypes[0]!.value;
+const defaultGrantType = grantTypes[0]?.value;
 
 function hiddenIfNot(
   grantTypes: GrantType[],
@@ -391,7 +391,7 @@ export const plugin: PluginDefinition = {
           credentialsInBody,
         });
       } else {
-        throw new Error('Invalid grant type ' + grantType);
+        throw new Error(`Invalid grant type ${grantType}`);
       }
 
       const headerName = stringArg(values, 'headerName') || 'Authorization';
@@ -406,7 +406,7 @@ function stringArgOrNull(
   name: string,
 ): string | null {
   const arg = values[name];
-  if (arg == null || arg == '') return null;
+  if (arg == null || arg === '') return null;
   return `${arg}`;
 }
 

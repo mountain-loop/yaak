@@ -11,9 +11,8 @@ export const environmentsBreakdownAtom = atom((get) => {
       ?.sort((a, b) => {
         if (a.sortPriority === b.sortPriority) {
           return a.updatedAt > b.updatedAt ? 1 : -1;
-        } else {
-          return a.sortPriority - b.sortPriority;
         }
+        return a.sortPriority - b.sortPriority;
       }) ?? [];
 
   const folderEnvironments =

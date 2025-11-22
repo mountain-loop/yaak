@@ -43,7 +43,7 @@ export const plugin: PluginDefinition = {
             const request = await ctx.httpRequest.getById({ id: args.values.requestId });
             if (request == null) return null;
 
-            const validHeaders = request.headers.filter(h => h.enabled !== false && h.name);
+            const validHeaders = request.headers.filter((h) => h.enabled !== false && h.name);
             return {
               placeholder: validHeaders[0]?.name,
               completionOptions: validHeaders.map<GenericCompletionOption>((h) => ({

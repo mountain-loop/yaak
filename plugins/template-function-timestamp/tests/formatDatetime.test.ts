@@ -1,6 +1,6 @@
+import { tz } from '@date-fns/tz';
 import { describe, expect, it } from 'vitest';
 import { calculateDatetime, formatDatetime } from '../src';
-import { tz } from "@date-fns/tz";
 
 describe('formatDatetime', () => {
   it('returns formatted current date', () => {

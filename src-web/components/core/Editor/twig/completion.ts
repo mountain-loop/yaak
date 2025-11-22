@@ -44,14 +44,13 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
     if (toMatch === null) return null;
 
     const matchLen = toMatch.to - toMatch.from;
-
-    if (toMatch.from >0 && matchLen < MIN_MATCH_NAME) {
+    if (toMatch.from > 0 && matchLen < MIN_MATCH_NAME) {
       return null;
     }
 
     const completions: Completion[] = options
       .flatMap((o): Completion[] => {
-        const matchSegments = toMatch!.text.replace(/^\$/, '').split('.');
+        const matchSegments = toMatch.text.replace(/^\$/, '').split('.');
         const optionSegments = o.name.split('.');
 
         // If not on the last segment, only complete the namespace
@@ -59,7 +58,7 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
           const prefix = optionSegments.slice(0, matchSegments.length).join('.');
           return [
             {
-              label: prefix + '.*',
+              label: `${prefix}.*`,
               type: 'namespace',
               detail: 'namespace',
               apply: (view, _completion, from, to) => {

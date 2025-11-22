@@ -43,8 +43,8 @@ export function Dialog({
 
   return (
     <Overlay open={open} onClose={disableBackdropClose ? undefined : onClose} portalName="dialog">
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
+        // biome-ignore lint/a11y/useSemanticElements: <explanation>
         role="dialog"
         className={classNames(
           'py-4 x-theme-dialog absolute inset-0 pointer-events-none',

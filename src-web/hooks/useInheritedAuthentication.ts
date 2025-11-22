@@ -8,15 +8,11 @@ import type {
 import { foldersAtom, workspacesAtom } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 
-const ancestorsAtom = atom(function (get) {
-  return [...get(foldersAtom), ...get(workspacesAtom)];
-});
+const ancestorsAtom = atom((get) => [...get(foldersAtom), ...get(workspacesAtom)]);
 
 export type AuthenticatedModel = HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace;
 
-export function useInheritedAuthentication(
-  baseModel: AuthenticatedModel | null,
-) {
+export function useInheritedAuthentication(baseModel: AuthenticatedModel | null) {
   const parents = useAtomValue(ancestorsAtom);
 
   if (baseModel == null) return null;
@@ -35,7 +31,7 @@ export function useInheritedAuthentication(
     // Recurse up the tree
     const parent = parents.find((p) => {
       if (child.folderId) return p.id === child.folderId;
-      else return p.id === child.workspaceId;
+      return p.id === child.workspaceId;
     });
 
     // Failed to find parent (should never happen)

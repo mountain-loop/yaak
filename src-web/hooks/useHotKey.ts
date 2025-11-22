@@ -281,16 +281,15 @@ export function useFormattedHotkey(action: HotkeyAction | null): string[] | null
 
   if (os === 'macos') {
     return labelParts;
-  } else {
-    return [labelParts.join('+')];
   }
+  return [labelParts.join('+')];
 }
 
 const resolveHotkeyKey = (key: string) => {
   const os = type();
   if (key === 'CmdCtrl' && os === 'macos') return 'Meta';
-  else if (key === 'CmdCtrl') return 'Control';
-  else return key;
+  if (key === 'CmdCtrl') return 'Control';
+  return key;
 };
 
 function compareKeys(keysA: string[], keysB: string[]) {

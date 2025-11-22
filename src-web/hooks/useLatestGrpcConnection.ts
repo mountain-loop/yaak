@@ -1,4 +1,4 @@
-import type { GrpcConnection} from '@yaakapp-internal/models';
+import type { GrpcConnection } from '@yaakapp-internal/models';
 import { grpcConnectionsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 

@@ -17,13 +17,14 @@ export function useFormatText({
     queryFn: async () => {
       if (text === '' || !pretty) {
         return text;
-      } else if (language === 'json') {
-        return tryFormatJson(text);
-      } else if (language === 'xml' || language === 'html') {
-        return tryFormatXml(text);
-      } else {
-        return text;
       }
+      if (language === 'json') {
+        return tryFormatJson(text);
+      }
+      if (language === 'xml' || language === 'html') {
+        return tryFormatXml(text);
+      }
+      return text;
     },
   }).data;
 }

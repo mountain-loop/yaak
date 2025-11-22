@@ -1,6 +1,6 @@
+import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useResponseBodyText } from '../../hooks/useResponseBodyText';
-import type { HttpResponse } from '@yaakapp-internal/models';
 import { JsonAttributeTree } from '../core/JsonAttributeTree';
 
 interface Props {

@@ -15,13 +15,13 @@ import type { ReflectResponseService } from '../hooks/useGrpc';
 import { showAlert } from '../lib/alert';
 import { showDialog } from '../lib/dialog';
 import { pluralizeCount } from '../lib/pluralize';
+import { GrpcProtoSelectionDialog } from './GrpcProtoSelectionDialog';
 import { Button } from './core/Button';
 import type { EditorProps } from './core/Editor/Editor';
 import { Editor } from './core/Editor/LazyEditor';
 import { FormattedError } from './core/FormattedError';
 import { InlineCode } from './core/InlineCode';
 import { VStack } from './core/Stacks';
-import { GrpcProtoSelectionDialog } from './GrpcProtoSelectionDialog';
 
 type Props = Pick<EditorProps, 'heightMode' | 'onChange' | 'className' | 'forceUpdateKey'> & {
   services: ReflectResponseService[] | null;

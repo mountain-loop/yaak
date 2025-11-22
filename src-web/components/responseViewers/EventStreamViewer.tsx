@@ -144,6 +144,7 @@ function EventRow({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={classNames(
         className,

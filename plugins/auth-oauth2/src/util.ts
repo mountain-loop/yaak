@@ -50,7 +50,7 @@ export function extractCode(urlStr: string, redirectUri: string | null): string 
 export function urlMatchesRedirect(url: URL, redirectUrl: string | null): boolean {
   if (!redirectUrl) return true;
 
-  let redirect;
+  let redirect: URL;
   try {
     redirect = new URL(redirectUrl);
   } catch {

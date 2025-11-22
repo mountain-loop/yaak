@@ -4,12 +4,12 @@ import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { editEnvironment } from '../lib/editEnvironment';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
+import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
-import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 
 type Props = {
   className?: string;

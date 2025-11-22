@@ -35,8 +35,13 @@ export function equalSubtree<T extends { id: string }>(
   if (getNodeKey(a, getItemKey) !== getNodeKey(b, getItemKey)) return false;
   const ak = a.children ?? [];
   const bk = b.children ?? [];
-  if (ak.length !== bk.length) return false;
+
+  if (ak.length !== bk.length) {
+    return false;
+  }
+
   for (let i = 0; i < ak.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: <explanation>
     if (!equalSubtree(ak[i]!, bk[i]!, getItemKey)) return false;
   }
 

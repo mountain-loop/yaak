@@ -11,7 +11,7 @@ type WorkspaceSearchSchema = {
   | {
       folder_id: string;
     }
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  // biome-ignore lint/complexity/noBannedTypes: Needed to support empty
   | {}
 );
 
@@ -27,11 +27,11 @@ export const Route = createFileRoute('/workspaces/$workspaceId/')({
     const folderId = search.folder_id as string | undefined;
     if (requestId != null) {
       return { ...base, request_id: requestId };
-    } else if (folderId) {
-      return { ...base, folder_id: folderId };
-    } else {
-      return base;
     }
+    if (folderId) {
+      return { ...base, folder_id: folderId };
+    }
+    return base;
   },
 });
 

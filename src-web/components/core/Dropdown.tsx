@@ -3,15 +3,15 @@ import { atom } from 'jotai';
 import * as m from 'motion/react-m';
 import type {
   CSSProperties,
-  FocusEvent as ReactFocusEvent,
   HTMLAttributes,
   MouseEvent,
   ReactElement,
+  FocusEvent as ReactFocusEvent,
   ReactNode,
   RefObject,
   SetStateAction,
 } from 'react';
-import React, {
+import {
   Children,
   cloneElement,
   forwardRef,
@@ -30,6 +30,7 @@ import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { generateId } from '../../lib/generateId';
 import { getNodeText } from '../../lib/getNodeText';
 import { jotaiStore } from '../../lib/jotai';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { Overlay } from '../Overlay';
 import { Button } from './Button';
 import { HotKey } from './HotKey';
@@ -37,7 +38,6 @@ import { Icon } from './Icon';
 import { LoadingIcon } from './LoadingIcon';
 import { Separator } from './Separator';
 import { HStack, VStack } from './Stacks';
-import { ErrorBoundary } from '../ErrorBoundary';
 
 export type DropdownItemSeparator = {
   type: 'separator';
@@ -96,24 +96,24 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   ref,
 ) {
   const id = useRef(generateId());
-  const [isOpen, _setIsOpen] = useState<boolean>(false);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
 
   useEffect(() => {
     return jotaiStore.sub(openAtom, () => {
       const globalOpenId = jotaiStore.get(openAtom);
       const newIsOpen = globalOpenId === id.current;
       if (newIsOpen !== isOpen) {
-        _setIsOpen(newIsOpen);
+        setIsOpen(newIsOpen);
       }
     });
-  }, [isOpen, _setIsOpen]);
+  }, [isOpen]);
 
   // const [isOpen, _setIsOpen] = useState<boolean>(false);
   const [defaultSelectedIndex, setDefaultSelectedIndex] = useState<number | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<Omit<DropdownRef, 'open'>>(null);
 
-  const setIsOpen = useCallback(
+  const handleSetIsOpen = useCallback(
     (o: SetStateAction<boolean>) => {
       jotaiStore.set(openAtom, (prevId) => {
         const prevIsOpen = prevId === id.current;
@@ -121,9 +121,11 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
         // Persist background color of button until we close the dropdown
         if (newIsOpen) {
           onOpen?.();
-          buttonRef.current!.style.backgroundColor = window
-            .getComputedStyle(buttonRef.current!)
-            .getPropertyValue('background-color');
+          if (buttonRef.current) {
+            buttonRef.current.style.backgroundColor = window
+              .getComputedStyle(buttonRef.current)
+              .getPropertyValue('background-color');
+          }
         }
         return newIsOpen ? id.current : null; // Set global atom to current ID to signify open state
       });
@@ -136,7 +138,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   useEffect(() => {
     if (!isOpen) {
       // Clear persisted BG
-      buttonRef.current!.style.backgroundColor = '';
+      if (buttonRef.current) buttonRef.current.style.backgroundColor = '';
       // Set to different value when opened and closed to force it to update. This is to force
       // <Menu/> to reset its selected-index state, which it does when this prop changes
       setDefaultSelectedIndex(null);
@@ -157,38 +159,38 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
         else this.close();
       },
       open(index?: number) {
-        setIsOpen(true);
+        handleSetIsOpen(true);
         setDefaultSelectedIndex(index ?? -1);
       },
       close() {
-        setIsOpen(false);
+        handleSetIsOpen(false);
       },
     }),
-    [isOpen, setIsOpen, menuRefCurrent],
+    [isOpen, handleSetIsOpen, menuRefCurrent],
   );
 
   useHotKey(hotKeyAction ?? null, () => {
     setDefaultSelectedIndex(0);
-    setIsOpen(true);
+    handleSetIsOpen(true);
   });
 
   const child = useMemo(() => {
     const existingChild = Children.only(children);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const props: any = {
-      ...existingChild.props,
-      ref: buttonRef,
-      'aria-haspopup': 'true',
-      onClick:
-        existingChild.props?.onClick ??
-        ((e: MouseEvent<HTMLButtonElement>) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setIsOpen((o) => !o); // Toggle dropdown
-        }),
-    };
+    const props: HTMLAttributes<HTMLButtonElement> & { ref: RefObject<HTMLButtonElement | null> } =
+      {
+        ...existingChild.props,
+        ref: buttonRef,
+        'aria-haspopup': 'true',
+        onClick:
+          existingChild.props?.onClick ??
+          ((e: MouseEvent<HTMLButtonElement>) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleSetIsOpen((o) => !o); // Toggle dropdown
+          }),
+      };
     return cloneElement(existingChild, props);
-  }, [children, setIsOpen]);
+  }, [children, handleSetIsOpen]);
 
   useEffect(() => {
     buttonRef.current?.setAttribute('aria-expanded', isOpen.toString());
@@ -204,7 +206,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   return (
     <>
       {child}
-      <ErrorBoundary name={`Dropdown Menu`}>
+      <ErrorBoundary name={'Dropdown Menu'}>
         <Menu
           ref={menuRef}
           showTriangle
@@ -213,7 +215,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
           defaultSelectedIndex={defaultSelectedIndex}
           items={items}
           triggerShape={triggerRect ?? null}
-          onClose={() => setIsOpen(false)}
+          onClose={() => handleSetIsOpen(false)}
           isOpen={isOpen}
         />
       </ErrorBoundary>
@@ -348,7 +350,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     );
 
     const handleNext = useCallback(
-      (incrBy: number = 1) => {
+      (incrBy = 1) => {
         setSelectedIndex((currIndex) => {
           let nextIndex = (currIndex ?? -1) + incrBy;
           const maxTries = items.length;
@@ -408,18 +410,22 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       [handleClose, setSelectedIndex],
     );
 
-    useImperativeHandle(ref, () => {
-      return {
-        close: handleClose,
-        prev: handlePrev,
-        next: handleNext,
-        select: async () => {
-          const item = items[selectedIndexRef.current ?? -1] ?? null;
-          if (!item) return;
-          await handleSelect(item);
-        },
-      };
-    }, [handleClose, handleNext, handlePrev, handleSelect, items]);
+    useImperativeHandle(
+      ref,
+      () => {
+        return {
+          close: handleClose,
+          prev: handlePrev,
+          next: handleNext,
+          select: async () => {
+            const item = items[selectedIndexRef.current ?? -1] ?? null;
+            if (!item) return;
+            await handleSelect(item);
+          },
+        };
+      },
+      [handleClose, handleNext, handlePrev, handleSelect, items],
+    );
 
     const styles = useMemo<{
       container: CSSProperties;
@@ -556,6 +562,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                   if (item.type === 'separator') {
                     return (
                       <Separator
+                        // biome-ignore lint/suspicious/noArrayIndexKey: Nothing else available
                         key={i}
                         className={classNames('my-1.5', item.label ? 'ml-2' : null)}
                       >
@@ -565,12 +572,8 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                   }
                   if (item.type === 'content') {
                     return (
-                      // eslint-disable-next-line jsx-a11y/no-static-element-interactions,jsx-a11y/click-events-have-key-events
-                      <div
-                        key={i}
-                        className={classNames('my-1 mx-2 max-w-xs')}
-                        onClick={onClose}
-                      >
+                      // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+                      <div key={i} className={classNames('my-1 mx-2 max-w-xs')} onClick={onClose}>
                         {item.label}
                       </div>
                     );
@@ -580,7 +583,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                       focused={i === selectedIndex}
                       onFocus={handleFocus}
                       onSelect={handleSelect}
-                      key={`item_${i}`}
+                      key={`item_${item.label}`}
                       item={item}
                     />
                   );

@@ -18,6 +18,8 @@ import { useRandomKey } from '../hooks/useRandomKey';
 import { capitalize } from '../lib/capitalize';
 import { showDialog } from '../lib/dialog';
 import { resolvedModelName } from '../lib/resolvedModelName';
+import { Markdown } from './Markdown';
+import { SelectFile } from './SelectFile';
 import { Banner } from './core/Banner';
 import { Checkbox } from './core/Checkbox';
 import { DetailsBanner } from './core/DetailsBanner';
@@ -29,10 +31,7 @@ import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { Select } from './core/Select';
 import { VStack } from './core/Stacks';
-import { Markdown } from './Markdown';
-import { SelectFile } from './SelectFile';
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const DYNAMIC_FORM_NULL_ARG = '__NULL__';
 const INPUT_SIZE = 'sm';
 
@@ -59,7 +58,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
 }: Props<T>) {
   const setDataAttr = useCallback(
     (name: string, value: JsonPrimitive) => {
-      onChange({ ...data, [name]: value == DYNAMIC_FORM_NULL_ARG ? undefined : value });
+      onChange({ ...data, [name]: value === DYNAMIC_FORM_NULL_ARG ? undefined : value });
     },
     [data, onChange],
   );
@@ -128,7 +127,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
           case 'select':
             return (
               <SelectArg
-                key={i}
+                key={i + stateKey}
                 arg={input}
                 onChange={(v) => setDataAttr(input.name, v)}
                 value={
@@ -293,9 +292,8 @@ function TextArg({
   };
   if (autocompleteVariables || autocompleteFunctions) {
     return <Input {...props} />;
-  } else {
-    return <PlainInput {...props} />;
   }
+  return <PlainInput {...props} />;
 }
 
 function EditorArg({
@@ -491,7 +489,7 @@ function HttpRequestArg({
           return {
             label:
               buildRequestBreadcrumbs(r, folders).join(' / ') +
-              (r.id == activeHttpRequest?.id ? ' (current)' : ''),
+              (r.id === activeHttpRequest?.id ? ' (current)' : ''),
             value: r.id,
           };
         }),

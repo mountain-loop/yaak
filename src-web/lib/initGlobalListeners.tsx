@@ -115,7 +115,7 @@ export function initGlobalListeners() {
               variant="border"
               rightSlot={<Icon icon="external_link" />}
               onClick={async () => {
-                await openUrl('https://yaak.app/changelog/' + version);
+                await openUrl(`https://yaak.app/changelog/${version}`);
               }}
             >
               What&apos;s New

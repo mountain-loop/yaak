@@ -1,6 +1,6 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useToggle } from '../hooks/useToggle';
 import { showConfirm } from '../lib/confirm';
 import { Banner } from './core/Banner';
@@ -54,7 +54,7 @@ export function ConfirmLargeRequestBody({ children, request }: Props) {
             variant="border"
             onClick={async () => {
               const confirm = await showConfirm({
-                id: 'delete-body-' + request.id,
+                id: `delete-body-${request.id}`,
                 confirmText: 'Delete Body',
                 title: 'Delete Body Text',
                 description: 'Are you sure you want to delete the request body text?',

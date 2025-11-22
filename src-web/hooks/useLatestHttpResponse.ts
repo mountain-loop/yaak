@@ -1,4 +1,4 @@
-import type { HttpResponse} from '@yaakapp-internal/models';
+import type { HttpResponse } from '@yaakapp-internal/models';
 import { httpResponsesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 

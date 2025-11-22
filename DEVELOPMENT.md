@@ -60,3 +60,29 @@ _Note: For safety, development builds use a separate database location from prod
 # Example
 lezer-generator components/core/Editor/<LANG>/<LANG>.grammar > components/core/Editor/<LANG>/<LANG>.ts
 ```
+
+## Linting & Formatting
+
+This repo uses Biome for linting and formatting (replacing ESLint + Prettier).
+
+- Lint the entire repo:
+
+```sh
+npm run lint
+```
+
+- Auto-fix lint issues where possible:
+
+```sh
+npm run lint:fix
+```
+
+- Format code:
+
+```sh
+npm run format
+```
+
+Notes:
+- Many workspace packages also expose the same scripts (`lint`, `lint:fix`, and `format`).
+- TypeScript type-checking still runs separately via `tsc --noEmit` in relevant packages.

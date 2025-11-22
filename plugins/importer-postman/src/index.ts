@@ -205,7 +205,7 @@ function convertUrl(rawUrl: string | unknown): Pick<HttpRequest, 'url' | 'urlPar
   if ('variable' in url && Array.isArray(url.variable) && url.variable.length > 0) {
     for (const v of url.variable) {
       params.push({
-        name: ':' + (v.key ?? ''),
+        name: `:${v.key ?? ''}`,
         value: v.value ?? '',
         enabled: !v.disabled,
       });
@@ -414,7 +414,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         ),
       },
     };
-  } else if (body.mode === 'urlencoded') {
+  }
+  if (body.mode === 'urlencoded') {
     return {
       headers: [
         {
@@ -432,7 +433,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         })),
       },
     };
-  } else if (body.mode === 'formdata') {
+  }
+  if (body.mode === 'formdata') {
     return {
       headers: [
         {
@@ -459,7 +461,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         ),
       },
     };
-  } else if (body.mode === 'raw') {
+  }
+  if (body.mode === 'raw') {
     return {
       headers: [
         {
@@ -473,7 +476,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         text: body.raw ?? '',
       },
     };
-  } else if (body.mode === 'file') {
+  }
+  if (body.mode === 'file') {
     return {
       headers: [],
       bodyType: 'binary',
@@ -481,9 +485,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         filePath: body.file?.src,
       },
     };
-  } else {
-    return { headers: [], bodyType: null, body: {} };
   }
+  return { headers: [], bodyType: null, body: {} };
 }
 
 function parseJSONToRecord<T>(jsonStr: string): Record<string, T> | null {
@@ -503,7 +506,7 @@ function toRecord<T>(value: Record<string, T> | unknown): Record<string, T> {
 
 function toArray<T>(value: unknown): T[] {
   if (Object.prototype.toString.call(value) === '[object Array]') return value as T[];
-  else return [];
+  return [];
 }
 
 /** Recursively render all nested object properties */
@@ -511,31 +514,32 @@ function convertTemplateSyntax<T>(obj: T): T {
   if (typeof obj === 'string') {
     return obj.replace(
       /{{\s*(_\.)?([^}]*)\s*}}/g,
-      (_m, _dot, expr) => '${[' + expr.trim().replace(/^vault:/, '') + ']}',
+      (_m, _dot, expr) => `\${[${expr.trim().replace(/^vault:/, '')}]}`,
     ) as T;
-  } else if (Array.isArray(obj) && obj != null) {
+  }
+  if (Array.isArray(obj) && obj != null) {
     return obj.map(convertTemplateSyntax) as T;
-  } else if (typeof obj === 'object' && obj != null) {
+  }
+  if (typeof obj === 'object' && obj != null) {
     return Object.fromEntries(
       Object.entries(obj).map(([k, v]) => [k, convertTemplateSyntax(v)]),
     ) as T;
-  } else {
-    return obj;
   }
+  return obj;
 }
 
 function deleteUndefinedAttrs<T>(obj: T): T {
   if (Array.isArray(obj) && obj != null) {
     return obj.map(deleteUndefinedAttrs) as T;
-  } else if (typeof obj === 'object' && obj != null) {
+  }
+  if (typeof obj === 'object' && obj != null) {
     return Object.fromEntries(
       Object.entries(obj)
         .filter(([, v]) => v !== undefined)
         .map(([k, v]) => [k, deleteUndefinedAttrs(v)]),
     ) as T;
-  } else {
-    return obj;
   }
+  return obj;
 }
 
 const idCount: Partial<Record<string, number>> = {};

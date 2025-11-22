@@ -11,7 +11,7 @@ export function copyToClipboard(
     writeText(text).catch(console.error);
   }
 
-  if (text != '' && !disableToast) {
+  if (text !== '' && !disableToast) {
     showToast({
       id: 'copied',
       color: 'success',

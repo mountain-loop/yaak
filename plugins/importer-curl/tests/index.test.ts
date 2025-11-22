@@ -374,7 +374,7 @@ describe('importer-curl', () => {
         httpRequests: [
           baseRequest({
             url: 'https://yaak.app',
-            method: "POST",
+            method: 'POST',
             bodyType: 'application/x-www-form-urlencoded',
             body: {
               form: [{ name: 'foo', value: 'bar=baz', enabled: true }],

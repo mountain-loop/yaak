@@ -10,7 +10,7 @@ describe('exporter-curl', () => {
         },
         [],
       ),
-    ).toEqual([`grpcurl yaak.app`].join(` \\\n  `));
+    ).toEqual(['grpcurl yaak.app'].join(' \\\n  '));
   });
   test('Basic metadata', async () => {
     expect(
@@ -25,7 +25,7 @@ describe('exporter-curl', () => {
         },
         [],
       ),
-    ).toEqual([`grpcurl -H 'aaa: AAA'`, `-H 'bbb: BBB'`, `yaak.app`].join(` \\\n  `));
+    ).toEqual([`grpcurl -H 'aaa: AAA'`, `-H 'bbb: BBB'`, 'yaak.app'].join(' \\\n  '));
   });
   test('Basic auth', async () => {
     expect(
@@ -40,7 +40,7 @@ describe('exporter-curl', () => {
         },
         [],
       ),
-    ).toEqual([`grpcurl -H 'Authorization: Basic dXNlcjpwYXNz'`, `yaak.app`].join(` \\\n  `));
+    ).toEqual([`grpcurl -H 'Authorization: Basic dXNlcjpwYXNz'`, 'yaak.app'].join(' \\\n  '));
   });
 
   test('API key auth', async () => {
@@ -56,7 +56,7 @@ describe('exporter-curl', () => {
         },
         [],
       ),
-    ).toEqual([`grpcurl -H 'X-Token: tok'`, `yaak.app`].join(` \\\n  `));
+    ).toEqual([`grpcurl -H 'X-Token: tok'`, 'yaak.app'].join(' \\\n  '));
   });
 
   test('API key auth', async () => {
@@ -73,7 +73,7 @@ describe('exporter-curl', () => {
         },
         [],
       ),
-    ).toEqual([`grpcurl`, `yaak.app?token=tok%201`].join(` \\\n  `));
+    ).toEqual(['grpcurl', 'yaak.app?token=tok%201'].join(' \\\n  '));
   });
 
   test('Single proto file', async () => {
@@ -82,8 +82,8 @@ describe('exporter-curl', () => {
         `grpcurl -import-path '/foo/bar'`,
         `-import-path '/foo'`,
         `-proto '/foo/bar/baz.proto'`,
-        `yaak.app`,
-      ].join(` \\\n  `),
+        'yaak.app',
+      ].join(' \\\n  '),
     );
   });
   test('Multiple proto files, same dir', async () => {
@@ -95,8 +95,8 @@ describe('exporter-curl', () => {
         `-import-path '/foo'`,
         `-proto '/foo/bar/aaa.proto'`,
         `-proto '/foo/bar/bbb.proto'`,
-        `yaak.app`,
-      ].join(` \\\n  `),
+        'yaak.app',
+      ].join(' \\\n  '),
     );
   });
   test('Multiple proto files, different dir', async () => {
@@ -110,18 +110,18 @@ describe('exporter-curl', () => {
         `-import-path '/xxx'`,
         `-proto '/aaa/bbb/ccc.proto'`,
         `-proto '/xxx/yyy/zzz.proto'`,
-        `yaak.app`,
-      ].join(` \\\n  `),
+        'yaak.app',
+      ].join(' \\\n  '),
     );
   });
   test('Single include dir', async () => {
     expect(await convert({ url: 'https://yaak.app' }, ['/aaa/bbb'])).toEqual(
-      [`grpcurl -import-path '/aaa/bbb'`, `yaak.app`].join(` \\\n  `),
+      [`grpcurl -import-path '/aaa/bbb'`, 'yaak.app'].join(' \\\n  '),
     );
   });
   test('Multiple include dir', async () => {
     expect(await convert({ url: 'https://yaak.app' }, ['/aaa/bbb', '/xxx/yyy'])).toEqual(
-      [`grpcurl -import-path '/aaa/bbb'`, `-import-path '/xxx/yyy'`, `yaak.app`].join(` \\\n  `),
+      [`grpcurl -import-path '/aaa/bbb'`, `-import-path '/xxx/yyy'`, 'yaak.app'].join(' \\\n  '),
     );
   });
   test('Mixed proto and dirs', async () => {
@@ -134,8 +134,8 @@ describe('exporter-curl', () => {
         `-import-path '/foo'`,
         `-import-path '/'`,
         `-proto '/foo/bar.proto'`,
-        `yaak.app`,
-      ].join(` \\\n  `),
+        'yaak.app',
+      ].join(' \\\n  '),
     );
   });
   test('Sends data', async () => {
@@ -152,8 +152,8 @@ describe('exporter-curl', () => {
         `grpcurl -import-path '/'`,
         `-proto '/foo.proto'`,
         `-d '{"foo":"bar","baz":1}'`,
-        `yaak.app`,
-      ].join(` \\\n  `),
+        'yaak.app',
+      ].join(' \\\n  '),
     );
   });
 });

@@ -21,9 +21,9 @@ export function useHttpRequestActions() {
     queryFn: () => getHttpRequestActions(),
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   const actions = useMemo(() => {
     return actionsResult.data ?? [];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(actionsResult.data)]);
 
   return actions;

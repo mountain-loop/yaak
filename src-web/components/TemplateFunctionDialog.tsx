@@ -24,6 +24,7 @@ import { showDialog } from '../lib/dialog';
 import { convertTemplateToInsecure } from '../lib/encryption';
 import { jotaiStore } from '../lib/jotai';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
+import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 import { Button } from './core/Button';
 import { collectArgumentValues } from './core/Editor/twig/util';
 import { IconButton } from './core/IconButton';
@@ -31,7 +32,6 @@ import { InlineCode } from './core/InlineCode';
 import { LoadingIcon } from './core/LoadingIcon';
 import { PlainInput } from './core/PlainInput';
 import { HStack } from './core/Stacks';
-import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 
 interface Props {
   templateFunction: TemplateFunction;
@@ -50,7 +50,7 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
       return;
     }
 
-    (async function () {
+    (async () => {
       const initial = collectArgumentValues(initialTokens, templateFunction);
 
       // HACK: Replace the secure() function's encrypted `value` arg with the decrypted version so
@@ -140,6 +140,7 @@ function InitializedTemplateFunctionDialog({
   );
 
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only update this on rendered data change to keep secrets hidden on input change
   const dataContainsSecrets = useMemo(() => {
     for (const [name, value] of Object.entries(argValues)) {
       const arg = templateFunction.data?.args.find((a) => 'name' in a && a.name === name);
@@ -149,8 +150,6 @@ function InitializedTemplateFunctionDialog({
       }
     }
     return false;
-    // Only update this on rendered data change to keep secrets hidden on input change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendered.data]);
 
   if (templateFunction.data == null || templateFunction.isPending) {
@@ -177,7 +176,7 @@ function InitializedTemplateFunctionDialog({
             name="value"
             type="password"
             placeholder="••••••••••••"
-            defaultValue={String(argValues['value'] ?? '')}
+            defaultValue={String(argValues.value ?? '')}
             onChange={(value) => setArgValues({ ...argValues, value })}
           />
         ) : (
@@ -263,22 +262,23 @@ function InitializedTemplateFunctionDialog({
   );
 }
 
-TemplateFunctionDialog.show = function (
+TemplateFunctionDialog.show = (
   fn: TemplateFunction,
   tagValue: string,
   startPos: number,
   view: EditorView,
-) {
+) => {
   const initialTokens = parseTemplate(tagValue);
   showDialog({
-    id: 'template-function-' + Math.random(), // Allow multiple at once
+    id: `template-function-${Math.random()}`, // Allow multiple at once
     size: 'md',
     className: 'h-[60rem]',
     noPadding: true,
     title: <InlineCode>{fn.name}(…)</InlineCode>,
     description: fn.description,
     render: ({ hide }) => {
-      const model = jotaiStore.get(activeWorkspaceAtom)!;
+      const model = jotaiStore.get(activeWorkspaceAtom);
+      if (model == null) return null;
       return (
         <TemplateFunctionDialog
           templateFunction={fn}

@@ -13,6 +13,7 @@ import classNames from 'classnames';
 import { useMemo, useState } from 'react';
 import { resolvedModelName } from '../../lib/resolvedModelName';
 import { showErrorToast } from '../../lib/toast';
+import { EmptyStateText } from '../EmptyStateText';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import type { CheckboxProps } from '../core/Checkbox';
@@ -23,9 +24,8 @@ import { Input } from '../core/Input';
 import { Separator } from '../core/Separator';
 import { SplitLayout } from '../core/SplitLayout';
 import { HStack } from '../core/Stacks';
-import { EmptyStateText } from '../EmptyStateText';
-import { handlePushResult } from './git-util';
 import { gitCallbacks } from './callbacks';
+import { handlePushResult } from './git-util';
 
 interface Props {
   syncDir: string;
@@ -281,10 +281,10 @@ function TreeNodeChildren({
         />
       </div>
 
-      {node.children.map((childNode, i) => {
+      {node.children.map((childNode) => {
         return (
           <TreeNodeChildren
-            key={childNode.status.relaPath + i}
+            key={childNode.status.relaPath + childNode.status.status + childNode.status.staged}
             node={childNode}
             depth={depth + 1}
             onCheck={onCheck}
@@ -353,11 +353,11 @@ function nodeCheckedStatus(root: CommitTreeNode): CheckboxProps['checked'] {
 
   if (numVisited === numChecked + numCurrent) {
     return true;
-  } else if (numChecked === 0) {
-    return false;
-  } else {
-    return 'indeterminate';
   }
+  if (numChecked === 0) {
+    return false;
+  }
+  return 'indeterminate';
 }
 
 function setCheckedAndChildren(

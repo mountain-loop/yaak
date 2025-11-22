@@ -8,6 +8,6 @@ interface Props {
 export function AudioViewer({ bodyPath }: Props) {
   const src = convertFileSrc(bodyPath);
 
-  // eslint-disable-next-line jsx-a11y/media-has-caption
-  return <audio className="w-full" controls src={src}></audio>;
+  // biome-ignore lint/a11y/useMediaCaption: <explanation>
+  return <audio className="w-full" controls src={src} />;
 }

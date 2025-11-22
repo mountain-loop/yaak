@@ -6,10 +6,6 @@ import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { workspaceLayoutAtom } from '../lib/atoms';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
-import { PillButton } from './core/PillButton';
-import { Icon } from './core/Icon';
-import { IconButton } from './core/IconButton';
-import { HStack } from './core/Stacks';
 import { EnvironmentActionsDropdown } from './EnvironmentActionsDropdown';
 import { ImportCurlButton } from './ImportCurlButton';
 import { LicenseBadge } from './LicenseBadge';
@@ -17,6 +13,10 @@ import { RecentRequestsDropdown } from './RecentRequestsDropdown';
 import { SettingsDropdown } from './SettingsDropdown';
 import { SidebarActions } from './SidebarActions';
 import { WorkspaceActionsDropdown } from './WorkspaceActionsDropdown';
+import { Icon } from './core/Icon';
+import { IconButton } from './core/IconButton';
+import { PillButton } from './core/PillButton';
+import { HStack } from './core/Stacks';
 
 interface Props {
   className?: string;
@@ -37,7 +37,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full h-full',
       )}
     >
-      <HStack space={0.5} className={classNames("flex-1 pointer-events-none")}>
+      <HStack space={0.5} className={classNames('flex-1 pointer-events-none')}>
         <SidebarActions />
         <CookieDropdown />
         <HStack className="min-w-0">

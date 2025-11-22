@@ -1,4 +1,4 @@
-import { LanguageSupport, LRLanguage } from '@codemirror/language';
+import { LRLanguage, LanguageSupport } from '@codemirror/language';
 import { parser } from './text';
 
 export const textLanguage = LRLanguage.define({

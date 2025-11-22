@@ -15,20 +15,22 @@ export function setWorkspaceSearchParams(
     folder_id: string | null;
   }>,
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (router as any).navigate({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    search: (prev: any) => {
-      // console.log('Navigating to', { prev, search });
-      const o =  { ...prev, ...search };
-      for (const k of Object.keys(o)) {
-        if (o[k] == null) {
-          delete o[k];
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  (router as any)
+    .navigate({
+      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+      search: (prev: any) => {
+        // console.log('Navigating to', { prev, search });
+        const o = { ...prev, ...search };
+        for (const k of Object.keys(o)) {
+          if (o[k] == null) {
+            delete o[k];
+          }
         }
-      }
-      return o;
-    },
-  });
+        return o;
+      },
+    })
+    .catch(console.error);
 }
 
 export function navigateToRequestOrFolderOrWorkspace(

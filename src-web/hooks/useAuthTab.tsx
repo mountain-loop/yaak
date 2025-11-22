@@ -40,7 +40,7 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
           {
             label: 'Inherit from Parent',
             shortLabel:
-              inheritedAuth != null && inheritedAuth.authenticationType != 'none' ? (
+              inheritedAuth != null && inheritedAuth.authenticationType !== 'none' ? (
                 <HStack space={1.5}>
                   {authentication.find((a) => a.name === inheritedAuth.authenticationType)
                     ?.shortLabel ?? 'UNKNOWN'}

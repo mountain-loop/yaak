@@ -204,7 +204,6 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
             onFocus={handleFocus}
             onBlur={handleBlur}
             required={required}
-            autoFocus={autoFocus}
             placeholder={placeholder}
             onKeyDownCapture={onKeyDownCapture}
           />

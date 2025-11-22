@@ -17,6 +17,8 @@ import { usePluginInfo } from '../../hooks/usePluginInfo';
 import { usePluginsKey, useRefreshPlugins } from '../../hooks/usePlugins';
 import { showConfirmDelete } from '../../lib/confirm';
 import { minPromiseMillis } from '../../lib/minPromiseMillis';
+import { EmptyStateText } from '../EmptyStateText';
+import { SelectFile } from '../SelectFile';
 import { Button } from '../core/Button';
 import { CountBadge } from '../core/CountBadge';
 import { Icon } from '../core/Icon';
@@ -28,8 +30,6 @@ import { PlainInput } from '../core/PlainInput';
 import { HStack } from '../core/Stacks';
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
-import { EmptyStateText } from '../EmptyStateText';
-import { SelectFile } from '../SelectFile';
 
 export function SettingsPlugins() {
   const [directory, setDirectory] = React.useState<string | null>(null);
@@ -306,7 +306,7 @@ function usePromptUninstall(pluginId: string | null, name: string) {
       if (pluginId == null) return;
 
       const confirmed = await showConfirmDelete({
-        id: 'uninstall-plugin-' + pluginId,
+        id: `uninstall-plugin-${pluginId}`,
         title: 'Uninstall Plugin',
         confirmText: 'Uninstall',
         description: (

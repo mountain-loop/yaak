@@ -21,13 +21,15 @@ export const plugin: PluginDefinition = {
         name: 'key',
         label: 'Key',
         dynamic: (_ctx, { values }) => {
-          return values.location === 'query' ? {
-            label: 'Parameter Name',
-            description: 'The name of the query parameter to add to the request',
-          } : {
-            label: 'Header Name',
-            description: 'The name of the header to add to the request',
-          };
+          return values.location === 'query'
+            ? {
+                label: 'Parameter Name',
+                description: 'The name of the query parameter to add to the request',
+              }
+            : {
+                label: 'Header Name',
+                description: 'The name of the header to add to the request',
+              };
         },
       },
       {
@@ -45,9 +47,8 @@ export const plugin: PluginDefinition = {
 
       if (location === 'query') {
         return { setQueryParameters: [{ name: key, value }] };
-      } else {
-        return { setHeaders: [{ name: key, value }] };
       }
+      return { setHeaders: [{ name: key, value }] };
     },
   },
 };

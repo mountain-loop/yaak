@@ -71,9 +71,9 @@ function isModelRelevant(m: AnyModel) {
     m.model !== 'websocket_request'
   ) {
     return false;
-  } else if (m.model === 'workspace') {
-    return m.id === workspaceId;
-  } else {
-    return m.workspaceId === workspaceId;
   }
+  if (m.model === 'workspace') {
+    return m.id === workspaceId;
+  }
+  return m.workspaceId === workspaceId;
 }

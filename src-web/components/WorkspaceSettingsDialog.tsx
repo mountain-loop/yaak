@@ -7,17 +7,17 @@ import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { router } from '../lib/router';
 import { CopyIconButton } from './CopyIconButton';
+import { HeadersEditor } from './HeadersEditor';
+import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
+import { MarkdownEditor } from './MarkdownEditor';
+import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
+import { WorkspaceEncryptionSetting } from './WorkspaceEncryptionSetting';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
-import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
-import { WorkspaceEncryptionSetting } from './WorkspaceEncryptionSetting';
 
 interface Props {
   workspaceId: string;

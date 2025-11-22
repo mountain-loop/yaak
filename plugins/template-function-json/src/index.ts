@@ -118,7 +118,7 @@ export function filterJSONPath(
   path: string,
   result: JSONPathResult,
   join: string | null,
-  formatted: boolean = false,
+  formatted = false,
 ): string {
   const parsed = JSON.parse(body);
   let items = JSONPath({ path, json: parsed });
@@ -138,13 +138,12 @@ export function filterJSONPath(
   return objToStr(items, formatted);
 }
 
-function objToStr(o: unknown, formatted: boolean = false): string {
+function objToStr(o: unknown, formatted = false): string {
   if (
     Object.prototype.toString.call(o) === '[object Array]' ||
     Object.prototype.toString.call(o) === '[object Object]'
   ) {
     return formatted ? JSON.stringify(o, null, 2) : JSON.stringify(o);
-  } else {
-    return String(o);
   }
+  return String(o);
 }

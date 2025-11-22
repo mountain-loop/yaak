@@ -5,7 +5,7 @@ import { activeEnvironmentAtom } from './useActiveEnvironment';
 import { useEnvironmentsBreakdown } from './useEnvironmentsBreakdown';
 import { useKeyValue } from './useKeyValue';
 
-const kvKey = (workspaceId: string) => 'recent_environments::' + workspaceId;
+const kvKey = (workspaceId: string) => `recent_environments::${workspaceId}`;
 const namespace = 'global';
 const fallback: string[] = [];
 

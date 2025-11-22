@@ -1,7 +1,7 @@
 import { syntaxTree } from '@codemirror/language';
 import type { Range } from '@codemirror/state';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, ViewPlugin, WidgetType, EditorView } from '@codemirror/view';
+import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view';
 
 class PathPlaceholderWidget extends WidgetType {
   readonly #clickListenerCallback: () => void;
@@ -23,7 +23,7 @@ class PathPlaceholderWidget extends WidgetType {
 
   toDOM() {
     const elt = document.createElement('span');
-    elt.className = `x-theme-templateTag x-theme-templateTag--secondary template-tag`;
+    elt.className = 'x-theme-templateTag x-theme-templateTag--secondary template-tag';
     elt.textContent = this.rawText;
     elt.addEventListener('click', this.#clickListenerCallback);
     return elt;

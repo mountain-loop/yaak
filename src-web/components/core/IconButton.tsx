@@ -33,6 +33,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     showBadge,
     iconColor,
     isLoading,
+    type = 'button',
     ...props
   }: IconButtonProps,
   ref,
@@ -56,6 +57,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       innerClassName="flex items-center justify-center"
       size={size}
       color={color}
+      type={type}
       className={classNames(
         className,
         'group/button relative flex-shrink-0',

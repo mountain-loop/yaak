@@ -8,20 +8,23 @@ export function languageFromContentType(
   const justContentType = contentType?.split(';')[0] ?? contentType ?? '';
   if (justContentType.includes('json')) {
     return 'json';
-  } else if (justContentType.includes('xml')) {
+  }
+  if (justContentType.includes('xml')) {
     return 'xml';
-  } else if (justContentType.includes('html')) {
+  }
+  if (justContentType.includes('html')) {
     const detected = detectFromContent(content);
     if (detected === 'xml') {
       // If it's detected as XML, but is already HTML, don't change it
       return 'html';
-    } else {
-      return detected;
     }
-  } else if (justContentType.includes('javascript')) {
+    return detected;
+  }
+  if (justContentType.includes('javascript')) {
     // Sometimes `application/javascript` returns JSON, so try detecting that
     return detectFromContent(content, 'javascript');
-  } else if (justContentType.includes('markdown')) {
+  }
+  if (justContentType.includes('markdown')) {
     return 'markdown';
   }
 
@@ -38,12 +41,14 @@ function detectFromContent(
 
   if (firstBytes.startsWith('{') || firstBytes.startsWith('[')) {
     return 'json';
-  } else if (
+  }
+  if (
     firstBytes.toLowerCase().startsWith('<!doctype') ||
     firstBytes.toLowerCase().startsWith('<html')
   ) {
     return 'html';
-  } else if (firstBytes.startsWith('<')) {
+  }
+  if (firstBytes.startsWith('<')) {
     return 'xml';
   }
 
@@ -56,8 +61,7 @@ export function isJSON(content: string | null | undefined): boolean {
   try {
     JSON.parse(content);
     return true;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (err) {
+  } catch {
     return false;
   }
 }

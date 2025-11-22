@@ -13,6 +13,7 @@ export function ImportCurlButton() {
   const importCurl = useImportCurl();
   const [isLoading, setIsLoading] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
     readText().then(setClipboardText);
   }, [focused]);
