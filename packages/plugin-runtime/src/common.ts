@@ -73,6 +73,7 @@ export function validateTemplateFunctionArgs(
     if (!('name' in arg)) continue;
     if (arg.optional) continue;
     if (arg.defaultValue != null) continue;
+    if (arg.hidden) continue;
     if (values[arg.name] != null) continue;
 
     return `Missing required argument "${arg.label || arg.name}" for template function ${fnName}()`;
