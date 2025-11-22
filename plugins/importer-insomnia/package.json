@@ -8,7 +8,6 @@
     "build": "yaakcli build",
     "dev": "yaakcli dev",
     "lint": "tsc --noEmit",
-    "format": "biome format --write .",
     "test": "vitest --run tests"
   },
   "dependencies": {
