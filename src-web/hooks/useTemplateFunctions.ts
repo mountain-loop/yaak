@@ -20,27 +20,18 @@ export function useTemplateFunctionCompletionOptions(
     if (!enabled) {
       return [];
     }
-    return (
-      templateFunctions.map((fn) => {
-        const NUM_ARGS = 2;
-        const argsWithName = fn.args.filter((a) => 'name' in a);
-        const shortArgs =
-          argsWithName
-            .slice(0, NUM_ARGS)
-            .map((a) => a.name)
-            .join(', ') + (fn.args.length > NUM_ARGS ? ', …' : '');
-        return {
-          name: fn.name,
-          aliases: fn.aliases,
-          type: 'function',
-          description: fn.description,
-          args: argsWithName.map((a) => ({ name: a.name })),
-          value: null,
-          label: `${fn.name}(${shortArgs})`,
-          onClick: (rawTag: string, startPos: number) => onClick(fn, rawTag, startPos),
-        };
-      }) ?? []
-    );
+    return templateFunctions.map((fn) => {
+      const argsLabel = fn.args.length > 0 ? '…' : '';
+      const fn2: TwigCompletionOption = {
+        type: 'function',
+        onClick: (rawTag: string, startPos: number) => onClick(fn, rawTag, startPos),
+        label: `${fn.name}(${argsLabel})`,
+        invalid: false,
+        value: null,
+        ...fn,
+      };
+      return fn2;
+    });
   }, [enabled, onClick, templateFunctions]);
 }
 
