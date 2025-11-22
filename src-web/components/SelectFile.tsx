@@ -120,7 +120,7 @@ export function SelectFile({
                 size={size === 'auto' ? 'md' : size}
                 variant="border"
                 icon="x"
-                title={'Unset ' + itemLabel}
+                title={`Unset ${itemLabel}`}
                 onClick={handleClear}
               />
             )}

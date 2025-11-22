@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { useToggle } from '../../hooks/useToggle';
 import { pluralizeCount } from '../../lib/pluralize';
 import { CargoFeature } from '../CargoFeature';
+import { LocalImage } from '../LocalImage';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import { Icon } from '../core/Icon';
@@ -12,7 +13,6 @@ import { Link } from '../core/Link';
 import { PlainInput } from '../core/PlainInput';
 import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';
-import { LocalImage } from '../LocalImage';
 
 export function SettingsLicense() {
   return (
@@ -66,8 +66,7 @@ function SettingsLicenseCmp() {
             <br />
             <span className="opacity-50">
               You may continue using Yaak for personal use free, forever.
-              <br />
-              A license is required for commercial use.
+              <br />A license is required for commercial use.
             </span>
             <Separator className="my-2" />
             <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">

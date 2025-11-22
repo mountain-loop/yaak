@@ -12,7 +12,10 @@ export function DismissibleBanner({
   id,
   actions,
   ...props
-}: BannerProps & { id: string; actions?: { label: string; onClick: () => void; color?: Color }[] }) {
+}: BannerProps & {
+  id: string;
+  actions?: { label: string; onClick: () => void; color?: Color }[];
+}) {
   const { set: setDismissed, value: dismissed } = useKeyValue<boolean>({
     namespace: 'global',
     key: ['dismiss-banner', id],
@@ -28,9 +31,9 @@ export function DismissibleBanner({
     >
       {children}
       <HStack space={1.5}>
-        {actions?.map((a, i) => (
+        {actions?.map((a) => (
           <Button
-            key={a.label + i}
+            key={a.label}
             variant="border"
             color={a.color ?? props.color}
             size="xs"

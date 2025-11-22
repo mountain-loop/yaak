@@ -15,7 +15,7 @@ type Props = {
 export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey }: Props) {
   const pairEditorRef = useRef<PairEditorHandle>(null);
   const handleInitPairEditorRef = useCallback((ref: PairEditorHandle) => {
-    return (pairEditorRef.current = ref);
+    pairEditorRef.current = ref;
   }, []);
 
   const [{ urlParametersKey }] = useRequestEditor();

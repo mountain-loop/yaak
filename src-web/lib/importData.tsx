@@ -1,8 +1,8 @@
 import type { BatchUpsertResult } from '@yaakapp-internal/models';
+import { ImportDataDialog } from '../components/ImportDataDialog';
 import { Button } from '../components/core/Button';
 import { FormattedError } from '../components/core/FormattedError';
 import { VStack } from '../components/core/Stacks';
-import { ImportDataDialog } from '../components/ImportDataDialog';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
 import { showAlert } from './alert';

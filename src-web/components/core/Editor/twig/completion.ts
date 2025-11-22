@@ -59,7 +59,7 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
 
     const completions: Completion[] = options
       .flatMap((o): Completion[] => {
-        const matchSegments = toStartOfName!.text.split('.');
+        const matchSegments = toStartOfName?.text.split('.') ?? [];
         const optionSegments = o.name.split('.');
 
         // If not on the last segment, only complete the namespace
@@ -67,7 +67,7 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
           const prefix = optionSegments.slice(0, matchSegments.length).join('.');
           return [
             {
-              label: prefix + '.*',
+              label: `${prefix}.*`,
               apply: prefix,
               type: 'namespace',
             },

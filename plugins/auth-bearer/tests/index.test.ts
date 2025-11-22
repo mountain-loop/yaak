@@ -7,7 +7,7 @@ const ctx = {} as Context;
 describe('auth-bearer', () => {
   test('No values', async () => {
     expect(
-      await plugin.authentication!.onApply(ctx, {
+      await plugin.authentication?.onApply(ctx, {
         values: {},
         headers: [],
         url: 'https://yaak.app',
@@ -19,7 +19,7 @@ describe('auth-bearer', () => {
 
   test('Only token', async () => {
     expect(
-      await plugin.authentication!.onApply(ctx, {
+      await plugin.authentication?.onApply(ctx, {
         values: { token: 'my-token' },
         headers: [],
         url: 'https://yaak.app',
@@ -31,7 +31,7 @@ describe('auth-bearer', () => {
 
   test('Only prefix', async () => {
     expect(
-      await plugin.authentication!.onApply(ctx, {
+      await plugin.authentication?.onApply(ctx, {
         values: { prefix: 'Hello' },
         headers: [],
         url: 'https://yaak.app',
@@ -43,7 +43,7 @@ describe('auth-bearer', () => {
 
   test('Prefix and token', async () => {
     expect(
-      await plugin.authentication!.onApply(ctx, {
+      await plugin.authentication?.onApply(ctx, {
         values: { prefix: 'Hello', token: 'my-token' },
         headers: [],
         url: 'https://yaak.app',
@@ -55,7 +55,7 @@ describe('auth-bearer', () => {
 
   test('Extra spaces', async () => {
     expect(
-      await plugin.authentication!.onApply(ctx, {
+      await plugin.authentication?.onApply(ctx, {
         values: { prefix: '\t Hello  ', token: ' \nmy-token  ' },
         headers: [],
         url: 'https://yaak.app',

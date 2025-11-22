@@ -5,7 +5,7 @@ import {
   grpcEventsAtom,
   replaceModelsInStore,
 } from '@yaakapp-internal/models';
-import { useAtomValue , atom } from 'jotai';
+import { atom, useAtomValue } from 'jotai';
 import { useEffect } from 'react';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { activeRequestIdAtom } from './useActiveRequestId';
@@ -40,7 +40,7 @@ export const pinnedGrpcConnectionIdAtom = atom(
 );
 
 function recordKey(activeRequestId: string | null, latestConnection: GrpcConnection | null) {
-  return activeRequestId + '-' + (latestConnection?.id ?? 'none');
+  return `${activeRequestId}-${latestConnection?.id ?? 'none'}`;
 }
 
 export const activeGrpcConnections = atom<GrpcConnection[]>((get) => {

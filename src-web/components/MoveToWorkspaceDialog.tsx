@@ -1,11 +1,5 @@
-import type {
-  GrpcRequest,
-  HttpRequest,
-  WebsocketRequest} from '@yaakapp-internal/models';
-import {
-  patchModel,
-  workspacesAtom,
-} from '@yaakapp-internal/models';
+import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
+import { patchModel, workspacesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import React, { useState } from 'react';
 import { resolvedModelName } from '../lib/resolvedModelName';

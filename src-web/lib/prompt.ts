@@ -39,5 +39,5 @@ export async function showPrompt({
 
   if (result == null) return null; // Cancelled
   if (typeof result.value === 'string') return result.value;
-  else return props.defaultValue ?? '';
+  return props.defaultValue ?? '';
 }

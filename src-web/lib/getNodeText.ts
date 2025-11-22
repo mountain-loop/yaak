@@ -14,7 +14,7 @@ export function getNodeText(node: ReactNode): string {
   }
 
   if (typeof node === 'object' && node) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
     return getNodeText((node as any).props.children);
   }
 

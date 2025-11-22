@@ -12,6 +12,9 @@ import {
 } from '../hooks/usePinnedGrpcConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { copyToClipboard } from '../lib/copy';
+import { EmptyStateText } from './EmptyStateText';
+import { ErrorBoundary } from './ErrorBoundary';
+import { RecentGrpcConnectionsDropdown } from './RecentGrpcConnectionsDropdown';
 import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -24,9 +27,6 @@ import { LoadingIcon } from './core/LoadingIcon';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
-import { EmptyStateText } from './EmptyStateText';
-import { ErrorBoundary } from './ErrorBoundary';
-import { RecentGrpcConnectionsDropdown } from './RecentGrpcConnectionsDropdown';
 
 interface Props {
   style?: CSSProperties;
@@ -55,13 +55,13 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
     [activeEventId, events],
   );
 
-  // Set active message to the first message received if unary
+  // Set the active message to the first message received if unary
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
     if (events.length === 0 || activeEvent != null || methodType !== 'unary') {
       return;
     }
     setActiveEventId(events.find((m) => m.eventType === 'server_message')?.id ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events.length]);
 
   return (
@@ -226,6 +226,7 @@ function EventRow({
   return (
     <div className="px-1" ref={ref}>
       <button
+        type="button"
         onClick={onClick}
         className={classNames(
           'w-full grid grid-cols-[auto_minmax(0,3fr)_auto] gap-2 items-center text-left',
@@ -274,7 +275,7 @@ function EventRow({
           {error && <span className="text-warning"> ({error})</span>}
         </div>
         <div className={classNames('opacity-50 text-xs')}>
-          {format(createdAt + 'Z', 'HH:mm:ss.SSS')}
+          {format(`${createdAt}Z`, 'HH:mm:ss.SSS')}
         </div>
       </button>
     </div>

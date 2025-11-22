@@ -11,7 +11,8 @@ export const plugin: PluginDefinition = {
 };
 
 export function migrateImport(contents: string) {
-  let parsed;
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  let parsed: any;
   try {
     parsed = JSON.parse(contents);
   } catch {
@@ -30,7 +31,7 @@ export function migrateImport(contents: string) {
   // Migrate v1 to v2 -- changes requests to httpRequests
   if ('requests' in parsed.resources) {
     parsed.resources.httpRequests = parsed.resources.requests;
-    delete parsed.resources['requests'];
+    parsed.resources.requests = undefined;
   }
 
   // Migrate v2 to v3
@@ -38,7 +39,7 @@ export function migrateImport(contents: string) {
     if ('variables' in workspace) {
       // Create the base environment
       const baseEnvironment: Partial<Environment> = {
-        id: `GENERATE_ID::base_env_${workspace['id']}`,
+        id: `GENERATE_ID::base_env_${workspace.id}`,
         name: 'Global Variables',
         variables: workspace.variables,
         workspaceId: workspace.id,
@@ -47,7 +48,7 @@ export function migrateImport(contents: string) {
       parsed.resources.environments.push(baseEnvironment);
 
       // Delete variables key from the workspace
-      delete workspace.variables;
+      workspace.variables = undefined;
 
       // Add environmentId to relevant environments
       for (const environment of parsed.resources.environments) {
@@ -62,7 +63,7 @@ export function migrateImport(contents: string) {
   for (const environment of parsed.resources.environments ?? []) {
     if ('environmentId' in environment) {
       environment.base = environment.environmentId == null;
-      delete environment.environmentId;
+      environment.environmentId = undefined;
     }
   }
 
@@ -71,11 +72,11 @@ export function migrateImport(contents: string) {
     if ('base' in environment && environment.base && environment.parentModel == null) {
       environment.parentModel = 'workspace';
       environment.parentId = null;
-      delete environment.base;
+      environment.base = undefined;
     } else if ('base' in environment && !environment.base && environment.parentModel == null) {
       environment.parentModel = 'environment';
       environment.parentId = null;
-      delete environment.base;
+      environment.base = undefined;
     }
   }
 

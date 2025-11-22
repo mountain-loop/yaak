@@ -24,7 +24,7 @@ export function useImportCurl() {
         workspaceId,
       });
 
-      let verb;
+      let verb: string;
       if (overwriteRequestId == null) {
         verb = 'Created';
         await createRequestAndNavigate(importedRequest);

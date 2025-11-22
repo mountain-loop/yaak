@@ -215,7 +215,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
         onChange={handleChangeQuery}
         placeholder="..."
         actions={actions}
-        stateKey={'graphql_body.' + request.id}
+        stateKey={`graphql_body.${request.id}`}
         {...extraEditorProps}
       />
       <div className="grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 min-h-[5rem]">
@@ -228,7 +228,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
           defaultValue={currentBody.variables}
           onChange={handleChangeVariables}
           placeholder="{}"
-          stateKey={'graphql_vars.' + request.id}
+          stateKey={`graphql_vars.${request.id}`}
           autocompleteFunctions
           autocompleteVariables
           {...extraEditorProps}

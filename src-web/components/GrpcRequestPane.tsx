@@ -10,6 +10,11 @@ import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { resolvedModelName } from '../lib/resolvedModelName';
+import { GrpcEditor } from './GrpcEditor';
+import { HeadersEditor } from './HeadersEditor';
+import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
+import { MarkdownEditor } from './MarkdownEditor';
+import { UrlBar } from './UrlBar';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
 import { Icon } from './core/Icon';
@@ -19,11 +24,6 @@ import { RadioDropdown } from './core/RadioDropdown';
 import { HStack, VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { GrpcEditor } from './GrpcEditor';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
-import { UrlBar } from './UrlBar';
 
 interface Props {
   style?: CSSProperties;
@@ -183,7 +183,7 @@ export function GrpcRequestPane({
           onUrlChange={handleChangeUrl}
           onCancel={onCancel}
           isLoading={isStreaming}
-          stateKey={'grpc_url.' + activeRequest.id}
+          stateKey={`grpc_url.${activeRequest.id}`}
         />
         <HStack space={1.5}>
           <RadioDropdown

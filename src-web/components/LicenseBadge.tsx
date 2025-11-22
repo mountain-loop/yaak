@@ -5,8 +5,8 @@ import { useAtomValue } from 'jotai';
 import type { ReactNode } from 'react';
 import { openSettings } from '../commands/openSettings';
 import { CargoFeature } from './CargoFeature';
-import { PillButton } from './core/PillButton';
 import type { ButtonProps } from './core/Button';
+import { PillButton } from './core/PillButton';
 
 const details: Record<
   LicenseCheckStatus['type'],
@@ -52,10 +52,7 @@ function LicenseBadgeCmp() {
   }
 
   return (
-    <PillButton
-      color={detail.color}
-      onClick={() => openSettings.mutate('license')}
-    >
+    <PillButton color={detail.color} onClick={() => openSettings.mutate('license')}>
       {detail.label}
     </PillButton>
   );

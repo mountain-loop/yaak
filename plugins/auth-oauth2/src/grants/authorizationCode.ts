@@ -1,5 +1,5 @@
-import type { Context } from '@yaakapp/api';
 import { createHash, randomBytes } from 'node:crypto';
+import type { Context } from '@yaakapp/api';
 import { fetchAccessToken } from '../fetchAccessToken';
 import { getOrRefreshAccessToken } from '../getOrRefreshAccessToken';
 import type { AccessToken, TokenStoreArgs } from '../store';
@@ -84,7 +84,7 @@ export async function getAuthorizationCode(
   const authorizationUrlStr = authorizationUrl.toString();
   console.log('[oauth2] Authorizing', authorizationUrlStr);
 
-  // eslint-disable-next-line no-async-promise-executor
+  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: <explanation>
   const code = await new Promise<string>(async (resolve, reject) => {
     let foundCode = false;
     const { close } = await ctx.window.openUrl({
@@ -97,7 +97,7 @@ export async function getAuthorizationCode(
         }
       },
       async onNavigate({ url: urlStr }) {
-        let code;
+        let code: string | null;
         try {
           code = extractCode(urlStr, redirectUri);
         } catch (err) {

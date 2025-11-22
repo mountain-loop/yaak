@@ -1,11 +1,11 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
 import { useSaveResponse } from '../../hooks/useSaveResponse';
 import { getContentTypeFromHeaders } from '../../lib/model_util';
+import { EmptyStateText } from '../EmptyStateText';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import { InlineCode } from '../core/InlineCode';
 import { LoadingIcon } from '../core/LoadingIcon';
-import { EmptyStateText } from '../EmptyStateText';
 
 interface Props {
   response: HttpResponse;

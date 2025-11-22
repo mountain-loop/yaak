@@ -7,7 +7,7 @@ import { invokeCmd } from '../lib/tauri';
 
 export const openSettings = createFastMutation<void, string, SettingsTab | null>({
   mutationKey: ['open_settings'],
-  mutationFn: async function (tab) {
+  mutationFn: async (tab) => {
     const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
     if (workspaceId == null) return;
 

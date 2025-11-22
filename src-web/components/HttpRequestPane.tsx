@@ -36,14 +36,6 @@ import { resolvedModelName } from '../lib/resolvedModelName';
 import { showToast } from '../lib/toast';
 import { BinaryFileEditor } from './BinaryFileEditor';
 import { ConfirmLargeRequestBody } from './ConfirmLargeRequestBody';
-import { CountBadge } from './core/CountBadge';
-import { Editor } from './core/Editor/LazyEditor';
-import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
-import { InlineCode } from './core/InlineCode';
-import type { Pair } from './core/PairEditor';
-import { PlainInput } from './core/PlainInput';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
-import type { TabItem } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { FormMultipartEditor } from './FormMultipartEditor';
 import { FormUrlencodedEditor } from './FormUrlencodedEditor';
@@ -53,6 +45,14 @@ import { MarkdownEditor } from './MarkdownEditor';
 import { RequestMethodDropdown } from './RequestMethodDropdown';
 import { UrlBar } from './UrlBar';
 import { UrlParametersEditor } from './UrlParameterEditor';
+import { CountBadge } from './core/CountBadge';
+import { Editor } from './core/Editor/LazyEditor';
+import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
+import { InlineCode } from './core/InlineCode';
+import type { Pair } from './core/PairEditor';
+import { PlainInput } from './core/PlainInput';
+import { TabContent, Tabs } from './core/Tabs/Tabs';
+import type { TabItem } from './core/Tabs/Tabs';
 
 const GraphQLEditor = lazy(() =>
   import('./graphql/GraphQLEditor').then((m) => ({ default: m.GraphQLEditor })),
@@ -128,9 +128,9 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
     const items: Pair[] = [...nonEmptyParameters];
     for (const name of placeholderNames) {
-      const index = items.findIndex((p) => p.name === name);
-      if (index >= 0) {
-        items[index]!.readOnlyName = true;
+      const item = items.find((p) => p.name === name);
+      if (item) {
+        item.readOnlyName = true;
       } else {
         items.push({ name, value: '', enabled: true, readOnlyName: true, id: generateId() });
       }
@@ -207,7 +207,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 showMethodToast(patch.method);
               }
               newContentType = bodyType === BODY_TYPE_OTHER ? 'text/plain' : bodyType;
-            } else if (bodyType == BODY_TYPE_GRAPHQL) {
+            } else if (bodyType === BODY_TYPE_GRAPHQL) {
               patch.method = 'POST';
               newContentType = 'application/json';
               showMethodToast(patch.method);

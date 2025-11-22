@@ -44,7 +44,7 @@ export function RecentWebsocketConnectionsDropdown({
         ...connections.map((c) => ({
           label: (
             <HStack space={2}>
-              {formatDistanceToNowStrict(c.createdAt + 'Z')} ago &bull;{' '}
+              {formatDistanceToNowStrict(`${c.createdAt}Z`)} ago &bull;{' '}
               <span className="font-mono text-sm">{c.elapsed}ms</span>
             </HStack>
           ),

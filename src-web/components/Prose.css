@@ -62,7 +62,8 @@
   ul {
     @apply list-disc;
 
-    ul, ol {
+    ul,
+    ol {
       @apply my-0;
     }
   }
@@ -70,12 +71,14 @@
   ol {
     @apply list-decimal;
 
-    ol, ul {
+    ol,
+    ul {
       @apply my-0;
     }
   }
 
-  ol, ul {
+  ol,
+  ul {
     @apply pl-6;
 
     li p {
@@ -133,27 +136,27 @@
       @apply block font-bold mb-1;
       @apply text-text-subtlest;
 
-      content: 'Note';
+      content: "Note";
     }
 
     &.x-theme-banner--secondary::before {
-      content: 'Info';
+      content: "Info";
     }
 
     &.x-theme-banner--success::before {
-      content: 'Tip';
+      content: "Tip";
     }
 
     &.x-theme-banner--notice::before {
-      content: 'Important';
+      content: "Important";
     }
 
     &.x-theme-banner--warning::before {
-      content: 'Warning';
+      content: "Warning";
     }
 
     &.x-theme-banner--danger::before {
-      content: 'Caution';
+      content: "Caution";
     }
   }
 
@@ -201,7 +204,7 @@
 
     figcaption::before {
       @apply border-info absolute left-2 top-0 h-3.5 w-6 rounded-bl border-l border-b border-dotted;
-      content: '';
+      content: "";
     }
   }
 }

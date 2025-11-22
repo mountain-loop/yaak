@@ -1,7 +1,4 @@
-import type { JSONPathResult } from '../../template-function-json';
-import { filterJSONPath } from '../../template-function-json';
-import type { XPathResult } from '../../template-function-xml';
-import { filterXPath } from '../../template-function-xml';
+import { readFileSync } from 'node:fs';
 import type {
   CallTemplateFunctionArgs,
   Context,
@@ -11,7 +8,10 @@ import type {
   PluginDefinition,
   RenderPurpose,
 } from '@yaakapp/api';
-import { readFileSync } from 'node:fs';
+import type { JSONPathResult } from '../../template-function-json';
+import { filterJSONPath } from '../../template-function-json';
+import type { XPathResult } from '../../template-function-xml';
+import { filterXPath } from '../../template-function-xml';
 
 const BEHAVIOR_TTL = 'ttl';
 const BEHAVIOR_ALWAYS = 'always';
@@ -146,13 +146,12 @@ export const plugin: PluginDefinition = {
                 placeholder: '/books[0]/id',
                 description: 'Enter an XPath expression used to filter the results',
               };
-            } else {
-              return {
-                label: 'JSONPath',
-                placeholder: '$.books[0].id',
-                description: 'Enter a JSONPath expression used to filter the results',
-              };
             }
+            return {
+              label: 'JSONPath',
+              placeholder: '$.books[0].id',
+              description: 'Enter a JSONPath expression used to filter the results',
+            };
           },
         },
       ],
@@ -171,7 +170,7 @@ export const plugin: PluginDefinition = {
           return null;
         }
 
-        let body;
+        let body: string;
         try {
           body = readFileSync(response.bodyPath, 'utf-8');
         } catch {
@@ -235,7 +234,7 @@ export const plugin: PluginDefinition = {
           return null;
         }
 
-        let body;
+        let body: string;
         try {
           body = readFileSync(response.bodyPath, 'utf-8');
         } catch {
@@ -297,9 +296,9 @@ async function getResponse(
 
 function shouldSendExpired(response: HttpResponse | null, ttl: string | null): boolean {
   if (response == null) return true;
-  const ttlSeconds = parseInt(ttl || '0') || 0;
+  const ttlSeconds = Number.parseInt(ttl || '0') || 0;
   if (ttlSeconds === 0) return false;
   const nowMillis = Date.now();
-  const respMillis = new Date(response.createdAt + 'Z').getTime();
+  const respMillis = new Date(`${response.createdAt}Z`).getTime();
   return respMillis + ttlSeconds * 1000 < nowMillis;
 }

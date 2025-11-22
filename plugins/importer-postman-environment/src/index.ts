@@ -93,39 +93,37 @@ function toRecord<T>(value: Record<string, T> | unknown): Record<string, T> {
 
 function toArray<T>(value: unknown): T[] {
   if (Object.prototype.toString.call(value) === '[object Array]') return value as T[];
-  else return [] as T[];
+  return [] as T[];
 }
 
 /** Recursively render all nested object properties */
 function convertTemplateSyntax<T>(obj: T): T {
   if (typeof obj === 'string') {
-    return obj.replace(
-      /{{\s*(_\.)?([^}]*)\s*}}/g,
-      (_m, _dot, expr) => '${[' + expr.trim() + ']}',
-    ) as T;
-  } else if (Array.isArray(obj) && obj != null) {
+    return obj.replace(/{{\s*(_\.)?([^}]*)\s*}}/g, (_m, _dot, expr) => `\${[${expr.trim()}]}`) as T;
+  }
+  if (Array.isArray(obj) && obj != null) {
     return obj.map(convertTemplateSyntax) as T;
-  } else if (typeof obj === 'object' && obj != null) {
+  }
+  if (typeof obj === 'object' && obj != null) {
     return Object.fromEntries(
       Object.entries(obj as Record<string, unknown>).map(([k, v]) => [k, convertTemplateSyntax(v)]),
     ) as T;
-  } else {
-    return obj;
   }
+  return obj;
 }
 
 function deleteUndefinedAttrs<T>(obj: T): T {
   if (Array.isArray(obj) && obj != null) {
     return obj.map(deleteUndefinedAttrs) as T;
-  } else if (typeof obj === 'object' && obj != null) {
+  }
+  if (typeof obj === 'object' && obj != null) {
     return Object.fromEntries(
       Object.entries(obj as Record<string, unknown>)
         .filter(([, v]) => v !== undefined)
         .map(([k, v]) => [k, deleteUndefinedAttrs(v)]),
     ) as T;
-  } else {
-    return obj;
   }
+  return obj;
 }
 
 const idCount: Partial<Record<string, number>> = {};

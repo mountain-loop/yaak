@@ -9,9 +9,7 @@ import type {
 import { foldersAtom, workspacesAtom } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 
-const ancestorsAtom = atom(function (get) {
-  return [...get(foldersAtom), ...get(workspacesAtom)];
-});
+const ancestorsAtom = atom((get) => [...get(foldersAtom), ...get(workspacesAtom)]);
 
 export type HeaderModel = HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace;
 
@@ -30,7 +28,7 @@ export function useInheritedHeaders(baseModel: HeaderModel | null) {
     // Recurse up the tree
     const parent = parents.find((p) => {
       if (child.folderId) return p.id === child.folderId;
-      else return p.id === child.workspaceId;
+      return p.id === child.workspaceId;
     });
 
     // Failed to find parent (should never happen)

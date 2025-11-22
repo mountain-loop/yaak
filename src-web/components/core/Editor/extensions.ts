@@ -11,24 +11,24 @@ import { markdown } from '@codemirror/lang-markdown';
 import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
 import {
+  HighlightStyle,
   bracketMatching,
   codeFolding,
   foldGutter,
   foldKeymap,
-  HighlightStyle,
   indentOnInput,
   syntaxHighlighting,
 } from '@codemirror/language';
-import { linter, lintGutter, lintKeymap } from '@codemirror/lint';
+import { lintGutter, lintKeymap, linter } from '@codemirror/lint';
 
 import { search, searchKeymap } from '@codemirror/search';
 import type { Extension } from '@codemirror/state';
 import { EditorState } from '@codemirror/state';
 import {
+  EditorView,
   crosshairCursor,
   drawSelection,
   dropCursor,
-  EditorView,
   highlightActiveLineGutter,
   highlightSpecialChars,
   keymap,

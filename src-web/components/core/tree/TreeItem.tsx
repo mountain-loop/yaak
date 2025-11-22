@@ -4,17 +4,18 @@ import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import type { MouseEvent, PointerEvent } from 'react';
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { computeSideForDragMove } from '../../../lib/dnd';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps, DropdownItem } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
-import { collapsedFamily, isCollapsedFamily, isLastFocusedFamily, isSelectedFamily, } from './atoms';
-import type { TreeNode } from './common';
-import { getNodeKey } from './common';
 import type { TreeProps } from './Tree';
 import { TreeIndentGuide } from './TreeIndentGuide';
+import { collapsedFamily, isCollapsedFamily, isLastFocusedFamily, isSelectedFamily } from './atoms';
+import type { TreeNode } from './common';
+import { getNodeKey } from './common';
 
 export interface TreeItemClickEvent {
   shiftKey: boolean;
@@ -84,7 +85,7 @@ function TreeItem_<T extends { id: string }>({
       },
       scrollIntoView: () => {
         listItemRef.current?.scrollIntoView({ block: 'nearest' });
-      }
+      },
     }),
     [editing, getEditOptions],
   );
@@ -304,6 +305,7 @@ function TreeItem_<T extends { id: string }>({
         )}
         {node.children != null ? (
           <button
+            type="button"
             tabIndex={-1}
             className="h-full pl-[0.5rem] outline-none"
             onClick={toggleCollapsed}

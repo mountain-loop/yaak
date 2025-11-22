@@ -20,7 +20,7 @@ export function RedirectToLatestWorkspace() {
       return;
     }
 
-    (async function () {
+    (async () => {
       const workspaceId = recentWorkspaces[0] ?? workspaces[0]?.id ?? 'n/a';
       const environmentId = (await getRecentEnvironments(workspaceId))[0] ?? null;
       const cookieJarId = (await getRecentCookieJars(workspaceId))[0] ?? null;

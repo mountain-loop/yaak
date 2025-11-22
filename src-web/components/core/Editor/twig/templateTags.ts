@@ -1,7 +1,7 @@
 import { syntaxTree } from '@codemirror/language';
 import type { Range } from '@codemirror/state';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, ViewPlugin, WidgetType, EditorView } from '@codemirror/view';
+import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view';
 import type { SyntaxNodeRef } from '@lezer/common';
 import type { TwigCompletionOption } from './completion';
 

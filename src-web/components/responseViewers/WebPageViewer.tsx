@@ -1,6 +1,6 @@
+import type { HttpResponse } from '@yaakapp-internal/models';
 import { useMemo } from 'react';
 import { useResponseBodyText } from '../../hooks/useResponseBodyText';
-import type { HttpResponse } from '@yaakapp-internal/models';
 
 interface Props {
   response: HttpResponse;

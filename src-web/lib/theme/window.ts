@@ -139,7 +139,7 @@ function bannerColorVariables(color: YaakColor | null): Partial<CSSVariables> {
 
 function buttonSolidColorVariables(
   color: YaakColor | null,
-  isDefault: boolean = false,
+  isDefault = false,
 ): Partial<CSSVariables> {
   if (color == null) return {};
 
@@ -161,7 +161,7 @@ function buttonSolidColorVariables(
 
 function buttonBorderColorVariables(
   color: YaakColor | null,
-  isDefault: boolean = false,
+  isDefault = false,
 ): Partial<CSSVariables> {
   if (color == null) return {};
 
@@ -268,6 +268,7 @@ export function getThemeCSS(theme: Theme): string {
   theme.components.toast = theme.components.toast ?? theme.components.menu ?? {};
   const { components, id, label } = theme;
   const colors = Object.keys(theme.base).reduce((prev, key) => {
+    // biome-ignore lint/performance/noAccumulatingSpread: <explanation>
     return { ...prev, [key]: theme.base[key as YaakColorKey] };
   }, {}) as ThemeComponentColors;
 
@@ -278,11 +279,11 @@ export function getThemeCSS(theme: Theme): string {
       baseCss,
       ...Object.keys(components ?? {}).map((key) => componentCSS(theme, key as ComponentName)),
       variablesToCSS(
-        `.x-theme-button--solid--default`,
+        '.x-theme-button--solid--default',
         buttonSolidColorVariables(yc(theme, theme.base.surface), true),
       ),
       variablesToCSS(
-        `.x-theme-button--border--default`,
+        '.x-theme-button--border--default',
         buttonBorderColorVariables(yc(theme, theme.base.surface), true),
       ),
       ...Object.keys(colors ?? {}).map((key) =>
@@ -312,7 +313,7 @@ export function addThemeStylesToDocument(rawTheme: Theme | null) {
   }
 
   const theme = completeTheme(rawTheme);
-  let styleEl = document.head.querySelector(`style[data-theme]`);
+  let styleEl = document.head.querySelector('style[data-theme]');
   if (!styleEl) {
     styleEl = document.createElement('style');
     document.head.appendChild(styleEl);

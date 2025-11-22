@@ -47,14 +47,14 @@ export function resolvedModelNameWithFoldersArray(model: AnyModel | null): strin
   const folders = jotaiStore.get(foldersAtom) ?? [];
 
   const getParents = (m: AnyModel, names: string[]) => {
-    names = [...names, resolvedModelName(m)];
+    let newNames = [...names, resolvedModelName(m)];
     if ('folderId' in m) {
       const parent = folders.find((f) => f.id === m.folderId);
       if (parent) {
-        names = [...resolvedModelNameWithFoldersArray(parent), ...names];
+        newNames = [...resolvedModelNameWithFoldersArray(parent), ...newNames];
       }
     }
-    return names;
+    return newNames;
   };
 
   return getParents(model, []);

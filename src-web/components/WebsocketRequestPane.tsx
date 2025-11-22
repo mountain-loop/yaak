@@ -24,6 +24,11 @@ import { languageFromContentType } from '../lib/contentType';
 import { generateId } from '../lib/generateId';
 import { prepareImportQuerystring } from '../lib/prepareImportQuerystring';
 import { resolvedModelName } from '../lib/resolvedModelName';
+import { HeadersEditor } from './HeadersEditor';
+import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
+import { MarkdownEditor } from './MarkdownEditor';
+import { UrlBar } from './UrlBar';
+import { UrlParametersEditor } from './UrlParameterEditor';
 import { CountBadge } from './core/CountBadge';
 import { Editor } from './core/Editor/LazyEditor';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
@@ -32,11 +37,6 @@ import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
-import { UrlBar } from './UrlBar';
-import { UrlParametersEditor } from './UrlParameterEditor';
 
 interface Props {
   style: CSSProperties;
@@ -81,9 +81,9 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
     const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
     const items: Pair[] = [...nonEmptyParameters];
     for (const name of placeholderNames) {
-      const index = items.findIndex((p) => p.name === name);
-      if (index >= 0) {
-        items[index]!.readOnlyName = true;
+      const item = items.find((p) => p.name === name);
+      if (item) {
+        item.readOnlyName = true;
       } else {
         items.push({ name, value: '', enabled: true, readOnlyName: true, id: generateId() });
       }

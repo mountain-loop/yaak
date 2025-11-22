@@ -61,11 +61,11 @@ import { InlineCode } from './core/InlineCode';
 import type { InputHandle } from './core/Input';
 import { Input } from './core/Input';
 import { LoadingIcon } from './core/LoadingIcon';
-import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
-import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
+import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
+import type { TreeNode } from './core/tree/common';
 import { GitDropdown } from './git/GitDropdown';
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
@@ -84,7 +84,7 @@ const OPACITY_SUBTLE = 'opacity-80';
 function Sidebar({ className }: { className?: string }) {
   const [hidden, setHidden] = useSidebarHidden();
   const activeWorkspaceId = useAtomValue(activeWorkspaceAtom)?.id;
-  const treeId = 'tree.' + (activeWorkspaceId ?? 'unknown');
+  const treeId = `tree.${activeWorkspaceId ?? 'unknown'}`;
   const filterText = useAtomValue(sidebarFilterAtom);
   const [tree, allFields] = useAtomValue(sidebarTreeAtom) ?? [];
   const wrapperRef = useRef<HTMLElement>(null);
@@ -95,8 +95,8 @@ function Sidebar({ className }: { className?: string }) {
   }, []);
   const allHidden = useMemo(() => {
     if (tree?.children?.length === 0) return false;
-    else if (filterText) return tree?.children?.every((c) => c.hidden);
-    else return true;
+    if (filterText) return tree?.children?.every((c) => c.hidden);
+    return true;
   }, [filterText, tree?.children]);
 
   const focusActiveItem = useCallback(() => {
@@ -119,7 +119,7 @@ function Sidebar({ className }: { className?: string }) {
         treeRef.current?.selectItem(activeId, true);
       }
     });
-  }, [focusActiveItem]);
+  }, []);
 
   useHotKey(
     'sidebar.filter',
@@ -250,12 +250,13 @@ function Sidebar({ className }: { className?: string }) {
           if (tree == null) return;
 
           const next = (node: TreeNode<SidebarModel>, collapsed: Record<string, boolean>) => {
+            let newCollapsed = { ...collapsed };
             for (const n of node.children ?? []) {
               if (n.item.model !== 'folder') continue;
-              collapsed[n.item.id] = true;
-              collapsed = next(n, collapsed);
+              newCollapsed[n.item.id] = true;
+              newCollapsed = next(n, collapsed);
             }
-            return collapsed;
+            return newCollapsed;
           };
           const collapsed = next(tree, {});
           jotaiStore.set(collapsedFamily(treeId), collapsed);
@@ -263,14 +264,14 @@ function Sidebar({ className }: { className?: string }) {
       },
       'sidebar.selected.delete': {
         enable,
-        cb: async function (items: SidebarModel[]) {
+        cb: async (items: SidebarModel[]) => {
           await deleteModelWithConfirm(items);
         },
       },
       'sidebar.selected.rename': {
         enable,
         allowDefault: true,
-        cb: async function (items: SidebarModel[]) {
+        cb: async (items: SidebarModel[]) => {
           const item = items[0];
           if (items.length === 1 && item != null) {
             treeRef.current?.renameItem(item.id);
@@ -280,9 +281,9 @@ function Sidebar({ className }: { className?: string }) {
       'sidebar.selected.duplicate': {
         priority: 10,
         enable,
-        cb: async function (items: SidebarModel[]) {
-          if (items.length === 1) {
-            const item = items[0]!;
+        cb: async (items: SidebarModel[]) => {
+          if (items.length === 1 && items[0]) {
+            const item = items[0];
             const newId = await duplicateModel(item);
             navigateToRequestOrFolderOrWorkspace(newId, item.model);
           } else {
@@ -292,7 +293,7 @@ function Sidebar({ className }: { className?: string }) {
       },
       'request.send': {
         enable,
-        cb: async function (items: SidebarModel[]) {
+        cb: async (items: SidebarModel[]) => {
           await Promise.all(
             items
               .filter((i) => i.model === 'http_request')
@@ -355,8 +356,7 @@ function Sidebar({ className }: { className?: string }) {
           : []
         ).map((a) => ({
           label: a.label,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+          leftSlot: <Icon icon={a.icon ?? 'empty'} />,
           onSelect: async () => {
             const request = getModel('http_request', child.id);
             if (request != null) await a.call(request);
@@ -368,7 +368,7 @@ function Sidebar({ className }: { className?: string }) {
         ).map((a) => ({
           label: a.label,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          leftSlot: <Icon icon={(a.icon as any) ?? 'empty'} />,
+          leftSlot: <Icon icon={a.icon ?? 'empty'} />,
           onSelect: async () => {
             const request = getModel('grpc_request', child.id);
             if (request != null) await a.call(request);
@@ -621,10 +621,10 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
   for (const item of allModels) {
     if ('folderId' in item && item.folderId == null) {
       childrenMap[item.workspaceId] = childrenMap[item.workspaceId] ?? [];
-      childrenMap[item.workspaceId]!.push(item);
+      childrenMap[item.workspaceId]?.push(item);
     } else if ('folderId' in item && item.folderId != null) {
       childrenMap[item.folderId] = childrenMap[item.folderId] ?? [];
-      childrenMap[item.folderId]!.push(item);
+      childrenMap[item.folderId]?.push(item);
     }
   }
 
@@ -729,18 +729,18 @@ const SidebarLeftSlot = memo(function SidebarLeftSlot({
 }) {
   if (item.model === 'folder') {
     return <Icon icon="folder" />;
-  } else if (item.model === 'workspace') {
-    return null;
-  } else {
-    const isSelected = jotaiStore.get(isSelectedFamily({ treeId, itemId: item.id }));
-    return (
-      <HttpMethodTag
-        short
-        className={classNames('text-xs pl-1.5', !isSelected && OPACITY_SUBTLE)}
-        request={item}
-      />
-    );
   }
+  if (item.model === 'workspace') {
+    return null;
+  }
+  const isSelected = jotaiStore.get(isSelectedFamily({ treeId, itemId: item.id }));
+  return (
+    <HttpMethodTag
+      short
+      className={classNames('text-xs pl-1.5', !isSelected && OPACITY_SUBTLE)}
+      request={item}
+    />
+  );
 });
 
 const SidebarInnerItem = memo(function SidebarInnerItem({

@@ -1,10 +1,10 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { emit } from '@tauri-apps/api/event';
 import type { GrpcConnection, GrpcRequest } from '@yaakapp-internal/models';
-import {jotaiStore} from "../lib/jotai";
+import { jotaiStore } from '../lib/jotai';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { invokeCmd } from '../lib/tauri';
-import {activeEnvironmentIdAtom, useActiveEnvironment} from './useActiveEnvironment';
+import { activeEnvironmentIdAtom, useActiveEnvironment } from './useActiveEnvironment';
 import { useDebouncedValue } from './useDebouncedValue';
 
 export interface ReflectResponseService {

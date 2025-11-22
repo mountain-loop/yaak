@@ -1,8 +1,8 @@
+import { URL } from 'node:url';
 import type { CallHttpAuthenticationResponse } from '@yaakapp-internal/plugins';
 import type { PluginDefinition } from '@yaakapp/api';
 import aws4 from 'aws4';
 import type { Request } from 'aws4';
-import { URL } from 'node:url';
 
 export const plugin: PluginDefinition = {
   authentication: {

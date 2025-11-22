@@ -4,9 +4,9 @@ import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import React from 'react';
 import { workspaceLayoutAtom } from '../lib/atoms';
-import { SplitLayout } from './core/SplitLayout';
 import { WebsocketRequestPane } from './WebsocketRequestPane';
 import { WebsocketResponsePane } from './WebsocketResponsePane';
+import { SplitLayout } from './core/SplitLayout';
 
 interface Props {
   activeRequest: WebsocketRequest;

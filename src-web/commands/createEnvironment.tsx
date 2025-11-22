@@ -1,4 +1,4 @@
-import { type Environment } from '@yaakapp-internal/models';
+import type { Environment } from '@yaakapp-internal/models';
 import { CreateEnvironmentDialog } from '../components/CreateEnvironmentDialog';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';

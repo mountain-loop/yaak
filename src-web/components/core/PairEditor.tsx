@@ -25,8 +25,8 @@ import { Checkbox } from './Checkbox';
 import type { DropdownItem } from './Dropdown';
 import { Dropdown } from './Dropdown';
 import type { EditorProps } from './Editor/Editor';
-import type { GenericCompletionConfig } from './Editor/genericCompletion';
 import { Editor } from './Editor/LazyEditor';
+import type { GenericCompletionConfig } from './Editor/genericCompletion';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import type { InputHandle, InputProps } from './Input';
@@ -143,6 +143,7 @@ export function PairEditor({
     [handle, pairs, setRef],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only care about forceUpdateKey
   useEffect(() => {
     // Remove empty headers on initial render and ensure they all have valid ids (pairs didn't use to have IDs)
     const newPairs: PairWithId[] = [];
@@ -161,8 +162,6 @@ export function PairEditor({
 
     setPairs(newPairs);
     regenerateLocalForceUpdateKey();
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceUpdateKey]);
 
   const setPairsAndSave = useCallback(
@@ -534,9 +533,8 @@ export function PairEditorRow({
   const valueAutocompleteVariablesFiltered = useMemo<EditorProps['autocompleteVariables']>(() => {
     if (valueAutocompleteVariables === 'environment') {
       return (v: WrappedEnvironmentVariable): boolean => v.variable.name !== pair.name;
-    } else {
-      return valueAutocompleteVariables;
     }
+    return valueAutocompleteVariables;
   }, [pair.name, valueAutocompleteVariables]);
 
   const handleSetRef = useCallback(

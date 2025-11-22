@@ -1,8 +1,5 @@
-import type {
-  WorkspaceSettingsTab} from '../components/WorkspaceSettingsDialog';
-import {
-  WorkspaceSettingsDialog
-} from '../components/WorkspaceSettingsDialog';
+import type { WorkspaceSettingsTab } from '../components/WorkspaceSettingsDialog';
+import { WorkspaceSettingsDialog } from '../components/WorkspaceSettingsDialog';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';

@@ -88,9 +88,8 @@ export function Input({ type, ...props }: InputProps) {
   // use the encrypted input component.
   if (type === 'password' && props.autocompleteFunctions) {
     return <EncryptionInput {...props} />;
-  } else {
-    return <BaseInput type={type} {...props} />;
   }
+  return <BaseInput type={type} {...props} />;
 }
 
 function BaseInput({
@@ -145,7 +144,7 @@ function BaseInput({
       isFocused: () => editorRef.current?.hasFocus ?? false,
       value: () => editorRef.current?.state.doc.toString() ?? '',
       dispatch: (...args) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
         editorRef.current?.dispatch(...(args as any));
       },
       selectAll() {
@@ -168,7 +167,9 @@ function BaseInput({
   );
 
   useEffect(() => {
-    const fn = () => (skipNextFocus.current = true);
+    const fn = () => {
+      skipNextFocus.current = true;
+    };
     window.addEventListener('focus', fn);
     return () => {
       window.removeEventListener('focus', fn);

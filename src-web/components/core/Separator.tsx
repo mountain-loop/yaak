@@ -10,9 +10,15 @@ interface Props {
   color?: Color;
 }
 
-export function Separator({ color, className, dashed, orientation = 'horizontal', children }: Props) {
+export function Separator({
+  color,
+  className,
+  dashed,
+  orientation = 'horizontal',
+  children,
+}: Props) {
   return (
-    <div role="separator" className={classNames(className, 'flex items-center w-full')}>
+    <div role="presentation" className={classNames(className, 'flex items-center w-full')}>
       {children && (
         <div className="text-sm text-text-subtlest mr-2 whitespace-nowrap">{children}</div>
       )}

@@ -1,9 +1,9 @@
 import { DragOverlay } from '@dnd-kit/core';
 import { useAtomValue } from 'jotai';
-import { draggingIdsFamily } from './atoms';
-import type { SelectableTreeNode } from './common';
 import type { TreeProps } from './Tree';
 import { TreeItemList } from './TreeItemList';
+import { draggingIdsFamily } from './atoms';
+import type { SelectableTreeNode } from './common';
 
 export function TreeDragOverlay<T extends { id: string }>({
   treeId,
@@ -19,7 +19,7 @@ export function TreeDragOverlay<T extends { id: string }>({
   return (
     <DragOverlay dropAnimation={null}>
       <TreeItemList
-        treeId={treeId + '.dragging'}
+        treeId={`${treeId}.dragging`}
         nodes={selectableItems.filter((i) => draggingItems.includes(i.node.item.id))}
         getItemKey={getItemKey}
         ItemInner={ItemInner}

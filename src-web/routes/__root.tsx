@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { createRootRoute, Outlet } from '@tanstack/react-router';
+import { Outlet, createRootRoute } from '@tanstack/react-router';
 import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import { Provider as JotaiProvider } from 'jotai';

@@ -1,10 +1,10 @@
-import type { Color } from "@yaakapp-internal/plugins";
-import type { FormEvent } from "react";
-import { useState } from "react";
-import { CopyIconButton } from "../CopyIconButton";
-import { Button } from "./Button";
-import { PlainInput } from "./PlainInput";
-import { HStack } from "./Stacks";
+import type { Color } from '@yaakapp-internal/plugins';
+import type { FormEvent } from 'react';
+import { useState } from 'react';
+import { CopyIconButton } from '../CopyIconButton';
+import { Button } from './Button';
+import { PlainInput } from './PlainInput';
+import { HStack } from './Stacks';
 
 export interface ConfirmProps {
   onHide: () => void;
@@ -19,9 +19,9 @@ export function Confirm({
   onResult,
   confirmText,
   requireTyping,
-  color = "primary",
+  color = 'primary',
 }: ConfirmProps) {
-  const [confirm, setConfirm] = useState<string>("");
+  const [confirm, setConfirm] = useState<string>('');
   const handleHide = () => {
     onResult(false);
     onHide();
@@ -61,13 +61,9 @@ export function Confirm({
           }
         />
       )}
-      <HStack
-        space={2}
-        justifyContent="start"
-        className="mt-2 mb-4 flex-row-reverse"
-      >
+      <HStack space={2} justifyContent="start" className="mt-2 mb-4 flex-row-reverse">
         <Button type="submit" color={color} disabled={!didConfirm}>
-          {confirmText ?? "Confirm"}
+          {confirmText ?? 'Confirm'}
         </Button>
         <Button onClick={handleHide} variant="border">
           Cancel

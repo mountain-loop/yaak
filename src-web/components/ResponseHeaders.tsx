@@ -15,6 +15,7 @@ export function ResponseHeaders({ response }: Props) {
     <div className="overflow-auto h-full pb-4">
       <KeyValueRows>
         {sortedHeaders.map((h, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
           <KeyValueRow labelColor="primary" key={i} label={h.name}>
             {h.value}
           </KeyValueRow>
