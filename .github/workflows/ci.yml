@@ -15,12 +15,11 @@ jobs:
           workspaces: 'src-tauri'
           shared-key: ci
           cache-on-failure: true
+
       - run: npm ci
       - run: npm run lint
       - name: Run JS Tests
         run: npm test
-      - name: Vendor tauri dependencies
-        run: npm run vendor # Will fail without this
       - name: Run Rust Tests
         run: cargo test --all
         working-directory: src-tauri

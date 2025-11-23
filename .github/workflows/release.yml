@@ -70,14 +70,13 @@ jobs:
           echo $dir >> $env:GITHUB_PATH
           & $exe --version
 
-      - name: Install NPM Dependencies
-        run: npm ci
-
-      - name: Run lint
-        run: npm run lint
-
-      - name: Run tests
+      - run: npm ci
+      - run: npm run lint
+      - name: Run JS Tests
         run: npm test
+      - name: Run Rust Tests
+        run: cargo test --all
+        working-directory: src-tauri
 
       - name: Set version
         run: npm run replace-version
