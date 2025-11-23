@@ -1,6 +1,8 @@
 on: pull_request
 
 name: CI (JS)
+permissions:
+  contents: read
 
 jobs:
   test:
