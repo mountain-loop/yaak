@@ -210,27 +210,28 @@ function InitializedTemplateFunctionDialog({
                 )}
               />
             </HStack>
-            <InlineCode
-              className={classNames(
-                'relative',
-                'whitespace-pre-wrap !select-text cursor-text max-h-[10rem] overflow-auto hide-scrollbars !border-text-subtlest',
-                tooLarge && 'italic text-danger',
-              )}
-            >
-              {rendered.error || tagText.error ? (
-                <em className="text-danger">
-                  {`${rendered.error || tagText.error}`.replace(/^Render Error: /, '')}
-                </em>
-              ) : dataContainsSecrets && !showSecretsInPreview ? (
-                <span className="italic text-text-subtle">
-                  ------ sensitive values hidden ------
-                </span>
-              ) : tooLarge ? (
-                'too large to preview'
-              ) : (
-                rendered.data || <>&nbsp;</>
-              )}
-              <div className="absolute right-0 top-0 flex items-center">
+            <div className="relative w-full max-h-[10rem]">
+              <InlineCode
+                className={classNames(
+                  'block whitespace-pre-wrap !select-text cursor-text max-h-[10rem] overflow-auto hide-scrollbars !border-text-subtlest',
+                  tooLarge && 'italic text-danger',
+                )}
+              >
+                {rendered.error || tagText.error ? (
+                  <em className="text-danger">
+                    {`${rendered.error || tagText.error}`.replace(/^Render Error: /, '')}
+                  </em>
+                ) : dataContainsSecrets && !showSecretsInPreview ? (
+                  <span className="italic text-text-subtle">
+                    ------ sensitive values hidden ------
+                  </span>
+                ) : tooLarge ? (
+                  'too large to preview'
+                ) : (
+                  rendered.data || <>&nbsp;</>
+                )}
+              </InlineCode>
+              <div className="absolute right-0.5 top-0 bottom-0 flex items-center">
                 <IconButton
                   size="xs"
                   icon="refresh"
@@ -242,7 +243,7 @@ function InitializedTemplateFunctionDialog({
                   }}
                 />
               </div>
-            </InlineCode>
+            </div>
           </div>
         ) : (
           <span />
