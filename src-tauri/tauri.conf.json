@@ -30,5 +30,14 @@
         ]
       }
     }
+  },
+  "bundle": {
+    "icon": [
+      "icons/dev/32x32.png",
+      "icons/dev/128x128.png",
+      "icons/dev/128x128@2x.png",
+      "icons/dev/icon.icns",
+      "icons/dev/icon.ico"
+    ]
   }
 }
