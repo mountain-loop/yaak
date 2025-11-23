@@ -5,9 +5,12 @@
   "main": "index.ts",
   "scripts": {
     "bootstrap": "npm run build",
-    "build": "wasm-pack build --target bundler"
+    "build": "run-s build:*",
+    "build:pack": "wasm-pack build --target bundler",
+    "build:clean": "rimraf ./pkg/.gitignore"
   },
   "devDependencies": {
-    "wasm-pack": "^0.13.1"
+    "wasm-pack": "^0.13.1",
+    "rimraf": "^6.1.2"
   }
 }

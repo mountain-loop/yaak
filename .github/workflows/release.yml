@@ -60,6 +60,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: Install Protoc for plugin-runtime
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install trusted-signing-cli (Windows only)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
@@ -75,15 +80,6 @@ jobs:
 
       - name: Install NPM Dependencies
         run: npm ci
-
-      - name: Install Protoc for plugin-runtime
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      # Some things (eg. WASM package) requires building before lint will work
-      - name: Run bootstrap
-        run: npm run bootstrap
 
       - name: Run lint
         run: npm run lint
