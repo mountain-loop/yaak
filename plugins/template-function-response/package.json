@@ -6,8 +6,7 @@
   "version": "0.1.0",
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev",
-    "lint": "tsc --noEmit"
+    "dev": "yaakcli dev"
   },
   "dependencies": {
     "@yaak/template-function-xml": "*"

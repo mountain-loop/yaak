@@ -12,7 +12,6 @@
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "lint": "tsc --noEmit",
     "test": "vitest --run tests"
   }
 }

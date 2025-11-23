@@ -8,8 +8,7 @@
     "build": "run-p build:*",
     "build:1-build": "yaakcli build",
     "build:2-cpywasm": "cpx '../../node_modules/@1password/sdk-core/nodejs/core_bg.*' build/",
-    "dev": "yaakcli dev",
-    "lint": "tsc --noEmit"
+    "dev": "yaakcli dev"
   },
   "dependencies": {
     "@1password/sdk": "^0.4.0-beta.2"

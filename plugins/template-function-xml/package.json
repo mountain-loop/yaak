@@ -8,8 +8,7 @@
   "types": "src/index.ts",
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev",
-    "lint": "tsc --noEmit"
+    "dev": "yaakcli dev"
   },
   "dependencies": {
     "@xmldom/xmldom": "^0.9.8",
