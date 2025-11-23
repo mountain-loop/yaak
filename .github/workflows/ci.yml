@@ -1,24 +1,14 @@
-on:
-  pull_request:
-    paths:
-      - src-tauri/**
-      - .github/workflows/**
+on: pull_request
 
-name: CI (Rust)
-
-defaults:
-  run:
-    working-directory: src-tauri
+name: CI (JS)
 
 jobs:
   test:
-    name: Check/Test
+    name: Lint/Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev
+      - uses: actions/setup-node@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/cache@v3
         continue-on-error: false
@@ -28,8 +18,13 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
+            src-tauri/target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-      - run: cargo check --all
-      - run: cargo test --all
+      - run: npm ci
+      - run: npm run lint
+      - name: Run JS Tests
+        run: npm test
+      - name: Run Rust Tests
+        run: cargo test --all
+        working-directory: src-tauri
