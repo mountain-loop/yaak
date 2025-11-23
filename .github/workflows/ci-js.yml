@@ -12,5 +12,6 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      - run: npm run bootstrap
       - run: npm run lint
       - run: npm test
