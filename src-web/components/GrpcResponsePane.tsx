@@ -12,9 +12,6 @@ import {
 } from '../hooks/usePinnedGrpcConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { copyToClipboard } from '../lib/copy';
-import { EmptyStateText } from './EmptyStateText';
-import { ErrorBoundary } from './ErrorBoundary';
-import { RecentGrpcConnectionsDropdown } from './RecentGrpcConnectionsDropdown';
 import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
@@ -27,6 +24,9 @@ import { LoadingIcon } from './core/LoadingIcon';
 import { Separator } from './core/Separator';
 import { SplitLayout } from './core/SplitLayout';
 import { HStack, VStack } from './core/Stacks';
+import { EmptyStateText } from './EmptyStateText';
+import { ErrorBoundary } from './ErrorBoundary';
+import { RecentGrpcConnectionsDropdown } from './RecentGrpcConnectionsDropdown';
 
 interface Props {
   style?: CSSProperties;

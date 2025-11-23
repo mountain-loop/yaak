@@ -18,11 +18,11 @@ import { Dropdown } from '../core/Dropdown';
 import { Icon } from '../core/Icon';
 import { InlineCode } from '../core/InlineCode';
 import { BranchSelectionDialog } from './BranchSelectionDialog';
+import { gitCallbacks } from './callbacks';
 import { GitCommitDialog } from './GitCommitDialog';
 import { GitRemotesDialog } from './GitRemotesDialog';
-import { HistoryDialog } from './HistoryDialog';
-import { gitCallbacks } from './callbacks';
 import { handlePullResult } from './git-util';
+import { HistoryDialog } from './HistoryDialog';
 
 export function GitDropdown() {
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);

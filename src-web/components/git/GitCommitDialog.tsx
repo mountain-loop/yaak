@@ -13,7 +13,6 @@ import classNames from 'classnames';
 import { useMemo, useState } from 'react';
 import { resolvedModelName } from '../../lib/resolvedModelName';
 import { showErrorToast } from '../../lib/toast';
-import { EmptyStateText } from '../EmptyStateText';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import type { CheckboxProps } from '../core/Checkbox';
@@ -24,6 +23,7 @@ import { Input } from '../core/Input';
 import { Separator } from '../core/Separator';
 import { SplitLayout } from '../core/SplitLayout';
 import { HStack } from '../core/Stacks';
+import { EmptyStateText } from '../EmptyStateText';
 import { gitCallbacks } from './callbacks';
 import { handlePushResult } from './git-util';
 

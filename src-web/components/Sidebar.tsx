@@ -61,11 +61,11 @@ import { InlineCode } from './core/InlineCode';
 import type { InputHandle } from './core/Input';
 import { Input } from './core/Input';
 import { LoadingIcon } from './core/LoadingIcon';
+import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
+import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
-import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
-import type { TreeNode } from './core/tree/common';
 import { GitDropdown } from './git/GitDropdown';
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;

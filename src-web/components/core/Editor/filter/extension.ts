@@ -1,6 +1,6 @@
 import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import { autocompletion, startCompletion } from '@codemirror/autocomplete';
-import { LRLanguage, LanguageSupport, syntaxTree } from '@codemirror/language';
+import { LanguageSupport, LRLanguage, syntaxTree } from '@codemirror/language';
 import type { SyntaxNode } from '@lezer/common';
 import { parser } from './filter';
 

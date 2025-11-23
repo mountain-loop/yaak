@@ -1,8 +1,8 @@
 import { getModel } from '@yaakapp-internal/models';
-import type { FolderSettingsTab } from '../components/FolderSettingsDialog';
-import { FolderSettingsDialog } from '../components/FolderSettingsDialog';
 import { Icon } from '../components/core/Icon';
 import { HStack } from '../components/core/Stacks';
+import type { FolderSettingsTab } from '../components/FolderSettingsDialog';
+import { FolderSettingsDialog } from '../components/FolderSettingsDialog';
 import { showDialog } from '../lib/dialog';
 import { resolvedModelName } from '../lib/resolvedModelName';
 

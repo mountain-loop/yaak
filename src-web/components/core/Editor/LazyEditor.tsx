@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import type { EditorProps } from './Editor';
 
 const Editor_ = lazy(() => import('./Editor').then((m) => ({ default: m.Editor })));

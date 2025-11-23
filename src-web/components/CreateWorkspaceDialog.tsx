@@ -6,14 +6,14 @@ import { router } from '../lib/router';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
-import { EncryptionHelp } from './EncryptionHelp';
-import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
+import { EncryptionHelp } from './EncryptionHelp';
 import { gitCallbacks } from './git/callbacks';
+import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
 
 interface Props {
   hide: () => void;

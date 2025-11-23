@@ -1,4 +1,4 @@
-import { LRLanguage, LanguageSupport } from '@codemirror/language';
+import { LanguageSupport, LRLanguage } from '@codemirror/language';
 import { parser } from './url';
 
 const urlLanguage = LRLanguage.define({

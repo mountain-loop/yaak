@@ -1,4 +1,4 @@
-import { Navigate, createFileRoute, useParams } from '@tanstack/react-router';
+import { createFileRoute, Navigate, useParams } from '@tanstack/react-router';
 
 // -----------------------------------------------------------------------------------
 // IMPORTANT: This is a deprecated route. Since the active request is optional, it was

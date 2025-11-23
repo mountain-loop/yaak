@@ -7,7 +7,6 @@ import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActive
 import { createFastMutation } from '../hooks/useFastMutation';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { CopyIconButton } from './CopyIconButton';
-import { EncryptionHelp } from './EncryptionHelp';
 import { Banner } from './core/Banner';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
@@ -16,6 +15,7 @@ import { IconTooltip } from './core/IconTooltip';
 import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
+import { EncryptionHelp } from './EncryptionHelp';
 
 interface Props {
   size?: ButtonProps['size'];

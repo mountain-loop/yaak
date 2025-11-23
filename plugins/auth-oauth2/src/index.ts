@@ -7,10 +7,10 @@ import type {
 } from '@yaakapp/api';
 import {
   DEFAULT_PKCE_METHOD,
-  PKCE_PLAIN,
-  PKCE_SHA256,
   genPkceCodeVerifier,
   getAuthorizationCode,
+  PKCE_PLAIN,
+  PKCE_SHA256,
 } from './grants/authorizationCode';
 import { getClientCredentials } from './grants/clientCredentials';
 import { getImplicit } from './grants/implicit';

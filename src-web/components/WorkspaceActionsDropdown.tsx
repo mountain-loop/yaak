@@ -17,13 +17,13 @@ import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { revealInFinderText } from '../lib/reveal';
-import { SwitchWorkspaceDialog } from './SwitchWorkspaceDialog';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
+import { SwitchWorkspaceDialog } from './SwitchWorkspaceDialog';
 
 type Props = Pick<ButtonProps, 'className' | 'justify' | 'forDropdown' | 'leftSlot'>;
 

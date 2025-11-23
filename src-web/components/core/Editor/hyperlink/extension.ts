@@ -1,5 +1,5 @@
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, EditorView, MatchDecorator, ViewPlugin, hoverTooltip } from '@codemirror/view';
+import { Decoration, EditorView, hoverTooltip, MatchDecorator, ViewPlugin } from '@codemirror/view';
 import { activeWorkspaceIdAtom } from '../../../../hooks/useActiveWorkspace';
 import { copyToClipboard } from '../../../../lib/copy';
 import { createRequestAndNavigate } from '../../../../lib/createRequestAndNavigate';

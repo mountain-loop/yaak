@@ -7,11 +7,11 @@ import { useExportData } from '../hooks/useExportData';
 import { appInfo } from '../lib/appInfo';
 import { showDialog } from '../lib/dialog';
 import { importData } from '../lib/importData';
-import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import type { DropdownRef } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
+import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 
 export function SettingsDropdown() {
   const exportData = useExportData();

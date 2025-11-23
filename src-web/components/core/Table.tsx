@@ -1,7 +1,6 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 
-
 export function Table({ children }: { children: ReactNode }) {
   return (
     <table className="w-full text-sm mb-auto min-w-full max-w-full divide-y divide-surface-highlight">

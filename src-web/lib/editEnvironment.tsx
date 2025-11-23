@@ -1,9 +1,9 @@
 import type { Environment, EnvironmentVariable } from '@yaakapp-internal/models';
 import { updateModel } from '@yaakapp-internal/models';
 import { openFolderSettings } from '../commands/openFolderSettings';
-import { EnvironmentEditDialog } from '../components/EnvironmentEditDialog';
 import type { PairEditorHandle } from '../components/core/PairEditor';
 import { ensurePairId } from '../components/core/PairEditor.util';
+import { EnvironmentEditDialog } from '../components/EnvironmentEditDialog';
 import { environmentsBreakdownAtom } from '../hooks/useEnvironmentsBreakdown';
 import { toggleDialog } from './dialog';
 import { jotaiStore } from './jotai';

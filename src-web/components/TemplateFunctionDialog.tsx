@@ -24,7 +24,6 @@ import { showDialog } from '../lib/dialog';
 import { convertTemplateToInsecure } from '../lib/encryption';
 import { jotaiStore } from '../lib/jotai';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
-import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 import { Button } from './core/Button';
 import { collectArgumentValues } from './core/Editor/twig/util';
 import { IconButton } from './core/IconButton';
@@ -32,6 +31,7 @@ import { InlineCode } from './core/InlineCode';
 import { LoadingIcon } from './core/LoadingIcon';
 import { PlainInput } from './core/PlainInput';
 import { HStack } from './core/Stacks';
+import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 
 interface Props {
   templateFunction: TemplateFunction;

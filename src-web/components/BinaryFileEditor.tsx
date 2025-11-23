@@ -1,11 +1,11 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
 import mime from 'mime';
 import { useKeyValue } from '../hooks/useKeyValue';
-import { SelectFile } from './SelectFile';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
 import { HStack, VStack } from './core/Stacks';
+import { SelectFile } from './SelectFile';
 
 type Props = {
   requestId: string;

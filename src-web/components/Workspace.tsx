@@ -31,6 +31,11 @@ import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFo
 import { importData } from '../lib/importData';
 import { jotaiStore } from '../lib/jotai';
 import { CreateDropdown } from './CreateDropdown';
+import { Banner } from './core/Banner';
+import { Button } from './core/Button';
+import { HotKeyList } from './core/HotKeyList';
+import { FeedbackLink } from './core/Link';
+import { HStack } from './core/Stacks';
 import { ErrorBoundary } from './ErrorBoundary';
 import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
@@ -43,11 +48,6 @@ import Sidebar from './Sidebar';
 import { SidebarActions } from './SidebarActions';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
-import { Banner } from './core/Banner';
-import { Button } from './core/Button';
-import { HotKeyList } from './core/HotKeyList';
-import { FeedbackLink } from './core/Link';
-import { HStack } from './core/Stacks';
 
 const side = { gridArea: 'side' };
 const head = { gridArea: 'head' };

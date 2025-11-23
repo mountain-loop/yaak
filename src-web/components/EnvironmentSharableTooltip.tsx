@@ -1,4 +1,3 @@
-
 import { IconTooltip } from './core/IconTooltip';
 
 export function EnvironmentSharableTooltip() {

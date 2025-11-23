@@ -1,5 +1,5 @@
-import { WorkspaceEncryptionSetting } from '../components/WorkspaceEncryptionSetting';
 import { VStack } from '../components/core/Stacks';
+import { WorkspaceEncryptionSetting } from '../components/WorkspaceEncryptionSetting';
 import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { showDialog } from './dialog';
 import { jotaiStore } from './jotai';

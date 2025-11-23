@@ -76,7 +76,7 @@
     "vendor:vendor-plugins": "node scripts/vendor-plugins.cjs",
     "vendor:vendor-protoc": "node scripts/vendor-protoc.cjs",
     "lint": "run-p lint:*",
-    "lint:biome": "biome check .",
+    "lint:biome": "biome lint",
     "lint:extra": "npm run --workspaces --if-present lint",
     "format": "biome format --write .",
     "replace-version": "node scripts/replace-version.cjs",

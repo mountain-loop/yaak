@@ -1,6 +1,6 @@
+import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 import type { AnyModel, HttpUrlParameter } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 
 export const plugin: PluginDefinition = {
   templateFunctions: [

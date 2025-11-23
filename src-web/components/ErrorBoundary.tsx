@@ -1,10 +1,10 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component, useEffect } from 'react';
 import { showDialog } from '../lib/dialog';
-import RouteError from './RouteError';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
+import RouteError from './RouteError';
 
 interface ErrorBoundaryProps {
   name: string;

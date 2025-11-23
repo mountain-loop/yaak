@@ -10,7 +10,6 @@ import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { showDialog } from '../lib/dialog';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
-import { HttpResponsePane } from './HttpResponsePane';
 import { Button } from './core/Button';
 import { Heading } from './core/Heading';
 import { HttpResponseDurationTag } from './core/HttpResponseDurationTag';
@@ -21,6 +20,7 @@ import { LoadingIcon } from './core/LoadingIcon';
 import { Separator } from './core/Separator';
 import { SizeTag } from './core/SizeTag';
 import { HStack } from './core/Stacks';
+import { HttpResponsePane } from './HttpResponsePane';
 
 interface Props {
   folder: Folder;
