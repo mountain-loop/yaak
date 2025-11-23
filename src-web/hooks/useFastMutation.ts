@@ -63,8 +63,8 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
 export function useFastMutation<TData = unknown, TError = unknown, TVariables = void>(
   defaultArgs: MutationOptions<TData, TError, TVariables>,
 ) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   return useMemo(() => {
     return createFastMutation(defaultArgs);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: Force it!
   }, defaultArgs.mutationKey);
 }

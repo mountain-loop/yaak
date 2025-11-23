@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
-import React from 'react';
+
 
 export function Table({ children }: { children: ReactNode }) {
   return (

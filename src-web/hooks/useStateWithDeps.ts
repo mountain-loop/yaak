@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
  */
 export function useStateWithDeps<T>(defaultValue: T | (() => T), deps: DependencyList) {
   const [value, setValue] = useState(defaultValue);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     setValue(defaultValue);
   }, [...deps]);

@@ -1,6 +1,6 @@
 import { createWorkspaceModel, foldersAtom, patchModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useHeadersTab } from '../hooks/useHeadersTab';

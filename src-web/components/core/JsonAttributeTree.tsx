@@ -5,7 +5,7 @@ import { Icon } from './Icon';
 
 interface Props {
   depth?: number;
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   attrValue: any;
   attrKey?: string | number;
   attrKeyJsonPath?: string;
@@ -54,10 +54,10 @@ export const JsonAttributeTree = ({
     if (jsonType === '[object Array]') {
       return {
         children: isExpanded
-          ? // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+          ? // biome-ignore lint/suspicious/noExplicitAny: none
             attrValue.flatMap((v: any, i: number) => (
               <JsonAttributeTree
-                // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+                // biome-ignore lint/suspicious/noArrayIndexKey: none
                 key={i}
                 depth={depth + 1}
                 attrValue={v}

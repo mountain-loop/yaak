@@ -2,7 +2,7 @@ import { useSearch } from '@tanstack/react-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useKeyPressEvent } from 'react-use';
 import { appInfo } from '../../lib/appInfo';
 import { capitalize } from '../../lib/capitalize';

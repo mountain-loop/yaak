@@ -12,12 +12,12 @@ export function useRequestEditorEvent<
   Event extends keyof EventDataMap,
   Data extends EventDataMap[Event],
 >(event: Event, fn: (data: Data) => void, deps?: DependencyList) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
     emitter.on(event, fn);
     return () => {
       emitter.off(event, fn);
     };
+    // biome-ignore lint/correctness/useExhaustiveDependencies: We're handing deps manually
   }, deps);
 }
 

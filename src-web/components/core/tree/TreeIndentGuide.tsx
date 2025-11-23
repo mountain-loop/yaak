@@ -19,7 +19,7 @@ export const TreeIndentGuide = memo(function TreeIndentGuide({
     <div className="flex">
       {Array.from({ length: depth }).map((_, i) => (
         <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+          // biome-ignore lint/suspicious/noArrayIndexKey: none
           key={i}
           className={classNames(
             'w-[calc(1rem+0.5px)] border-r border-r-text-subtlest',

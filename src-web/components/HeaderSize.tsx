@@ -3,7 +3,7 @@ import { settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useIsFullscreen } from '../hooks/useIsFullscreen';
 import { HEADER_SIZE_LG, HEADER_SIZE_MD, WINDOW_CONTROLS_WIDTH } from '../lib/constants';
 import { WindowControls } from './WindowControls';

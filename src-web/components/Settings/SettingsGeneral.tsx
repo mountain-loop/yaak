@@ -108,9 +108,9 @@ export function SettingsGeneral() {
           placeholder="0"
           labelPosition="left"
           defaultValue={`${workspace.settingRequestTimeout}`}
-          validate={(value) => Number.parseInt(value) >= 0}
+          validate={(value) => Number.parseInt(value, 10) >= 0}
           onChange={(v) =>
-            patchModel(workspace, { settingRequestTimeout: Number.parseInt(v) || 0 })
+            patchModel(workspace, { settingRequestTimeout: Number.parseInt(v, 10) || 0 })
           }
           type="number"
         />

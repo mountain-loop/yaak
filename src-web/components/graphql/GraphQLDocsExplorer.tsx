@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { fuzzyMatch } from 'fuzzbunny';
@@ -29,12 +28,12 @@ import { useContainerSize } from '../../hooks/useContainerQuery';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { jotaiStore } from '../../lib/jotai';
-import { Markdown } from '../Markdown';
 import { Banner } from '../core/Banner';
 import { CountBadge } from '../core/CountBadge';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';
 import { PlainInput } from '../core/PlainInput';
+import { Markdown } from '../Markdown';
 import { showGraphQLDocExplorerAtom } from './graphqlAtoms';
 
 interface Props {
@@ -46,7 +45,7 @@ interface Props {
 
 type ExplorerItem =
   | { kind: 'type'; type: GraphQLType; from: ExplorerItem }
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   | { kind: 'field'; type: GraphQLField<any, any>; from: ExplorerItem }
   | { kind: 'input_field'; type: GraphQLInputField; from: ExplorerItem }
   | null;
@@ -183,14 +182,14 @@ function GraphQLExplorerHeader({
           <Icon icon="book_open_text" />
           {crumbs.map((crumb, i) => {
             return (
-              // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+              // biome-ignore lint/suspicious/noArrayIndexKey: none
               <Fragment key={i}>
                 {i > 0 && <Icon icon="chevron_right" className="text-text-subtlest" />}
                 {crumb === item || item == null ? (
                   <GqlTypeLabel noTruncate item={item} />
                 ) : crumb === item ? null : (
                   <GqlTypeLink
-                    // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+                    // biome-ignore lint/suspicious/noArrayIndexKey: none
                     key={i}
                     noTruncate
                     item={crumb}
@@ -675,7 +674,7 @@ function Subheading({ children, count }: { children: ReactNode; count?: number }
 
 interface SearchResult {
   name: string;
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   type: GraphQLNamedType | GraphQLField<any, any> | GraphQLInputField;
   score: number;
   from: GraphQLNamedType | null;
@@ -752,7 +751,7 @@ function GqlSchemaSearch({
   }, [currentItem, schema, debouncedValue, value]);
 
   const activeIndex = useMemo(() => {
-    const index = results.findIndex((r) => r === activeResult) ?? 0;
+    const index = (activeResult ? results.indexOf(activeResult) : 0) ?? 0;
     return index === -1 ? 0 : index;
   }, [activeResult, results]);
 
@@ -898,10 +897,10 @@ function DocMarkdown({ children, className }: { children: string | null; classNa
 
 function walkTypeGraph(
   schema: GraphQLSchema,
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   start: GraphQLType | GraphQLField<any, any> | GraphQLInputField | null,
   cb: (
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: none
     type: GraphQLNamedType | GraphQLField<any, any> | GraphQLInputField,
     from: GraphQLNamedType | null,
     path: string[],
@@ -909,7 +908,7 @@ function walkTypeGraph(
 ) {
   const visited = new Set<string>();
   const queue: Array<{
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: none
     current: GraphQLType | GraphQLField<any, any> | GraphQLInputField;
     from: GraphQLNamedType | null;
     path: string[];
@@ -929,7 +928,7 @@ function walkTypeGraph(
   }
 
   while (queue.length > 0) {
-    // biome-ignore lint/style/noNonNullAssertion: <explanation>
+    // biome-ignore lint/style/noNonNullAssertion: none
     const { current, from, path } = queue.shift()!;
     if (!isNamedType(current)) continue;
 
@@ -982,7 +981,7 @@ function walkTypeGraph(
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+// biome-ignore lint/suspicious/noExplicitAny: none
 function toExplorerItem(t: any, from: ExplorerItem | null): ExplorerItem | null {
   if (t == null) return null;
 

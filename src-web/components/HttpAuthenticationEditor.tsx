@@ -6,14 +6,12 @@ import type {
   Workspace,
 } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
 import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
 import { useInheritedAuthentication } from '../hooks/useInheritedAuthentication';
 import { resolvedModelName } from '../lib/resolvedModelName';
-import { DynamicForm } from './DynamicForm';
-import { EmptyStateText } from './EmptyStateText';
 import { Checkbox } from './core/Checkbox';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
@@ -22,6 +20,8 @@ import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import { Link } from './core/Link';
 import { HStack } from './core/Stacks';
+import { DynamicForm } from './DynamicForm';
+import { EmptyStateText } from './EmptyStateText';
 
 interface Props {
   model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace;

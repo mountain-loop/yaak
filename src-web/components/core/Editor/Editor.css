@@ -200,8 +200,7 @@
 }
 
 .cm-editor .fold-gutter-icon::after {
-  @apply block w-1.5 h-1.5 p-0.5 border-transparent
-  border-l border-b border-l-[currentColor] border-b-[currentColor] content-[''];
+  @apply block w-1.5 h-1.5 p-0.5 border-transparent border-l border-b border-l-[currentColor] border-b-[currentColor] content-[''];
 }
 
 /* Rotate the fold gutter chevron when open */

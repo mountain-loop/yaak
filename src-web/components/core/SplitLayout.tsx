@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { CSSProperties, ReactNode } from 'react';
-import React, { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useLocalStorage } from 'react-use';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useContainerSize } from '../../hooks/useContainerQuery';

@@ -1,6 +1,6 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React from 'react';
+
 import { Checkbox } from '../core/Checkbox';
 import { InlineCode } from '../core/InlineCode';
 import { PlainInput } from '../core/PlainInput';

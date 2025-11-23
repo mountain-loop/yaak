@@ -56,7 +56,7 @@ export async function getImplicit(
     );
   }
 
-  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: <explanation>
+  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: none
   const newToken = await new Promise<AccessToken>(async (resolve, reject) => {
     let foundAccessToken = false;
     const authorizationUrlStr = authorizationUrl.toString();

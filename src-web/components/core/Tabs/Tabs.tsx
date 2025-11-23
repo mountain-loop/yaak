@@ -80,6 +80,7 @@ export function Tabs({
       )}
     >
       <div
+        role="tablist"
         aria-label={label}
         className={classNames(
           tabListClassName,

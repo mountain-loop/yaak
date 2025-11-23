@@ -1,6 +1,6 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React, { lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useResolvedAppearance } from '../../hooks/useResolvedAppearance';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';

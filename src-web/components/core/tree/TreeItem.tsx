@@ -3,19 +3,19 @@ import { useDndContext, useDndMonitor, useDraggable, useDroppable } from '@dnd-k
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
-import type { MouseEvent, PointerEvent } from 'react';
 import type React from 'react';
+import type { MouseEvent, PointerEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { computeSideForDragMove } from '../../../lib/dnd';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps, DropdownItem } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
 import { Icon } from '../Icon';
-import type { TreeProps } from './Tree';
-import { TreeIndentGuide } from './TreeIndentGuide';
 import { collapsedFamily, isCollapsedFamily, isLastFocusedFamily, isSelectedFamily } from './atoms';
 import type { TreeNode } from './common';
 import { getNodeKey } from './common';
+import type { TreeProps } from './Tree';
+import { TreeIndentGuide } from './TreeIndentGuide';
 
 export interface TreeItemClickEvent {
   shiftKey: boolean;
@@ -273,10 +273,6 @@ function TreeItem_<T extends { id: string }>({
   return (
     <li
       ref={listItemRef}
-      role="treeitem"
-      aria-level={depth + 1}
-      aria-expanded={node.children == null ? undefined : !isCollapsed}
-      aria-selected={isSelected}
       onContextMenu={handleContextMenu}
       className={classNames(
         className,

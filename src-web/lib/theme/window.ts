@@ -268,7 +268,7 @@ export function getThemeCSS(theme: Theme): string {
   theme.components.toast = theme.components.toast ?? theme.components.menu ?? {};
   const { components, id, label } = theme;
   const colors = Object.keys(theme.base).reduce((prev, key) => {
-    // biome-ignore lint/performance/noAccumulatingSpread: <explanation>
+    // biome-ignore lint/performance/noAccumulatingSpread: none
     return { ...prev, [key]: theme.base[key as YaakColorKey] };
   }, {}) as ThemeComponentColors;
 

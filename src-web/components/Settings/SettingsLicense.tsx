@@ -1,11 +1,10 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useLicense } from '@yaakapp-internal/license';
 import { differenceInDays } from 'date-fns';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useToggle } from '../../hooks/useToggle';
 import { pluralizeCount } from '../../lib/pluralize';
 import { CargoFeature } from '../CargoFeature';
-import { LocalImage } from '../LocalImage';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import { Icon } from '../core/Icon';
@@ -13,6 +12,7 @@ import { Link } from '../core/Link';
 import { PlainInput } from '../core/PlainInput';
 import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';
+import { LocalImage } from '../LocalImage';
 
 export function SettingsLicense() {
   return (

@@ -61,7 +61,7 @@ export async function fetchAccessToken(
     throw new Error(`Failed to fetch access token with status=${resp.status} and body=${body}`);
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   let response: any;
   try {
     response = JSON.parse(body);

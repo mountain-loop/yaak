@@ -1,7 +1,7 @@
 import { type GrpcRequest, type HttpRequestHeader, patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
-import React, { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
@@ -10,11 +10,6 @@ import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { resolvedModelName } from '../lib/resolvedModelName';
-import { GrpcEditor } from './GrpcEditor';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
-import { UrlBar } from './UrlBar';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
 import { Icon } from './core/Icon';
@@ -24,6 +19,11 @@ import { RadioDropdown } from './core/RadioDropdown';
 import { HStack, VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
+import { GrpcEditor } from './GrpcEditor';
+import { HeadersEditor } from './HeadersEditor';
+import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
+import { MarkdownEditor } from './MarkdownEditor';
+import { UrlBar } from './UrlBar';
 
 interface Props {
   style?: CSSProperties;

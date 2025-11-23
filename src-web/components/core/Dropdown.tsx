@@ -7,6 +7,7 @@ import type {
   MouseEvent,
   ReactElement,
   FocusEvent as ReactFocusEvent,
+  KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
   RefObject,
   SetStateAction,
@@ -305,7 +306,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     }, [onClose]);
 
     // Close menu on space bar
-    const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const handleMenuKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
       const isCharacter = e.key.length === 1;
       const isSpecial = e.ctrlKey || e.metaKey || e.altKey;
       if (isCharacter && !isSpecial) {
@@ -410,22 +411,18 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       [handleClose, setSelectedIndex],
     );
 
-    useImperativeHandle(
-      ref,
-      () => {
-        return {
-          close: handleClose,
-          prev: handlePrev,
-          next: handleNext,
-          select: async () => {
-            const item = items[selectedIndexRef.current ?? -1] ?? null;
-            if (!item) return;
-            await handleSelect(item);
-          },
-        };
-      },
-      [handleClose, handleNext, handlePrev, handleSelect, items],
-    );
+    useImperativeHandle(ref, () => {
+      return {
+        close: handleClose,
+        prev: handlePrev,
+        next: handleNext,
+        select: async () => {
+          const item = items[selectedIndexRef.current ?? -1] ?? null;
+          if (!item) return;
+          await handleSelect(item);
+        },
+      };
+    }, [handleClose, handleNext, handlePrev, handleSelect, items]);
 
     const styles = useMemo<{
       container: CSSProperties;
@@ -480,7 +477,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
 
     const handleFocus = useCallback(
       (i: DropdownItem) => {
-        const index = filteredItems.findIndex((item) => item === i) ?? null;
+        const index = filteredItems.indexOf(i) ?? null;
         setSelectedIndex(index);
       },
       [filteredItems, setSelectedIndex],
@@ -572,7 +569,8 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                   }
                   if (item.type === 'content') {
                     return (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+                      // biome-ignore lint/a11y/noStaticElementInteractions: Needs to be clickable but want to support nested buttons
+                      // biome-ignore lint/suspicious/noArrayIndexKey: index is fine
                       <div key={i} className={classNames('my-1 mx-2 max-w-xs')} onClick={onClose}>
                         {item.label}
                       </div>

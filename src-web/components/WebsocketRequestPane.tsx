@@ -5,7 +5,7 @@ import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-intern
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { getActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { getActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
@@ -24,19 +24,19 @@ import { languageFromContentType } from '../lib/contentType';
 import { generateId } from '../lib/generateId';
 import { prepareImportQuerystring } from '../lib/prepareImportQuerystring';
 import { resolvedModelName } from '../lib/resolvedModelName';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
-import { UrlBar } from './UrlBar';
-import { UrlParametersEditor } from './UrlParameterEditor';
 import { CountBadge } from './core/CountBadge';
-import { Editor } from './core/Editor/LazyEditor';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
+import { Editor } from './core/Editor/LazyEditor';
 import { IconButton } from './core/IconButton';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
+import { HeadersEditor } from './HeadersEditor';
+import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
+import { MarkdownEditor } from './MarkdownEditor';
+import { UrlBar } from './UrlBar';
+import { UrlParametersEditor } from './UrlParameterEditor';
 
 interface Props {
   style: CSSProperties;

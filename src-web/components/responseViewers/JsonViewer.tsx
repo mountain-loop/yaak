@@ -16,8 +16,7 @@ export function JsonViewer({ response, className }: Props) {
   let parsed = {};
   try {
     parsed = JSON.parse(rawBody.data);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (err) {
+  } catch {
     // Nothing yet
   }
 

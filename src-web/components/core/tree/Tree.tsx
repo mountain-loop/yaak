@@ -28,10 +28,6 @@ import { computeSideForDragMove } from '../../../lib/dnd';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps, DropdownItem } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
-import { TreeDragOverlay } from './TreeDragOverlay';
-import type { TreeItemClickEvent, TreeItemHandle, TreeItemProps } from './TreeItem';
-import type { TreeItemListProps } from './TreeItemList';
-import { TreeItemList } from './TreeItemList';
 import {
   collapsedFamily,
   draggingIdsFamily,
@@ -42,6 +38,10 @@ import {
 } from './atoms';
 import type { SelectableTreeNode, TreeNode } from './common';
 import { closestVisibleNode, equalSubtree, getSelectedItems, hasAncestor } from './common';
+import { TreeDragOverlay } from './TreeDragOverlay';
+import type { TreeItemClickEvent, TreeItemHandle, TreeItemProps } from './TreeItem';
+import type { TreeItemListProps } from './TreeItemList';
+import { TreeItemList } from './TreeItemList';
 import { useSelectableItems } from './useSelectableItems';
 
 /** So we re-calculate after expanding a folder during drag */
@@ -735,6 +735,7 @@ function DropRegionAfterList({
   onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
 }) {
   const { setNodeRef } = useDroppable({ id });
+  // biome-ignore lint/a11y/noStaticElementInteractions: Meh
   return <div ref={setNodeRef} onContextMenu={onContextMenu} />;
 }
 

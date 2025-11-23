@@ -15,10 +15,10 @@ export function setWorkspaceSearchParams(
     folder_id: string | null;
   }>,
 ) {
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   (router as any)
     .navigate({
-      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+      // biome-ignore lint/suspicious/noExplicitAny: none
       search: (prev: any) => {
         // console.log('Navigating to', { prev, search });
         const o = { ...prev, ...search };

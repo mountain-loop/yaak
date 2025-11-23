@@ -1,11 +1,15 @@
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { workspaceLayoutAtom } from '../lib/atoms';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
+import { Icon } from './core/Icon';
+import { IconButton } from './core/IconButton';
+import { PillButton } from './core/PillButton';
+import { HStack } from './core/Stacks';
 import { EnvironmentActionsDropdown } from './EnvironmentActionsDropdown';
 import { ImportCurlButton } from './ImportCurlButton';
 import { LicenseBadge } from './LicenseBadge';
@@ -13,10 +17,6 @@ import { RecentRequestsDropdown } from './RecentRequestsDropdown';
 import { SettingsDropdown } from './SettingsDropdown';
 import { SidebarActions } from './SidebarActions';
 import { WorkspaceActionsDropdown } from './WorkspaceActionsDropdown';
-import { Icon } from './core/Icon';
-import { IconButton } from './core/IconButton';
-import { PillButton } from './core/PillButton';
-import { HStack } from './core/Stacks';
 
 interface Props {
   className?: string;

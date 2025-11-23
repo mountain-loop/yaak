@@ -2,17 +2,17 @@ import { patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
 import { activeGrpcConnectionAtom, useGrpcEvents } from '../hooks/usePinnedGrpcConnection';
 import { workspaceLayoutAtom } from '../lib/atoms';
-import { GrpcRequestPane } from './GrpcRequestPane';
-import { GrpcResponsePane } from './GrpcResponsePane';
 import { Banner } from './core/Banner';
 import { HotKeyList } from './core/HotKeyList';
 import { SplitLayout } from './core/SplitLayout';
+import { GrpcRequestPane } from './GrpcRequestPane';
+import { GrpcResponsePane } from './GrpcResponsePane';
 
 interface Props {
   style: CSSProperties;

@@ -2,15 +2,14 @@ import type { HttpRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import React from 'react';
 import { useCurrentGraphQLSchema } from '../hooks/useIntrospectGraphQL';
 import { workspaceLayoutAtom } from '../lib/atoms';
-import { HttpRequestPane } from './HttpRequestPane';
-import { HttpResponsePane } from './HttpResponsePane';
 import type { SlotProps } from './core/SplitLayout';
 import { SplitLayout } from './core/SplitLayout';
 import { GraphQLDocsExplorer } from './graphql/GraphQLDocsExplorer';
 import { showGraphQLDocExplorerAtom } from './graphql/graphqlAtoms';
+import { HttpRequestPane } from './HttpRequestPane';
+import { HttpResponsePane } from './HttpResponsePane';
 
 interface Props {
   activeRequest: HttpRequest;

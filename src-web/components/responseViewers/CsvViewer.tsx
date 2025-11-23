@@ -24,10 +24,10 @@ export function CsvViewer({ response, className }: Props) {
       <table className={classNames(className, 'text-sm')}>
         <tbody>
           {parsed.data.map((row, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+            // biome-ignore lint/suspicious/noArrayIndexKey: none
             <tr key={i} className={classNames('border-l border-t', i > 0 && 'border-b')}>
               {row.map((col, j) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+                // biome-ignore lint/suspicious/noArrayIndexKey: none
                 <td key={j} className="border-r px-1.5">
                   {col}
                 </td>

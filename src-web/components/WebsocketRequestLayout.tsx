@@ -2,7 +2,7 @@ import type { WebsocketRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import React from 'react';
+
 import { workspaceLayoutAtom } from '../lib/atoms';
 import { WebsocketRequestPane } from './WebsocketRequestPane';
 import { WebsocketResponsePane } from './WebsocketResponsePane';

@@ -1,7 +1,7 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
 import type { ServerSentEvent } from '@yaakapp-internal/sse';
 import classNames from 'classnames';
-import React, { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useFormatText } from '../../hooks/useFormatText';
 import { useResponseBodyEventSource } from '../../hooks/useResponseBodyEventSource';
 import { isJSON } from '../../lib/contentType';

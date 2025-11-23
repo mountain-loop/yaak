@@ -1,7 +1,7 @@
 import type { Environment, Workspace } from '@yaakapp-internal/models';
 import { duplicateModel, patchModel } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import {
@@ -13,9 +13,6 @@ import { jotaiStore } from '../lib/jotai';
 import { isBaseEnvironment, isSubEnvironment } from '../lib/model_util';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { showColorPicker } from '../lib/showColorPicker';
-import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
-import { EnvironmentEditor } from './EnvironmentEditor';
-import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 import { Banner } from './core/Banner';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
@@ -24,9 +21,12 @@ import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
 import type { PairEditorHandle } from './core/PairEditor';
 import { SplitLayout } from './core/SplitLayout';
+import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
-import type { TreeNode } from './core/tree/common';
+import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
+import { EnvironmentEditor } from './EnvironmentEditor';
+import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 
 interface Props {
   initialEnvironmentId: string | null;
@@ -112,7 +112,7 @@ function EnvironmentEditDialogSidebar({
   const treeRef = useRef<TreeHandle>(null);
   const { baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useLayoutEffect(() => {
     if (selectedEnvironmentId == null) return;
     treeRef.current?.selectItem(selectedEnvironmentId);

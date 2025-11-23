@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { IconProps } from './Icon';
 import { Icon } from './Icon';
 import type { TooltipProps } from './Tooltip';

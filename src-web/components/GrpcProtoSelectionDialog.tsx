@@ -20,7 +20,7 @@ export function GrpcProtoSelectionDialog(props: Props) {
   const request = useActiveRequest();
   if (request?.model !== 'grpc_request') return null;
 
-  return GrpcProtoSelectionDialogWithRequest({ ...props, request });
+  return <GrpcProtoSelectionDialogWithRequest request={request} {...props} />;
 }
 
 function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: GrpcRequest }) {
@@ -144,7 +144,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               {protoFiles.map((f, i) => {
                 const parts = f.split('/');
                 return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+                  // biome-ignore lint/suspicious/noArrayIndexKey: none
                   <tr key={f + i} className="group">
                     <td>
                       <Icon icon={f.endsWith('.proto') ? 'file_code' : 'folder_code'} />

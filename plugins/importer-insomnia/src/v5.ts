@@ -1,7 +1,7 @@
 import type { PartialImportResources } from '@yaakapp/api';
 import { convertId, convertTemplateSyntax, isJSObject } from './common';
 
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+// biome-ignore lint/suspicious/noExplicitAny: none
 export function convertInsomniaV5(parsed: any) {
   // Assert parsed is object
   if (parsed == null || typeof parsed !== 'object') {
@@ -22,7 +22,7 @@ export function convertInsomniaV5(parsed: any) {
   };
 
   // Import workspaces
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   const meta = ('meta' in parsed ? parsed.meta : {}) as Record<string, any>;
   resources.workspaces.push({
     id: convertId(meta.id ?? 'collection'),
@@ -38,12 +38,12 @@ export function convertInsomniaV5(parsed: any) {
   // Import environments
   resources.environments.push(
     importEnvironment(parsed.environments, meta.id, true),
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: none
     ...(parsed.environments.subEnvironments ?? []).map((r: any) => importEnvironment(r, meta.id)),
   );
 
   // Import folders
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   const nextFolder = (children: any[], parentId: string) => {
     for (const child of children ?? []) {
       if (!isJSObject(child)) continue;
@@ -76,7 +76,7 @@ export function convertInsomniaV5(parsed: any) {
 }
 
 function importHttpRequest(
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   r: any,
   workspaceId: string,
   parentId: string,
@@ -94,7 +94,7 @@ function importHttpRequest(
   } else if (r.body?.mimeType === 'application/x-www-form-urlencoded') {
     bodyType = 'application/x-www-form-urlencoded';
     body = {
-      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+      // biome-ignore lint/suspicious/noExplicitAny: none
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
         name: p.name ?? '',
@@ -104,7 +104,7 @@ function importHttpRequest(
   } else if (r.body?.mimeType === 'multipart/form-data') {
     bodyType = 'multipart/form-data';
     body = {
-      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+      // biome-ignore lint/suspicious/noExplicitAny: none
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
         name: p.name ?? '',
@@ -131,7 +131,7 @@ function importHttpRequest(
     name: r.name,
     description: r.meta?.description || undefined,
     url: r.url,
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: none
     urlParameters: (r.parameters ?? []).map((p: any) => ({
       enabled: !p.disabled,
       name: p.name ?? '',
@@ -146,7 +146,7 @@ function importHttpRequest(
 }
 
 function importGrpcRequest(
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   r: any,
   workspaceId: string,
   parentId: string,
@@ -156,7 +156,7 @@ function importGrpcRequest(
   const updated = r.meta?.modified ?? r.updated;
   const sortKey = r.meta?.sortKey ?? r.sortKey;
 
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   const parts = r.protoMethodName.split('/').filter((p: any) => p !== '');
   const service = parts[0] ?? null;
   const method = parts[1] ?? null;
@@ -176,19 +176,19 @@ function importGrpcRequest(
     method,
     message: r.body?.text ?? '',
     metadata: (r.metadata ?? [])
-      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+      // biome-ignore lint/suspicious/noExplicitAny: none
       .map((h: any) => ({
         enabled: !h.disabled,
         name: h.name ?? '',
         value: h.value ?? '',
       }))
-      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+      // biome-ignore lint/suspicious/noExplicitAny: none
       .filter(({ name, value }: any) => name !== '' || value !== ''),
   };
 }
 
 function importWebsocketRequest(
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   r: any,
   workspaceId: string,
   parentId: string,
@@ -215,21 +215,21 @@ function importWebsocketRequest(
   };
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+// biome-ignore lint/suspicious/noExplicitAny: none
 function importHeaders(obj: any) {
   const headers = (obj.headers ?? [])
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: none
     .map((h: any) => ({
       enabled: !h.disabled,
       name: h.name ?? '',
       value: h.value ?? '',
     }))
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: none
     .filter(({ name, value }: any) => name !== '' || value !== '');
   return { headers } as const;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+// biome-ignore lint/suspicious/noExplicitAny: none
 function importAuthentication(obj: any) {
   let authenticationType: string | null = null;
   let authentication = {};
@@ -250,7 +250,7 @@ function importAuthentication(obj: any) {
 }
 
 function importFolder(
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   f: any,
   workspaceId: string,
   parentId: string,
@@ -302,7 +302,7 @@ function importFolder(
 }
 
 function importEnvironment(
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   e: any,
   workspaceId: string,
   isParent?: boolean,

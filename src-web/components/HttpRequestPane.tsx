@@ -4,7 +4,7 @@ import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import React, { lazy, Suspense, useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useAuthTab } from '../hooks/useAuthTab';
@@ -36,6 +36,14 @@ import { resolvedModelName } from '../lib/resolvedModelName';
 import { showToast } from '../lib/toast';
 import { BinaryFileEditor } from './BinaryFileEditor';
 import { ConfirmLargeRequestBody } from './ConfirmLargeRequestBody';
+import { CountBadge } from './core/CountBadge';
+import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
+import { Editor } from './core/Editor/LazyEditor';
+import { InlineCode } from './core/InlineCode';
+import type { Pair } from './core/PairEditor';
+import { PlainInput } from './core/PlainInput';
+import type { TabItem } from './core/Tabs/Tabs';
+import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { FormMultipartEditor } from './FormMultipartEditor';
 import { FormUrlencodedEditor } from './FormUrlencodedEditor';
@@ -45,14 +53,6 @@ import { MarkdownEditor } from './MarkdownEditor';
 import { RequestMethodDropdown } from './RequestMethodDropdown';
 import { UrlBar } from './UrlBar';
 import { UrlParametersEditor } from './UrlParameterEditor';
-import { CountBadge } from './core/CountBadge';
-import { Editor } from './core/Editor/LazyEditor';
-import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
-import { InlineCode } from './core/InlineCode';
-import type { Pair } from './core/PairEditor';
-import { PlainInput } from './core/PlainInput';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
-import type { TabItem } from './core/Tabs/Tabs';
 
 const GraphQLEditor = lazy(() =>
   import('./graphql/GraphQLEditor').then((m) => ({ default: m.GraphQLEditor })),

@@ -13,7 +13,7 @@ export function KeyValueRows({ children }: Props) {
     <table className="text-xs font-mono min-w-0 w-full mb-auto">
       <tbody className="divide-y divide-surface-highlight">
         {children.map((child, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+          // biome-ignore lint/suspicious/noArrayIndexKey: none
           <tr key={i}>{child}</tr>
         ))}
       </tbody>

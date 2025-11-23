@@ -120,7 +120,7 @@ export const syncWorkspace = createFastMutation<
                       }
 
                       return (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+                        // biome-ignore lint/suspicious/noArrayIndexKey: none
                         <tr key={i} className="text-text">
                           <td className="py-1">{name}</td>
                           <td className="py-1 pl-4 text-right">

@@ -42,7 +42,7 @@ export function useKeyValue<T extends object | boolean | number | string | null>
     mutationFn: (value) => setKeyValue<T>({ namespace, key, value }),
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   const set = useCallback(
     async (valueOrUpdate: ((v: T) => T) | T) => {
       if (typeof valueOrUpdate === 'function') {

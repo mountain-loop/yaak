@@ -4,7 +4,7 @@ import { useLicense } from '@yaakapp-internal/license';
 import type { EditorKeymap, Settings } from '@yaakapp-internal/models';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React from 'react';
+
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { clamp } from '../../lib/clamp';
 import { showConfirm } from '../../lib/confirm';
@@ -95,7 +95,7 @@ export function SettingsInterface() {
           defaultValue="14"
           value={`${settings.interfaceFontSize}`}
           options={fontSizeOptions}
-          onChange={(v) => patchModel(settings, { interfaceFontSize: Number.parseInt(v) })}
+          onChange={(v) => patchModel(settings, { interfaceFontSize: Number.parseInt(v, 10) })}
         />
       </HStack>
       <HStack space={2} alignItems="end">
@@ -127,7 +127,7 @@ export function SettingsInterface() {
           value={`${settings.editorFontSize}`}
           options={fontSizeOptions}
           onChange={(v) =>
-            patchModel(settings, { editorFontSize: clamp(Number.parseInt(v) || 14, 8, 30) })
+            patchModel(settings, { editorFontSize: clamp(Number.parseInt(v, 10) || 14, 8, 30) })
           }
         />
       </HStack>

@@ -24,7 +24,6 @@ export function SegmentedControl<T extends string>({
   return (
     <HStack
       ref={containerRef}
-      // biome-ignore lint/a11y/useSemanticElements: <explanation>
       role="group"
       dir="ltr"
       space={0.5}

@@ -1,5 +1,5 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useResponseBodyText } from '../../hooks/useResponseBodyText';
 
 interface Props {

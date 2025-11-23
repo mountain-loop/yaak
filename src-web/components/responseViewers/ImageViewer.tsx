@@ -1,5 +1,5 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
-import React from 'react';
+
 
 interface Props {
   bodyPath: string;

@@ -1,10 +1,10 @@
 import type { CSSProperties } from 'react';
 import { Fragment } from 'react';
+import type { SelectableTreeNode } from './common';
 import type { TreeProps } from './Tree';
 import { TreeDropMarker } from './TreeDropMarker';
 import type { TreeItemHandle, TreeItemProps } from './TreeItem';
 import { TreeItem } from './TreeItem';
-import type { SelectableTreeNode } from './common';
 
 export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
@@ -29,7 +29,7 @@ export function TreeItemList<T extends { id: string }>({
   ...props
 }: TreeItemListProps<T>) {
   return (
-    <ul role="tree" style={style} className={className}>
+    <ul style={style} className={className}>
       <TreeDropMarker node={null} treeId={treeId} index={0} />
       {nodes.map((child, i) => (
         <Fragment key={getItemKey(child.node.item)}>

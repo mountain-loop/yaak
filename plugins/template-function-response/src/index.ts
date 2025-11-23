@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import type {
   CallTemplateFunctionArgs,
   Context,
@@ -9,6 +8,7 @@ import type {
   PluginDefinition,
   RenderPurpose,
 } from '@yaakapp/api';
+import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import type { JSONPathResult } from '../../template-function-json';
 import { filterJSONPath } from '../../template-function-json';
 import type { XPathResult } from '../../template-function-xml';
@@ -313,7 +313,7 @@ async function getResponse(
 
 function shouldSendExpired(response: HttpResponse | null, ttl: string | null): boolean {
   if (response == null) return true;
-  const ttlSeconds = Number.parseInt(ttl || '0') || 0;
+  const ttlSeconds = Number.parseInt(ttl || '0', 10) || 0;
   if (ttlSeconds === 0) return false;
   const nowMillis = Date.now();
   const respMillis = new Date(`${response.createdAt}Z`).getTime();

@@ -18,8 +18,6 @@ import { useRandomKey } from '../hooks/useRandomKey';
 import { capitalize } from '../lib/capitalize';
 import { showDialog } from '../lib/dialog';
 import { resolvedModelName } from '../lib/resolvedModelName';
-import { Markdown } from './Markdown';
-import { SelectFile } from './SelectFile';
 import { Banner } from './core/Banner';
 import { Checkbox } from './core/Checkbox';
 import { DetailsBanner } from './core/DetailsBanner';
@@ -31,6 +29,8 @@ import { Label } from './core/Label';
 import { PlainInput } from './core/PlainInput';
 import { Select } from './core/Select';
 import { VStack } from './core/Stacks';
+import { Markdown } from './Markdown';
+import { SelectFile } from './SelectFile';
 
 export const DYNAMIC_FORM_NULL_ARG = '__NULL__';
 const INPUT_SIZE = 'sm';
@@ -249,6 +249,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
             );
           case 'markdown':
             return <Markdown key={i + stateKey}>{input.content}</Markdown>;
+          default:
+            // @ts-expect-error
+            throw new Error(`Invalid input type: ${input.type}`);
         }
       })}
     </>

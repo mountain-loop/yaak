@@ -7,7 +7,7 @@ import { VStack } from './core/Stacks';
 export default function RouteError({ error }: { error: unknown }) {
   console.log('Error', error);
   const stringified = JSON.stringify(error);
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  // biome-ignore lint/suspicious/noExplicitAny: none
   const message = (error as any).message ?? stringified;
   const stack =
     typeof error === 'object' && error != null && 'stack' in error ? String(error.stack) : null;

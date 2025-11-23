@@ -30,6 +30,7 @@ export function deleteUndefinedAttrs<T>(obj: T): T {
 /** Recursively render all nested object properties */
 export function convertTemplateSyntax<T>(obj: T): T {
   if (typeof obj === 'string') {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
     return obj.replaceAll(/{{\s*(_\.)?([^}]+)\s*}}/g, '${[$2]}') as T;
   }
   if (Array.isArray(obj) && obj != null) {

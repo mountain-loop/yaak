@@ -37,7 +37,7 @@ export function useEnsureActiveCookieJar() {
   //  things change when switching workspaces, and we don't currently have a good way to ensure that all
   //  stores have updated.
   // TODO: Create a global data store that can handle this case
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     if (cookieJars == null) return; // Hasn't loaded yet
 

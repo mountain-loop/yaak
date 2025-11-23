@@ -1,6 +1,6 @@
 import { clear, readText } from '@tauri-apps/plugin-clipboard-manager';
 import * as m from 'motion/react-m';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useImportCurl } from '../hooks/useImportCurl';
 import { useWindowFocus } from '../hooks/useWindowFocus';
 import { Button } from './core/Button';
@@ -13,7 +13,7 @@ export function ImportCurlButton() {
   const importCurl = useImportCurl();
   const [isLoading, setIsLoading] = useState(false);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     readText().then(setClipboardText);
   }, [focused]);

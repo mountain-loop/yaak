@@ -56,7 +56,7 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
   );
 
   // Set the active message to the first message received if unary
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     if (events.length === 0 || activeEvent != null || methodType !== 'unary') {
       return;

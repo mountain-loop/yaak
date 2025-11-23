@@ -84,7 +84,7 @@ export async function getAuthorizationCode(
   const authorizationUrlStr = authorizationUrl.toString();
   console.log('[oauth2] Authorizing', authorizationUrlStr);
 
-  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: <explanation>
+  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: none
   const code = await new Promise<string>(async (resolve, reject) => {
     let foundCode = false;
     const { close } = await ctx.window.openUrl({

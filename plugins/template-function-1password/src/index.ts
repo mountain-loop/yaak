@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import type { Client } from '@1password/sdk';
 import { createClient } from '@1password/sdk';
-import type { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
 import type { PluginDefinition } from '@yaakapp/api';
+import type { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
 
 const _clients: Record<string, Client> = {};
 
@@ -34,6 +34,7 @@ export const plugin: PluginDefinition = {
           type: 'text',
           label: '1Password Service Account Token',
           description: '',
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
           defaultValue: '${[ONEPASSWORD_TOKEN]}',
           password: true,
         },

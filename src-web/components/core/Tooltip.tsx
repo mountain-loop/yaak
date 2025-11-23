@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { generateId } from '../../lib/generateId';
 import { Portal } from '../Portal';
 
@@ -91,9 +91,9 @@ export function Tooltip({ children, className, content, tabIndex, size = 'md' }:
           <Triangle className="text-border mb-2" />
         </div>
       </Portal>
+      {/** biome-ignore lint/a11y/useSemanticElements: Needs to be usable in other buttons */}
       <span
         ref={triggerRef}
-        // biome-ignore lint/a11y/useSemanticElements: Needs to be usable inside button
         role="button"
         aria-describedby={isOpen ? id.current : undefined}
         tabIndex={tabIndex ?? -1}

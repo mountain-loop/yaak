@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
-import React, { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 const START_DISTANCE = 7;
 

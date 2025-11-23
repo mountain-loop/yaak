@@ -86,7 +86,7 @@ export function useIntrospectGraphQL(
     }
   }, [activeEnvironment?.id, baseRequest, upsertIntrospection]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     // Skip introspection if automatic is disabled and we already have one
     if (options.disabled) {
@@ -144,14 +144,14 @@ function tryParseIntrospectionToSchema(
   let parsedResponse: IntrospectionQuery;
   try {
     parsedResponse = JSON.parse(content).data;
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: none
   } catch (e: any) {
     return { error: String('message' in e ? e.message : e) };
   }
 
   try {
     return { schema: buildClientSchema(parsedResponse, {}) };
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: none
   } catch (e: any) {
     return { error: String('message' in e ? e.message : e) };
   }

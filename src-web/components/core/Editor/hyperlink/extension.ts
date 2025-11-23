@@ -14,7 +14,7 @@ const tooltip = hoverTooltip(
     let match: RegExpExecArray | null;
     let found: { start: number; end: number } | null = null;
 
-    // biome-ignore lint/suspicious/noAssignInExpressions: <explanation>
+    // biome-ignore lint/suspicious/noAssignInExpressions: none
     while ((match = REGEX.exec(text))) {
       const start = from + match.index;
       const end = start + match[0].length;

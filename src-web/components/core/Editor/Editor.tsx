@@ -319,7 +319,7 @@ export function Editor({
   );
 
   // Update the language extension when the language changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     if (cm.current === null) return;
     const { view, languageCompartment } = cm.current;

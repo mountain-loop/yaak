@@ -1,6 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "extends": [],
+  "$schema": "https://biomejs.dev/schemas/2.3.7/schema.json",
   "linter": {
     "enabled": true,
     "rules": {
@@ -17,6 +16,14 @@
     "lineWidth": 100,
     "bracketSpacing": true
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    },
+    "linter": {
+      "enabled": false
+    }
+  },
   "javascript": {
     "formatter": {
       "quoteStyle": "single",
@@ -26,18 +33,19 @@
     }
   },
   "files": {
-    "ignore": [
-      "**/node_modules/**",
-      "**/dist/**",
-      "**/build/**",
-      "scripts/**",
-      "packages/plugin-runtime/**",
-      "packages/plugin-runtime-types/**",
-      "src-tauri/**",
-      "src-web/tailwind.config.cjs",
-      "src-web/postcss.config.cjs",
-      "src-web/vite.config.ts",
-      "src-web/routeTree.gen.ts"
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/build",
+      "!scripts",
+      "!packages/plugin-runtime",
+      "!packages/plugin-runtime-types",
+      "!src-tauri",
+      "!src-web/tailwind.config.cjs",
+      "!src-web/postcss.config.cjs",
+      "!src-web/vite.config.ts",
+      "!src-web/routeTree.gen.ts"
     ]
   }
 }

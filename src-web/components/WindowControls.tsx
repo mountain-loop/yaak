@@ -3,7 +3,7 @@ import { type } from '@tauri-apps/plugin-os';
 import { settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { WINDOW_CONTROLS_WIDTH } from '../lib/constants';
 import { Button } from './core/Button';
 import { HStack } from './core/Stacks';

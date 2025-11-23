@@ -37,5 +37,5 @@ export function RedirectToLatestWorkspace() {
     })();
   }, [recentWorkspaces, workspaces, workspaces.length]);
 
-  return <></>;
+  return null;
 }

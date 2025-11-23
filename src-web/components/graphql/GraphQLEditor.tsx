@@ -241,8 +241,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
 function tryParseJson(text: string, fallback: unknown) {
   try {
     return JSON.parse(text);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (err) {
+  } catch {
     return fallback;
   }
 }

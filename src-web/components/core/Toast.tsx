@@ -2,7 +2,7 @@ import type { ShowToastRequest } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import * as m from 'motion/react-m';
 import type { ReactNode } from 'react';
-import React from 'react';
+
 import { useKey } from 'react-use';
 import type { IconProps } from './Icon';
 import { Icon } from './Icon';
