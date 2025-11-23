@@ -36,6 +36,7 @@
     "homepage": "https://yaak.app",
     "active": true,
     "category": "DeveloperTool",
+    "createUpdaterArtifacts": true,
     "externalBin": [
       "vendored/node/yaaknode",
       "vendored/protoc/yaakprotoc"
