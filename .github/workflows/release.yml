@@ -44,6 +44,7 @@ jobs:
         with:
           workspaces: 'src-tauri'
           shared-key: ci
+          cache-on-failure: true
 
       - name: install dependencies (Linux only)
         if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
