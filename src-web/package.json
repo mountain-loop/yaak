@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev --force",
-    "build": "vite build",
-    "lint": "tsc --noEmit"
+    "build": "vite build"
   },
   "dependencies": {
     "@codemirror/commands": "^6.8.1",
