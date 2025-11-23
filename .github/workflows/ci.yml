@@ -12,6 +12,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
+          workspaces: 'src-tauri'
           shared-key: ci
       - run: npm ci
       - run: npm run lint

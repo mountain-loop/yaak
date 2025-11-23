@@ -42,6 +42,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          workspaces: 'src-tauri'
           shared-key: ci
 
       - name: install dependencies (Linux only)
