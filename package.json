@@ -75,13 +75,14 @@
     "vendor": "run-p vendor:*",
     "vendor:vendor-plugins": "node scripts/vendor-plugins.cjs",
     "vendor:vendor-protoc": "node scripts/vendor-protoc.cjs",
+    "vendor:vendor-node": "node scripts/vendor-node.cjs",
     "lint": "run-p lint:*",
     "lint:biome": "biome lint",
     "lint:extra": "npm run --workspaces --if-present lint",
     "format": "biome format --write .",
     "replace-version": "node scripts/replace-version.cjs",
     "tauri": "tauri",
-    "tauri-before-build": "npm run bootstrap && npm run --workspaces --if-present build",
+    "tauri-before-build": "npm run bootstrap",
     "tauri-before-dev": "workspaces-run --parallel -- npm run --workspaces --if-present dev"
   },
   "devDependencies": {
