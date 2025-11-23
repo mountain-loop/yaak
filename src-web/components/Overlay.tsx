@@ -2,7 +2,7 @@ import classNames from 'classnames';
 import { FocusTrap } from 'focus-trap-react';
 import * as m from 'motion/react-m';
 import type { ReactNode } from 'react';
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { Portal } from './Portal';
 
 interface Props {

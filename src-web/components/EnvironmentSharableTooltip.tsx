@@ -1,4 +1,3 @@
-import React from 'react';
 import { IconTooltip } from './core/IconTooltip';
 
 export function EnvironmentSharableTooltip() {

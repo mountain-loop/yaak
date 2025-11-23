@@ -4,7 +4,7 @@ import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import { Provider as JotaiProvider } from 'jotai';
 import { LazyMotion, MotionConfig } from 'motion/react';
-import React, { lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { GlobalHooks } from '../components/GlobalHooks';
 import RouteError from '../components/RouteError';
 import { jotaiStore } from '../lib/jotai';

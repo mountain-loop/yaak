@@ -1,12 +1,12 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: none
 export function debounce(fn: (...args: any[]) => void, delay = 500) {
   let timer: ReturnType<typeof setTimeout>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = function (...args: any[]) {
+  // biome-ignore lint/suspicious/noExplicitAny: none
+  const result = (...args: any[]) => {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), delay);
   };
-  result.cancel = function () {
+  result.cancel = () => {
     clearTimeout(timer);
   };
   return result;

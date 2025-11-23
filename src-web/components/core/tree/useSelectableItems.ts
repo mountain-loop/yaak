@@ -6,7 +6,7 @@ export function useSelectableItems<T extends { id: string }>(root: TreeNode<T>) 
     const selectableItems: SelectableTreeNode<T>[] = [];
 
     // Put requests and folders into a tree structure
-    const next = (node: TreeNode<T>, depth: number = 0) => {
+    const next = (node: TreeNode<T>, depth = 0) => {
       if (node.children == null) {
         return;
       }

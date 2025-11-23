@@ -55,13 +55,13 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
     [activeEventId, events],
   );
 
-  // Set active message to the first message received if unary
+  // Set the active message to the first message received if unary
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     if (events.length === 0 || activeEvent != null || methodType !== 'unary') {
       return;
     }
     setActiveEventId(events.find((m) => m.eventType === 'server_message')?.id ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events.length]);
 
   return (
@@ -226,6 +226,7 @@ function EventRow({
   return (
     <div className="px-1" ref={ref}>
       <button
+        type="button"
         onClick={onClick}
         className={classNames(
           'w-full grid grid-cols-[auto_minmax(0,3fr)_auto] gap-2 items-center text-left',
@@ -274,7 +275,7 @@ function EventRow({
           {error && <span className="text-warning"> ({error})</span>}
         </div>
         <div className={classNames('opacity-50 text-xs')}>
-          {format(createdAt + 'Z', 'HH:mm:ss.SSS')}
+          {format(`${createdAt}Z`, 'HH:mm:ss.SSS')}
         </div>
       </button>
     </div>

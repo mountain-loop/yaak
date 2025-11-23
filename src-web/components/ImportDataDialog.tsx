@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLocalStorage } from 'react-use';
 import { Button } from './core/Button';
 import { VStack } from './core/Stacks';

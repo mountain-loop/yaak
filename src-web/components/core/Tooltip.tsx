@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { generateId } from '../../lib/generateId';
 import { Portal } from '../Portal';
 
@@ -91,6 +91,7 @@ export function Tooltip({ children, className, content, tabIndex, size = 'md' }:
           <Triangle className="text-border mb-2" />
         </div>
       </Portal>
+      {/** biome-ignore lint/a11y/useSemanticElements: Needs to be usable in other buttons */}
       <span
         ref={triggerRef}
         role="button"
@@ -124,6 +125,7 @@ function Triangle({ className }: { className?: string }) {
         'h-[0.5rem] w-[0.8rem]',
       )}
     >
+      <title>Triangle</title>
       <polygon className="fill-surface-highlight" points="0,0 30,0 15,10" />
       <path
         d="M0 0 L15 9 L30 0"

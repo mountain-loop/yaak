@@ -39,6 +39,7 @@ export const plugin: PluginDefinition = {
               type: 'text',
               name: 'namespace',
               label: 'Namespace',
+              // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
               defaultValue: '${[ctx.workspace()]}',
               optional: true,
             },
@@ -77,7 +78,7 @@ export const plugin: PluginDefinition = {
               async dynamic(_ctx, args) {
                 const key = buildKey(args);
                 return {
-                  content: ['Value will be saved under: `' + key + '`'].join('\n\n'),
+                  content: [`Value will be saved under: \`${key}\``].join('\n\n'),
                 };
               },
             },
@@ -104,7 +105,7 @@ export const plugin: PluginDefinition = {
         if (args.purpose !== 'send') return null;
 
         if (args.values.store !== STORE_NONE && !args.values.namespace) {
-          throw new Error('Namespace is required when storing values')
+          throw new Error('Namespace is required when storing values');
         }
 
         const existing = await maybeGetValue(ctx, args);
@@ -155,7 +156,7 @@ async function maybeGetValue(ctx: Context, args: CallTemplateFunctionArgs) {
     return existing.value;
   }
 
-  const ttlSeconds = parseInt(String(args.values.ttl)) || 0;
+  const ttlSeconds = Number.parseInt(String(args.values.ttl), 10) || 0;
   const ageSeconds = (Date.now() - existing.createdAt) / 1000;
   if (ageSeconds > ttlSeconds) {
     ctx.store.delete(buildKey(args)).catch(console.error);

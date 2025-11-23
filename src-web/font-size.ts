@@ -13,6 +13,4 @@ listen<ModelPayload>('model_write', async (event) => {
   setFontSizeOnDocument(event.payload.model.interfaceFontSize);
 }).catch(console.error);
 
-getSettings().then((settings) =>
-  setFontSizeOnDocument(settings.interfaceFontSize),
-);
+getSettings().then((settings) => setFontSizeOnDocument(settings.interfaceFontSize));

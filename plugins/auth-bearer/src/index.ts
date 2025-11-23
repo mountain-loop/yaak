@@ -1,5 +1,5 @@
-import type { CallHttpAuthenticationRequest } from '@yaakapp-internal/plugins';
 import type { PluginDefinition } from '@yaakapp/api';
+import type { CallHttpAuthenticationRequest } from '@yaakapp-internal/plugins';
 
 export const plugin: PluginDefinition = {
   authentication: {

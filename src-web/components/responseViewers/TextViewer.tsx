@@ -7,8 +7,8 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useFormatText } from '../../hooks/useFormatText';
 import { useResponseBodyText } from '../../hooks/useResponseBodyText';
 import type { EditorProps } from '../core/Editor/Editor';
-import { Editor } from '../core/Editor/LazyEditor';
 import { hyperlink } from '../core/Editor/hyperlink/extension';
+import { Editor } from '../core/Editor/LazyEditor';
 import { IconButton } from '../core/IconButton';
 import { Input } from '../core/Input';
 
@@ -107,7 +107,7 @@ export function TextViewer({ language, text, response, requestId, pretty, classN
     return null;
   }
 
-  let body;
+  let body: string;
   if (isSearching && filterText?.length > 0) {
     if (filteredResponse.error) {
       body = '';
@@ -133,7 +133,7 @@ export function TextViewer({ language, text, response, requestId, pretty, classN
       actions={actions}
       extraExtensions={extraExtensions}
       // State key for storing fold state
-      stateKey={'response.body.' + response.id}
+      stateKey={`response.body.${response.id}`}
     />
   );
 }
@@ -141,7 +141,7 @@ export function TextViewer({ language, text, response, requestId, pretty, classN
 /** Convert \uXXXX to actual Unicode characters */
 function decodeUnicodeLiterals(text: string): string {
   return text.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => {
-    const charCode = parseInt(hex, 16);
+    const charCode = Number.parseInt(hex, 16);
     return String.fromCharCode(charCode);
   });
 }

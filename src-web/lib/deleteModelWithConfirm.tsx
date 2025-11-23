@@ -15,10 +15,13 @@ export async function deleteModelWithConfirm(
     return false;
   }
   const models = Array.isArray(model) ? model : [model];
+  const firstModel = models[0];
+  if (firstModel == null) return false;
+
   const descriptor =
-    models.length === 1 ? modelTypeLabel(models[0]!) : pluralizeCount('Item', models.length);
+    models.length === 1 ? modelTypeLabel(firstModel) : pluralizeCount('Item', models.length);
   const confirmed = await showConfirmDelete({
-    id: 'delete-model-' + models.map((m) => m.id).join(','),
+    id: `delete-model-${models.map((m) => m.id).join(',')}`,
     title: `Delete ${descriptor}`,
     requireTyping: options.confirmName,
     description: (
@@ -26,7 +29,7 @@ export async function deleteModelWithConfirm(
         Permanently delete{' '}
         {models.length === 1 ? (
           <>
-            <InlineCode>{resolvedModelName(models[0]!)}</InlineCode>?
+            <InlineCode>{resolvedModelName(firstModel)}</InlineCode>?
           </>
         ) : models.length < 10 ? (
           <>

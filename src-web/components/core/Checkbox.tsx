@@ -1,5 +1,5 @@
 import classNames from 'classnames';
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Icon } from './Icon';
 import { IconTooltip } from './IconTooltip';
 import { HStack } from './Stacks';
@@ -58,7 +58,9 @@ export function Checkbox({
         </div>
       </div>
       {!hideLabel && (
-        <div className={classNames('text-sm', fullWidth && 'w-full', disabled && 'opacity-disabled')}>
+        <div
+          className={classNames('text-sm', fullWidth && 'w-full', disabled && 'opacity-disabled')}
+        >
           {title}
         </div>
       )}

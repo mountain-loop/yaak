@@ -1,5 +1,5 @@
-import type { TemplateFunctionArg } from '@yaakapp-internal/plugins';
 import type { PluginDefinition } from '@yaakapp/api';
+import type { TemplateFunctionArg } from '@yaakapp-internal/plugins';
 
 import type { ContextFn } from 'date-fns';
 import {

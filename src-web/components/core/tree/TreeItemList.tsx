@@ -29,7 +29,7 @@ export function TreeItemList<T extends { id: string }>({
   ...props
 }: TreeItemListProps<T>) {
   return (
-    <ul role="tree" style={style} className={className}>
+    <ul style={style} className={className}>
       <TreeDropMarker node={null} treeId={treeId} index={0} />
       {nodes.map((child, i) => (
         <Fragment key={getItemKey(child.node.item)}>

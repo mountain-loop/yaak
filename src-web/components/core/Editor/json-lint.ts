@@ -12,7 +12,7 @@ export function jsonParseLinter() {
       // syntax with repeating `1` characters, so it's valid JSON and the position is still correct.
       const escapedDoc = doc.replace(TEMPLATE_SYNTAX_REGEX, '1');
       jsonLintParse(escapedDoc);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: none
     } catch (err: any) {
       if (!('location' in err)) {
         return [];

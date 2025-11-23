@@ -8,8 +8,7 @@
   "types": "src/index.ts",
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev",
-    "lint":"tsc --noEmit && eslint . --ext .ts,.tsx"
+    "dev": "yaakcli dev"
   },
   "dependencies": {
     "jsonpath-plus": "^10.3.0"

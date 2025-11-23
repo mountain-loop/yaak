@@ -17,12 +17,12 @@ export function ColorIndicator({ color, onClick, className }: Props) {
   if (onClick) {
     return (
       <button
+        type="button"
         onClick={onClick}
         style={style}
         className={classNames(finalClassName, 'hover:border-text')}
       />
     );
-  } else {
-    return <span style={style} className={finalClassName} />;
   }
+  return <span style={style} className={finalClassName} />;
 }

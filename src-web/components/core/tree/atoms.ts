@@ -21,7 +21,7 @@ export const focusIdsFamily = atomFamily((_treeId: string) => {
 
 export const isLastFocusedFamily = atomFamily(
   ({ treeId, itemId }: { treeId: string; itemId: string }) =>
-    selectAtom(focusIdsFamily(treeId), (v) => v.lastId == itemId, Object.is),
+    selectAtom(focusIdsFamily(treeId), (v) => v.lastId === itemId, Object.is),
   (a, b) => a.treeId === b.treeId && a.itemId === b.itemId,
 );
 

@@ -26,7 +26,8 @@
     }
 
     &:not(.cm-focused) {
-      .cm-cursor, .cm-fat-cursor {
+      .cm-cursor,
+      .cm-fat-cursor {
         @apply hidden;
       }
     }
@@ -77,7 +78,6 @@
       .cm-gutterElement {
         @apply cursor-default;
       }
-
     }
 
     .cm-gutter-lint {
@@ -91,7 +91,7 @@
         @apply cursor-default opacity-80 hover:opacity-100 transition-opacity;
         @apply rounded-full w-[0.9em] h-[0.9em];
 
-        content: '';
+        content: "";
 
         &.cm-lint-marker-error {
           @apply bg-danger;
@@ -168,7 +168,8 @@
     @apply outline-text;
     @apply bg-text !important;
 
-    &, * {
+    &,
+    * {
       @apply text-surface font-semibold !important;
     }
   }
@@ -199,8 +200,7 @@
 }
 
 .cm-editor .fold-gutter-icon::after {
-  @apply block w-1.5 h-1.5 p-0.5 border-transparent
-  border-l border-b border-l-[currentColor] border-b-[currentColor] content-[''];
+  @apply block w-1.5 h-1.5 p-0.5 border-transparent border-l border-b border-l-[currentColor] border-b-[currentColor] content-[''];
 }
 
 /* Rotate the fold gutter chevron when open */
@@ -270,7 +270,8 @@
 
   /* Style the tooltip for popping up "open in browser" and other stuff */
 
-  a, button {
+  a,
+  button {
     @apply text-text hover:bg-surface-highlight w-full h-sm flex items-center px-2 rounded;
   }
 
@@ -279,7 +280,7 @@
 
     &::after {
       @apply text-text bg-text h-3 w-3 ml-1;
-      content: '';
+      content: "";
       -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' fill='black' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z'/%3E%3Cpath fill-rule='evenodd' d='M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z'/%3E%3C/svg%3E");
       -webkit-mask-size: contain;
       display: inline-block;
@@ -300,59 +301,59 @@
     @apply opacity-80 italic;
 
     &::after {
-      content: 'a' !important; /* Default (eg. for GraphQL) */
+      content: "a" !important; /* Default (eg. for GraphQL) */
     }
 
     &.cm-completionIcon-function::after {
-      content: 'f' !important;
+      content: "f" !important;
       @apply text-info;
     }
 
     &.cm-completionIcon-variable::after {
-      content: 'x' !important;
+      content: "x" !important;
       @apply text-primary;
     }
 
     &.cm-completionIcon-namespace::after {
-      content: 'n' !important;
+      content: "n" !important;
       @apply text-warning;
     }
 
     &.cm-completionIcon-constant::after {
-      content: 'c' !important;
+      content: "c" !important;
       @apply text-notice;
     }
 
     &.cm-completionIcon-class::after {
-      content: 'o' !important;
+      content: "o" !important;
     }
 
     &.cm-completionIcon-enum::after {
-      content: 'e' !important;
+      content: "e" !important;
     }
 
     &.cm-completionIcon-interface::after {
-      content: 'i' !important;
+      content: "i" !important;
     }
 
     &.cm-completionIcon-keyword::after {
-      content: 'k' !important;
+      content: "k" !important;
     }
 
     &.cm-completionIcon-method::after {
-      content: 'm' !important;
+      content: "m" !important;
     }
 
     &.cm-completionIcon-property::after {
-      content: 'a' !important;
+      content: "a" !important;
     }
 
     &.cm-completionIcon-text::after {
-      content: 't' !important;
+      content: "t" !important;
     }
 
     &.cm-completionIcon-type::after {
-      content: 't' !important;
+      content: "t" !important;
     }
   }
 
@@ -406,7 +407,7 @@
     @apply appearance-none bg-none cursor-default;
   }
 
-  button[name='close'] {
+  button[name="close"] {
     @apply text-text-subtle hocus:text-text px-2 -mr-1.5 !important;
   }
 
@@ -421,7 +422,7 @@
 
   /* Hide the "All" button */
 
-  button[name='select'] {
+  button[name="select"] {
     @apply hidden;
   }
 }

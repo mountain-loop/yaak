@@ -4,7 +4,5 @@ import { createFastMutation } from '../hooks/useFastMutation';
 
 export const deleteWebsocketConnections = createFastMutation({
   mutationKey: ['delete_websocket_connections'],
-  mutationFn: async function (request: WebsocketRequest) {
-    return cmdDeleteWebsocketConnections(request.id);
-  },
+  mutationFn: async (request: WebsocketRequest) => cmdDeleteWebsocketConnections(request.id),
 });

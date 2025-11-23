@@ -43,7 +43,6 @@ export function Dialog({
 
   return (
     <Overlay open={open} onClose={disableBackdropClose ? undefined : onClose} portalName="dialog">
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         role="dialog"
         className={classNames(

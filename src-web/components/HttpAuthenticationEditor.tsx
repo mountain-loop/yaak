@@ -6,7 +6,7 @@ import type {
   Workspace,
 } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
 import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
@@ -66,9 +66,8 @@ export function HttpAuthenticationEditor({ model }: Props) {
           </Link>
         </EmptyStateText>
       );
-    } else {
-      return <EmptyStateText>No authentication</EmptyStateText>;
     }
+    return <EmptyStateText>No authentication</EmptyStateText>;
   }
 
   if (inheritedAuth.authenticationType === 'none') {
@@ -84,6 +83,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
         <p>
           Inherited from{' '}
           <button
+            type="submit"
             className="underline hover:text-text"
             onClick={() => {
               if (inheritedAuth.model === 'folder') openFolderSettings(inheritedAuth.id, 'auth');

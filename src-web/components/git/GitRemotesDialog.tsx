@@ -36,8 +36,8 @@ export function GitRemotesDialog({ dir }: Props) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {remotes.data?.map((r, i) => (
-            <TableRow key={i}>
+          {remotes.data?.map((r) => (
+            <TableRow key={r.name + r.url}>
               <TableCell>{r.name}</TableCell>
               <TableCell>{r.url}</TableCell>
               <TableCell>
@@ -57,7 +57,7 @@ export function GitRemotesDialog({ dir }: Props) {
   );
 }
 
-GitRemotesDialog.show = function (dir: string) {
+GitRemotesDialog.show = (dir: string) => {
   showDialog({
     id: 'git-remotes',
     title: 'Manage Remotes',

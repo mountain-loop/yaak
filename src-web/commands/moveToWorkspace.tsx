@@ -1,5 +1,5 @@
 import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import React from 'react';
+
 import { MoveToWorkspaceDialog } from '../components/MoveToWorkspaceDialog';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';

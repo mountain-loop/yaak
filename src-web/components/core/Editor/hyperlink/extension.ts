@@ -11,9 +11,10 @@ const REGEX =
 const tooltip = hoverTooltip(
   (view, pos, side) => {
     const { from, text } = view.state.doc.lineAt(pos);
-    let match;
+    let match: RegExpExecArray | null;
     let found: { start: number; end: number } | null = null;
 
+    // biome-ignore lint/suspicious/noAssignInExpressions: none
     while ((match = REGEX.exec(text))) {
       const start = from + match.index;
       const end = start + match[0].length;
@@ -28,7 +29,7 @@ const tooltip = hoverTooltip(
       return null;
     }
 
-    if ((found.start == pos && side < 0) || (found.end == pos && side > 0)) {
+    if ((found.start === pos && side < 0) || (found.end === pos && side > 0)) {
       return null;
     }
 
@@ -37,7 +38,7 @@ const tooltip = hoverTooltip(
       end: found.end,
       create() {
         const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-        const link = text.substring(found!.start - from, found!.end - from);
+        const link = text.substring(found?.start - from, found?.end - from);
         const dom = document.createElement('div');
 
         const $open = document.createElement('a');
@@ -77,7 +78,7 @@ const tooltip = hoverTooltip(
   },
 );
 
-const decorator = function () {
+const decorator = () => {
   const placeholderMatcher = new MatchDecorator({
     regexp: REGEX,
     decoration(match, view, matchStartPos) {

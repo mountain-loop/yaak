@@ -89,7 +89,7 @@ const markdownComponents: Partial<Components> = {
   },
   code(props) {
     const { children, className, ref, ...extraProps } = props;
-    delete extraProps.node;
+    extraProps.node = undefined;
 
     const match = /language-(\w+)/.exec(className || '');
     return match ? (

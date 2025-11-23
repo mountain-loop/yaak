@@ -30,7 +30,7 @@ export function Prompt({
     [onResult, value],
   );
 
-  const id = 'prompt.form.' + useRef(generateId()).current;
+  const id = `prompt.form.${useRef(generateId()).current}`;
 
   return (
     <form

@@ -1,6 +1,6 @@
 import { createWorkspaceModel, foldersAtom, patchModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useHeadersTab } from '../hooks/useHeadersTab';
@@ -28,7 +28,11 @@ const TAB_HEADERS = 'headers';
 const TAB_VARIABLES = 'variables';
 const TAB_GENERAL = 'general';
 
-export type FolderSettingsTab = typeof TAB_AUTH | typeof TAB_HEADERS | typeof TAB_GENERAL | typeof TAB_VARIABLES;
+export type FolderSettingsTab =
+  | typeof TAB_AUTH
+  | typeof TAB_HEADERS
+  | typeof TAB_GENERAL
+  | typeof TAB_VARIABLES;
 
 export function FolderSettingsDialog({ folderId, tab }: Props) {
   const folders = useAtomValue(foldersAtom);

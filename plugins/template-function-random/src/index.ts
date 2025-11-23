@@ -26,15 +26,15 @@ export const plugin: PluginDefinition = {
         },
       ],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
-        const min = args.values.min ? parseInt(String(args.values.min ?? '0')) : 0;
-        const max = args.values.max ? parseInt(String(args.values.max ?? '1')) : 1;
+        const min = args.values.min ? Number.parseInt(String(args.values.min ?? '0'), 10) : 0;
+        const max = args.values.max ? Number.parseInt(String(args.values.max ?? '1'), 10) : 1;
         const decimals = args.values.decimals
-          ? parseInt(String(args.values.decimals ?? '0'))
+          ? Number.parseInt(String(args.values.decimals ?? '0'), 10)
           : null;
 
         let value = Math.random() * (max - min) + min;
         if (decimals !== null) {
-          value = Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals);
+          value = Math.round(value * 10 ** decimals) / 10 ** decimals;
         }
         return String(value);
       },

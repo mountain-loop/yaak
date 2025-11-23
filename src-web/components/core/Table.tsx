@@ -1,6 +1,5 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
-import React from 'react';
 
 export function Table({ children }: { children: ReactNode }) {
   return (
@@ -57,7 +56,12 @@ export function TableHeaderCell({
   className?: string;
 }) {
   return (
-    <th className={classNames(className, 'py-2 [&:not(:first-child)]:pl-4 text-left text-text-subtle')}>
+    <th
+      className={classNames(
+        className,
+        'py-2 [&:not(:first-child)]:pl-4 text-left text-text-subtle',
+      )}
+    >
       {children}
     </th>
   );

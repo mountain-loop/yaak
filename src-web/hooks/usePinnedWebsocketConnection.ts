@@ -17,7 +17,7 @@ const pinnedWebsocketConnectionIdAtom = atomWithKVStorage<Record<string, string 
 );
 
 function recordKey(activeRequestId: string | null, latestConnection: WebsocketConnection | null) {
-  return activeRequestId + '-' + (latestConnection?.id ?? 'none');
+  return `${activeRequestId}-${latestConnection?.id ?? 'none'}`;
 }
 
 export const activeWebsocketConnectionsAtom = atom<WebsocketConnection[]>((get) => {

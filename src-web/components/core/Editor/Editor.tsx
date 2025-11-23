@@ -28,7 +28,6 @@ import {
 import { activeEnvironmentAtom } from '../../../hooks/useActiveEnvironment';
 import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
 import { useEnvironmentVariables } from '../../../hooks/useEnvironmentVariables';
-import { useRandomKey } from '../../../hooks/useRandomKey';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { editEnvironment } from '../../../lib/editEnvironment';
@@ -113,7 +112,7 @@ export function Editor({
   disabled,
   extraExtensions,
   forcedEnvironmentId,
-  forceUpdateKey: forceUpdateKeyFromAbove,
+  forceUpdateKey,
   format,
   heightMode,
   hideGutter,
@@ -144,10 +143,6 @@ export function Editor({
       ? allEnvironmentVariables.filter(autocompleteVariables)
       : allEnvironmentVariables;
   }, [allEnvironmentVariables, autocompleteVariables]);
-  // Track a local key for updates. If the default value is changed when the input is not in focus,
-  // regenerate this to force the field to update.
-  const [focusedUpdateKey, regenerateFocusedUpdateKey] = useRandomKey('initial');
-  const forceUpdateKey = `${forceUpdateKeyFromAbove}::${focusedUpdateKey}`;
 
   if (settings && wrapLines === undefined) {
     wrapLines = settings.editorSoftWrap;
@@ -223,7 +218,7 @@ export function Editor({
       const effects = placeholderCompartment.current.reconfigure(ext);
       cm.current?.view.dispatch({ effects });
     },
-    [placeholder, type],
+    [placeholder],
   );
 
   // Update vim
@@ -233,12 +228,12 @@ export function Editor({
       if (cm.current === null) return;
       const current = keymapCompartment.current.get(cm.current.view.state) ?? [];
       // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
-      if (settings.editorKeymap === 'default' && current === keymapExtensions['default']) return; // Nothing to do
-      if (settings.editorKeymap === 'vim' && current === keymapExtensions['vim']) return; // Nothing to do
-      if (settings.editorKeymap === 'vscode' && current === keymapExtensions['vscode']) return; // Nothing to do
-      if (settings.editorKeymap === 'emacs' && current === keymapExtensions['emacs']) return; // Nothing to do
+      if (settings.editorKeymap === 'default' && current === keymapExtensions.default) return; // Nothing to do
+      if (settings.editorKeymap === 'vim' && current === keymapExtensions.vim) return; // Nothing to do
+      if (settings.editorKeymap === 'vscode' && current === keymapExtensions.vscode) return; // Nothing to do
+      if (settings.editorKeymap === 'emacs' && current === keymapExtensions.emacs) return; // Nothing to do
 
-      const ext = keymapExtensions[settings.editorKeymap] ?? keymapExtensions['default'];
+      const ext = keymapExtensions[settings.editorKeymap] ?? keymapExtensions.default;
       const effects = keymapCompartment.current.reconfigure(ext);
       cm.current.view.dispatch({ effects });
     },
@@ -324,6 +319,7 @@ export function Editor({
   );
 
   // Update the language extension when the language changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     if (cm.current === null) return;
     const { view, languageCompartment } = cm.current;
@@ -355,6 +351,7 @@ export function Editor({
   ]);
 
   // Initialize the editor when ref mounts
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only reinitialize when necessary
   const initEditorRef = useCallback(
     function initEditorRef(container: HTMLDivElement | null) {
       if (container === null) {
@@ -384,7 +381,7 @@ export function Editor({
             !disableTabIndent ? keymap.of([indentWithTab]) : emptyExtension,
           ),
           keymapCompartment.current.of(
-            keymapExtensions[settings.editorKeymap] ?? keymapExtensions['default'],
+            keymapExtensions[settings.editorKeymap] ?? keymapExtensions.default,
           ),
           ...getExtensions({
             container,
@@ -434,7 +431,6 @@ export function Editor({
         console.log('Failed to initialize Codemirror', e);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [forceUpdateKey],
   );
 
@@ -456,7 +452,7 @@ export function Editor({
         updateContents(cm.current.view, defaultValue || '');
       }
     },
-    [defaultValue, readOnly, regenerateFocusedUpdateKey],
+    [defaultValue],
   );
 
   // Add bg classes to actions, so they appear over the text
@@ -628,7 +624,7 @@ function saveCachedEditorState(stateKey: string | null, state: EditorState | nul
   // Save state in sessionStorage by removing doc and saving the hash of it instead.
   // This will be checked on restore and put back in if it matches.
   stateObj.docHash = md5(stateObj.doc);
-  delete stateObj.doc;
+  stateObj.doc = undefined;
 
   try {
     sessionStorage.setItem(computeFullStateKey(stateKey), JSON.stringify(stateObj));
@@ -670,7 +666,9 @@ function updateContents(view: EditorView, text: string) {
 
   if (currentDoc === text) {
     return;
-  } else if (text.startsWith(currentDoc)) {
+  }
+
+  if (text.startsWith(currentDoc)) {
     // If we're just appending, append only the changes. This preserves
     // things like scroll position.
     view.dispatch({

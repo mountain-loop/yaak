@@ -24,9 +24,9 @@ export function useGrpcRequestActions() {
     },
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   const actions = useMemo(() => {
     return actionsResult.data ?? [];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(actionsResult.data)]);
 
   return actions;

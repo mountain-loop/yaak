@@ -2,7 +2,7 @@ import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakap
 import { foldersAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useLatestHttpResponse } from '../hooks/useLatestHttpResponse';
@@ -43,7 +43,14 @@ export function FolderLayout({ folder, style }: Props) {
         <Icon icon="folder" size="xl" color="secondary" />
         <Heading level={1}>{resolvedModelName(folder)}</Heading>
         <HStack className="ml-auto" alignItems="center">
-          <Button rightSlot={<Icon icon="send_horizontal" />} color="secondary" size="sm" variant="border">Send All</Button>
+          <Button
+            rightSlot={<Icon icon="send_horizontal" />}
+            color="secondary"
+            size="sm"
+            variant="border"
+          >
+            Send All
+          </Button>
         </HStack>
       </HStack>
       <Separator className="mt-3 mb-8" />
@@ -57,7 +64,7 @@ export function FolderLayout({ folder, style }: Props) {
 }
 
 function ChildCard({ child }: { child: Folder | HttpRequest | GrpcRequest | WebsocketRequest }) {
-  let card;
+  let card: ReactNode;
   if (child.model === 'folder') {
     card = <FolderCard folder={child} />;
   } else if (child.model === 'http_request') {
@@ -67,7 +74,7 @@ function ChildCard({ child }: { child: Folder | HttpRequest | GrpcRequest | Webs
   } else if (child.model === 'websocket_request') {
     card = <RequestCard request={child} />;
   } else {
-    card = <div>Unknown model {child['model']}</div>;
+    card = <div>Unknown model</div>;
   }
 
   const navigate = useCallback(async () => {

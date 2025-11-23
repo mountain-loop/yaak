@@ -9,7 +9,7 @@ interface Props {
 export function WebsocketStatusTag({ connection, className }: Props) {
   const { state, error } = connection;
 
-  let label;
+  let label: string;
   let colorClass = 'text-text-subtle';
 
   if (error) {

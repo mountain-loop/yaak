@@ -10,7 +10,7 @@ import {
   uninstallPlugin,
 } from '@yaakapp-internal/plugins';
 import { useAtomValue } from 'jotai';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
@@ -306,7 +306,7 @@ function usePromptUninstall(pluginId: string | null, name: string) {
       if (pluginId == null) return;
 
       const confirmed = await showConfirmDelete({
-        id: 'uninstall-plugin-' + pluginId,
+        id: `uninstall-plugin-${pluginId}`,
         title: 'Uninstall Plugin',
         confirmText: 'Uninstall',
         description: (

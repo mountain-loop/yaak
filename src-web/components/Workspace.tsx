@@ -30,12 +30,12 @@ import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTi
 import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFolderAndNavigate';
 import { importData } from '../lib/importData';
 import { jotaiStore } from '../lib/jotai';
+import { CreateDropdown } from './CreateDropdown';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { HotKeyList } from './core/HotKeyList';
 import { FeedbackLink } from './core/Link';
 import { HStack } from './core/Stacks';
-import { CreateDropdown } from './CreateDropdown';
 import { ErrorBoundary } from './ErrorBoundary';
 import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
@@ -221,11 +221,14 @@ function WorkspaceBody() {
 
   if (activeRequest?.model === 'grpc_request') {
     return <GrpcConnectionLayout style={body} />;
-  } else if (activeRequest?.model === 'websocket_request') {
+  }
+  if (activeRequest?.model === 'websocket_request') {
     return <WebsocketRequestLayout style={body} activeRequest={activeRequest} />;
-  } else if (activeRequest?.model === 'http_request') {
+  }
+  if (activeRequest?.model === 'http_request') {
     return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
-  } else if (activeFolder != null) {
+  }
+  if (activeFolder != null) {
     return <FolderLayout folder={activeFolder} style={body} />;
   }
 

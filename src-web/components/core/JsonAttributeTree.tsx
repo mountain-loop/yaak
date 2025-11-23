@@ -5,7 +5,7 @@ import { Icon } from './Icon';
 
 interface Props {
   depth?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: none
   attrValue: any;
   attrKey?: string | number;
   attrKeyJsonPath?: string;
@@ -47,15 +47,17 @@ export const JsonAttributeTree = ({
               ))
           : null,
         isExpandable: Object.keys(attrValue).length > 0,
-        label: isExpanded ? `{${Object.keys(attrValue).length || ' '}}` : `{⋯}`,
+        label: isExpanded ? `{${Object.keys(attrValue).length || ' '}}` : '{⋯}',
         labelClassName: 'text-text-subtlest',
       };
-    } else if (jsonType === '[object Array]') {
+    }
+    if (jsonType === '[object Array]') {
       return {
         children: isExpanded
-          ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ? // biome-ignore lint/suspicious/noExplicitAny: none
             attrValue.flatMap((v: any, i: number) => (
               <JsonAttributeTree
+                // biome-ignore lint/suspicious/noArrayIndexKey: none
                 key={i}
                 depth={depth + 1}
                 attrValue={v}
@@ -65,26 +67,27 @@ export const JsonAttributeTree = ({
             ))
           : null,
         isExpandable: attrValue.length > 0,
-        label: isExpanded ? `[${attrValue.length || ' '}]` : `[⋯]`,
+        label: isExpanded ? `[${attrValue.length || ' '}]` : '[⋯]',
         labelClassName: 'text-text-subtlest',
       };
-    } else {
-      return {
-        children: null,
-        isExpandable: false,
-        label: jsonType === '[object String]' ? `"${attrValue}"` : `${attrValue}`,
-        labelClassName: classNames(
-          jsonType === '[object Boolean]' && 'text-primary',
-          jsonType === '[object Number]' && 'text-info',
-          jsonType === '[object String]' && 'text-notice',
-          jsonType === '[object Null]' && 'text-danger',
-        ),
-      };
     }
+    return {
+      children: null,
+      isExpandable: false,
+      label: jsonType === '[object String]' ? `"${attrValue}"` : `${attrValue}`,
+      labelClassName: classNames(
+        jsonType === '[object Boolean]' && 'text-primary',
+        jsonType === '[object Number]' && 'text-info',
+        jsonType === '[object String]' && 'text-notice',
+        jsonType === '[object Null]' && 'text-danger',
+      ),
+    };
   }, [attrValue, attrKeyJsonPath, isExpanded, depth]);
 
   const labelEl = (
-    <span className={classNames(labelClassName, 'cursor-text select-text group-hover:text-text-subtle')}>
+    <span
+      className={classNames(labelClassName, 'cursor-text select-text group-hover:text-text-subtle')}
+    >
       {label}
     </span>
   );
@@ -98,7 +101,11 @@ export const JsonAttributeTree = ({
     >
       <div className="flex items-center">
         {isExpandable ? (
-          <button className="group relative flex items-center pl-4 w-full" onClick={toggleExpanded}>
+          <button
+            type="button"
+            className="group relative flex items-center pl-4 w-full"
+            onClick={toggleExpanded}
+          >
             <Icon
               size="xs"
               icon="chevron_right"
@@ -131,7 +138,7 @@ function joinObjectKey(baseKey: string | undefined, key: string): string {
   const quotedKey = key.match(/^[a-z0-9_]+$/i) ? key : `\`${key}\``;
 
   if (baseKey == null) return quotedKey;
-  else return `${baseKey}.${quotedKey}`;
+  return `${baseKey}.${quotedKey}`;
 }
 
 function joinArrayKey(baseKey: string | undefined, index: number): string {

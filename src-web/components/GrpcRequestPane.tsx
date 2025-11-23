@@ -1,7 +1,7 @@
 import { type GrpcRequest, type HttpRequestHeader, patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
-import React, { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
@@ -183,7 +183,7 @@ export function GrpcRequestPane({
           onUrlChange={handleChangeUrl}
           onCancel={onCancel}
           isLoading={isStreaming}
-          stateKey={'grpc_url.' + activeRequest.id}
+          stateKey={`grpc_url.${activeRequest.id}`}
         />
         <HStack space={1.5}>
           <RadioDropdown

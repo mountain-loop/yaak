@@ -19,9 +19,9 @@ import { Icon } from '../core/Icon';
 import { InlineCode } from '../core/InlineCode';
 import { BranchSelectionDialog } from './BranchSelectionDialog';
 import { gitCallbacks } from './callbacks';
-import { handlePullResult } from './git-util';
 import { GitCommitDialog } from './GitCommitDialog';
 import { GitRemotesDialog } from './GitRemotesDialog';
+import { handlePullResult } from './git-util';
 import { HistoryDialog } from './HistoryDialog';
 
 export function GitDropdown() {

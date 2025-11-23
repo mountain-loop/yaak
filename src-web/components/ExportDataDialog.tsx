@@ -55,6 +55,7 @@ function ExportDataDialogContent({
 
   const handleToggleAll = () => {
     setSelectedWorkspaces(
+      // biome-ignore lint/performance/noAccumulatingSpread: none
       allSelected ? {} : workspaces.reduce((acc, w) => ({ ...acc, [w.id]: true }), {}),
     );
   };

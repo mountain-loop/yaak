@@ -6,7 +6,7 @@ import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
 import { activeCookieJarAtom } from './useActiveCookieJar';
 import { useKeyValue } from './useKeyValue';
 
-const kvKey = (workspaceId: string) => 'recent_cookie_jars::' + workspaceId;
+const kvKey = (workspaceId: string) => `recent_cookie_jars::${workspaceId}`;
 const namespace = 'global';
 const fallback: string[] = [];
 

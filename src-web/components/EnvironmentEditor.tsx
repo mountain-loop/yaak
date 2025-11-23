@@ -13,13 +13,13 @@ import {
   setupOrConfigureEncryption,
   withEncryptionEnabled,
 } from '../lib/setupOrConfigureEncryption';
-import { PillButton } from './core/PillButton';
 import { DismissibleBanner } from './core/DismissibleBanner';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import { Heading } from './core/Heading';
 import type { PairEditorHandle, PairWithId } from './core/PairEditor';
 import { ensurePairId } from './core/PairEditor.util';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
+import { PillButton } from './core/PillButton';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
 

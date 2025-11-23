@@ -1,7 +1,7 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { FormEvent, ReactNode } from 'react';
-import { useCallback, memo, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useHotKey } from '../hooks/useHotKey';
 import type { IconProps } from './core/Icon';
 import { IconButton } from './core/IconButton';

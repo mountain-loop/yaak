@@ -135,7 +135,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                           ? 'Connection open'
                           : `Message ${activeEvent.isServer ? 'Received' : 'Sent'}`}
                     </div>
-                    {message != '' && (
+                    {message !== '' && (
                       <HStack space={1}>
                         <Button
                           variant="border"
@@ -215,6 +215,7 @@ function EventRow({
   return (
     <div className="px-1" ref={ref}>
       <button
+        type="button"
         onClick={onClick}
         className={classNames(
           'w-full grid grid-cols-[auto_minmax(0,3fr)_auto] gap-2 items-center text-left',
@@ -252,7 +253,7 @@ function EventRow({
           {/*{error && <span className="text-warning"> ({error})</span>}*/}
         </div>
         <div className={classNames('opacity-50 text-xs')}>
-          {format(createdAt + 'Z', 'HH:mm:ss.SSS')}
+          {format(`${createdAt}Z`, 'HH:mm:ss.SSS')}
         </div>
       </button>
     </div>

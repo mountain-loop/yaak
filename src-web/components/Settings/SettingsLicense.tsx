@@ -1,7 +1,7 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useLicense } from '@yaakapp-internal/license';
 import { differenceInDays } from 'date-fns';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useToggle } from '../../hooks/useToggle';
 import { pluralizeCount } from '../../lib/pluralize';
 import { CargoFeature } from '../CargoFeature';
@@ -66,8 +66,7 @@ function SettingsLicenseCmp() {
             <br />
             <span className="opacity-50">
               You may continue using Yaak for personal use free, forever.
-              <br />
-              A license is required for commercial use.
+              <br />A license is required for commercial use.
             </span>
             <Separator className="my-2" />
             <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">

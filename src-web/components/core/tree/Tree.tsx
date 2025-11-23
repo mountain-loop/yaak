@@ -11,9 +11,18 @@ import {
 import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import type { ComponentType, MouseEvent, ReactElement, Ref, RefAttributes } from 'react';
-import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, } from 'react';
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
-import type { HotkeyAction, HotKeyOptions } from '../../../hooks/useHotKey';
+import type { HotKeyOptions, HotkeyAction } from '../../../hooks/useHotKey';
 import { useHotKey } from '../../../hooks/useHotKey';
 import { computeSideForDragMove } from '../../../lib/dnd';
 import { jotaiStore } from '../../../lib/jotai';
@@ -102,6 +111,7 @@ function TreeInner<T extends { id: string }>(
   }, []);
 
   // Select the first item on first render
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only used for initial render
   useEffect(() => {
     const ids = jotaiStore.get(selectedIdsFamily(treeId));
     const fallback = selectableItems[0];
@@ -112,7 +122,6 @@ function TreeInner<T extends { id: string }>(
         lastId: fallback.node.item.id,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [treeId]);
 
   const handleCloseContextMenu = useCallback(() => {
@@ -129,11 +138,10 @@ function TreeInner<T extends { id: string }>(
     );
     if ($el == null) {
       return false;
-    } else {
-      $el.focus();
-      $el.scrollIntoView({ block: 'nearest' });
-      return true;
     }
+    $el.focus();
+    $el.scrollIntoView({ block: 'nearest' });
+    return true;
   }, []);
 
   const ensureTabbableItem = useCallback(() => {
@@ -166,7 +174,7 @@ function TreeInner<T extends { id: string }>(
   useEffect(() => {
     const unsub = jotaiStore.sub(collapsedFamily(treeId), ensureTabbableItem);
     return unsub;
-  }, [ensureTabbableItem, isTreeFocused, selectableItems, treeId, tryFocus]);
+  }, [ensureTabbableItem, treeId]);
 
   // Ensure there's always a tabbable item after render
   useEffect(() => {
@@ -224,13 +232,12 @@ function TreeInner<T extends { id: string }>(
       if (isSelected) {
         // If right-clicked an item that was in the multiple-selection, use the entire selection
         return getContextMenu(items);
-      } else {
-        // If right-clicked an item that was NOT in the multiple-selection, just use that one
-        // Also update the selection with it
-        setSelected([item.id], false);
-        jotaiStore.set(focusIdsFamily(treeId), (prev) => ({ ...prev, lastId: item.id }));
-        return getContextMenu([item]);
       }
+      // If right-clicked an item that was NOT in the multiple-selection, just use that one
+      // Also update the selection with it
+      setSelected([item.id], false);
+      jotaiStore.set(focusIdsFamily(treeId), (prev) => ({ ...prev, lastId: item.id }));
+      return getContextMenu([item]);
     };
   }, [getContextMenu, selectableItems, setSelected, treeId]);
 
@@ -728,6 +735,7 @@ function DropRegionAfterList({
   onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
 }) {
   const { setNodeRef } = useDroppable({ id });
+  // biome-ignore lint/a11y/noStaticElementInteractions: Meh
   return <div ref={setNodeRef} onContextMenu={onContextMenu} />;
 }
 
@@ -758,7 +766,7 @@ function TreeHotKey<T extends { id: string }>({
       enable: () => {
         if (enable == null) return true;
         if (typeof enable === 'function') return enable();
-        else return enable;
+        return enable;
       },
     },
   );

@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev --force",
-    "build": "vite build",
-    "lint": "tsc --noEmit && eslint . --ext .ts,.tsx"
+    "build": "vite build"
   },
   "dependencies": {
     "@codemirror/commands": "^6.8.1",
@@ -47,6 +46,7 @@
     "fuzzbunny": "^1.0.1",
     "hexy": "^0.3.5",
     "history": "^5.3.0",
+    "jotai": "^2.12.2",
     "js-md5": "^0.8.3",
     "lucide-react": "^0.525.0",
     "mime": "^4.0.4",
@@ -86,7 +86,6 @@
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.4.21",
     "decompress": "^4.2.1",
-    "eslint-plugin-react-refresh": "^0.4.20",
     "internal-ip": "^8.0.0",
     "postcss": "^8.5.6",
     "postcss-nesting": "^13.0.2",

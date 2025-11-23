@@ -24,6 +24,7 @@ export function HotKey({ action, className, variant }: Props) {
       )}
     >
       {labelParts.map((char, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: none
         <div key={index} className="min-w-[1.1em] text-center">
           {char}
         </div>

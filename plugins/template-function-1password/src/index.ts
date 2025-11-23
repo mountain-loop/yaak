@@ -1,8 +1,8 @@
+import crypto from 'node:crypto';
 import type { Client } from '@1password/sdk';
 import { createClient } from '@1password/sdk';
-import type { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
 import type { PluginDefinition } from '@yaakapp/api';
-import crypto from 'crypto';
+import type { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
 
 const _clients: Record<string, Client> = {};
 
@@ -34,6 +34,7 @@ export const plugin: PluginDefinition = {
           type: 'text',
           label: '1Password Service Account Token',
           description: '',
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
           defaultValue: '${[ONEPASSWORD_TOKEN]}',
           password: true,
         },
@@ -69,7 +70,7 @@ export const plugin: PluginDefinition = {
             const items = await client.items.list(vaultId);
             return {
               options: items.map((item) => ({
-                label: item.title + ' ' + item.category,
+                label: `${item.title} ${item.category}`,
                 value: item.id,
               })),
             };
@@ -114,7 +115,7 @@ export const plugin: PluginDefinition = {
         const item = await client.items.get(vaultId, itemId);
         const field = item.fields.find((f) => f.id === fieldId);
         if (field == null) {
-          throw new Error('Field not found: ' + fieldId);
+          throw new Error(`Field not found: ${fieldId}`);
         }
         return field.value ?? '';
       },

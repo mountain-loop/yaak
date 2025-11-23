@@ -11,8 +11,7 @@
   "version": "0.1.0",
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev",
-    "lint": "tsc --noEmit && eslint . --ext .ts,.tsx"
+    "dev": "yaakcli dev"
   },
   "dependencies": {
     "oauth-1.0a": "^2.2.6"

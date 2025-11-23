@@ -1,4 +1,12 @@
-import type { Context, Environment, Folder, HttpRequest, HttpUrlParameter, PluginDefinition, Workspace } from '@yaakapp/api';
+import type {
+  Context,
+  Environment,
+  Folder,
+  HttpRequest,
+  HttpUrlParameter,
+  PluginDefinition,
+  Workspace,
+} from '@yaakapp/api';
 import type { ControlOperator, ParseEntry } from 'shell-quote';
 import { parse } from 'shell-quote';
 
@@ -28,7 +36,7 @@ const SUPPORTED_FLAGS = [
   ['url-query'],
   ['user', 'u'], // Authentication
   DATA_FLAGS,
-].flatMap((v) => v);
+].flat();
 
 const BOOLEAN_FLAGS = ['G', 'get', 'digest'];
 
@@ -41,7 +49,7 @@ export const plugin: PluginDefinition = {
     name: 'cURL',
     description: 'Import cURL commands',
     onImport(_ctx: Context, args: { text: string }) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: none
       return convertCurl(args.text) as any;
     },
   },
@@ -100,7 +108,7 @@ export function convertCurl(rawData: string) {
 
     if (op?.startsWith('$')) {
       // Handle the case where literal like -H $'Header: \'Some Quoted Thing\''
-      const str = op.slice(2, op.length - 1).replace(/\\'/g, '\'');
+      const str = op.slice(2, op.length - 1).replace(/\\'/g, "'");
 
       currentCommand.push(str);
       continue;
@@ -153,7 +161,7 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
         continue;
       }
 
-      let value;
+      let value: string | boolean;
       const nextEntry = parseEntries[i + 1];
       const hasValue = !BOOLEAN_FLAGS.includes(name);
       if (isSingleDash && name.length > 1) {
@@ -169,7 +177,7 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
       }
 
       flagsByName[name] = flagsByName[name] || [];
-      flagsByName[name]!.push(value);
+      flagsByName[name]?.push(value);
     } else if (parseEntry) {
       singletons.push(parseEntry);
     }
@@ -184,7 +192,11 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
   const urlParameters: HttpUrlParameter[] =
     search?.split('&').map((p) => {
       const v = splitOnce(p, '=');
-      return { name: decodeURIComponent(v[0] ?? ''), value: decodeURIComponent(v[1] ?? ''), enabled: true };
+      return {
+        name: decodeURIComponent(v[0] ?? ''),
+        value: decodeURIComponent(v[1] ?? ''),
+        enabled: true,
+      };
     }) ?? [];
 
   const url = baseUrl ?? urlArg;
@@ -209,15 +221,15 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
   const authenticationType = username ? (isDigest ? 'digest' : 'basic') : null;
   const authentication = username
     ? {
-      username: username.trim(),
-      password: (password ?? '').trim(),
-    }
+        username: username.trim(),
+        password: (password ?? '').trim(),
+      }
     : {};
 
   // Headers
   const headers = [
-    ...((flagsByName['header'] as string[] | undefined) || []),
-    ...((flagsByName['H'] as string[] | undefined) || []),
+    ...((flagsByName.header as string[] | undefined) || []),
+    ...((flagsByName.H as string[] | undefined) || []),
   ].map((header) => {
     const [name, value] = header.split(/:(.*)$/);
     // remove final colon from header name if present
@@ -237,8 +249,8 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
 
   // Cookies
   const cookieHeaderValue = [
-    ...((flagsByName['cookie'] as string[] | undefined) || []),
-    ...((flagsByName['b'] as string[] | undefined) || []),
+    ...((flagsByName.cookie as string[] | undefined) || []),
+    ...((flagsByName.b as string[] | undefined) || []),
   ]
     .map((str) => {
       const name = str.split('=', 1)[0];
@@ -269,8 +281,8 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
 
   // Body (Multipart Form Data)
   const formDataParams = [
-    ...((flagsByName['form'] as string[] | undefined) || []),
-    ...((flagsByName['F'] as string[] | undefined) || []),
+    ...((flagsByName.form as string[] | undefined) || []),
+    ...((flagsByName.F as string[] | undefined) || []),
   ].map((str) => {
     const parts = str.split('=');
     const name = parts[0] ?? '';
@@ -281,9 +293,9 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
     };
 
     if (value.indexOf('@') === 0) {
-      item['file'] = value.slice(1);
+      item.file = value.slice(1);
     } else {
-      item['value'] = value;
+      item.value = value;
     }
 
     return item;
@@ -384,7 +396,7 @@ function pairsToDataParameters(keyedPairs: FlagsByName): DataParameter[] {
 
     for (const p of pairs) {
       if (typeof p !== 'string') continue;
-      const params = p.split("&");
+      const params = p.split('&');
       for (const param of params) {
         const [name, value] = splitOnce(param, '=');
         if (param.startsWith('@')) {
@@ -398,7 +410,7 @@ function pairsToDataParameters(keyedPairs: FlagsByName): DataParameter[] {
         } else {
           dataParameters.push({
             name: name ?? '',
-            value: flagName === 'data-urlencode' ? encodeURIComponent(value ?? '') : value ?? '',
+            value: flagName === 'data-urlencode' ? encodeURIComponent(value ?? '') : (value ?? ''),
             enabled: true,
           });
         }
@@ -415,8 +427,8 @@ const getPairValue = <T extends string | boolean>(
   names: string[],
 ) => {
   for (const name of names) {
-    if (pairsByName[name] && pairsByName[name]!.length) {
-      return pairsByName[name]![0] as T;
+    if (pairsByName[name]?.length) {
+      return pairsByName[name]?.[0] as T;
     }
   }
 

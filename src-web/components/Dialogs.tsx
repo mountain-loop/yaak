@@ -1,6 +1,6 @@
 import { useAtomValue } from 'jotai';
 import type { ComponentType } from 'react';
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import { dialogsAtom, hideDialog } from '../lib/dialog';
 import { Dialog, type DialogProps } from './core/Dialog';
 import { ErrorBoundary } from './ErrorBoundary';

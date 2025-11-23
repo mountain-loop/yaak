@@ -104,7 +104,8 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       // Always open a new window if the selected one is already active
       switchWorkspace.mutate({ workspaceId, inNewWindow: true });
       return;
-    } else if (typeof settings.openWorkspaceNewWindow === 'boolean') {
+    }
+    if (typeof settings.openWorkspaceNewWindow === 'boolean') {
       switchWorkspace.mutate({ workspaceId, inNewWindow: settings.openWorkspaceNewWindow });
       return;
     }

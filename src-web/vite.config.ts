@@ -1,7 +1,6 @@
 // @ts-ignore
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
-import reactRefresh from 'eslint-plugin-react-refresh';
 import { internalIpV4 } from 'internal-ip';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -25,7 +24,6 @@ const mobile = !!/android|ios/.exec(process.env.TAURI_ENV_PLATFORM ?? '');
 export default defineConfig(async () => ({
   plugins: [
     wasm(),
-    reactRefresh.configs.vite,
     tanstackRouter({
       target: 'react',
       routesDirectory: './routes',

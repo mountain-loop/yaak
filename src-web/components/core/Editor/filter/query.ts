@@ -255,9 +255,9 @@ type Technique = 'substring' | 'fuzzy' | 'strict';
 
 function includes(hay: string | undefined, needle: string, technique: Technique): boolean {
   if (!hay || !needle) return false;
-  else if (technique === 'strict') return hay === needle;
-  else if (technique === 'fuzzy') return !!fuzzyMatch(hay, needle);
-  else return hay.indexOf(needle) !== -1;
+  if (technique === 'strict') return hay === needle;
+  if (technique === 'fuzzy') return !!fuzzyMatch(hay, needle);
+  return hay.indexOf(needle) !== -1;
 }
 
 export function evaluate(ast: Ast | null, doc: Doc): boolean {

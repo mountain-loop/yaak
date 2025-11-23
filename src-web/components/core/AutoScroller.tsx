@@ -39,6 +39,8 @@ export function AutoScroller<T>({ data, render, header }: Props<T>) {
   useLayoutEffect(() => {
     if (!autoScroll) return;
 
+    data.length; // Make linter happy. We want to refresh when length changes
+
     const el = containerRef.current;
     if (el == null) return;
 
@@ -69,21 +71,26 @@ export function AutoScroller<T>({ data, render, header }: Props<T>) {
             position: 'relative',
           }}
         >
-          {rowVirtualizer.getVirtualItems().map((virtualItem) => (
-            <div
-              key={virtualItem.key}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: `${virtualItem.size}px`,
-                transform: `translateY(${virtualItem.start}px)`,
-              }}
-            >
-              {render(data[virtualItem.index]!, virtualItem.index)}
-            </div>
-          ))}
+          {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+            const item = data[virtualItem.index];
+            return (
+              item != null && (
+                <div
+                  key={virtualItem.key}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualItem.size}px`,
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  {render(item, virtualItem.index)}
+                </div>
+              )
+            );
+          })}
         </div>
       </div>
     </div>

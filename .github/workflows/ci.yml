@@ -1,0 +1,27 @@
+on: pull_request
+
+name: CI (JS)
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lint/Test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri'
+          shared-key: ci
+          cache-on-failure: true
+
+      - run: npm ci
+      - run: npm run lint
+      - name: Run JS Tests
+        run: npm test
+      - name: Run Rust Tests
+        run: cargo test --all
+        working-directory: src-tauri

@@ -1,0 +1,17 @@
+{
+  "name": "yaak-templates",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "yaak_templates_bg.wasm",
+    "yaak_templates.js",
+    "yaak_templates_bg.js",
+    "yaak_templates.d.ts"
+  ],
+  "main": "yaak_templates.js",
+  "types": "yaak_templates.d.ts",
+  "sideEffects": [
+    "./yaak_templates.js",
+    "./snippets/*"
+  ]
+}

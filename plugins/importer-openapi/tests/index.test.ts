@@ -13,7 +13,7 @@ describe('importer-openapi', () => {
   });
 
   for (const fixture of fixtures) {
-    test('Imports ' + fixture, async () => {
+    test(`Imports ${fixture}`, async () => {
       const contents = fs.readFileSync(path.join(p, fixture), 'utf-8');
       const imported = await convertOpenApi(contents);
       expect(imported?.resources.workspaces).toEqual([

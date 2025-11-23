@@ -1,3 +1,4 @@
+import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import type { CSSProperties, ReactNode } from 'react';
 import { useState } from 'react';
@@ -7,7 +8,6 @@ import { Label } from './Label';
 import type { RadioDropdownItem } from './RadioDropdown';
 import { RadioDropdown } from './RadioDropdown';
 import { HStack } from './Stacks';
-import { type } from '@tauri-apps/plugin-os';
 
 export interface SelectProps<T extends string> {
   name: string;

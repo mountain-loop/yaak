@@ -3,7 +3,7 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import './PdfViewer.css';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Document, Page } from 'react-pdf';
 import { useContainerSize } from '../../hooks/useContainerQuery';
 

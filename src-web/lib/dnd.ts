@@ -1,9 +1,6 @@
 import type { DragMoveEvent } from '@dnd-kit/core';
 
-export function computeSideForDragMove(
-  id: string,
-  e: DragMoveEvent,
-): 'above' | 'below' | null {
+export function computeSideForDragMove(id: string, e: DragMoveEvent): 'above' | 'below' | null {
   if (e.over == null || e.over.id !== id) {
     return null;
   }

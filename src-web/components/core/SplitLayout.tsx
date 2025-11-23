@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { CSSProperties, ReactNode } from 'react';
-import React, { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useLocalStorage } from 'react-use';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useContainerSize } from '../../hooks/useContainerQuery';
@@ -99,8 +99,10 @@ export function SplitLayout({
         containerRef.current,
       );
       const $c = containerRef.current;
-      const containerWidth = $c.clientWidth - parseFloat(paddingLeft) - parseFloat(paddingRight);
-      const containerHeight = $c.clientHeight - parseFloat(paddingTop) - parseFloat(paddingBottom);
+      const containerWidth =
+        $c.clientWidth - Number.parseFloat(paddingLeft) - Number.parseFloat(paddingRight);
+      const containerHeight =
+        $c.clientHeight - Number.parseFloat(paddingTop) - Number.parseFloat(paddingBottom);
 
       const mouseStartX = e.xStart;
       const mouseStartY = e.yStart;

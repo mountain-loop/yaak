@@ -1,7 +1,7 @@
 import type { Environment, Workspace } from '@yaakapp-internal/models';
 import { duplicateModel, patchModel } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import {
@@ -112,11 +112,11 @@ function EnvironmentEditDialogSidebar({
   const treeRef = useRef<TreeHandle>(null);
   const { baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useLayoutEffect(() => {
     if (selectedEnvironmentId == null) return;
     treeRef.current?.selectItem(selectedEnvironmentId);
     treeRef.current?.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDeleteEnvironment = useCallback(
@@ -137,7 +137,7 @@ function EnvironmentEditDialogSidebar({
         enable,
         allowDefault: true,
         priority: 100,
-        cb: async function (items: TreeModel[]) {
+        cb: async (items: TreeModel[]) => {
           const item = items[0];
           if (items.length === 1 && item != null) {
             treeRef.current?.renameItem(item.id);
@@ -152,9 +152,9 @@ function EnvironmentEditDialogSidebar({
       'sidebar.selected.duplicate': {
         priority: 100,
         enable,
-        cb: async function (items: TreeModel[]) {
-          if (items.length === 1) {
-            const item = items[0]!;
+        cb: async (items: TreeModel[]) => {
+          if (items.length === 1 && items[0]) {
+            const item = items[0];
             const newId = await duplicateModel(item);
             setSelectedEnvironmentId(newId);
           } else {

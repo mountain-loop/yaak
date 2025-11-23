@@ -5,7 +5,7 @@ import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-intern
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { getActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { getActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
@@ -25,8 +25,8 @@ import { generateId } from '../lib/generateId';
 import { prepareImportQuerystring } from '../lib/prepareImportQuerystring';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { CountBadge } from './core/CountBadge';
-import { Editor } from './core/Editor/LazyEditor';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
+import { Editor } from './core/Editor/LazyEditor';
 import { IconButton } from './core/IconButton';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
@@ -81,9 +81,9 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
     const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
     const items: Pair[] = [...nonEmptyParameters];
     for (const name of placeholderNames) {
-      const index = items.findIndex((p) => p.name === name);
-      if (index >= 0) {
-        items[index]!.readOnlyName = true;
+      const item = items.find((p) => p.name === name);
+      if (item) {
+        item.readOnlyName = true;
       } else {
         items.push({ name, value: '', enabled: true, readOnlyName: true, id: generateId() });
       }

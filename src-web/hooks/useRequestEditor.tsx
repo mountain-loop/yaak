@@ -1,5 +1,5 @@
 import EventEmitter from 'eventemitter3';
-import { atom , useAtom } from 'jotai';
+import { atom, useAtom } from 'jotai';
 import type { DependencyList } from 'react';
 import { useCallback, useEffect } from 'react';
 
@@ -17,7 +17,7 @@ export function useRequestEditorEvent<
     return () => {
       emitter.off(event, fn);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: We're handing deps manually
   }, deps);
 }
 

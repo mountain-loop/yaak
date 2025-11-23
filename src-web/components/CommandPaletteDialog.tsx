@@ -2,8 +2,15 @@ import { workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { fuzzyFilter } from 'fuzzbunny';
 import { useAtomValue } from 'jotai';
-import type { KeyboardEvent, ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  type KeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createFolder } from '../commands/commands';
 import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
 import { openSettings } from '../commands/openSettings';
@@ -76,6 +83,11 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const [recentRequests] = useRecentRequests();
   const [, setSidebarHidden] = useSidebarHidden();
   const { mutate: sendRequest } = useSendAnyHttpRequest();
+
+  const handleSetCommand = (command: string) => {
+    setCommand(command);
+    setSelectedItemKey(null);
+  };
 
   const workspaceCommands = useMemo<CommandPaletteItem[]>(() => {
     if (workspaceId == null) return [];
@@ -150,25 +162,23 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         label: 'Send Request',
         onSelect: () => sendRequest(activeRequest.id),
       });
-      for (let i = 0; i < httpRequestActions.length; i++) {
-        const a = httpRequestActions[i]!;
+      httpRequestActions.forEach((a, i) => {
         commands.push({
           key: `http_request_action.${i}`,
           label: a.label,
           onSelect: () => a.call(activeRequest),
         });
-      }
+      });
     }
 
     if (activeRequest?.model === 'grpc_request') {
-      for (let i = 0; i < grpcRequestActions.length; i++) {
-        const a = grpcRequestActions[i]!;
+      grpcRequestActions.forEach((a, i) => {
         commands.push({
           key: `grpc_request_action.${i}`,
           label: a.label,
           onSelect: () => a.call(activeRequest),
         });
-      }
+      });
     }
 
     if (activeRequest != null) {
@@ -210,13 +220,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
       if (aRecentIndex >= 0 && bRecentIndex >= 0) {
         return aRecentIndex - bRecentIndex;
-      } else if (aRecentIndex >= 0 && bRecentIndex === -1) {
-        return -1;
-      } else if (aRecentIndex === -1 && bRecentIndex >= 0) {
-        return 1;
-      } else {
-        return a.createdAt.localeCompare(b.createdAt);
       }
+      if (aRecentIndex >= 0 && bRecentIndex === -1) {
+        return -1;
+      }
+      if (aRecentIndex === -1 && bRecentIndex >= 0) {
+        return 1;
+      }
+      return a.createdAt.localeCompare(b.createdAt);
     });
   }, [recentRequests, requests]);
 
@@ -227,13 +238,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
       if (aRecentIndex >= 0 && bRecentIndex >= 0) {
         return aRecentIndex - bRecentIndex;
-      } else if (aRecentIndex >= 0 && bRecentIndex === -1) {
-        return -1;
-      } else if (aRecentIndex === -1 && bRecentIndex >= 0) {
-        return 1;
-      } else {
-        return a.createdAt.localeCompare(b.createdAt);
       }
+      if (aRecentIndex >= 0 && bRecentIndex === -1) {
+        return -1;
+      }
+      if (aRecentIndex === -1 && bRecentIndex >= 0) {
+        return 1;
+      }
+      return a.createdAt.localeCompare(b.createdAt);
     });
   }, [subEnvironments, recentEnvironments]);
 
@@ -249,13 +261,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
       if (aRecentIndex >= 0 && bRecentIndex >= 0) {
         return aRecentIndex - bRecentIndex;
-      } else if (aRecentIndex >= 0 && bRecentIndex === -1) {
-        return -1;
-      } else if (aRecentIndex === -1 && bRecentIndex >= 0) {
-        return 1;
-      } else {
-        return a.createdAt.localeCompare(b.createdAt);
       }
+      if (aRecentIndex >= 0 && bRecentIndex === -1) {
+        return -1;
+      }
+      if (aRecentIndex === -1 && bRecentIndex >= 0) {
+        return 1;
+      }
+      return a.createdAt.localeCompare(b.createdAt);
     });
   }, [recentWorkspaces, workspaces]);
 
@@ -280,12 +293,10 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
           <div className="flex items-center gap-x-0.5">
             <HttpMethodTag short className="text-xs mr-2" request={r} />
             {resolvedModelNameWithFoldersArray(r).map((name, i, all) => (
-              <>
-                {i !== 0 && (
-                  <Icon icon="chevron_right" className="opacity-80"/>
-                )}
+              <Fragment key={name}>
+                {i !== 0 && <Icon icon="chevron_right" className="opacity-80" />}
                 <div className={classNames(i < all.length - 1 && 'truncate')}>{name}</div>
-              </>
+              </Fragment>
             ))}
           </div>
         ),
@@ -340,10 +351,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   ]);
 
   const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
-
-  useEffect(() => {
-    setSelectedItemKey(null);
-  }, [command]);
 
   const { filteredGroups, filteredAllItems } = useMemo(() => {
     const result = command
@@ -424,7 +431,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
           placeholder="Search or type a command"
           className="font-sans !text-base"
           defaultValue={command}
-          onChange={setCommand}
+          onChange={handleSetCommand}
           onKeyDownCapture={handleKeyDown}
         />
       </div>

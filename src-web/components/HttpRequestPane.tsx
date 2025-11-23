@@ -4,7 +4,7 @@ import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import React, { lazy, Suspense, useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useAuthTab } from '../hooks/useAuthTab';
@@ -37,13 +37,13 @@ import { showToast } from '../lib/toast';
 import { BinaryFileEditor } from './BinaryFileEditor';
 import { ConfirmLargeRequestBody } from './ConfirmLargeRequestBody';
 import { CountBadge } from './core/CountBadge';
-import { Editor } from './core/Editor/LazyEditor';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
+import { Editor } from './core/Editor/LazyEditor';
 import { InlineCode } from './core/InlineCode';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
 import type { TabItem } from './core/Tabs/Tabs';
+import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { FormMultipartEditor } from './FormMultipartEditor';
 import { FormUrlencodedEditor } from './FormUrlencodedEditor';
@@ -128,9 +128,9 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
     const items: Pair[] = [...nonEmptyParameters];
     for (const name of placeholderNames) {
-      const index = items.findIndex((p) => p.name === name);
-      if (index >= 0) {
-        items[index]!.readOnlyName = true;
+      const item = items.find((p) => p.name === name);
+      if (item) {
+        item.readOnlyName = true;
       } else {
         items.push({ name, value: '', enabled: true, readOnlyName: true, id: generateId() });
       }
@@ -207,7 +207,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 showMethodToast(patch.method);
               }
               newContentType = bodyType === BODY_TYPE_OTHER ? 'text/plain' : bodyType;
-            } else if (bodyType == BODY_TYPE_GRAPHQL) {
+            } else if (bodyType === BODY_TYPE_GRAPHQL) {
               patch.method = 'POST';
               newContentType = 'application/json';
               showMethodToast(patch.method);

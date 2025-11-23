@@ -1,6 +1,6 @@
+import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 import type { AnyModel, HttpUrlParameter } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 
 export const plugin: PluginDefinition = {
   templateFunctions: [
@@ -43,7 +43,7 @@ export const plugin: PluginDefinition = {
             const request = await ctx.httpRequest.getById({ id: args.values.requestId });
             if (request == null) return null;
 
-            const validHeaders = request.headers.filter(h => h.enabled !== false && h.name);
+            const validHeaders = request.headers.filter((h) => h.enabled !== false && h.name);
             return {
               placeholder: validHeaders[0]?.name,
               completionOptions: validHeaders.map<GenericCompletionOption>((h) => ({

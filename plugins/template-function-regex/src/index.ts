@@ -1,5 +1,5 @@
-import type { TemplateFunctionArg } from '@yaakapp-internal/plugins';
 import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
+import type { TemplateFunctionArg } from '@yaakapp-internal/plugins';
 
 const inputArg: TemplateFunctionArg = {
   type: 'text',

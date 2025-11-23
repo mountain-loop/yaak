@@ -1,6 +1,7 @@
 import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import { autocompletion, startCompletion } from '@codemirror/autocomplete';
 import { LanguageSupport, LRLanguage, syntaxTree } from '@codemirror/language';
+import type { SyntaxNode } from '@lezer/common';
 import { parser } from './filter';
 
 export interface FieldDef {
@@ -40,9 +41,10 @@ function wordBefore(doc: string, pos: number): { from: number; to: number; text:
 
 function inPhrase(ctx: CompletionContext): boolean {
   // Lezer node names from your grammar: Phrase is the quoted token
-  let n = syntaxTree(ctx.state).resolveInner(ctx.pos, -1);
-  for (; n; n = n.parent!) {
+  let n: SyntaxNode | null = syntaxTree(ctx.state).resolveInner(ctx.pos, -1);
+  while (n) {
     if (n.name === 'Phrase') return true;
+    n = n.parent;
   }
   return false;
 }

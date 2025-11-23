@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { fuzzyMatch } from 'fuzzbunny';
@@ -46,6 +45,7 @@ interface Props {
 
 type ExplorerItem =
   | { kind: 'type'; type: GraphQLType; from: ExplorerItem }
+  // biome-ignore lint/suspicious/noExplicitAny: none
   | { kind: 'field'; type: GraphQLField<any, any>; from: ExplorerItem }
   | { kind: 'input_field'; type: GraphQLInputField; from: ExplorerItem }
   | null;
@@ -79,12 +79,12 @@ export const GraphQLDocsExplorer = memo(function GraphQLDocsExplorer({
         ) {
           setActiveItem(toExplorerItem(t, toExplorerItem(from, null)));
           return false;
-        } else if (showField.type === t.name && from?.name === showField.parentType) {
+        }
+        if (showField.type === t.name && from?.name === showField.parentType) {
           setActiveItem(toExplorerItem(t, toExplorerItem(from, null)));
           return false;
-        } else {
-          return true;
         }
+        return true;
       });
     }
   }, [schema, showField]);
@@ -132,8 +132,7 @@ export const GraphQLDocsExplorer = memo(function GraphQLDocsExplorer({
             <Subheading count={Object.keys(allTypes).length}>All Schema Types</Subheading>
             <DocMarkdown>{schema.description ?? null}</DocMarkdown>
             <div className="flex flex-col gap-1">
-              {Object.keys(allTypes).map((typeName) => {
-                const t = allTypes[typeName]!;
+              {Object.values(allTypes).map((t) => {
                 return (
                   <GqlTypeLink
                     key={t.name}
@@ -183,12 +182,14 @@ function GraphQLExplorerHeader({
           <Icon icon="book_open_text" />
           {crumbs.map((crumb, i) => {
             return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: none
               <Fragment key={i}>
                 {i > 0 && <Icon icon="chevron_right" className="text-text-subtlest" />}
                 {crumb === item || item == null ? (
                   <GqlTypeLabel noTruncate item={item} />
                 ) : crumb === item ? null : (
                   <GqlTypeLink
+                    // biome-ignore lint/suspicious/noArrayIndexKey: none
                     key={i}
                     noTruncate
                     item={crumb}
@@ -246,7 +247,8 @@ function GqlTypeInfo({
 
   if (isScalarType(item.type)) {
     return heading;
-  } else if (isNonNullType(item.type) || isListType(item.type)) {
+  }
+  if (isNonNullType(item.type) || isListType(item.type)) {
     // kinda a hack, but we'll just unwrap there and show the named type
     return (
       <GqlTypeInfo
@@ -255,7 +257,8 @@ function GqlTypeInfo({
         schema={schema}
       />
     );
-  } else if (isInterfaceType(item.type)) {
+  }
+  if (isInterfaceType(item.type)) {
     const fields = item.type.getFields();
     const possibleTypes = schema.getPossibleTypes(item.type) ?? [];
 
@@ -264,8 +267,7 @@ function GqlTypeInfo({
         {heading}
 
         <Subheading count={Object.keys(fields).length}>Fields</Subheading>
-        {Object.keys(fields).map((fieldName) => {
-          const field = fields[fieldName]!;
+        {Object.entries(fields).map(([fieldName, field]) => {
           const fieldItem: ExplorerItem = toExplorerItem(field, item);
           return (
             <div key={`${field.type}::${field.name}`} className="my-4">
@@ -281,14 +283,15 @@ function GqlTypeInfo({
         {possibleTypes.length > 0 && (
           <>
             <Subheading>Implemented By</Subheading>
-            {possibleTypes.map((t: any) => (
+            {possibleTypes.map((t) => (
               <GqlTypeRow key={t.name} item={toExplorerItem(t, item)} setItem={setItem} />
             ))}
           </>
         )}
       </div>
     );
-  } else if (isUnionType(item.type)) {
+  }
+  if (isUnionType(item.type)) {
     const types = item.type.getTypes();
 
     return (
@@ -301,7 +304,8 @@ function GqlTypeInfo({
         ))}
       </div>
     );
-  } else if (isEnumType(item.type)) {
+  }
+  if (isEnumType(item.type)) {
     const values = item.type.getValues();
 
     return (
@@ -316,7 +320,8 @@ function GqlTypeInfo({
         ))}
       </div>
     );
-  } else if (item.kind === 'input_field') {
+  }
+  if (item.kind === 'input_field') {
     return (
       <div className="flex flex-col gap-3">
         {heading}
@@ -338,7 +343,8 @@ function GqlTypeInfo({
         </div>
       </div>
     );
-  } else if (item.kind === 'field') {
+  }
+  if (item.kind === 'field') {
     return (
       <div className="flex flex-col gap-3">
         {heading}
@@ -357,7 +363,7 @@ function GqlTypeInfo({
             <Subheading>Arguments</Subheading>
             {item.type.args.map((a) => {
               return (
-                <div key={a.type + '::' + a.name} className="my-4">
+                <div key={`${a.type}::${a.name}`} className="my-4">
                   <GqlTypeRow
                     name={{ value: a.name, color: 'info' }}
                     item={{ kind: 'type', type: a.type, from: item }}
@@ -370,7 +376,8 @@ function GqlTypeInfo({
         )}
       </div>
     );
-  } else if (isInputObjectType(item.type)) {
+  }
+  if (isInputObjectType(item.type)) {
     const fields = item.type.getFields();
     return (
       <div>
@@ -397,7 +404,8 @@ function GqlTypeInfo({
         })}
       </div>
     );
-  } else if (isObjectType(item.type)) {
+  }
+  if (isObjectType(item.type)) {
     const fields = item.type.getFields();
     const interfaces = item.type.getInterfaces();
 
@@ -505,7 +513,7 @@ function GqlTypeRow({
               {item.type.args.map((arg) => (
                 <div
                   key={`${arg.type}::${arg.name}`}
-                  className={classNames(item.type.args.length == 1 && 'inline-flex')}
+                  className={classNames(item.type.args.length === 1 && 'inline-flex')}
                 >
                   {item.type.args.length > 1 && <>&nbsp;&nbsp;</>}
                   <span className="text-primary">{arg.name}:</span>&nbsp;
@@ -579,7 +587,8 @@ function GqlTypeLink({
         <span className="text-text-subtle">]</span>
       </span>
     );
-  } else if (item?.kind === 'type' && isNonNullType(item.type)) {
+  }
+  if (item?.kind === 'type' && isNonNullType(item.type)) {
     return (
       <span className="font-mono text-editor">
         <GqlTypeLink
@@ -598,6 +607,7 @@ function GqlTypeLink({
 
   return (
     <button
+      type="button"
       className={classNames(
         className,
         'hover:underline text-left mr-auto gap-2 max-w-full',
@@ -636,7 +646,7 @@ function GqlTypeLabel({
   className?: string;
   noTruncate?: boolean;
 }) {
-  let inner;
+  let inner: ReactNode;
   if (children) {
     inner = children;
   } else if (item == null) {
@@ -664,6 +674,7 @@ function Subheading({ children, count }: { children: ReactNode; count?: number }
 
 interface SearchResult {
   name: string;
+  // biome-ignore lint/suspicious/noExplicitAny: none
   type: GraphQLNamedType | GraphQLField<any, any> | GraphQLInputField;
   score: number;
   from: GraphQLNamedType | null;
@@ -712,34 +723,35 @@ function GqlSchemaSearch({
       return true;
     });
     results.sort((a, b) => {
-      if (value == '') {
+      if (value === '') {
         if (a.name.startsWith('_') && !b.name.startsWith('_')) {
           // Always sort __<NAME> types to the end when there is no query
           return 1;
-        } else if (a.depth.length !== b.depth.length) {
-          return a.depth.length - b.depth.length;
-        } else {
-          return a.name.localeCompare(b.name);
         }
-      } else {
         if (a.depth.length !== b.depth.length) {
           return a.depth.length - b.depth.length;
-        } else if (a.score === 0 && b.score === 0) {
-          return a.name.localeCompare(b.name);
-        } else if (a.score === b.score && a.name.length === b.name.length) {
-          return a.name.localeCompare(b.name);
-        } else if (a.score === b.score) {
-          return a.name.length - b.type.name.length;
-        } else {
-          return b.score - a.score;
         }
+        return a.name.localeCompare(b.name);
       }
+      if (a.depth.length !== b.depth.length) {
+        return a.depth.length - b.depth.length;
+      }
+      if (a.score === 0 && b.score === 0) {
+        return a.name.localeCompare(b.name);
+      }
+      if (a.score === b.score && a.name.length === b.name.length) {
+        return a.name.localeCompare(b.name);
+      }
+      if (a.score === b.score) {
+        return a.name.length - b.type.name.length;
+      }
+      return b.score - a.score;
     });
     return results.slice(0, 100);
   }, [currentItem, schema, debouncedValue, value]);
 
   const activeIndex = useMemo(() => {
-    const index = results.findIndex((r) => r === activeResult) ?? 0;
+    const index = (activeResult ? results.indexOf(activeResult) : 0) ?? 0;
     return index === -1 ? 0 : index;
   }, [activeResult, results]);
 
@@ -786,7 +798,7 @@ function GqlSchemaSearch({
         label="search"
         hideLabel
         defaultValue={value}
-        placeholder={focused ? 'Search ' + (currentItem?.type.toString() ?? 'Schema') : 'Search'}
+        placeholder={focused ? `Search ${currentItem?.type.toString() ?? 'Schema'}` : 'Search'}
         leftSlot={
           <div className="w-10 flex justify-center items-center">
             <Icon size="sm" icon="search" color="secondary" />
@@ -814,7 +826,7 @@ function GqlSchemaSearch({
         )}
         {results.map((r, i) => {
           const item = toExplorerItem(r.type, currentItem);
-          if (item == currentItem) return null;
+          if (item === currentItem) return null;
           return (
             <SearchResult
               key={`${i}::${r.type.name}`}
@@ -885,8 +897,10 @@ function DocMarkdown({ children, className }: { children: string | null; classNa
 
 function walkTypeGraph(
   schema: GraphQLSchema,
+  // biome-ignore lint/suspicious/noExplicitAny: none
   start: GraphQLType | GraphQLField<any, any> | GraphQLInputField | null,
   cb: (
+    // biome-ignore lint/suspicious/noExplicitAny: none
     type: GraphQLNamedType | GraphQLField<any, any> | GraphQLInputField,
     from: GraphQLNamedType | null,
     path: string[],
@@ -894,6 +908,7 @@ function walkTypeGraph(
 ) {
   const visited = new Set<string>();
   const queue: Array<{
+    // biome-ignore lint/suspicious/noExplicitAny: none
     current: GraphQLType | GraphQLField<any, any> | GraphQLInputField;
     from: GraphQLNamedType | null;
     path: string[];
@@ -913,6 +928,7 @@ function walkTypeGraph(
   }
 
   while (queue.length > 0) {
+    // biome-ignore lint/style/noNonNullAssertion: none
     const { current, from, path } = queue.shift()!;
     if (!isNamedType(current)) continue;
 
@@ -965,6 +981,7 @@ function walkTypeGraph(
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: none
 function toExplorerItem(t: any, from: ExplorerItem | null): ExplorerItem | null {
   if (t == null) return null;
 

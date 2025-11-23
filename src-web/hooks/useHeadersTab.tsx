@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { CountBadge } from '../components/core/CountBadge';
 import type { TabItem } from '../components/core/Tabs/Tabs';
 import type { HeaderModel } from './useInheritedHeaders';

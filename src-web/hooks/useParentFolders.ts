@@ -15,7 +15,9 @@ function getParentFolders(
 ): Folder[] {
   if (currentModel == null) return [];
 
-  const parentFolder = currentModel.folderId ? folders.find((f) => f.id === currentModel.folderId) : null;
+  const parentFolder = currentModel.folderId
+    ? folders.find((f) => f.id === currentModel.folderId)
+    : null;
   if (parentFolder == null) {
     return [];
   }

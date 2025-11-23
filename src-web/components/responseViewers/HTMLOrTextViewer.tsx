@@ -23,18 +23,18 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
 
   if (language === 'html' && pretty) {
     return <WebPageViewer response={response} />;
-  } else if (rawTextBody.data == null) {
-    return <EmptyStateText>Empty response</EmptyStateText>;
-  } else {
-    return (
-      <TextViewer
-        language={language}
-        text={rawTextBody.data}
-        pretty={pretty}
-        className={textViewerClassName}
-        response={response}
-        requestId={response.requestId}
-      />
-    );
   }
+  if (rawTextBody.data == null) {
+    return <EmptyStateText>Empty response</EmptyStateText>;
+  }
+  return (
+    <TextViewer
+      language={language}
+      text={rawTextBody.data}
+      pretty={pretty}
+      className={textViewerClassName}
+      response={response}
+      requestId={response.requestId}
+    />
+  );
 }

@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
-import React, { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 const START_DISTANCE = 7;
 
@@ -72,12 +72,12 @@ export function ResizeHandle({
         onResizeEnd?.();
       }
 
-      moveState.current = {  calledStart: false, xStart: e.clientX, yStart: e.clientY, move, up };
+      moveState.current = { calledStart: false, xStart: e.clientX, yStart: e.clientY, move, up };
 
       document.documentElement.addEventListener('mousemove', move);
       document.documentElement.addEventListener('mouseup', up);
     },
-    [moveState, onResizeEnd, onResizeMove, onResizeStart, vertical],
+    [onResizeEnd, onResizeMove, onResizeStart, vertical],
   );
 
   return (

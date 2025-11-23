@@ -50,7 +50,7 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
       return;
     }
 
-    (async function () {
+    (async () => {
       const initial = collectArgumentValues(initialTokens, templateFunction);
 
       // HACK: Replace the secure() function's encrypted `value` arg with the decrypted version so
@@ -140,6 +140,7 @@ function InitializedTemplateFunctionDialog({
   );
 
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only update this on rendered data change to keep secrets hidden on input change
   const dataContainsSecrets = useMemo(() => {
     for (const [name, value] of Object.entries(argValues)) {
       const arg = templateFunction.data?.args.find((a) => 'name' in a && a.name === name);
@@ -149,8 +150,6 @@ function InitializedTemplateFunctionDialog({
       }
     }
     return false;
-    // Only update this on rendered data change to keep secrets hidden on input change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendered.data]);
 
   if (templateFunction.data == null || templateFunction.isPending) {
@@ -177,7 +176,7 @@ function InitializedTemplateFunctionDialog({
             name="value"
             type="password"
             placeholder="••••••••••••"
-            defaultValue={String(argValues['value'] ?? '')}
+            defaultValue={String(argValues.value ?? '')}
             onChange={(value) => setArgValues({ ...argValues, value })}
           />
         ) : (
@@ -211,27 +210,28 @@ function InitializedTemplateFunctionDialog({
                 )}
               />
             </HStack>
-            <InlineCode
-              className={classNames(
-                'relative',
-                'whitespace-pre-wrap !select-text cursor-text max-h-[10rem] overflow-auto hide-scrollbars !border-text-subtlest',
-                tooLarge && 'italic text-danger',
-              )}
-            >
-              {rendered.error || tagText.error ? (
-                <em className="text-danger">
-                  {`${rendered.error || tagText.error}`.replace(/^Render Error: /, '')}
-                </em>
-              ) : dataContainsSecrets && !showSecretsInPreview ? (
-                <span className="italic text-text-subtle">
-                  ------ sensitive values hidden ------
-                </span>
-              ) : tooLarge ? (
-                'too large to preview'
-              ) : (
-                rendered.data || <>&nbsp;</>
-              )}
-              <div className="absolute right-0 top-0 flex items-center">
+            <div className="relative w-full max-h-[10rem]">
+              <InlineCode
+                className={classNames(
+                  'block whitespace-pre-wrap !select-text cursor-text max-h-[10rem] overflow-auto hide-scrollbars !border-text-subtlest',
+                  tooLarge && 'italic text-danger',
+                )}
+              >
+                {rendered.error || tagText.error ? (
+                  <em className="text-danger">
+                    {`${rendered.error || tagText.error}`.replace(/^Render Error: /, '')}
+                  </em>
+                ) : dataContainsSecrets && !showSecretsInPreview ? (
+                  <span className="italic text-text-subtle">
+                    ------ sensitive values hidden ------
+                  </span>
+                ) : tooLarge ? (
+                  'too large to preview'
+                ) : (
+                  rendered.data || <>&nbsp;</>
+                )}
+              </InlineCode>
+              <div className="absolute right-0.5 top-0 bottom-0 flex items-center">
                 <IconButton
                   size="xs"
                   icon="refresh"
@@ -243,7 +243,7 @@ function InitializedTemplateFunctionDialog({
                   }}
                 />
               </div>
-            </InlineCode>
+            </div>
           </div>
         ) : (
           <span />
@@ -263,22 +263,23 @@ function InitializedTemplateFunctionDialog({
   );
 }
 
-TemplateFunctionDialog.show = function (
+TemplateFunctionDialog.show = (
   fn: TemplateFunction,
   tagValue: string,
   startPos: number,
   view: EditorView,
-) {
+) => {
   const initialTokens = parseTemplate(tagValue);
   showDialog({
-    id: 'template-function-' + Math.random(), // Allow multiple at once
+    id: `template-function-${Math.random()}`, // Allow multiple at once
     size: 'md',
     className: 'h-[60rem]',
     noPadding: true,
     title: <InlineCode>{fn.name}(…)</InlineCode>,
     description: fn.description,
     render: ({ hide }) => {
-      const model = jotaiStore.get(activeWorkspaceAtom)!;
+      const model = jotaiStore.get(activeWorkspaceAtom);
+      if (model == null) return null;
       return (
         <TemplateFunctionDialog
           templateFunction={fn}

@@ -1,6 +1,6 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React, { lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useResolvedAppearance } from '../../hooks/useResolvedAppearance';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
@@ -127,7 +127,7 @@ export function SettingsTheme() {
               color={c}
               size="2xs"
               iconSize="xs"
-              icon={icons[i % icons.length]!}
+              icon={icons[i % icons.length] ?? 'info'}
               iconClassName="text"
               title={`${c}`}
             />
@@ -139,7 +139,7 @@ export function SettingsTheme() {
               variant="border"
               size="2xs"
               iconSize="xs"
-              icon={icons[i % icons.length]!}
+              icon={icons[i % icons.length] ?? 'info'}
               iconClassName="text"
               title={`${c}`}
             />

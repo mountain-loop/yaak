@@ -1,6 +1,6 @@
 import type { Context } from '@yaakapp/api';
-import type { AccessToken, AccessTokenRawResponse} from '../store';
-import  { getDataDirKey , getToken, storeToken } from '../store';
+import type { AccessToken, AccessTokenRawResponse } from '../store';
+import { getDataDirKey, getToken, storeToken } from '../store';
 import { isTokenExpired } from '../util';
 
 export async function getImplicit(
@@ -56,7 +56,7 @@ export async function getImplicit(
     );
   }
 
-  // eslint-disable-next-line no-async-promise-executor
+  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: none
   const newToken = await new Promise<AccessToken>(async (resolve, reject) => {
     let foundAccessToken = false;
     const authorizationUrlStr = authorizationUrl.toString();

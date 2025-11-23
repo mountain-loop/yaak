@@ -65,6 +65,6 @@ export function useFastMutation<TData = unknown, TError = unknown, TVariables = 
 ) {
   return useMemo(() => {
     return createFastMutation(defaultArgs);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: Force it!
   }, defaultArgs.mutationKey);
 }

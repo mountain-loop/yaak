@@ -21,7 +21,7 @@ export function useRefreshPlugins() {
     mutationKey: ['refresh_plugins'],
     mutationFn: async () => {
       await minPromiseMillis(
-        (async function () {
+        (async () => {
           await invokeCmd('cmd_reload_plugins');
           const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
           await changeModelStoreWorkspace(workspaceId); // Force refresh models

@@ -2,8 +2,8 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
-import { appInfo } from '../../lib/appInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
+import { appInfo } from '../../lib/appInfo';
 import { revealInFinderText } from '../../lib/reveal';
 import { CargoFeature } from '../CargoFeature';
 import { Checkbox } from '../core/Checkbox';
@@ -108,8 +108,10 @@ export function SettingsGeneral() {
           placeholder="0"
           labelPosition="left"
           defaultValue={`${workspace.settingRequestTimeout}`}
-          validate={(value) => parseInt(value) >= 0}
-          onChange={(v) => patchModel(workspace, { settingRequestTimeout: parseInt(v) || 0 })}
+          validate={(value) => Number.parseInt(value, 10) >= 0}
+          onChange={(v) =>
+            patchModel(workspace, { settingRequestTimeout: Number.parseInt(v, 10) || 0 })
+          }
           type="number"
         />
 

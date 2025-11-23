@@ -14,10 +14,10 @@ export function HttpResponseDurationTag({ response }: Props) {
     clearInterval(timeout.current);
     if (response.state === 'closed') return;
     timeout.current = setInterval(() => {
-      setFallbackElapsed(Date.now() - new Date(response.createdAt + 'Z').getTime());
+      setFallbackElapsed(Date.now() - new Date(`${response.createdAt}Z`).getTime());
     }, 100);
     return () => clearInterval(timeout.current);
-  }, [response.createdAt, response.elapsed, response.state]);
+  }, [response.createdAt, response.state]);
 
   const title = `HEADER: ${formatMillis(response.elapsedHeaders)}\nTOTAL: ${formatMillis(response.elapsed)}`;
 
@@ -33,12 +33,12 @@ export function HttpResponseDurationTag({ response }: Props) {
 function formatMillis(ms: number) {
   if (ms < 1000) {
     return `${ms} ms`;
-  } else if (ms < 60_000) {
+  }
+  if (ms < 60_000) {
     const seconds = (ms / 1000).toFixed(ms < 10_000 ? 1 : 0);
     return `${seconds} s`;
-  } else {
-    const minutes = Math.floor(ms / 60_000);
-    const seconds = Math.round((ms % 60_000) / 1000);
-    return `${minutes}m ${seconds}s`;
   }
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  return `${minutes}m ${seconds}s`;
 }

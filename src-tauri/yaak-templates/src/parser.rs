@@ -578,13 +578,13 @@ mod tests {
 
     #[test]
     fn var_prefixes() -> Result<()> {
-        let mut p = Parser::new("${[ -a ]}${[ 0a ]}");
+        let mut p = Parser::new("${[ -a ]}${[ $a ]}");
         assert_eq!(
             p.parse()?.tokens,
             vec![
                 Token::Raw {
                     // Shouldn't be parsed, because they're invalid
-                    text: "${[ -a ]}${[ 0a ]}".into()
+                    text: "${[ -a ]}${[ $a ]}".into()
                 },
                 Token::Eof
             ]

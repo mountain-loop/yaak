@@ -19,7 +19,7 @@ export function TreeDragOverlay<T extends { id: string }>({
   return (
     <DragOverlay dropAnimation={null}>
       <TreeItemList
-        treeId={treeId + '.dragging'}
+        treeId={`${treeId}.dragging`}
         nodes={selectableItems.filter((i) => draggingItems.includes(i.node.item.id))}
         getItemKey={getItemKey}
         ItemInner={ItemInner}

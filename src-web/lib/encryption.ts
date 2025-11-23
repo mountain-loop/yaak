@@ -25,11 +25,11 @@ export function analyzeTemplate(template: string): 'global_secured' | 'local_sec
 
   if (secureTags === 1 && totalTags === 1) {
     return 'global_secured';
-  } else if (insecureTags === 0) {
-    return 'local_secured';
-  } else {
-    return 'insecure';
   }
+  if (insecureTags === 0) {
+    return 'local_secured';
+  }
+  return 'insecure';
 }
 
 export async function convertTemplateToInsecure(template: string) {

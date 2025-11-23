@@ -3,10 +3,10 @@ import parseColor from 'parse-color';
 export class YaakColor {
   private readonly appearance: 'dark' | 'light' = 'light';
 
-  private hue: number = 0;
-  private saturation: number = 0;
-  private lightness: number = 0;
-  private alpha: number = 1;
+  private hue = 0;
+  private saturation = 0;
+  private lightness = 0;
+  private alpha = 1;
 
   constructor(cssColor: string, appearance: 'dark' | 'light' = 'light') {
     try {
@@ -30,11 +30,12 @@ export class YaakColor {
   }
 
   set(cssColor: string): YaakColor {
+    let fixedCssColor = cssColor;
     if (cssColor.startsWith('#') && cssColor.length === 9) {
       const [r, g, b, a] = hexToRgba(cssColor);
-      cssColor = `rgba(${r},${g},${b},${a})`;
+      fixedCssColor = `rgba(${r},${g},${b},${a})`;
     }
-    const { hsla } = parseColor(cssColor);
+    const { hsla } = parseColor(fixedCssColor);
     this.hue = hsla[0];
     this.saturation = hsla[1];
     this.lightness = hsla[2];
@@ -131,7 +132,7 @@ function rgbaToHex(r: number, g: number, b: number, a: number): string {
     const hex = Number(Math.round(n)).toString(16);
     return hex.length === 1 ? `0${hex}` : hex;
   };
-  return '#' + [toHex(r), toHex(g), toHex(b), toHex(a * 255)].join('').toUpperCase();
+  return `#${[toHex(r), toHex(g), toHex(b), toHex(a * 255)].join('').toUpperCase()}`;
 }
 
 function rgbaToHexNoAlpha(r: number, g: number, b: number): string {
@@ -139,7 +140,7 @@ function rgbaToHexNoAlpha(r: number, g: number, b: number): string {
     const hex = Number(Math.round(n)).toString(16);
     return hex.length === 1 ? `0${hex}` : hex;
   };
-  return '#' + [toHex(r), toHex(g), toHex(b)].join('').toUpperCase();
+  return `#${[toHex(r), toHex(g), toHex(b)].join('').toUpperCase()}`;
 }
 
 function hexToRgba(hex: string): [number, number, number, number] {

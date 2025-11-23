@@ -14,7 +14,6 @@ const featureMap: Record<Props['feature'], boolean> = {
 export function CargoFeature({ children, feature }: Props) {
   if (featureMap[feature]) {
     return <>{children}</>;
-  } else {
-    return null;
   }
+  return null;
 }

@@ -1,5 +1,5 @@
-import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 import fs from 'node:fs';
+import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 
 const UTF8 = 'utf8';
 const options = [
