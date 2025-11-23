@@ -69,9 +69,16 @@
       "entitlements": "macos/entitlements.plist",
       "frameworks": []
     },
-    "createUpdaterArtifacts": true,
     "windows": {
       "signCommand": "trusted-signing-cli -e https://eus.codesigning.azure.net/ -a Yaak -c yaakapp %1"
+    },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "./template.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "./template.desktop"
+      }
     }
   }
 }
