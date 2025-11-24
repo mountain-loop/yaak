@@ -32,7 +32,7 @@ import { EmptyStateText } from '../EmptyStateText';
 import { SelectFile } from '../SelectFile';
 
 export function SettingsPlugins() {
-  const [directory, setDirectory] = React.useState<string | null>(null);
+  const [directory, setDirectory] = useState<string | null>(null);
   const plugins = useAtomValue(pluginsAtom);
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
