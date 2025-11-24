@@ -1,5 +1,5 @@
 import classNames from 'classnames';
-import type React from 'react';
+import type { ReactNode } from 'react';
 import { Fragment } from 'react';
 import type { HotkeyAction } from '../../hooks/useHotKey';
 import { HotKey } from './HotKey';
@@ -7,7 +7,7 @@ import { HotKeyLabel } from './HotKeyLabel';
 
 interface Props {
   hotkeys: HotkeyAction[];
-  bottomSlot?: React.ReactNode;
+  bottomSlot?: ReactNode;
   className?: string;
 }
 

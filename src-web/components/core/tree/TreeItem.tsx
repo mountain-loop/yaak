@@ -3,8 +3,12 @@ import { useDndContext, useDndMonitor, useDraggable, useDroppable } from '@dnd-k
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
-import type React from 'react';
-import type { MouseEvent, PointerEvent } from 'react';
+import type {
+  MouseEvent,
+  PointerEvent,
+  FocusEvent as ReactFocusEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { computeSideForDragMove } from '../../../lib/dnd';
 import { jotaiStore } from '../../../lib/jotai';
@@ -148,14 +152,14 @@ function TreeItem_<T extends { id: string }>({
   }, []);
 
   const handleEditBlur = useCallback(
-    async function editBlur(e: React.FocusEvent<HTMLInputElement>) {
+    async function editBlur(e: ReactFocusEvent<HTMLInputElement>) {
       await handleSubmitNameEdit(e.currentTarget);
     },
     [handleSubmitNameEdit],
   );
 
   const handleEditKeyDown = useCallback(
-    async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    async (e: ReactKeyboardEvent<HTMLInputElement>) => {
       e.stopPropagation(); // Don't trigger other tree keys (like arrows)
       switch (e.key) {
         case 'Enter':
