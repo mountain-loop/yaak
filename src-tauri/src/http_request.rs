@@ -398,11 +398,16 @@ pub async fn send_http_request_with_context<R: Runtime>(
 
                             // Set a file path if it is not empty
                             if !file_path.is_empty() {
-                                let filename = PathBuf::from(file_path)
-                                    .file_name()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                                    .to_string();
+                                let user_filename = get_str(p, "filename").to_owned();
+                                let filename = if user_filename.is_empty() {
+                                    PathBuf::from(file_path)
+                                        .file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .to_string()
+                                } else {
+                                    user_filename
+                                };
                                 part = part.file_name(filename);
                             }
 

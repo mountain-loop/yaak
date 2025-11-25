@@ -82,22 +82,22 @@ export default function Settings({ hide }: Props) {
           }),
         )}
       >
-        <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-8 !py-4">
+        <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-6 !py-4">
           <SettingsGeneral />
         </TabContent>
-        <TabContent value={TAB_INTERFACE} className="overflow-y-auto h-full px-8 !py-4">
+        <TabContent value={TAB_INTERFACE} className="overflow-y-auto h-full px-6 !py-4">
           <SettingsInterface />
         </TabContent>
-        <TabContent value={TAB_THEME} className="overflow-y-auto h-full px-8 !py-4">
+        <TabContent value={TAB_THEME} className="overflow-y-auto h-full px-6 !py-4">
           <SettingsTheme />
         </TabContent>
-        <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1 px-8 !py-4">
+        <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1 px-6 !py-4">
           <SettingsPlugins />
         </TabContent>
-        <TabContent value={TAB_PROXY} className="overflow-y-auto h-full px-8 !py-4">
+        <TabContent value={TAB_PROXY} className="overflow-y-auto h-full px-6 !py-4">
           <SettingsProxy />
         </TabContent>
-        <TabContent value={TAB_LICENSE} className="overflow-y-auto h-full px-8 !py-4">
+        <TabContent value={TAB_LICENSE} className="overflow-y-auto h-full px-6 !py-4">
           <SettingsLicense />
         </TabContent>
       </Tabs>

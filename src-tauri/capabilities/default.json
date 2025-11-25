@@ -10,6 +10,7 @@
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:path:allow-resolve-directory",
+    "core:path:allow-basename",
     "os:allow-os-type",
     "clipboard-manager:allow-clear",
     "clipboard-manager:allow-write-text",

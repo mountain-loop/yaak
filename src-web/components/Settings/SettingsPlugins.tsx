@@ -242,7 +242,7 @@ function PluginSearch() {
           defaultValue={query}
         />
       </HStack>
-      <div className="w-full h-full overflow-y-auto">
+      <div className="w-full h-full">
         {results.data == null ? (
           <EmptyStateText>
             <LoadingIcon size="xl" className="text-text-subtlest" />
@@ -250,7 +250,7 @@ function PluginSearch() {
         ) : (results.data.plugins ?? []).length === 0 ? (
           <EmptyStateText>No plugins found</EmptyStateText>
         ) : (
-          <Table>
+          <Table scrollable>
             <TableHead>
               <TableRow>
                 <TableHeaderCell>Name</TableHeaderCell>
@@ -282,7 +282,7 @@ function InstalledPlugins() {
       </EmptyStateText>
     </div>
   ) : (
-    <Table>
+    <Table scrollable>
       <TableHead>
         <TableRow>
           <TableHeaderCell>Name</TableHeaderCell>

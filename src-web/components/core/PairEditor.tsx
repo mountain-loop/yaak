@@ -9,6 +9,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { basename } from '@tauri-apps/api/path';
 import classNames from 'classnames';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WrappedEnvironmentVariable } from '../../hooks/useEnvironmentVariables';
@@ -70,6 +71,7 @@ export type Pair = {
   name: string;
   value: string;
   contentType?: string;
+  filename?: string;
   isFile?: boolean;
   readOnlyName?: boolean;
 };
@@ -492,6 +494,11 @@ export function PairEditorRow({
     [onChange, pair],
   );
 
+  const handleChangeValueFilename = useMemo(
+    () => (filename: string) => onChange?.({ ...pair, filename }),
+    [onChange, pair],
+  );
+
   const handleEditMultiLineValue = useCallback(
     () =>
       showDialog({
@@ -614,6 +621,7 @@ export function PairEditorRow({
               inline
               size="xs"
               filePath={pair.value}
+              nameOverride={pair.filename || null}
               onChange={handleChangeValueFile}
             />
           ) : pair.value.includes('\n') ? (
@@ -659,6 +667,7 @@ export function PairEditorRow({
           onChangeFile={handleChangeValueFile}
           onChangeText={handleChangeValueText}
           onChangeContentType={handleChangeValueContentType}
+          onChangeFilename={handleChangeValueFilename}
           onDelete={handleDelete}
           editMultiLine={handleEditMultiLineValue}
         />
@@ -687,6 +696,7 @@ function FileActionsDropdown({
   onChangeFile,
   onChangeText,
   onChangeContentType,
+  onChangeFilename,
   onDelete,
   editMultiLine,
 }: {
@@ -694,6 +704,7 @@ function FileActionsDropdown({
   onChangeFile: ({ filePath }: { filePath: string | null }) => void;
   onChangeText: (text: string) => void;
   onChangeContentType: (contentType: string) => void;
+  onChangeFilename: (filename: string) => void;
   onDelete: () => void;
   editMultiLine: () => void;
 }) {
@@ -732,6 +743,26 @@ function FileActionsDropdown({
         },
       },
       {
+        label: 'Set File Name',
+        leftSlot: <Icon icon="file_code" />,
+        onSelect: async () => {
+          console.log('PAIR', pair);
+          const defaultFilename = await basename(pair.value ?? '');
+          const filename = await showPrompt({
+            id: 'filename',
+            title: 'Override Filename',
+            label: 'Filename',
+            required: false,
+            placeholder: defaultFilename ?? 'myfile.png',
+            defaultValue: pair.filename,
+            confirmText: 'Set',
+            description: 'Leave blank to use the name of the selected file',
+          });
+          if (filename == null) return;
+          onChangeFilename(filename);
+        },
+      },
+      {
         label: 'Unset File',
         leftSlot: <Icon icon="x" />,
         hidden: pair.isFile,
@@ -747,7 +778,17 @@ function FileActionsDropdown({
         color: 'danger',
       },
     ],
-    [editMultiLine, onChangeContentType, onChangeFile, onDelete, pair.contentType, pair.isFile],
+    [
+      editMultiLine,
+      onChangeContentType,
+      onChangeFile,
+      onDelete,
+      pair.contentType,
+      pair.isFile,
+      onChangeFilename,
+      pair.filename,
+      pair,
+    ],
   );
 
   return (

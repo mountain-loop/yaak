@@ -107,6 +107,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           id: 'git-history',
           size: 'md',
           title: 'Commit History',
+          noPadding: true,
           render: () => <HistoryDialog log={log.data ?? []} />,
         });
       },

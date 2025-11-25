@@ -14,6 +14,7 @@ import { HStack } from './core/Stacks';
 type Props = Omit<ButtonProps, 'type'> & {
   onChange: (value: { filePath: string | null; contentType: string | null }) => void;
   filePath: string | null;
+  nameOverride?: string | null;
   directory?: boolean;
   inline?: boolean;
   noun?: string;
@@ -31,6 +32,7 @@ export function SelectFile({
   className,
   directory,
   noun,
+  nameOverride,
   size = 'sm',
   label,
   help,
@@ -88,6 +90,8 @@ export function SelectFile({
     };
   }, [isHovering, onChange]);
 
+  const filePathWithNameOverride = nameOverride ? `${filePath} (${nameOverride})` : filePath;
+
   return (
     <div ref={ref} className="w-full">
       {label && (
@@ -110,7 +114,7 @@ export function SelectFile({
           {...props}
         >
           {rtlEscapeChar}
-          {inline ? filePath || selectOrChange : selectOrChange}
+          {inline ? filePathWithNameOverride || selectOrChange : selectOrChange}
         </Button>
 
         {!inline && (

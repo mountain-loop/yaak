@@ -1,20 +1,50 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 
-export function Table({ children }: { children: ReactNode }) {
+export function Table({
+  children,
+  className,
+  scrollable,
+}: {
+  children: ReactNode;
+  className?: string;
+  scrollable?: boolean;
+}) {
   return (
-    <table className="w-full text-sm mb-auto min-w-full max-w-full divide-y divide-surface-highlight">
-      {children}
-    </table>
+    <div className={classNames('w-full', scrollable && 'h-full overflow-y-auto')}>
+      <table
+        className={classNames(
+          className,
+          'w-full text-sm mb-auto min-w-full max-w-full',
+          'border-separate border-spacing-0',
+          scrollable && '[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10',
+        )}
+      >
+        {children}
+      </table>
+    </div>
   );
 }
 
 export function TableBody({ children }: { children: ReactNode }) {
-  return <tbody className="divide-y divide-surface-highlight">{children}</tbody>;
+  return (
+    <tbody className="[&>tr:not(:last-child)>td]:border-b [&>tr:not(:last-child)>td]:border-b-surface-highlight">
+      {children}
+    </tbody>
+  );
 }
 
-export function TableHead({ children }: { children: ReactNode }) {
-  return <thead>{children}</thead>;
+export function TableHead({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <thead
+      className={classNames(
+        className,
+        'bg-surface [&_th]:border-b [&_th]:border-b-surface-highlight',
+      )}
+    >
+      {children}
+    </thead>
+  );
 }
 
 export function TableRow({ children }: { children: ReactNode }) {
@@ -42,9 +72,7 @@ export function TruncatedWideTableCell({
   className?: string;
 }) {
   return (
-    <TableCell className={classNames(className, 'w-full relative')}>
-      <div className="absolute inset-0 py-2 truncate">{children}</div>
-    </TableCell>
+    <TableCell className={classNames(className, 'truncate max-w-0 w-full')}>{children}</TableCell>
   );
 }
 

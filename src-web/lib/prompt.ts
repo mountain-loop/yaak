@@ -18,11 +18,13 @@ export async function showPrompt({
   description,
   cancelText,
   confirmText,
+  required,
   ...props
 }: PromptArgs) {
   const inputs: FormInput[] = [
     {
       ...props,
+      optional: !required,
       type: 'text',
       name: 'value',
     },
