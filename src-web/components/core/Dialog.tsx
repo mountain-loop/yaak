@@ -69,11 +69,7 @@ export function Dialog({
           animate={{ top: 0, scale: 1 }}
           className={classNames(
             className,
-            'grid',
-            title != null && description != null && 'grid-rows-[auto_minmax(0,1fr)_minmax_(0,1fr)]',
-            title == null && description != null && 'grid-rows-[auto_minmax(0,1fr)]',
-            title != null && description == null && 'grid-rows-[auto_minmax(0,1fr)]',
-            title == null && description == null && 'grid-rows-[minmax(0,1fr)]',
+            'grid grid-rows-[auto_auto_minmax(0,1fr)]',
             'grid-cols-1', // must be here for inline code blocks to correctly break words
             'relative bg-surface pointer-events-auto',
             'rounded-lg',
@@ -87,16 +83,20 @@ export function Dialog({
             size === 'dynamic' && 'min-w-[20rem] max-w-[100vw]',
           )}
         >
-          {title && (
+          {title ? (
             <Heading className="px-6 mt-4 mb-2" level={1} id={titleId}>
               {title}
             </Heading>
+          ) : (
+            <span />
           )}
 
-          {description && (
+          {description ? (
             <div className="min-h-0 px-6 text-text-subtle mb-3" id={descriptionId}>
               {description}
             </div>
+          ) : (
+            <span />
           )}
 
           <div

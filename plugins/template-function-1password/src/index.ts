@@ -33,9 +33,10 @@ export const plugin: PluginDefinition = {
           name: 'token',
           type: 'text',
           label: '1Password Service Account Token',
-          description: '',
+          description:
+            'Token can be generated from the 1Password website by visiting Developer > Service Accounts',
           // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
-          defaultValue: '${[ONEPASSWORD_TOKEN]}',
+          defaultValue: '${[1PASSWORD_TOKEN]}',
           password: true,
         },
         {

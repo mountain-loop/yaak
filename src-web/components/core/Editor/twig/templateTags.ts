@@ -106,20 +106,19 @@ function templateTags(
             };
           }
 
-          let invalid = false;
           if (option.type === 'function') {
             const tokens = parseTemplate(rawTag);
             const values = collectArgumentValues(tokens, option);
             for (const arg of option.args) {
               if (!('optional' in arg)) continue;
               if (!arg.optional && values[arg.name] == null) {
-                invalid = true;
+                option.invalid = true;
                 break;
               }
             }
           }
 
-          const widget = new TemplateTagWidget({ ...option, invalid }, rawTag, node.from);
+          const widget = new TemplateTagWidget(option, rawTag, node.from);
           const deco = Decoration.replace({ widget, inclusive: true });
           widgets.push(deco.range(node.from, node.to));
         }

@@ -1,6 +1,7 @@
 import { createWorkspaceModel, type Folder, modelTypeLabel } from '@yaakapp-internal/models';
 import { applySync, calculateSync } from '@yaakapp-internal/sync';
 import { Banner } from '../components/core/Banner';
+import { Button } from '../components/core/Button';
 import { InlineCode } from '../components/core/InlineCode';
 import {
   Table,
@@ -13,7 +14,7 @@ import {
 } from '../components/core/Table';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
-import { showConfirm } from '../lib/confirm';
+import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { pluralizeCount } from '../lib/pluralize';
 import { showPrompt } from '../lib/prompt';
@@ -78,81 +79,92 @@ export const syncWorkspace = createFastMutation<
 
     console.log('Directory changes detected', { dbOps, ops });
 
-    const confirmed = force
-      ? true
-      : await showConfirm({
-          id: 'commit-sync',
-          title: 'Changes Detected',
-          size: 'md',
-          confirmText: 'Apply Changes',
-          color: isDeletingWorkspace ? 'danger' : 'primary',
-          description: (
-            <div className="h-full grid grid-rows-[auto_auto_minmax(0,1fr)] gap-3">
-              {isDeletingWorkspace ? (
-                <Banner color="danger">
-                  🚨 <strong>Changes contain a workspace deletion!</strong>
-                </Banner>
-              ) : (
-                <span />
-              )}
-              <p>
-                {pluralizeCount('file', dbOps.length)} in the directory{' '}
-                {dbOps.length === 1 ? 'has' : 'have'} changed. Do you want to update your workspace?
-              </p>
-              <Table scrollable>
-                <TableHead>
-                  <TableRow>
-                    <TableHeaderCell>Type</TableHeaderCell>
-                    <TableHeaderCell>Name</TableHeaderCell>
-                    <TableHeaderCell>Operation</TableHeaderCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {dbOps.map((op, i) => {
-                    let name: string;
-                    let label: string;
-                    let color: string;
-                    let model: string;
-
-                    if (op.type === 'dbCreate') {
-                      label = 'create';
-                      name = resolvedModelNameWithFolders(op.fs.model);
-                      color = 'text-success';
-                      model = modelTypeLabel(op.fs.model);
-                    } else if (op.type === 'dbUpdate') {
-                      label = 'update';
-                      name = resolvedModelNameWithFolders(op.fs.model);
-                      color = 'text-info';
-                      model = modelTypeLabel(op.fs.model);
-                    } else if (op.type === 'dbDelete') {
-                      label = 'delete';
-                      name = resolvedModelNameWithFolders(op.model);
-                      color = 'text-danger';
-                      model = modelTypeLabel(op.model);
-                    } else {
-                      return null;
-                    }
-
-                    return (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: none
-                      <TableRow key={i}>
-                        <TableCell>{model}</TableCell>
-                        <TruncatedWideTableCell className="text-text">
-                          {name}
-                        </TruncatedWideTableCell>
-                        <TableCell className="text-right">
-                          <InlineCode className={color}>{label}</InlineCode>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          ),
-        });
-    if (confirmed) {
+    if (force) {
       await applySync(workspaceId, syncDir, ops);
+      return;
     }
+
+    showDialog({
+      id: 'commit-sync',
+      title: 'Changes Detected',
+      size: 'md',
+      render: ({ hide }) => (
+        <form
+          className="h-full grid grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await applySync(workspaceId, syncDir, ops);
+            hide();
+          }}
+        >
+          {isDeletingWorkspace ? (
+            <Banner color="danger">
+              🚨 <strong>Changes contain a workspace deletion!</strong>
+            </Banner>
+          ) : (
+            <span />
+          )}
+          <p>
+            {pluralizeCount('file', dbOps.length)} in the directory{' '}
+            {dbOps.length === 1 ? 'has' : 'have'} changed. Do you want to update your workspace?
+          </p>
+          <Table scrollable className="my-4">
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>Type</TableHeaderCell>
+                <TableHeaderCell>Name</TableHeaderCell>
+                <TableHeaderCell>Operation</TableHeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {dbOps.map((op, i) => {
+                let name: string;
+                let label: string;
+                let color: string;
+                let model: string;
+
+                if (op.type === 'dbCreate') {
+                  label = 'create';
+                  name = resolvedModelNameWithFolders(op.fs.model);
+                  color = 'text-success';
+                  model = modelTypeLabel(op.fs.model);
+                } else if (op.type === 'dbUpdate') {
+                  label = 'update';
+                  name = resolvedModelNameWithFolders(op.fs.model);
+                  color = 'text-info';
+                  model = modelTypeLabel(op.fs.model);
+                } else if (op.type === 'dbDelete') {
+                  label = 'delete';
+                  name = resolvedModelNameWithFolders(op.model);
+                  color = 'text-danger';
+                  model = modelTypeLabel(op.model);
+                } else {
+                  return null;
+                }
+
+                return (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: none
+                  <TableRow key={i}>
+                    <TableCell className="text-text-subtle">{model}</TableCell>
+                    <TruncatedWideTableCell>{name}</TruncatedWideTableCell>
+                    <TableCell className="text-right">
+                      <InlineCode className={color}>{label}</InlineCode>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          <footer className="py-3 flex flex-row-reverse items-center gap-3">
+            <Button type="submit" color="primary">
+              Apply Changes
+            </Button>
+            <Button onClick={hide} color="secondary">
+              Cancel
+            </Button>
+          </footer>
+        </form>
+      ),
+    });
   },
 });
