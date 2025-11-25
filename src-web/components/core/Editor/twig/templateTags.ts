@@ -92,11 +92,12 @@ function templateTags(
           let option = options.find(
             (o) => o.name === name || (o.type === 'function' && o.aliases?.includes(name)),
           );
+
           if (option == null) {
             const from = node.from; // Cache here so the reference doesn't change
             option = {
-              invalid: true,
               type: 'variable',
+              invalid: true,
               name: inner,
               value: null,
               label: inner,
@@ -112,7 +113,8 @@ function templateTags(
             for (const arg of option.args) {
               if (!('optional' in arg)) continue;
               if (!arg.optional && values[arg.name] == null) {
-                option.invalid = true;
+                // Clone so we don't mutate the original
+                option = { ...option, invalid: true };
                 break;
               }
             }

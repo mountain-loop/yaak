@@ -190,7 +190,7 @@ function InitializedTemplateFunctionDialog({
           />
         )}
       </div>
-      <div className="px-6 border-t border-t-border py-3 bg-surface-highlight w-full flex flex-col gap-4">
+      <div className="px-6 border-t border-t-border pt-3 pb-6 bg-surface-highlight w-full flex flex-col gap-4">
         {previewType !== 'none' ? (
           <div className="w-full grid grid-cols-1 grid-rows-[auto_auto]">
             <HStack space={0.5}>
