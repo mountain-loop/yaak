@@ -15,6 +15,8 @@ export function applyFormInputDefaults(
   for (const input of inputs) {
     if ('defaultValue' in input && values[input.name] === undefined) {
       newValues[input.name] = input.defaultValue;
+    } else if (input.type === 'checkbox' && values[input.name] === undefined) {
+      newValues[input.name] = false;
     }
     // Recurse down to all child inputs
     if ('inputs' in input) {

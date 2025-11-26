@@ -17,7 +17,7 @@ export const plugin: PluginDefinition = {
       description: 'Prompt the user for input when sending a request',
       previewType: 'click',
       args: [
-        { type: 'text', name: 'label', label: 'Label' },
+        { type: 'text', name: 'label', label: 'Label', optional: true },
         {
           type: 'select',
           name: 'store',
@@ -138,6 +138,9 @@ export const plugin: PluginDefinition = {
 };
 
 function buildKey(args: CallTemplateFunctionArgs) {
+  if (!args.values.key && !args.values.label) {
+    throw new Error('Key or Label is required when storing values');
+  }
   return [args.values.namespace, args.values.key || args.values.label]
     .filter((v) => !!v)
     .map((v) => slugify(String(v), { lower: true, trim: true }))
