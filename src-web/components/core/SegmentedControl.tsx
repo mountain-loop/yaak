@@ -81,6 +81,7 @@ export function SegmentedControl<T extends string>({
             return (
               <Button
                 key={o.label}
+                aria-checked={isActive}
                 size={size}
                 variant="solid"
                 color={isActive ? 'secondary' : undefined}
@@ -99,6 +100,7 @@ export function SegmentedControl<T extends string>({
             return (
               <IconButton
                 key={o.label}
+                aria-checked={isActive}
                 size={size}
                 variant="solid"
                 color={isActive ? 'secondary' : undefined}

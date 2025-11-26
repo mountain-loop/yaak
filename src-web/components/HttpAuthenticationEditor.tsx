@@ -1,4 +1,10 @@
-import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest, Workspace } from '@yaakapp-internal/models';
+import type {
+  Folder,
+  GrpcRequest,
+  HttpRequest,
+  WebsocketRequest,
+  Workspace,
+} from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import { useCallback } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
@@ -121,7 +127,6 @@ export function HttpAuthenticationEditor({ model }: Props) {
               } else {
                 disabled = '';
               }
-              console.log('SETTING DISABLED', disabled);
               await handleChange({ ...model.authentication, disabled });
             }}
           />
@@ -178,7 +183,6 @@ function AuthenticationDisabledInput({
     template: value,
     enabled: true,
     purpose: 'preview',
-    ignoreError: true,
     refreshKey: value,
   });
 
