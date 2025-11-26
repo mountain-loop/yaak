@@ -99,7 +99,11 @@ const stateFields = { history: historyField, folds: foldState };
 const emptyVariables: WrappedEnvironmentVariable[] = [];
 const emptyExtension: Extension = [];
 
-export function Editor({
+export function Editor(props: EditorProps) {
+  return <EditorInner key={props.stateKey} {...props} />;
+}
+
+function EditorInner({
   actions,
   autoFocus,
   autoSelect,
