@@ -254,7 +254,7 @@ function Sidebar({ className }: { className?: string }) {
             for (const n of node.children ?? []) {
               if (n.item.model !== 'folder') continue;
               newCollapsed[n.item.id] = true;
-              newCollapsed = next(n, collapsed);
+              newCollapsed = next(n, newCollapsed);
             }
             return newCollapsed;
           };
