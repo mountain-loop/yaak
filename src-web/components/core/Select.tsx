@@ -90,6 +90,7 @@ export function Select<T extends string>({
             onBlur={() => setFocused(false)}
             className={classNames(
               'pr-7 w-full outline-none bg-transparent disabled:opacity-disabled',
+              'leading-[1]', // Center the text better vertically
             )}
             disabled={disabled}
           >

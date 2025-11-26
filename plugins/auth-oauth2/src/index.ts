@@ -131,7 +131,6 @@ export const plugin: PluginDefinition = {
         type: 'select',
         name: 'grantType',
         label: 'Grant Type',
-        hideLabel: true,
         defaultValue: defaultGrantType,
         options: grantTypes,
       },
