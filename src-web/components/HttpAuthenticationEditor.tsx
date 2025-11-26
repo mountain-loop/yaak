@@ -1,24 +1,19 @@
-import type {
-  Folder,
-  GrpcRequest,
-  HttpRequest,
-  WebsocketRequest,
-  Workspace,
-} from '@yaakapp-internal/models';
+import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest, Workspace } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import { useCallback } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
 import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
 import { useInheritedAuthentication } from '../hooks/useInheritedAuthentication';
+import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { resolvedModelName } from '../lib/resolvedModelName';
-import { Checkbox } from './core/Checkbox';
-import type { DropdownItem } from './core/Dropdown';
-import { Dropdown } from './core/Dropdown';
+import { Dropdown, type DropdownItem } from './core/Dropdown';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
+import { Input, type InputProps } from './core/Input';
 import { Link } from './core/Link';
+import { SegmentedControl } from './core/SegmentedControl';
 import { HStack } from './core/Stacks';
 import { DynamicForm } from './DynamicForm';
 import { EmptyStateText } from './EmptyStateText';
@@ -36,7 +31,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
   );
 
   const handleChange = useCallback(
-    async (authentication: Record<string, boolean>) => await patchModel(model, { authentication }),
+    async (authentication: Record<string, unknown>) => await patchModel(model, { authentication }),
     [model],
   );
 
@@ -98,30 +93,65 @@ export function HttpAuthenticationEditor({ model }: Props) {
   }
 
   return (
-    <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
-      <HStack space={2} className="mb-2" alignItems="center">
-        <Checkbox
-          className="w-full"
-          checked={!model.authentication.disabled}
-          onChange={(disabled) => handleChange({ ...model.authentication, disabled: !disabled })}
-          title="Enabled"
-        />
-        {authConfig.data?.actions && authConfig.data.actions.length > 0 && (
-          <Dropdown
-            items={authConfig.data.actions.map(
-              (a): DropdownItem => ({
-                label: a.label,
-                leftSlot: a.icon ? <Icon icon={a.icon} /> : null,
-                onSelect: () => a.call(model),
-              }),
-            )}
-          >
-            <IconButton title="Authentication Actions" icon="settings" size="xs" />
-          </Dropdown>
+    <div className="h-full grid grid-rows-[auto_minmax(0,1fr)] gap-y-3">
+      <div>
+        <HStack space={2} alignItems="start">
+          <SegmentedControl
+            label="Enabled"
+            hideLabel
+            name="enabled"
+            value={
+              model.authentication.disabled === false || model.authentication.disabled == null
+                ? '__TRUE__'
+                : model.authentication.disabled === true
+                  ? '__FALSE__'
+                  : '__DYNAMIC__'
+            }
+            options={[
+              { label: 'Enabled', value: '__TRUE__' },
+              { label: 'Disabled', value: '__FALSE__' },
+              { label: 'Enabled when...', value: '__DYNAMIC__' },
+            ]}
+            onChange={async (enabled) => {
+              let disabled: boolean | string;
+              if (enabled === '__TRUE__') {
+                disabled = false;
+              } else if (enabled === '__FALSE__') {
+                disabled = true;
+              } else {
+                disabled = '';
+              }
+              console.log('SETTING DISABLED', disabled);
+              await handleChange({ ...model.authentication, disabled });
+            }}
+          />
+          {authConfig.data?.actions && authConfig.data.actions.length > 0 && (
+            <Dropdown
+              items={authConfig.data.actions.map(
+                (a): DropdownItem => ({
+                  label: a.label,
+                  leftSlot: a.icon ? <Icon icon={a.icon} /> : null,
+                  onSelect: () => a.call(model),
+                }),
+              )}
+            >
+              <IconButton title="Authentication Actions" icon="settings" size="xs" />
+            </Dropdown>
+          )}
+        </HStack>
+        {typeof model.authentication.disabled === 'string' && (
+          <div className="mt-3">
+            <AuthenticationDisabledInput
+              className="w-full"
+              stateKey={`auth.${model.id}.dynamic`}
+              value={model.authentication.disabled}
+              onChange={(v) => handleChange({ ...model.authentication, disabled: v })}
+            />
+          </div>
         )}
-      </HStack>
+      </div>
       <DynamicForm
-        disabled={model.authentication.disabled}
+        disabled={model.authentication.disabled === true}
         autocompleteVariables
         autocompleteFunctions
         stateKey={`auth.${model.id}.${model.authenticationType}`}
@@ -130,5 +160,47 @@ export function HttpAuthenticationEditor({ model }: Props) {
         onChange={handleChange}
       />
     </div>
+  );
+}
+
+function AuthenticationDisabledInput({
+  value,
+  onChange,
+  stateKey,
+  className,
+}: {
+  value: string;
+  onChange: InputProps['onChange'];
+  stateKey: string;
+  className?: string;
+}) {
+  const rendered = useRenderTemplate({
+    template: value,
+    enabled: true,
+    purpose: 'preview',
+    ignoreError: true,
+    refreshKey: value,
+  });
+
+  return (
+    <Input
+      size="sm"
+      className={className}
+      label="Dynamic Disabled"
+      hideLabel
+      defaultValue={value}
+      placeholder="Enabled when this renders a non-empty value"
+      rightSlot={
+        <div className="px-1 flex items-center">
+          <div className="rounded-full bg-surface-highlight text-xs px-1.5 py-0.5 text-text-subtle whitespace-nowrap">
+            {rendered.isPending ? 'loading' : rendered.data ? 'enabled' : 'disabled'}
+          </div>
+        </div>
+      }
+      autocompleteFunctions
+      autocompleteVariables
+      onChange={onChange}
+      stateKey={stateKey}
+    />
   );
 }

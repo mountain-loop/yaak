@@ -132,12 +132,13 @@ function InitializedTemplateFunctionDialog({
 
   const debouncedTagText = useDebouncedValue(tagText.data ?? '', 400);
   const [renderKey, setRenderKey] = useState<string | null>(null);
-  const rendered = useRenderTemplate(
-    debouncedTagText,
-    previewType !== 'none',
-    previewType === 'click' ? 'send' : 'preview',
-    previewType === 'live' ? renderKey + debouncedTagText : renderKey,
-  );
+  const rendered = useRenderTemplate({
+    template: debouncedTagText,
+    enabled: previewType !== 'none',
+    purpose: previewType === 'click' ? 'send' : 'preview',
+    refreshKey: previewType === 'live' ? renderKey + debouncedTagText : renderKey,
+    ignoreError: false,
+  });
 
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
   // biome-ignore lint/correctness/useExhaustiveDependencies: Only update this on rendered data change to keep secrets hidden on input change

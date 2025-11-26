@@ -155,7 +155,6 @@ impl EncryptionManager {
         let raw_key = mkey
             .decrypt(decoded_key.as_slice())
             .map_err(|e| WorkspaceKeyDecryptionError(e.to_string()))?;
-        info!("Got existing workspace key for {workspace_id}");
         let wkey = WorkspaceKey::from_raw_key(raw_key.as_slice());
 
         Ok(wkey)
