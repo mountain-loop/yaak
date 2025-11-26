@@ -68,6 +68,7 @@ export function MarkdownEditor({
         <SegmentedControl
           name={name}
           label="View mode"
+          hideLabel
           onChange={setViewMode}
           value={viewMode}
           className="opacity-0 group-focus-within/markdown:opacity-100 group-hover/markdown:opacity-100"

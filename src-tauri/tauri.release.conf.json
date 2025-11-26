@@ -41,13 +41,6 @@
       "vendored/node/yaaknode",
       "vendored/protoc/yaakprotoc"
     ],
-    "icon": [
-      "icons/release/32x32.png",
-      "icons/release/128x128.png",
-      "icons/release/128x128@2x.png",
-      "icons/release/icon.icns",
-      "icons/release/icon.ico"
-    ],
     "longDescription": "A cross-platform desktop app for interacting with REST, GraphQL, and gRPC",
     "resources": [
       "static",
