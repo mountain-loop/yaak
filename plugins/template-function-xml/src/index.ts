@@ -11,6 +11,7 @@ export const plugin: PluginDefinition = {
     {
       name: 'xml.xpath',
       description: 'Filter XML-formatted text using XPath syntax',
+      previewArgs: ['query'],
       args: [
         {
           type: 'text',

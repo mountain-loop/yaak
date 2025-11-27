@@ -22,6 +22,7 @@ pub(crate) fn template_function_secure() -> TemplateFunction {
         preview_type: Some(TemplateFunctionPreviewType::None),
         description: Some("Securely store encrypted text".to_string()),
         aliases: None,
+        preview_args: None,
         args: vec![TemplateFunctionArg::FormInput(FormInput::Text(
             FormInputText {
                 multi_line: Some(true),
@@ -68,6 +69,7 @@ pub(crate) fn template_function_keyring() -> TemplateFunction {
         preview_type: Some(TemplateFunctionPreviewType::Live),
         description: Some(meta.description),
         aliases: Some(vec!["keyring".to_string()]),
+        preview_args: Some(vec!["service".to_string(), "account".to_string()]),
         args: vec![
             TemplateFunctionArg::FormInput(FormInput::Banner(FormInputBanner {
                 inputs: Some(vec![FormInput::Markdown(FormInputMarkdown {

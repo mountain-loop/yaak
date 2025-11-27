@@ -4,7 +4,7 @@ const path = require('node:path');
 const { rmSync, mkdirSync, cpSync, existsSync, statSync, chmodSync } = require('node:fs');
 const { execSync } = require('node:child_process');
 
-const VERSION = '28.3';
+const VERSION = '33.1';
 
 // `${process.platform}_${process.arch}`
 const MAC_ARM = 'darwin_arm64';
@@ -81,7 +81,7 @@ mkdirSync(dstDir, { recursive: true });
 
 function tryExecSync(cmd) {
   try {
-    return execSync(cmd, { stdio: 'inherit' }).toString('utf-8');
+    return execSync(cmd, { stdio: 'pipe' }).toString('utf-8');
   } catch (_) {
     return '';
   }

@@ -450,7 +450,11 @@ export type TemplateFunction = { name: string, previewType?: TemplateFunctionPre
  * Also support alternative names. This is useful for not breaking existing
  * tags when changing the `name` property
  */
-aliases?: Array<string>, args: Array<TemplateFunctionArg>, };
+aliases?: Array<string>, args: Array<TemplateFunctionArg>, 
+/**
+ * A list of arg names to show in the inline preview. If not provided, none will be shown (for privacy reasons).
+ */
+previewArgs?: Array<string>, };
 
 /**
  * Similar to FormInput, but contains

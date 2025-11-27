@@ -758,6 +758,10 @@ pub struct TemplateFunction {
     #[ts(optional)]
     pub aliases: Option<Vec<String>>,
     pub args: Vec<TemplateFunctionArg>,
+
+    /// A list of arg names to show in the inline preview. If not provided, none will be shown (for privacy reasons).
+    #[ts(optional)]
+    pub preview_args: Option<Vec<String>>,
 }
 
 /// Similar to FormInput, but contains

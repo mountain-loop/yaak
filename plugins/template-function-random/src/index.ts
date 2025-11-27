@@ -5,6 +5,7 @@ export const plugin: PluginDefinition = {
     {
       name: 'random.range',
       description: 'Generate a random number between two values',
+      previewArgs: ['min', 'max'],
       args: [
         {
           type: 'text',

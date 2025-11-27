@@ -11,6 +11,7 @@ export const plugin: PluginDefinition = {
     {
       name: 'json.jsonpath',
       description: 'Filter JSON-formatted text using JSONPath syntax',
+      previewArgs: ['query'],
       args: [
         {
           type: 'editor',

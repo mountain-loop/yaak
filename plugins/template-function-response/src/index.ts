@@ -62,6 +62,7 @@ export const plugin: PluginDefinition = {
     {
       name: 'response.header',
       description: 'Read the value of a response header, by name',
+      previewArgs: ['header'],
       args: [
         requestArg,
         behaviorArgs,
@@ -108,6 +109,7 @@ export const plugin: PluginDefinition = {
       name: 'response.body.path',
       description: 'Access a field of the response body using JsonPath or XPath',
       aliases: ['response'],
+      previewArgs: ['path'],
       args: [
         requestArg,
         behaviorArgs,
@@ -155,7 +157,9 @@ export const plugin: PluginDefinition = {
             }
 
             const contentType =
-              resp?.headers.find((h) => h.name.toLowerCase() === 'content-type')?.value ?? '';
+              resp?.headers
+                .find((h) => h.name.toLowerCase() === 'content-type')
+                ?.value.toLowerCase() ?? '';
             if (contentType.includes('xml') || contentType?.includes('html')) {
               return {
                 label: 'XPath',
@@ -187,9 +191,10 @@ export const plugin: PluginDefinition = {
           return null;
         }
 
+        const BOM = '\ufeff';
         let body: string;
         try {
-          body = readFileSync(response.bodyPath, 'utf-8');
+          body = readFileSync(response.bodyPath, 'utf-8').replace(BOM, '');
         } catch {
           return null;
         }

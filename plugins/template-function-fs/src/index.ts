@@ -16,6 +16,7 @@ export const plugin: PluginDefinition = {
     {
       name: 'fs.readFile',
       description: 'Read the contents of a file as utf-8',
+      previewArgs: ['encoding'],
       args: [
         { title: 'Select File', type: 'file', name: 'path', label: 'File' },
         {
@@ -26,14 +27,21 @@ export const plugin: PluginDefinition = {
           description: "Specifies how the file's bytes are decoded into text when read",
           options,
         },
+        {
+          type: 'checkbox',
+          name: 'trim',
+          label: 'Trim Whitespace',
+          description: 'Remove leading and trailing whitespace from the file contents',
+        },
       ],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         if (!args.values.path || !args.values.encoding) return null;
 
         try {
-          return fs.promises.readFile(String(args.values.path ?? ''), {
+          const v = await fs.promises.readFile(String(args.values.path ?? ''), {
             encoding: String(args.values.encoding ?? 'utf-8') as BufferEncoding,
           });
+          return args.values.trim ? v.trim() : v;
         } catch {
           return null;
         }

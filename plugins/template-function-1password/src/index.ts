@@ -28,6 +28,7 @@ export const plugin: PluginDefinition = {
     {
       name: '1password.item',
       description: 'Get a secret',
+      previewArgs: ['field'],
       args: [
         {
           name: 'token',

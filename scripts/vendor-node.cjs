@@ -4,7 +4,7 @@ const Downloader = require('nodejs-file-downloader');
 const { rmSync, cpSync, mkdirSync, existsSync } = require('node:fs');
 const { execSync } = require('node:child_process');
 
-const NODE_VERSION = 'v24.4.0';
+const NODE_VERSION = 'v24.11.1';
 
 // `${process.platform}_${process.arch}`
 const MAC_ARM = 'darwin_arm64';
@@ -80,7 +80,7 @@ rmSync(tmpDir, { recursive: true, force: true });
 
 function tryExecSync(cmd) {
   try {
-    return execSync(cmd, { stdio: 'inherit' }).toString('utf-8');
+    return execSync(cmd, { stdio: 'pipe' }).toString('utf-8');
   } catch (_) {
     return '';
   }
