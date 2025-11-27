@@ -66,6 +66,7 @@ export const plugin: PluginDefinition = {
           region: values.region ? String(values.region) : undefined,
           body: values.body ? String(values.body) : undefined,
           headers,
+          doNotEncodePath: true,
         },
         {
           accessKeyId,
