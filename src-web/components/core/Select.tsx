@@ -88,11 +88,11 @@ export function Select<T extends string>({
             onChange={(e) => handleChange(e.target.value as T)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
+            disabled={disabled}
             className={classNames(
               'pr-7 w-full outline-none bg-transparent disabled:opacity-disabled',
-              'leading-[1]', // Center the text better vertically
+              'leading-[1] rounded-none', // Center the text better vertically
             )}
-            disabled={disabled}
           >
             {isInvalidSelection && <option value={'__NONE__'}>-- Select an Option --</option>}
             {options.map((o) => {
