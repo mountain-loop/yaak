@@ -276,8 +276,8 @@ function EditorInner({
       if (!disableTabIndent && current === emptyExtension) return; // Nothing to do
 
       const ext = !disableTabIndent
-          ? [keymap.of([indentWithTab]), indentUnit.of(' '.repeat(tabIndent ?? 2))]
-          : emptyExtension;
+        ? [keymap.of([indentWithTab]), indentUnit.of(' '.repeat(tabIndent ?? 2))]
+        : emptyExtension;
 
       const effects = tabIndentCompartment.current.reconfigure(ext);
       cm.current?.view.dispatch({ effects });
@@ -390,8 +390,8 @@ function EditorInner({
           wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : emptyExtension),
           tabIndentCompartment.current.of(
             !disableTabIndent
-                ? [keymap.of([indentWithTab]), indentUnit.of(' '.repeat(tabIndent ?? 2))]
-                : emptyExtension,
+              ? [keymap.of([indentWithTab]), indentUnit.of(' '.repeat(tabIndent ?? 2))]
+              : emptyExtension,
           ),
           keymapCompartment.current.of(
             keymapExtensions[settings.editorKeymap] ?? keymapExtensions.default,
