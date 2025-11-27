@@ -162,6 +162,9 @@ pub enum InternalEventPayload {
     PromptTextRequest(PromptTextRequest),
     PromptTextResponse(PromptTextResponse),
 
+    PromptSelectRequest(PromptSelectRequest),
+    PromptSelectResponse(PromptSelectResponse),
+
     WindowInfoRequest(WindowInfoRequest),
     WindowInfoResponse(WindowInfoResponse),
 
@@ -573,6 +576,40 @@ pub struct PromptTextRequest {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct PromptTextResponse {
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct PromptSelectRequest {
+    // A unique ID to identify the prompt (eg. "choose-environment")
+    pub id: String,
+    // Title to show on the prompt dialog
+    pub title: String,
+    // Text to show on the label above the select
+    pub label: String,
+    #[ts(optional)]
+    pub description: Option<String>,
+    #[ts(optional)]
+    pub default_value: Option<String>,
+    /// The options that will be available in the select prompt
+    pub options: Vec<FormInputSelectOption>,
+    /// Text to add to the confirmation button
+    #[ts(optional)]
+    pub confirm_text: Option<String>,
+    /// Text to add to the cancel button
+    #[ts(optional)]
+    pub cancel_text: Option<String>,
+    /// Require the user to select a value
+    #[ts(optional)]
+    pub required: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct PromptSelectResponse {
     pub value: Option<String>,
 }
 
