@@ -1,0 +1,14 @@
+{
+  "name": "@yaak/template-function-prompt-select",
+  "displayName": "Prompt Select Template Function",
+  "description": "Template function for prompting user to select from options",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev"
+  },
+  "dependencies": {
+    "slugify": "^1.6.6"
+  }
+}
