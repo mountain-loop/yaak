@@ -72,7 +72,7 @@ export interface EditorProps {
   extraExtensions?: Extension[] | Extension;
   forcedEnvironmentId?: string;
   forceUpdateKey?: string | number;
-  format?: (v: string) => Promise<string>;
+  format?: (v: string, indent?: number) => Promise<string>;
   heightMode?: 'auto' | 'full';
   hideGutter?: boolean;
   id?: string;
@@ -488,7 +488,7 @@ function EditorInner({
           onClick={async () => {
             if (cm.current === null) return;
             const { doc } = cm.current.view.state;
-            const formatted = await format(doc.toString());
+            const formatted = await format(doc.toString(), tabIndent);
             // Update editor and blur because the cursor will reset anyway
             cm.current.view.dispatch({
               changes: { from: 0, to: doc.length, insert: formatted },
@@ -512,7 +512,7 @@ function EditorInner({
       }),
     );
     return results;
-  }, [actions, format, onChange]);
+  }, [actions, format, tabIndent, onChange]);
 
   const cmContainer = (
     <div

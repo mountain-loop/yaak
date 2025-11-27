@@ -1,18 +1,17 @@
 import vkBeautify from 'vkbeautify';
-import { invokeCmd } from './tauri';
+import {invokeCmd} from './tauri';
 
-export async function tryFormatJson(text: string): Promise<string> {
+export async function tryFormatJson(text: string, indent = 2): Promise<string> {
   if (text === '') return text;
 
   try {
-    const result = await invokeCmd<string>('cmd_format_json', { text });
-    return result;
+    return await invokeCmd<string>('cmd_format_json', {text, indent});
   } catch (err) {
     console.warn('Failed to format JSON', err);
   }
 
   try {
-    return JSON.stringify(JSON.parse(text), null, 2);
+    return JSON.stringify(JSON.parse(text), null, indent);
   } catch (err) {
     console.log('JSON beautify failed', err);
   }
@@ -20,11 +19,11 @@ export async function tryFormatJson(text: string): Promise<string> {
   return text;
 }
 
-export async function tryFormatXml(text: string): Promise<string> {
+export async function tryFormatXml(text: string, indent = 2): Promise<string> {
   if (text === '') return text;
 
   try {
-    return vkBeautify.xml(text, '  ');
+    return vkBeautify.xml(text, ' '.repeat(indent));
   } catch (err) {
     console.warn('Failed to format XML', err);
   }
