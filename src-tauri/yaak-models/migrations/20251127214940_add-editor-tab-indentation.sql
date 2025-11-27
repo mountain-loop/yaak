@@ -1,0 +1,1 @@
+ALTER TABLE settings ADD COLUMN editor_indentation INTEGER DEFAULT 2 NOT NULL;
