@@ -28,6 +28,10 @@ const keymaps: { value: EditorKeymap; label: string }[] = [
   { value: 'emacs', label: 'Emacs' },
 ];
 
+const tabIndentOptions = [
+    2, 4, 6, 8, 10,
+].map((n) => ({ label: `${n}`, value: `${n}` }));
+
 export function SettingsInterface() {
   const workspace = useAtomValue(activeWorkspaceAtom);
   const settings = useAtomValue(settingsAtom);
@@ -139,6 +143,18 @@ export function SettingsInterface() {
         value={`${settings.editorKeymap}`}
         options={keymaps}
         onChange={(v) => patchModel(settings, { editorKeymap: v })}
+      />
+      <Select
+        leftSlot={<Icon icon="arrow_big_right_dash" color="secondary" />}
+        size="sm"
+        name="editorIndentation"
+        label="Editor indentation"
+        defaultValue="2"
+        value={`${settings.editorIndentation}`}
+        options={tabIndentOptions}
+        onChange={(v) =>
+            patchModel(settings, { editorIndentation: clamp(Number.parseInt(v, 10) || 2, 2, 10) })
+        }
       />
       <Checkbox
         checked={settings.editorSoftWrap}

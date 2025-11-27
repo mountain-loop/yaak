@@ -21,6 +21,7 @@ impl<'a> DbContext<'a> {
             editor_font_size: 12,
             editor_font: None,
             editor_keymap: EditorKeymap::Default,
+            editor_indentation: 2,
             editor_soft_wrap: true,
             interface_font_size: 14,
             interface_scale: 1.0,
