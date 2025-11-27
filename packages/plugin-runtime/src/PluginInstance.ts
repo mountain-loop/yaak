@@ -14,6 +14,7 @@ import {
   InternalEventPayload,
   ListCookieNamesResponse,
   PluginContext,
+  PromptSelectResponse,
   PromptTextResponse,
   RenderGrpcRequestResponse,
   RenderHttpRequestResponse,
@@ -546,6 +547,13 @@ export class PluginInstance {
         text: async (args) => {
           const reply: PromptTextResponse = await this.#sendForReply(context, {
             type: 'prompt_text_request',
+            ...args,
+          });
+          return reply.value;
+        },
+        select: async (args) => {
+          const reply: PromptSelectResponse = await this.#sendForReply(context, {
+            type: 'prompt_select_request',
             ...args,
           });
           return reply.value;
