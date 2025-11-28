@@ -33,8 +33,9 @@ jobs:
             args: ''
             yaak_arch: 'x64'
             os: 'windows'
-          - platform: 'windows-11-arm'
-            args: ''
+          # Windows ARM64
+          - platform: 'windows-latest'
+            args: '--target aarch64-pc-windows-msvc'
             yaak_arch: 'arm64'
             os: 'windows'
     runs-on: ${{ matrix.platform }}
