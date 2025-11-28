@@ -4,6 +4,7 @@ import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Editor } from './core/Editor/LazyEditor';
 import { Icon } from './core/Icon';
+import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
 
 interface Props {
@@ -17,6 +18,7 @@ const EXAMPLE_CURL = `curl https://api.example.com/users \\
 
 export function ImportCurlDialog({ hide }: Props) {
   const [curlCommand, setCurlCommand] = useState<string>('');
+  const [requestName, setRequestName] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const { mutate: importCurl } = useImportCurl();
@@ -35,7 +37,7 @@ export function ImportCurlDialog({ hide }: Props) {
     setError(null);
     setIsLoading(true);
     try {
-      await importCurl({ command: curlCommand });
+      await importCurl({ command: curlCommand, name: requestName });
       hide();
     } catch (error) {
       console.error('Failed to import cURL:', error);
@@ -62,6 +64,18 @@ export function ImportCurlDialog({ hide }: Props) {
           </div>
         </VStack>
       </Banner>
+
+      {/* Request Name (Optional) */}
+      <VStack space={2}>
+        <div className="text-sm font-medium text-text">Name <span className="text-text-subtle font-normal">(optional)</span></div>
+        <PlainInput
+          label="Request Name"
+          hideLabel
+          placeholder="e.g., Get Users, Create Order"
+          defaultValue={requestName}
+          onChange={(value) => setRequestName(value)}
+        />
+      </VStack>
 
       {/* Editor Section */}
       <VStack space={2} className="flex-1 min-h-0">
