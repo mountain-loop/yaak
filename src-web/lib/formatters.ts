@@ -1,8 +1,12 @@
 import vkBeautify from 'vkbeautify';
 import { invokeCmd } from './tauri';
+import { getSettings } from './settings';
 
-export async function tryFormatJson(text: string, indent = 2): Promise<string> {
+export async function tryFormatJson(text: string): Promise<string> {
   if (text === '') return text;
+
+  const settings = await getSettings();
+  const indent = settings.editorIndentation;
 
   try {
     return await invokeCmd<string>('cmd_format_json', { text, indent });
@@ -19,8 +23,11 @@ export async function tryFormatJson(text: string, indent = 2): Promise<string> {
   return text;
 }
 
-export async function tryFormatXml(text: string, indent = 2): Promise<string> {
+export async function tryFormatXml(text: string): Promise<string> {
   if (text === '') return text;
+
+  const settings = await getSettings();
+  const indent = settings.editorIndentation;
 
   try {
     return vkBeautify.xml(text, ' '.repeat(indent));
