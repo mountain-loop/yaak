@@ -70,6 +70,7 @@
     "icons:dev": "tauri icon src-tauri/icons/icon-dev.png --output src-tauri/icons/dev",
     "icons:release": "tauri icon src-tauri/icons/icon.png --output src-tauri/icons/release",
     "bootstrap": "run-s bootstrap:*",
+    "bootstrap:install-wasm-pack": "node scripts/install-wasm-pack.cjs",
     "bootstrap:build": "npm run build",
     "bootstrap:vendor": "npm run vendor",
     "vendor": "run-p vendor:*",
