@@ -17,27 +17,33 @@ jobs:
             args: '--target aarch64-apple-darwin'
             yaak_arch: 'arm64'
             os: 'macos'
+            targets: 'aarch64-apple-darwin'
           - platform: 'macos-latest' # for Intel-based Macs.
             args: '--target x86_64-apple-darwin'
             yaak_arch: 'x64'
             os: 'macos'
+            targets: 'x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
             yaak_arch: 'x64'
             os: 'ubuntu'
+            targets: ''
           - platform: 'ubuntu-22.04-arm'
             args: ''
             yaak_arch: 'arm64'
             os: 'ubuntu'
+            targets: ''
           - platform: 'windows-latest'
             args: ''
             yaak_arch: 'x64'
             os: 'windows'
+            targets: ''
           # Windows ARM64
           - platform: 'windows-latest'
             args: '--target aarch64-pc-windows-msvc'
             yaak_arch: 'arm64'
             os: 'windows'
+            targets: 'aarch64-pc-windows-msvc'
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 40
     steps:
@@ -50,9 +56,7 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: |
-            ${{ matrix.os == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-            ${{ matrix.os == 'windows' && matrix.yaak_arch == 'arm64' && 'aarch64-pc-windows-msvc' || '' }}
+          targets: ${{ matrix.targets }}
 
       - uses: Swatinem/rust-cache@v2
         with:
