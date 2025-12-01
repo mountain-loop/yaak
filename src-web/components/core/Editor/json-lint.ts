@@ -10,7 +10,7 @@ export function jsonParseLinter() {
       const doc = view.state.doc.toString();
       // We need lint to not break on stuff like {"foo:" ${[ ... ]}} so we'll replace all template
       // syntax with repeating `1` characters, so it's valid JSON and the position is still correct.
-      const escapedDoc = doc.replace(TEMPLATE_SYNTAX_REGEX, '1');
+      const escapedDoc = doc.replace(TEMPLATE_SYNTAX_REGEX, (m) => '1'.repeat(m.length));
       jsonLintParse(escapedDoc);
       // biome-ignore lint/suspicious/noExplicitAny: none
     } catch (err: any) {
