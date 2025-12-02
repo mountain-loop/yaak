@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import type {
-  Folder,
-  GrpcRequest,
-  HttpRequest,
-  WebsocketRequest,
-  Workspace,
+import {
+  environmentsAtom,
+  type Folder,
+  type GrpcRequest,
+  type HttpRequest,
+  httpResponsesAtom,
+  pluginsAtom,
+  type WebsocketRequest,
+  type Workspace,
 } from '@yaakapp-internal/models';
-import { environmentsAtom, httpResponsesAtom } from '@yaakapp-internal/models';
 import type { GetTemplateFunctionConfigResponse, JsonPrimitive } from '@yaakapp-internal/plugins';
 import { useAtomValue } from 'jotai';
 import { md5 } from 'js-md5';
@@ -19,6 +21,7 @@ export function useTemplateFunctionConfig(
   values: Record<string, JsonPrimitive>,
   model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
 ) {
+  const pluginsKey = useAtomValue(pluginsAtom);
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const environmentId = useAtomValue(activeEnvironmentIdAtom);
   const responses = useAtomValue(httpResponsesAtom);
@@ -40,10 +43,11 @@ export function useTemplateFunctionConfig(
       model,
       functionName,
       values,
-      responseKey,
-      workspaceId,
-      environmentId,
-      environmentsKey,
+      workspaceId, // Refresh when the active workspace changes
+      environmentId, // Refresh when the active environment changes
+      environmentsKey, // Refresh when environments change
+      responseKey, // Refresh when responses change
+      pluginsKey, // Refresh when plugins reload
     ],
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {
