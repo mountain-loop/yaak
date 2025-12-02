@@ -1,5 +1,5 @@
 import { defaultKeymap, historyField, indentWithTab } from '@codemirror/commands';
-import { foldState, forceParsing } from '@codemirror/language';
+import { foldState, forceParsing, indentUnit } from '@codemirror/language';
 import type { EditorStateConfig, Extension } from '@codemirror/state';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap, placeholder as placeholderExt, tooltips } from '@codemirror/view';
@@ -66,12 +66,13 @@ export interface EditorProps {
   autocompleteVariables?: boolean | ((v: WrappedEnvironmentVariable) => boolean);
   className?: string;
   defaultValue?: string | null;
+  tabIndent?: number;
   disableTabIndent?: boolean;
   disabled?: boolean;
   extraExtensions?: Extension[] | Extension;
   forcedEnvironmentId?: string;
   forceUpdateKey?: string | number;
-  format?: (v: string) => Promise<string>;
+  format?: (v: string, indent?: number) => Promise<string>;
   heightMode?: 'auto' | 'full';
   hideGutter?: boolean;
   id?: string;
@@ -112,6 +113,7 @@ function EditorInner({
   autocompleteVariables,
   className,
   defaultValue,
+  tabIndent,
   disableTabIndent,
   disabled,
   extraExtensions,
@@ -151,6 +153,8 @@ function EditorInner({
   if (settings && wrapLines === undefined) {
     wrapLines = settings.editorSoftWrap;
   }
+
+  tabIndent = tabIndent ?? settings.editorIndentation;
 
   if (disabled) {
     readOnly = true;
@@ -271,11 +275,14 @@ function EditorInner({
       if (disableTabIndent && current !== emptyExtension) return; // Nothing to do
       if (!disableTabIndent && current === emptyExtension) return; // Nothing to do
 
-      const ext = !disableTabIndent ? keymap.of([indentWithTab]) : emptyExtension;
+      const ext = !disableTabIndent
+        ? [keymap.of([indentWithTab]), indentUnit.of(' '.repeat(tabIndent))]
+        : emptyExtension;
+
       const effects = tabIndentCompartment.current.reconfigure(ext);
       cm.current?.view.dispatch({ effects });
     },
-    [disableTabIndent],
+    [disableTabIndent, tabIndent],
   );
 
   const onClickFunction = useCallback(
@@ -382,7 +389,9 @@ function EditorInner({
           placeholderCompartment.current.of(placeholderExt(placeholderElFromText(placeholder))),
           wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : emptyExtension),
           tabIndentCompartment.current.of(
-            !disableTabIndent ? keymap.of([indentWithTab]) : emptyExtension,
+            !disableTabIndent
+              ? [keymap.of([indentWithTab]), indentUnit.of(' '.repeat(tabIndent))]
+              : emptyExtension,
           ),
           keymapCompartment.current.of(
             keymapExtensions[settings.editorKeymap] ?? keymapExtensions.default,
@@ -479,7 +488,7 @@ function EditorInner({
           onClick={async () => {
             if (cm.current === null) return;
             const { doc } = cm.current.view.state;
-            const formatted = await format(doc.toString());
+            const formatted = await format(doc.toString(), tabIndent);
             // Update editor and blur because the cursor will reset anyway
             cm.current.view.dispatch({
               changes: { from: 0, to: doc.length, insert: formatted },
@@ -503,7 +512,7 @@ function EditorInner({
       }),
     );
     return results;
-  }, [actions, format, onChange]);
+  }, [actions, format, tabIndent, onChange]);
 
   const cmContainer = (
     <div

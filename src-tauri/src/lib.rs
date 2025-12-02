@@ -724,8 +724,10 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_format_json(text: &str) -> YaakResult<String> {
-    Ok(format_json(text, "  "))
+async fn cmd_format_json(text: &str, indent: Option<u32>) -> YaakResult<String> {
+    let n = indent.unwrap_or(2);
+    let indent_str = " ".repeat(n as usize);
+    Ok(format_json(text, &indent_str))
 }
 
 #[tauri::command]
