@@ -5,9 +5,9 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "build": "run-p build:*",
+    "build": "run-s build:*",
     "build:1-build": "yaakcli build",
-    "build:2-cpywasm": "cpx '../../node_modules/@1password/sdk-core/nodejs/core_bg.*' build/",
+    "build:2-cpywasm": "cp \"../../node_modules/@1password/sdk-core/nodejs/core_bg.wasm\" build/",
     "dev": "yaakcli dev"
   },
   "dependencies": {
