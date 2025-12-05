@@ -1,6 +1,5 @@
 import './main.css';
 import { RouterProvider } from '@tanstack/react-router';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { type } from '@tauri-apps/plugin-os';
 import { changeModelStoreWorkspace, initModelStore } from '@yaakapp-internal/models';
 import { StrictMode } from 'react';
@@ -10,12 +9,7 @@ import { initGlobalListeners } from './lib/initGlobalListeners';
 import { jotaiStore } from './lib/jotai';
 import { router } from './lib/router';
 
-// Hide decorations here because it doesn't work in Rust for some reason (bug?)
 const osType = type();
-if (osType !== 'macos') {
-  await getCurrentWebviewWindow().setDecorations(false);
-}
-
 document.documentElement.setAttribute('data-platform', osType);
 
 window.addEventListener('keydown', (e) => {
