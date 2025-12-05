@@ -9,7 +9,7 @@ const NAMESPACE: &str = "analytics";
 const NUM_LAUNCHES_KEY: &str = "num_launches";
 const LAST_VERSION_KEY: &str = "last_tracked_version";
 const PREV_VERSION_KEY: &str = "last_tracked_version_prev";
-const VERSION_SINCE_KEY: &str = "last_tracked_version_since";
+const VERSION_SINCE_KEY: &str = "last_tracked_version_since"; 
 
 #[derive(Default, Debug, Clone)]
 pub struct LaunchEventInfo {
