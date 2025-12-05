@@ -30,6 +30,10 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
         ],
     )?;
 
+    #[cfg(target_os = "macos")] {
+        window_menu.set_as_windows_menu_for_nsapp()?;
+    }
+
     let help_menu = Submenu::with_id_and_items(
         app_handle,
         HELP_SUBMENU_ID,
@@ -43,6 +47,10 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
                 .build(app_handle)?,
         ],
     )?;
+
+    #[cfg(target_os = "macos")] {
+        help_menu.set_as_windows_menu_for_nsapp()?;
+    }
 
     let menu = Menu::with_items(
         app_handle,

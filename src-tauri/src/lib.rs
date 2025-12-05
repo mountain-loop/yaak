@@ -25,13 +25,13 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind, log};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
-use yaak_mac_window::AppHandleMacWindowExt;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
 use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::GrpcHandle;
 use yaak_grpc::{Code, ServiceDefinition, serialize_message};
+use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
     GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, Plugin, Workspace,
@@ -1322,7 +1322,13 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Don't restore StateFlags::DECORATIONS because we want to be able to toggle them on/off on a restart
+        // We could* make this work if we toggled them in the frontend before the window closes, but, this is nicer.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(StateFlags::all() - StateFlags::DECORATIONS)
+                .build(),
+        )
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())

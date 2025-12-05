@@ -95,12 +95,6 @@ pub(crate) fn create_window<R: Runtime>(
         });
     }
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        println!("ENABLING DECORATIONS FOR WINDOW");
-        win_builder = win_builder.decorations(true);
-    }
-
     let settings = handle.db().get_settings();
     if config.hide_titlebar && !settings.use_native_titlebar {
         #[cfg(target_os = "macos")]
@@ -110,8 +104,6 @@ pub(crate) fn create_window<R: Runtime>(
         }
         #[cfg(not(target_os = "macos"))]
         {
-            // Doesn't seem to work from Rust, here, so we do it in main.tsx
-            println!("DISABLING DECORATIONS FOR WINDOW");
             win_builder = win_builder.decorations(false);
         }
     }
