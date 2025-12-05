@@ -25,6 +25,7 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind, log};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+use yaak_mac_window::AppHandleMacWindowExt;
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
@@ -1390,6 +1391,10 @@ pub fn run() {
             // Add GRPC manager
             let grpc_handle = GrpcHandle::new(&app.app_handle());
             app.manage(Mutex::new(grpc_handle));
+
+            // Specific settings
+            let settings = app.db().get_settings();
+            app.app_handle().set_native_titlebar(settings.use_native_titlebar);
 
             monitor_plugin_events(&app.app_handle().clone());
 

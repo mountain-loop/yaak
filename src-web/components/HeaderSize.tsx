@@ -27,6 +27,7 @@ export function HeaderSize({
 }: HeaderSizeProps) {
   const settings = useAtomValue(settingsAtom);
   const isFullscreen = useIsFullscreen();
+  const nativeTitlebar = settings.useNativeTitlebar;
   const finalStyle = useMemo<CSSProperties>(() => {
     const s = { ...style };
 
@@ -34,7 +35,9 @@ export function HeaderSize({
     if (size === 'md') s.minHeight = HEADER_SIZE_MD;
     if (size === 'lg') s.minHeight = HEADER_SIZE_LG;
 
-    if (type() === 'macos') {
+    if (nativeTitlebar) {
+      // No style updates when using native titlebar
+    } else if (type() === 'macos') {
       if (!isFullscreen) {
         // Add large padding for window controls
         s.paddingLeft = 72 / settings.interfaceScale;
@@ -51,6 +54,7 @@ export function HeaderSize({
     settings.interfaceScale,
     size,
     style,
+    nativeTitlebar,
   ]);
 
   return (
@@ -73,7 +77,7 @@ export function HeaderSize({
       >
         {children}
       </div>
-      {!hideControls && <WindowControls onlyX={onlyXWindowControl} />}
+      {!hideControls && !nativeTitlebar && <WindowControls onlyX={onlyXWindowControl} />}
     </div>
   );
 }

@@ -4,16 +4,32 @@ mod commands;
 mod mac;
 
 use crate::commands::{set_theme, set_title};
-use tauri::{
-    Runtime, generate_handler,
-    plugin::{Builder, TauriPlugin},
-};
+use std::sync::atomic::AtomicBool;
+use tauri::{generate_handler, plugin, plugin::TauriPlugin, Manager, Runtime};
+
+pub trait AppHandleMacWindowExt {
+    /// Sets whether to use the native titlebar
+    fn set_native_titlebar(&self, enable: bool);
+}
+
+impl<R: Runtime> AppHandleMacWindowExt for tauri::AppHandle<R> {
+    fn set_native_titlebar(&self, enable: bool) {
+        self.state::<PluginState>().native_titlebar.store(enable, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+pub(crate) struct PluginState {
+    native_titlebar: AtomicBool,
+}
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    #[allow(unused)]
-    Builder::new("yaak-mac-window")
+    plugin::Builder::new("yaak-mac-window")
+        .setup(move |app, _| {
+            app.manage(PluginState { native_titlebar: AtomicBool::new(false) });
+            Ok(())
+        })
         .invoke_handler(generate_handler![set_title, set_theme])
-        .on_window_ready(|window| {
+        .on_window_ready(move |window| {
             #[cfg(target_os = "macos")]
             {
                 mac::setup_traffic_light_positioner(&window);
