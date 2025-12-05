@@ -18,7 +18,7 @@ export function WindowControls({ className, onlyX }: Props) {
   const [maximized, setMaximized] = useState<boolean>(false);
   const settings = useAtomValue(settingsAtom);
   // Never show controls on macOS or if hideWindowControls is true
-  if (type() === 'macos' || settings.hideWindowControls) {
+  if (type() === 'macos' || settings.hideWindowControls || settings.useNativeTitlebar) {
     return null;
   }
 
