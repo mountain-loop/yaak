@@ -7,7 +7,7 @@ if (version.startsWith('wasm-pack ')) {
 }
 
 console.log('Installing wasm-pack via cargo...');
-execSync('cargo install wasm-pack', { stdio: 'inherit' });
+execSync('cargo install wasm-pack --locked', { stdio: 'inherit' });
 
 function tryExecSync(cmd) {
   try {
