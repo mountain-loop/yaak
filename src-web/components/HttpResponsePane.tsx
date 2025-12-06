@@ -30,6 +30,7 @@ import { CsvViewer } from './responseViewers/CsvViewer';
 import { EventStreamViewer } from './responseViewers/EventStreamViewer';
 import { HTMLOrTextViewer } from './responseViewers/HTMLOrTextViewer';
 import { ImageViewer } from './responseViewers/ImageViewer';
+import { MultipartViewer } from './responseViewers/MultipartViewer';
 import { SvgViewer } from './responseViewers/SvgViewer';
 import { VideoViewer } from './responseViewers/VideoViewer';
 
@@ -189,6 +190,8 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                         <EnsureCompleteResponse response={activeResponse} Component={AudioViewer} />
                       ) : mimeType?.match(/^video/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={VideoViewer} />
+                      ) : mimeType?.match(/^multipart/i) ? (
+                        <MultipartViewer response={activeResponse} />
                       ) : mimeType?.match(/pdf/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={PdfViewer} />
                       ) : mimeType?.match(/csv|tab-separated/i) ? (
