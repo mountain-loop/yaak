@@ -43,6 +43,7 @@ import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { deepEqualAtom } from '../lib/atoms';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
+import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { isSidebarFocused } from '../lib/scopes';
@@ -67,6 +68,7 @@ import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
 import { GitDropdown } from './git/GitDropdown';
+import { ImportCurlDialog } from './ImportCurlDialog';
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
 function isSidebarLeafModel(m: AnyModel): boolean {
@@ -457,6 +459,25 @@ function Sidebar({ className }: { className?: string }) {
     });
   }, [allFields]);
 
+  // Subscribe to activeIdAtom changes to auto-select new requests in the sidebar
+  useEffect(() => {
+    return jotaiStore.sub(activeIdAtom, () => {
+      const activeId = jotaiStore.get(activeIdAtom);
+      if (activeId != null && treeRef.current != null) {
+        treeRef.current.selectItem(activeId);
+      }
+    });
+  }, []);
+
+  const handleImportCurl = useCallback(() => {
+    showDialog({
+      id: 'import-curl',
+      title: 'Import cURL Command',
+      size: 'md',
+      render: ImportCurlDialog,
+    });
+  }, []);
+
   if (tree == null || hidden) {
     return null;
   }
@@ -467,9 +488,18 @@ function Sidebar({ className }: { className?: string }) {
       aria-hidden={hidden ?? undefined}
       className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)_auto]')}
     >
-      <div className="w-full pl-3 pr-0.5 pt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center">
+      <div className="w-full px-3 pt-3 flex flex-col gap-2">
+        <IconButton
+          size="sm"
+          icon="import"
+          className="w-full justify-center"
+          title="Import cURL command"
+          onClick={handleImportCurl}
+        >
+          Import
+        </IconButton>
         {(tree.children?.length ?? 0) > 0 && (
-          <>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center">
             <Input
               hideLabel
               setRef={setFilterRef}
@@ -544,7 +574,7 @@ function Sidebar({ className }: { className?: string }) {
                 title="Show sidebar actions menu"
               />
             </Dropdown>
-          </>
+          </div>
         )}
       </div>
       {allHidden ? (
