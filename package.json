@@ -36,6 +36,7 @@
     "plugins/template-function-hash",
     "plugins/template-function-json",
     "plugins/template-function-prompt",
+    "plugins/template-function-prompt-select",
     "plugins/template-function-random",
     "plugins/template-function-regex",
     "plugins/template-function-timestamp",
