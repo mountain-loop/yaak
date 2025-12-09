@@ -9,10 +9,10 @@ const _clients: Record<string, Client> = {};
 async function op(args: CallTemplateFunctionArgs): Promise<{ client?: Client; error?: unknown }> {
   let authMethod: string | DesktopAuth | null = null;
   let hash: string | null = null;
-  switch (args.values.auth_method) {
+  switch (args.values.authMethod) {
     case 'desktop': {
-      const account = args.values.token;
-      if (typeof account !== 'string') return { error: 'Missing account name' };
+      const account = args.values.account;
+      if (typeof account !== 'string' || !account) return { error: 'Missing account name' };
 
       hash = crypto.createHash('sha256').update(`desktop:${account}`).digest('hex');
       authMethod = new DesktopAuth(account);
@@ -20,7 +20,7 @@ async function op(args: CallTemplateFunctionArgs): Promise<{ client?: Client; er
     }
     case 'token': {
       const token = args.values.token;
-      if (typeof token !== 'string') return { error: 'Missing service token' };
+      if (typeof token !== 'string' || !token) return { error: 'Missing service token' };
 
       hash = crypto.createHash('sha256').update(`token:${token}`).digest('hex');
       authMethod = token;
@@ -91,50 +91,54 @@ export const plugin: PluginDefinition = {
       previewArgs: ['field'],
       args: [
         {
-          name: 'auth_method',
-          type: 'select',
-          label: 'Authentication Method',
-          options: [
+          type: 'h_stack',
+          inputs: [
             {
-              label: '1Password Service Account Token',
-              value: 'token',
+              name: 'authMethod',
+              type: 'select',
+              label: 'Authentication Method',
+              description: '',
+              options: [
+                {
+                  label: 'Service Account',
+                  value: 'token',
+                },
+                {
+                  label: 'Desktop App',
+                  value: 'desktop',
+                },
+              ],
+              defaultValue: 'token',
             },
             {
-              label: '1Password Desktop App',
-              value: 'desktop',
+              name: 'account',
+              type: 'text',
+              description: '',
+              dynamic(_ctx, args) {
+                switch (args.values.authMethod) {
+                  case 'desktop':
+                    return {
+                      name: 'account',
+                      label: 'Account Name',
+                      description:
+                        'Account name can be taken from the sidebar of the 1Password App. Make sure you\'re on the BETA version of the 1Password app and have "Integrate with other apps" enabled in Settings > Developer.',
+                    };
+                  case 'token':
+                    return {
+                      name: 'token',
+                      label: 'Token',
+                      description:
+                        'Token can be generated from the 1Password website by visiting Developer > Service Accounts',
+                      // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
+                      defaultValue: '${[1PASSWORD_TOKEN]}',
+                      password: true,
+                    };
+                }
+
+                return { hidden: true };
+              },
             },
           ],
-          defaultValue: 'token',
-        },
-        {
-          name: 'token',
-          type: 'text',
-          description: '',
-          dynamic(_ctx, args) {
-            switch (args.values.auth_method) {
-              case 'desktop':
-                return {
-                  name: 'token',
-                  type: 'text',
-                  label: '1Password Account Name',
-                  description:
-                    'Account name can be taken from the sidebar of the 1Password App. Make sure you\'re on the BETA version of the 1Password app and have "Integrate with other apps" enabled in Settings > Developer.',
-                };
-              case 'token':
-                return {
-                  name: 'token',
-                  type: 'text',
-                  label: '1Password Service Account Token',
-                  description:
-                    'Token can be generated from the 1Password website by visiting Developer > Service Accounts',
-                  // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
-                  defaultValue: '${[1PASSWORD_TOKEN]}',
-                  password: true,
-                };
-            }
-
-            return { hidden: true };
-          },
         },
         {
           name: 'vault',
