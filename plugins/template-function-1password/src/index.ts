@@ -118,7 +118,7 @@ export const plugin: PluginDefinition = {
                   type: 'text',
                   label: '1Password Account Name',
                   description:
-                    'Using 1Password Desktop app authentication. Make sure you\'re on the BETA version of the 1Password app and have "Integrate with other apps" enabled in Settings > Developer.',
+                    'Account name can be taken from the sidebar of the 1Password App. Make sure you\'re on the BETA version of the 1Password app and have "Integrate with other apps" enabled in Settings > Developer.',
                 };
               case 'token':
                 return {
