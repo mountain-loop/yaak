@@ -79,11 +79,11 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           Add Import Folders
         </Button>
         <Button
-          isLoading={grpc.reflect.isFetching}
-          disabled={grpc.reflect.isFetching}
+          isLoading={grpc.refreshSchema.isPending}
+          disabled={grpc.refreshSchema.isPending}
           variant="border"
           color="secondary"
-          onClick={() => grpc.reflect.refetch()}
+          onClick={() => grpc.refreshSchema.mutateAsync()}
         >
           Refresh Schema
         </Button>

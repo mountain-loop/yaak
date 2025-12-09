@@ -244,6 +244,12 @@ impl GrpcHandle {
 }
 
 impl GrpcHandle {
+    /// Remove cached descriptor pool for the given key, if present.
+    pub fn invalidate_pool(&mut self, id: &str, uri: &str, proto_files: &Vec<PathBuf>) {
+        let key = make_pool_key(id, uri, proto_files);
+        self.pools.remove(&key);
+    }
+
     pub async fn reflect(
         &mut self,
         id: &str,
@@ -253,6 +259,13 @@ impl GrpcHandle {
         validate_certificates: bool,
     ) -> Result<bool, String> {
         let server_reflection = proto_files.is_empty();
+        let key = make_pool_key(id, uri, proto_files);
+
+        // If we already have a pool for this key, reuse it and avoid re-reflection
+        if self.pools.contains_key(&key) {
+            return Ok(server_reflection);
+        }
+
         let pool = if server_reflection {
             let full_uri = uri_from_str(uri)?;
             fill_pool_from_reflection(&full_uri, metadata, validate_certificates).await
@@ -260,7 +273,7 @@ impl GrpcHandle {
             fill_pool_from_files(&self.app_handle, proto_files).await
         }?;
 
-        self.pools.insert(make_pool_key(id, uri, proto_files), pool.clone());
+        self.pools.insert(key, pool.clone());
         Ok(server_reflection)
     }
 
@@ -272,8 +285,10 @@ impl GrpcHandle {
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
     ) -> Result<Vec<ServiceDefinition>, String> {
-        // Ensure reflection is up-to-date
-        self.reflect(id, uri, proto_files, metadata, validate_certificates).await?;
+        // Ensure we have a pool; reflect only if missing
+        if self.get_pool(id, uri, proto_files).is_none() {
+            self.reflect(id, uri, proto_files, metadata, validate_certificates).await?;
+        }
 
         let pool = self.get_pool(id, uri, proto_files).ok_or("Failed to get pool".to_string())?;
         Ok(self.services_from_pool(&pool))
@@ -312,8 +327,10 @@ impl GrpcHandle {
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
     ) -> Result<GrpcConnection, String> {
-        let use_reflection =
+        let use_reflection = proto_files.is_empty();
+        if self.get_pool(id, uri, proto_files).is_none() {
             self.reflect(id, uri, proto_files, metadata, validate_certificates).await?;
+        }
         let pool = self.get_pool(id, uri, proto_files).ok_or("Failed to get pool")?.clone();
         let uri = uri_from_str(uri)?;
         let conn = get_transport(validate_certificates);
