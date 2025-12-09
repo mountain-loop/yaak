@@ -22,7 +22,6 @@ type TauriCmd =
   | 'cmd_get_workspace_meta'
   | 'cmd_grpc_go'
   | 'cmd_grpc_reflect'
-  | 'cmd_grpc_refresh_schema'
   | 'cmd_grpc_request_actions'
   | 'cmd_http_request_actions'
   | 'cmd_http_response_body'

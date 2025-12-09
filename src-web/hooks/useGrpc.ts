@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { emit } from '@tauri-apps/api/event';
 import type { GrpcConnection, GrpcRequest } from '@yaakapp-internal/models';
 import { jotaiStore } from '../lib/jotai';
@@ -19,7 +19,6 @@ export function useGrpc(
 ) {
   const requestId = req?.id ?? 'n/a';
   const environment = useActiveEnvironment();
-  const queryClient = useQueryClient();
 
   const go = useMutation<void, string>({
     mutationKey: ['grpc_go', conn?.id],
@@ -48,26 +47,15 @@ export function useGrpc(
   const reflect = useQuery<ReflectResponseService[], string>({
     enabled: req != null,
     queryKey: ['grpc_reflect', req?.id ?? 'n/a', debouncedUrl, protoFiles],
+    staleTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: () => {
       const environmentId = jotaiStore.get(activeEnvironmentIdAtom);
       return minPromiseMillis<ReflectResponseService[]>(
-        invokeCmd('cmd_grpc_reflect', { requestId, protoFiles, environmentId }),
+        invokeCmd('cmd_grpc_reflect', { requestId, protoFiles, environmentId, skipCache: true }),
         300,
-      );
-    },
-  });
-
-  const refreshSchema = useMutation<ReflectResponseService[], string>({
-    mutationKey: ['grpc_refresh_schema', req?.id ?? 'n/a', debouncedUrl, protoFiles],
-    mutationFn: () => {
-      const environmentId = jotaiStore.get(activeEnvironmentIdAtom);
-      return invokeCmd('cmd_grpc_refresh_schema', { requestId, protoFiles, environmentId });
-    },
-    onSuccess: (data) => {
-      // Update the reflect query cache so UI updates immediately
-      queryClient.setQueryData<ReflectResponseService[]>(
-        ['grpc_reflect', req?.id ?? 'n/a', debouncedUrl, protoFiles],
-        data,
       );
     },
   });
@@ -75,7 +63,6 @@ export function useGrpc(
   return {
     go,
     reflect,
-    refreshSchema,
     cancel,
     commit,
     isStreaming: conn != null && conn.state !== 'closed',

@@ -156,6 +156,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
     proto_files: Vec<String>,
+    skip_cache: Option<bool>,
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
@@ -196,63 +197,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
             &metadata,
             workspace.setting_validate_certificates,
-        )
-        .await
-        .map_err(|e| GenericError(e.to_string()))?)
-}
-
-#[tauri::command]
-async fn cmd_grpc_refresh_schema<R: Runtime>(
-    request_id: &str,
-    environment_id: Option<&str>,
-    proto_files: Vec<String>,
-    window: WebviewWindow<R>,
-    app_handle: AppHandle<R>,
-    grpc_handle: State<'_, Mutex<GrpcHandle>>,
-) -> YaakResult<Vec<ServiceDefinition>> {
-    let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
-    let (resolved_request, auth_context_id) = resolve_grpc_request(&window, &unrendered_request)?;
-
-    let environment_chain = app_handle.db().resolve_environments(
-        &unrendered_request.workspace_id,
-        unrendered_request.folder_id.as_deref(),
-        environment_id,
-    )?;
-    let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
-
-    let req = render_grpc_request(
-        &resolved_request,
-        environment_chain,
-        &PluginTemplateCallback::new(
-            &app_handle,
-            &PluginContext::new(&window),
-            RenderPurpose::Send,
-        ),
-        &RenderOptions {
-            error_behavior: RenderErrorBehavior::Throw,
-        },
-    )
-    .await?;
-
-    let uri = safe_uri(&req.url);
-    let metadata = build_metadata(&window, &req, &auth_context_id).await?;
-
-    // Invalidate existing cached schema then fetch services again (which will re-reflect)
-    {
-        let mut handle = grpc_handle.lock().await;
-        let proto_vec = proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect();
-        handle.invalidate_pool(&req.id, &uri, &proto_vec);
-    }
-
-    Ok(grpc_handle
-        .lock()
-        .await
-        .services(
-            &req.id,
-            &uri,
-            &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
-            &metadata,
-            workspace.setting_validate_certificates,
+            skip_cache.unwrap_or(false),
         )
         .await
         .map_err(|e| GenericError(e.to_string()))?)
@@ -1483,7 +1428,6 @@ pub fn run() {
             cmd_get_workspace_meta,
             cmd_grpc_go,
             cmd_grpc_reflect,
-            cmd_grpc_refresh_schema,
             cmd_grpc_request_actions,
             cmd_http_request_actions,
             cmd_import_data,

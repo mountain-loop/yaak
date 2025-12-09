@@ -7,7 +7,7 @@ use crate::{MethodDefinition, ServiceDefinition, json_schema};
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
-use log::warn;
+use log::{info, warn};
 pub use prost_reflect::DynamicMessage;
 use prost_reflect::{DescriptorPool, MethodDescriptor, ServiceDescriptor};
 use serde_json::Deserializer;
@@ -284,9 +284,11 @@ impl GrpcHandle {
         proto_files: &Vec<PathBuf>,
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
+        skip_cache: bool,
     ) -> Result<Vec<ServiceDefinition>, String> {
         // Ensure we have a pool; reflect only if missing
-        if self.get_pool(id, uri, proto_files).is_none() {
+        if skip_cache || self.get_pool(id, uri, proto_files).is_none() {
+            info!("Reflecting gRPC services for {} at {}", id, uri);
             self.reflect(id, uri, proto_files, metadata, validate_certificates).await?;
         }
 
