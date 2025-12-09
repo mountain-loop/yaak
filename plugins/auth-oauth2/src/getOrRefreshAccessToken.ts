@@ -71,10 +71,10 @@ export async function getOrRefreshAccessToken(
   httpRequest.authenticationType = 'none'; // Don't inherit workspace auth
   const resp = await ctx.httpRequest.send({ httpRequest });
 
-  if (resp.status === 401) {
-    // Bad refresh token, so we'll force it to fetch a fresh access token by deleting
-    // and returning null;
-    console.log('[oauth2] Unauthorized refresh_token request');
+  if (resp.status >= 400 && resp.status < 500) {
+    // Client errors (4xx) indicate the refresh token is invalid, expired, or revoked
+    // Delete the token and return null to trigger a fresh authorization flow
+    console.log('[oauth2] Refresh token request failed with client error, deleting token');
     await deleteToken(ctx, tokenArgs);
     return null;
   }
