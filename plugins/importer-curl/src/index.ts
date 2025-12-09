@@ -55,6 +55,34 @@ export const plugin: PluginDefinition = {
   },
 };
 
+/**
+ * Decodes escape sequences in shell $'...' strings
+ * Handles Unicode escape sequences (\uXXXX) and common escape codes
+ */
+function decodeShellString(str: string): string {
+  return str
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\');
+}
+
+/**
+ * Checks if a string might contain escape sequences that need decoding
+ * If so, decodes them; otherwise returns the string as-is
+ */
+function maybeDecodeEscapeSequences(str: string): string {
+  // Check if the string contains escape sequences that shell-quote might not handle
+  if (str.includes('\\u') || str.includes('\\x')) {
+    return decodeShellString(str);
+  }
+  return str;
+}
+
 export function convertCurl(rawData: string) {
   if (!rawData.match(/^\s*curl /)) {
     return null;
@@ -86,9 +114,11 @@ export function convertCurl(rawData: string) {
   for (const parseEntry of normalizedParseEntries) {
     if (typeof parseEntry === 'string') {
       if (parseEntry.startsWith('$')) {
-        currentCommand.push(parseEntry.slice(1));
+        // Handle $'...' strings from shell-quote - decode escape sequences
+        currentCommand.push(decodeShellString(parseEntry.slice(1)));
       } else {
-        currentCommand.push(parseEntry);
+        // Decode escape sequences that shell-quote might not handle
+        currentCommand.push(maybeDecodeEscapeSequences(parseEntry));
       }
       continue;
     }
@@ -108,7 +138,7 @@ export function convertCurl(rawData: string) {
 
     if (op?.startsWith('$')) {
       // Handle the case where literal like -H $'Header: \'Some Quoted Thing\''
-      const str = op.slice(2, op.length - 1).replace(/\\'/g, "'");
+      const str = decodeShellString(op.slice(2, op.length - 1));
 
       currentCommand.push(str);
       continue;

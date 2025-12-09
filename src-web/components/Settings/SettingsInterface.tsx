@@ -199,7 +199,7 @@ function NativeTitlebarSetting({ settings }: { settings: Settings }) {
 
 function LicenseSettings({ settings }: { settings: Settings }) {
   const license = useLicense();
-  if (license.check.data?.type !== 'personal_use') {
+  if (license.check.data?.status !== 'personal_use') {
     return null;
   }
 
