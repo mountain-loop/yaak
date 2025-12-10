@@ -1,6 +1,6 @@
 use crate::error::Error::GenericError;
 use crate::error::Result;
-use log::{debug, warn};
+use log::debug;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::ring;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
@@ -27,13 +27,13 @@ pub fn get_tls_config(
     with_alpn: bool,
     client_cert: Option<ClientCertificateConfig>,
 ) -> Result<ClientConfig> {
-    let maybe_client_cert = load_client_cert(client_cert);
+    let maybe_client_cert = load_client_cert(client_cert)?;
 
     let mut client = if validate_certificates {
-        build_with_validation(maybe_client_cert)?
+        build_with_validation(maybe_client_cert)
     } else {
         build_without_validation(maybe_client_cert)
-    };
+    }?;
 
     if with_alpn {
         client.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
@@ -51,17 +51,7 @@ fn build_with_validation(
         .with_platform_verifier()?;
 
     if let Some((certs, key)) = client_cert {
-        return Ok(builder.with_client_auth_cert(certs, key).unwrap_or_else(|err| {
-            warn!("Failed to configure client certificate: {:?}", err);
-            // Rebuild without client auth
-            let arc_crypto_provider = Arc::new(ring::default_provider());
-            ClientConfig::builder_with_provider(arc_crypto_provider)
-                .with_safe_default_protocol_versions()
-                .unwrap()
-                .with_platform_verifier()
-                .unwrap()
-                .with_no_client_auth()
-        }));
+        return Ok(builder.with_client_auth_cert(certs, key)?);
     }
 
     Ok(builder.with_no_client_auth())
@@ -69,57 +59,43 @@ fn build_with_validation(
 
 fn build_without_validation(
     client_cert: Option<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)>,
-) -> ClientConfig {
+) -> Result<ClientConfig> {
     let arc_crypto_provider = Arc::new(ring::default_provider());
     let builder = ClientConfig::builder_with_provider(arc_crypto_provider)
-        .with_safe_default_protocol_versions()
-        .unwrap()
+        .with_safe_default_protocol_versions()?
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(NoVerifier));
 
     if let Some((certs, key)) = client_cert {
-        return builder.with_client_auth_cert(certs, key).unwrap_or_else(|err| {
-            warn!("Failed to configure client certificate: {:?}", err);
-            // Rebuild without client auth
-            let arc_crypto_provider = Arc::new(ring::default_provider());
-            ClientConfig::builder_with_provider(arc_crypto_provider)
-                .with_safe_default_protocol_versions()
-                .unwrap()
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(NoVerifier))
-                .with_no_client_auth()
-        });
+        return Ok(builder.with_client_auth_cert(certs, key)?);
     }
 
-    builder.with_no_client_auth()
+    Ok(builder.with_no_client_auth())
 }
 
 fn load_client_cert(
     client_cert: Option<ClientCertificateConfig>,
-) -> Option<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
-    let config = client_cert?;
+) -> Result<Option<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)>> {
+    let config = match client_cert {
+        None => return Ok(None),
+        Some(c) => c,
+    };
 
     // Try PFX/PKCS12 first
     if let Some(pfx_path) = &config.pfx_file {
         if !pfx_path.is_empty() {
-            match load_pkcs12(pfx_path, config.passphrase.as_deref().unwrap_or("")) {
-                Ok(result) => return Some(result),
-                Err(e) => warn!("Failed to load PFX file: {}", e),
-            }
+            return Ok(Some(load_pkcs12(pfx_path, config.passphrase.as_deref().unwrap_or(""))?));
         }
     }
 
     // Try CRT + KEY files
     if let (Some(crt_path), Some(key_path)) = (&config.crt_file, &config.key_file) {
         if !crt_path.is_empty() && !key_path.is_empty() {
-            match load_pem_files(crt_path, key_path) {
-                Ok(result) => return Some(result),
-                Err(e) => warn!("Failed to load PEM files: {}", e),
-            }
+            return Ok(Some(load_pem_files(crt_path, key_path)?));
         }
     }
 
-    None
+    Ok(None)
 }
 
 fn load_pem_files(

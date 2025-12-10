@@ -81,7 +81,7 @@ impl AutoReflectionClient {
                 .into_inner()
                 .next()
                 .await
-                .expect("steamed response")?
+                .ok_or(GenericError("Missing reflection message".to_string()))??
                 .message_response
                 .ok_or(GenericError("No reflection response".to_string()))
                 .map(|resp| to_v1_msg_response(resp))
@@ -113,7 +113,7 @@ impl AutoReflectionClient {
             .into_inner()
             .next()
             .await
-            .expect("steamed response")?
+            .ok_or(GenericError("Missing reflection message".to_string()))??
             .message_response
             .ok_or(GenericError("No reflection response".to_string()))
         }

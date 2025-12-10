@@ -89,7 +89,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             }
             validate={(value) => {
               if (!value) return false;
-              if (!/^[a-zA-Z0-9.-]+$/.test(value)) return false;
+              if (!/^[a-zA-Z0-9_.-]+$/.test(value)) return false;
               return true;
             }}
             label="Host"
@@ -144,7 +144,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
         <Separator className="my-3" />
 
         <SelectFile
-          label="PKCS File"
+          label="PFX File"
           noun="Key"
           filePath={certificate.pfxFile ?? null}
           size="sm"
@@ -219,8 +219,7 @@ export function SettingsCertificates() {
           <div>
             <Heading>Client Certificates</Heading>
             <p className="text-text-subtle">
-              Add and manage SSL certificates on a per domain basis. Learn more about working with
-              certificates
+              Add and manage TLS certificates on a per domain basis
             </p>
           </div>
           <Button variant="border" size="sm" color="secondary" onClick={handleAdd}>

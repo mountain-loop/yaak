@@ -10,7 +10,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::{
     Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
 };
-use yaak_tls::ClientCertificateConfig;
+use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 // Enabling ALPN breaks websocket requests
 const WITH_ALPN: bool = false;
@@ -22,7 +22,7 @@ pub(crate) async fn ws_connect(
     client_cert: Option<ClientCertificateConfig>,
 ) -> Result<(WebSocketStream<MaybeTlsStream<TcpStream>>, Response)> {
     info!("Connecting to WS {url}");
-    let tls_config = yaak_tls::get_tls_config(validate_certificates, WITH_ALPN, client_cert.clone())?;
+    let tls_config = get_tls_config(validate_certificates, WITH_ALPN, client_cert.clone())?;
 
     let mut req = url.into_client_request()?;
     let req_headers = req.headers_mut();

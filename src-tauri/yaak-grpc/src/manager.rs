@@ -117,7 +117,7 @@ impl GrpcConnection {
 
         let path = method_desc_to_path(method);
         let codec = DynamicCodec::new(method.clone());
-        client.ready().await.unwrap();
+        client.ready().await.map_err(|e| GenericError(format!("Failed to connect: {}", e)))?;
 
         Ok(client.unary(req, path, codec).await?)
     }
@@ -137,7 +137,7 @@ impl GrpcConnection {
             let uri = self.uri.clone();
             let md = metadata.clone();
             let use_reflection = self.use_reflection.clone();
-            let client_cert = client_cert.map(|c| c.clone());
+            let client_cert = client_cert.clone();
             stream.filter_map(move |json| {
                 let pool = pool.clone();
                 let uri = uri.clone();
@@ -184,14 +184,14 @@ impl GrpcConnection {
         metadata: &BTreeMap<String, String>,
         client_cert: Option<ClientCertificateConfig>,
     ) -> Result<Response<DynamicMessage>> {
-        let method = &self.method(&service, &method).await.unwrap();
+        let method = &self.method(&service, &method).await?;
         let mapped_stream = {
             let input_message = method.input();
             let pool = self.pool.clone();
             let uri = self.uri.clone();
             let md = metadata.clone();
             let use_reflection = self.use_reflection.clone();
-            let client_cert = client_cert.map(|c| c.clone());
+            let client_cert = client_cert.clone();
             stream.filter_map(move |json| {
                 let pool = pool.clone();
                 let uri = uri.clone();
@@ -226,7 +226,7 @@ impl GrpcConnection {
         let mut req = mapped_stream.into_streaming_request();
         decorate_req(metadata, &mut req)?;
 
-        client.ready().await.unwrap();
+        client.ready().await.map_err(|e| GenericError(format!("Failed to connect: {}", e)))?;
         Ok(client.client_streaming(req, path, codec).await.map_err(|e| GrpcStreamError {
             message: e.message().to_string(),
             status: Some(e),
@@ -349,7 +349,7 @@ impl GrpcHandle {
                             &pool,
                             input_message,
                         ))
-                        .unwrap(),
+                        .expect("Failed to serialize JSON schema"),
                     })
                 }
                 def
