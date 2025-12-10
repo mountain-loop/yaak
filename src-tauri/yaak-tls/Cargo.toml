@@ -1,0 +1,16 @@
+[package]
+name = "yaak-tls"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+log = { workspace = true }
+p12 = "0.6.3"
+rustls = { workspace = true, default-features = false, features = ["ring"] }
+rustls-pemfile = "2"
+rustls-platform-verifier = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = "2.0.17"
+url = "2.5"
+yaak-models = { workspace = true }

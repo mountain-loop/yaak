@@ -18,6 +18,7 @@ impl<'a> DbContext<'a> {
             updated_at: Default::default(),
 
             appearance: "system".to_string(),
+            client_certificates: Vec::new(),
             editor_font_size: 12,
             editor_font: None,
             editor_keymap: EditorKeymap::Default,

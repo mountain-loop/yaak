@@ -53,6 +53,26 @@ pub struct ProxySettingAuth {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct ClientCertificate {
+    pub host: String,
+    #[serde(default)]
+    pub port: Option<i32>,
+    #[serde(default)]
+    pub crt_file: Option<String>,
+    #[serde(default)]
+    pub key_file: Option<String>,
+    #[serde(default)]
+    pub pfx_file: Option<String>,
+    #[serde(default)]
+    pub passphrase: Option<String>,
+    #[serde(default = "default_true")]
+    #[ts(optional, as = "Option<bool>")]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum EditorKeymap {
@@ -106,6 +126,7 @@ pub struct Settings {
     pub updated_at: NaiveDateTime,
 
     pub appearance: String,
+    pub client_certificates: Vec<ClientCertificate>,
     pub colored_methods: bool,
     pub editor_font: Option<String>,
     pub editor_font_size: i32,
@@ -158,10 +179,12 @@ impl UpsertModelInfo for Settings {
             None => None,
             Some(p) => Some(serde_json::to_string(&p)?),
         };
+        let client_certificates = serde_json::to_string(&self.client_certificates)?;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (Appearance, self.appearance.as_str().into()),
+            (ClientCertificates, client_certificates.into()),
             (EditorFontSize, self.editor_font_size.into()),
             (EditorKeymap, self.editor_keymap.to_string().into()),
             (EditorSoftWrap, self.editor_soft_wrap.into()),
@@ -188,6 +211,7 @@ impl UpsertModelInfo for Settings {
         vec![
             SettingsIden::UpdatedAt,
             SettingsIden::Appearance,
+            SettingsIden::ClientCertificates,
             SettingsIden::EditorFontSize,
             SettingsIden::EditorKeymap,
             SettingsIden::EditorSoftWrap,
@@ -215,6 +239,7 @@ impl UpsertModelInfo for Settings {
         Self: Sized,
     {
         let proxy: Option<String> = row.get("proxy")?;
+        let client_certificates: String = row.get("client_certificates")?;
         let editor_keymap: String = row.get("editor_keymap")?;
         Ok(Self {
             id: row.get("id")?,
@@ -222,6 +247,7 @@ impl UpsertModelInfo for Settings {
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
             appearance: row.get("appearance")?,
+            client_certificates: serde_json::from_str(&client_certificates).unwrap_or_default(),
             editor_font_size: row.get("editor_font_size")?,
             editor_font: row.get("editor_font")?,
             editor_keymap: EditorKeymap::from_str(editor_keymap.as_str()).unwrap(),

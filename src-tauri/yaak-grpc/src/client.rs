@@ -1,3 +1,5 @@
+use crate::error::Error::GenericError;
+use crate::error::Result;
 use crate::manager::decorate_req;
 use crate::transport::get_transport;
 use async_recursion::async_recursion;
@@ -18,6 +20,7 @@ use tonic_reflection::pb::v1::{
 };
 use tonic_reflection::pb::v1::{ExtensionRequest, FileDescriptorResponse};
 use tonic_reflection::pb::{v1, v1alpha};
+use yaak_tls::ClientCertificateConfig;
 
 pub struct AutoReflectionClient<T = Client<HttpsConnector<HttpConnector>, BoxBody>> {
     use_v1alpha: bool,
@@ -26,20 +29,24 @@ pub struct AutoReflectionClient<T = Client<HttpsConnector<HttpConnector>, BoxBod
 }
 
 impl AutoReflectionClient {
-    pub fn new(uri: &Uri, validate_certificates: bool) -> Self {
+    pub fn new(
+        uri: &Uri,
+        validate_certificates: bool,
+        client_cert: Option<ClientCertificateConfig>,
+    ) -> Result<Self> {
         let client_v1 = v1::server_reflection_client::ServerReflectionClient::with_origin(
-            get_transport(validate_certificates),
+            get_transport(validate_certificates, client_cert.clone())?,
             uri.clone(),
         );
         let client_v1alpha = v1alpha::server_reflection_client::ServerReflectionClient::with_origin(
-            get_transport(validate_certificates),
+            get_transport(validate_certificates, client_cert.clone())?,
             uri.clone(),
         );
-        AutoReflectionClient {
+        Ok(AutoReflectionClient {
             use_v1alpha: false,
             client_v1,
             client_v1alpha,
-        }
+        })
     }
 
     #[async_recursion]
@@ -47,36 +54,40 @@ impl AutoReflectionClient {
         &mut self,
         message: MessageRequest,
         metadata: &BTreeMap<String, String>,
-    ) -> Result<MessageResponse, String> {
+    ) -> Result<MessageResponse> {
         let reflection_request = ServerReflectionRequest {
             host: "".into(), // Doesn't matter
             message_request: Some(message.clone()),
         };
 
         if self.use_v1alpha {
-            let mut request = Request::new(tokio_stream::once(to_v1alpha_request(reflection_request)));
-            decorate_req(metadata, &mut request).map_err(|e| e.to_string())?;
+            let mut request =
+                Request::new(tokio_stream::once(to_v1alpha_request(reflection_request)));
+            decorate_req(metadata, &mut request)?;
 
             self.client_v1alpha
                 .server_reflection_info(request)
                 .await
                 .map_err(|e| match e.code() {
-                    tonic::Code::Unavailable => "Failed to connect to endpoint".to_string(),
-                    tonic::Code::Unauthenticated => "Authentication failed".to_string(),
-                    tonic::Code::DeadlineExceeded => "Deadline exceeded".to_string(),
-                    _ => e.to_string(),
+                    tonic::Code::Unavailable => {
+                        GenericError("Failed to connect to endpoint".to_string())
+                    }
+                    tonic::Code::Unauthenticated => {
+                        GenericError("Authentication failed".to_string())
+                    }
+                    tonic::Code::DeadlineExceeded => GenericError("Deadline exceeded".to_string()),
+                    _ => GenericError(e.to_string()),
                 })?
                 .into_inner()
                 .next()
                 .await
-                .expect("steamed response")
-                .map_err(|e| e.to_string())?
+                .ok_or(GenericError("Missing reflection message".to_string()))??
                 .message_response
-                .ok_or("No reflection response".to_string())
+                .ok_or(GenericError("No reflection response".to_string()))
                 .map(|resp| to_v1_msg_response(resp))
         } else {
             let mut request = Request::new(tokio_stream::once(reflection_request));
-            decorate_req(metadata, &mut request).map_err(|e| e.to_string())?;
+            decorate_req(metadata, &mut request)?;
 
             let resp = self.client_v1.server_reflection_info(request).await;
             match resp {
@@ -92,18 +103,19 @@ impl AutoReflectionClient {
                 },
             }
             .map_err(|e| match e.code() {
-                tonic::Code::Unavailable => "Failed to connect to endpoint".to_string(),
-                tonic::Code::Unauthenticated => "Authentication failed".to_string(),
-                tonic::Code::DeadlineExceeded => "Deadline exceeded".to_string(),
-                _ => e.to_string(),
+                tonic::Code::Unavailable => {
+                    GenericError("Failed to connect to endpoint".to_string())
+                }
+                tonic::Code::Unauthenticated => GenericError("Authentication failed".to_string()),
+                tonic::Code::DeadlineExceeded => GenericError("Deadline exceeded".to_string()),
+                _ => GenericError(e.to_string()),
             })?
             .into_inner()
             .next()
             .await
-            .expect("steamed response")
-            .map_err(|e| e.to_string())?
+            .ok_or(GenericError("Missing reflection message".to_string()))??
             .message_response
-            .ok_or("No reflection response".to_string())
+            .ok_or(GenericError("No reflection response".to_string()))
         }
     }
 }
