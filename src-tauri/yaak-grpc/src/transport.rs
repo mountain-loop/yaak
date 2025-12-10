@@ -3,12 +3,17 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use tonic::body::BoxBody;
+use yaak_tls::ClientCertificateConfig;
+use crate::error::Result;
 
 // I think ALPN breaks this because we're specifying http2_only
 const WITH_ALPN: bool = false;
 
-pub(crate) fn get_transport(validate_certificates: bool) -> Client<HttpsConnector<HttpConnector>, BoxBody> {
-    let tls_config = yaak_http::tls::get_config(validate_certificates, WITH_ALPN, None);
+pub(crate) fn get_transport(
+    validate_certificates: bool,
+    client_cert: Option<ClientCertificateConfig>,
+) -> Result<Client<HttpsConnector<HttpConnector>, BoxBody>> {
+    let tls_config = yaak_tls::get_tls_config(validate_certificates, WITH_ALPN, client_cert)?;
 
     let mut http = HttpConnector::new();
     http.enforce_http(false);
@@ -21,5 +26,5 @@ pub(crate) fn get_transport(validate_certificates: bool) -> Client<HttpsConnecto
         .http2_only(true)
         .build(connector);
 
-    client
+    Ok(client)
 }

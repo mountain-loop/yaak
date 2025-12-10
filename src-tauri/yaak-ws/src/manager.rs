@@ -12,6 +12,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::handshake::client::Response;
 use tokio_tungstenite::tungstenite::http::{HeaderMap, HeaderValue};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+use yaak_tls::ClientCertificateConfig;
 
 #[derive(Clone)]
 pub struct WebsocketManager {
@@ -35,10 +36,12 @@ impl WebsocketManager {
         headers: HeaderMap<HeaderValue>,
         receive_tx: mpsc::Sender<Message>,
         validate_certificates: bool,
+        client_cert: Option<ClientCertificateConfig>,
     ) -> Result<Response> {
         let tx = receive_tx.clone();
 
-        let (stream, response) = ws_connect(url, headers, validate_certificates).await?;
+        let (stream, response) =
+            ws_connect(url, headers, validate_certificates, client_cert).await?;
         let (write, mut read) = stream.split();
 
         self.connections.lock().await.insert(id.to_string(), write);

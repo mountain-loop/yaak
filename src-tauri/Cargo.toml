@@ -12,6 +12,7 @@ members = [
     "yaak-sse",
     "yaak-sync",
     "yaak-templates",
+    "yaak-tls",
     "yaak-ws",
 ]
 
@@ -86,6 +87,7 @@ yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }
 yaak-sync = { workspace = true }
 yaak-templates = { workspace = true }
+yaak-tls = { workspace = true }
 yaak-ws = { path = "yaak-ws" }
 
 [workspace.dependencies]
@@ -116,3 +118,4 @@ yaak-plugins = { path = "yaak-plugins" }
 yaak-sse = { path = "yaak-sse" }
 yaak-sync = { path = "yaak-sync" }
 yaak-templates = { path = "yaak-templates" }
+yaak-tls = { path = "yaak-tls" }

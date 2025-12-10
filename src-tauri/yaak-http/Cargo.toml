@@ -7,13 +7,9 @@ publish = false
 [dependencies]
 hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
 log = { workspace = true }
-p12 = "0.6.3"
 regex = "1.11.1"
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider", "socks", "http2"] }
 reqwest_cookie_store = { workspace = true }
-rustls = { workspace = true, default-features = false, features = ["ring"] }
-rustls-pemfile = "2.2.0"
-rustls-platform-verifier = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tauri = { workspace = true }
 thiserror = { workspace = true }
@@ -21,3 +17,4 @@ tokio = { workspace = true }
 tower-service = "0.3.3"
 urlencoding = "2.1.3"
 yaak-models = { workspace = true }
+yaak-tls = { workspace = true }

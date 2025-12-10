@@ -25,10 +25,9 @@ use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::manager::HttpConnectionManager;
-use yaak_http::tls::ClientCertificateConfig;
 use yaak_models::models::{
-    ClientCertificate, Cookie, CookieJar, Environment, HttpRequest, HttpResponse,
-    HttpResponseHeader, HttpResponseState, ProxySetting, ProxySettingAuth,
+    Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
+    HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
@@ -38,6 +37,7 @@ use yaak_plugins::events::{
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
+use yaak_tls::find_client_certificate;
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -152,7 +152,6 @@ pub async fn send_http_request_with_context<R: Runtime>(
         }
     };
 
-    // Find matching client certificate for this URL
     let client_certificate = find_client_certificate(&url_string, &settings.client_certificates);
 
     // Add cookie store if specified
@@ -762,49 +761,4 @@ fn get_str_h<'a>(v: &'a BTreeMap<String, Value>, key: &str) -> &'a str {
         None => "",
         Some(v) => v.as_str().unwrap_or_default(),
     }
-}
-
-fn find_client_certificate(
-    url_string: &str,
-    certificates: &[ClientCertificate],
-) -> Option<ClientCertificateConfig> {
-    let url = Url::from_str(url_string).ok()?;
-    let host = url.host_str()?;
-    let port = url.port_or_known_default();
-
-    for cert in certificates {
-        if !cert.enabled {
-            debug!("Client certificate is disabled, skipping");
-            continue;
-        }
-
-        // Match host (case-insensitive)
-        if !cert.host.eq_ignore_ascii_case(host) {
-            debug!("Client certificate host does not match {} != {} (cert)", host, cert.host);
-            continue;
-        }
-
-        // Match port if specified in the certificate config
-        let cert_port = cert.port.unwrap_or(443);
-        if let Some(url_port) = port {
-            if cert_port != url_port as i32 {
-                debug!(
-                    "Client certificate port does not match {} != {} (cert)",
-                    url_port, cert_port
-                );
-                continue;
-            }
-        }
-
-        // Found a matching certificate
-        debug!("Found matching client certificate host={} port={}", host, port.unwrap_or(443));
-        return Some(ClientCertificateConfig {
-            crt_file: cert.crt_file.clone(),
-            key_file: cert.key_file.clone(),
-            pfx_file: cert.pfx_file.clone(),
-            passphrase: cert.passphrase.clone(),
-        });
-    }
-
-    None
 }

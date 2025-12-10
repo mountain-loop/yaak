@@ -1,4 +1,6 @@
-use log::warn;
+use crate::error::Error::GenericError;
+use crate::error::Result;
+use log::{debug, warn};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::ring;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
@@ -7,7 +9,10 @@ use rustls_platform_verifier::BuilderVerifierExt;
 use std::fs;
 use std::io::BufReader;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
+
+pub mod error;
 
 #[derive(Clone, Default)]
 pub struct ClientCertificateConfig {
@@ -17,15 +22,15 @@ pub struct ClientCertificateConfig {
     pub passphrase: Option<String>,
 }
 
-pub fn get_config(
+pub fn get_tls_config(
     validate_certificates: bool,
     with_alpn: bool,
-    client_cert: Option<&ClientCertificateConfig>,
-) -> ClientConfig {
+    client_cert: Option<ClientCertificateConfig>,
+) -> Result<ClientConfig> {
     let maybe_client_cert = load_client_cert(client_cert);
 
     let mut client = if validate_certificates {
-        build_with_validation(maybe_client_cert)
+        build_with_validation(maybe_client_cert)?
     } else {
         build_without_validation(maybe_client_cert)
     };
@@ -34,37 +39,32 @@ pub fn get_config(
         client.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
     }
 
-    client
+    Ok(client)
 }
 
 fn build_with_validation(
     client_cert: Option<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)>,
-) -> ClientConfig {
+) -> Result<ClientConfig> {
     let arc_crypto_provider = Arc::new(ring::default_provider());
     let builder = ClientConfig::builder_with_provider(arc_crypto_provider)
-        .with_safe_default_protocol_versions()
-        .unwrap()
-        .with_platform_verifier()
-        .unwrap();
+        .with_safe_default_protocol_versions()?
+        .with_platform_verifier()?;
 
     if let Some((certs, key)) = client_cert {
-        match builder.with_client_auth_cert(certs, key) {
-            Ok(cfg) => return cfg,
-            Err(err) => {
-                warn!("Failed to configure client certificate: {:?}", err);
-                // Rebuild without client auth
-                let arc_crypto_provider = Arc::new(ring::default_provider());
-                return ClientConfig::builder_with_provider(arc_crypto_provider)
-                    .with_safe_default_protocol_versions()
-                    .unwrap()
-                    .with_platform_verifier()
-                    .unwrap()
-                    .with_no_client_auth();
-            }
-        }
+        return Ok(builder.with_client_auth_cert(certs, key).unwrap_or_else(|err| {
+            warn!("Failed to configure client certificate: {:?}", err);
+            // Rebuild without client auth
+            let arc_crypto_provider = Arc::new(ring::default_provider());
+            ClientConfig::builder_with_provider(arc_crypto_provider)
+                .with_safe_default_protocol_versions()
+                .unwrap()
+                .with_platform_verifier()
+                .unwrap()
+                .with_no_client_auth()
+        }));
     }
 
-    builder.with_no_client_auth()
+    Ok(builder.with_no_client_auth())
 }
 
 fn build_without_validation(
@@ -78,27 +78,24 @@ fn build_without_validation(
         .with_custom_certificate_verifier(Arc::new(NoVerifier));
 
     if let Some((certs, key)) = client_cert {
-        match builder.with_client_auth_cert(certs, key) {
-            Ok(cfg) => return cfg,
-            Err(err) => {
-                warn!("Failed to configure client certificate: {:?}", err);
-                // Rebuild without client auth
-                let arc_crypto_provider = Arc::new(ring::default_provider());
-                return ClientConfig::builder_with_provider(arc_crypto_provider)
-                    .with_safe_default_protocol_versions()
-                    .unwrap()
-                    .dangerous()
-                    .with_custom_certificate_verifier(Arc::new(NoVerifier))
-                    .with_no_client_auth();
-            }
-        }
+        return builder.with_client_auth_cert(certs, key).unwrap_or_else(|err| {
+            warn!("Failed to configure client certificate: {:?}", err);
+            // Rebuild without client auth
+            let arc_crypto_provider = Arc::new(ring::default_provider());
+            ClientConfig::builder_with_provider(arc_crypto_provider)
+                .with_safe_default_protocol_versions()
+                .unwrap()
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoVerifier))
+                .with_no_client_auth()
+        });
     }
 
     builder.with_no_client_auth()
 }
 
 fn load_client_cert(
-    client_cert: Option<&ClientCertificateConfig>,
+    client_cert: Option<ClientCertificateConfig>,
 ) -> Option<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
     let config = client_cert?;
 
@@ -128,86 +125,76 @@ fn load_client_cert(
 fn load_pem_files(
     crt_path: &str,
     key_path: &str,
-) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>), String> {
+) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
     // Load certificates
-    let crt_file = fs::File::open(Path::new(crt_path)).map_err(|e| e.to_string())?;
+    let crt_file = fs::File::open(Path::new(crt_path))?;
     let mut crt_reader = BufReader::new(crt_file);
-    let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut crt_reader)
-        .filter_map(|r| r.ok())
-        .collect();
+    let certs: Vec<CertificateDer<'static>> =
+        rustls_pemfile::certs(&mut crt_reader).filter_map(|r| r.ok()).collect();
 
     if certs.is_empty() {
-        return Err("No certificates found in CRT file".to_string());
+        return Err(GenericError("No certificates found in CRT file".to_string()));
     }
 
     // Load private key
-    let key_data = fs::read(Path::new(key_path)).map_err(|e| e.to_string())?;
+    let key_data = fs::read(Path::new(key_path))?;
     let key = load_private_key(&key_data)?;
 
     Ok((certs, key))
 }
 
-fn load_private_key(data: &[u8]) -> Result<PrivateKeyDer<'static>, String> {
+fn load_private_key(data: &[u8]) -> Result<PrivateKeyDer<'static>> {
     let mut reader = BufReader::new(data);
 
     // Try PKCS8 first
-    if let Some(key) = rustls_pemfile::pkcs8_private_keys(&mut reader)
-        .filter_map(|r| r.ok())
-        .next()
+    if let Some(key) = rustls_pemfile::pkcs8_private_keys(&mut reader).filter_map(|r| r.ok()).next()
     {
         return Ok(PrivateKeyDer::Pkcs8(key));
     }
 
     // Reset reader and try RSA
     let mut reader = BufReader::new(data);
-    if let Some(key) = rustls_pemfile::rsa_private_keys(&mut reader)
-        .filter_map(|r| r.ok())
-        .next()
-    {
+    if let Some(key) = rustls_pemfile::rsa_private_keys(&mut reader).filter_map(|r| r.ok()).next() {
         return Ok(PrivateKeyDer::Pkcs1(key));
     }
 
     // Reset reader and try EC
     let mut reader = BufReader::new(data);
-    if let Some(key) = rustls_pemfile::ec_private_keys(&mut reader)
-        .filter_map(|r| r.ok())
-        .next()
-    {
+    if let Some(key) = rustls_pemfile::ec_private_keys(&mut reader).filter_map(|r| r.ok()).next() {
         return Ok(PrivateKeyDer::Sec1(key));
     }
 
-    Err("Could not parse private key".to_string())
+    Err(GenericError("Could not parse private key".to_string()))
 }
 
 fn load_pkcs12(
     path: &str,
     passphrase: &str,
-) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>), String> {
-    let data = fs::read(Path::new(path)).map_err(|e| e.to_string())?;
+) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
+    let data = fs::read(Path::new(path))?;
 
-    let pfx = p12::PFX::parse(&data).map_err(|e| format!("Failed to parse PFX: {:?}", e))?;
+    let pfx = p12::PFX::parse(&data)
+        .map_err(|e| GenericError(format!("Failed to parse PFX: {:?}", e)))?;
 
     let keys = pfx
         .key_bags(passphrase)
-        .map_err(|e| format!("Failed to extract keys: {:?}", e))?;
+        .map_err(|e| GenericError(format!("Failed to extract keys: {:?}", e)))?;
 
     let certs = pfx
         .cert_x509_bags(passphrase)
-        .map_err(|e| format!("Failed to extract certs: {:?}", e))?;
+        .map_err(|e| GenericError(format!("Failed to extract certs: {:?}", e)))?;
 
     if keys.is_empty() {
-        return Err("No private key found in PFX".to_string());
+        return Err(GenericError("No private key found in PFX".to_string()));
     }
 
     if certs.is_empty() {
-        return Err("No certificates found in PFX".to_string());
+        return Err(GenericError("No certificates found in PFX".to_string()));
     }
 
     // Convert certificates - p12 crate returns Vec<u8> for each cert
-    let cert_ders: Vec<CertificateDer<'static>> = certs
-        .into_iter()
-        .map(|c| CertificateDer::from(c))
-        .collect();
+    let cert_ders: Vec<CertificateDer<'static>> =
+        certs.into_iter().map(|c| CertificateDer::from(c)).collect();
 
     // Convert key - the p12 crate returns raw key bytes
     let key_bytes = keys.into_iter().next().unwrap();
@@ -228,7 +215,7 @@ impl ServerCertVerifier for NoVerifier {
         _server_name: &ServerName,
         _ocsp_response: &[u8],
         _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
+    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
         Ok(ServerCertVerified::assertion())
     }
 
@@ -237,7 +224,7 @@ impl ServerCertVerifier for NoVerifier {
         _message: &[u8],
         _cert: &CertificateDer,
         _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
         Ok(HandshakeSignatureValid::assertion())
     }
 
@@ -246,7 +233,7 @@ impl ServerCertVerifier for NoVerifier {
         _message: &[u8],
         _cert: &CertificateDer,
         _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
         Ok(HandshakeSignatureValid::assertion())
     }
 
@@ -267,4 +254,50 @@ impl ServerCertVerifier for NoVerifier {
             SignatureScheme::ED448,
         ]
     }
+}
+
+pub fn find_client_certificate(
+    url_string: &str,
+    certificates: &[yaak_models::models::ClientCertificate],
+) -> Option<ClientCertificateConfig> {
+    let url = url::Url::from_str(url_string).ok()?;
+    let host = url.host_str()?;
+    let port = url.port_or_known_default();
+
+    for cert in certificates {
+        if !cert.enabled {
+            debug!("Client certificate is disabled, skipping");
+            continue;
+        }
+
+        // Match host (case-insensitive)
+        if !cert.host.eq_ignore_ascii_case(host) {
+            debug!("Client certificate host does not match {} != {} (cert)", host, cert.host);
+            continue;
+        }
+
+        // Match port if specified in the certificate config
+        let cert_port = cert.port.unwrap_or(443);
+        if let Some(url_port) = port {
+            if cert_port != url_port as i32 {
+                debug!(
+                    "Client certificate port does not match {} != {} (cert)",
+                    url_port, cert_port
+                );
+                continue;
+            }
+        }
+
+        // Found a matching certificate
+        debug!("Found matching client certificate host={} port={}", host, port.unwrap_or(443));
+        return Some(ClientCertificateConfig {
+            crt_file: cert.crt_file.clone(),
+            key_file: cert.key_file.clone(),
+            pfx_file: cert.pfx_file.clone(),
+            passphrase: cert.passphrase.clone(),
+        });
+    }
+
+    debug!("No matching client certificate found for {}", url_string);
+    None
 }

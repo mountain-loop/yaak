@@ -1,5 +1,7 @@
 use crate::any::collect_any_types;
 use crate::client::AutoReflectionClient;
+use crate::error::Error::GenericError;
+use crate::error::Result;
 use anyhow::anyhow;
 use async_recursion::async_recursion;
 use log::{debug, info, warn};
@@ -21,11 +23,12 @@ use tonic::codegen::http::uri::PathAndQuery;
 use tonic::transport::Uri;
 use tonic_reflection::pb::v1::server_reflection_request::MessageRequest;
 use tonic_reflection::pb::v1::server_reflection_response::MessageResponse;
+use yaak_tls::ClientCertificateConfig;
 
 pub async fn fill_pool_from_files(
     app_handle: &AppHandle,
     paths: &Vec<PathBuf>,
-) -> Result<DescriptorPool, String> {
+) -> Result<DescriptorPool> {
     let mut pool = DescriptorPool::new();
     let random_file_name = format!("{}.desc", uuid::Uuid::new_v4());
     let desc_path = temp_dir().join(random_file_name);
@@ -103,18 +106,18 @@ pub async fn fill_pool_from_files(
         .expect("yaakprotoc failed to run");
 
     if !out.status.success() {
-        return Err(format!(
+        return Err(GenericError(format!(
             "protoc failed with status {}: {}",
             out.status.code().unwrap(),
             String::from_utf8_lossy(out.stderr.as_slice())
-        ));
+        )));
     }
 
-    let bytes = fs::read(desc_path).await.map_err(|e| e.to_string())?;
-    let fdp = FileDescriptorSet::decode(bytes.deref()).map_err(|e| e.to_string())?;
-    pool.add_file_descriptor_set(fdp).map_err(|e| e.to_string())?;
+    let bytes = fs::read(desc_path).await?;
+    let fdp = FileDescriptorSet::decode(bytes.deref())?;
+    pool.add_file_descriptor_set(fdp)?;
 
-    fs::remove_file(desc_path).await.map_err(|e| e.to_string())?;
+    fs::remove_file(desc_path).await?;
 
     Ok(pool)
 }
@@ -123,9 +126,10 @@ pub async fn fill_pool_from_reflection(
     uri: &Uri,
     metadata: &BTreeMap<String, String>,
     validate_certificates: bool,
-) -> Result<DescriptorPool, String> {
+    client_cert: Option<ClientCertificateConfig>,
+) -> Result<DescriptorPool> {
     let mut pool = DescriptorPool::new();
-    let mut client = AutoReflectionClient::new(uri, validate_certificates);
+    let mut client = AutoReflectionClient::new(uri, validate_certificates, client_cert)?;
 
     for service in list_services(&mut client, metadata).await? {
         if service == "grpc.reflection.v1alpha.ServerReflection" {
@@ -144,7 +148,7 @@ pub async fn fill_pool_from_reflection(
 async fn list_services(
     client: &mut AutoReflectionClient,
     metadata: &BTreeMap<String, String>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>> {
     let response =
         client.send_reflection_request(MessageRequest::ListServices("".into()), metadata).await?;
 
@@ -171,7 +175,7 @@ async fn file_descriptor_set_from_service_name(
     {
         Ok(resp) => resp,
         Err(e) => {
-            warn!("Error fetching file descriptor for service {}: {}", service_name, e);
+            warn!("Error fetching file descriptor for service {}: {:?}", service_name, e);
             return;
         }
     };
@@ -195,7 +199,8 @@ pub(crate) async fn reflect_types_for_message(
     uri: &Uri,
     json: &str,
     metadata: &BTreeMap<String, String>,
-) -> Result<(), String> {
+    client_cert: Option<ClientCertificateConfig>,
+) -> Result<()> {
     // 1. Collect all Any types in the JSON
     let mut extra_types = Vec::new();
     collect_any_types(json, &mut extra_types);
@@ -204,7 +209,7 @@ pub(crate) async fn reflect_types_for_message(
         return Ok(()); // nothing to do
     }
 
-    let mut client = AutoReflectionClient::new(uri, false);
+    let mut client = AutoReflectionClient::new(uri, false, client_cert)?;
     for extra_type in extra_types {
         {
             let guard = pool.read().await;
@@ -217,9 +222,9 @@ pub(crate) async fn reflect_types_for_message(
         let resp = match client.send_reflection_request(req, metadata).await {
             Ok(r) => r,
             Err(e) => {
-                return Err(format!(
-                    "Error sending reflection request for @type \"{extra_type}\": {e}",
-                ));
+                return Err(GenericError(format!(
+                    "Error sending reflection request for @type \"{extra_type}\": {e:?}",
+                )));
             }
         };
         let files = match resp {
@@ -286,7 +291,7 @@ async fn file_descriptor_set_by_filename(
             panic!("Expected a FileDescriptorResponse variant")
         }
         Err(e) => {
-            warn!("Error fetching file descriptor for {}: {}", filename, e);
+            warn!("Error fetching file descriptor for {}: {:?}", filename, e);
             return;
         }
     };

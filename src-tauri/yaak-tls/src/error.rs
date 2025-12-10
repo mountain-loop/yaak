@@ -1,13 +1,17 @@
 use serde::{Serialize, Serializer};
+use std::io;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Client error: {0:?}")]
-    Client(#[from] reqwest::Error),
+    #[error("Rustls error: {0}")]
+    RustlsError(#[from] rustls::Error),
 
-    #[error(transparent)]
-    TlsError(#[from] yaak_tls::error::Error),
+    #[error("I/O error: {0}")]
+    IOError(#[from] io::Error),
+
+    #[error("TLS error: {0}")]
+    GenericError(String),
 }
 
 impl Serialize for Error {

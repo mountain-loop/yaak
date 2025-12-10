@@ -1,4 +1,6 @@
 use crate::codec::DynamicCodec;
+use crate::error::Error::GenericError;
+use crate::error::Result;
 use crate::reflection::{
     fill_pool_from_files, fill_pool_from_reflection, method_desc_to_path, reflect_types_for_message,
 };
@@ -12,6 +14,9 @@ pub use prost_reflect::DynamicMessage;
 use prost_reflect::{DescriptorPool, MethodDescriptor, ServiceDescriptor};
 use serde_json::Deserializer;
 use std::collections::BTreeMap;
+use std::error::Error;
+use std::fmt;
+use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -23,6 +28,7 @@ use tonic::body::BoxBody;
 use tonic::metadata::{MetadataKey, MetadataValue};
 use tonic::transport::Uri;
 use tonic::{IntoRequest, IntoStreamingRequest, Request, Response, Status, Streaming};
+use yaak_tls::ClientCertificateConfig;
 
 #[derive(Clone)]
 pub struct GrpcConnection {
@@ -33,23 +39,34 @@ pub struct GrpcConnection {
 }
 
 #[derive(Default, Debug)]
-pub struct StreamError {
+pub struct GrpcStreamError {
     pub message: String,
     pub status: Option<Status>,
 }
 
-impl From<String> for StreamError {
+impl Error for GrpcStreamError {}
+
+impl Display for GrpcStreamError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.status {
+            Some(status) => write!(f, "[{}] {}", status, self.message),
+            None => write!(f, "{}", self.message),
+        }
+    }
+}
+
+impl From<String> for GrpcStreamError {
     fn from(value: String) -> Self {
-        StreamError {
+        GrpcStreamError {
             message: value.to_string(),
             status: None,
         }
     }
 }
 
-impl From<Status> for StreamError {
+impl From<Status> for GrpcStreamError {
     fn from(s: Status) -> Self {
-        StreamError {
+        GrpcStreamError {
             message: s.message().to_string(),
             status: Some(s),
         }
@@ -57,16 +74,20 @@ impl From<Status> for StreamError {
 }
 
 impl GrpcConnection {
-    pub async fn method(&self, service: &str, method: &str) -> Result<MethodDescriptor, String> {
+    pub async fn method(&self, service: &str, method: &str) -> Result<MethodDescriptor> {
         let service = self.service(service).await?;
-        let method =
-            service.methods().find(|m| m.name() == method).ok_or("Failed to find method")?;
+        let method = service
+            .methods()
+            .find(|m| m.name() == method)
+            .ok_or(GenericError("Failed to find method".to_string()))?;
         Ok(method)
     }
 
-    async fn service(&self, service: &str) -> Result<ServiceDescriptor, String> {
+    async fn service(&self, service: &str) -> Result<ServiceDescriptor> {
         let pool = self.pool.read().await;
-        let service = pool.get_service_by_name(service).ok_or("Failed to find service")?;
+        let service = pool
+            .get_service_by_name(service)
+            .ok_or(GenericError("Failed to find service".to_string()))?;
         Ok(service)
     }
 
@@ -76,22 +97,23 @@ impl GrpcConnection {
         method: &str,
         message: &str,
         metadata: &BTreeMap<String, String>,
-    ) -> Result<Response<DynamicMessage>, StreamError> {
+        client_cert: Option<ClientCertificateConfig>,
+    ) -> Result<Response<DynamicMessage>> {
         if self.use_reflection {
-            reflect_types_for_message(self.pool.clone(), &self.uri, message, metadata).await?;
+            reflect_types_for_message(self.pool.clone(), &self.uri, message, metadata, client_cert)
+                .await?;
         }
         let method = &self.method(&service, &method).await?;
         let input_message = method.input();
 
         let mut deserializer = Deserializer::from_str(message);
-        let req_message = DynamicMessage::deserialize(input_message, &mut deserializer)
-            .map_err(|e| e.to_string())?;
-        deserializer.end().unwrap();
+        let req_message = DynamicMessage::deserialize(input_message, &mut deserializer)?;
+        deserializer.end()?;
 
         let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
 
         let mut req = req_message.into_request();
-        decorate_req(metadata, &mut req).map_err(|e| e.to_string())?;
+        decorate_req(metadata, &mut req)?;
 
         let path = method_desc_to_path(method);
         let codec = DynamicCodec::new(method.clone());
@@ -106,7 +128,8 @@ impl GrpcConnection {
         method: &str,
         stream: ReceiverStream<String>,
         metadata: &BTreeMap<String, String>,
-    ) -> Result<Response<Streaming<DynamicMessage>>, StreamError> {
+        client_cert: Option<ClientCertificateConfig>,
+    ) -> Result<Response<Streaming<DynamicMessage>>> {
         let method = &self.method(&service, &method).await?;
         let mapped_stream = {
             let input_message = method.input();
@@ -114,15 +137,19 @@ impl GrpcConnection {
             let uri = self.uri.clone();
             let md = metadata.clone();
             let use_reflection = self.use_reflection.clone();
+            let client_cert = client_cert.map(|c| c.clone());
             stream.filter_map(move |json| {
                 let pool = pool.clone();
                 let uri = uri.clone();
                 let input_message = input_message.clone();
                 let md = md.clone();
                 let use_reflection = use_reflection.clone();
+                let client_cert = client_cert.clone();
                 tauri::async_runtime::block_on(async move {
                     if use_reflection {
-                        if let Err(e) = reflect_types_for_message(pool, &uri, &json, &md).await {
+                        if let Err(e) =
+                            reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
+                        {
                             warn!("Failed to resolve Any types: {e}");
                         }
                     }
@@ -143,9 +170,9 @@ impl GrpcConnection {
         let codec = DynamicCodec::new(method.clone());
 
         let mut req = mapped_stream.into_streaming_request();
-        decorate_req(metadata, &mut req).map_err(|e| e.to_string())?;
+        decorate_req(metadata, &mut req)?;
 
-        client.ready().await.map_err(|e| e.to_string())?;
+        client.ready().await.map_err(|e| GenericError(format!("Failed to connect: {}", e)))?;
         Ok(client.streaming(req, path, codec).await?)
     }
 
@@ -155,23 +182,28 @@ impl GrpcConnection {
         method: &str,
         stream: ReceiverStream<String>,
         metadata: &BTreeMap<String, String>,
-    ) -> Result<Response<DynamicMessage>, StreamError> {
-        let method = &self.method(&service, &method).await?;
+        client_cert: Option<ClientCertificateConfig>,
+    ) -> Result<Response<DynamicMessage>> {
+        let method = &self.method(&service, &method).await.unwrap();
         let mapped_stream = {
             let input_message = method.input();
             let pool = self.pool.clone();
             let uri = self.uri.clone();
             let md = metadata.clone();
             let use_reflection = self.use_reflection.clone();
+            let client_cert = client_cert.map(|c| c.clone());
             stream.filter_map(move |json| {
                 let pool = pool.clone();
                 let uri = uri.clone();
                 let input_message = input_message.clone();
                 let md = md.clone();
                 let use_reflection = use_reflection.clone();
+                let client_cert = client_cert.clone();
                 tauri::async_runtime::block_on(async move {
                     if use_reflection {
-                        if let Err(e) = reflect_types_for_message(pool, &uri, &json, &md).await {
+                        if let Err(e) =
+                            reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
+                        {
                             warn!("Failed to resolve Any types: {e}");
                         }
                     }
@@ -192,13 +224,13 @@ impl GrpcConnection {
         let codec = DynamicCodec::new(method.clone());
 
         let mut req = mapped_stream.into_streaming_request();
-        decorate_req(metadata, &mut req).map_err(|e| e.to_string())?;
+        decorate_req(metadata, &mut req)?;
 
         client.ready().await.unwrap();
-        client.client_streaming(req, path, codec).await.map_err(|e| StreamError {
+        Ok(client.client_streaming(req, path, codec).await.map_err(|e| GrpcStreamError {
             message: e.message().to_string(),
             status: Some(e),
-        })
+        })?)
     }
 
     pub async fn server_streaming(
@@ -207,23 +239,22 @@ impl GrpcConnection {
         method: &str,
         message: &str,
         metadata: &BTreeMap<String, String>,
-    ) -> Result<Response<Streaming<DynamicMessage>>, StreamError> {
+    ) -> Result<Response<Streaming<DynamicMessage>>> {
         let method = &self.method(&service, &method).await?;
         let input_message = method.input();
 
         let mut deserializer = Deserializer::from_str(message);
-        let req_message = DynamicMessage::deserialize(input_message, &mut deserializer)
-            .map_err(|e| e.to_string())?;
-        deserializer.end().unwrap();
+        let req_message = DynamicMessage::deserialize(input_message, &mut deserializer)?;
+        deserializer.end()?;
 
         let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
 
         let mut req = req_message.into_request();
-        decorate_req(metadata, &mut req).map_err(|e| e.to_string())?;
+        decorate_req(metadata, &mut req)?;
 
         let path = method_desc_to_path(method);
         let codec = DynamicCodec::new(method.clone());
-        client.ready().await.map_err(|e| e.to_string())?;
+        client.ready().await.map_err(|e| GenericError(format!("Failed to connect: {}", e)))?;
         Ok(client.server_streaming(req, path, codec).await?)
     }
 }
@@ -257,7 +288,8 @@ impl GrpcHandle {
         proto_files: &Vec<PathBuf>,
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
-    ) -> Result<bool, String> {
+        client_cert: Option<ClientCertificateConfig>,
+    ) -> Result<bool> {
         let server_reflection = proto_files.is_empty();
         let key = make_pool_key(id, uri, proto_files);
 
@@ -268,7 +300,7 @@ impl GrpcHandle {
 
         let pool = if server_reflection {
             let full_uri = uri_from_str(uri)?;
-            fill_pool_from_reflection(&full_uri, metadata, validate_certificates).await
+            fill_pool_from_reflection(&full_uri, metadata, validate_certificates, client_cert).await
         } else {
             fill_pool_from_files(&self.app_handle, proto_files).await
         }?;
@@ -284,15 +316,19 @@ impl GrpcHandle {
         proto_files: &Vec<PathBuf>,
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
+        client_cert: Option<ClientCertificateConfig>,
         skip_cache: bool,
-    ) -> Result<Vec<ServiceDefinition>, String> {
+    ) -> Result<Vec<ServiceDefinition>> {
         // Ensure we have a pool; reflect only if missing
         if skip_cache || self.get_pool(id, uri, proto_files).is_none() {
             info!("Reflecting gRPC services for {} at {}", id, uri);
-            self.reflect(id, uri, proto_files, metadata, validate_certificates).await?;
+            self.reflect(id, uri, proto_files, metadata, validate_certificates, client_cert)
+                .await?;
         }
 
-        let pool = self.get_pool(id, uri, proto_files).ok_or("Failed to get pool".to_string())?;
+        let pool = self
+            .get_pool(id, uri, proto_files)
+            .ok_or(GenericError("Failed to get pool".to_string()))?;
         Ok(self.services_from_pool(&pool))
     }
 
@@ -328,14 +364,26 @@ impl GrpcHandle {
         proto_files: &Vec<PathBuf>,
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
-    ) -> Result<GrpcConnection, String> {
+        client_cert: Option<ClientCertificateConfig>,
+    ) -> Result<GrpcConnection> {
         let use_reflection = proto_files.is_empty();
         if self.get_pool(id, uri, proto_files).is_none() {
-            self.reflect(id, uri, proto_files, metadata, validate_certificates).await?;
+            self.reflect(
+                id,
+                uri,
+                proto_files,
+                metadata,
+                validate_certificates,
+                client_cert.clone(),
+            )
+            .await?;
         }
-        let pool = self.get_pool(id, uri, proto_files).ok_or("Failed to get pool")?.clone();
+        let pool = self
+            .get_pool(id, uri, proto_files)
+            .ok_or(GenericError("Failed to get pool".to_string()))?
+            .clone();
         let uri = uri_from_str(uri)?;
-        let conn = get_transport(validate_certificates);
+        let conn = get_transport(validate_certificates, client_cert.clone())?;
         Ok(GrpcConnection {
             pool: Arc::new(RwLock::new(pool)),
             use_reflection,
@@ -352,22 +400,20 @@ impl GrpcHandle {
 pub(crate) fn decorate_req<T>(
     metadata: &BTreeMap<String, String>,
     req: &mut Request<T>,
-) -> Result<(), String> {
+) -> Result<()> {
     for (k, v) in metadata {
-        req.metadata_mut().insert(
-            MetadataKey::from_str(k.as_str()).map_err(|e| e.to_string())?,
-            MetadataValue::from_str(v.as_str()).map_err(|e| e.to_string())?,
-        );
+        req.metadata_mut()
+            .insert(MetadataKey::from_str(k.as_str())?, MetadataValue::from_str(v.as_str())?);
     }
     Ok(())
 }
 
-fn uri_from_str(uri_str: &str) -> Result<Uri, String> {
+fn uri_from_str(uri_str: &str) -> Result<Uri> {
     match Uri::from_str(uri_str) {
         Ok(uri) => Ok(uri),
         Err(err) => {
             // Uri::from_str basically only returns "invalid format" so we add more context here
-            Err(format!("Failed to parse URL, {}", err.to_string()))
+            Err(GenericError(format!("Failed to parse URL, {}", err.to_string())))
         }
     }
 }

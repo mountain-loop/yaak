@@ -1,13 +1,12 @@
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
-use crate::tls;
-use crate::tls::ClientCertificateConfig;
 use log::{debug, warn};
 use reqwest::redirect::Policy;
 use reqwest::{Client, Proxy};
 use reqwest_cookie_store::CookieStoreMutex;
 use std::sync::Arc;
 use std::time::Duration;
+use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 #[derive(Clone)]
 pub struct HttpConnectionProxySettingAuth {
@@ -49,11 +48,9 @@ impl HttpConnectionOptions {
             .tls_info(true);
 
         // Configure TLS with optional client certificate
-        client = client.use_preconfigured_tls(tls::get_config(
-            self.validate_certificates,
-            true,
-            self.client_certificate.as_ref(),
-        ));
+        let config =
+            get_tls_config(self.validate_certificates, true, self.client_certificate.clone())?;
+        client = client.use_preconfigured_tls(config);
 
         // Configure DNS resolver
         client = client.dns_resolver(LocalhostResolver::new());

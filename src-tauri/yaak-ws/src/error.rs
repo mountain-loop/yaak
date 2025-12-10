@@ -16,6 +16,9 @@ pub enum Error {
     #[error(transparent)]
     TemplateError(#[from] yaak_templates::error::Error),
 
+    #[error(transparent)]
+    TlsError(#[from] yaak_tls::error::Error),
+
     #[error("WebSocket error: {0}")]
     GenericError(String),
 }
