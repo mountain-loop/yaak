@@ -20,19 +20,20 @@ impl HttpConnectionManager {
         }
     }
 
-    pub async fn get_client(&self, id: &str, opt: &HttpConnectionOptions) -> Result<Client> {
+    pub async fn get_client(&self, opt: &HttpConnectionOptions) -> Result<Client> {
         let mut connections = self.connections.write().await;
+        let id = opt.id.clone();
 
         // Clean old connections
         connections.retain(|_, (_, last_used)| last_used.elapsed() <= self.ttl);
 
-        if let Some((c, last_used)) = connections.get_mut(id) {
+        if let Some((c, last_used)) = connections.get_mut(&id) {
             info!("Re-using HTTP client {id}");
             *last_used = Instant::now();
             return Ok(c.clone());
         }
 
-        info!("Building new HTTP client {id}");
+        info!("Building new HTTP client {id} cert={}", opt.client_certificate.is_some());
         let c = opt.build_client()?;
         connections.insert(id.into(), (c.clone(), Instant::now()));
         Ok(c)

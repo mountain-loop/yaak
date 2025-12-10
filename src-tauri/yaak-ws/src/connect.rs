@@ -19,7 +19,7 @@ pub(crate) async fn ws_connect(
     validate_certificates: bool,
 ) -> crate::error::Result<(WebSocketStream<MaybeTlsStream<TcpStream>>, Response)> {
     info!("Connecting to WS {url}");
-    let tls_config = yaak_http::tls::get_config(validate_certificates, WITH_ALPN);
+    let tls_config = yaak_http::tls::get_config(validate_certificates, WITH_ALPN, None);
 
     let mut req = url.into_client_request()?;
     let req_headers = req.headers_mut();

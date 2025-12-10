@@ -24,7 +24,7 @@ export function DetailsBanner({ className, color, summary, children, ...extraPro
           />
           {summary}
         </summary>
-        <div className="mt-1.5">{children}</div>
+        <div className="mt-1.5 pb-2">{children}</div>
       </details>
     </Banner>
   );

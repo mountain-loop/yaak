@@ -2,6 +2,8 @@
 
 export type AnyModel = CookieJar | Environment | Folder | GraphQlIntrospection | GrpcConnection | GrpcEvent | GrpcRequest | HttpRequest | HttpResponse | KeyValue | Plugin | Settings | SyncState | WebsocketConnection | WebsocketEvent | WebsocketRequest | Workspace | WorkspaceMeta;
 
+export type ClientCertificate = { host: string, port: number | null, crtFile: string | null, keyFile: string | null, pfxFile: string | null, passphrase: string | null, enabled?: boolean, };
+
 export type Cookie = { raw_cookie: string, domain: CookieDomain, expires: CookieExpires, path: [string, boolean], };
 
 export type CookieDomain = { "HostOnly": string } | { "Suffix": string } | "NotPresent" | "Empty";
@@ -62,7 +64,7 @@ export type ProxySetting = { "type": "enabled", http: string, https: string, aut
 
 export type ProxySettingAuth = { user: string, password: string, };
 
-export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, coloredMethods: boolean, editorFont: string | null, editorFontSize: number, editorKeymap: EditorKeymap, editorSoftWrap: boolean, hideWindowControls: boolean, useNativeTitlebar: boolean, interfaceFont: string | null, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, proxy: ProxySetting | null, themeDark: string, themeLight: string, updateChannel: string, hideLicenseBadge: boolean, autoupdate: boolean, autoDownloadUpdates: boolean, checkNotifications: boolean, };
+export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, clientCertificates: Array<ClientCertificate>, coloredMethods: boolean, editorFont: string | null, editorFontSize: number, editorKeymap: EditorKeymap, editorSoftWrap: boolean, hideWindowControls: boolean, useNativeTitlebar: boolean, interfaceFont: string | null, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, proxy: ProxySetting | null, themeDark: string, themeLight: string, updateChannel: string, hideLicenseBadge: boolean, autoupdate: boolean, autoDownloadUpdates: boolean, checkNotifications: boolean, };
 
 export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, relPath: string, syncDir: string, };
 

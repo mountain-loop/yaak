@@ -8,7 +8,7 @@ use tonic::body::BoxBody;
 const WITH_ALPN: bool = false;
 
 pub(crate) fn get_transport(validate_certificates: bool) -> Client<HttpsConnector<HttpConnector>, BoxBody> {
-    let tls_config = yaak_http::tls::get_config(validate_certificates, WITH_ALPN);
+    let tls_config = yaak_http::tls::get_config(validate_certificates, WITH_ALPN, None);
 
     let mut http = HttpConnector::new();
     http.enforce_http(false);

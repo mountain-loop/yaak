@@ -1,6 +1,7 @@
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
 use crate::tls;
+use crate::tls::ClientCertificateConfig;
 use log::{debug, warn};
 use reqwest::redirect::Policy;
 use reqwest::{Client, Proxy};
@@ -28,11 +29,13 @@ pub enum HttpConnectionProxySetting {
 
 #[derive(Clone)]
 pub struct HttpConnectionOptions {
+    pub id: String,
     pub follow_redirects: bool,
     pub validate_certificates: bool,
     pub proxy: HttpConnectionProxySetting,
     pub cookie_provider: Option<Arc<CookieStoreMutex>>,
     pub timeout: Option<Duration>,
+    pub client_certificate: Option<ClientCertificateConfig>,
 }
 
 impl HttpConnectionOptions {
@@ -45,8 +48,12 @@ impl HttpConnectionOptions {
             .referer(false)
             .tls_info(true);
 
-        // Configure TLS
-        client = client.use_preconfigured_tls(tls::get_config(self.validate_certificates, true));
+        // Configure TLS with optional client certificate
+        client = client.use_preconfigured_tls(tls::get_config(
+            self.validate_certificates,
+            true,
+            self.client_certificate.as_ref(),
+        ));
 
         // Configure DNS resolver
         client = client.dns_resolver(LocalhostResolver::new());
