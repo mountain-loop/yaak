@@ -1,7 +1,7 @@
 import type { ClientCertificate } from '@yaakapp-internal/models';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
-import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
+import { useRef } from 'react';
 import { showConfirmDelete } from '../../lib/confirm';
 import { Button } from '../core/Button';
 import { Checkbox } from '../core/Checkbox';
@@ -49,9 +49,11 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
 
   // Determine certificate type for display
   const certType = hasPfx ? 'PFX' : hasCrtKey ? 'CERT' : null;
+  const defaultOpen = useRef<boolean>(!certificate.host);
 
   return (
     <DetailsBanner
+      open={defaultOpen.current}
       summary={
         <HStack alignItems="center" justifyContent="between" space={2} className="w-full">
           <HStack space={1.5}>
@@ -63,10 +65,14 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
               onChange={(enabled) => updateField('enabled', enabled)}
             />
 
-            <InlineCode className={classNames(!certificate.host && 'border-danger')}>
-              {certificate.host || <>&nbsp;</>}
-              {certificate.port != null && `:${certificate.port}`}
-            </InlineCode>
+            {certificate.host ? (
+              <InlineCode>
+                {certificate.host || <>&nbsp;</>}
+                {certificate.port != null && `:${certificate.port}`}
+              </InlineCode>
+            ) : (
+              <span className="italic text-sm text-text-subtlest">Configure Certificate</span>
+            )}
             {certType && <InlineCode>{certType}</InlineCode>}
           </HStack>
           <IconButton
