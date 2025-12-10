@@ -1,6 +1,6 @@
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use reqwest::redirect::Policy;
 use reqwest::{Client, Proxy};
 use reqwest_cookie_store::CookieStoreMutex;
@@ -88,6 +88,12 @@ impl HttpConnectionOptions {
         if let Some(d) = self.timeout {
             client = client.timeout(d);
         }
+
+        info!(
+            "Building new HTTP client validate_certificates={} client_cert={}",
+            self.validate_certificates,
+            self.client_certificate.is_some()
+        );
 
         Ok(client.build()?)
     }

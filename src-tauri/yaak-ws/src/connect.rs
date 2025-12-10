@@ -8,7 +8,7 @@ use tokio_tungstenite::tungstenite::handshake::client::Response;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::{
-    connect_async_tls_with_config, Connector, MaybeTlsStream, WebSocketStream,
+    Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
 };
 use yaak_tls::ClientCertificateConfig;
 
@@ -22,7 +22,7 @@ pub(crate) async fn ws_connect(
     client_cert: Option<ClientCertificateConfig>,
 ) -> Result<(WebSocketStream<MaybeTlsStream<TcpStream>>, Response)> {
     info!("Connecting to WS {url}");
-    let tls_config = yaak_tls::get_tls_config(validate_certificates, WITH_ALPN, client_cert)?;
+    let tls_config = yaak_tls::get_tls_config(validate_certificates, WITH_ALPN, client_cert.clone())?;
 
     let mut req = url.into_client_request()?;
     let req_headers = req.headers_mut();
@@ -39,5 +39,12 @@ pub(crate) async fn ws_connect(
         Some(Connector::Rustls(Arc::new(tls_config))),
     )
     .await?;
+
+    info!(
+        "Connected to WS {url} validate_certificates={} client_cert={}",
+        validate_certificates,
+        client_cert.is_some()
+    );
+
     Ok((stream, response))
 }

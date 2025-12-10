@@ -33,7 +33,6 @@ impl HttpConnectionManager {
             return Ok(c.clone());
         }
 
-        info!("Building new HTTP client {id} cert={}", opt.client_certificate.is_some());
         let c = opt.build_client()?;
         connections.insert(id.into(), (c.clone(), Instant::now()));
         Ok(c)
