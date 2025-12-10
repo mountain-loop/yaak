@@ -6,11 +6,11 @@ publish = false
 
 [dependencies]
 log = { workspace = true }
+p12 = "0.6.3"
 rustls = { workspace = true, default-features = false, features = ["ring"] }
 rustls-pemfile = "2"
 rustls-platform-verifier = { workspace = true }
-p12 = "0.6.3"
 serde = { workspace = true, features = ["derive"] }
+thiserror = "2.0.17"
 url = "2.5"
 yaak-models = { workspace = true }
-thiserror = "2.0.17"
