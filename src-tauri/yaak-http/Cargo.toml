@@ -5,19 +5,19 @@ edition = "2024"
 publish = false
 
 [dependencies]
-yaak-models = { workspace = true }
+hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
+log = { workspace = true }
+p12 = "0.6.3"
 regex = "1.11.1"
-rustls = { workspace = true, default-features = false, features = ["ring"] }
-rustls-pemfile = "2"
-rustls-platform-verifier = { workspace = true }
-p12 = "0.6"
-urlencoding = "2.1.3"
-tauri = { workspace = true }
-tokio = { workspace = true }
 reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider", "socks", "http2"] }
 reqwest_cookie_store = { workspace = true }
-thiserror = { workspace = true }
+rustls = { workspace = true, default-features = false, features = ["ring"] }
+rustls-pemfile = "2.2.0"
+rustls-platform-verifier = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
+tauri = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
 tower-service = "0.3.3"
-log = { workspace = true }
+urlencoding = "2.1.3"
+yaak-models = { workspace = true }
