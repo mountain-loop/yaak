@@ -36,8 +36,8 @@ const tabs = [
   TAB_GENERAL,
   TAB_THEME,
   TAB_INTERFACE,
-  TAB_PROXY,
   TAB_CERTIFICATES,
+  TAB_PROXY,
   TAB_PLUGINS,
   TAB_LICENSE,
 ] as const;

@@ -1,5 +1,6 @@
 import type { ClientCertificate } from '@yaakapp-internal/models';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { showConfirmDelete } from '../../lib/confirm';
 import { Button } from '../core/Button';
@@ -62,7 +63,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
               onChange={(enabled) => updateField('enabled', enabled)}
             />
 
-            <InlineCode>
+            <InlineCode className={classNames(!certificate.host && 'border-danger')}>
               {certificate.host || <>&nbsp;</>}
               {certificate.port != null && `:${certificate.port}`}
             </InlineCode>
@@ -222,7 +223,7 @@ export function SettingsCertificates() {
               certificates
             </p>
           </div>
-          <Button size="sm" color="secondary" onClick={handleAdd}>
+          <Button variant="border" size="sm" color="secondary" onClick={handleAdd}>
             Add Certificate
           </Button>
         </HStack>
