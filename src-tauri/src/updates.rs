@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use crate::error::Result;
 use log::{debug, error, info, warn};
@@ -24,7 +24,7 @@ const MAX_UPDATE_CHECK_HOURS_ALPHA: u64 = 1;
 
 // Create updater struct
 pub struct YaakUpdater {
-    last_update_check: SystemTime,
+    last_check: Option<Instant>,
 }
 
 pub enum UpdateMode {
@@ -62,9 +62,7 @@ pub enum UpdateTrigger {
 
 impl YaakUpdater {
     pub fn new() -> Self {
-        Self {
-            last_update_check: SystemTime::UNIX_EPOCH,
-        }
+        Self { last_check: None }
     }
 
     pub async fn check_now<R: Runtime>(
@@ -84,7 +82,7 @@ impl YaakUpdater {
 
         let settings = window.db().get_settings();
         let update_key = format!("{:x}", md5::compute(settings.id));
-        self.last_update_check = SystemTime::now();
+        self.last_check = Some(Instant::now());
 
         info!("Checking for updates mode={} autodl={}", mode, auto_download);
 
@@ -176,9 +174,10 @@ impl YaakUpdater {
             UpdateMode::Beta => MAX_UPDATE_CHECK_HOURS_BETA,
             UpdateMode::Alpha => MAX_UPDATE_CHECK_HOURS_ALPHA,
         } * (60 * 60);
-        let seconds_since_last_check = self.last_update_check.elapsed().unwrap().as_secs();
-        let ignore_check = seconds_since_last_check < update_period_seconds;
-        if ignore_check {
+
+        if let Some(i) = self.last_check
+            && i.elapsed().as_secs() < update_period_seconds
+        {
             return Ok(false);
         }
 

@@ -47,10 +47,14 @@ export function useGrpc(
   const reflect = useQuery<ReflectResponseService[], string>({
     enabled: req != null,
     queryKey: ['grpc_reflect', req?.id ?? 'n/a', debouncedUrl, protoFiles],
+    staleTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: () => {
       const environmentId = jotaiStore.get(activeEnvironmentIdAtom);
       return minPromiseMillis<ReflectResponseService[]>(
-        invokeCmd('cmd_grpc_reflect', { requestId, protoFiles, environmentId }),
+        invokeCmd('cmd_grpc_reflect', { requestId, protoFiles, environmentId, skipCache: true }),
         300,
       );
     },

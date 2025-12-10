@@ -391,6 +391,56 @@ describe('importer-curl', () => {
       },
     });
   });
+
+  test('Imports data with Unicode escape sequences', () => {
+    expect(
+      convertCurl(
+        `curl 'https://yaak.app' -H 'Content-Type: application/json' --data-raw $'{"query":"SearchQueryInput\\u0021"}' -X POST`,
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            headers: [{ name: 'Content-Type', value: 'application/json', enabled: true }],
+            bodyType: 'application/json',
+            body: { text: '{"query":"SearchQueryInput!"}' },
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Imports data with multiple escape sequences', () => {
+    expect(
+      convertCurl(
+        `curl 'https://yaak.app' --data-raw $'Line1\\nLine2\\tTab\\u0021Exclamation' -X POST`,
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            bodyType: 'application/x-www-form-urlencoded',
+            body: {
+              form: [{ name: 'Line1\nLine2\tTab!Exclamation', value: '', enabled: true }],
+            },
+            headers: [
+              {
+                enabled: true,
+                name: 'Content-Type',
+                value: 'application/x-www-form-urlencoded',
+              },
+            ],
+          }),
+        ],
+      },
+    });
+  });
 });
 
 const idCount: Partial<Record<string, number>> = {};

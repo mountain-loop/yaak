@@ -1,7 +1,8 @@
 #![allow(deprecated)]
+use crate::PluginState;
 use csscolorparser::Color;
 use objc::{msg_send, sel, sel_impl};
-use tauri::{Emitter, Runtime, Window};
+use tauri::{Emitter, Manager, Runtime, State, Window};
 
 struct UnsafeWindowHandle(*mut std::ffi::c_void);
 
@@ -16,6 +17,8 @@ const MAIN_WINDOW_PREFIX: &str = "main_";
 pub(crate) fn update_window_title<R: Runtime>(window: Window<R>, title: String) {
     use cocoa::{appkit::NSWindow, base::nil, foundation::NSString};
 
+    let state: State<PluginState> = window.state();
+    let native_titlebar = state.native_titlebar.load(std::sync::atomic::Ordering::Relaxed);
     unsafe {
         let window_handle = UnsafeWindowHandle(window.ns_window().unwrap());
 
@@ -25,12 +28,16 @@ pub(crate) fn update_window_title<R: Runtime>(window: Window<R>, title: String) 
             let win_title = NSString::alloc(nil).init_str(&title);
             let handle = window_handle;
             NSWindow::setTitle_(handle.0 as cocoa::base::id, win_title);
-            position_traffic_lights(
-                UnsafeWindowHandle(window2.ns_window().expect("Failed to create window handle")),
-                WINDOW_CONTROL_PAD_X,
-                WINDOW_CONTROL_PAD_Y,
-                label,
-            );
+            if !native_titlebar {
+                position_traffic_lights(
+                    UnsafeWindowHandle(
+                        window2.ns_window().expect("Failed to create window handle"),
+                    ),
+                    WINDOW_CONTROL_PAD_X,
+                    WINDOW_CONTROL_PAD_Y,
+                    label,
+                );
+            }
         });
     }
 }
@@ -42,6 +49,8 @@ pub(crate) fn update_window_theme<R: Runtime>(window: Window<R>, color: Color) {
 
     let brightness = (color.r as f64 + color.g as f64 + color.b as f64) / 3.0;
     let label = window.label().to_string();
+    let state: State<PluginState> = window.state();
+    let native_titlebar = state.native_titlebar.load(std::sync::atomic::Ordering::Relaxed);
 
     unsafe {
         let window_handle = UnsafeWindowHandle(window.ns_window().unwrap());
@@ -56,12 +65,16 @@ pub(crate) fn update_window_theme<R: Runtime>(window: Window<R>, color: Color) {
             };
 
             NSWindow::setAppearance(handle.0 as cocoa::base::id, selected_appearance);
-            position_traffic_lights(
-                UnsafeWindowHandle(window2.ns_window().expect("Failed to create window handle")),
-                WINDOW_CONTROL_PAD_X,
-                WINDOW_CONTROL_PAD_Y,
-                label,
-            );
+            if !native_titlebar {
+                position_traffic_lights(
+                    UnsafeWindowHandle(
+                        window2.ns_window().expect("Failed to create window handle"),
+                    ),
+                    WINDOW_CONTROL_PAD_X,
+                    WINDOW_CONTROL_PAD_Y,
+                    label,
+                );
+            }
         });
     }
 }
@@ -118,6 +131,11 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
     use rand::Rng;
     use rand::distr::Alphanumeric;
     use std::ffi::c_void;
+
+    let state: State<PluginState> = window.state();
+    if state.native_titlebar.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
 
     position_traffic_lights(
         UnsafeWindowHandle(window.ns_window().expect("Failed to create window handle")),

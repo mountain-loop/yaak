@@ -28,7 +28,10 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
   const workspace = useAtomValue(activeWorkspaceAtom);
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const showEncryptionSetup =
-    workspace?.encryptionKeyChallenge != null && workspaceMeta?.encryptionKey == null;
+    workspace != null &&
+    workspaceMeta != null &&
+    workspace.encryptionKeyChallenge != null &&
+    workspaceMeta.encryptionKey == null;
 
   return (
     <div

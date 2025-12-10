@@ -7,6 +7,7 @@ use tauri::{
 };
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
+use yaak_models::query_manager::QueryManagerExt;
 
 const DEFAULT_WINDOW_WIDTH: f64 = 1100.0;
 const DEFAULT_WINDOW_HEIGHT: f64 = 600.0;
@@ -94,7 +95,8 @@ pub(crate) fn create_window<R: Runtime>(
         });
     }
 
-    if config.hide_titlebar {
+    let settings = handle.db().get_settings();
+    if config.hide_titlebar && !settings.use_native_titlebar {
         #[cfg(target_os = "macos")]
         {
             use tauri::TitleBarStyle;
@@ -102,7 +104,6 @@ pub(crate) fn create_window<R: Runtime>(
         }
         #[cfg(not(target_os = "macos"))]
         {
-            // Doesn't seem to work from Rust, here, so we do it in main.tsx
             win_builder = win_builder.decorations(false);
         }
     }

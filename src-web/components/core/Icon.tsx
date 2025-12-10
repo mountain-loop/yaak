@@ -1,6 +1,7 @@
 import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import {
+  AlarmClockIcon,
   AlertTriangleIcon,
   ArchiveIcon,
   ArrowBigDownDashIcon,
@@ -67,6 +68,7 @@ import {
   FolderSymlinkIcon,
   FolderSyncIcon,
   FolderUpIcon,
+  GiftIcon,
   GitBranchIcon,
   GitBranchPlusIcon,
   GitCommitIcon,
@@ -129,6 +131,7 @@ import type { CSSProperties, HTMLAttributes } from 'react';
 import { memo } from 'react';
 
 const icons = {
+  alarm_clock: AlarmClockIcon,
   alert_triangle: AlertTriangleIcon,
   archive: ArchiveIcon,
   arrow_big_down_dash: ArrowBigDownDashIcon,
@@ -194,6 +197,7 @@ const icons = {
   folder_symlink: FolderSymlinkIcon,
   folder_sync: FolderSyncIcon,
   folder_up: FolderUpIcon,
+  gift: GiftIcon,
   git_branch: GitBranchIcon,
   git_branch_plus: GitBranchPlusIcon,
   git_commit: GitCommitIcon,
