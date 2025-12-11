@@ -2,7 +2,7 @@ use crate::error::Error::BodyError;
 use crate::error::Result;
 use log::warn;
 use std::collections::BTreeMap;
-use yaak_common::serde::{get_bool, get_str};
+use yaak_common::serde::{get_bool, get_str, get_str_map};
 use yaak_models::models::HttpRequest;
 
 pub struct SendableHttpRequestHeader {
@@ -54,6 +54,7 @@ async fn build_body(r: &HttpRequest) -> Result<Option<Vec<u8>>> {
             build_form_urlencoded_body(&r.body).map(|b| b.into_bytes())
         }
         "binary" => build_binary_body(&r.body).await?,
+        "graphql" => build_graphql_body(&r.method, &r.body).map(|b| b.into_bytes()),
         t => {
             warn!("Unsupported body type: {}", t);
             None
@@ -99,6 +100,28 @@ async fn build_binary_body(body: &BTreeMap<String, serde_json::Value>) -> Result
         .await
         .map_err(|e| BodyError(format!("Failed to read file: {}", e)))?;
     Ok(Some(contents))
+}
+
+fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) -> Option<String> {
+    let query = get_str_map(body, "query");
+    let variables = get_str_map(body, "variables");
+
+    if method.to_lowercase() == "get" {
+        // GraphQL GET requests use query parameters, not a body
+        return None;
+    }
+
+    let body = if variables.trim().is_empty() {
+        format!(r#"{{"query":{}}}"#, serde_json::to_string(&query).unwrap_or_default())
+    } else {
+        format!(
+            r#"{{"query":{},"variables":{}}}"#,
+            serde_json::to_string(&query).unwrap_or_default(),
+            variables
+        )
+    };
+
+    Some(body)
 }
 
 #[cfg(test)]
@@ -153,5 +176,37 @@ mod tests {
         if let Err(e) = result {
             assert!(matches!(e, BodyError(_)));
         }
+    }
+
+    #[tokio::test]
+    async fn test_graphql_body_with_variables() {
+        let mut body = BTreeMap::new();
+        body.insert("query".to_string(), json!("{ user(id: $id) { name } }"));
+        body.insert("variables".to_string(), json!(r#"{"id": "123"}"#));
+
+        let result = build_graphql_body("POST", &body);
+        assert_eq!(
+            result,
+            Some(r#"{"query":"{ user(id: $id) { name } }","variables":{"id": "123"}}"#.to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_graphql_body_without_variables() {
+        let mut body = BTreeMap::new();
+        body.insert("query".to_string(), json!("{ users { name } }"));
+        body.insert("variables".to_string(), json!(""));
+
+        let result = build_graphql_body("POST", &body);
+        assert_eq!(result, Some(r#"{"query":"{ users { name } }"}"#.to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_graphql_body_get_method() {
+        let mut body = BTreeMap::new();
+        body.insert("query".to_string(), json!("{ users { name } }"));
+
+        let result = build_graphql_body("GET", &body);
+        assert_eq!(result, None);
     }
 }
