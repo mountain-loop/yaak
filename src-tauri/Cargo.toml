@@ -29,7 +29,9 @@ name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [profile.release]
-strip = true  # Automatically strip symbols from the binary.
+# Currently disabled due to:
+#   Warn Failed to add bundler type to the binary: __TAURI_BUNDLE_TYPE variable not found in binary. Make sure tauri crate and tauri-cli are up to date and that symbol stripping is disabled (https://doc.rust-lang.org/cargo/reference/profiles.html#strip). Updater plugin may not be able to update this package. This shouldn't normally happen, please report it to https://github.com/tauri-apps/tauri/issues
+strip = false
 
 [features]
 cargo-clippy = []
