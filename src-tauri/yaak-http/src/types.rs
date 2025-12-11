@@ -92,7 +92,7 @@ fn build_url(r: &HttpRequest) -> Result<String> {
 }
 
 fn build_headers(r: &HttpRequest) -> Vec<SendableHttpRequestHeader> {
-    r.headers
+    let mut headers: Vec<SendableHttpRequestHeader> = r.headers
         .iter()
         .filter_map(|h| {
             if h.enabled {
@@ -104,7 +104,25 @@ fn build_headers(r: &HttpRequest) -> Vec<SendableHttpRequestHeader> {
                 None
             }
         })
-        .collect()
+        .collect();
+
+    // Add default User-Agent if not present
+    if !headers.iter().any(|h| h.name.to_lowercase() == "user-agent") {
+        headers.push(SendableHttpRequestHeader {
+            name: "User-Agent".to_string(),
+            value: "yaak".to_string(),
+        });
+    }
+
+    // Add default Accept if not present
+    if !headers.iter().any(|h| h.name.to_lowercase() == "accept") {
+        headers.push(SendableHttpRequestHeader {
+            name: "Accept".to_string(),
+            value: "*/*".to_string(),
+        });
+    }
+
+    headers
 }
 
 async fn build_body(
