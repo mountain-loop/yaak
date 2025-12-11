@@ -37,7 +37,7 @@ updater = []
 license = ["yaak-license"]
 
 [build-dependencies]
-tauri-build = { version = "2.5.0", features = [] }
+tauri-build = { version = "2.5.3", features = [] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu installation to work
@@ -57,17 +57,17 @@ reqwest_cookie_store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
-tauri-plugin-clipboard-manager = "2.3.0"
-tauri-plugin-deep-link = "2.4.3"
+tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-deep-link = "2.4.5"
 tauri-plugin-dialog = { workspace = true }
-tauri-plugin-fs = "2.4.2"
-tauri-plugin-log = { version = "2.7.0", features = ["colored"] }
-tauri-plugin-opener = "2.5.0"
-tauri-plugin-os = "2.3.1"
+tauri-plugin-fs = "2.4.4"
+tauri-plugin-log = { version = "2.7.1", features = ["colored"] }
+tauri-plugin-opener = "2.5.2"
+tauri-plugin-os = "2.3.2"
 tauri-plugin-shell = { workspace = true }
-tauri-plugin-single-instance = { version = "2.3.4", features = ["deep-link"] }
+tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
 tauri-plugin-updater = "2.9.0"
-tauri-plugin-window-state = "2.4.0"
+tauri-plugin-window-state = "2.4.1"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tokio-stream = "0.1.17"
@@ -99,9 +99,9 @@ rustls-platform-verifier = "0.6.2"
 serde = "1.0.228"
 serde_json = "1.0.145"
 sha2 = "0.10.9"
-log = "0.4.28"
-tauri = "2.9.2"
-tauri-plugin = "2.5.1"
+log = "0.4.29"
+tauri = "2.9.5"
+tauri-plugin = "2.5.2"
 tauri-plugin-dialog = "2.4.2"
 tauri-plugin-shell = "2.3.3"
 thiserror = "2.0.17"
