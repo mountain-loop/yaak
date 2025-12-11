@@ -2,7 +2,7 @@ use yaak_models::models::HttpUrlParameter;
 
 pub fn apply_path_placeholders(
     url: &str,
-    parameters: Vec<HttpUrlParameter>,
+    parameters: &Vec<HttpUrlParameter>,
 ) -> (String, Vec<HttpUrlParameter>) {
     let mut new_parameters = Vec::new();
 
@@ -18,7 +18,7 @@ pub fn apply_path_placeholders(
 
         // Remove as param if it modified the URL
         if old_url_string == *url {
-            new_parameters.push(p);
+            new_parameters.push(p.to_owned());
         }
     }
 
@@ -172,7 +172,7 @@ mod placeholder_tests {
             ..Default::default()
         };
 
-        let (url, url_parameters) = apply_path_placeholders(&req.url, req.url_parameters);
+        let (url, url_parameters) = apply_path_placeholders(&req.url, &req.url_parameters);
 
         // Pattern match back to access it
         assert_eq!(url, "example.com/aaa/bar");

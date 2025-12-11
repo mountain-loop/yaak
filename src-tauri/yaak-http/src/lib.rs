@@ -8,6 +8,7 @@ pub mod error;
 pub mod manager;
 pub mod path_placeholders;
 pub mod types;
+mod proto;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-http")

@@ -1,12 +1,13 @@
 use crate::error::Error::BodyError;
 use crate::error::Result;
+use crate::path_placeholders::apply_path_placeholders;
+use crate::proto::ensure_proto;
 use log::warn;
 use std::collections::BTreeMap;
 use yaak_common::serde::{get_bool, get_str, get_str_map};
 use yaak_models::models::HttpRequest;
 
-// Hardcoded multipart boundary that's unlikely to conflict with content
-pub const MULTIPART_BOUNDARY: &str = "----YaakFormBoundary7MA4YWxkTrZu0gW";
+pub const MULTIPART_BOUNDARY: &str = "------YaakFormBoundary";
 
 pub struct SendableHttpRequestHeader {
     pub name: String,
@@ -23,13 +24,69 @@ pub struct SendableHttpRequest {
 impl SendableHttpRequest {
     pub async fn from_http_request(r: &HttpRequest) -> Result<Self> {
         Ok(Self {
-            url: r.url.clone(),
+            url: build_url(r)?,
             method: r.method.to_uppercase(),
             headers: build_headers(r),
             body: build_body(r).await?,
         })
     }
 }
+
+fn build_url(r: &HttpRequest) -> Result<String> {
+    let (url_string, params) = apply_path_placeholders(&ensure_proto(&r.url), &r.url_parameters);
+
+    // Collect enabled parameters
+    let params: Vec<(String, String)> = params
+        .iter()
+        .filter(|p| p.enabled && !p.name.is_empty())
+        .map(|p| (p.name.clone(), p.value.clone()))
+        .collect();
+
+    if params.is_empty() {
+        return Ok(url_string);
+    }
+
+    // Build query string
+    let query_string = params
+        .iter()
+        .map(|(name, value)| {
+            format!("{}={}", urlencoding::encode(name), urlencoding::encode(value))
+        })
+        .collect::<Vec<_>>()
+        .join("&");
+
+    // Split URL into parts: base URL, query, and fragment
+    let (base_and_query, fragment) = if let Some(hash_pos) = url_string.find('#') {
+        let (before_hash, after_hash) = url_string.split_at(hash_pos);
+        (before_hash.to_string(), Some(after_hash.to_string()))
+    } else {
+        (url_string, None)
+    };
+
+    // Now handle query parameters on the base URL (without fragment)
+    let mut result = if base_and_query.contains('?') {
+        // Check if there's already a query string after the '?'
+        let parts: Vec<&str> = base_and_query.splitn(2, '?').collect();
+        if parts.len() == 2 && !parts[1].trim().is_empty() {
+            // Append with & if there are existing parameters
+            format!("{}&{}", base_and_query, query_string)
+        } else {
+            // Just append the new parameters directly (URL ends with '?')
+            format!("{}{}", base_and_query, query_string)
+        }
+    } else {
+        // No existing query parameters, add with ?
+        format!("{}?{}", base_and_query, query_string)
+    };
+
+    // Re-append the fragment if it exists
+    if let Some(fragment) = fragment {
+        result.push_str(&fragment);
+    }
+
+    Ok(result)
+}
+
 fn build_headers(r: &HttpRequest) -> Vec<SendableHttpRequestHeader> {
     r.headers
         .iter()
@@ -215,6 +272,263 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::collections::BTreeMap;
+    use yaak_models::models::{HttpRequest, HttpUrlParameter};
+
+    #[test]
+    fn test_build_url_no_params() {
+        let r = HttpRequest {
+            url: "https://example.com/api".to_string(),
+            url_parameters: vec![],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://example.com/api");
+    }
+
+    #[test]
+    fn test_build_url_with_params() {
+        let r = HttpRequest {
+            url: "https://example.com/api".to_string(),
+            url_parameters: vec![
+                HttpUrlParameter {
+                    enabled: true,
+                    name: "foo".to_string(),
+                    value: "bar".to_string(),
+                    id: None,
+                },
+                HttpUrlParameter {
+                    enabled: true,
+                    name: "baz".to_string(),
+                    value: "qux".to_string(),
+                    id: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://example.com/api?foo=bar&baz=qux");
+    }
+
+    #[test]
+    fn test_build_url_with_disabled_params() {
+        let r = HttpRequest {
+            url: "https://example.com/api".to_string(),
+            url_parameters: vec![
+                HttpUrlParameter {
+                    enabled: false,
+                    name: "disabled".to_string(),
+                    value: "value".to_string(),
+                    id: None,
+                },
+                HttpUrlParameter {
+                    enabled: true,
+                    name: "enabled".to_string(),
+                    value: "value".to_string(),
+                    id: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://example.com/api?enabled=value");
+    }
+
+    #[test]
+    fn test_build_url_with_existing_query() {
+        let r = HttpRequest {
+            url: "https://example.com/api?existing=param".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "new".to_string(),
+                value: "value".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://example.com/api?existing=param&new=value");
+    }
+
+    #[test]
+    fn test_build_url_with_empty_existing_query() {
+        let r = HttpRequest {
+            url: "https://example.com/api?".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "new".to_string(),
+                value: "value".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://example.com/api?new=value");
+    }
+
+    #[test]
+    fn test_build_url_with_special_chars() {
+        let r = HttpRequest {
+            url: "https://example.com/api".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "special chars!@#".to_string(),
+                value: "value with spaces & symbols".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(
+            result,
+            "https://example.com/api?special%20chars%21%40%23=value%20with%20spaces%20%26%20symbols"
+        );
+    }
+
+    #[test]
+    fn test_build_url_adds_protocol() {
+        let r = HttpRequest {
+            url: "example.com/api".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "foo".to_string(),
+                value: "bar".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        // ensure_proto defaults to http:// for regular domains
+        assert_eq!(result, "http://example.com/api?foo=bar");
+    }
+
+    #[test]
+    fn test_build_url_adds_https_for_dev_domain() {
+        let r = HttpRequest {
+            url: "example.dev/api".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "foo".to_string(),
+                value: "bar".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        // .dev domains force https
+        assert_eq!(result, "https://example.dev/api?foo=bar");
+    }
+
+    #[test]
+    fn test_build_url_with_fragment() {
+        let r = HttpRequest {
+            url: "https://example.com/api#section".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "foo".to_string(),
+                value: "bar".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://example.com/api?foo=bar#section");
+    }
+
+    #[test]
+    fn test_build_url_with_existing_query_and_fragment() {
+        let r = HttpRequest {
+            url: "https://yaak.app?foo=bar#some-hash".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "baz".to_string(),
+                value: "qux".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://yaak.app?foo=bar&baz=qux#some-hash");
+    }
+
+    #[test]
+    fn test_build_url_with_empty_query_and_fragment() {
+        let r = HttpRequest {
+            url: "https://example.com/api?#section".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "foo".to_string(),
+                value: "bar".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://example.com/api?foo=bar#section");
+    }
+
+    #[test]
+    fn test_build_url_with_fragment_containing_special_chars() {
+        let r = HttpRequest {
+            url: "https://example.com#section/with/slashes?and=fake&query".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "real".to_string(),
+                value: "param".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://example.com?real=param#section/with/slashes?and=fake&query");
+    }
+
+    #[test]
+    fn test_build_url_preserves_empty_fragment() {
+        let r = HttpRequest {
+            url: "https://example.com/api#".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "foo".to_string(),
+                value: "bar".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        assert_eq!(result, "https://example.com/api?foo=bar#");
+    }
+
+    #[test]
+    fn test_build_url_with_multiple_fragments() {
+        // Testing edge case where URL has multiple # characters (though technically invalid)
+        let r = HttpRequest {
+            url: "https://example.com#section#subsection".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "foo".to_string(),
+                value: "bar".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r).unwrap();
+        // Should treat everything after first # as fragment
+        assert_eq!(result, "https://example.com?foo=bar#section#subsection");
+    }
 
     #[tokio::test]
     async fn test_text_body() {
