@@ -112,7 +112,8 @@ export const plugin: PluginDefinition = {
             {
               name: 'token',
               type: 'text',
-              description: '',
+              // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
+              defaultValue: '${[1PASSWORD_TOKEN]}',
               dynamic(_ctx, args) {
                 switch (args.values.authMethod) {
                   case 'desktop':
@@ -126,8 +127,6 @@ export const plugin: PluginDefinition = {
                       label: 'Token',
                       description:
                         'Token can be generated from the 1Password website by visiting Developer > Service Accounts',
-                      // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
-                      defaultValue: '${[1PASSWORD_TOKEN]}',
                       password: true,
                     };
                 }
