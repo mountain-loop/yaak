@@ -23,11 +23,15 @@ pub struct SendableHttpRequest {
 
 impl SendableHttpRequest {
     pub async fn from_http_request(r: &HttpRequest) -> Result<Self> {
+        let initial_headers = build_headers(r);
+
+        let (body, headers) = build_body(&r.method, &r.body_type, &r.body, initial_headers).await?;
+
         Ok(Self {
             url: build_url(r)?,
             method: r.method.to_uppercase(),
-            headers: build_headers(r),
-            body: build_body(r).await?,
+            headers,
+            body,
         })
     }
 }
@@ -103,25 +107,57 @@ fn build_headers(r: &HttpRequest) -> Vec<SendableHttpRequestHeader> {
         .collect()
 }
 
-async fn build_body(r: &HttpRequest) -> Result<Option<Vec<u8>>> {
-    let body_type = match &r.body_type {
-        None => return Ok(None),
+async fn build_body(
+    method: &str,
+    body_type: &Option<String>,
+    body: &BTreeMap<String, serde_json::Value>,
+    headers: Vec<SendableHttpRequestHeader>,
+) -> Result<(Option<Vec<u8>>, Vec<SendableHttpRequestHeader>)> {
+    let body_type = match &body_type {
+        None => return Ok((None, Vec::new())),
         Some(t) => t,
     };
 
-    let b = match body_type.as_str() {
-        "binary" => build_binary_body(&r.body).await?,
-        "graphql" => build_graphql_body(&r.method, &r.body).map(|b| b.into_bytes()),
-        "application/x-www-form-urlencoded" => build_form_body(&r.body).map(|b| b.into_bytes()),
-        "multipart/form-data" => build_multipart_body(&r.body).await?,
-        _ if r.body.contains_key("text") => build_text_body(&r.body).map(|b| b.bytes().collect()),
+    let (body, content_type) = match body_type.as_str() {
+        "binary" => (build_binary_body(&body).await?, None),
+        "graphql" => (
+            build_graphql_body(&method, &body).map(|b| b.into_bytes()),
+            Some("application/json".to_string()),
+        ),
+        "application/x-www-form-urlencoded" => (
+            build_form_body(&body).map(|b| b.into_bytes()),
+            Some("application/x-www-form-urlencoded".to_string()),
+        ),
+        "multipart/form-data" => build_multipart_body(&body).await?,
+        _ if body.contains_key("text") => {
+            (build_text_body(&body).map(|b| b.bytes().collect()), None)
+        }
         t => {
             warn!("Unsupported body type: {}", t);
-            None
+            (None, None)
         }
     };
 
-    Ok(b)
+    // Add or update the Content-Type header
+    let headers = match content_type {
+        None => headers,
+        Some(ct) => {
+            let mut headers = headers;
+            if let Some(existing) =
+                headers.iter_mut().find(|h| h.name.to_lowercase() == "content-type")
+            {
+                existing.value = ct;
+            } else {
+                headers.push(SendableHttpRequestHeader {
+                    name: "Content-Type".to_string(),
+                    value: ct,
+                });
+            }
+            headers
+        }
+    };
+
+    Ok((body, headers))
 }
 
 fn build_form_body(body: &BTreeMap<String, serde_json::Value>) -> Option<String> {
@@ -191,10 +227,10 @@ fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) 
 
 async fn build_multipart_body(
     body: &BTreeMap<String, serde_json::Value>,
-) -> Result<Option<Vec<u8>>> {
+) -> Result<(Option<Vec<u8>>, Option<String>)> {
     let form_params = match body.get("form").map(|f| f.as_array()) {
         Some(Some(f)) => f,
-        _ => return Ok(None),
+        _ => return Ok((None, None)),
     };
 
     let mut body_bytes = Vec::new();
@@ -258,12 +294,13 @@ async fn build_multipart_body(
         body_bytes.extend_from_slice(b"\r\n");
     }
 
-    // Add final boundary
+    // Add the final boundary
     if !body_bytes.is_empty() {
         body_bytes.extend_from_slice(format!("--{}--\r\n", MULTIPART_BOUNDARY).as_bytes());
-        Ok(Some(body_bytes))
+        let content_type = format!("multipart/form-data; boundary={}", MULTIPART_BOUNDARY);
+        Ok((Some(body_bytes), Some(content_type)))
     } else {
-        Ok(None)
+        Ok((None, None))
     }
 }
 
@@ -648,18 +685,21 @@ mod tests {
             ]),
         );
 
-        let result = build_multipart_body(&body).await?;
+        let (result, content_type) = build_multipart_body(&body).await?;
         assert!(result.is_some());
+        assert!(content_type.is_some());
 
         let body_bytes = result.unwrap();
         let body_str = String::from_utf8_lossy(&body_bytes);
-        assert!(body_str.contains("Content-Disposition: form-data; name=\"field1\""));
-        assert!(body_str.contains("value1"));
-        assert!(body_str.contains("Content-Disposition: form-data; name=\"field2\""));
-        assert!(body_str.contains("value2"));
-        assert!(!body_str.contains("disabled"));
-        assert!(body_str.starts_with(&format!("--{}", MULTIPART_BOUNDARY)));
-        assert!(body_str.ends_with(&format!("--{}--\r\n", MULTIPART_BOUNDARY)));
+
+        assert_eq!(
+            body_str,
+            "--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"field1\"\r\n\r\nvalue1\r\n--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"field2\"\r\n\r\nvalue2\r\n--------YaakFormBoundary--\r\n",
+        );
+        assert_eq!(
+            content_type.unwrap(),
+            format!("multipart/form-data; boundary={}", MULTIPART_BOUNDARY)
+        );
 
         Ok(())
     }
@@ -674,16 +714,20 @@ mod tests {
             ]),
         );
 
-        let result = build_multipart_body(&body).await?;
+        let (result, content_type) = build_multipart_body(&body).await?;
         assert!(result.is_some());
+        assert!(content_type.is_some());
 
         let body_bytes = result.unwrap();
         let body_str = String::from_utf8_lossy(&body_bytes);
-        assert!(body_str.contains(
-            "Content-Disposition: form-data; name=\"file_field\"; filename=\"custom.txt\""
-        ));
-        assert!(body_str.contains("Content-Type: text/plain"));
-        assert!(body_str.contains("This is a test file!")); // Content of test.txt
+        assert_eq!(
+            body_str,
+            "--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"file_field\"; filename=\"custom.txt\"\r\nContent-Type: text/plain\r\n\r\nThis is a test file!\n\r\n--------YaakFormBoundary--\r\n"
+        );
+        assert_eq!(
+            content_type.unwrap(),
+            format!("multipart/form-data; boundary={}", MULTIPART_BOUNDARY)
+        );
 
         Ok(())
     }
@@ -692,8 +736,9 @@ mod tests {
     async fn test_multipart_body_empty() -> Result<()> {
         let body = BTreeMap::new();
 
-        let result = build_multipart_body(&body).await?;
+        let (result, content_type) = build_multipart_body(&body).await?;
         assert_eq!(result, None);
+        assert_eq!(content_type, None);
 
         Ok(())
     }
