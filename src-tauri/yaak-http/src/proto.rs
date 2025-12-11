@@ -2,6 +2,10 @@ use reqwest::Url;
 use std::str::FromStr;
 
 pub(crate) fn ensure_proto(url_str: &str) -> String {
+    if url_str.is_empty() {
+        return "".to_string();
+    }
+
     if url_str.starts_with("http://") || url_str.starts_with("https://") {
         return url_str.to_string();
     }

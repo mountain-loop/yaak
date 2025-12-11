@@ -2,28 +2,23 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::render::render_http_request;
 use crate::response_err;
-use http::header::{ACCEPT, USER_AGENT};
-use http::{HeaderMap, HeaderName, HeaderValue};
+use http::{HeaderName, HeaderValue};
 use log::{debug, error, warn};
-use mime_guess::Mime;
-use reqwest::{multipart, Url};
-use reqwest::{Method, Response};
+use reqwest::{Method, Response, Url};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, Runtime, WebviewWindow};
-use tokio::fs;
 use tokio::fs::{create_dir_all, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
 use tokio::sync::{oneshot, Mutex};
-use yaak_common::serde::{get_bool, get_str, get_str_map};
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::manager::HttpConnectionManager;
+use yaak_http::types::SendableHttpRequest;
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
@@ -115,13 +110,20 @@ pub async fn send_http_request_with_context<R: Runtime>(
         }
     };
 
-    let mut url_string = request.url.clone();
+    // Build the sendable request using the new SendableHttpRequest type
+    let sendable_request = match SendableHttpRequest::from_http_request(&request).await {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(response_err(
+                &app_handle,
+                &*response.lock().await,
+                e.to_string(),
+                &update_source,
+            ));
+        }
+    };
 
-    url_string = ensure_proto(&url_string);
-    if !url_string.starts_with("http://") && !url_string.starts_with("https://") {
-        url_string = format!("http://{}", url_string);
-    }
-    debug!("Sending request to {} {url_string}", request.method);
+    debug!("Sending request to {} {}", sendable_request.method, sendable_request.url);
 
     let proxy_setting = match settings.proxy {
         None => HttpConnectionProxySetting::System,
@@ -151,7 +153,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
         }
     };
 
-    let client_certificate = find_client_certificate(&url_string, &settings.client_certificates);
+    let client_certificate = find_client_certificate(&sendable_request.url, &settings.client_certificates);
 
     // Add cookie store if specified
     let maybe_cookie_manager = match cookie_jar.clone() {
@@ -195,59 +197,25 @@ pub async fn send_http_request_with_context<R: Runtime>(
         })
         .await?;
 
-    // Render query parameters
-    let mut query_params = Vec::new();
-    for p in request.url_parameters.clone() {
-        if !p.enabled || p.name.is_empty() {
-            continue;
-        }
-        query_params.push((p.name, p.value));
-    }
-
-    let url = match Url::from_str(&url_string) {
+    // Build reqwest request from SendableHttpRequest
+    let url = match Url::from_str(&sendable_request.url) {
         Ok(u) => u,
         Err(e) => {
             return Ok(response_err(
                 &app_handle,
                 &*response.lock().await,
-                format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
+                format!("Failed to parse URL \"{}\": {}", sendable_request.url, e.to_string()),
                 &update_source,
             ));
         }
     };
 
-    let m = Method::from_str(&request.method.to_uppercase())
+    let m = Method::from_str(&sendable_request.method)
         .map_err(|e| GenericError(e.to_string()))?;
-    let mut request_builder = client.request(m, url).query(&query_params);
+    let mut request_builder = client.request(m, url);
 
-    let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_static("yaak"));
-    headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
-
-    // TODO: Set cookie header ourselves once we also handle redirects. We need to do this
-    //  because reqwest doesn't give us a way to inspect the headers it sent (we have to do
-    //  everything manually to know that).
-    // if let Some(cookie_store) = maybe_cookie_store.clone() {
-    //     let values1 = cookie_store.get_request_values(&url);
-    //     let raw_value = cookie_store.get_request_values(&url)
-    //         .map(|(name, value)| format!("{}={}", name, value))
-    //         .collect::<Vec<_>>()
-    //         .join("; ");
-    //     headers.insert(
-    //         COOKIE,
-    //         HeaderValue::from_str(&raw_value).expect("Failed to create cookie header"),
-    //     );
-    // }
-
-    for h in request.headers.clone() {
-        if h.name.is_empty() && h.value.is_empty() {
-            continue;
-        }
-
-        if !h.enabled {
-            continue;
-        }
-
+    // Add headers from SendableHttpRequest
+    for h in &sendable_request.headers {
         let header_name = match HeaderName::from_str(&h.name) {
             Ok(n) => n,
             Err(e) => {
@@ -262,180 +230,13 @@ pub async fn send_http_request_with_context<R: Runtime>(
                 continue;
             }
         };
-
-        headers.insert(header_name, header_value);
+        request_builder = request_builder.header(header_name, header_value);
     }
 
-    let request_body = request.body.clone();
-    if let Some(body_type) = &request.body_type.clone() {
-        if body_type == "graphql" {
-            let query = get_str_map(&request_body, "query");
-            let variables = get_str_map(&request_body, "variables");
-            if request.method.to_lowercase() == "get" {
-                request_builder = request_builder.query(&[("query", query)]);
-                if !variables.trim().is_empty() {
-                    request_builder = request_builder.query(&[("variables", variables)]);
-                }
-            } else {
-                let body = if variables.trim().is_empty() {
-                    format!(r#"{{"query":{}}}"#, serde_json::to_string(query).unwrap_or_default())
-                } else {
-                    format!(
-                        r#"{{"query":{},"variables":{variables}}}"#,
-                        serde_json::to_string(query).unwrap_or_default()
-                    )
-                };
-                request_builder = request_builder.body(body.to_owned());
-            }
-        } else if body_type == "application/x-www-form-urlencoded"
-            && request_body.contains_key("form")
-        {
-            let mut form_params = Vec::new();
-            let form = request_body.get("form");
-            if let Some(f) = form {
-                match f.as_array() {
-                    None => {}
-                    Some(a) => {
-                        for p in a {
-                            let enabled = get_bool(p, "enabled", true);
-                            let name = get_str(p, "name");
-                            if !enabled || name.is_empty() {
-                                continue;
-                            }
-                            let value = get_str(p, "value");
-                            form_params.push((name, value));
-                        }
-                    }
-                }
-            }
-            request_builder = request_builder.form(&form_params);
-        } else if body_type == "binary" && request_body.contains_key("filePath") {
-            let file_path = request_body
-                .get("filePath")
-                .ok_or(GenericError("filePath not set".to_string()))?
-                .as_str()
-                .unwrap_or_default();
-
-            match fs::read(file_path).await.map_err(|e| e.to_string()) {
-                Ok(f) => {
-                    request_builder = request_builder.body(f);
-                }
-                Err(e) => {
-                    return Ok(response_err(
-                        &app_handle,
-                        &*response.lock().await,
-                        e,
-                        &update_source,
-                    ));
-                }
-            }
-        } else if body_type == "multipart/form-data" && request_body.contains_key("form") {
-            let mut multipart_form = multipart::Form::new();
-            if let Some(form_definition) = request_body.get("form") {
-                match form_definition.as_array() {
-                    None => {}
-                    Some(fd) => {
-                        for p in fd {
-                            let enabled = get_bool(p, "enabled", true);
-                            let name = get_str(p, "name").to_string();
-
-                            if !enabled || name.is_empty() {
-                                continue;
-                            }
-
-                            let file_path = get_str(p, "file").to_owned();
-                            let value = get_str(p, "value").to_owned();
-
-                            let mut part = if file_path.is_empty() {
-                                multipart::Part::text(value.clone())
-                            } else {
-                                match fs::read(file_path.clone()).await {
-                                    Ok(f) => multipart::Part::bytes(f),
-                                    Err(e) => {
-                                        return Ok(response_err(
-                                            &app_handle,
-                                            &*response.lock().await,
-                                            e.to_string(),
-                                            &update_source,
-                                        ));
-                                    }
-                                }
-                            };
-
-                            let content_type = get_str(p, "contentType");
-
-                            // Set or guess mimetype
-                            if !content_type.is_empty() {
-                                part = match part.mime_str(content_type) {
-                                    Ok(p) => p,
-                                    Err(e) => {
-                                        return Ok(response_err(
-                                            &app_handle,
-                                            &*response.lock().await,
-                                            format!("Invalid mime for multi-part entry {e:?}"),
-                                            &update_source,
-                                        ));
-                                    }
-                                };
-                            } else if !file_path.is_empty() {
-                                let default_mime =
-                                    Mime::from_str("application/octet-stream").unwrap();
-                                let mime =
-                                    mime_guess::from_path(file_path.clone()).first_or(default_mime);
-                                part = match part.mime_str(mime.essence_str()) {
-                                    Ok(p) => p,
-                                    Err(e) => {
-                                        return Ok(response_err(
-                                            &app_handle,
-                                            &*response.lock().await,
-                                            format!("Invalid mime for multi-part entry {e:?}"),
-                                            &update_source,
-                                        ));
-                                    }
-                                };
-                            }
-
-                            // Set a file path if it is not empty
-                            if !file_path.is_empty() {
-                                let user_filename = get_str(p, "filename").to_owned();
-                                let filename = if user_filename.is_empty() {
-                                    PathBuf::from(file_path)
-                                        .file_name()
-                                        .unwrap_or_default()
-                                        .to_string_lossy()
-                                        .to_string()
-                                } else {
-                                    user_filename
-                                };
-                                part = part.file_name(filename);
-                            }
-
-                            multipart_form = multipart_form.part(name, part);
-                        }
-                    }
-                }
-            }
-            headers.remove("Content-Type"); // reqwest will add this automatically
-            request_builder = request_builder.multipart(multipart_form);
-        } else if request_body.contains_key("text") {
-            let body = get_str_map(&request_body, "text");
-            request_builder = request_builder.body(body.to_owned());
-        } else {
-            warn!("Unsupported body type: {}", body_type);
-        }
-    } else {
-        // No body set
-        let method = request.method.to_ascii_lowercase();
-        let is_body_method = method == "post" || method == "put" || method == "patch";
-        // Add Content-Length for methods that commonly accept a body because some servers
-        // will error if they don't receive it.
-        if is_body_method && !headers.contains_key("content-length") {
-            headers.insert("Content-Length", HeaderValue::from_static("0"));
-        }
+    // Add body if present
+    if let Some(body_bytes) = sendable_request.body {
+        request_builder = request_builder.body(body_bytes);
     }
-
-    // Add headers last, because previous steps may modify them
-    request_builder = request_builder.headers(headers);
 
     let mut sendable_req = match request_builder.build() {
         Ok(r) => r,
@@ -718,25 +519,3 @@ pub fn resolve_http_request<R: Runtime>(
     Ok((new_request, authentication_context_id))
 }
 
-fn ensure_proto(url_str: &str) -> String {
-    if url_str.starts_with("http://") || url_str.starts_with("https://") {
-        return url_str.to_string();
-    }
-
-    // Url::from_str will fail without a proto, so add one
-    let parseable_url = format!("http://{}", url_str);
-    if let Ok(u) = Url::from_str(parseable_url.as_str()) {
-        match u.host() {
-            Some(host) => {
-                let h = host.to_string();
-                // These TLDs force HTTPS
-                if h.ends_with(".app") || h.ends_with(".dev") || h.ends_with(".page") {
-                    return format!("https://{url_str}");
-                }
-            }
-            None => {}
-        }
-    }
-
-    format!("http://{url_str}")
-}
