@@ -6,21 +6,19 @@ use http::header::{ACCEPT, USER_AGENT};
 use http::{HeaderMap, HeaderName, HeaderValue};
 use log::{debug, error, warn};
 use mime_guess::Mime;
+use reqwest::{multipart, Url};
 use reqwest::{Method, Response};
-use reqwest::{Url, multipart};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
-use serde_json::Value;
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs;
-use tokio::fs::{File, create_dir_all};
+use tokio::fs::{create_dir_all, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use yaak_common::serde::{get_bool, get_str, get_str_map};
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
