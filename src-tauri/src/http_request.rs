@@ -21,6 +21,7 @@ use tokio::fs::{File, create_dir_all};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
 use tokio::sync::{Mutex, oneshot};
+use yaak_common::serde::{get_bool, get_str, get_str_map};
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
@@ -270,8 +271,8 @@ pub async fn send_http_request_with_context<R: Runtime>(
     let request_body = request.body.clone();
     if let Some(body_type) = &request.body_type.clone() {
         if body_type == "graphql" {
-            let query = get_str_h(&request_body, "query");
-            let variables = get_str_h(&request_body, "variables");
+            let query = get_str_map(&request_body, "query");
+            let variables = get_str_map(&request_body, "variables");
             if request.method.to_lowercase() == "get" {
                 request_builder = request_builder.query(&[("query", query)]);
                 if !variables.trim().is_empty() {
@@ -419,7 +420,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
             headers.remove("Content-Type"); // reqwest will add this automatically
             request_builder = request_builder.multipart(multipart_form);
         } else if request_body.contains_key("text") {
-            let body = get_str_h(&request_body, "text");
+            let body = get_str_map(&request_body, "text");
             request_builder = request_builder.body(body.to_owned());
         } else {
             warn!("Unsupported body type: {}", body_type);
@@ -740,25 +741,4 @@ fn ensure_proto(url_str: &str) -> String {
     }
 
     format!("http://{url_str}")
-}
-
-fn get_bool(v: &Value, key: &str, fallback: bool) -> bool {
-    match v.get(key) {
-        None => fallback,
-        Some(v) => v.as_bool().unwrap_or(fallback),
-    }
-}
-
-fn get_str<'a>(v: &'a Value, key: &str) -> &'a str {
-    match v.get(key) {
-        None => "",
-        Some(v) => v.as_str().unwrap_or_default(),
-    }
-}
-
-fn get_str_h<'a>(v: &'a BTreeMap<String, Value>, key: &str) -> &'a str {
-    match v.get(key) {
-        None => "",
-        Some(v) => v.as_str().unwrap_or_default(),
-    }
 }

@@ -7929,6 +7929,7 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
+ "serde_json",
  "tauri",
  "thiserror 2.0.17",
 ]
@@ -8016,11 +8017,13 @@ dependencies = [
  "reqwest",
  "reqwest_cookie_store",
  "serde",
+ "serde_json",
  "tauri",
  "thiserror 2.0.17",
  "tokio",
  "tower-service",
  "urlencoding",
+ "yaak-common",
  "yaak-models",
  "yaak-tls",
 ]

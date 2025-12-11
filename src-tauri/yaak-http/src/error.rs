@@ -8,6 +8,9 @@ pub enum Error {
 
     #[error(transparent)]
     TlsError(#[from] yaak_tls::error::Error),
+
+    #[error("Body error: {0:?}")]
+    BodyError(String),
 }
 
 impl Serialize for Error {
