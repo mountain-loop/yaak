@@ -8013,6 +8013,7 @@ version = "0.1.0"
 dependencies = [
  "hyper-util",
  "log",
+ "mime_guess",
  "regex",
  "reqwest",
  "reqwest_cookie_store",

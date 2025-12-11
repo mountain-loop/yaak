@@ -5,16 +5,19 @@ use std::collections::BTreeMap;
 use yaak_common::serde::{get_bool, get_str, get_str_map};
 use yaak_models::models::HttpRequest;
 
+// Hardcoded multipart boundary that's unlikely to conflict with content
+pub const MULTIPART_BOUNDARY: &str = "----YaakFormBoundary7MA4YWxkTrZu0gW";
+
 pub struct SendableHttpRequestHeader {
-    name: String,
-    value: String,
+    pub name: String,
+    pub value: String,
 }
 
 pub struct SendableHttpRequest {
-    url: String,
-    method: String,
-    headers: Vec<SendableHttpRequestHeader>,
-    body: Option<Vec<u8>>,
+    pub url: String,
+    pub method: String,
+    pub headers: Vec<SendableHttpRequestHeader>,
+    pub body: Option<Vec<u8>>,
 }
 
 impl SendableHttpRequest {
@@ -50,11 +53,11 @@ async fn build_body(r: &HttpRequest) -> Result<Option<Vec<u8>>> {
     };
 
     let b = match body_type.as_str() {
-        "application/x-www-form-urlencoded" => {
-            build_form_urlencoded_body(&r.body).map(|b| b.into_bytes())
-        }
         "binary" => build_binary_body(&r.body).await?,
         "graphql" => build_graphql_body(&r.method, &r.body).map(|b| b.into_bytes()),
+        "application/x-www-form-urlencoded" => build_form_body(&r.body).map(|b| b.into_bytes()),
+        "multipart/form-data" => build_multipart_body(&r.body).await?,
+        _ if r.body.contains_key("text") => build_text_body(&r.body).map(|b| b.bytes().collect()),
         t => {
             warn!("Unsupported body type: {}", t);
             None
@@ -64,7 +67,7 @@ async fn build_body(r: &HttpRequest) -> Result<Option<Vec<u8>>> {
     Ok(b)
 }
 
-fn build_form_urlencoded_body(body: &BTreeMap<String, serde_json::Value>) -> Option<String> {
+fn build_form_body(body: &BTreeMap<String, serde_json::Value>) -> Option<String> {
     let form_params = match body.get("form").map(|f| f.as_array()) {
         Some(Some(f)) => f,
         _ => return None,
@@ -102,6 +105,11 @@ async fn build_binary_body(body: &BTreeMap<String, serde_json::Value>) -> Result
     Ok(Some(contents))
 }
 
+fn build_text_body(body: &BTreeMap<String, serde_json::Value>) -> Option<&str> {
+    let text = get_str_map(body, "text");
+    if text.is_empty() { None } else { Some(text) }
+}
+
 fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) -> Option<String> {
     let query = get_str_map(body, "query");
     let variables = get_str_map(body, "variables");
@@ -124,11 +132,115 @@ fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) 
     Some(body)
 }
 
+async fn build_multipart_body(
+    body: &BTreeMap<String, serde_json::Value>,
+) -> Result<Option<Vec<u8>>> {
+    let form_params = match body.get("form").map(|f| f.as_array()) {
+        Some(Some(f)) => f,
+        _ => return Ok(None),
+    };
+
+    let mut body_bytes = Vec::new();
+
+    for p in form_params {
+        let enabled = get_bool(p, "enabled", true);
+        let name = get_str(p, "name");
+        if !enabled || name.is_empty() {
+            continue;
+        }
+
+        // Add boundary delimiter
+        body_bytes.extend_from_slice(format!("--{}\r\n", MULTIPART_BOUNDARY).as_bytes());
+
+        let file_path = get_str(p, "file");
+        let value = get_str(p, "value");
+        let content_type = get_str(p, "contentType");
+
+        if file_path.is_empty() {
+            // Text field
+            body_bytes.extend_from_slice(
+                format!("Content-Disposition: form-data; name=\"{}\"\r\n\r\n", name).as_bytes(),
+            );
+            body_bytes.extend_from_slice(value.as_bytes());
+        } else {
+            // File field
+            let filename = get_str(p, "filename");
+            let filename = if filename.is_empty() {
+                std::path::Path::new(file_path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("file")
+            } else {
+                filename
+            };
+
+            body_bytes.extend_from_slice(
+                format!(
+                    "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
+                    name, filename
+                )
+                .as_bytes(),
+            );
+
+            // Add content type
+            let mime_type = if !content_type.is_empty() {
+                content_type.to_string()
+            } else {
+                // Guess mime type from file extension
+                mime_guess::from_path(file_path).first_or_octet_stream().to_string()
+            };
+            body_bytes.extend_from_slice(format!("Content-Type: {}\r\n\r\n", mime_type).as_bytes());
+
+            // Read and append file contents
+            let file_contents = tokio::fs::read(file_path)
+                .await
+                .map_err(|e| BodyError(format!("Failed to read file: {}", e)))?;
+            body_bytes.extend_from_slice(&file_contents);
+        }
+
+        body_bytes.extend_from_slice(b"\r\n");
+    }
+
+    // Add final boundary
+    if !body_bytes.is_empty() {
+        body_bytes.extend_from_slice(format!("--{}--\r\n", MULTIPART_BOUNDARY).as_bytes());
+        Ok(Some(body_bytes))
+    } else {
+        Ok(None)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
     use std::collections::BTreeMap;
+
+    #[tokio::test]
+    async fn test_text_body() {
+        let mut body = BTreeMap::new();
+        body.insert("text".to_string(), json!("Hello, World!"));
+
+        let result = build_text_body(&body);
+        assert_eq!(result, Some("Hello, World!"));
+    }
+
+    #[tokio::test]
+    async fn test_text_body_empty() {
+        let mut body = BTreeMap::new();
+        body.insert("text".to_string(), json!(""));
+
+        let result = build_text_body(&body);
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn test_text_body_missing() {
+        let body = BTreeMap::new();
+
+        let result = build_text_body(&body);
+        assert_eq!(result, None);
+    }
 
     #[tokio::test]
     async fn test_form_urlencoded_body() -> Result<()> {
@@ -142,7 +254,7 @@ mod tests {
             ]),
         );
 
-        let result = build_form_urlencoded_body(&body);
+        let result = build_form_body(&body);
         assert_eq!(result, Some("basic=aaa&fUnkey%20Stuff%21%24%2A%23%28=%2A%29%25%26%23%24%29%40%20%2A%24%23%29%40%26".to_string()));
         Ok(())
     }
@@ -151,7 +263,7 @@ mod tests {
     async fn test_form_urlencoded_body_missing_form() {
         let body = BTreeMap::new();
 
-        let result = build_form_urlencoded_body(&body);
+        let result = build_form_body(&body);
         assert_eq!(result, None);
     }
 
@@ -208,5 +320,67 @@ mod tests {
 
         let result = build_graphql_body("GET", &body);
         assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn test_multipart_body_text_fields() -> Result<()> {
+        let mut body = BTreeMap::new();
+        body.insert(
+            "form".to_string(),
+            json!([
+                { "enabled": true, "name": "field1", "value": "value1", "file": "" },
+                { "enabled": true, "name": "field2", "value": "value2", "file": "" },
+                { "enabled": false, "name": "disabled", "value": "won't show", "file": "" },
+            ]),
+        );
+
+        let result = build_multipart_body(&body).await?;
+        assert!(result.is_some());
+
+        let body_bytes = result.unwrap();
+        let body_str = String::from_utf8_lossy(&body_bytes);
+        assert!(body_str.contains("Content-Disposition: form-data; name=\"field1\""));
+        assert!(body_str.contains("value1"));
+        assert!(body_str.contains("Content-Disposition: form-data; name=\"field2\""));
+        assert!(body_str.contains("value2"));
+        assert!(!body_str.contains("disabled"));
+        assert!(body_str.starts_with(&format!("--{}", MULTIPART_BOUNDARY)));
+        assert!(body_str.ends_with(&format!("--{}--\r\n", MULTIPART_BOUNDARY)));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_multipart_body_with_file() -> Result<()> {
+        let mut body = BTreeMap::new();
+        body.insert(
+            "form".to_string(),
+            json!([
+                { "enabled": true, "name": "file_field", "file": "./tests/test.txt", "filename": "custom.txt", "contentType": "text/plain" },
+            ]),
+        );
+
+        let result = build_multipart_body(&body).await?;
+        assert!(result.is_some());
+
+        let body_bytes = result.unwrap();
+        let body_str = String::from_utf8_lossy(&body_bytes);
+        assert!(body_str.contains(
+            "Content-Disposition: form-data; name=\"file_field\"; filename=\"custom.txt\""
+        ));
+        assert!(body_str.contains("Content-Type: text/plain"));
+        assert!(body_str.contains("This is a test file!")); // Content of test.txt
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_multipart_body_empty() -> Result<()> {
+        let body = BTreeMap::new();
+
+        let result = build_multipart_body(&body).await?;
+        assert_eq!(result, None);
+
+        Ok(())
     }
 }
