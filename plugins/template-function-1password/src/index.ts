@@ -11,7 +11,7 @@ async function op(args: CallTemplateFunctionArgs): Promise<{ client?: Client; er
   let hash: string | null = null;
   switch (args.values.authMethod) {
     case 'desktop': {
-      const account = args.values.account;
+      const account = args.values.token;
       if (typeof account !== 'string' || !account) return { error: 'Missing account name' };
 
       hash = crypto.createHash('sha256').update(`desktop:${account}`).digest('hex');
@@ -97,7 +97,7 @@ export const plugin: PluginDefinition = {
               name: 'authMethod',
               type: 'select',
               label: 'Authentication Method',
-              description: '',
+              defaultValue: 'token',
               options: [
                 {
                   label: 'Service Account',
@@ -108,24 +108,21 @@ export const plugin: PluginDefinition = {
                   value: 'desktop',
                 },
               ],
-              defaultValue: 'token',
             },
             {
-              name: 'account',
+              name: 'token',
               type: 'text',
               description: '',
               dynamic(_ctx, args) {
                 switch (args.values.authMethod) {
                   case 'desktop':
                     return {
-                      name: 'account',
                       label: 'Account Name',
                       description:
                         'Account name can be taken from the sidebar of the 1Password App. Make sure you\'re on the BETA version of the 1Password app and have "Integrate with other apps" enabled in Settings > Developer.',
                     };
                   case 'token':
                     return {
-                      name: 'token',
                       label: 'Token',
                       description:
                         'Token can be generated from the 1Password website by visiting Developer > Service Accounts',
