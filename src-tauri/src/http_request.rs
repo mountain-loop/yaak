@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::render::render_http_request;
 use crate::response_err;
 use http::{HeaderName, HeaderValue};
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use reqwest::{Method, Response, Url};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use std::str::FromStr;
@@ -19,7 +19,8 @@ use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::manager::HttpConnectionManager;
-use yaak_http::types::{SendableBodyPlain, SendableHttpRequest};
+use yaak_http::sender::{HttpSender, ReqwestSender};
+use yaak_http::types::{SendableBodyPlain, SendableHttpRequest, append_query_params};
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
@@ -112,7 +113,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
     };
 
     // Build the sendable request using the new SendableHttpRequest type
-    let sendable_request = match SendableHttpRequest::from_http_request(&request).await {
+    let mut sendable_request = match SendableHttpRequest::from_http_request(&request).await {
         Ok(r) => r,
         Err(e) => {
             return Ok(response_err(
@@ -199,67 +200,6 @@ pub async fn send_http_request_with_context<R: Runtime>(
         })
         .await?;
 
-    // Build reqwest request from SendableHttpRequest
-    let url = match Url::from_str(&sendable_request.url) {
-        Ok(u) => u,
-        Err(e) => {
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                format!("Failed to parse URL \"{}\": {}", sendable_request.url, e.to_string()),
-                &update_source,
-            ));
-        }
-    };
-
-    let m = Method::from_str(&sendable_request.method).map_err(|e| GenericError(e.to_string()))?;
-    let mut request_builder = client.request(m, url);
-
-    // Add headers from SendableHttpRequest
-    for h in &sendable_request.headers {
-        let header_name = match HeaderName::from_str(&h.name) {
-            Ok(n) => n,
-            Err(e) => {
-                error!("Failed to create header name {}: {}", h.name, e);
-                continue;
-            }
-        };
-        let header_value = match HeaderValue::from_str(&h.value) {
-            Ok(n) => n,
-            Err(e) => {
-                error!("Failed to create header value {}: {}", h.value, e);
-                continue;
-            }
-        };
-        request_builder = request_builder.header(header_name, header_value);
-    }
-
-    match sendable_request.body {
-        SendableBodyPlain::None => {
-            // No request body
-        }
-        SendableBodyPlain::Bytes(bytes) => {
-            request_builder = request_builder.body(bytes);
-        }
-        SendableBodyPlain::Stream(reader) => {
-            let stream = FramedRead::new(reader, BytesCodec::new());
-            request_builder = request_builder.body(reqwest::Body::wrap_stream(stream));
-        }
-    }
-
-    let mut sendable_req = match request_builder.build() {
-        Ok(r) => r,
-        Err(e) => {
-            warn!("Failed to build request builder {e:?}");
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                e.to_string(),
-                &update_source,
-            ));
-        }
-    };
-
     match request.authentication_type {
         None => {
             // No authentication found. Not even inherited
@@ -271,14 +211,14 @@ pub async fn send_http_request_with_context<R: Runtime>(
             let req = CallHttpAuthenticationRequest {
                 context_id: format!("{:x}", md5::compute(auth_context_id)),
                 values: serde_json::from_value(serde_json::to_value(&request.authentication)?)?,
-                url: sendable_req.url().to_string(),
-                method: sendable_req.method().to_string(),
-                headers: sendable_req
-                    .headers()
+                url: sendable_request.url.clone(),
+                method: sendable_request.method.clone(),
+                headers: sendable_request
+                    .headers
                     .iter()
                     .map(|(name, value)| HttpHeader {
                         name: name.to_string(),
-                        value: value.to_str().unwrap_or_default().to_string(),
+                        value: value.to_string(),
                     })
                     .collect(),
             };
@@ -297,200 +237,226 @@ pub async fn send_http_request_with_context<R: Runtime>(
                 }
             };
 
-            let headers = sendable_req.headers_mut();
             for header in plugin_result.set_headers.unwrap_or_default() {
-                match (HeaderName::from_str(&header.name), HeaderValue::from_str(&header.value)) {
-                    (Ok(name), Ok(value)) => {
-                        headers.insert(name, value);
-                    }
-                    _ => continue,
-                };
+                sendable_request.insert_header((header.name, header.value));
             }
 
             if let Some(params) = plugin_result.set_query_parameters {
-                let mut query_pairs = sendable_req.url_mut().query_pairs_mut();
-                for p in params {
-                    query_pairs.append_pair(&p.name, &p.value);
-                }
+                let params = params.into_iter().map(|p| (p.name, p.value)).collect::<Vec<_>>();
+                sendable_request.url = append_query_params(&sendable_request.url, params);
             }
         }
     }
 
-    let (resp_tx, resp_rx) = oneshot::channel::<std::result::Result<Response, reqwest::Error>>();
     let (done_tx, done_rx) = oneshot::channel::<HttpResponse>();
 
     let start = std::time::Instant::now();
 
-    tokio::spawn(async move {
-        let _ = resp_tx.send(client.execute(sendable_req).await);
-    });
-
-    let raw_response = tokio::select! {
-        Ok(r) = resp_rx => r,
-        _ = cancelled_rx.changed() => {
-            let mut r = response.lock().await;
-            r.elapsed_headers = start.elapsed().as_millis() as i32;
-            r.elapsed = start.elapsed().as_millis() as i32;
-            return Ok(response_err(&app_handle, &r, "Request was cancelled".to_string(), &update_source));
-        }
-    };
-
+    // let (resp_tx, resp_rx) = oneshot::channel::<std::result::Result<Response, reqwest::Error>>();
     {
-        let app_handle = app_handle.clone();
-        let window = window.clone();
-        let cancelled_rx = cancelled_rx.clone();
-        let response_id = response_id.clone();
         let response = response.clone();
+        let app_handle = app_handle.clone();
         let update_source = update_source.clone();
         tokio::spawn(async move {
-            match raw_response {
-                Ok(mut v) => {
-                    let content_length = v.content_length();
-                    let response_headers = v.headers().clone();
-                    let dir = app_handle.path().app_data_dir().unwrap();
-                    let base_dir = dir.join("responses");
-                    create_dir_all(base_dir.clone()).await.expect("Failed to create responses dir");
-                    let body_path = if response_id.is_empty() {
-                        base_dir.join(uuid::Uuid::new_v4().to_string())
-                    } else {
-                        base_dir.join(response_id.clone())
-                    };
-
-                    {
-                        let mut r = response.lock().await;
-                        r.body_path = Some(body_path.to_str().unwrap().to_string());
-                        r.elapsed_headers = start.elapsed().as_millis() as i32;
-                        r.elapsed = start.elapsed().as_millis() as i32;
-                        r.status = v.status().as_u16() as i32;
-                        r.status_reason = v.status().canonical_reason().map(|s| s.to_string());
-                        r.headers = response_headers
-                            .iter()
-                            .map(|(k, v)| HttpResponseHeader {
-                                name: k.as_str().to_string(),
-                                value: v.to_str().unwrap_or_default().to_string(),
-                            })
-                            .collect();
-                        r.url = v.url().to_string();
-                        r.remote_addr = v.remote_addr().map(|a| a.to_string());
-                        r.version = match v.version() {
-                            reqwest::Version::HTTP_09 => Some("HTTP/0.9".to_string()),
-                            reqwest::Version::HTTP_10 => Some("HTTP/1.0".to_string()),
-                            reqwest::Version::HTTP_11 => Some("HTTP/1.1".to_string()),
-                            reqwest::Version::HTTP_2 => Some("HTTP/2".to_string()),
-                            reqwest::Version::HTTP_3 => Some("HTTP/3".to_string()),
-                            _ => None,
-                        };
-
-                        r.state = HttpResponseState::Connected;
-                        app_handle
-                            .db()
-                            .update_http_response_if_id(&r, &update_source)
-                            .expect("Failed to update response after connected");
-                    }
-
-                    // Write body to FS
-                    let mut f = File::options()
-                        .create(true)
-                        .truncate(true)
-                        .write(true)
-                        .open(&body_path)
-                        .await
-                        .expect("Failed to open file");
-
-                    let mut written_bytes: usize = 0;
-                    loop {
-                        let chunk = v.chunk().await;
-                        if *cancelled_rx.borrow() {
-                            // Request was canceled
-                            return;
-                        }
-                        match chunk {
-                            Ok(Some(bytes)) => {
-                                let mut r = response.lock().await;
-                                r.elapsed = start.elapsed().as_millis() as i32;
-                                f.write_all(&bytes).await.expect("Failed to write to file");
-                                f.flush().await.expect("Failed to flush file");
-                                written_bytes += bytes.len();
-                                r.content_length = Some(written_bytes as i32);
-                                app_handle
-                                    .db()
-                                    .update_http_response_if_id(&r, &update_source)
-                                    .expect("Failed to update response");
-                            }
-                            Ok(None) => {
-                                break;
-                            }
-                            Err(e) => {
-                                response_err(
-                                    &app_handle,
-                                    &*response.lock().await,
-                                    e.to_string(),
-                                    &update_source,
-                                );
-                                break;
-                            }
-                        }
-                    }
-
-                    // Set the final content length
-                    {
-                        let mut r = response.lock().await;
-                        r.content_length = match content_length {
-                            Some(l) => Some(l as i32),
-                            None => Some(written_bytes as i32),
-                        };
-                        r.state = HttpResponseState::Closed;
-                        app_handle
-                            .db()
-                            .update_http_response_if_id(&r, &UpdateSource::from_window(&window))
-                            .expect("Failed to update response");
-                    };
-
-                    // Add cookie store if specified
-                    if let Some((cookie_store, mut cookie_jar)) = maybe_cookie_manager {
-                        // let cookies = response_headers.get_all(SET_COOKIE).iter().map(|h| {
-                        //     println!("RESPONSE COOKIE: {}", h.to_str().unwrap());
-                        //     cookie_store::RawCookie::from_str(h.to_str().unwrap())
-                        //         .expect("Failed to parse cookie")
-                        // });
-                        // store.store_response_cookies(cookies, &url);
-
-                        let json_cookies: Vec<Cookie> = cookie_store
-                            .lock()
-                            .unwrap()
-                            .iter_any()
-                            .map(|c| {
-                                let json_cookie =
-                                    serde_json::to_value(&c).expect("Failed to serialize cookie");
-                                serde_json::from_value(json_cookie)
-                                    .expect("Failed to deserialize cookie")
-                            })
-                            .collect::<Vec<_>>();
-                        cookie_jar.cookies = json_cookies;
-                        if let Err(e) = app_handle
-                            .db()
-                            .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))
-                        {
-                            error!("Failed to update cookie jar: {}", e);
-                        };
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to execute request {e}");
-                    response_err(
-                        &app_handle,
-                        &*response.lock().await,
-                        format!("{e} → {e:?}"),
-                        &update_source,
-                    );
-                }
-            };
-
-            let r = response.lock().await.clone();
-            done_tx.send(r).unwrap();
+            let sender = ReqwestSender::with_client(client);
+            info!("Sending request to {} {}", sendable_request.method, sendable_request.url);
+            let final_response =
+                sender.send(sendable_request).await.expect("Failed to send request");
+            info!("Request finished");
+            let mut resp = { response.lock().await.clone() };
+            resp.headers = final_response
+                .headers
+                .into_iter()
+                .map(|h| HttpResponseHeader {
+                    name: h.0.to_string(),
+                    value: h.1.to_string(),
+                })
+                .collect();
+            resp.status = final_response.status as i32;
+            resp.state = HttpResponseState::Closed;
+            resp.elapsed = start.elapsed().as_millis() as i32;
+            resp.elapsed_headers = 0; // TODO
+            app_handle
+                .db()
+                .update_http_response_if_id(&resp, &update_source)
+                .expect("Failed to update response after connected");
+            let body_str = String::from_utf8(final_response.body).unwrap_or_default();
+            debug!("UPDATED REQUEST {resp:#?}\n{}", body_str);
+            done_tx.send(resp).unwrap();
         });
-    };
+    }
 
+    // tokio::spawn(async move {
+    //     let _ = resp_tx.send(client.execute(sendable_req).await);
+    // });
+
+    // let raw_response = tokio::select! {
+    //     Ok(r) = resp_rx => r,
+    //     _ = cancelled_rx.changed() => {
+    //         let mut r = response.lock().await;
+    //         r.elapsed_headers = start.elapsed().as_millis() as i32;
+    //         r.elapsed = start.elapsed().as_millis() as i32;
+    //         return Ok(response_err(&app_handle, &r, "Request was cancelled".to_string(), &update_source));
+    //     }
+    // };
+
+    // {
+    //     let app_handle = app_handle.clone();
+    //     let window = window.clone();
+    //     let cancelled_rx = cancelled_rx.clone();
+    //     let response_id = response_id.clone();
+    //     let response = response.clone();
+    //     let update_source = update_source.clone();
+    //     tokio::spawn(async move {
+    //         match raw_response {
+    //             Ok(mut v) => {
+    //                 let content_length = v.content_length();
+    //                 let response_headers = v.headers().clone();
+    //                 let dir = app_handle.path().app_data_dir().unwrap();
+    //                 let base_dir = dir.join("responses");
+    //                 create_dir_all(base_dir.clone()).await.expect("Failed to create responses dir");
+    //                 let body_path = if response_id.is_empty() {
+    //                     base_dir.join(uuid::Uuid::new_v4().to_string())
+    //                 } else {
+    //                     base_dir.join(response_id.clone())
+    //                 };
+    //
+    //                 {
+    //                     let mut r = response.lock().await;
+    //                     r.body_path = Some(body_path.to_str().unwrap().to_string());
+    //                     r.elapsed_headers = start.elapsed().as_millis() as i32;
+    //                     r.elapsed = start.elapsed().as_millis() as i32;
+    //                     r.status = v.status().as_u16() as i32;
+    //                     r.status_reason = v.status().canonical_reason().map(|s| s.to_string());
+    //                     r.headers = response_headers
+    //                         .iter()
+    //                         .map(|(k, v)| HttpResponseHeader {
+    //                             name: k.as_str().to_string(),
+    //                             value: v.to_str().unwrap_or_default().to_string(),
+    //                         })
+    //                         .collect();
+    //                     r.url = v.url().to_string();
+    //                     r.remote_addr = v.remote_addr().map(|a| a.to_string());
+    //                     r.version = match v.version() {
+    //                         reqwest::Version::HTTP_09 => Some("HTTP/0.9".to_string()),
+    //                         reqwest::Version::HTTP_10 => Some("HTTP/1.0".to_string()),
+    //                         reqwest::Version::HTTP_11 => Some("HTTP/1.1".to_string()),
+    //                         reqwest::Version::HTTP_2 => Some("HTTP/2".to_string()),
+    //                         reqwest::Version::HTTP_3 => Some("HTTP/3".to_string()),
+    //                         _ => None,
+    //                     };
+    //
+    //                     r.state = HttpResponseState::Connected;
+    //                     app_handle
+    //                         .db()
+    //                         .update_http_response_if_id(&r, &update_source)
+    //                         .expect("Failed to update response after connected");
+    //                 }
+    //
+    //                 // Write body to FS
+    //                 let mut f = File::options()
+    //                     .create(true)
+    //                     .truncate(true)
+    //                     .write(true)
+    //                     .open(&body_path)
+    //                     .await
+    //                     .expect("Failed to open file");
+    //
+    //                 let mut written_bytes: usize = 0;
+    //                 loop {
+    //                     let chunk = v.chunk().await;
+    //                     if *cancelled_rx.borrow() {
+    //                         // Request was canceled
+    //                         return;
+    //                     }
+    //                     match chunk {
+    //                         Ok(Some(bytes)) => {
+    //                             let mut r = response.lock().await;
+    //                             r.elapsed = start.elapsed().as_millis() as i32;
+    //                             f.write_all(&bytes).await.expect("Failed to write to file");
+    //                             f.flush().await.expect("Failed to flush file");
+    //                             written_bytes += bytes.len();
+    //                             r.content_length = Some(written_bytes as i32);
+    //                             app_handle
+    //                                 .db()
+    //                                 .update_http_response_if_id(&r, &update_source)
+    //                                 .expect("Failed to update response");
+    //                         }
+    //                         Ok(None) => {
+    //                             break;
+    //                         }
+    //                         Err(e) => {
+    //                             response_err(
+    //                                 &app_handle,
+    //                                 &*response.lock().await,
+    //                                 e.to_string(),
+    //                                 &update_source,
+    //                             );
+    //                             break;
+    //                         }
+    //                     }
+    //                 }
+    //
+    //                 // Set the final content length
+    //                 {
+    //                     let mut r = response.lock().await;
+    //                     r.content_length = match content_length {
+    //                         Some(l) => Some(l as i32),
+    //                         None => Some(written_bytes as i32),
+    //                     };
+    //                     r.state = HttpResponseState::Closed;
+    //                     app_handle
+    //                         .db()
+    //                         .update_http_response_if_id(&r, &UpdateSource::from_window(&window))
+    //                         .expect("Failed to update response");
+    //                 };
+    //
+    //                 // Add cookie store if specified
+    //                 if let Some((cookie_store, mut cookie_jar)) = maybe_cookie_manager {
+    //                     // let cookies = response_headers.get_all(SET_COOKIE).iter().map(|h| {
+    //                     //     println!("RESPONSE COOKIE: {}", h.to_str().unwrap());
+    //                     //     cookie_store::RawCookie::from_str(h.to_str().unwrap())
+    //                     //         .expect("Failed to parse cookie")
+    //                     // });
+    //                     // store.store_response_cookies(cookies, &url);
+    //
+    //                     let json_cookies: Vec<Cookie> = cookie_store
+    //                         .lock()
+    //                         .unwrap()
+    //                         .iter_any()
+    //                         .map(|c| {
+    //                             let json_cookie =
+    //                                 serde_json::to_value(&c).expect("Failed to serialize cookie");
+    //                             serde_json::from_value(json_cookie)
+    //                                 .expect("Failed to deserialize cookie")
+    //                         })
+    //                         .collect::<Vec<_>>();
+    //                     cookie_jar.cookies = json_cookies;
+    //                     if let Err(e) = app_handle
+    //                         .db()
+    //                         .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))
+    //                     {
+    //                         error!("Failed to update cookie jar: {}", e);
+    //                     };
+    //                 }
+    //             }
+    //             Err(e) => {
+    //                 warn!("Failed to execute request {e}");
+    //                 response_err(
+    //                     &app_handle,
+    //                     &*response.lock().await,
+    //                     format!("{e} → {e:?}"),
+    //                     &update_source,
+    //                 );
+    //             }
+    //         };
+    //
+    //         let r = response.lock().await.clone();
+    //         done_tx.send(r).unwrap();
+    //     });
+    // };
+
+    info!("Waiting for response");
     let app_handle = app_handle.clone();
     Ok(tokio::select! {
         Ok(r) = done_rx => r,

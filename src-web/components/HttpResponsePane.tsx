@@ -49,6 +49,7 @@ const TAB_INFO = 'info';
 
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
+  console.log('RESPONSE', activeResponse);
   const [viewMode, setViewMode] = useResponseViewMode(activeResponse?.requestId);
   const [activeTabs, setActiveTabs] = useLocalStorage<Record<string, string>>(
     'responsePaneActiveTabs',

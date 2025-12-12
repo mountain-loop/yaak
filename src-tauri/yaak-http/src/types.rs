@@ -13,12 +13,6 @@ use yaak_models::models::HttpRequest;
 
 pub const MULTIPART_BOUNDARY: &str = "------YaakFormBoundary";
 
-#[derive(Debug)]
-pub struct SendableHttpRequestHeader {
-    pub name: String,
-    pub value: String,
-}
-
 pub enum SendableBodyPlain {
     None,
     Bytes(Bytes),
@@ -47,7 +41,7 @@ impl Into<SendableBodyPlain> for SendableBody {
 pub struct SendableHttpRequest {
     pub url: String,
     pub method: String,
-    pub headers: Vec<SendableHttpRequestHeader>,
+    pub headers: Vec<(String, String)>,
     pub body: SendableBodyPlain,
 }
 
@@ -58,26 +52,28 @@ impl SendableHttpRequest {
         let (body, headers) = build_body(&r.method, &r.body_type, &r.body, initial_headers).await?;
 
         Ok(Self {
-            url: build_url(r)?,
+            url: build_url(r),
             method: r.method.to_uppercase(),
             headers,
             body: body.into(),
         })
     }
+
+    pub fn insert_header(&mut self, header: (String, String)) {
+        if let Some(existing) =
+            self.headers.iter_mut().find(|h| h.0.to_lowercase() == header.0.to_lowercase())
+        {
+            existing.1 = header.1;
+        } else {
+            self.headers.push(header);
+        }
+    }
 }
 
-fn build_url(r: &HttpRequest) -> Result<String> {
-    let (url_string, params) = apply_path_placeholders(&ensure_proto(&r.url), &r.url_parameters);
-
-    // Collect enabled parameters
-    let params: Vec<(String, String)> = params
-        .iter()
-        .filter(|p| p.enabled && !p.name.is_empty())
-        .map(|p| (p.name.clone(), p.value.clone()))
-        .collect();
-
+pub fn append_query_params(url: &str, params: Vec<(String, String)>) -> String {
+    let url_string = url.to_string();
     if params.is_empty() {
-        return Ok(url_string);
+        return url.to_string();
     }
 
     // Build query string
@@ -118,19 +114,28 @@ fn build_url(r: &HttpRequest) -> Result<String> {
         result.push_str(&fragment);
     }
 
-    Ok(result)
+    result
 }
 
-fn build_headers(r: &HttpRequest) -> Vec<SendableHttpRequestHeader> {
-    let mut headers: Vec<SendableHttpRequestHeader> = r
+fn build_url(r: &HttpRequest) -> String {
+    let (url_string, params) = apply_path_placeholders(&ensure_proto(&r.url), &r.url_parameters);
+    append_query_params(
+        &url_string,
+        params
+            .iter()
+            .filter(|p| p.enabled && !p.name.is_empty())
+            .map(|p| (p.name.clone(), p.value.clone()))
+            .collect(),
+    )
+}
+
+fn build_headers(r: &HttpRequest) -> Vec<(String, String)> {
+    let mut headers: Vec<(String, String)> = r
         .headers
         .iter()
         .filter_map(|h| {
             if h.enabled && !h.name.is_empty() {
-                Some(SendableHttpRequestHeader {
-                    name: h.name.clone(),
-                    value: h.value.clone(),
-                })
+                Some((h.name.clone(), h.value.clone()))
             } else {
                 None
             }
@@ -138,19 +143,13 @@ fn build_headers(r: &HttpRequest) -> Vec<SendableHttpRequestHeader> {
         .collect();
 
     // Add a default User-Agent if not present
-    if !headers.iter().any(|h| h.name.to_lowercase() == "user-agent") {
-        headers.push(SendableHttpRequestHeader {
-            name: "User-Agent".to_string(),
-            value: "yaak".to_string(),
-        });
+    if !headers.iter().any(|h| h.0.to_lowercase() == "user-agent") {
+        headers.push(("User-Agent".to_string(), "yaak".to_string()));
     }
 
     // Add default Accept if not present
-    if !headers.iter().any(|h| h.name.to_lowercase() == "accept") {
-        headers.push(SendableHttpRequestHeader {
-            name: "Accept".to_string(),
-            value: "*/*".to_string(),
-        });
+    if !headers.iter().any(|h| h.0.to_lowercase() == "accept") {
+        headers.push(("Accept".to_string(), "*/*".to_string()));
     }
 
     headers
@@ -160,8 +159,8 @@ async fn build_body(
     method: &str,
     body_type: &Option<String>,
     body: &BTreeMap<String, serde_json::Value>,
-    headers: Vec<SendableHttpRequestHeader>,
-) -> Result<(SendableBodyPlain, Vec<SendableHttpRequestHeader>)> {
+    headers: Vec<(String, String)>,
+) -> Result<(SendableBodyPlain, Vec<(String, String)>)> {
     let body_type = match &body_type {
         None => return Ok((SendableBodyPlain::None, headers)),
         Some(t) => t,
@@ -184,21 +183,17 @@ async fn build_body(
     // Add or update the Content-Type header
     let mut headers = headers;
     if let Some(ct) = content_type {
-        if let Some(existing) = headers.iter_mut().find(|h| h.name.to_lowercase() == "content-type")
-        {
-            existing.value = ct;
+        if let Some(existing) = headers.iter_mut().find(|h| h.0.to_lowercase() == "content-type") {
+            existing.1 = ct;
         } else {
-            headers.push(SendableHttpRequestHeader {
-                name: "Content-Type".to_string(),
-                value: ct,
-            });
+            headers.push(("Content-Type".to_string(), ct));
         }
     }
 
     // Check if Transfer-Encoding: chunked is already set
-    let has_chunked_encoding = headers
-        .iter()
-        .any(|h| h.name.to_lowercase() == "transfer-encoding" && h.value.to_lowercase().contains("chunked"));
+    let has_chunked_encoding = headers.iter().any(|h| {
+        h.0.to_lowercase() == "transfer-encoding" && h.1.to_lowercase().contains("chunked")
+    });
 
     // Add a Content-Length header only if chunked encoding is not being used
     if !has_chunked_encoding {
@@ -209,10 +204,7 @@ async fn build_body(
         };
 
         if let Some(cl) = content_length {
-            headers.push(SendableHttpRequestHeader {
-                name: "Content-Length".to_string(),
-                value: cl.to_string(),
-            });
+            headers.push(("Content-Length".to_string(), cl.to_string()));
         }
     }
 
@@ -299,7 +291,7 @@ fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) 
 
 async fn build_multipart_body(
     body: &BTreeMap<String, serde_json::Value>,
-    headers: &Vec<SendableHttpRequestHeader>,
+    headers: &Vec<(String, String)>,
 ) -> Result<(SendableBody, Option<String>)> {
     let boundary = extract_boundary_from_headers(headers);
 
@@ -406,14 +398,13 @@ async fn build_multipart_body(
     }
 }
 
-fn extract_boundary_from_headers(headers: &Vec<SendableHttpRequestHeader>) -> String {
+fn extract_boundary_from_headers(headers: &Vec<(String, String)>) -> String {
     headers
         .iter()
-        .find(|h| h.name.to_lowercase() == "content-type")
+        .find(|h| h.0.to_lowercase() == "content-type")
         .and_then(|h| {
             // Extract boundary from the Content-Type header (e.g., "multipart/form-data; boundary=xyz")
-            h.value
-                .split(';')
+            h.1.split(';')
                 .find(|part| part.trim().starts_with("boundary="))
                 .and_then(|boundary_part| boundary_part.split('=').nth(1))
                 .map(|b| b.trim().to_string())
@@ -437,7 +428,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://example.com/api");
     }
 
@@ -462,7 +453,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://example.com/api?foo=bar&baz=qux");
     }
 
@@ -487,7 +478,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://example.com/api?enabled=value");
     }
 
@@ -504,7 +495,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://example.com/api?existing=param&new=value");
     }
 
@@ -521,7 +512,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://example.com/api?new=value");
     }
 
@@ -538,7 +529,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(
             result,
             "https://example.com/api?special%20chars%21%40%23=value%20with%20spaces%20%26%20symbols"
@@ -558,7 +549,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         // ensure_proto defaults to http:// for regular domains
         assert_eq!(result, "http://example.com/api?foo=bar");
     }
@@ -576,7 +567,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         // .dev domains force https
         assert_eq!(result, "https://example.dev/api?foo=bar");
     }
@@ -594,7 +585,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://example.com/api?foo=bar#section");
     }
 
@@ -611,7 +602,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://yaak.app?foo=bar&baz=qux#some-hash");
     }
 
@@ -628,7 +619,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://example.com/api?foo=bar#section");
     }
 
@@ -645,7 +636,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://example.com?real=param#section/with/slashes?and=fake&query");
     }
 
@@ -662,7 +653,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         assert_eq!(result, "https://example.com/api?foo=bar#");
     }
 
@@ -680,7 +671,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = build_url(&r).unwrap();
+        let result = build_url(&r);
         // Should treat everything after first # as fragment
         assert_eq!(result, "https://example.com?foo=bar#section#subsection");
     }
@@ -900,54 +891,42 @@ mod tests {
     #[tokio::test]
     async fn test_multipart_body_empty() -> Result<()> {
         let body = BTreeMap::new();
-
         let (result, content_type) = build_multipart_body(&body, &vec![]).await?;
         assert!(matches!(result, SendableBody::None));
         assert_eq!(content_type, None);
-
         Ok(())
     }
 
     #[test]
     fn test_extract_boundary_from_headers_with_custom_boundary() {
-        let headers = vec![SendableHttpRequestHeader {
-            name: "Content-Type".to_string(),
-            value: "multipart/form-data; boundary=customBoundary123".to_string(),
-        }];
-
+        let headers = vec![(
+            "Content-Type".to_string(),
+            "multipart/form-data; boundary=customBoundary123".to_string(),
+        )];
         let boundary = extract_boundary_from_headers(&headers);
         assert_eq!(boundary, "customBoundary123");
     }
 
     #[test]
     fn test_extract_boundary_from_headers_default() {
-        let headers = vec![SendableHttpRequestHeader {
-            name: "Accept".to_string(),
-            value: "*/*".to_string(),
-        }];
-
+        let headers = vec![("Accept".to_string(), "*/*".to_string())];
         let boundary = extract_boundary_from_headers(&headers);
         assert_eq!(boundary, MULTIPART_BOUNDARY);
     }
 
     #[test]
     fn test_extract_boundary_from_headers_no_boundary_in_content_type() {
-        let headers = vec![SendableHttpRequestHeader {
-            name: "Content-Type".to_string(),
-            value: "multipart/form-data".to_string(),
-        }];
-
+        let headers = vec![("Content-Type".to_string(), "multipart/form-data".to_string())];
         let boundary = extract_boundary_from_headers(&headers);
         assert_eq!(boundary, MULTIPART_BOUNDARY);
     }
 
     #[test]
     fn test_extract_boundary_case_insensitive() {
-        let headers = vec![SendableHttpRequestHeader {
-            name: "content-type".to_string(),
-            value: "multipart/form-data; boundary=myBoundary".to_string(),
-        }];
-
+        let headers = vec![(
+            "Content-Type".to_string(),
+            "multipart/form-data; boundary=myBoundary".to_string(),
+        )];
         let boundary = extract_boundary_from_headers(&headers);
         assert_eq!(boundary, "myBoundary");
     }
@@ -958,23 +937,20 @@ mod tests {
         body.insert("text".to_string(), json!("Hello, World!"));
 
         // Headers with Transfer-Encoding: chunked
-        let headers = vec![SendableHttpRequestHeader {
-            name: "Transfer-Encoding".to_string(),
-            value: "chunked".to_string(),
-        }];
+        let headers = vec![("Transfer-Encoding".to_string(), "chunked".to_string())];
 
-        let (_, result_headers) = build_body("POST", &Some("text/plain".to_string()), &body, headers).await?;
+        let (_, result_headers) =
+            build_body("POST", &Some("text/plain".to_string()), &body, headers).await?;
 
         // Verify that Content-Length is NOT present when Transfer-Encoding: chunked is set
-        let has_content_length = result_headers
-            .iter()
-            .any(|h| h.name.to_lowercase() == "content-length");
+        let has_content_length =
+            result_headers.iter().any(|h| h.0.to_lowercase() == "content-length");
         assert!(!has_content_length, "Content-Length should not be present with chunked encoding");
 
-        // Verify that Transfer-Encoding header is still present
-        let has_chunked = result_headers
-            .iter()
-            .any(|h| h.name.to_lowercase() == "transfer-encoding" && h.value.to_lowercase().contains("chunked"));
+        // Verify that the Transfer-Encoding header is still present
+        let has_chunked = result_headers.iter().any(|h| {
+            h.0.to_lowercase() == "transfer-encoding" && h.1.to_lowercase().contains("chunked")
+        });
         assert!(has_chunked, "Transfer-Encoding: chunked should be preserved");
 
         Ok(())
@@ -988,14 +964,21 @@ mod tests {
         // Headers without Transfer-Encoding: chunked
         let headers = vec![];
 
-        let (_, result_headers) = build_body("POST", &Some("text/plain".to_string()), &body, headers).await?;
+        let (_, result_headers) =
+            build_body("POST", &Some("text/plain".to_string()), &body, headers).await?;
 
         // Verify that Content-Length IS present when Transfer-Encoding: chunked is NOT set
-        let content_length_header = result_headers
-            .iter()
-            .find(|h| h.name.to_lowercase() == "content-length");
-        assert!(content_length_header.is_some(), "Content-Length should be present without chunked encoding");
-        assert_eq!(content_length_header.unwrap().value, "13", "Content-Length should match the body size");
+        let content_length_header =
+            result_headers.iter().find(|h| h.0.to_lowercase() == "content-length");
+        assert!(
+            content_length_header.is_some(),
+            "Content-Length should be present without chunked encoding"
+        );
+        assert_eq!(
+            content_length_header.unwrap().1,
+            "13",
+            "Content-Length should match the body size"
+        );
 
         Ok(())
     }

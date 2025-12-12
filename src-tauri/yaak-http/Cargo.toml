@@ -5,8 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+async-trait = "0.1"
 bytes = "1.5.0"
-futures-util = "0.3"
 hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
 log = { workspace = true }
 mime_guess = "2.0.5"
@@ -18,7 +18,7 @@ serde_json = { workspace = true }
 tauri = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "fs", "io-util"] }
-tokio-util = { version = "0.7", features = ["codec", "io"] }
+tokio-util = { version = "0.7", features = ["codec", "io", "io-util"] }
 tower-service = "0.3.3"
 urlencoding = "2.1.3"
 yaak-common = { workspace = true }

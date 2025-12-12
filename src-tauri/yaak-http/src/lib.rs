@@ -7,6 +7,8 @@ pub mod dns;
 pub mod error;
 pub mod manager;
 pub mod path_placeholders;
+pub mod sender;
+pub mod transaction;
 pub mod types;
 mod proto;
 mod chained_reader;
