@@ -301,9 +301,10 @@ async fn build_multipart_body(
         _ => return Ok((SendableBody::None, None)),
     };
 
-    // Build a list of readers for streaming
+    // Build a list of readers for streaming and calculate total content length
     let mut readers: Vec<ReaderType> = Vec::new();
     let mut has_content = false;
+    let mut total_size: usize = 0;
 
     for p in form_params {
         let enabled = get_bool(p, "enabled", true);
@@ -315,7 +316,9 @@ async fn build_multipart_body(
         has_content = true;
 
         // Add boundary delimiter
-        readers.push(ReaderType::Bytes(format!("--{}\r\n", boundary).into_bytes()));
+        let boundary_bytes = format!("--{}\r\n", boundary).into_bytes();
+        total_size += boundary_bytes.len();
+        readers.push(ReaderType::Bytes(boundary_bytes));
 
         let file_path = get_str(p, "file");
         let value = get_str(p, "value");
@@ -325,12 +328,20 @@ async fn build_multipart_body(
             // Text field
             let header =
                 format!("Content-Disposition: form-data; name=\"{}\"\r\n\r\n{}", name, value);
-            readers.push(ReaderType::Bytes(header.into_bytes()));
+            let header_bytes = header.into_bytes();
+            total_size += header_bytes.len();
+            readers.push(ReaderType::Bytes(header_bytes));
         } else {
             // File field - validate that file exists first
             if !tokio::fs::try_exists(file_path).await.unwrap_or(false) {
                 return Err(BodyError(format!("File not found: {}", file_path)));
             }
+
+            // Get file size for content length calculation
+            let file_metadata = tokio::fs::metadata(file_path)
+                .await
+                .map_err(|e| BodyError(format!("Failed to get file metadata: {}", e)))?;
+            let file_size = file_metadata.len() as usize;
 
             let filename = get_str(p, "filename");
             let filename = if filename.is_empty() {
@@ -354,25 +365,32 @@ async fn build_multipart_body(
                 "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\nContent-Type: {}\r\n\r\n",
                 name, filename, mime_type
             );
-            readers.push(ReaderType::Bytes(header.into_bytes()));
+            let header_bytes = header.into_bytes();
+            total_size += header_bytes.len();
+            total_size += file_size;
+            readers.push(ReaderType::Bytes(header_bytes));
 
             // Add a file path for streaming
             readers.push(ReaderType::FilePath(file_path.to_string()));
         }
 
-        readers.push(ReaderType::Bytes(b"\r\n".to_vec()));
+        let line_ending = b"\r\n".to_vec();
+        total_size += line_ending.len();
+        readers.push(ReaderType::Bytes(line_ending));
     }
 
     if has_content {
         // Add the final boundary
-        readers.push(ReaderType::Bytes(format!("--{}--\r\n", boundary).into_bytes()));
+        let final_boundary = format!("--{}--\r\n", boundary).into_bytes();
+        total_size += final_boundary.len();
+        readers.push(ReaderType::Bytes(final_boundary));
 
         let content_type = format!("multipart/form-data; boundary={}", boundary);
         let stream = ChainedReader::new(readers);
         Ok((
             SendableBody::Stream {
                 data: Box::pin(stream),
-                content_length: None,
+                content_length: Some(total_size),
             },
             Some(content_type),
         ))
