@@ -9,11 +9,13 @@ use yaak_models::models::HttpRequest;
 
 pub const MULTIPART_BOUNDARY: &str = "------YaakFormBoundary";
 
+#[derive(Debug)]
 pub struct SendableHttpRequestHeader {
     pub name: String,
     pub value: String,
 }
 
+#[derive(Debug)]
 pub struct SendableHttpRequest {
     pub url: String,
     pub method: String,
@@ -92,10 +94,11 @@ fn build_url(r: &HttpRequest) -> Result<String> {
 }
 
 fn build_headers(r: &HttpRequest) -> Vec<SendableHttpRequestHeader> {
-    let mut headers: Vec<SendableHttpRequestHeader> = r.headers
+    let mut headers: Vec<SendableHttpRequestHeader> = r
+        .headers
         .iter()
         .filter_map(|h| {
-            if h.enabled {
+            if h.enabled && !h.name.is_empty() {
                 Some(SendableHttpRequestHeader {
                     name: h.name.clone(),
                     value: h.value.clone(),
@@ -146,7 +149,7 @@ async fn build_body(
             build_form_body(&body).map(|b| b.into_bytes()),
             Some("application/x-www-form-urlencoded".to_string()),
         ),
-        "multipart/form-data" => build_multipart_body(&body).await?,
+        "multipart/form-data" => build_multipart_body(&body, &headers).await?,
         _ if body.contains_key("text") => {
             (build_text_body(&body).map(|b| b.bytes().collect()), None)
         }
@@ -245,7 +248,10 @@ fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) 
 
 async fn build_multipart_body(
     body: &BTreeMap<String, serde_json::Value>,
+    headers: &Vec<SendableHttpRequestHeader>,
 ) -> Result<(Option<Vec<u8>>, Option<String>)> {
+    let boundary = extract_boundary_from_headers(headers);
+
     let form_params = match body.get("form").map(|f| f.as_array()) {
         Some(Some(f)) => f,
         _ => return Ok((None, None)),
@@ -261,7 +267,7 @@ async fn build_multipart_body(
         }
 
         // Add boundary delimiter
-        body_bytes.extend_from_slice(format!("--{}\r\n", MULTIPART_BOUNDARY).as_bytes());
+        body_bytes.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
 
         let file_path = get_str(p, "file");
         let value = get_str(p, "value");
@@ -314,12 +320,27 @@ async fn build_multipart_body(
 
     // Add the final boundary
     if !body_bytes.is_empty() {
-        body_bytes.extend_from_slice(format!("--{}--\r\n", MULTIPART_BOUNDARY).as_bytes());
-        let content_type = format!("multipart/form-data; boundary={}", MULTIPART_BOUNDARY);
+        body_bytes.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+        let content_type = format!("multipart/form-data; boundary={}", boundary);
         Ok((Some(body_bytes), Some(content_type)))
     } else {
         Ok((None, None))
     }
+}
+
+fn extract_boundary_from_headers(headers: &Vec<SendableHttpRequestHeader>) -> String {
+    headers
+        .iter()
+        .find(|h| h.name.to_lowercase() == "content-type")
+        .and_then(|h| {
+            // Extract boundary from the Content-Type header (e.g., "multipart/form-data; boundary=xyz")
+            h.value
+                .split(';')
+                .find(|part| part.trim().starts_with("boundary="))
+                .and_then(|boundary_part| boundary_part.split('=').nth(1))
+                .map(|b| b.trim().to_string())
+        })
+        .unwrap_or_else(|| MULTIPART_BOUNDARY.to_string())
 }
 
 #[cfg(test)]
@@ -703,7 +724,7 @@ mod tests {
             ]),
         );
 
-        let (result, content_type) = build_multipart_body(&body).await?;
+        let (result, content_type) = build_multipart_body(&body, &vec![]).await?;
         assert!(result.is_some());
         assert!(content_type.is_some());
 
@@ -732,7 +753,7 @@ mod tests {
             ]),
         );
 
-        let (result, content_type) = build_multipart_body(&body).await?;
+        let (result, content_type) = build_multipart_body(&body, &vec![]).await?;
         assert!(result.is_some());
         assert!(content_type.is_some());
 
@@ -754,10 +775,54 @@ mod tests {
     async fn test_multipart_body_empty() -> Result<()> {
         let body = BTreeMap::new();
 
-        let (result, content_type) = build_multipart_body(&body).await?;
+        let (result, content_type) = build_multipart_body(&body, &vec![]).await?;
         assert_eq!(result, None);
         assert_eq!(content_type, None);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_extract_boundary_from_headers_with_custom_boundary() {
+        let headers = vec![SendableHttpRequestHeader {
+            name: "Content-Type".to_string(),
+            value: "multipart/form-data; boundary=customBoundary123".to_string(),
+        }];
+
+        let boundary = extract_boundary_from_headers(&headers);
+        assert_eq!(boundary, "customBoundary123");
+    }
+
+    #[test]
+    fn test_extract_boundary_from_headers_default() {
+        let headers = vec![SendableHttpRequestHeader {
+            name: "Accept".to_string(),
+            value: "*/*".to_string(),
+        }];
+
+        let boundary = extract_boundary_from_headers(&headers);
+        assert_eq!(boundary, MULTIPART_BOUNDARY);
+    }
+
+    #[test]
+    fn test_extract_boundary_from_headers_no_boundary_in_content_type() {
+        let headers = vec![SendableHttpRequestHeader {
+            name: "Content-Type".to_string(),
+            value: "multipart/form-data".to_string(),
+        }];
+
+        let boundary = extract_boundary_from_headers(&headers);
+        assert_eq!(boundary, MULTIPART_BOUNDARY);
+    }
+
+    #[test]
+    fn test_extract_boundary_case_insensitive() {
+        let headers = vec![SendableHttpRequestHeader {
+            name: "content-type".to_string(),
+            value: "multipart/form-data; boundary=myBoundary".to_string(),
+        }];
+
+        let boundary = extract_boundary_from_headers(&headers);
+        assert_eq!(boundary, "myBoundary");
     }
 }

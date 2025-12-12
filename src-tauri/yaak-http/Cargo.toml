@@ -9,7 +9,7 @@ hyper-util = { version = "0.1.17", default-features = false, features = ["client
 log = { workspace = true }
 mime_guess = "2.0.5"
 regex = "1.11.1"
-reqwest = { workspace = true, features = ["multipart", "cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider", "socks", "http2"] }
+reqwest = { workspace = true, features = ["cookies", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider", "socks", "http2"] }
 reqwest_cookie_store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

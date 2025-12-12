@@ -219,14 +219,14 @@ pub async fn send_http_request_with_context<R: Runtime>(
         let header_name = match HeaderName::from_str(&h.name) {
             Ok(n) => n,
             Err(e) => {
-                error!("Failed to create header name: {}", e);
+                error!("Failed to create header name {}: {}", h.name, e);
                 continue;
             }
         };
         let header_value = match HeaderValue::from_str(&h.value) {
             Ok(n) => n,
             Err(e) => {
-                error!("Failed to create header value: {}", e);
+                error!("Failed to create header value {}: {}", h.value, e);
                 continue;
             }
         };
@@ -518,4 +518,3 @@ pub fn resolve_http_request<R: Runtime>(
 
     Ok((new_request, authentication_context_id))
 }
-
