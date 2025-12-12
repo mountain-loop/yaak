@@ -3,7 +3,14 @@ use crate::types::{SendableBodyPlain, SendableHttpRequest};
 use async_trait::async_trait;
 use reqwest::{Client, Method};
 use std::collections::HashMap;
+use std::time::Duration;
 use tokio_util::io::ReaderStream;
+
+#[derive(Debug, Default)]
+pub struct HttpResponseTiming {
+    pub headers: Duration,
+    pub body: Duration,
+}
 
 /// Basic response type for HTTP responses
 #[derive(Debug)]
@@ -11,6 +18,8 @@ pub struct HttpResponse {
     pub status: u16,
     pub headers: HashMap<String, String>,
     pub body: Vec<u8>,
+    pub content_length: Option<u64>,
+    pub timing: HttpResponseTiming,
 }
 
 /// Trait for sending HTTP requests
@@ -71,11 +80,17 @@ impl HttpSender for ReqwestSender {
             }
         }
 
+        let start = std::time::Instant::now();
+        let mut timing = HttpResponseTiming::default();
+
         // Send the request
         let response = req_builder.send().await?;
 
+        timing.headers = start.elapsed();
+
         // Extract status
         let status = response.status().as_u16();
+        let content_length = response.content_length();
 
         // Extract headers
         let mut headers = HashMap::new();
@@ -85,13 +100,16 @@ impl HttpSender for ReqwestSender {
             }
         }
 
-        // Extract body
         let body = response.bytes().await?.to_vec();
+
+        timing.body = start.elapsed();
 
         Ok(HttpResponse {
             status,
             headers,
             body,
+            content_length,
+            timing,
         })
     }
 }

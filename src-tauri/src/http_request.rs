@@ -259,10 +259,8 @@ pub async fn send_http_request_with_context<R: Runtime>(
         let update_source = update_source.clone();
         tokio::spawn(async move {
             let sender = ReqwestSender::with_client(client);
-            info!("Sending request to {} {}", sendable_request.method, sendable_request.url);
             let final_response =
                 sender.send(sendable_request).await.expect("Failed to send request");
-            info!("Request finished");
             let mut resp = { response.lock().await.clone() };
             resp.headers = final_response
                 .headers
@@ -274,14 +272,12 @@ pub async fn send_http_request_with_context<R: Runtime>(
                 .collect();
             resp.status = final_response.status as i32;
             resp.state = HttpResponseState::Closed;
-            resp.elapsed = start.elapsed().as_millis() as i32;
-            resp.elapsed_headers = 0; // TODO
+            resp.elapsed = final_response.timing.body.as_millis() as i32;
+            resp.elapsed_headers = final_response.timing.headers.as_millis() as i32;
             app_handle
                 .db()
                 .update_http_response_if_id(&resp, &update_source)
                 .expect("Failed to update response after connected");
-            let body_str = String::from_utf8(final_response.body).unwrap_or_default();
-            debug!("UPDATED REQUEST {resp:#?}\n{}", body_str);
             done_tx.send(resp).unwrap();
         });
     }
