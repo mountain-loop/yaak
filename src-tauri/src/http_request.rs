@@ -1,31 +1,24 @@
-use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::render::render_http_request;
 use crate::response_err;
-use http::{HeaderName, HeaderValue};
-use log::{debug, error, info, warn};
-use reqwest::{Method, Response, Url};
+use log::{debug, info};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, Runtime, WebviewWindow};
-use tokio::fs::{File, create_dir_all};
-use tokio::io::AsyncWriteExt;
+use tokio::fs;
+use tokio::fs::create_dir_all;
 use tokio::sync::watch::Receiver;
-use tokio::sync::{Mutex, oneshot};
-use tokio_util::codec::{BytesCodec, FramedRead};
+use tokio::sync::{oneshot, Mutex};
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::manager::HttpConnectionManager;
 use yaak_http::sender::{HttpSender, ReqwestSender};
-use yaak_http::types::{
-    SendableBodyPlain, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
-};
+use yaak_http::types::{append_query_params, SendableHttpRequest, SendableHttpRequestOptions};
 use yaak_models::models::{
-    Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
-    HttpResponseState, ProxySetting, ProxySettingAuth,
+    CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader, HttpResponseState,
+    ProxySetting, ProxySettingAuth,
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
@@ -251,6 +244,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
         let response = response.clone();
         let app_handle = app_handle.clone();
         let update_source = update_source.clone();
+        let response_id = response_id.clone();
         tokio::spawn(async move {
             let sender = ReqwestSender::with_client(client);
             let final_response =
@@ -268,6 +262,18 @@ pub async fn send_http_request_with_context<R: Runtime>(
             resp.state = HttpResponseState::Closed;
             resp.elapsed = final_response.timing.body.as_millis() as i32;
             resp.elapsed_headers = final_response.timing.headers.as_millis() as i32;
+            let dir = app_handle.path().app_data_dir().unwrap();
+            let base_dir = dir.join("responses");
+            let _ = create_dir_all(base_dir.clone()).await;
+            let body_path = if response_id.is_empty() {
+                base_dir.join(uuid::Uuid::new_v4().to_string())
+            } else {
+                base_dir.join(response_id.clone())
+            };
+            fs::write(body_path.clone(), final_response.body)
+                .await
+                .expect("Failed to write response body");
+            resp.body_path = Some(body_path.to_str().unwrap().to_string());
             app_handle
                 .db()
                 .update_http_response_if_id(&resp, &update_source)

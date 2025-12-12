@@ -12,14 +12,14 @@ use tokio::io::AsyncRead;
 use yaak_common::serde::{get_bool, get_str, get_str_map};
 use yaak_models::models::HttpRequest;
 
-pub const MULTIPART_BOUNDARY: &str = "------YaakFormBoundary";
+pub(crate) const MULTIPART_BOUNDARY: &str = "------YaakFormBoundary";
 
-pub enum SendableBodyPlain {
+pub enum SendableBody {
     Bytes(Bytes),
     Stream(Pin<Box<dyn AsyncRead + Send + 'static>>),
 }
 
-enum SendableBody {
+enum SendableBodyWithMeta {
     Bytes(Bytes),
     Stream {
         data: Pin<Box<dyn AsyncRead + Send + 'static>>,
@@ -27,11 +27,11 @@ enum SendableBody {
     },
 }
 
-impl Into<SendableBodyPlain> for SendableBody {
-    fn into(self) -> SendableBodyPlain {
+impl Into<SendableBody> for SendableBodyWithMeta {
+    fn into(self) -> SendableBody {
         match self {
-            SendableBody::Bytes(b) => SendableBodyPlain::Bytes(b),
-            SendableBody::Stream { data, .. } => SendableBodyPlain::Stream(data),
+            SendableBodyWithMeta::Bytes(b) => SendableBody::Bytes(b),
+            SendableBodyWithMeta::Stream { data, .. } => SendableBody::Stream(data),
         }
     }
 }
@@ -41,7 +41,7 @@ pub struct SendableHttpRequest {
     pub url: String,
     pub method: String,
     pub headers: Vec<(String, String)>,
-    pub body: Option<SendableBodyPlain>,
+    pub body: Option<SendableBody>,
     pub options: SendableHttpRequestOptions,
 }
 
@@ -168,7 +168,7 @@ async fn build_body(
     body_type: &Option<String>,
     body: &BTreeMap<String, serde_json::Value>,
     headers: Vec<(String, String)>,
-) -> Result<(Option<SendableBodyPlain>, Vec<(String, String)>)> {
+) -> Result<(Option<SendableBody>, Vec<(String, String)>)> {
     let body_type = match &body_type {
         None => return Ok((None, headers)),
         Some(t) => t,
@@ -206,8 +206,8 @@ async fn build_body(
     // Add a Content-Length header only if chunked encoding is not being used
     if !has_chunked_encoding {
         let content_length = match body {
-            Some(SendableBody::Bytes(ref bytes)) => Some(bytes.len()),
-            Some(SendableBody::Stream { content_length, .. }) => content_length,
+            Some(SendableBodyWithMeta::Bytes(ref bytes)) => Some(bytes.len()),
+            Some(SendableBodyWithMeta::Stream { content_length, .. }) => content_length,
             None => None,
         };
 
@@ -219,7 +219,7 @@ async fn build_body(
     Ok((body.map(|b| b.into()), headers))
 }
 
-fn build_form_body(body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBody> {
+fn build_form_body(body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBodyWithMeta> {
     let form_params = match body.get("form").map(|f| f.as_array()) {
         Some(Some(f)) => f,
         _ => return None,
@@ -241,12 +241,12 @@ fn build_form_body(body: &BTreeMap<String, serde_json::Value>) -> Option<Sendabl
         body.push_str(&urlencoding::encode(&value));
     }
 
-    if body.is_empty() { None } else { Some(SendableBody::Bytes(Bytes::from(body))) }
+    if body.is_empty() { None } else { Some(SendableBodyWithMeta::Bytes(Bytes::from(body))) }
 }
 
 async fn build_binary_body(
     body: &BTreeMap<String, serde_json::Value>,
-) -> Result<Option<SendableBody>> {
+) -> Result<Option<SendableBodyWithMeta>> {
     let file_path = match body.get("filePath").map(|f| f.as_str()) {
         Some(Some(f)) => f,
         _ => return Ok(None),
@@ -262,21 +262,25 @@ async fn build_binary_body(
         .await
         .map_err(|e| BodyError(format!("Failed to open file: {}", e)))?;
 
-    Ok(Some(SendableBody::Stream {
+    Ok(Some(SendableBodyWithMeta::Stream {
         data: Box::pin(file),
         content_length: Some(content_length as usize),
     }))
 }
 
-fn build_text_body(body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBody> {
+fn build_text_body(body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBodyWithMeta> {
     let text = get_str_map(body, "text");
-    if text.is_empty() { None } else { Some(SendableBody::Bytes(Bytes::from(text.to_string()))) }
+    if text.is_empty() {
+        None
+    } else {
+        Some(SendableBodyWithMeta::Bytes(Bytes::from(text.to_string())))
+    }
 }
 
 fn build_graphql_body(
     method: &str,
     body: &BTreeMap<String, serde_json::Value>,
-) -> Option<SendableBody> {
+) -> Option<SendableBodyWithMeta> {
     let query = get_str_map(body, "query");
     let variables = get_str_map(body, "variables");
 
@@ -295,13 +299,13 @@ fn build_graphql_body(
         )
     };
 
-    Some(SendableBody::Bytes(Bytes::from(body)))
+    Some(SendableBodyWithMeta::Bytes(Bytes::from(body)))
 }
 
 async fn build_multipart_body(
     body: &BTreeMap<String, serde_json::Value>,
     headers: &Vec<(String, String)>,
-) -> Result<(Option<SendableBody>, Option<String>)> {
+) -> Result<(Option<SendableBodyWithMeta>, Option<String>)> {
     let boundary = extract_boundary_from_headers(headers);
 
     let form_params = match body.get("form").map(|f| f.as_array()) {
@@ -396,7 +400,7 @@ async fn build_multipart_body(
         let content_type = format!("multipart/form-data; boundary={}", boundary);
         let stream = ChainedReader::new(readers);
         Ok((
-            Some(SendableBody::Stream {
+            Some(SendableBodyWithMeta::Stream {
                 data: Box::pin(stream),
                 content_length: Some(total_size),
             }),
@@ -692,7 +696,9 @@ mod tests {
 
         let result = build_text_body(&body);
         match result {
-            Some(SendableBody::Bytes(bytes)) => assert_eq!(bytes, Bytes::from("Hello, World!")),
+            Some(SendableBodyWithMeta::Bytes(bytes)) => {
+                assert_eq!(bytes, Bytes::from("Hello, World!"))
+            }
             _ => panic!("Expected Some(SendableBody::Bytes)"),
         }
     }
@@ -728,7 +734,7 @@ mod tests {
 
         let result = build_form_body(&body);
         match result {
-            Some(SendableBody::Bytes(bytes)) => {
+            Some(SendableBodyWithMeta::Bytes(bytes)) => {
                 let expected = "basic=aaa&fUnkey%20Stuff%21%24%2A%23%28=%2A%29%25%26%23%24%29%40%20%2A%24%23%29%40%26";
                 assert_eq!(bytes, Bytes::from(expected));
             }
@@ -750,7 +756,7 @@ mod tests {
         body.insert("filePath".to_string(), json!("./tests/test.txt"));
 
         let result = build_binary_body(&body).await?;
-        assert!(matches!(result, Some(SendableBody::Stream{..})));
+        assert!(matches!(result, Some(SendableBodyWithMeta::Stream { .. })));
         Ok(())
     }
 
@@ -774,7 +780,7 @@ mod tests {
 
         let result = build_graphql_body("POST", &body);
         match result {
-            Some(SendableBody::Bytes(bytes)) => {
+            Some(SendableBodyWithMeta::Bytes(bytes)) => {
                 let expected =
                     r#"{"query":"{ user(id: $id) { name } }","variables":{"id": "123"}}"#;
                 assert_eq!(bytes, Bytes::from(expected));
@@ -791,7 +797,7 @@ mod tests {
 
         let result = build_graphql_body("POST", &body);
         match result {
-            Some(SendableBody::Bytes(bytes)) => {
+            Some(SendableBodyWithMeta::Bytes(bytes)) => {
                 let expected = r#"{"query":"{ users { name } }"}"#;
                 assert_eq!(bytes, Bytes::from(expected));
             }
@@ -824,7 +830,7 @@ mod tests {
         assert!(content_type.is_some());
 
         match result {
-            Some(SendableBody::Stream {
+            Some(SendableBodyWithMeta::Stream {
                 data: mut stream,
                 content_length,
             }) => {
@@ -864,7 +870,7 @@ mod tests {
         assert!(content_type.is_some());
 
         match result {
-            Some(SendableBody::Stream {
+            Some(SendableBodyWithMeta::Stream {
                 data: mut stream,
                 content_length,
             }) => {

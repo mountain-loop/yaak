@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::types::{SendableBodyPlain, SendableHttpRequest};
+use crate::types::{SendableBody, SendableHttpRequest};
 use async_trait::async_trait;
 use reqwest::{Client, Method, Version};
 use std::collections::HashMap;
@@ -15,6 +15,7 @@ pub struct HttpResponseTiming {
 
 #[derive(Debug)]
 pub enum HttpResponseEvent {
+    Setting(String, String),
     Info(String),
     SendUrl { method: String, path: String },
     ReceiveUrl { version: Version, status: String },
@@ -25,6 +26,7 @@ pub enum HttpResponseEvent {
 impl Display for HttpResponseEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            HttpResponseEvent::Setting(name, value) => write!(f, "* Setting {}={}", name, value),
             HttpResponseEvent::Info(s) => write!(f, "* {}", s),
             HttpResponseEvent::SendUrl { method, path } => write!(f, "> {} {}", method, path),
             HttpResponseEvent::ReceiveUrl { version, status } => {
@@ -76,6 +78,7 @@ impl ReqwestSender {
 impl HttpSender for ReqwestSender {
     async fn send(&self, request: SendableHttpRequest) -> Result<SendableHttpResponse> {
         let mut events = Vec::new();
+
         // Parse the HTTP method
         let method = Method::from_bytes(request.method.as_bytes())
             .map_err(|e| crate::error::Error::BodyError(format!("Invalid HTTP method: {}", e)))?;
@@ -98,10 +101,10 @@ impl HttpSender for ReqwestSender {
         // Add body
         match request.body {
             None => {}
-            Some(SendableBodyPlain::Bytes(bytes)) => {
+            Some(SendableBody::Bytes(bytes)) => {
                 req_builder = req_builder.body(bytes);
             }
-            Some(SendableBodyPlain::Stream(stream)) => {
+            Some(SendableBody::Stream(stream)) => {
                 // Convert AsyncRead stream to reqwest Body
                 let stream = ReaderStream::new(stream);
                 let body = reqwest::Body::wrap_stream(stream);
@@ -114,6 +117,15 @@ impl HttpSender for ReqwestSender {
 
         // Send the request
         let sendable_req = req_builder.build()?;
+        events.push(HttpResponseEvent::Setting(
+            "timeout".to_string(),
+            if request.options.timeout.unwrap_or_default().is_zero() {
+                "Infinity".to_string()
+            } else {
+                format!("{:?}", request.options.timeout)
+            },
+        ));
+
         events.push(HttpResponseEvent::SendUrl {
             path: sendable_req.url().path().to_string(),
             method: sendable_req.method().to_string(),
