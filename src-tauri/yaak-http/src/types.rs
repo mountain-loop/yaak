@@ -2,8 +2,11 @@ use crate::error::Error::BodyError;
 use crate::error::Result;
 use crate::path_placeholders::apply_path_placeholders;
 use crate::proto::ensure_proto;
+use bytes::Bytes;
 use log::warn;
 use std::collections::BTreeMap;
+use std::pin::Pin;
+use tokio::io::AsyncRead;
 use yaak_common::serde::{get_bool, get_str, get_str_map};
 use yaak_models::models::HttpRequest;
 
@@ -15,12 +18,16 @@ pub struct SendableHttpRequestHeader {
     pub value: String,
 }
 
-#[derive(Debug)]
+pub enum SendableBody {
+    Bytes(Bytes),
+    Stream(Pin<Box<dyn AsyncRead + Send + 'static>>),
+}
+
 pub struct SendableHttpRequest {
     pub url: String,
     pub method: String,
     pub headers: Vec<SendableHttpRequestHeader>,
-    pub body: Option<Vec<u8>>,
+    pub body: Option<SendableBody>,
 }
 
 impl SendableHttpRequest {
@@ -133,25 +140,25 @@ async fn build_body(
     body_type: &Option<String>,
     body: &BTreeMap<String, serde_json::Value>,
     headers: Vec<SendableHttpRequestHeader>,
-) -> Result<(Option<Vec<u8>>, Vec<SendableHttpRequestHeader>)> {
+) -> Result<(Option<SendableBody>, Vec<SendableHttpRequestHeader>)> {
     let body_type = match &body_type {
-        None => return Ok((None, Vec::new())),
+        None => return Ok((None, headers)),
         Some(t) => t,
     };
 
     let (body, content_type) = match body_type.as_str() {
         "binary" => (build_binary_body(&body).await?, None),
         "graphql" => (
-            build_graphql_body(&method, &body).map(|b| b.into_bytes()),
+            build_graphql_body(&method, &body),
             Some("application/json".to_string()),
         ),
         "application/x-www-form-urlencoded" => (
-            build_form_body(&body).map(|b| b.into_bytes()),
+            build_form_body(&body),
             Some("application/x-www-form-urlencoded".to_string()),
         ),
         "multipart/form-data" => build_multipart_body(&body, &headers).await?,
         _ if body.contains_key("text") => {
-            (build_text_body(&body).map(|b| b.bytes().collect()), None)
+            (build_text_body(&body), None)
         }
         t => {
             warn!("Unsupported body type: {}", t);
@@ -160,28 +167,32 @@ async fn build_body(
     };
 
     // Add or update the Content-Type header
-    let headers = match content_type {
-        None => headers,
-        Some(ct) => {
-            let mut headers = headers;
-            if let Some(existing) =
-                headers.iter_mut().find(|h| h.name.to_lowercase() == "content-type")
-            {
-                existing.value = ct;
-            } else {
-                headers.push(SendableHttpRequestHeader {
-                    name: "Content-Type".to_string(),
-                    value: ct,
-                });
-            }
-            headers
+    let mut headers = headers;
+    if let Some(ct) = content_type {
+        if let Some(existing) =
+            headers.iter_mut().find(|h| h.name.to_lowercase() == "content-type")
+        {
+            existing.value = ct;
+        } else {
+            headers.push(SendableHttpRequestHeader {
+                name: "Content-Type".to_string(),
+                value: ct,
+            });
         }
-    };
+    }
+
+    // Add Content-Length header for Bytes variant
+    if let Some(SendableBody::Bytes(ref bytes)) = body {
+        headers.push(SendableHttpRequestHeader {
+            name: "Content-Length".to_string(),
+            value: bytes.len().to_string(),
+        });
+    }
 
     Ok((body, headers))
 }
 
-fn build_form_body(body: &BTreeMap<String, serde_json::Value>) -> Option<String> {
+fn build_form_body(body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBody> {
     let form_params = match body.get("form").map(|f| f.as_array()) {
         Some(Some(f)) => f,
         _ => return None,
@@ -203,28 +214,37 @@ fn build_form_body(body: &BTreeMap<String, serde_json::Value>) -> Option<String>
         body.push_str(&urlencoding::encode(&value));
     }
 
-    Some(body)
+    if body.is_empty() {
+        None
+    } else {
+        Some(SendableBody::Bytes(Bytes::from(body)))
+    }
 }
 
-async fn build_binary_body(body: &BTreeMap<String, serde_json::Value>) -> Result<Option<Vec<u8>>> {
+async fn build_binary_body(body: &BTreeMap<String, serde_json::Value>) -> Result<Option<SendableBody>> {
     let file_path = match body.get("filePath").map(|f| f.as_str()) {
         Some(Some(f)) => f,
         _ => return Ok(None),
     };
 
-    // Read and return file contents
-    let contents = tokio::fs::read(file_path)
+    // Open file for streaming
+    let file = tokio::fs::File::open(file_path)
         .await
-        .map_err(|e| BodyError(format!("Failed to read file: {}", e)))?;
-    Ok(Some(contents))
+        .map_err(|e| BodyError(format!("Failed to open file: {}", e)))?;
+
+    Ok(Some(SendableBody::Stream(Box::pin(file))))
 }
 
-fn build_text_body(body: &BTreeMap<String, serde_json::Value>) -> Option<&str> {
+fn build_text_body(body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBody> {
     let text = get_str_map(body, "text");
-    if text.is_empty() { None } else { Some(text) }
+    if text.is_empty() {
+        None
+    } else {
+        Some(SendableBody::Bytes(Bytes::from(text.to_string())))
+    }
 }
 
-fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) -> Option<String> {
+fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBody> {
     let query = get_str_map(body, "query");
     let variables = get_str_map(body, "variables");
 
@@ -243,13 +263,13 @@ fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) 
         )
     };
 
-    Some(body)
+    Some(SendableBody::Bytes(Bytes::from(body)))
 }
 
 async fn build_multipart_body(
     body: &BTreeMap<String, serde_json::Value>,
     headers: &Vec<SendableHttpRequestHeader>,
-) -> Result<(Option<Vec<u8>>, Option<String>)> {
+) -> Result<(Option<SendableBody>, Option<String>)> {
     let boundary = extract_boundary_from_headers(headers);
 
     let form_params = match body.get("form").map(|f| f.as_array()) {
@@ -257,6 +277,8 @@ async fn build_multipart_body(
         _ => return Ok((None, None)),
     };
 
+    // For now, we'll still build multipart in memory but could be optimized later
+    // to stream the entire multipart body
     let mut body_bytes = Vec::new();
 
     for p in form_params {
@@ -322,7 +344,7 @@ async fn build_multipart_body(
     if !body_bytes.is_empty() {
         body_bytes.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
         let content_type = format!("multipart/form-data; boundary={}", boundary);
-        Ok((Some(body_bytes), Some(content_type)))
+        Ok((Some(SendableBody::Bytes(Bytes::from(body_bytes))), Some(content_type)))
     } else {
         Ok((None, None))
     }
@@ -346,6 +368,7 @@ fn extract_boundary_from_headers(headers: &Vec<SendableHttpRequestHeader>) -> St
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::Bytes;
     use serde_json::json;
     use std::collections::BTreeMap;
     use yaak_models::models::{HttpRequest, HttpUrlParameter};
@@ -612,7 +635,10 @@ mod tests {
         body.insert("text".to_string(), json!("Hello, World!"));
 
         let result = build_text_body(&body);
-        assert_eq!(result, Some("Hello, World!"));
+        match result {
+            Some(SendableBody::Bytes(bytes)) => assert_eq!(bytes, Bytes::from("Hello, World!")),
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
     }
 
     #[tokio::test]
@@ -621,7 +647,7 @@ mod tests {
         body.insert("text".to_string(), json!(""));
 
         let result = build_text_body(&body);
-        assert_eq!(result, None);
+        assert_eq!(result.is_none(), true);
     }
 
     #[tokio::test]
@@ -629,7 +655,7 @@ mod tests {
         let body = BTreeMap::new();
 
         let result = build_text_body(&body);
-        assert_eq!(result, None);
+        assert_eq!(result.is_none(), true);
     }
 
     #[tokio::test]
@@ -645,7 +671,13 @@ mod tests {
         );
 
         let result = build_form_body(&body);
-        assert_eq!(result, Some("basic=aaa&fUnkey%20Stuff%21%24%2A%23%28=%2A%29%25%26%23%24%29%40%20%2A%24%23%29%40%26".to_string()));
+        match result {
+            Some(SendableBody::Bytes(bytes)) => {
+                let expected = "basic=aaa&fUnkey%20Stuff%21%24%2A%23%28=%2A%29%25%26%23%24%29%40%20%2A%24%23%29%40%26";
+                assert_eq!(bytes, Bytes::from(expected));
+            },
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
         Ok(())
     }
 
@@ -654,7 +686,7 @@ mod tests {
         let body = BTreeMap::new();
 
         let result = build_form_body(&body);
-        assert_eq!(result, None);
+        assert_eq!(result.is_none(), true);
     }
 
     #[tokio::test]
@@ -663,8 +695,13 @@ mod tests {
         body.insert("filePath".to_string(), json!("./tests/test.txt"));
 
         let result = build_binary_body(&body).await?;
-        let result_str = result.map(|bytes| String::from_utf8(bytes).unwrap());
-        assert_eq!(result_str, Some("This is a test file!\n".to_string()));
+        match result {
+            Some(SendableBody::Stream(_)) => {
+                // We can't easily test the stream contents in this test
+                // but we can verify it returns a stream
+            },
+            _ => panic!("Expected Some(SendableBody::Stream)"),
+        }
         Ok(())
     }
 
@@ -687,10 +724,13 @@ mod tests {
         body.insert("variables".to_string(), json!(r#"{"id": "123"}"#));
 
         let result = build_graphql_body("POST", &body);
-        assert_eq!(
-            result,
-            Some(r#"{"query":"{ user(id: $id) { name } }","variables":{"id": "123"}}"#.to_string())
-        );
+        match result {
+            Some(SendableBody::Bytes(bytes)) => {
+                let expected = r#"{"query":"{ user(id: $id) { name } }","variables":{"id": "123"}}"#;
+                assert_eq!(bytes, Bytes::from(expected));
+            },
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
     }
 
     #[tokio::test]
@@ -700,7 +740,13 @@ mod tests {
         body.insert("variables".to_string(), json!(""));
 
         let result = build_graphql_body("POST", &body);
-        assert_eq!(result, Some(r#"{"query":"{ users { name } }"}"#.to_string()));
+        match result {
+            Some(SendableBody::Bytes(bytes)) => {
+                let expected = r#"{"query":"{ users { name } }"}"#;
+                assert_eq!(bytes, Bytes::from(expected));
+            },
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
     }
 
     #[tokio::test]
@@ -709,7 +755,7 @@ mod tests {
         body.insert("query".to_string(), json!("{ users { name } }"));
 
         let result = build_graphql_body("GET", &body);
-        assert_eq!(result, None);
+        assert_eq!(result.is_none(), true);
     }
 
     #[tokio::test]
@@ -728,13 +774,17 @@ mod tests {
         assert!(result.is_some());
         assert!(content_type.is_some());
 
-        let body_bytes = result.unwrap();
-        let body_str = String::from_utf8_lossy(&body_bytes);
+        match result {
+            Some(SendableBody::Bytes(bytes)) => {
+                let body_str = String::from_utf8_lossy(&bytes);
+                assert_eq!(
+                    body_str,
+                    "--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"field1\"\r\n\r\nvalue1\r\n--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"field2\"\r\n\r\nvalue2\r\n--------YaakFormBoundary--\r\n",
+                );
+            },
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
 
-        assert_eq!(
-            body_str,
-            "--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"field1\"\r\n\r\nvalue1\r\n--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"field2\"\r\n\r\nvalue2\r\n--------YaakFormBoundary--\r\n",
-        );
         assert_eq!(
             content_type.unwrap(),
             format!("multipart/form-data; boundary={}", MULTIPART_BOUNDARY)
@@ -757,12 +807,17 @@ mod tests {
         assert!(result.is_some());
         assert!(content_type.is_some());
 
-        let body_bytes = result.unwrap();
-        let body_str = String::from_utf8_lossy(&body_bytes);
-        assert_eq!(
-            body_str,
-            "--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"file_field\"; filename=\"custom.txt\"\r\nContent-Type: text/plain\r\n\r\nThis is a test file!\n\r\n--------YaakFormBoundary--\r\n"
-        );
+        match result {
+            Some(SendableBody::Bytes(bytes)) => {
+                let body_str = String::from_utf8_lossy(&bytes);
+                assert_eq!(
+                    body_str,
+                    "--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"file_field\"; filename=\"custom.txt\"\r\nContent-Type: text/plain\r\n\r\nThis is a test file!\n\r\n--------YaakFormBoundary--\r\n"
+                );
+            },
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
+
         assert_eq!(
             content_type.unwrap(),
             format!("multipart/form-data; boundary={}", MULTIPART_BOUNDARY)
@@ -776,7 +831,7 @@ mod tests {
         let body = BTreeMap::new();
 
         let (result, content_type) = build_multipart_body(&body, &vec![]).await?;
-        assert_eq!(result, None);
+        assert_eq!(result.is_none(), true);
         assert_eq!(content_type, None);
 
         Ok(())

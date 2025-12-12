@@ -18,7 +18,8 @@ use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::manager::HttpConnectionManager;
-use yaak_http::types::SendableHttpRequest;
+use tokio_util::codec::{BytesCodec, FramedRead};
+use yaak_http::types::{SendableBody, SendableHttpRequest};
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
@@ -234,8 +235,16 @@ pub async fn send_http_request_with_context<R: Runtime>(
     }
 
     // Add body if present
-    if let Some(body_bytes) = sendable_request.body {
-        request_builder = request_builder.body(body_bytes);
+    if let Some(body) = sendable_request.body {
+        match body {
+            SendableBody::Bytes(bytes) => {
+                request_builder = request_builder.body(bytes);
+            }
+            SendableBody::Stream(reader) => {
+                let stream = FramedRead::new(reader, BytesCodec::new());
+                request_builder = request_builder.body(reqwest::Body::wrap_stream(stream));
+            }
+        }
     }
 
     let mut sendable_req = match request_builder.build() {

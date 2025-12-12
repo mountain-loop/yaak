@@ -7903,6 +7903,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "ts-rs",
  "uuid",
  "yaak-common",
@@ -8011,6 +8012,8 @@ dependencies = [
 name = "yaak-http"
 version = "0.1.0"
 dependencies = [
+ "bytes",
+ "futures-util",
  "hyper-util",
  "log",
  "mime_guess",
@@ -8022,6 +8025,7 @@ dependencies = [
  "tauri",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-util",
  "tower-service",
  "urlencoding",
  "yaak-common",
