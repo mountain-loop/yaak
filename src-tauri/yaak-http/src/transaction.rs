@@ -1,6 +1,6 @@
 use crate::error::Result;
-use crate::sender::{HttpResponse, HttpSender};
-use crate::types::{SendableBodyPlain, SendableHttpRequest};
+use crate::sender::{HttpSender, SendableHttpResponse};
+use crate::types::SendableHttpRequest;
 
 /// HTTP Transaction that manages the lifecycle of a request, including redirect handling
 pub struct HttpTransaction<S: HttpSender> {
@@ -26,7 +26,7 @@ impl<S: HttpSender> HttpTransaction<S> {
     }
 
     /// Execute the request, following redirects if necessary
-    pub async fn execute(&self, request: SendableHttpRequest) -> Result<HttpResponse> {
+    pub async fn execute(&self, request: SendableHttpRequest) -> Result<SendableHttpResponse> {
         let mut redirect_count = 0;
         let mut current_url = request.url;
         let mut current_method = request.method;
@@ -40,6 +40,7 @@ impl<S: HttpSender> HttpTransaction<S> {
                 method: current_method.clone(),
                 headers: current_headers.clone(),
                 body: current_body,
+                options: request.options.clone(),
             };
 
             // Send the request
@@ -52,17 +53,20 @@ impl<S: HttpSender> HttpTransaction<S> {
 
             // Check if we've exceeded max redirects
             if redirect_count >= self.max_redirects {
-                return Err(crate::error::Error::BodyError(
-                    format!("Maximum redirect limit ({}) exceeded", self.max_redirects)
-                ));
+                return Err(crate::error::Error::BodyError(format!(
+                    "Maximum redirect limit ({}) exceeded",
+                    self.max_redirects
+                )));
             }
 
             // Get the Location header
-            let location = response.headers.get("location")
+            let location = response
+                .headers
+                .get("location")
                 .or_else(|| response.headers.get("Location"))
                 .ok_or_else(|| {
                     crate::error::Error::BodyError(
-                        "Redirect response missing Location header".to_string()
+                        "Redirect response missing Location header".to_string(),
                     )
                 })?;
 
@@ -105,7 +109,7 @@ impl<S: HttpSender> HttpTransaction<S> {
 
             // Reset body for next iteration (since it was moved in the send call)
             // For redirects that change method to GET or for all redirects since body was consumed
-            current_body = SendableBodyPlain::None;
+            current_body = None;
 
             redirect_count += 1;
         }
@@ -160,11 +164,11 @@ mod tests {
 
     /// Mock sender for testing
     struct MockSender {
-        responses: Arc<Mutex<Vec<HttpResponse>>>,
+        responses: Arc<Mutex<Vec<SendableHttpResponse>>>,
     }
 
     impl MockSender {
-        fn new(responses: Vec<HttpResponse>) -> Self {
+        fn new(responses: Vec<SendableHttpResponse>) -> Self {
             Self {
                 responses: Arc::new(Mutex::new(responses)),
             }
@@ -173,7 +177,7 @@ mod tests {
 
     #[async_trait]
     impl HttpSender for MockSender {
-        async fn send(&self, _request: SendableHttpRequest) -> Result<HttpResponse> {
+        async fn send(&self, _request: SendableHttpRequest) -> Result<SendableHttpResponse> {
             let mut responses = self.responses.lock().await;
             if responses.is_empty() {
                 Err(crate::error::Error::BodyError("No more mock responses".to_string()))
@@ -185,10 +189,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_no_redirect() {
-        let response = HttpResponse {
+        let response = SendableHttpResponse {
             status: 200,
             headers: HashMap::new(),
             body: b"OK".to_vec(),
+            ..Default::default()
         };
         let sender = MockSender::new(vec![response]);
         let transaction = HttpTransaction::new(sender);
@@ -197,7 +202,7 @@ mod tests {
             url: "https://example.com".to_string(),
             method: "GET".to_string(),
             headers: vec![],
-            body: SendableBodyPlain::None,
+            ..Default::default()
         };
 
         let result = transaction.execute(request).await.unwrap();
@@ -211,15 +216,16 @@ mod tests {
         redirect_headers.insert("Location".to_string(), "https://example.com/new".to_string());
 
         let responses = vec![
-            HttpResponse {
+            SendableHttpResponse {
                 status: 302,
                 headers: redirect_headers,
-                body: vec![],
+                ..Default::default()
             },
-            HttpResponse {
+            SendableHttpResponse {
                 status: 200,
                 headers: HashMap::new(),
                 body: b"Final".to_vec(),
+                ..Default::default()
             },
         ];
 
@@ -229,8 +235,7 @@ mod tests {
         let request = SendableHttpRequest {
             url: "https://example.com/old".to_string(),
             method: "GET".to_string(),
-            headers: vec![],
-            body: SendableBodyPlain::None,
+            ..Default::default()
         };
 
         let result = transaction.execute(request).await.unwrap();
@@ -244,11 +249,11 @@ mod tests {
         redirect_headers.insert("Location".to_string(), "https://example.com/loop".to_string());
 
         // Create more redirects than allowed
-        let responses: Vec<HttpResponse> = (0..12)
-            .map(|_| HttpResponse {
+        let responses: Vec<SendableHttpResponse> = (0..12)
+            .map(|_| SendableHttpResponse {
                 status: 302,
                 headers: redirect_headers.clone(),
-                body: vec![],
+                ..Default::default()
             })
             .collect();
 
@@ -258,8 +263,7 @@ mod tests {
         let request = SendableHttpRequest {
             url: "https://example.com/start".to_string(),
             method: "GET".to_string(),
-            headers: vec![],
-            body: SendableBodyPlain::None,
+            ..Default::default()
         };
 
         let result = transaction.execute(request).await;
@@ -285,7 +289,8 @@ mod tests {
 
     #[test]
     fn test_extract_base_url() {
-        let result = HttpTransaction::<MockSender>::extract_base_url("https://example.com/path/to/resource");
+        let result =
+            HttpTransaction::<MockSender>::extract_base_url("https://example.com/path/to/resource");
         assert_eq!(result.unwrap(), "https://example.com");
 
         let result = HttpTransaction::<MockSender>::extract_base_url("http://localhost:8080/api");
@@ -297,7 +302,9 @@ mod tests {
 
     #[test]
     fn test_extract_base_path() {
-        let result = HttpTransaction::<MockSender>::extract_base_path("https://example.com/path/to/resource");
+        let result = HttpTransaction::<MockSender>::extract_base_path(
+            "https://example.com/path/to/resource",
+        );
         assert_eq!(result.unwrap(), "https://example.com/path/to");
 
         let result = HttpTransaction::<MockSender>::extract_base_path("https://example.com/single");

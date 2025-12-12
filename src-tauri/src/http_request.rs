@@ -20,7 +20,9 @@ use yaak_http::client::{
 };
 use yaak_http::manager::HttpConnectionManager;
 use yaak_http::sender::{HttpSender, ReqwestSender};
-use yaak_http::types::{SendableBodyPlain, SendableHttpRequest, append_query_params};
+use yaak_http::types::{
+    SendableBodyPlain, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
+};
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
@@ -113,17 +115,16 @@ pub async fn send_http_request_with_context<R: Runtime>(
     };
 
     // Build the sendable request using the new SendableHttpRequest type
-    let mut sendable_request = match SendableHttpRequest::from_http_request(&request).await {
-        Ok(r) => r,
-        Err(e) => {
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                e.to_string(),
-                &update_source,
-            ));
-        }
-    };
+    let sendable_request = SendableHttpRequest::from_http_request(
+        &request,
+        SendableHttpRequestOptions {
+            timeout: if workspace.setting_request_timeout > 0 {
+                Some(Duration::from_millis(workspace.setting_request_timeout.unsigned_abs() as u64))
+            } else {
+                None
+            },
+        },
+    )?;
 
     debug!("Sending request to {} {}", sendable_request.method, sendable_request.url);
 
@@ -192,11 +193,6 @@ pub async fn send_http_request_with_context<R: Runtime>(
             proxy: proxy_setting,
             cookie_provider: maybe_cookie_manager.as_ref().map(|(p, _)| Arc::clone(&p)),
             client_certificate,
-            timeout: if workspace.setting_request_timeout > 0 {
-                Some(Duration::from_millis(workspace.setting_request_timeout.unsigned_abs() as u64))
-            } else {
-                None
-            },
         })
         .await?;
 
@@ -278,6 +274,9 @@ pub async fn send_http_request_with_context<R: Runtime>(
                 .db()
                 .update_http_response_if_id(&resp, &update_source)
                 .expect("Failed to update response after connected");
+            for event in final_response.events {
+                println!("   {}", event);
+            }
             done_tx.send(resp).unwrap();
         });
     }

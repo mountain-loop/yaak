@@ -5,7 +5,6 @@ use reqwest::redirect::Policy;
 use reqwest::{Client, Proxy};
 use reqwest_cookie_store::CookieStoreMutex;
 use std::sync::Arc;
-use std::time::Duration;
 use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 #[derive(Clone)]
@@ -33,7 +32,6 @@ pub struct HttpConnectionOptions {
     pub validate_certificates: bool,
     pub proxy: HttpConnectionProxySetting,
     pub cookie_provider: Option<Arc<CookieStoreMutex>>,
-    pub timeout: Option<Duration>,
     pub client_certificate: Option<ClientCertificateConfig>,
 }
 
@@ -82,11 +80,6 @@ impl HttpConnectionOptions {
                     client = client.proxy(p)
                 }
             }
-        }
-
-        // Configure timeout
-        if let Some(d) = self.timeout {
-            client = client.timeout(d);
         }
 
         info!(
