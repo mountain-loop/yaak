@@ -9,18 +9,17 @@ use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use http::header::CONTENT_LENGTH;
 use tauri::{Manager, Runtime, WebviewWindow};
-use tokio::fs::{create_dir_all, File};
+use tokio::fs::{File, create_dir_all};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch::Receiver;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
+use tokio_util::codec::{BytesCodec, FramedRead};
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::manager::HttpConnectionManager;
-use tokio_util::codec::{BytesCodec, FramedRead};
-use yaak_http::types::{SendableBody, SendableHttpRequest};
+use yaak_http::types::{SendableBodyPlain, SendableHttpRequest};
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
@@ -155,7 +154,8 @@ pub async fn send_http_request_with_context<R: Runtime>(
         }
     };
 
-    let client_certificate = find_client_certificate(&sendable_request.url, &settings.client_certificates);
+    let client_certificate =
+        find_client_certificate(&sendable_request.url, &settings.client_certificates);
 
     // Add cookie store if specified
     let maybe_cookie_manager = match cookie_jar.clone() {
@@ -212,8 +212,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
         }
     };
 
-    let m = Method::from_str(&sendable_request.method)
-        .map_err(|e| GenericError(e.to_string()))?;
+    let m = Method::from_str(&sendable_request.method).map_err(|e| GenericError(e.to_string()))?;
     let mut request_builder = client.request(m, url);
 
     // Add headers from SendableHttpRequest
@@ -235,19 +234,16 @@ pub async fn send_http_request_with_context<R: Runtime>(
         request_builder = request_builder.header(header_name, header_value);
     }
 
-    // Add body if present
-    if let Some(body) = sendable_request.body {
-        match body {
-            SendableBody::Bytes(bytes) => {
-                request_builder = request_builder.body(bytes);
-            }
-            SendableBody::Stream{data: reader, content_length} => {
-                let stream = FramedRead::new(reader, BytesCodec::new());
-                request_builder = request_builder.body(reqwest::Body::wrap_stream(stream));
-                if let Some(content_length) = content_length {
-                    request_builder = request_builder.header(CONTENT_LENGTH, content_length);
-                }
-            }
+    match sendable_request.body {
+        SendableBodyPlain::None => {
+            // No request body
+        }
+        SendableBodyPlain::Bytes(bytes) => {
+            request_builder = request_builder.body(bytes);
+        }
+        SendableBodyPlain::Stream(reader) => {
+            let stream = FramedRead::new(reader, BytesCodec::new());
+            request_builder = request_builder.body(reqwest::Body::wrap_stream(stream));
         }
     }
 
