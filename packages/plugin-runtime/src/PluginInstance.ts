@@ -1,3 +1,4 @@
+import { applyFormInputDefaults, validateTemplateFunctionArgs } from '@yaakapp-internal/lib/templateFunction';
 import {
   BootRequest,
   DeleteKeyValueResponse,
@@ -25,11 +26,7 @@ import { Context, PluginDefinition } from '@yaakapp/api';
 import console from 'node:console';
 import { type Stats, statSync, watch } from 'node:fs';
 import path from 'node:path';
-import {
-  applyDynamicFormInput,
-  applyFormInputDefaults,
-  validateTemplateFunctionArgs,
-} from './common';
+import { applyDynamicFormInput } from './common';
 import { EventChannel } from './EventChannel';
 import { migrateTemplateFunctionSelectOptions } from './migrations';
 

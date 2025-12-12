@@ -67,7 +67,7 @@ export function SettingsDropdown() {
         {
           label: 'Purchase License',
           color: 'success',
-          hidden: check.data == null || check.data.type === 'commercial_use',
+          hidden: check.data == null || check.data.status === 'active',
           leftSlot: <Icon icon="circle_dollar_sign" />,
           onSelect: () => openSettings.mutate('license'),
         },

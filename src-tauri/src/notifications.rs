@@ -1,11 +1,10 @@
-use std::time::SystemTime;
-
 use crate::error::Result;
 use crate::history::get_or_upsert_launch_info;
 use chrono::{DateTime, Utc};
 use log::{debug, info};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 use yaak_common::api_client::yaak_api_client;
@@ -21,7 +20,7 @@ const KV_KEY: &str = "seen";
 
 // Create updater struct
 pub struct YaakNotifier {
-    last_check: SystemTime,
+    last_check: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -47,9 +46,7 @@ pub struct YaakNotificationAction {
 
 impl YaakNotifier {
     pub fn new() -> Self {
-        Self {
-            last_check: SystemTime::UNIX_EPOCH,
-        }
+        Self { last_check: None }
     }
 
     pub async fn seen<R: Runtime>(&mut self, window: &WebviewWindow<R>, id: &str) -> Result<()> {
@@ -69,13 +66,13 @@ impl YaakNotifier {
 
     pub async fn maybe_check<R: Runtime>(&mut self, window: &WebviewWindow<R>) -> Result<()> {
         let app_handle = window.app_handle();
-        let ignore_check = self.last_check.elapsed().unwrap().as_secs() < MAX_UPDATE_CHECK_SECONDS;
-
-        if ignore_check {
+        if let Some(i) = self.last_check
+            && i.elapsed().as_secs() < MAX_UPDATE_CHECK_SECONDS
+        {
             return Ok(());
         }
 
-        self.last_check = SystemTime::now();
+        self.last_check = Some(Instant::now());
 
         if !app_handle.db().get_settings().check_notifications {
             info!("Notifications are disabled. Skipping check.");
@@ -88,13 +85,18 @@ impl YaakNotifier {
         let license_check = {
             use yaak_license::{LicenseCheckStatus, check_license};
             match check_license(window).await {
-                Ok(LicenseCheckStatus::PersonalUse { .. }) => "personal".to_string(),
-                Ok(LicenseCheckStatus::CommercialUse) => "commercial".to_string(),
-                Ok(LicenseCheckStatus::InvalidLicense) => "invalid_license".to_string(),
-                Ok(LicenseCheckStatus::Trialing { .. }) => "trialing".to_string(),
-                Err(_) => "unknown".to_string(),
+                Ok(LicenseCheckStatus::PersonalUse { .. }) => "personal",
+                Ok(LicenseCheckStatus::Active { .. }) => "commercial",
+                Ok(LicenseCheckStatus::PastDue { .. }) => "past_due",
+                Ok(LicenseCheckStatus::Inactive { .. }) => "invalid_license",
+                Ok(LicenseCheckStatus::Trialing { .. }) => "trialing",
+                Ok(LicenseCheckStatus::Expired { .. }) => "expired",
+                Ok(LicenseCheckStatus::Error { .. }) => "error",
+                Err(_) => "unknown",
             }
+            .to_string()
         };
+
         #[cfg(not(feature = "license"))]
         let license_check = "disabled".to_string();
 

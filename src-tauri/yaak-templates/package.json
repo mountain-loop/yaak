@@ -10,7 +10,6 @@
     "build:clean": "rimraf ./pkg/.gitignore"
   },
   "devDependencies": {
-    "wasm-pack": "^0.13.1",
     "rimraf": "^6.1.2"
   }
 }

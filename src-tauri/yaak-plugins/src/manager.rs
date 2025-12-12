@@ -622,6 +622,14 @@ impl PluginManager {
         values: HashMap<String, JsonPrimitive>,
         model_id: &str,
     ) -> Result<GetHttpAuthenticationConfigResponse> {
+        if auth_name == "none" {
+            return Ok(GetHttpAuthenticationConfigResponse {
+                args: Vec::new(),
+                plugin_ref_id: "auth-none".to_string(),
+                actions: None,
+            });
+        }
+
         let results = self.get_http_authentication_summaries(window).await?;
         let plugin = results
             .iter()

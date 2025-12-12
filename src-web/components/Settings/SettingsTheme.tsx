@@ -5,9 +5,11 @@ import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useResolvedAppearance } from '../../hooks/useResolvedAppearance';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import type { ButtonProps } from '../core/Button';
+import { Heading } from '../core/Heading';
 import type { IconProps } from '../core/Icon';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';
+import { Link } from '../core/Link';
 import type { SelectProps } from '../core/Select';
 import { Select } from '../core/Select';
 import { HStack, VStack } from '../core/Stacks';
@@ -69,6 +71,15 @@ export function SettingsTheme() {
 
   return (
     <VStack space={3} className="mb-4">
+      <div className="mb-3">
+        <Heading>Theme</Heading>
+        <p className="text-text-subtle">
+          Make Yaak your own by selecting a theme, or{' '}
+          <Link href="https://feedback.yaak.app/help/articles/6911763-plugins-quick-start">
+            Create Your Own
+          </Link>
+        </p>
+      </div>
       <Select
         name="appearance"
         label="Appearance"

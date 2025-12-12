@@ -3,8 +3,11 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error(transparent)]
+    #[error("Client error: {0:?}")]
     Client(#[from] reqwest::Error),
+
+    #[error(transparent)]
+    TlsError(#[from] yaak_tls::error::Error),
 }
 
 impl Serialize for Error {

@@ -16,8 +16,22 @@ export const plugin: PluginDefinition = {
       name: 'prompt.text',
       description: 'Prompt the user for input when sending a request',
       previewType: 'click',
+      previewArgs: ['label'],
       args: [
-        { type: 'text', name: 'label', label: 'Label', optional: true },
+        {
+          type: 'text',
+          name: 'label',
+          label: 'Label',
+          optional: true,
+          dynamic(_ctx, args) {
+            if (
+              args.values.store === STORE_EXPIRE ||
+              (args.values.store === STORE_FOREVER && !args.values.key)
+            ) {
+              return { optional: false };
+            }
+          },
+        },
         {
           type: 'select',
           name: 'store',
@@ -68,21 +82,24 @@ export const plugin: PluginDefinition = {
         {
           type: 'banner',
           color: 'info',
+          inputs: [],
           dynamic(_ctx, args) {
-            return { hidden: args.values.store === STORE_NONE };
-          },
-          inputs: [
-            {
-              type: 'markdown',
-              content: '',
-              async dynamic(_ctx, args) {
-                const key = buildKey(args);
-                return {
+            let key: string;
+            try {
+              key = buildKey(args);
+            } catch (err) {
+              return { color: 'danger', inputs: [{ type: 'markdown', content: String(err) }] };
+            }
+            return {
+              hidden: args.values.store === STORE_NONE,
+              inputs: [
+                {
+                  type: 'markdown',
                   content: [`Value will be saved under: \`${key}\``].join('\n\n'),
-                };
-              },
-            },
-          ],
+                },
+              ],
+            };
+          },
         },
         {
           type: 'accordion',
@@ -139,7 +156,7 @@ export const plugin: PluginDefinition = {
 
 function buildKey(args: CallTemplateFunctionArgs) {
   if (!args.values.key && !args.values.label) {
-    throw new Error('Key or Label is required when storing values');
+    throw new Error('A label or key is required when storing values');
   }
   return [args.values.namespace, args.values.key || args.values.label]
     .filter((v) => !!v)

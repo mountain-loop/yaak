@@ -162,6 +162,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
           'x-theme-input',
           'relative w-full rounded-md text',
           'border',
+          'overflow-hidden',
           focused ? 'border-border-focus' : 'border-border-subtle',
           hasChanged && 'has-[:invalid]:border-danger', // For built-in HTML validation
           size === 'md' && 'min-h-md',

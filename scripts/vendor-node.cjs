@@ -4,7 +4,7 @@ const Downloader = require('nodejs-file-downloader');
 const { rmSync, cpSync, mkdirSync, existsSync } = require('node:fs');
 const { execSync } = require('node:child_process');
 
-const NODE_VERSION = 'v24.4.0';
+const NODE_VERSION = 'v24.11.1';
 
 // `${process.platform}_${process.arch}`
 const MAC_ARM = 'darwin_arm64';
@@ -12,6 +12,7 @@ const MAC_X64 = 'darwin_x64';
 const LNX_ARM = 'linux_arm64';
 const LNX_X64 = 'linux_x64';
 const WIN_X64 = 'win32_x64';
+const WIN_ARM = 'win32_arm64';
 
 const URL_MAP = {
   [MAC_ARM]: `https://nodejs.org/download/release/${NODE_VERSION}/node-${NODE_VERSION}-darwin-arm64.tar.gz`,
@@ -19,6 +20,7 @@ const URL_MAP = {
   [LNX_ARM]: `https://nodejs.org/download/release/${NODE_VERSION}/node-${NODE_VERSION}-linux-arm64.tar.gz`,
   [LNX_X64]: `https://nodejs.org/download/release/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.gz`,
   [WIN_X64]: `https://nodejs.org/download/release/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip`,
+  [WIN_ARM]: `https://nodejs.org/download/release/${NODE_VERSION}/node-${NODE_VERSION}-win-arm64.zip`,
 };
 
 const SRC_BIN_MAP = {
@@ -27,6 +29,7 @@ const SRC_BIN_MAP = {
   [LNX_ARM]: `node-${NODE_VERSION}-linux-arm64/bin/node`,
   [LNX_X64]: `node-${NODE_VERSION}-linux-x64/bin/node`,
   [WIN_X64]: `node-${NODE_VERSION}-win-x64/node.exe`,
+  [WIN_ARM]: `node-${NODE_VERSION}-win-arm64/node.exe`,
 };
 
 const DST_BIN_MAP = {
@@ -35,6 +38,7 @@ const DST_BIN_MAP = {
   [LNX_ARM]: 'yaaknode-aarch64-unknown-linux-gnu',
   [LNX_X64]: 'yaaknode-x86_64-unknown-linux-gnu',
   [WIN_X64]: 'yaaknode-x86_64-pc-windows-msvc.exe',
+  [WIN_ARM]: 'yaaknode-aarch64-pc-windows-msvc.exe',
 };
 
 const key = `${process.platform}_${process.env.YAAK_TARGET_ARCH ?? process.arch}`;
@@ -80,7 +84,7 @@ rmSync(tmpDir, { recursive: true, force: true });
 
 function tryExecSync(cmd) {
   try {
-    return execSync(cmd, { stdio: 'inherit' }).toString('utf-8');
+    return execSync(cmd, { stdio: 'pipe' }).toString('utf-8');
   } catch (_) {
     return '';
   }

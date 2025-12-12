@@ -1,3 +1,4 @@
+use crate::error::Result;
 use log::info;
 use std::sync::Arc;
 use tauri::http::HeaderMap;
@@ -9,6 +10,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::{
     Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
 };
+use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 // Enabling ALPN breaks websocket requests
 const WITH_ALPN: bool = false;
@@ -17,9 +19,10 @@ pub(crate) async fn ws_connect(
     url: &str,
     headers: HeaderMap<HeaderValue>,
     validate_certificates: bool,
-) -> crate::error::Result<(WebSocketStream<MaybeTlsStream<TcpStream>>, Response)> {
+    client_cert: Option<ClientCertificateConfig>,
+) -> Result<(WebSocketStream<MaybeTlsStream<TcpStream>>, Response)> {
     info!("Connecting to WS {url}");
-    let tls_config = yaak_http::tls::get_config(validate_certificates, WITH_ALPN);
+    let tls_config = get_tls_config(validate_certificates, WITH_ALPN, client_cert.clone())?;
 
     let mut req = url.into_client_request()?;
     let req_headers = req.headers_mut();
@@ -36,5 +39,12 @@ pub(crate) async fn ws_connect(
         Some(Connector::Rustls(Arc::new(tls_config))),
     )
     .await?;
+
+    info!(
+        "Connected to WS {url} validate_certificates={} client_cert={}",
+        validate_certificates,
+        client_cert.is_some()
+    );
+
     Ok((stream, response))
 }

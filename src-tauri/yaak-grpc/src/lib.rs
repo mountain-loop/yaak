@@ -9,6 +9,7 @@ pub mod manager;
 mod reflection;
 mod transport;
 mod any;
+pub mod error;
 
 pub use tonic::metadata::*;
 pub use tonic::Code;

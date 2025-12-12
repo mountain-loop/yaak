@@ -16,15 +16,34 @@ jobs:
           - platform: 'macos-latest' # for Arm-based Macs (M1 and above).
             args: '--target aarch64-apple-darwin'
             yaak_arch: 'arm64'
+            os: 'macos'
+            targets: 'aarch64-apple-darwin'
           - platform: 'macos-latest' # for Intel-based Macs.
             args: '--target x86_64-apple-darwin'
             yaak_arch: 'x64'
+            os: 'macos'
+            targets: 'x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
             yaak_arch: 'x64'
+            os: 'ubuntu'
+            targets: ''
+          - platform: 'ubuntu-22.04-arm'
+            args: ''
+            yaak_arch: 'arm64'
+            os: 'ubuntu'
+            targets: ''
           - platform: 'windows-latest'
             args: ''
             yaak_arch: 'x64'
+            os: 'windows'
+            targets: ''
+          # Windows ARM64
+          - platform: 'windows-latest'
+            args: '--target aarch64-pc-windows-msvc'
+            yaak_arch: 'arm64'
+            os: 'windows'
+            targets: 'aarch64-pc-windows-msvc'
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 40
     steps:
@@ -37,8 +56,7 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.targets }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -47,10 +65,10 @@ jobs:
           cache-on-failure: true
 
       - name: install dependencies (Linux only)
-        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        if: matrix.os == 'ubuntu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
 
       - name: Install Protoc for plugin-runtime
         uses: arduino/setup-protoc@v3
@@ -58,7 +76,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install trusted-signing-cli (Windows only)
-        if: matrix.platform == 'windows-latest'
+        if: matrix.os == 'windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -93,17 +111,17 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
 
           # Apple signing stuff
-          APPLE_CERTIFICATE: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_TEAM_ID: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_TEAM_ID }}
+          APPLE_CERTIFICATE: ${{ matrix.os == 'macos' && secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ matrix.os == 'macos' && secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ matrix.os == 'macos' && secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ matrix.os == 'macos' && secrets.APPLE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos' && secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ matrix.os == 'macos' && secrets.APPLE_TEAM_ID }}
 
           # Windows signing stuff
-          AZURE_CLIENT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ matrix.platform == 'windows-latest' && secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ matrix.os == 'windows' && secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ matrix.os == 'windows' && secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ matrix.os == 'windows' && secrets.AZURE_TENANT_ID }}
         with:
           tagName: 'v__VERSION__'
           releaseName: 'Release __VERSION__'

@@ -18,6 +18,7 @@ impl<'a> DbContext<'a> {
             updated_at: Default::default(),
 
             appearance: "system".to_string(),
+            client_certificates: Vec::new(),
             editor_font_size: 12,
             editor_font: None,
             editor_keymap: EditorKeymap::Default,
@@ -27,6 +28,7 @@ impl<'a> DbContext<'a> {
             interface_scale: 1.0,
             interface_font: None,
             hide_window_controls: false,
+            use_native_titlebar: false,
             open_workspace_new_window: None,
             proxy: None,
             theme_dark: "yaak-dark".to_string(),

@@ -23,7 +23,7 @@ export type TwigCompletionOption = (
   | TwigCompletionOptionNamespace
 ) & {
   name: string;
-  label: string;
+  label: string | HTMLElement;
   description?: string;
   onClick: (rawTag: string, startPos: number) => void;
   value: string | null;
@@ -34,7 +34,7 @@ export interface TwigCompletionConfig {
   options: TwigCompletionOption[];
 }
 
-const MIN_MATCH_NAME = 2;
+const MIN_MATCH_NAME = 1;
 
 export function twigCompletion({ options }: TwigCompletionConfig) {
   return function completions(context: CompletionContext) {
@@ -44,7 +44,7 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
     if (toMatch === null) return null;
 
     const matchLen = toMatch.to - toMatch.from;
-    if (toMatch.from > 0 && matchLen < MIN_MATCH_NAME) {
+    if (!context.explicit && toMatch.from > 0 && matchLen < MIN_MATCH_NAME) {
       return null;
     }
 

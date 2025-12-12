@@ -4,12 +4,16 @@ import { useLicense } from '@yaakapp-internal/license';
 import type { EditorKeymap, Settings } from '@yaakapp-internal/models';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
+import { useState } from 'react';
 
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { clamp } from '../../lib/clamp';
 import { showConfirm } from '../../lib/confirm';
+import { invokeCmd } from '../../lib/tauri';
 import { CargoFeature } from '../CargoFeature';
+import { Button } from '../core/Button';
 import { Checkbox } from '../core/Checkbox';
+import { Heading } from '../core/Heading';
 import { Icon } from '../core/Icon';
 import { Link } from '../core/Link';
 import { Select } from '../core/Select';
@@ -41,6 +45,10 @@ export function SettingsInterface() {
 
   return (
     <VStack space={3} className="mb-4">
+      <div className="mb-3">
+        <Heading>Interface</Heading>
+        <p className="text-text-subtle">Tweak settings related to the user interface.</p>
+      </div>
       <Select
         name="switchWorkspaceBehavior"
         label="Open workspace behavior"
@@ -168,6 +176,8 @@ export function SettingsInterface() {
         <LicenseSettings settings={settings} />
       </CargoFeature>
 
+      <NativeTitlebarSetting settings={settings} />
+
       {type() !== 'macos' && (
         <Checkbox
           checked={settings.hideWindowControls}
@@ -179,9 +189,36 @@ export function SettingsInterface() {
     </VStack>
   );
 }
+
+function NativeTitlebarSetting({ settings }: { settings: Settings }) {
+  const [nativeTitlebar, setNativeTitlebar] = useState(settings.useNativeTitlebar);
+  return (
+    <div className="flex gap-1 overflow-hidden h-2xs">
+      <Checkbox
+        checked={nativeTitlebar}
+        title="Native title bar"
+        help="Use the operating system's standard title bar and window controls"
+        onChange={setNativeTitlebar}
+      />
+      {settings.useNativeTitlebar !== nativeTitlebar && (
+        <Button
+          color="primary"
+          size="2xs"
+          onClick={async () => {
+            await patchModel(settings, { useNativeTitlebar: nativeTitlebar });
+            await invokeCmd('cmd_restart');
+          }}
+        >
+          Apply and Restart
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function LicenseSettings({ settings }: { settings: Settings }) {
   const license = useLicense();
-  if (license.check.data?.type !== 'personal_use') {
+  if (license.check.data?.status !== 'personal_use') {
     return null;
   }
 

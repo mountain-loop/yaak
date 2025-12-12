@@ -37,6 +37,7 @@ use yaak_plugins::events::{
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
+use yaak_tls::find_client_certificate;
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -151,6 +152,8 @@ pub async fn send_http_request_with_context<R: Runtime>(
         }
     };
 
+    let client_certificate = find_client_certificate(&url_string, &settings.client_certificates);
+
     // Add cookie store if specified
     let maybe_cookie_manager = match cookie_jar.clone() {
         Some(CookieJar { id, .. }) => {
@@ -178,22 +181,19 @@ pub async fn send_http_request_with_context<R: Runtime>(
     };
 
     let client = connection_manager
-        .get_client(
-            &plugin_context.id,
-            &HttpConnectionOptions {
-                follow_redirects: workspace.setting_follow_redirects,
-                validate_certificates: workspace.setting_validate_certificates,
-                proxy: proxy_setting,
-                cookie_provider: maybe_cookie_manager.as_ref().map(|(p, _)| Arc::clone(&p)),
-                timeout: if workspace.setting_request_timeout > 0 {
-                    Some(Duration::from_millis(
-                        workspace.setting_request_timeout.unsigned_abs() as u64
-                    ))
-                } else {
-                    None
-                },
+        .get_client(&HttpConnectionOptions {
+            id: plugin_context.id.clone(),
+            follow_redirects: workspace.setting_follow_redirects,
+            validate_certificates: workspace.setting_validate_certificates,
+            proxy: proxy_setting,
+            cookie_provider: maybe_cookie_manager.as_ref().map(|(p, _)| Arc::clone(&p)),
+            client_certificate,
+            timeout: if workspace.setting_request_timeout > 0 {
+                Some(Duration::from_millis(workspace.setting_request_timeout.unsigned_abs() as u64))
+            } else {
+                None
             },
-        )
+        })
         .await?;
 
     // Render query parameters

@@ -37,6 +37,17 @@ export const plugin: PluginDefinition = {
     shortLabel: 'OAuth 1',
     args: [
       {
+        type: 'banner',
+        color: 'info',
+        inputs: [
+          {
+            type: 'markdown',
+            content:
+              'OAuth 1.0 is still in beta. Please submit any issues to [Feedback](https://yaak.app/feedback).',
+          },
+        ],
+      },
+      {
         name: 'signatureMethod',
         label: 'Signature Method',
         type: 'select',

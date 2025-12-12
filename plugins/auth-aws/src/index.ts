@@ -64,8 +64,8 @@ export const plugin: PluginDefinition = {
           path: url.pathname + (url.search || ''),
           service: String(values.service || 'sts'),
           region: values.region ? String(values.region) : undefined,
-          body: values.body ? String(values.body) : undefined,
           headers,
+          doNotEncodePath: true,
         },
         {
           accessKeyId,

@@ -31,6 +31,7 @@ use tokio::time;
 use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::GrpcHandle;
 use yaak_grpc::{Code, ServiceDefinition, serialize_message};
+use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
     GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, Plugin, Workspace,
@@ -52,6 +53,7 @@ use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_templates::format_json::format_json;
 use yaak_templates::{RenderErrorBehavior, RenderOptions, Tokens, transform_args};
+use yaak_tls::find_client_certificate;
 
 mod commands;
 mod encoding;
@@ -155,6 +157,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
     proto_files: Vec<String>,
+    skip_cache: Option<bool>,
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
@@ -185,6 +188,9 @@ async fn cmd_grpc_reflect<R: Runtime>(
 
     let uri = safe_uri(&req.url);
     let metadata = build_metadata(&window, &req, &auth_context_id).await?;
+    let settings = window.db().get_settings();
+    let client_certificate =
+        find_client_certificate(req.url.as_str(), &settings.client_certificates);
 
     Ok(grpc_handle
         .lock()
@@ -195,6 +201,8 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
             &metadata,
             workspace.setting_validate_certificates,
+            client_certificate,
+            skip_cache.unwrap_or(false),
         )
         .await
         .map_err(|e| GenericError(e.to_string()))?)
@@ -233,6 +241,10 @@ async fn cmd_grpc_go<R: Runtime>(
     .await?;
 
     let metadata = build_metadata(&window, &request, &auth_context_id).await?;
+
+    // Find matching client certificate for this URL
+    let settings = app_handle.db().get_settings();
+    let client_cert = find_client_certificate(&request.url, &settings.client_certificates);
 
     let conn = app_handle.db().upsert_grpc_connection(
         &GrpcConnection {
@@ -282,6 +294,7 @@ async fn cmd_grpc_go<R: Runtime>(
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
             &metadata,
             workspace.setting_validate_certificates,
+            client_cert.clone(),
         )
         .await;
 
@@ -291,7 +304,7 @@ async fn cmd_grpc_go<R: Runtime>(
             app_handle.db().upsert_grpc_connection(
                 &GrpcConnection {
                     elapsed: start.elapsed().as_millis() as i32,
-                    error: Some(err.clone()),
+                    error: Some(err.to_string()),
                     state: GrpcConnectionState::Closed,
                     ..conn.clone()
                 },
@@ -422,7 +435,9 @@ async fn cmd_grpc_go<R: Runtime>(
                 match (method_desc.is_client_streaming(), method_desc.is_server_streaming()) {
                     (true, true) => (
                         Some(
-                            connection.streaming(&service, &method, in_msg_stream, &metadata).await,
+                            connection
+                                .streaming(&service, &method, in_msg_stream, &metadata, client_cert)
+                                .await,
                         ),
                         None,
                     ),
@@ -430,7 +445,13 @@ async fn cmd_grpc_go<R: Runtime>(
                         None,
                         Some(
                             connection
-                                .client_streaming(&service, &method, in_msg_stream, &metadata)
+                                .client_streaming(
+                                    &service,
+                                    &method,
+                                    in_msg_stream,
+                                    &metadata,
+                                    client_cert,
+                                )
                                 .await,
                         ),
                     ),
@@ -438,9 +459,12 @@ async fn cmd_grpc_go<R: Runtime>(
                         Some(connection.server_streaming(&service, &method, &msg, &metadata).await),
                         None,
                     ),
-                    (false, false) => {
-                        (None, Some(connection.unary(&service, &method, &msg, &metadata).await))
-                    }
+                    (false, false) => (
+                        None,
+                        Some(
+                            connection.unary(&service, &method, &msg, &metadata, client_cert).await,
+                        ),
+                    ),
                 };
 
             if !method_desc.is_client_streaming() {
@@ -500,7 +524,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         )
                         .unwrap();
                 }
-                Some(Err(e)) => {
+                Some(Err(yaak_grpc::error::Error::GrpcStreamError(e))) => {
                     app_handle
                         .db()
                         .upsert_grpc_event(
@@ -521,6 +545,21 @@ async fn cmd_grpc_go<R: Runtime>(
                                     ..base_event.clone()
                                 },
                             }),
+                            &UpdateSource::from_window(&window),
+                        )
+                        .unwrap();
+                }
+                Some(Err(e)) => {
+                    app_handle
+                        .db()
+                        .upsert_grpc_event(
+                            &GrpcEvent {
+                                error: Some(e.to_string()),
+                                status: Some(Code::Unknown as i32),
+                                content: "Failed to connect".to_string(),
+                                event_type: GrpcEventType::ConnectionEnd,
+                                ..base_event.clone()
+                            },
                             &UpdateSource::from_window(&window),
                         )
                         .unwrap();
@@ -551,7 +590,7 @@ async fn cmd_grpc_go<R: Runtime>(
                         .unwrap();
                     stream.into_inner()
                 }
-                Some(Err(e)) => {
+                Some(Err(yaak_grpc::error::Error::GrpcStreamError(e))) => {
                     warn!("GRPC stream error {e:?}");
                     app_handle
                         .db()
@@ -573,6 +612,22 @@ async fn cmd_grpc_go<R: Runtime>(
                                     ..base_event.clone()
                                 },
                             }),
+                            &UpdateSource::from_window(&window),
+                        )
+                        .unwrap();
+                    return;
+                }
+                Some(Err(e)) => {
+                    app_handle
+                        .db()
+                        .upsert_grpc_event(
+                            &GrpcEvent {
+                                error: Some(e.to_string()),
+                                status: Some(Code::Unknown as i32),
+                                content: "Failed to connect".to_string(),
+                                event_type: GrpcEventType::ConnectionEnd,
+                                ..base_event.clone()
+                            },
                             &UpdateSource::from_window(&window),
                         )
                         .unwrap();
@@ -1323,7 +1378,13 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Don't restore StateFlags::DECORATIONS because we want to be able to toggle them on/off on a restart
+        // We could* make this work if we toggled them in the frontend before the window closes, but, this is nicer.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(StateFlags::all() - StateFlags::DECORATIONS)
+                .build(),
+        )
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -1392,6 +1453,10 @@ pub fn run() {
             // Add GRPC manager
             let grpc_handle = GrpcHandle::new(&app.app_handle());
             app.manage(Mutex::new(grpc_handle));
+
+            // Specific settings
+            let settings = app.db().get_settings();
+            app.app_handle().set_native_titlebar(settings.use_native_titlebar);
 
             monitor_plugin_events(&app.app_handle().clone());
 

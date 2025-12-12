@@ -26,6 +26,10 @@ export function SettingsGeneral() {
 
   return (
     <VStack space={1.5} className="mb-4">
+      <div className="mb-4">
+        <Heading>General</Heading>
+        <p className="text-text-subtle">Configure general settings for update behavior and more.</p>
+      </div>
       <CargoFeature feature="updater">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1">
           <Select

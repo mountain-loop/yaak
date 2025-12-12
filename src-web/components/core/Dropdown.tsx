@@ -581,7 +581,8 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                       focused={i === selectedIndex}
                       onFocus={handleFocus}
                       onSelect={handleSelect}
-                      key={`item_${item.label}`}
+                      // biome-ignore lint/suspicious/noArrayIndexKey: It's fine
+                      key={i}
                       item={item}
                     />
                   );

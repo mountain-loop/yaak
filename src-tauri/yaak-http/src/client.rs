@@ -1,12 +1,12 @@
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
-use crate::tls;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use reqwest::redirect::Policy;
 use reqwest::{Client, Proxy};
 use reqwest_cookie_store::CookieStoreMutex;
 use std::sync::Arc;
 use std::time::Duration;
+use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 #[derive(Clone)]
 pub struct HttpConnectionProxySettingAuth {
@@ -28,11 +28,13 @@ pub enum HttpConnectionProxySetting {
 
 #[derive(Clone)]
 pub struct HttpConnectionOptions {
+    pub id: String,
     pub follow_redirects: bool,
     pub validate_certificates: bool,
     pub proxy: HttpConnectionProxySetting,
     pub cookie_provider: Option<Arc<CookieStoreMutex>>,
     pub timeout: Option<Duration>,
+    pub client_certificate: Option<ClientCertificateConfig>,
 }
 
 impl HttpConnectionOptions {
@@ -45,8 +47,10 @@ impl HttpConnectionOptions {
             .referer(false)
             .tls_info(true);
 
-        // Configure TLS
-        client = client.use_preconfigured_tls(tls::get_config(self.validate_certificates, true));
+        // Configure TLS with optional client certificate
+        let config =
+            get_tls_config(self.validate_certificates, true, self.client_certificate.clone())?;
+        client = client.use_preconfigured_tls(config);
 
         // Configure DNS resolver
         client = client.dns_resolver(LocalhostResolver::new());
@@ -84,6 +88,12 @@ impl HttpConnectionOptions {
         if let Some(d) = self.timeout {
             client = client.timeout(d);
         }
+
+        info!(
+            "Building new HTTP client validate_certificates={} client_cert={}",
+            self.validate_certificates,
+            self.client_certificate.is_some()
+        );
 
         Ok(client.build()?)
     }

@@ -25,6 +25,7 @@ dist-ssr
 *.sln
 *.sw?
 .eslintcache
+out
 
 *.sqlite
 *.sqlite-*

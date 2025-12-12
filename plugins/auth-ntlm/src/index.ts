@@ -9,6 +9,17 @@ export const plugin: PluginDefinition = {
     shortLabel: 'NTLM',
     args: [
       {
+        type: 'banner',
+        color: 'info',
+        inputs: [
+          {
+            type: 'markdown',
+            content:
+              'NTLM is still in beta. Please submit any issues to [Feedback](https://yaak.app/feedback).',
+          },
+        ],
+      },
+      {
         type: 'text',
         name: 'username',
         label: 'Username',

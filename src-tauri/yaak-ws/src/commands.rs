@@ -23,6 +23,7 @@ use yaak_plugins::events::{
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
+use yaak_tls::find_client_certificate;
 
 #[tauri::command]
 pub(crate) async fn upsert_request<R: Runtime>(
@@ -196,6 +197,7 @@ pub(crate) async fn connect<R: Runtime>(
         environment_id,
     )?;
     let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
+    let settings = app_handle.db().get_settings();
     let (resolved_request, auth_context_id) =
         resolve_websocket_request(&window, &unrendered_request)?;
     let request = render_websocket_request(
@@ -363,6 +365,8 @@ pub(crate) async fn connect<R: Runtime>(
         }
     }
 
+    let client_cert = find_client_certificate(url.as_str(), &settings.client_certificates);
+
     let response = match ws_manager
         .connect(
             &connection.id,
@@ -370,6 +374,7 @@ pub(crate) async fn connect<R: Runtime>(
             headers,
             receive_tx,
             workspace.setting_validate_certificates,
+            client_cert,
         )
         .await
     {

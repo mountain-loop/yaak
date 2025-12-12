@@ -1,11 +1,20 @@
 import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
 import type { AnyModel, HttpUrlParameter } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
+import type { JSONPathResult } from '../../template-function-json';
+import { filterJSONPath } from '../../template-function-json';
+import type { XPathResult } from '../../template-function-xml';
+import { filterXPath } from '../../template-function-xml';
+
+const RETURN_FIRST = 'first';
+const RETURN_ALL = 'all';
+const RETURN_JOIN = 'join';
 
 export const plugin: PluginDefinition = {
   templateFunctions: [
     {
-      name: 'request.body',
+      name: 'request.body.raw',
+      aliases: ['request.body'],
       args: [
         {
           name: 'requestId',
@@ -26,7 +35,114 @@ export const plugin: PluginDefinition = {
       },
     },
     {
+      name: 'request.body.path',
+      previewArgs: ['path'],
+      args: [
+        { name: 'requestId', label: 'Http Request', type: 'http_request' },
+        {
+          type: 'h_stack',
+          inputs: [
+            {
+              type: 'select',
+              name: 'result',
+              label: 'Return Format',
+              defaultValue: RETURN_FIRST,
+              options: [
+                { label: 'First result', value: RETURN_FIRST },
+                { label: 'All results', value: RETURN_ALL },
+                { label: 'Join with separator', value: RETURN_JOIN },
+              ],
+            },
+            {
+              name: 'join',
+              type: 'text',
+              label: 'Separator',
+              optional: true,
+              defaultValue: ', ',
+              dynamic(_ctx, args) {
+                return { hidden: args.values.result !== RETURN_JOIN };
+              },
+            },
+          ],
+        },
+        {
+          type: 'text',
+          name: 'path',
+          label: 'JSONPath or XPath',
+          placeholder: '$.books[0].id or /books[0]/id',
+          dynamic: async (ctx, args) => {
+            const requestId = String(args.values.requestId ?? 'n/a');
+            const httpRequest = await ctx.httpRequest.getById({ id: requestId });
+            if (httpRequest == null) return null;
+
+            const contentType =
+              httpRequest.headers
+                .find((h) => h.name.toLowerCase() === 'content-type')
+                ?.value.toLowerCase() ?? '';
+            if (contentType.includes('xml') || contentType?.includes('html')) {
+              return {
+                label: 'XPath',
+                placeholder: '/books[0]/id',
+                description: 'Enter an XPath expression used to filter the results',
+              };
+            }
+
+            return {
+              label: 'JSONPath',
+              placeholder: '$.books[0].id',
+              description: 'Enter a JSONPath expression used to filter the results',
+            };
+          },
+        },
+      ],
+      async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
+        const requestId = String(args.values.requestId ?? 'n/a');
+        const httpRequest = await ctx.httpRequest.getById({ id: requestId });
+        if (httpRequest == null) return null;
+
+        const body = httpRequest.body?.text ?? '';
+
+        try {
+          const result: JSONPathResult =
+            args.values.result === RETURN_ALL
+              ? 'all'
+              : args.values.result === RETURN_JOIN
+                ? 'join'
+                : 'first';
+          return filterJSONPath(
+            body,
+            String(args.values.path || ''),
+            result,
+            args.values.join == null ? null : String(args.values.join),
+          );
+        } catch {
+          // Probably not JSON, try XPath
+        }
+
+        try {
+          const result: XPathResult =
+            args.values.result === RETURN_ALL
+              ? 'all'
+              : args.values.result === RETURN_JOIN
+                ? 'join'
+                : 'first';
+          return filterXPath(
+            body,
+            String(args.values.path || ''),
+            result,
+            args.values.join == null ? null : String(args.values.join),
+          );
+        } catch {
+          // Probably not XML
+        }
+
+        return null; // Bail out
+      },
+    },
+    {
       name: 'request.header',
+      description: 'Read the value of a request header, by name',
+      previewArgs: ['header'],
       args: [
         {
           name: 'requestId',

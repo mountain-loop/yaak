@@ -101,12 +101,33 @@
 
     .template-tag {
       /* Colors */
-      @apply bg-surface text-text-subtle border-border-subtle whitespace-nowrap;
+      @apply bg-surface text-text border-border-subtle whitespace-nowrap;
       @apply hover:border-border-subtle hover:text-text hover:bg-surface-highlight;
 
-      @apply inline border px-1 mx-[0.5px] rounded cursor-default dark:shadow;
+      @apply inline border px-1 mx-[0.5px] rounded dark:shadow;
 
       -webkit-text-security: none;
+
+      * {
+        @apply cursor-default;
+      }
+
+      .fn {
+        @apply inline-block;
+        .fn-inner {
+          @apply text-text-subtle max-w-[40em] italic inline-flex items-end whitespace-pre text-[0.9em];
+        }
+        .fn-arg-name {
+          /* Nothing yet */
+          @apply opacity-60;
+        }
+        .fn-arg-value {
+          @apply inline-block truncate;
+        }
+        .fn-bracket {
+          @apply text-text-subtle opacity-30;
+        }
+      }
     }
 
     .hyperlink-widget {

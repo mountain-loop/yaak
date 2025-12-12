@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 futures-util = "0.3.31"
 log = { workspace = true }
-md5 = "0.7.0"
+md5 = "0.8.0"
 reqwest_cookie_store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time", "test-util"] }
 tokio-tungstenite = { version = "0.26.2", default-features = false, features = ["rustls-tls-native-roots", "connect"] }
 yaak-http = { workspace = true }
+yaak-tls = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-templates = { workspace = true }
