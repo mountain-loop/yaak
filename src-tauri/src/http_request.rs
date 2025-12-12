@@ -115,16 +115,14 @@ pub async fn send_http_request_with_context<R: Runtime>(
     };
 
     // Build the sendable request using the new SendableHttpRequest type
-    let sendable_request = SendableHttpRequest::from_http_request(
-        &request,
-        SendableHttpRequestOptions {
-            timeout: if workspace.setting_request_timeout > 0 {
-                Some(Duration::from_millis(workspace.setting_request_timeout.unsigned_abs() as u64))
-            } else {
-                None
-            },
+    let options = SendableHttpRequestOptions {
+        timeout: if workspace.setting_request_timeout > 0 {
+            Some(Duration::from_millis(workspace.setting_request_timeout.unsigned_abs() as u64))
+        } else {
+            None
         },
-    )?;
+    };
+    let mut sendable_request = SendableHttpRequest::from_http_request(&request, options).await?;
 
     debug!("Sending request to {} {}", sendable_request.method, sendable_request.url);
 

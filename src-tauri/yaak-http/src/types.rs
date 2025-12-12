@@ -56,7 +56,6 @@ impl SendableHttpRequest {
         options: SendableHttpRequestOptions,
     ) -> Result<Self> {
         let initial_headers = build_headers(r);
-
         let (body, headers) = build_body(&r.method, &r.body_type, &r.body, initial_headers).await?;
 
         Ok(Self {
