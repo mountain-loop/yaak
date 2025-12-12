@@ -1,3 +1,4 @@
+use crate::chained_reader::{ChainedReader, ReaderType};
 use crate::error::Error::BodyError;
 use crate::error::Result;
 use crate::path_placeholders::apply_path_placeholders;
@@ -20,7 +21,10 @@ pub struct SendableHttpRequestHeader {
 
 pub enum SendableBody {
     Bytes(Bytes),
-    Stream(Pin<Box<dyn AsyncRead + Send + 'static>>),
+    Stream {
+        data: Pin<Box<dyn AsyncRead + Send + 'static>>,
+        content_length: Option<u64>,
+    },
 }
 
 pub struct SendableHttpRequest {
@@ -88,7 +92,7 @@ fn build_url(r: &HttpRequest) -> Result<String> {
             format!("{}{}", base_and_query, query_string)
         }
     } else {
-        // No existing query parameters, add with ?
+        // No existing query parameters, add with '?'
         format!("{}?{}", base_and_query, query_string)
     };
 
@@ -116,7 +120,7 @@ fn build_headers(r: &HttpRequest) -> Vec<SendableHttpRequestHeader> {
         })
         .collect();
 
-    // Add default User-Agent if not present
+    // Add a default User-Agent if not present
     if !headers.iter().any(|h| h.name.to_lowercase() == "user-agent") {
         headers.push(SendableHttpRequestHeader {
             name: "User-Agent".to_string(),
@@ -148,18 +152,12 @@ async fn build_body(
 
     let (body, content_type) = match body_type.as_str() {
         "binary" => (build_binary_body(&body).await?, None),
-        "graphql" => (
-            build_graphql_body(&method, &body),
-            Some("application/json".to_string()),
-        ),
-        "application/x-www-form-urlencoded" => (
-            build_form_body(&body),
-            Some("application/x-www-form-urlencoded".to_string()),
-        ),
-        "multipart/form-data" => build_multipart_body(&body, &headers).await?,
-        _ if body.contains_key("text") => {
-            (build_text_body(&body), None)
+        "graphql" => (build_graphql_body(&method, &body), Some("application/json".to_string())),
+        "application/x-www-form-urlencoded" => {
+            (build_form_body(&body), Some("application/x-www-form-urlencoded".to_string()))
         }
+        "multipart/form-data" => build_multipart_body(&body, &headers).await?,
+        _ if body.contains_key("text") => (build_text_body(&body), None),
         t => {
             warn!("Unsupported body type: {}", t);
             (None, None)
@@ -169,8 +167,7 @@ async fn build_body(
     // Add or update the Content-Type header
     let mut headers = headers;
     if let Some(ct) = content_type {
-        if let Some(existing) =
-            headers.iter_mut().find(|h| h.name.to_lowercase() == "content-type")
+        if let Some(existing) = headers.iter_mut().find(|h| h.name.to_lowercase() == "content-type")
         {
             existing.value = ct;
         } else {
@@ -181,7 +178,7 @@ async fn build_body(
         }
     }
 
-    // Add Content-Length header for Bytes variant
+    // Add a Content-Length header for Bytes variant
     if let Some(SendableBody::Bytes(ref bytes)) = body {
         headers.push(SendableHttpRequestHeader {
             name: "Content-Length".to_string(),
@@ -214,37 +211,42 @@ fn build_form_body(body: &BTreeMap<String, serde_json::Value>) -> Option<Sendabl
         body.push_str(&urlencoding::encode(&value));
     }
 
-    if body.is_empty() {
-        None
-    } else {
-        Some(SendableBody::Bytes(Bytes::from(body)))
-    }
+    if body.is_empty() { None } else { Some(SendableBody::Bytes(Bytes::from(body))) }
 }
 
-async fn build_binary_body(body: &BTreeMap<String, serde_json::Value>) -> Result<Option<SendableBody>> {
+async fn build_binary_body(
+    body: &BTreeMap<String, serde_json::Value>,
+) -> Result<Option<SendableBody>> {
     let file_path = match body.get("filePath").map(|f| f.as_str()) {
         Some(Some(f)) => f,
         _ => return Ok(None),
     };
 
-    // Open file for streaming
+    // Open a file for streaming
+    let content_length = tokio::fs::metadata(file_path)
+        .await
+        .map_err(|e| BodyError(format!("Failed to get file metadata: {}", e)))?
+        .len();
+
     let file = tokio::fs::File::open(file_path)
         .await
         .map_err(|e| BodyError(format!("Failed to open file: {}", e)))?;
 
-    Ok(Some(SendableBody::Stream(Box::pin(file))))
+    Ok(Some(SendableBody::Stream {
+        data: Box::pin(file),
+        content_length: Some(content_length),
+    }))
 }
 
 fn build_text_body(body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBody> {
     let text = get_str_map(body, "text");
-    if text.is_empty() {
-        None
-    } else {
-        Some(SendableBody::Bytes(Bytes::from(text.to_string())))
-    }
+    if text.is_empty() { None } else { Some(SendableBody::Bytes(Bytes::from(text.to_string()))) }
 }
 
-fn build_graphql_body(method: &str, body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBody> {
+fn build_graphql_body(
+    method: &str,
+    body: &BTreeMap<String, serde_json::Value>,
+) -> Option<SendableBody> {
     let query = get_str_map(body, "query");
     let variables = get_str_map(body, "variables");
 
@@ -277,9 +279,9 @@ async fn build_multipart_body(
         _ => return Ok((None, None)),
     };
 
-    // For now, we'll still build multipart in memory but could be optimized later
-    // to stream the entire multipart body
-    let mut body_bytes = Vec::new();
+    // Build a list of readers for streaming
+    let mut readers: Vec<ReaderType> = Vec::new();
+    let mut has_content = false;
 
     for p in form_params {
         let enabled = get_bool(p, "enabled", true);
@@ -288,8 +290,10 @@ async fn build_multipart_body(
             continue;
         }
 
+        has_content = true;
+
         // Add boundary delimiter
-        body_bytes.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+        readers.push(ReaderType::Bytes(format!("--{}\r\n", boundary).into_bytes()));
 
         let file_path = get_str(p, "file");
         let value = get_str(p, "value");
@@ -297,12 +301,15 @@ async fn build_multipart_body(
 
         if file_path.is_empty() {
             // Text field
-            body_bytes.extend_from_slice(
-                format!("Content-Disposition: form-data; name=\"{}\"\r\n\r\n", name).as_bytes(),
-            );
-            body_bytes.extend_from_slice(value.as_bytes());
+            let header =
+                format!("Content-Disposition: form-data; name=\"{}\"\r\n\r\n{}", name, value);
+            readers.push(ReaderType::Bytes(header.into_bytes()));
         } else {
-            // File field
+            // File field - validate that file exists first
+            if !tokio::fs::try_exists(file_path).await.unwrap_or(false) {
+                return Err(BodyError(format!("File not found: {}", file_path)));
+            }
+
             let filename = get_str(p, "filename");
             let filename = if filename.is_empty() {
                 std::path::Path::new(file_path)
@@ -313,14 +320,6 @@ async fn build_multipart_body(
                 filename
             };
 
-            body_bytes.extend_from_slice(
-                format!(
-                    "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
-                    name, filename
-                )
-                .as_bytes(),
-            );
-
             // Add content type
             let mime_type = if !content_type.is_empty() {
                 content_type.to_string()
@@ -328,23 +327,33 @@ async fn build_multipart_body(
                 // Guess mime type from file extension
                 mime_guess::from_path(file_path).first_or_octet_stream().to_string()
             };
-            body_bytes.extend_from_slice(format!("Content-Type: {}\r\n\r\n", mime_type).as_bytes());
 
-            // Read and append file contents
-            let file_contents = tokio::fs::read(file_path)
-                .await
-                .map_err(|e| BodyError(format!("Failed to read file: {}", e)))?;
-            body_bytes.extend_from_slice(&file_contents);
+            let header = format!(
+                "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\nContent-Type: {}\r\n\r\n",
+                name, filename, mime_type
+            );
+            readers.push(ReaderType::Bytes(header.into_bytes()));
+
+            // Add a file path for streaming
+            readers.push(ReaderType::FilePath(file_path.to_string()));
         }
 
-        body_bytes.extend_from_slice(b"\r\n");
+        readers.push(ReaderType::Bytes(b"\r\n".to_vec()));
     }
 
-    // Add the final boundary
-    if !body_bytes.is_empty() {
-        body_bytes.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+    if has_content {
+        // Add the final boundary
+        readers.push(ReaderType::Bytes(format!("--{}--\r\n", boundary).into_bytes()));
+
         let content_type = format!("multipart/form-data; boundary={}", boundary);
-        Ok((Some(SendableBody::Bytes(Bytes::from(body_bytes))), Some(content_type)))
+        let stream = ChainedReader::new(readers);
+        Ok((
+            Some(SendableBody::Stream {
+                data: Box::pin(stream),
+                content_length: None,
+            }),
+            Some(content_type),
+        ))
     } else {
         Ok((None, None))
     }
@@ -612,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_build_url_with_multiple_fragments() {
-        // Testing edge case where URL has multiple # characters (though technically invalid)
+        // Testing edge case where the URL has multiple # characters (though technically invalid)
         let r = HttpRequest {
             url: "https://example.com#section#subsection".to_string(),
             url_parameters: vec![HttpUrlParameter {
@@ -675,7 +684,7 @@ mod tests {
             Some(SendableBody::Bytes(bytes)) => {
                 let expected = "basic=aaa&fUnkey%20Stuff%21%24%2A%23%28=%2A%29%25%26%23%24%29%40%20%2A%24%23%29%40%26";
                 assert_eq!(bytes, Bytes::from(expected));
-            },
+            }
             _ => panic!("Expected Some(SendableBody::Bytes)"),
         }
         Ok(())
@@ -696,10 +705,10 @@ mod tests {
 
         let result = build_binary_body(&body).await?;
         match result {
-            Some(SendableBody::Stream(_)) => {
-                // We can't easily test the stream contents in this test
+            Some(SendableBody::Stream { .. }) => {
+                // We can't easily test the stream contents in this test,
                 // but we can verify it returns a stream
-            },
+            }
             _ => panic!("Expected Some(SendableBody::Stream)"),
         }
         Ok(())
@@ -726,9 +735,10 @@ mod tests {
         let result = build_graphql_body("POST", &body);
         match result {
             Some(SendableBody::Bytes(bytes)) => {
-                let expected = r#"{"query":"{ user(id: $id) { name } }","variables":{"id": "123"}}"#;
+                let expected =
+                    r#"{"query":"{ user(id: $id) { name } }","variables":{"id": "123"}}"#;
                 assert_eq!(bytes, Bytes::from(expected));
-            },
+            }
             _ => panic!("Expected Some(SendableBody::Bytes)"),
         }
     }
@@ -744,7 +754,7 @@ mod tests {
             Some(SendableBody::Bytes(bytes)) => {
                 let expected = r#"{"query":"{ users { name } }"}"#;
                 assert_eq!(bytes, Bytes::from(expected));
-            },
+            }
             _ => panic!("Expected Some(SendableBody::Bytes)"),
         }
     }
@@ -775,14 +785,19 @@ mod tests {
         assert!(content_type.is_some());
 
         match result {
-            Some(SendableBody::Bytes(bytes)) => {
-                let body_str = String::from_utf8_lossy(&bytes);
+            Some(SendableBody::Stream{data: mut stream, content_length}) => {
+                // Read the entire stream to verify content
+                let mut buf = Vec::new();
+                use tokio::io::AsyncReadExt;
+                stream.read_to_end(&mut buf).await.expect("Failed to read stream");
+                let body_str = String::from_utf8_lossy(&buf);
                 assert_eq!(
                     body_str,
                     "--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"field1\"\r\n\r\nvalue1\r\n--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"field2\"\r\n\r\nvalue2\r\n--------YaakFormBoundary--\r\n",
                 );
-            },
-            _ => panic!("Expected Some(SendableBody::Bytes)"),
+                assert_eq!(content_length, Some(body_str.len() as u64));
+            }
+            _ => panic!("Expected Some(SendableBody::Stream)"),
         }
 
         assert_eq!(
@@ -808,14 +823,19 @@ mod tests {
         assert!(content_type.is_some());
 
         match result {
-            Some(SendableBody::Bytes(bytes)) => {
-                let body_str = String::from_utf8_lossy(&bytes);
+            Some(SendableBody::Stream{data: mut stream, content_length}) => {
+                // Read the entire stream to verify content
+                let mut buf = Vec::new();
+                use tokio::io::AsyncReadExt;
+                stream.read_to_end(&mut buf).await.expect("Failed to read stream");
+                let body_str = String::from_utf8_lossy(&buf);
                 assert_eq!(
                     body_str,
                     "--------YaakFormBoundary\r\nContent-Disposition: form-data; name=\"file_field\"; filename=\"custom.txt\"\r\nContent-Type: text/plain\r\n\r\nThis is a test file!\n\r\n--------YaakFormBoundary--\r\n"
                 );
-            },
-            _ => panic!("Expected Some(SendableBody::Bytes)"),
+                assert_eq!(content_length, Some(body_str.len() as u64));
+            }
+            _ => panic!("Expected Some(SendableBody::Stream)"),
         }
 
         assert_eq!(

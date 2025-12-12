@@ -9,6 +9,7 @@ pub mod manager;
 pub mod path_placeholders;
 pub mod types;
 mod proto;
+mod chained_reader;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-http")

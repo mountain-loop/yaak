@@ -9,6 +9,7 @@ use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use http::header::CONTENT_LENGTH;
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs::{create_dir_all, File};
 use tokio::io::AsyncWriteExt;
@@ -240,9 +241,12 @@ pub async fn send_http_request_with_context<R: Runtime>(
             SendableBody::Bytes(bytes) => {
                 request_builder = request_builder.body(bytes);
             }
-            SendableBody::Stream(reader) => {
+            SendableBody::Stream{data: reader, content_length} => {
                 let stream = FramedRead::new(reader, BytesCodec::new());
                 request_builder = request_builder.body(reqwest::Body::wrap_stream(stream));
+                if let Some(content_length) = content_length {
+                    request_builder = request_builder.header(CONTENT_LENGTH, content_length);
+                }
             }
         }
     }
