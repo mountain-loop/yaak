@@ -195,18 +195,25 @@ async fn build_body(
         }
     }
 
-    // Add a Content-Length header for Bytes variant
-    let content_length = match body {
-        SendableBody::Bytes(ref bytes) => Some(bytes.len()),
-        SendableBody::Stream { content_length, .. } => content_length,
-        SendableBody::None => None,
-    };
+    // Check if Transfer-Encoding: chunked is already set
+    let has_chunked_encoding = headers
+        .iter()
+        .any(|h| h.name.to_lowercase() == "transfer-encoding" && h.value.to_lowercase().contains("chunked"));
 
-    if let Some(cl) = content_length {
-        headers.push(SendableHttpRequestHeader {
-            name: "Content-Length".to_string(),
-            value: cl.to_string(),
-        });
+    // Add a Content-Length header only if chunked encoding is not being used
+    if !has_chunked_encoding {
+        let content_length = match body {
+            SendableBody::Bytes(ref bytes) => Some(bytes.len()),
+            SendableBody::Stream { content_length, .. } => content_length,
+            SendableBody::None => None,
+        };
+
+        if let Some(cl) = content_length {
+            headers.push(SendableHttpRequestHeader {
+                name: "Content-Length".to_string(),
+                value: cl.to_string(),
+            });
+        }
     }
 
     Ok((body.into(), headers))
@@ -943,5 +950,53 @@ mod tests {
 
         let boundary = extract_boundary_from_headers(&headers);
         assert_eq!(boundary, "myBoundary");
+    }
+
+    #[tokio::test]
+    async fn test_no_content_length_with_chunked_encoding() -> Result<()> {
+        let mut body = BTreeMap::new();
+        body.insert("text".to_string(), json!("Hello, World!"));
+
+        // Headers with Transfer-Encoding: chunked
+        let headers = vec![SendableHttpRequestHeader {
+            name: "Transfer-Encoding".to_string(),
+            value: "chunked".to_string(),
+        }];
+
+        let (_, result_headers) = build_body("POST", &Some("text/plain".to_string()), &body, headers).await?;
+
+        // Verify that Content-Length is NOT present when Transfer-Encoding: chunked is set
+        let has_content_length = result_headers
+            .iter()
+            .any(|h| h.name.to_lowercase() == "content-length");
+        assert!(!has_content_length, "Content-Length should not be present with chunked encoding");
+
+        // Verify that Transfer-Encoding header is still present
+        let has_chunked = result_headers
+            .iter()
+            .any(|h| h.name.to_lowercase() == "transfer-encoding" && h.value.to_lowercase().contains("chunked"));
+        assert!(has_chunked, "Transfer-Encoding: chunked should be preserved");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_content_length_without_chunked_encoding() -> Result<()> {
+        let mut body = BTreeMap::new();
+        body.insert("text".to_string(), json!("Hello, World!"));
+
+        // Headers without Transfer-Encoding: chunked
+        let headers = vec![];
+
+        let (_, result_headers) = build_body("POST", &Some("text/plain".to_string()), &body, headers).await?;
+
+        // Verify that Content-Length IS present when Transfer-Encoding: chunked is NOT set
+        let content_length_header = result_headers
+            .iter()
+            .find(|h| h.name.to_lowercase() == "content-length");
+        assert!(content_length_header.is_some(), "Content-Length should be present without chunked encoding");
+        assert_eq!(content_length_header.unwrap().value, "13", "Content-Length should match the body size");
+
+        Ok(())
     }
 }
