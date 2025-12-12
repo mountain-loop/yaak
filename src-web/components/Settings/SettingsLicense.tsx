@@ -42,7 +42,10 @@ function SettingsLicenseCmp() {
       case 'trialing':
         return (
           <Banner color="info" className="@container flex items-center gap-x-5 max-w-xl">
-            <LocalImage src="static/greg.jpeg" className="hidden @sm:block rounded-full h-14 w-14" />
+            <LocalImage
+              src="static/greg.jpeg"
+              className="hidden @sm:block rounded-full h-14 w-14"
+            />
             <p className="w-full">
               <strong>
                 {pluralizeCount('day', differenceInDays(check.data.data.end, new Date()))}
@@ -56,10 +59,7 @@ function SettingsLicenseCmp() {
                   Contact Support
                 </Link>
                 <Icon icon="dot" size="sm" color="secondary" />
-                <Link
-                  noUnderline
-                  href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}
-                >
+                <Link noUnderline href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}>
                   Learn More
                 </Link>
               </div>
@@ -70,7 +70,10 @@ function SettingsLicenseCmp() {
       case 'personal_use':
         return (
           <Banner color="notice" className="@container flex items-center gap-x-5 max-w-xl">
-            <LocalImage src="static/greg.jpeg" className="hidden @sm:block rounded-full h-14 w-14" />
+            <LocalImage
+              src="static/greg.jpeg"
+              className="hidden @sm:block rounded-full h-14 w-14"
+            />
             <p className="w-full">
               Your commercial-use trial has ended.
               <br />
@@ -84,10 +87,7 @@ function SettingsLicenseCmp() {
                   Contact Support
                 </Link>
                 <Icon icon="dot" size="sm" color="secondary" />
-                <Link
-                  noUnderline
-                  href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}
-                >
+                <Link noUnderline href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}>
                   Learn More
                 </Link>
               </div>
