@@ -1,18 +1,18 @@
+use crate::error::Error::InvalidSyncDirectory;
 use crate::error::Result;
 use crate::sync::{
-    apply_sync_ops, apply_sync_state_ops, compute_sync_ops, get_db_candidates, get_fs_candidates, FsCandidate,
-    SyncOp,
+    FsCandidate, SyncOp, apply_sync_ops, apply_sync_state_ops, compute_sync_ops, get_db_candidates,
+    get_fs_candidates,
 };
-use crate::watch::{watch_directory, WatchEvent};
+use crate::watch::{WatchEvent, watch_directory};
 use chrono::Utc;
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::ipc::Channel;
-use tauri::{command, AppHandle, Listener, Runtime};
+use tauri::{AppHandle, Listener, Runtime, command};
 use tokio::sync::watch;
 use ts_rs::TS;
-use crate::error::Error::InvalidSyncDirectory;
 
 #[command]
 pub async fn calculate<R: Runtime>(
@@ -21,7 +21,7 @@ pub async fn calculate<R: Runtime>(
     sync_dir: &Path,
 ) -> Result<Vec<SyncOp>> {
     if !sync_dir.exists() {
-        return Err(InvalidSyncDirectory(sync_dir.to_string_lossy().to_string()))
+        return Err(InvalidSyncDirectory(sync_dir.to_string_lossy().to_string()));
     }
 
     let db_candidates = get_db_candidates(&app_handle, workspace_id, sync_dir)?;

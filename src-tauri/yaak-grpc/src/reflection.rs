@@ -327,10 +327,7 @@ mod topology {
         T: Eq + std::hash::Hash + Clone,
     {
         pub fn new() -> Self {
-            SimpleTopoSort {
-                out_graph: HashMap::new(),
-                in_graph: HashMap::new(),
-            }
+            SimpleTopoSort { out_graph: HashMap::new(), in_graph: HashMap::new() }
         }
 
         pub fn insert<I: IntoIterator<Item = T>>(&mut self, node: T, deps: I) {
@@ -376,10 +373,7 @@ mod topology {
                 }
             }
 
-            SimpleTopoSortIter {
-                data,
-                zero_indegree,
-            }
+            SimpleTopoSortIter { data, zero_indegree }
         }
     }
 

@@ -3,7 +3,8 @@ use crate::window_menu::app_menu;
 use log::{info, warn};
 use rand::random;
 use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, PhysicalSize, Runtime, WebviewUrl, WebviewWindow, WindowEvent
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalSize, Runtime, WebviewUrl, WebviewWindow,
+    WindowEvent,
 };
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;

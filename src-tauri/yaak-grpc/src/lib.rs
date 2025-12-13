@@ -2,17 +2,17 @@ use prost_reflect::{DynamicMessage, MethodDescriptor, SerializeOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Deserializer;
 
+mod any;
 mod client;
 mod codec;
+pub mod error;
 mod json_schema;
 pub mod manager;
 mod reflection;
 mod transport;
-mod any;
-pub mod error;
 
-pub use tonic::metadata::*;
 pub use tonic::Code;
+pub use tonic::metadata::*;
 
 pub fn serialize_options() -> SerializeOptions {
     SerializeOptions::new().skip_default_fields(false)

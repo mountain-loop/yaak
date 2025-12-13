@@ -1,7 +1,7 @@
 use prost_reflect::prost::Message;
 use prost_reflect::{DynamicMessage, MethodDescriptor};
-use tonic::codec::{Codec, DecodeBuf, Decoder, EncodeBuf, Encoder};
 use tonic::Status;
+use tonic::codec::{Codec, DecodeBuf, Decoder, EncodeBuf, Encoder};
 
 #[derive(Clone)]
 pub struct DynamicCodec(MethodDescriptor);

@@ -1,8 +1,6 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{
-    GrpcRequest, HttpRequest, WebsocketRequest,
-};
+use crate::models::{GrpcRequest, HttpRequest, WebsocketRequest};
 
 pub enum AnyRequest {
     HttpRequest(HttpRequest),

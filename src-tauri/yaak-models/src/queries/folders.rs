@@ -1,7 +1,10 @@
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{Environment, EnvironmentIden, Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestHeader, HttpRequestIden, WebsocketRequest, WebsocketRequestIden};
+use crate::models::{
+    Environment, EnvironmentIden, Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest,
+    HttpRequestHeader, HttpRequestIden, WebsocketRequest, WebsocketRequestIden,
+};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -69,57 +72,35 @@ impl<'a> DbContext<'a> {
 
         for m in self.find_many::<HttpRequest>(HttpRequestIden::FolderId, fid, None)? {
             self.upsert_http_request(
-                &HttpRequest {
-                    id: "".into(),
-                    folder_id: Some(new_folder.id.clone()),
-                    ..m
-                },
+                &HttpRequest { id: "".into(), folder_id: Some(new_folder.id.clone()), ..m },
                 source,
             )?;
         }
 
         for m in self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, fid, None)? {
             self.upsert_websocket_request(
-                &WebsocketRequest {
-                    id: "".into(),
-                    folder_id: Some(new_folder.id.clone()),
-                    ..m
-                },
+                &WebsocketRequest { id: "".into(), folder_id: Some(new_folder.id.clone()), ..m },
                 source,
             )?;
         }
 
         for m in self.find_many::<GrpcRequest>(GrpcRequestIden::FolderId, fid, None)? {
             self.upsert_grpc_request(
-                &GrpcRequest {
-                    id: "".into(),
-                    folder_id: Some(new_folder.id.clone()),
-                    ..m
-                },
+                &GrpcRequest { id: "".into(), folder_id: Some(new_folder.id.clone()), ..m },
                 source,
             )?;
         }
 
         for m in self.find_many::<Environment>(EnvironmentIden::ParentId, fid, None)? {
             self.upsert_environment(
-                &Environment {
-                    id: "".into(),
-                    parent_id: Some(new_folder.id.clone()),
-                    ..m
-                },
+                &Environment { id: "".into(), parent_id: Some(new_folder.id.clone()), ..m },
                 source,
             )?;
         }
 
         for m in self.find_many::<Folder>(FolderIden::FolderId, fid, None)? {
             // Recurse down
-            self.duplicate_folder(
-                &Folder {
-                    folder_id: Some(new_folder.id.clone()),
-                    ..m
-                },
-                source,
-            )?;
+            self.duplicate_folder(&Folder { folder_id: Some(new_folder.id.clone()), ..m }, source)?;
         }
 
         Ok(new_folder)

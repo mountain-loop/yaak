@@ -3,10 +3,10 @@ use futures_util::{SinkExt, StreamExt};
 use log::{error, info, warn};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::accept_async_with_config;
-use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 #[derive(Clone)]
 pub(crate) struct PluginRuntimeServerWebsocket {

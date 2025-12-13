@@ -34,8 +34,5 @@ pub(crate) async fn list() -> Result<Fonts> {
     ui_fonts.sort();
     editor_fonts.sort();
 
-    Ok(Fonts {
-        ui_fonts,
-        editor_fonts,
-    })
+    Ok(Fonts { ui_fonts, editor_fonts })
 }

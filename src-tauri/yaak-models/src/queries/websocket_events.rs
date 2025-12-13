@@ -1,9 +1,6 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{
-    WebsocketEvent,
-    WebsocketEventIden,
-};
+use crate::models::{WebsocketEvent, WebsocketEventIden};
 use crate::util::UpdateSource;
 
 impl<'a> DbContext<'a> {

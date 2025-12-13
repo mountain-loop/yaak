@@ -100,9 +100,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
 
     let cb = PluginTemplateCallback::new(window.app_handle(), &plugin_context, RenderPurpose::Send);
 
-    let opt = RenderOptions {
-        error_behavior: RenderErrorBehavior::Throw,
-    };
+    let opt = RenderOptions { error_behavior: RenderErrorBehavior::Throw };
 
     let request = match render_http_request(&resolved_request, environment_chain, &cb, &opt).await {
         Ok(r) => r,
@@ -127,13 +125,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
     let proxy_setting = match settings.proxy {
         None => HttpConnectionProxySetting::System,
         Some(ProxySetting::Disabled) => HttpConnectionProxySetting::Disabled,
-        Some(ProxySetting::Enabled {
-            http,
-            https,
-            auth,
-            bypass,
-            disabled,
-        }) => {
+        Some(ProxySetting::Enabled { http, https, auth, bypass, disabled }) => {
             if disabled {
                 HttpConnectionProxySetting::System
             } else {
