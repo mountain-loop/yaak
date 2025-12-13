@@ -1,3 +1,4 @@
+use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::render::render_http_request;
 use crate::response_err;
@@ -245,55 +246,27 @@ pub async fn send_http_request_with_context<R: Runtime>(
         let update_source = update_source.clone();
         let response_id = response_id.clone();
         tokio::spawn(async move {
-            let sender = ReqwestSender::with_client(client);
-            let transaction = HttpTransaction::new(sender);
-            let (final_response, events) = match transaction.execute(sendable_request).await {
+            let final_resp = execute_transaction(
+                client,
+                sendable_request,
+                response.clone(),
+                response_id,
+                app_handle.clone(),
+                update_source.clone(),
+            )
+            .await;
+
+            let final_resp = match final_resp {
                 Ok(r) => r,
-                Err(e) => {
-                    done_tx
-                        .send(response_err(
-                            &app_handle,
-                            &response.lock().await.clone(),
-                            e.to_string(),
-                            &update_source,
-                        ))
-                        .unwrap();
-                    return;
-                }
+                Err(e) => response_err(
+                    &app_handle,
+                    &response.lock().await.clone(),
+                    e.to_string(),
+                    &update_source,
+                ),
             };
-            let mut resp = { response.lock().await.clone() };
-            resp.headers = final_response
-                .headers
-                .into_iter()
-                .map(|h| HttpResponseHeader {
-                    name: h.0.to_string(),
-                    value: h.1.to_string(),
-                })
-                .collect();
-            resp.status = final_response.status as i32;
-            resp.state = HttpResponseState::Closed;
-            resp.elapsed = final_response.timing.body.as_millis() as i32;
-            resp.elapsed_headers = final_response.timing.headers.as_millis() as i32;
-            let dir = app_handle.path().app_data_dir().unwrap();
-            let base_dir = dir.join("responses");
-            let _ = create_dir_all(base_dir.clone()).await;
-            let body_path = if response_id.is_empty() {
-                base_dir.join(uuid::Uuid::new_v4().to_string())
-            } else {
-                base_dir.join(response_id.clone())
-            };
-            fs::write(body_path.clone(), final_response.body)
-                .await
-                .expect("Failed to write response body");
-            resp.body_path = Some(body_path.to_str().unwrap().to_string());
-            app_handle
-                .db()
-                .update_http_response_if_id(&resp, &update_source)
-                .expect("Failed to update response after connected");
-            for event in events {
-                println!("   {}", event);
-            }
-            done_tx.send(resp).unwrap();
+
+            done_tx.send(final_resp).unwrap();
         });
     }
 
@@ -504,4 +477,54 @@ pub fn resolve_http_request<R: Runtime>(
     new_request.headers = headers;
 
     Ok((new_request, authentication_context_id))
+}
+
+async fn execute_transaction<R: Runtime>(
+    client: reqwest::Client,
+    sendable_request: SendableHttpRequest,
+    response: Arc<Mutex<HttpResponse>>,
+    response_id: String,
+    app_handle: tauri::AppHandle<R>,
+    update_source: UpdateSource,
+) -> Result<HttpResponse> {
+    let sender = ReqwestSender::with_client(client);
+    let transaction = HttpTransaction::new(sender);
+    let (final_response, events) = transaction.execute(sendable_request).await?;
+
+    let mut resp = response.lock().await.clone();
+    resp.headers = final_response
+        .headers
+        .into_iter()
+        .map(|h| HttpResponseHeader {
+            name: h.0.to_string(),
+            value: h.1.to_string(),
+        })
+        .collect();
+    resp.status = final_response.status as i32;
+    resp.state = HttpResponseState::Closed;
+    resp.elapsed = final_response.timing.body.as_millis() as i32;
+    resp.elapsed_headers = final_response.timing.headers.as_millis() as i32;
+
+    let dir = app_handle.path().app_data_dir()?;
+    let base_dir = dir.join("responses");
+    create_dir_all(&base_dir).await?;
+
+    let body_path = if response_id.is_empty() {
+        base_dir.join(uuid::Uuid::new_v4().to_string())
+    } else {
+        base_dir.join(&response_id)
+    };
+
+    fs::write(&body_path, final_response.body).await?;
+    resp.body_path = Some(
+        body_path.to_str().ok_or(GenericError(format!("Invalid path {body_path:?}",)))?.to_string(),
+    );
+
+    app_handle.db().update_http_response_if_id(&resp, &update_source)?;
+
+    for event in events {
+        println!("   {}", event);
+    }
+
+    Ok(resp)
 }

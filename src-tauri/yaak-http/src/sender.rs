@@ -143,14 +143,17 @@ impl HttpSender for ReqwestSender {
             ));
         }
 
-        let timeout = sendable_req.timeout().map(|d| d.clone());
+        // Map some errors to our own, so they look nicer
         let response = self.client.execute(sendable_req).await.map_err(|e| {
             if reqwest::Error::is_timeout(&e) {
-                Error::RequestTimeout(timeout.unwrap_or(Duration::from_secs(0)).clone())
+                Error::RequestTimeout(
+                    request.options.timeout.unwrap_or(Duration::from_secs(0)).clone(),
+                )
             } else {
                 Error::Client(e)
             }
         })?;
+
         let status = response.status().as_u16();
         events.push(HttpResponseEvent::ReceiveUrl {
             version: response.version(),

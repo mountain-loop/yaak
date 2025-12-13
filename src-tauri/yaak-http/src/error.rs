@@ -12,7 +12,7 @@ pub enum Error {
     #[error("Body error: {0:?}")]
     BodyError(String),
 
-    #[error("Request timeout ({0:?}) reached")]
+    #[error("Timeout of {0:?} reached")]
     RequestTimeout(std::time::Duration),
 }
 
