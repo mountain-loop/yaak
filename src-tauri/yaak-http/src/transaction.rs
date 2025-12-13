@@ -36,7 +36,7 @@ impl<S: HttpSender> HttpTransaction<S> {
         loop {
             // Check for cancellation before each request
             if *cancelled_rx.borrow() {
-                return Err(crate::error::Error::RequestError("Request cancelled".to_string()));
+                return Err(crate::error::Error::RequestCanceledError);
             }
 
             // Build request for this iteration
@@ -58,7 +58,7 @@ impl<S: HttpSender> HttpTransaction<S> {
             let response = tokio::select! {
                 result = self.sender.send(req, &mut events) => result?,
                 _ = cancelled_rx.changed() => {
-                    return Err(crate::error::Error::RequestError("Request cancelled".to_string()));
+                    return Err(crate::error::Error::RequestCanceledError);
                 }
             };
 

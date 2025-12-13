@@ -2,15 +2,15 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::render::render_http_request;
 use crate::response_err;
-use log::{debug, info};
+use log::debug;
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use std::sync::Arc;
-use std::time::Duration;
-use tauri::{Manager, Runtime, WebviewWindow};
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs;
 use tokio::fs::create_dir_all;
+use tokio::sync::Mutex;
 use tokio::sync::watch::Receiver;
-use tokio::sync::{Mutex, oneshot};
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
@@ -58,7 +58,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
     og_response: &HttpResponse,
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
-    cancelled_rx: &mut Receiver<bool>,
+    cancelled_rx: &Receiver<bool>,
     plugin_context: &PluginContext,
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
@@ -91,7 +91,7 @@ async fn send_http_request_inner<R: Runtime>(
     og_response: &HttpResponse,
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
-    cancelled_rx: &mut Receiver<bool>,
+    cancelled_rx: &Receiver<bool>,
     plugin_context: &PluginContext,
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
@@ -195,29 +195,34 @@ async fn send_http_request_inner<R: Runtime>(
     )
     .await?;
 
-    let (done_tx, done_rx) = oneshot::channel::<Result<HttpResponse>>();
+    let start_for_cancellation = Instant::now();
+    let final_resp = execute_transaction(
+        client,
+        sendable_request,
+        response.clone(),
+        &resp_id,
+        &app_handle,
+        &update_source,
+        cancelled_rx.clone(),
+    )
+    .await;
 
-    // Clone the cancelled_rx for the spawned task
-    let cancelled_rx_clone = cancelled_rx.clone();
-    {
-        let response = response.clone();
-        let app_handle = app_handle.clone();
-        let update_source = update_source.clone();
-        let response_id = resp_id.clone();
-        tokio::spawn(async move {
-            let final_resp = execute_transaction(
-                client,
-                sendable_request,
-                response.clone(),
-                response_id,
-                app_handle.clone(),
-                update_source.clone(),
-                cancelled_rx_clone,
-            )
-            .await;
-
-            done_tx.send(final_resp).unwrap();
-        });
+    match final_resp {
+        Ok(r) => Ok(r),
+        Err(e) => match app_handle.db().get_http_response(&resp_id) {
+            Ok(mut r) => {
+                r.state = HttpResponseState::Closed;
+                r.elapsed = start_for_cancellation.elapsed().as_millis() as i32;
+                r.elapsed_headers = start_for_cancellation.elapsed().as_millis() as i32;
+                r.error = Some(e.to_string());
+                app_handle
+                    .db()
+                    .update_http_response_if_id(&r, &UpdateSource::from_window(window))
+                    .expect("Failed to update response");
+                Ok(r)
+            }
+            _ => Err(GenericError("Ephemeral request was cancelled".to_string())),
+        },
     }
 
     // tokio::spawn(async move {
@@ -389,25 +394,6 @@ async fn send_http_request_inner<R: Runtime>(
     //         done_tx.send(r).unwrap();
     //     });
     // };
-
-    info!("Waiting for response");
-    let app_handle = app_handle.clone();
-    tokio::select! {
-        Ok(result) = done_rx => result,
-        _ = cancelled_rx.changed() => {
-            match app_handle.with_db(|c| c.get_http_response(&resp_id)) {
-                Ok(mut r) => {
-                    r.state = HttpResponseState::Closed;
-                    app_handle.db().update_http_response_if_id(&r, &UpdateSource::from_window(window))
-                        .expect("Failed to update response");
-                    Ok(r)
-                },
-                _ => {
-                    Err(GenericError("Ephemeral request was cancelled".to_string()))
-                },
-            }
-        }
-    }
 }
 
 pub fn resolve_http_request<R: Runtime>(
@@ -431,18 +417,17 @@ async fn execute_transaction<R: Runtime>(
     client: reqwest::Client,
     sendable_request: SendableHttpRequest,
     response: Arc<Mutex<HttpResponse>>,
-    response_id: String,
-    app_handle: tauri::AppHandle<R>,
-    update_source: UpdateSource,
+    response_id: &String,
+    app_handle: &AppHandle<R>,
+    update_source: &UpdateSource,
     cancelled_rx: Receiver<bool>,
 ) -> Result<HttpResponse> {
     let sender = ReqwestSender::with_client(client);
     let transaction = HttpTransaction::new(sender);
 
     // Execute the transaction with cancellation support
-    let (final_response, events) = transaction
-        .execute_with_cancellation(sendable_request, cancelled_rx)
-        .await?;
+    let (final_response, events) =
+        transaction.execute_with_cancellation(sendable_request, cancelled_rx).await?;
 
     let mut resp = response.lock().await.clone();
     resp.headers = final_response
