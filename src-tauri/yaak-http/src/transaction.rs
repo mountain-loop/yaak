@@ -11,18 +11,12 @@ pub struct HttpTransaction<S: HttpSender> {
 impl<S: HttpSender> HttpTransaction<S> {
     /// Create a new transaction with default settings
     pub fn new(sender: S) -> Self {
-        Self {
-            sender,
-            max_redirects: 10,
-        }
+        Self { sender, max_redirects: 10 }
     }
 
     /// Create a new transaction with custom max redirects
     pub fn with_max_redirects(sender: S, max_redirects: usize) -> Self {
-        Self {
-            sender,
-            max_redirects,
-        }
+        Self { sender, max_redirects }
     }
 
     /// Execute the request, following redirects if necessary
@@ -190,9 +184,7 @@ mod tests {
 
     impl MockSender {
         fn new(responses: Vec<SendableHttpResponse>) -> Self {
-            Self {
-                responses: Arc::new(Mutex::new(responses)),
-            }
+            Self { responses: Arc::new(Mutex::new(responses)) }
         }
     }
 
@@ -241,11 +233,7 @@ mod tests {
         redirect_headers.insert("Location".to_string(), "https://example.com/new".to_string());
 
         let responses = vec![
-            SendableHttpResponse {
-                status: 302,
-                headers: redirect_headers,
-                ..Default::default()
-            },
+            SendableHttpResponse { status: 302, headers: redirect_headers, ..Default::default() },
             SendableHttpResponse {
                 status: 200,
                 headers: HashMap::new(),

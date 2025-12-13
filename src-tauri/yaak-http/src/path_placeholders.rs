@@ -55,12 +55,8 @@ mod placeholder_tests {
 
     #[test]
     fn placeholder_middle() {
-        let p = HttpUrlParameter {
-            name: ":foo".into(),
-            value: "xxx".into(),
-            enabled: true,
-            id: None,
-        };
+        let p =
+            HttpUrlParameter { name: ":foo".into(), value: "xxx".into(), enabled: true, id: None };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo/bar"),
             "https://example.com/xxx/bar",
@@ -69,12 +65,8 @@ mod placeholder_tests {
 
     #[test]
     fn placeholder_end() {
-        let p = HttpUrlParameter {
-            name: ":foo".into(),
-            value: "xxx".into(),
-            enabled: true,
-            id: None,
-        };
+        let p =
+            HttpUrlParameter { name: ":foo".into(), value: "xxx".into(), enabled: true, id: None };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo"),
             "https://example.com/xxx",
@@ -83,12 +75,8 @@ mod placeholder_tests {
 
     #[test]
     fn placeholder_query() {
-        let p = HttpUrlParameter {
-            name: ":foo".into(),
-            value: "xxx".into(),
-            enabled: true,
-            id: None,
-        };
+        let p =
+            HttpUrlParameter { name: ":foo".into(), value: "xxx".into(), enabled: true, id: None };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo?:foo"),
             "https://example.com/xxx?:foo",
@@ -125,12 +113,8 @@ mod placeholder_tests {
 
     #[test]
     fn placeholder_prefix() {
-        let p = HttpUrlParameter {
-            name: ":foo".into(),
-            value: "xxx".into(),
-            enabled: true,
-            id: None,
-        };
+        let p =
+            HttpUrlParameter { name: ":foo".into(), value: "xxx".into(), enabled: true, id: None };
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foooo"),
             "https://example.com/:foooo",

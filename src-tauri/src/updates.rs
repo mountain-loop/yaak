@@ -259,17 +259,11 @@ async fn start_integrated_update<R: Runtime>(
             self.win.unlisten(self.id);
         }
     }
-    let _guard = Unlisten {
-        win: window,
-        id: event_id,
-    };
+    let _guard = Unlisten { win: window, id: event_id };
 
     // 2) Emit the event now that listener is in place
-    let info = UpdateInfo {
-        version: update.version.to_string(),
-        downloaded,
-        reply_event_id: reply_id,
-    };
+    let info =
+        UpdateInfo { version: update.version.to_string(), downloaded, reply_event_id: reply_id };
     window
         .emit_to(window.label(), "update_available", &info)
         .map_err(|e| GenericError(format!("Failed to emit update_available: {e}")))?;

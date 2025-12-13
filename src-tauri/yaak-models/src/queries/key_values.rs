@@ -1,8 +1,8 @@
-use chrono::NaiveDateTime;
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{KeyValue, KeyValueIden, UpsertModelInfo};
 use crate::util::UpdateSource;
+use chrono::NaiveDateTime;
 use log::error;
 use sea_query::{Asterisk, Cond, Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
@@ -39,7 +39,12 @@ impl<'a> DbContext<'a> {
         }
     }
 
-    pub fn get_key_value_dte(&self, namespace: &str, key: &str, default: NaiveDateTime) -> NaiveDateTime {
+    pub fn get_key_value_dte(
+        &self,
+        namespace: &str,
+        key: &str,
+        default: NaiveDateTime,
+    ) -> NaiveDateTime {
         match self.get_key_value_raw(namespace, key) {
             None => default,
             Some(v) => {
@@ -139,14 +144,8 @@ impl<'a> DbContext<'a> {
                 true,
             ),
             Some(kv) => (
-                self.upsert_key_value(
-                    &KeyValue {
-                        value: value.to_string(),
-                        ..kv
-                    },
-                    source,
-                )
-                .expect("Failed to update key value"),
+                self.upsert_key_value(&KeyValue { value: value.to_string(), ..kv }, source)
+                    .expect("Failed to update key value"),
                 false,
             ),
         }

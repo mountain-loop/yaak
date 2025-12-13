@@ -1,7 +1,7 @@
 use crate::error::Result;
-use crate::{escape, Parser};
-use wasm_bindgen::prelude::wasm_bindgen;
+use crate::{Parser, escape};
 use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 pub fn parse_template(template: &str) -> Result<JsValue> {

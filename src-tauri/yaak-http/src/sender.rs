@@ -178,13 +178,7 @@ impl HttpSender for ReqwestSender {
 
         timing.body = start.elapsed();
 
-        Ok(SendableHttpResponse {
-            status,
-            headers,
-            body,
-            content_length,
-            timing,
-        })
+        Ok(SendableHttpResponse { status, headers, body, content_length, timing })
     }
 }
 

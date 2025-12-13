@@ -3,8 +3,8 @@ use log::{info, warn};
 use std::net::SocketAddr;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager, Runtime};
-use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandEvent;
 use tokio::sync::watch::Receiver;
 
 pub async fn start_nodejs_plugin_runtime<R: Runtime>(

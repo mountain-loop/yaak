@@ -1,4 +1,4 @@
-use tauri::{command, Runtime, Window};
+use tauri::{Runtime, Window, command};
 
 #[command]
 pub(crate) fn set_title<R: Runtime>(window: Window<R>, title: &str) {

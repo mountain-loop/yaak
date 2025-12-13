@@ -57,19 +57,13 @@ impl Display for GrpcStreamError {
 
 impl From<String> for GrpcStreamError {
     fn from(value: String) -> Self {
-        GrpcStreamError {
-            message: value.to_string(),
-            status: None,
-        }
+        GrpcStreamError { message: value.to_string(), status: None }
     }
 }
 
 impl From<Status> for GrpcStreamError {
     fn from(s: Status) -> Self {
-        GrpcStreamError {
-            message: s.message().to_string(),
-            status: Some(s),
-        }
+        GrpcStreamError { message: s.message().to_string(), status: Some(s) }
     }
 }
 
@@ -227,10 +221,10 @@ impl GrpcConnection {
         decorate_req(metadata, &mut req)?;
 
         client.ready().await.map_err(|e| GenericError(format!("Failed to connect: {}", e)))?;
-        Ok(client.client_streaming(req, path, codec).await.map_err(|e| GrpcStreamError {
-            message: e.message().to_string(),
-            status: Some(e),
-        })?)
+        Ok(client
+            .client_streaming(req, path, codec)
+            .await
+            .map_err(|e| GrpcStreamError { message: e.message().to_string(), status: Some(e) })?)
     }
 
     pub async fn server_streaming(
@@ -267,10 +261,7 @@ pub struct GrpcHandle {
 impl GrpcHandle {
     pub fn new(app_handle: &AppHandle) -> Self {
         let pools = BTreeMap::new();
-        Self {
-            pools,
-            app_handle: app_handle.clone(),
-        }
+        Self { pools, app_handle: app_handle.clone() }
     }
 }
 
@@ -335,10 +326,8 @@ impl GrpcHandle {
     fn services_from_pool(&self, pool: &DescriptorPool) -> Vec<ServiceDefinition> {
         pool.services()
             .map(|s| {
-                let mut def = ServiceDefinition {
-                    name: s.full_name().to_string(),
-                    methods: vec![],
-                };
+                let mut def =
+                    ServiceDefinition { name: s.full_name().to_string(), methods: vec![] };
                 for method in s.methods() {
                     let input_message = method.input();
                     def.methods.push(MethodDefinition {
@@ -384,12 +373,7 @@ impl GrpcHandle {
             .clone();
         let uri = uri_from_str(uri)?;
         let conn = get_transport(validate_certificates, client_cert.clone())?;
-        Ok(GrpcConnection {
-            pool: Arc::new(RwLock::new(pool)),
-            use_reflection,
-            conn,
-            uri,
-        })
+        Ok(GrpcConnection { pool: Arc::new(RwLock::new(pool)), use_reflection, conn, uri })
     }
 
     fn get_pool(&self, id: &str, uri: &str, proto_files: &Vec<PathBuf>) -> Option<&DescriptorPool> {

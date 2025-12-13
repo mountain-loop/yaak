@@ -831,10 +831,7 @@ mod tests {
         assert!(content_type.is_some());
 
         match result {
-            Some(SendableBodyWithMeta::Stream {
-                data: mut stream,
-                content_length,
-            }) => {
+            Some(SendableBodyWithMeta::Stream { data: mut stream, content_length }) => {
                 // Read the entire stream to verify content
                 let mut buf = Vec::new();
                 use tokio::io::AsyncReadExt;
@@ -871,10 +868,7 @@ mod tests {
         assert!(content_type.is_some());
 
         match result {
-            Some(SendableBodyWithMeta::Stream {
-                data: mut stream,
-                content_length,
-            }) => {
+            Some(SendableBodyWithMeta::Stream { data: mut stream, content_length }) => {
                 // Read the entire stream to verify content
                 let mut buf = Vec::new();
                 use tokio::io::AsyncReadExt;

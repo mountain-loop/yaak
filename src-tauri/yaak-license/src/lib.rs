@@ -1,7 +1,6 @@
 use tauri::{
-    generate_handler,
+    Runtime, generate_handler,
     plugin::{Builder, TauriPlugin},
-    Runtime,
 };
 
 mod commands;

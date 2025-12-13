@@ -14,10 +14,7 @@ impl<'a> DbContext<'a> {
             self.find_many(WorkspaceMetaIden::WorkspaceId, workspace_id, None)?;
 
         if workspace_metas.is_empty() {
-            let wm = WorkspaceMeta {
-                workspace_id: workspace_id.to_string(),
-                ..Default::default()
-            };
+            let wm = WorkspaceMeta { workspace_id: workspace_id.to_string(), ..Default::default() };
             workspace_metas.push(self.upsert_workspace_meta(&wm, &UpdateSource::Background)?)
         }
 
@@ -30,10 +27,8 @@ impl<'a> DbContext<'a> {
             return Ok(workspace_meta);
         }
 
-        let workspace_meta = WorkspaceMeta {
-            workspace_id: workspace_id.to_string(),
-            ..Default::default()
-        };
+        let workspace_meta =
+            WorkspaceMeta { workspace_id: workspace_id.to_string(), ..Default::default() };
 
         info!("Creating WorkspaceMeta for {workspace_id}");
 

@@ -1,10 +1,10 @@
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
 use log::{debug, info, warn};
-use reqwest::{redirect, Client, Proxy};
+use reqwest::{Client, Proxy, redirect};
 use reqwest_cookie_store::CookieStoreMutex;
 use std::sync::Arc;
-use yaak_tls::{get_tls_config, ClientCertificateConfig};
+use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 #[derive(Clone)]
 pub struct HttpConnectionProxySettingAuth {
@@ -63,12 +63,7 @@ impl HttpConnectionOptions {
             HttpConnectionProxySetting::Disabled => {
                 client = client.no_proxy();
             }
-            HttpConnectionProxySetting::Enabled {
-                http,
-                https,
-                auth,
-                bypass,
-            } => {
+            HttpConnectionProxySetting::Enabled { http, https, auth, bypass } => {
                 for p in build_enabled_proxy(http, https, auth, bypass) {
                     client = client.proxy(p)
                 }

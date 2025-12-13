@@ -78,9 +78,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 environment_id.as_deref(),
             )?;
             let cb = PluginTemplateCallback::new(app_handle, &plugin_context, req.purpose);
-            let opt = RenderOptions {
-                error_behavior: RenderErrorBehavior::Throw,
-            };
+            let opt = RenderOptions { error_behavior: RenderErrorBehavior::Throw };
             let grpc_request =
                 render_grpc_request(&req.grpc_request, environment_chain, &cb, &opt).await?;
             Ok(Some(InternalEventPayload::RenderGrpcRequestResponse(RenderGrpcRequestResponse {
@@ -99,9 +97,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 environment_id.as_deref(),
             )?;
             let cb = PluginTemplateCallback::new(app_handle, &plugin_context, req.purpose);
-            let opt = &RenderOptions {
-                error_behavior: RenderErrorBehavior::Throw,
-            };
+            let opt = &RenderOptions { error_behavior: RenderErrorBehavior::Throw };
             let http_request =
                 render_http_request(&req.http_request, environment_chain, &cb, &opt).await?;
             Ok(Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
@@ -130,9 +126,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 environment_id.as_deref(),
             )?;
             let cb = PluginTemplateCallback::new(app_handle, &plugin_context, req.purpose);
-            let opt = RenderOptions {
-                error_behavior: RenderErrorBehavior::Throw,
-            };
+            let opt = RenderOptions { error_behavior: RenderErrorBehavior::Throw };
             let data = render_json_value(req.data, environment_chain, &cb, &opt).await?;
             Ok(Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data })))
         }

@@ -1,5 +1,5 @@
-use std::collections::BTreeMap;
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 pub fn get_bool(v: &Value, key: &str, fallback: bool) -> bool {
     match v.get(key) {

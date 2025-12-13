@@ -56,7 +56,11 @@ impl<'a> DbContext<'a> {
         websocket_request: &WebsocketRequest,
     ) -> Result<(Option<String>, BTreeMap<String, Value>, String)> {
         if let Some(at) = websocket_request.authentication_type.clone() {
-            return Ok((Some(at), websocket_request.authentication.clone(), websocket_request.id.clone()));
+            return Ok((
+                Some(at),
+                websocket_request.authentication.clone(),
+                websocket_request.id.clone(),
+            ));
         }
 
         if let Some(folder_id) = websocket_request.folder_id.clone() {

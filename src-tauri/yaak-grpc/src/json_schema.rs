@@ -11,9 +11,7 @@ struct JsonSchemaGenerator {
 
 impl JsonSchemaGenerator {
     pub fn new() -> Self {
-        JsonSchemaGenerator {
-            msg_mapping: HashMap::new(),
-        }
+        JsonSchemaGenerator { msg_mapping: HashMap::new() }
     }
 
     pub fn generate_json_schema(msg: MessageDescriptor) -> JsonSchemaEntry {
@@ -297,16 +295,10 @@ impl JsonSchemaEntry {
 
 impl JsonSchemaEntry {
     pub fn object() -> Self {
-        JsonSchemaEntry {
-            type_: Some(JsonType::Object),
-            ..Default::default()
-        }
+        JsonSchemaEntry { type_: Some(JsonType::Object), ..Default::default() }
     }
     pub fn boolean() -> Self {
-        JsonSchemaEntry {
-            type_: Some(JsonType::Boolean),
-            ..Default::default()
-        }
+        JsonSchemaEntry { type_: Some(JsonType::Boolean), ..Default::default() }
     }
     pub fn number<S: Into<String>>(format: S) -> Self {
         JsonSchemaEntry {
@@ -316,10 +308,7 @@ impl JsonSchemaEntry {
         }
     }
     pub fn string() -> Self {
-        JsonSchemaEntry {
-            type_: Some(JsonType::String),
-            ..Default::default()
-        }
+        JsonSchemaEntry { type_: Some(JsonType::String), ..Default::default() }
     }
 
     pub fn string_with_format<S: Into<String>>(format: S) -> Self {
@@ -330,16 +319,10 @@ impl JsonSchemaEntry {
         }
     }
     pub fn reference<S: AsRef<str>>(ref_: S) -> Self {
-        JsonSchemaEntry {
-            ref_: Some(format!("#/$defs/{}", ref_.as_ref())),
-            ..Default::default()
-        }
+        JsonSchemaEntry { ref_: Some(format!("#/$defs/{}", ref_.as_ref())), ..Default::default() }
     }
-    pub fn root_reference() -> Self{
-        JsonSchemaEntry {
-            ref_: Some("#".to_string()),
-            ..Default::default()
-        }
+    pub fn root_reference() -> Self {
+        JsonSchemaEntry { ref_: Some("#".to_string()), ..Default::default() }
     }
     pub fn array(item: JsonSchemaEntry) -> Self {
         JsonSchemaEntry {
@@ -349,11 +332,7 @@ impl JsonSchemaEntry {
         }
     }
     pub fn enums(enums: Vec<String>) -> Self {
-        JsonSchemaEntry {
-            type_: Some(JsonType::String),
-            enum_: Some(enums),
-            ..Default::default()
-        }
+        JsonSchemaEntry { type_: Some(JsonType::String), enum_: Some(enums), ..Default::default() }
     }
 
     pub fn map(value_type: JsonSchemaEntry) -> Self {
@@ -365,10 +344,7 @@ impl JsonSchemaEntry {
     }
 
     pub fn null() -> Self {
-        JsonSchemaEntry {
-            type_: Some(JsonType::Null),
-            ..Default::default()
-        }
+        JsonSchemaEntry { type_: Some(JsonType::Null), ..Default::default() }
     }
 }
 

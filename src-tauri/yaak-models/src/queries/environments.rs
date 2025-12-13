@@ -143,11 +143,7 @@ impl<'a> DbContext<'a> {
         }
 
         self.upsert(
-            &Environment {
-                name,
-                variables: cleaned_variables,
-                ..environment.clone()
-            },
+            &Environment { name, variables: cleaned_variables, ..environment.clone() },
             source,
         )
     }

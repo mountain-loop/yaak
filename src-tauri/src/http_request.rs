@@ -52,7 +52,87 @@ pub async fn send_http_request<R: Runtime>(
     .await
 }
 
+async fn apply_authentication<R: Runtime>(
+    window: &WebviewWindow<R>,
+    sendable_request: &mut SendableHttpRequest,
+    request: &HttpRequest,
+    auth_context_id: String,
+    plugin_manager: &PluginManager,
+    plugin_context: &PluginContext,
+) -> Result<()> {
+    match &request.authentication_type {
+        None => {
+            // No authentication found. Not even inherited
+        }
+        Some(authentication_type) if authentication_type == "none" => {
+            // Explicitly no authentication
+        }
+        Some(authentication_type) => {
+            let req = CallHttpAuthenticationRequest {
+                context_id: format!("{:x}", md5::compute(auth_context_id)),
+                values: serde_json::from_value(serde_json::to_value(&request.authentication)?)?,
+                url: sendable_request.url.clone(),
+                method: sendable_request.method.clone(),
+                headers: sendable_request
+                    .headers
+                    .iter()
+                    .map(|(name, value)| HttpHeader {
+                        name: name.to_string(),
+                        value: value.to_string(),
+                    })
+                    .collect(),
+            };
+            let plugin_result = plugin_manager
+                .call_http_authentication(&window, &authentication_type, req, plugin_context)
+                .await?;
+
+            for header in plugin_result.set_headers.unwrap_or_default() {
+                sendable_request.insert_header((header.name, header.value));
+            }
+
+            if let Some(params) = plugin_result.set_query_parameters {
+                let params = params.into_iter().map(|p| (p.name, p.value)).collect::<Vec<_>>();
+                sendable_request.url = append_query_params(&sendable_request.url, params);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub async fn send_http_request_with_context<R: Runtime>(
+    window: &WebviewWindow<R>,
+    unrendered_request: &HttpRequest,
+    og_response: &HttpResponse,
+    environment: Option<Environment>,
+    cookie_jar: Option<CookieJar>,
+    cancelled_rx: &mut Receiver<bool>,
+    plugin_context: &PluginContext,
+) -> Result<HttpResponse> {
+    let app_handle = window.app_handle().clone();
+    let response = Arc::new(Mutex::new(og_response.clone()));
+    let update_source = UpdateSource::from_window(window);
+
+    // Execute the inner send logic and handle errors consistently
+    let result = send_http_request_inner(
+        window,
+        unrendered_request,
+        og_response,
+        environment,
+        cookie_jar,
+        cancelled_rx,
+        plugin_context,
+    )
+    .await;
+
+    match result {
+        Ok(response) => Ok(response),
+        Err(e) => {
+            Ok(response_err(&app_handle, &*response.lock().await, e.to_string(), &update_source))
+        }
+    }
+}
+
+async fn send_http_request_inner<R: Runtime>(
     window: &WebviewWindow<R>,
     unrendered_request: &HttpRequest,
     og_response: &HttpResponse,
@@ -65,49 +145,17 @@ pub async fn send_http_request_with_context<R: Runtime>(
     let plugin_manager = app_handle.state::<PluginManager>();
     let connection_manager = app_handle.state::<HttpConnectionManager>();
     let settings = window.db().get_settings();
-    let workspace = window.db().get_workspace(&unrendered_request.workspace_id)?;
-    let environment_id = environment.map(|e| e.id);
-    let environment_chain = window.db().resolve_environments(
-        &unrendered_request.workspace_id,
-        unrendered_request.folder_id.as_deref(),
-        environment_id.as_deref(),
-    )?;
-
-    let response_id = og_response.id.clone();
+    let wrk_id = &unrendered_request.workspace_id;
+    let fld_id = unrendered_request.folder_id.as_deref();
+    let env_id = environment.map(|e| e.id);
+    let resp_id = og_response.id.clone();
+    let workspace = window.db().get_workspace(wrk_id)?;
     let response = Arc::new(Mutex::new(og_response.clone()));
-
     let update_source = UpdateSource::from_window(window);
-
-    let (resolved_request, auth_context_id) = match resolve_http_request(window, unrendered_request)
-    {
-        Ok(r) => r,
-        Err(e) => {
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                e.to_string(),
-                &update_source,
-            ));
-        }
-    };
-
+    let (resolved, auth_context_id) = resolve_http_request(window, unrendered_request)?;
     let cb = PluginTemplateCallback::new(window.app_handle(), &plugin_context, RenderPurpose::Send);
-
-    let opt = RenderOptions {
-        error_behavior: RenderErrorBehavior::Throw,
-    };
-
-    let request = match render_http_request(&resolved_request, environment_chain, &cb, &opt).await {
-        Ok(r) => r,
-        Err(e) => {
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                e.to_string(),
-                &update_source,
-            ));
-        }
-    };
+    let env_chain = window.db().resolve_environments(&workspace.id, fld_id, env_id.as_deref())?;
+    let request = render_http_request(&resolved, env_chain, &cb, &RenderOptions::throw()).await?;
 
     // Build the sendable request using the new SendableHttpRequest type
     let options = SendableHttpRequestOptions {
@@ -125,13 +173,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
     let proxy_setting = match settings.proxy {
         None => HttpConnectionProxySetting::System,
         Some(ProxySetting::Disabled) => HttpConnectionProxySetting::Disabled,
-        Some(ProxySetting::Enabled {
-            http,
-            https,
-            auth,
-            bypass,
-            disabled,
-        }) => {
+        Some(ProxySetting::Enabled { http, https, auth, bypass, disabled }) => {
             if disabled {
                 HttpConnectionProxySetting::System
             } else {
@@ -189,62 +231,25 @@ pub async fn send_http_request_with_context<R: Runtime>(
         })
         .await?;
 
-    match request.authentication_type {
-        None => {
-            // No authentication found. Not even inherited
-        }
-        Some(authentication_type) if authentication_type == "none" => {
-            // Explicitly no authentication
-        }
-        Some(authentication_type) => {
-            let req = CallHttpAuthenticationRequest {
-                context_id: format!("{:x}", md5::compute(auth_context_id)),
-                values: serde_json::from_value(serde_json::to_value(&request.authentication)?)?,
-                url: sendable_request.url.clone(),
-                method: sendable_request.method.clone(),
-                headers: sendable_request
-                    .headers
-                    .iter()
-                    .map(|(name, value)| HttpHeader {
-                        name: name.to_string(),
-                        value: value.to_string(),
-                    })
-                    .collect(),
-            };
-            let auth_result = plugin_manager
-                .call_http_authentication(&window, &authentication_type, req, plugin_context)
-                .await;
-            let plugin_result = match auth_result {
-                Ok(r) => r,
-                Err(e) => {
-                    return Ok(response_err(
-                        &app_handle,
-                        &*response.lock().await,
-                        e.to_string(),
-                        &update_source,
-                    ));
-                }
-            };
+    // Apply authentication to the request
+    apply_authentication(
+        &window,
+        &mut sendable_request,
+        &request,
+        auth_context_id,
+        &plugin_manager,
+        plugin_context,
+    )
+    .await?;
 
-            for header in plugin_result.set_headers.unwrap_or_default() {
-                sendable_request.insert_header((header.name, header.value));
-            }
-
-            if let Some(params) = plugin_result.set_query_parameters {
-                let params = params.into_iter().map(|p| (p.name, p.value)).collect::<Vec<_>>();
-                sendable_request.url = append_query_params(&sendable_request.url, params);
-            }
-        }
-    }
-
-    let (done_tx, done_rx) = oneshot::channel::<HttpResponse>();
+    let (done_tx, done_rx) = oneshot::channel::<Result<HttpResponse>>();
 
     // let (resp_tx, resp_rx) = oneshot::channel::<std::result::Result<Response, reqwest::Error>>();
     {
         let response = response.clone();
         let app_handle = app_handle.clone();
         let update_source = update_source.clone();
-        let response_id = response_id.clone();
+        let response_id = resp_id.clone();
         tokio::spawn(async move {
             let final_resp = execute_transaction(
                 client,
@@ -255,16 +260,6 @@ pub async fn send_http_request_with_context<R: Runtime>(
                 update_source.clone(),
             )
             .await;
-
-            let final_resp = match final_resp {
-                Ok(r) => r,
-                Err(e) => response_err(
-                    &app_handle,
-                    &response.lock().await.clone(),
-                    e.to_string(),
-                    &update_source,
-                ),
-            };
 
             done_tx.send(final_resp).unwrap();
         });
@@ -442,24 +437,25 @@ pub async fn send_http_request_with_context<R: Runtime>(
 
     info!("Waiting for response");
     let app_handle = app_handle.clone();
-    Ok(tokio::select! {
-        Ok(r) = done_rx => r,
+    tokio::select! {
+        Ok(result) = done_rx => result,
         _ = cancelled_rx.changed() => {
-            match app_handle.with_db(|c| c.get_http_response(&response_id)) {
+            match app_handle.with_db(|c| c.get_http_response(&resp_id)) {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
                     // TODO
                     // r.elapsed = start.elapsed().as_millis() as i32;
                     // r.elapsed_headers = start.elapsed().as_millis() as i32;
                     app_handle.db().update_http_response_if_id(&r, &UpdateSource::from_window(window))
-                        .expect("Failed to update response")
+                        .expect("Failed to update response");
+                    Ok(r)
                 },
                 _ => {
-                    response_err(&app_handle, &*response.lock().await, "Ephemeral request was cancelled".to_string(), &update_source)
-                }.clone(),
+                    Err(GenericError("Ephemeral request was cancelled".to_string()))
+                },
             }
         }
-    })
+    }
 }
 
 pub fn resolve_http_request<R: Runtime>(
@@ -495,10 +491,7 @@ async fn execute_transaction<R: Runtime>(
     resp.headers = final_response
         .headers
         .into_iter()
-        .map(|h| HttpResponseHeader {
-            name: h.0.to_string(),
-            value: h.1.to_string(),
-        })
+        .map(|h| HttpResponseHeader { name: h.0.to_string(), value: h.1.to_string() })
         .collect();
     resp.status = final_response.status as i32;
     resp.state = HttpResponseState::Closed;

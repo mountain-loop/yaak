@@ -18,14 +18,9 @@ pub(crate) enum ReaderType {
 
 impl ChainedReader {
     pub(crate) fn new(readers: Vec<ReaderType>) -> Self {
-        Self {
-            readers,
-            current_index: 0,
-            current_reader: None,
-        }
+        Self { readers, current_index: 0, current_reader: None }
     }
 }
-
 
 impl AsyncRead for ChainedReader {
     fn poll_read(
@@ -48,7 +43,7 @@ impl AsyncRead for ChainedReader {
                     }
                     Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
                     Poll::Pending => Poll::Pending,
-                }
+                };
             }
 
             // We need to get the next reader
