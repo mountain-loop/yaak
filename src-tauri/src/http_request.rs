@@ -398,9 +398,6 @@ async fn send_http_request_inner<R: Runtime>(
             match app_handle.with_db(|c| c.get_http_response(&resp_id)) {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
-                    // TODO
-                    // r.elapsed = start.elapsed().as_millis() as i32;
-                    // r.elapsed_headers = start.elapsed().as_millis() as i32;
                     app_handle.db().update_http_response_if_id(&r, &UpdateSource::from_window(window))
                         .expect("Failed to update response");
                     Ok(r)

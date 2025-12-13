@@ -9,8 +9,8 @@ pub enum Error {
     #[error(transparent)]
     TlsError(#[from] yaak_tls::error::Error),
 
-    #[error("Body error: {0:?}")]
-    BodyError(String),
+    #[error("Request failed with {0:?}")]
+    RequestError(String),
 
     #[error("Timeout of {0:?} reached")]
     RequestTimeout(std::time::Duration),

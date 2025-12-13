@@ -36,7 +36,7 @@ impl<S: HttpSender> HttpTransaction<S> {
         loop {
             // Check for cancellation before each request
             if *cancelled_rx.borrow() {
-                return Err(crate::error::Error::BodyError("Request cancelled".to_string()));
+                return Err(crate::error::Error::RequestError("Request cancelled".to_string()));
             }
 
             // Build request for this iteration
@@ -58,7 +58,7 @@ impl<S: HttpSender> HttpTransaction<S> {
             let response = tokio::select! {
                 result = self.sender.send(req, &mut events) => result?,
                 _ = cancelled_rx.changed() => {
-                    return Err(crate::error::Error::BodyError("Request cancelled".to_string()));
+                    return Err(crate::error::Error::RequestError("Request cancelled".to_string()));
                 }
             };
 
@@ -74,7 +74,7 @@ impl<S: HttpSender> HttpTransaction<S> {
 
             // Check if we've exceeded max redirects
             if redirect_count >= self.max_redirects {
-                return Err(crate::error::Error::BodyError(format!(
+                return Err(crate::error::Error::RequestError(format!(
                     "Maximum redirect limit ({}) exceeded",
                     self.max_redirects
                 )));
@@ -86,7 +86,7 @@ impl<S: HttpSender> HttpTransaction<S> {
                 .get("location")
                 .or_else(|| response.headers.get("Location"))
                 .ok_or_else(|| {
-                    crate::error::Error::BodyError(
+                    crate::error::Error::RequestError(
                         "Redirect response missing Location header".to_string(),
                     )
                 })?;
@@ -154,7 +154,7 @@ impl<S: HttpSender> HttpTransaction<S> {
     fn extract_base_url(url: &str) -> Result<String> {
         // Find the position after "://"
         let scheme_end = url.find("://").ok_or_else(|| {
-            crate::error::Error::BodyError(format!("Invalid URL format: {}", url))
+            crate::error::Error::RequestError(format!("Invalid URL format: {}", url))
         })?;
 
         // Find the first '/' after the scheme
@@ -212,7 +212,7 @@ mod tests {
         ) -> Result<SendableHttpResponse> {
             let mut responses = self.responses.lock().await;
             if responses.is_empty() {
-                Err(crate::error::Error::BodyError("No more mock responses".to_string()))
+                Err(crate::error::Error::RequestError("No more mock responses".to_string()))
             } else {
                 Ok(responses.remove(0))
             }
@@ -306,7 +306,7 @@ mod tests {
 
         let (_tx, rx) = tokio::sync::watch::channel(false);
         let result = transaction.execute_with_cancellation(request, rx).await;
-        if let Err(crate::error::Error::BodyError(msg)) = result {
+        if let Err(crate::error::Error::RequestError(msg)) = result {
             assert!(msg.contains("Maximum redirect limit"));
         } else {
             panic!("Expected BodyError with max redirect message. Got {result:?}");

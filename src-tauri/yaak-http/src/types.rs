@@ -1,5 +1,5 @@
 use crate::chained_reader::{ChainedReader, ReaderType};
-use crate::error::Error::BodyError;
+use crate::error::Error::RequestError;
 use crate::error::Result;
 use crate::path_placeholders::apply_path_placeholders;
 use crate::proto::ensure_proto;
@@ -256,12 +256,12 @@ async fn build_binary_body(
     // Open a file for streaming
     let content_length = tokio::fs::metadata(file_path)
         .await
-        .map_err(|e| BodyError(format!("Failed to get file metadata: {}", e)))?
+        .map_err(|e| RequestError(format!("Failed to get file metadata: {}", e)))?
         .len();
 
     let file = tokio::fs::File::open(file_path)
         .await
-        .map_err(|e| BodyError(format!("Failed to open file: {}", e)))?;
+        .map_err(|e| RequestError(format!("Failed to open file: {}", e)))?;
 
     Ok(Some(SendableBodyWithMeta::Stream {
         data: Box::pin(file),
@@ -347,13 +347,13 @@ async fn build_multipart_body(
         } else {
             // File field - validate that file exists first
             if !tokio::fs::try_exists(file_path).await.unwrap_or(false) {
-                return Err(BodyError(format!("File not found: {}", file_path)));
+                return Err(RequestError(format!("File not found: {}", file_path)));
             }
 
             // Get file size for content length calculation
             let file_metadata = tokio::fs::metadata(file_path)
                 .await
-                .map_err(|e| BodyError(format!("Failed to get file metadata: {}", e)))?;
+                .map_err(|e| RequestError(format!("Failed to get file metadata: {}", e)))?;
             let file_size = file_metadata.len() as usize;
 
             let filename = get_str(p, "filename");
@@ -769,7 +769,7 @@ mod tests {
         let result = build_binary_body(&body).await;
         assert!(result.is_err());
         if let Err(e) = result {
-            assert!(matches!(e, BodyError(_)));
+            assert!(matches!(e, RequestError(_)));
         }
     }
 

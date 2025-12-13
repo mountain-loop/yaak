@@ -86,7 +86,7 @@ impl HttpSender for ReqwestSender {
     ) -> Result<SendableHttpResponse> {
         // Parse the HTTP method
         let method = Method::from_bytes(request.method.as_bytes())
-            .map_err(|e| Error::BodyError(format!("Invalid HTTP method: {}", e)))?;
+            .map_err(|e| Error::RequestError(format!("Invalid HTTP method: {}", e)))?;
 
         // Build the request
         let mut req_builder = self.client.request(method, &request.url);
