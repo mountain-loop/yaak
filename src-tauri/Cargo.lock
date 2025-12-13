@@ -7903,6 +7903,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "ts-rs",
  "uuid",
  "yaak-common",
@@ -7929,6 +7930,7 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
+ "serde_json",
  "tauri",
  "thiserror 2.0.17",
 ]
@@ -8010,17 +8012,23 @@ dependencies = [
 name = "yaak-http"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "bytes",
  "hyper-util",
  "log",
+ "mime_guess",
  "regex",
  "reqwest",
  "reqwest_cookie_store",
  "serde",
+ "serde_json",
  "tauri",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-util",
  "tower-service",
  "urlencoding",
+ "yaak-common",
  "yaak-models",
  "yaak-tls",
 ]

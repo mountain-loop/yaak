@@ -216,7 +216,7 @@ pub(crate) async fn connect<R: Runtime>(
         &UpdateSource::from_window(&window),
     )?;
 
-    let (mut url, url_parameters) = apply_path_placeholders(&request.url, request.url_parameters);
+    let (mut url, url_parameters) = apply_path_placeholders(&request.url, &request.url_parameters);
     if !url.starts_with("ws://") && !url.starts_with("wss://") {
         url.insert_str(0, "ws://");
     }
