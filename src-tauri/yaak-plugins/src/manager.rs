@@ -185,12 +185,8 @@ impl PluginManager {
             .collect();
 
         let plugins = app_handle.db().list_plugins().unwrap_or_default();
-        let installed_plugin_dirs: Vec<PluginCandidate> = plugins
-            .iter()
-            .map(|p| PluginCandidate {
-                dir: p.directory.to_owned(),
-            })
-            .collect();
+        let installed_plugin_dirs: Vec<PluginCandidate> =
+            plugins.iter().map(|p| PluginCandidate { dir: p.directory.to_owned() }).collect();
 
         [bundled_plugin_dirs, installed_plugin_dirs].concat()
     }
@@ -524,9 +520,7 @@ impl PluginManager {
             RenderPurpose::Preview,
         );
         // We don't want to fail for this op because the UI will not be able to list any auth types then
-        let render_opt = RenderOptions {
-            error_behavior: RenderErrorBehavior::ReturnEmpty,
-        };
+        let render_opt = RenderOptions { error_behavior: RenderErrorBehavior::ReturnEmpty };
         let rendered_values = render_json_value_raw(json!(values), vars, &cb, &render_opt).await?;
         let context_id = format!("{:x}", md5::compute(model_id.to_string()));
 
@@ -643,9 +637,7 @@ impl PluginManager {
             RenderPurpose::Preview,
         );
         // We don't want to fail for this op because the UI will not be able to list any auth types then
-        let render_opt = RenderOptions {
-            error_behavior: RenderErrorBehavior::ReturnEmpty,
-        };
+        let render_opt = RenderOptions { error_behavior: RenderErrorBehavior::ReturnEmpty };
         let rendered_values = render_json_value_raw(json!(values), vars, &cb, &render_opt).await?;
         let context_id = format!("{:x}", md5::compute(model_id.to_string()));
         let event = self
@@ -688,9 +680,7 @@ impl PluginManager {
                 &PluginContext::new(&window),
                 RenderPurpose::Preview,
             ),
-            &RenderOptions {
-                error_behavior: RenderErrorBehavior::Throw,
-            },
+            &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
         )
         .await?;
         let results = self.get_http_authentication_summaries(window).await?;
@@ -807,21 +797,20 @@ impl PluginManager {
             .await
             .map_err(|e| RenderError(format!("Failed to call template function {e:}")))?;
 
-        let value = events.into_iter().find_map(|e| match e.payload {
-            // Error returned
-            InternalEventPayload::CallTemplateFunctionResponse(CallTemplateFunctionResponse {
-                error: Some(error),
-                ..
-            }) => Some(Err(error)),
-            // Value or null returned
-            InternalEventPayload::CallTemplateFunctionResponse(CallTemplateFunctionResponse {
-                value,
-                ..
-            }) => Some(Ok(value.unwrap_or_default())),
-            // Generic error returned
-            InternalEventPayload::ErrorResponse(ErrorResponse { error }) => Some(Err(error)),
-            _ => None,
-        });
+        let value =
+            events.into_iter().find_map(|e| match e.payload {
+                // Error returned
+                InternalEventPayload::CallTemplateFunctionResponse(
+                    CallTemplateFunctionResponse { error: Some(error), .. },
+                ) => Some(Err(error)),
+                // Value or null returned
+                InternalEventPayload::CallTemplateFunctionResponse(
+                    CallTemplateFunctionResponse { value, .. },
+                ) => Some(Ok(value.unwrap_or_default())),
+                // Generic error returned
+                InternalEventPayload::ErrorResponse(ErrorResponse { error }) => Some(Err(error)),
+                _ => None,
+            });
 
         match value {
             None => Err(RenderError(format!("Template function {fn_name}(…) not found "))),

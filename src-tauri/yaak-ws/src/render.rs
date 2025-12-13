@@ -70,12 +70,5 @@ pub async fn render_websocket_request<T: TemplateCallback>(
 
     let message = parse_and_render(&r.message.clone(), vars, cb, opt).await?;
 
-    Ok(WebsocketRequest {
-        url,
-        url_parameters,
-        headers,
-        authentication,
-        message,
-        ..r.to_owned()
-    })
+    Ok(WebsocketRequest { url, url_parameters, headers, authentication, message, ..r.to_owned() })
 }

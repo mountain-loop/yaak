@@ -1,5 +1,5 @@
-use std::path::Path;
 use crate::error::Error::{GitRepoNotFound, GitUnknown};
+use std::path::Path;
 
 pub(crate) fn open_repo(dir: &Path) -> crate::error::Result<git2::Repository> {
     match git2::Repository::discover(dir) {
@@ -8,4 +8,3 @@ pub(crate) fn open_repo(dir: &Path) -> crate::error::Result<git2::Repository> {
         Err(e) => Err(GitUnknown(e)),
     }
 }
-

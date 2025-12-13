@@ -45,11 +45,7 @@ pub struct PluginContext {
 
 impl PluginContext {
     pub fn new_empty() -> Self {
-        Self {
-            id: "default".to_string(),
-            label: None,
-            workspace_id: None,
-        }
+        Self { id: "default".to_string(), label: None, workspace_id: None }
     }
     pub fn new<R: Runtime>(window: &WebviewWindow<R>) -> Self {
         Self {
@@ -1049,9 +1045,7 @@ pub enum Content {
 
 impl Default for Content {
     fn default() -> Self {
-        Self::Text {
-            content: String::default(),
-        }
+        Self::Text { content: String::default() }
     }
 }
 

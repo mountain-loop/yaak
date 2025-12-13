@@ -23,10 +23,7 @@ pub struct WebsocketManager {
 
 impl WebsocketManager {
     pub fn new() -> Self {
-        WebsocketManager {
-            connections: Default::default(),
-            read_tasks: Default::default(),
-        }
+        WebsocketManager { connections: Default::default(), read_tasks: Default::default() }
     }
 
     pub async fn connect(

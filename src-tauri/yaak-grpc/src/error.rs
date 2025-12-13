@@ -1,8 +1,8 @@
 use crate::manager::GrpcStreamError;
+use prost::DecodeError;
 use serde::{Serialize, Serializer};
 use serde_json::Error as SerdeJsonError;
 use std::io;
-use prost::DecodeError;
 use thiserror::Error;
 use tonic::Status;
 

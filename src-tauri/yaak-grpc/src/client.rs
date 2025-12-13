@@ -42,11 +42,7 @@ impl AutoReflectionClient {
             get_transport(validate_certificates, client_cert.clone())?,
             uri.clone(),
         );
-        Ok(AutoReflectionClient {
-            use_v1alpha: false,
-            client_v1,
-            client_v1alpha,
-        })
+        Ok(AutoReflectionClient { use_v1alpha: false, client_v1, client_v1alpha })
     }
 
     #[async_recursion]
@@ -140,9 +136,7 @@ fn to_v1_msg_response(
                 service: v
                     .service
                     .iter()
-                    .map(|s| ServiceResponse {
-                        name: s.name.clone(),
-                    })
+                    .map(|s| ServiceResponse { name: s.name.clone() })
                     .collect(),
             })
         }
@@ -176,10 +170,7 @@ fn to_v1alpha_msg_request(
             extension_number,
             containing_type,
         }) => v1alpha::server_reflection_request::MessageRequest::FileContainingExtension(
-            v1alpha::ExtensionRequest {
-                extension_number,
-                containing_type,
-            },
+            v1alpha::ExtensionRequest { extension_number, containing_type },
         ),
         MessageRequest::AllExtensionNumbersOfType(v) => {
             v1alpha::server_reflection_request::MessageRequest::AllExtensionNumbersOfType(v)

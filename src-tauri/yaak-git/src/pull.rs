@@ -37,10 +37,7 @@ pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
     info!("Pulled status={} {combined}", out.status);
 
     if combined.to_lowercase().contains("could not read") {
-        return Ok(PullResult::NeedsCredentials {
-            url: remote_url.to_string(),
-            error: None,
-        });
+        return Ok(PullResult::NeedsCredentials { url: remote_url.to_string(), error: None });
     }
 
     if combined.to_lowercase().contains("unable to access") {
@@ -58,9 +55,7 @@ pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
         return Ok(PullResult::UpToDate);
     }
 
-    Ok(PullResult::Success {
-        message: format!("Pulled from {}/{}", remote_name, branch_name),
-    })
+    Ok(PullResult::Success { message: format!("Pulled from {}/{}", remote_name, branch_name) })
 }
 
 // pub(crate) fn git_pull_old(dir: &Path) -> Result<PullResult> {

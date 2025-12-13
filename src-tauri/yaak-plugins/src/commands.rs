@@ -1,9 +1,9 @@
 use crate::api::{
-    check_plugin_updates, search_plugins, PluginSearchResponse, PluginUpdatesResponse,
+    PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates, search_plugins,
 };
 use crate::error::Result;
 use crate::install::{delete_and_uninstall, download_and_install};
-use tauri::{command, AppHandle, Runtime, WebviewWindow};
+use tauri::{AppHandle, Runtime, WebviewWindow, command};
 use yaak_models::models::Plugin;
 
 #[command]

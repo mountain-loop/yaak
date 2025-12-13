@@ -72,12 +72,7 @@ impl HttpConnectionOptions {
             HttpConnectionProxySetting::Disabled => {
                 client = client.no_proxy();
             }
-            HttpConnectionProxySetting::Enabled {
-                http,
-                https,
-                auth,
-                bypass,
-            } => {
+            HttpConnectionProxySetting::Enabled { http, https, auth, bypass } => {
                 for p in build_enabled_proxy(http, https, auth, bypass) {
                     client = client.proxy(p)
                 }

@@ -1,24 +1,24 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use crate::commands::{install, search, uninstall, updates};
 use crate::manager::PluginManager;
 use log::info;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::plugin::{Builder, TauriPlugin};
-use tauri::{generate_handler, Manager, RunEvent, Runtime, State};
+use tauri::{Manager, RunEvent, Runtime, State, generate_handler};
 
+pub mod api;
+mod checksum;
 mod commands;
 pub mod error;
 pub mod events;
+pub mod install;
 pub mod manager;
 pub mod native_template_functions;
 mod nodejs;
 pub mod plugin_handle;
+pub mod plugin_meta;
 mod server_ws;
 pub mod template_callback;
 mod util;
-mod checksum;
-pub mod api;
-pub mod install;
-pub mod plugin_meta;
 
 static EXITING: AtomicBool = AtomicBool::new(false);
 

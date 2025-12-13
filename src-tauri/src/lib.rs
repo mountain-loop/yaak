@@ -180,9 +180,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &PluginContext::new(&window),
             RenderPurpose::Send,
         ),
-        &RenderOptions {
-            error_behavior: RenderErrorBehavior::Throw,
-        },
+        &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
     )
     .await?;
 
@@ -234,9 +232,7 @@ async fn cmd_grpc_go<R: Runtime>(
             &PluginContext::new(&window),
             RenderPurpose::Send,
         ),
-        &RenderOptions {
-            error_behavior: RenderErrorBehavior::Throw,
-        },
+        &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
     )
     .await?;
 
@@ -362,9 +358,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     &PluginContext::new(&window),
                                     RenderPurpose::Send,
                                 ),
-                                &RenderOptions {
-                                    error_behavior: RenderErrorBehavior::Throw,
-                                },
+                                &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
                             )
                             .await
                             .expect("Failed to render template")
@@ -414,9 +408,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 &PluginContext::new(&window),
                 RenderPurpose::Send,
             ),
-            &RenderOptions {
-                error_behavior: RenderErrorBehavior::Throw,
-            },
+            &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
         )
         .await?;
 
@@ -813,10 +805,7 @@ async fn cmd_http_response_body<R: Runtime>(
         Some(filter) if !filter.is_empty() => {
             Ok(plugin_manager.filter_data(&window, filter, &body, content_type).await?)
         }
-        _ => Ok(FilterResponse {
-            content: body,
-            error: None,
-        }),
+        _ => Ok(FilterResponse { content: body, error: None }),
     }
 }
 
@@ -1202,11 +1191,7 @@ async fn cmd_install_plugin<R: Runtime>(
     plugin_manager.add_plugin_by_dir(&PluginContext::new(&window), &directory).await?;
 
     Ok(app_handle.db().upsert_plugin(
-        &Plugin {
-            directory: directory.into(),
-            url,
-            ..Default::default()
-        },
+        &Plugin { directory: directory.into(), url, ..Default::default() },
         &UpdateSource::from_window(&window),
     )?)
 }
@@ -1527,11 +1512,7 @@ pub fn run() {
                         let _ = db.cancel_pending_websocket_connections();
                     });
                 }
-                RunEvent::WindowEvent {
-                    event: WindowEvent::Focused(true),
-                    label,
-                    ..
-                } => {
+                RunEvent::WindowEvent { event: WindowEvent::Focused(true), label, .. } => {
                     if cfg!(feature = "updater") {
                         // Run update check whenever the window is focused
                         let w = app_handle.get_webview_window(&label).unwrap();
@@ -1566,10 +1547,7 @@ pub fn run() {
                         }
                     });
                 }
-                RunEvent::WindowEvent {
-                    event: WindowEvent::CloseRequested { .. },
-                    ..
-                } => {
+                RunEvent::WindowEvent { event: WindowEvent::CloseRequested { .. }, .. } => {
                     if let Err(e) = app_handle.save_window_state(StateFlags::all()) {
                         warn!("Failed to save window state {e:?}");
                     } else {

@@ -1,4 +1,4 @@
-use mime_guess::{mime, Mime};
+use mime_guess::{Mime, mime};
 use std::path::Path;
 use std::str::FromStr;
 use tokio::fs;

@@ -31,13 +31,9 @@ impl<'a> DbContext<'a> {
                 },
                 source,
             ),
-            Some(introspection) => self.upsert(
-                &GraphQlIntrospection {
-                    content,
-                    ..introspection
-                },
-                source,
-            ),
+            Some(introspection) => {
+                self.upsert(&GraphQlIntrospection { content, ..introspection }, source)
+            }
         }
     }
 

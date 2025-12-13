@@ -39,9 +39,7 @@ impl WorkspaceKey {
     }
 
     pub(crate) fn from_raw_key(key: &[u8]) -> Self {
-        Self {
-            key: Key::<XChaCha20Poly1305>::clone_from_slice(key),
-        }
+        Self { key: Key::<XChaCha20Poly1305>::clone_from_slice(key) }
     }
 
     pub(crate) fn raw_key(&self) -> &[u8] {

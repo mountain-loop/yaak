@@ -1,10 +1,10 @@
+use crate::error::Result;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use crate::error::Result;
 
+use crate::error::Error::GitNotFound;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
-use crate::error::Error::GitNotFound;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;

@@ -114,10 +114,7 @@ pub async fn activate_license<R: Runtime>(
 
     if response.status().is_client_error() {
         let body: APIErrorResponsePayload = response.json().await?;
-        return Err(ClientError {
-            message: body.message,
-            error: body.error,
-        });
+        return Err(ClientError { message: body.message, error: body.error });
     }
 
     if response.status().is_server_error() {
@@ -154,10 +151,7 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
 
     if response.status().is_client_error() {
         let body: APIErrorResponsePayload = response.json().await?;
-        return Err(ClientError {
-            message: body.message,
-            error: body.error,
-        });
+        return Err(ClientError { message: body.message, error: body.error });
     }
 
     if response.status().is_server_error() {
@@ -192,9 +186,7 @@ pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<Lice
 
     match (has_activation_id, trial_period_active) {
         (false, true) => Ok(LicenseCheckStatus::Trialing { end: trial_end }),
-        (false, false) => Ok(LicenseCheckStatus::PersonalUse {
-            trial_ended: trial_end,
-        }),
+        (false, false) => Ok(LicenseCheckStatus::PersonalUse { trial_ended: trial_end }),
         (true, _) => {
             info!("Checking license activation");
             // A license has been activated, so let's check the license server
@@ -204,10 +196,7 @@ pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<Lice
 
             if response.status().is_client_error() {
                 let body: APIErrorResponsePayload = response.json().await?;
-                return Err(ClientError {
-                    message: body.message,
-                    error: body.error,
-                });
+                return Err(ClientError { message: body.message, error: body.error });
             }
 
             if response.status().is_server_error() {

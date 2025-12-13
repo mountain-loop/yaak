@@ -128,9 +128,7 @@ pub(crate) async fn send<R: Runtime>(
             &PluginContext::new(&window),
             RenderPurpose::Send,
         ),
-        &RenderOptions {
-            error_behavior: RenderErrorBehavior::Throw,
-        },
+        &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
     )
     .await?;
 
@@ -164,10 +162,7 @@ pub(crate) async fn close<R: Runtime>(
         let db = app_handle.db();
         let connection = db.get_websocket_connection(connection_id)?;
         db.upsert_websocket_connection(
-            &WebsocketConnection {
-                state: WebsocketConnectionState::Closing,
-                ..connection
-            },
+            &WebsocketConnection { state: WebsocketConnectionState::Closing, ..connection },
             &UpdateSource::from_window(&window),
         )?
     };
@@ -208,9 +203,7 @@ pub(crate) async fn connect<R: Runtime>(
             &PluginContext::new(&window),
             RenderPurpose::Send,
         ),
-        &RenderOptions {
-            error_behavior: RenderErrorBehavior::Throw,
-        },
+        &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
     )
     .await?;
 
@@ -278,10 +271,7 @@ pub(crate) async fn connect<R: Runtime>(
                     .headers
                     .clone()
                     .into_iter()
-                    .map(|h| HttpHeader {
-                        name: h.name,
-                        value: h.value,
-                    })
+                    .map(|h| HttpHeader { name: h.name, value: h.value })
                     .collect(),
             };
             let plugin_result = plugin_manager

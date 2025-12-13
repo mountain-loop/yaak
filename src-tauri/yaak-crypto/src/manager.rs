@@ -96,18 +96,12 @@ impl EncryptionManager {
             let workspace = tx.get_workspace(workspace_id)?;
             let workspace_meta = tx.get_or_create_workspace_meta(workspace_id)?;
             tx.upsert_workspace(
-                &Workspace {
-                    encryption_key_challenge,
-                    ..workspace
-                },
+                &Workspace { encryption_key_challenge, ..workspace },
                 &UpdateSource::Background,
             )?;
 
             Ok(tx.upsert_workspace_meta(
-                &WorkspaceMeta {
-                    encryption_key: Some(encrypted_key.clone()),
-                    ..workspace_meta
-                },
+                &WorkspaceMeta { encryption_key: Some(encrypted_key.clone()), ..workspace_meta },
                 &UpdateSource::Background,
             )?)
         })?;

@@ -37,10 +37,7 @@ pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
     info!("Pushed to repo status={} {combined}", out.status);
 
     if combined.to_lowercase().contains("could not read") {
-        return Ok(PushResult::NeedsCredentials {
-            url: remote_url.to_string(),
-            error: None,
-        });
+        return Ok(PushResult::NeedsCredentials { url: remote_url.to_string(), error: None });
     }
 
     if combined.to_lowercase().contains("unable to access") {
@@ -58,7 +55,5 @@ pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
         return Err(GenericError(format!("Failed to push {combined}")));
     }
 
-    Ok(PushResult::Success {
-        message: format!("Pushed to {}/{}", remote_name, branch_name),
-    })
+    Ok(PushResult::Success { message: format!("Pushed to {}/{}", remote_name, branch_name) })
 }

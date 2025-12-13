@@ -58,10 +58,7 @@ pub async fn check_plugin_updates<R: Runtime>(
         .list_plugins()?
         .into_iter()
         .filter_map(|p| match get_plugin_meta(&Path::new(&p.directory)) {
-            Ok(m) => Some(PluginNameVersion {
-                name: m.name,
-                version: m.version,
-            }),
+            Ok(m) => Some(PluginNameVersion { name: m.name, version: m.version }),
             Err(e) => {
                 warn!("Failed to get plugin metadata: {}", e);
                 None
@@ -70,9 +67,7 @@ pub async fn check_plugin_updates<R: Runtime>(
         .collect();
 
     let url = build_url("/updates");
-    let body = serde_json::to_vec(&PluginUpdatesResponse {
-        plugins: name_versions,
-    })?;
+    let body = serde_json::to_vec(&PluginUpdatesResponse { plugins: name_versions })?;
     let resp = yaak_api_client(app_handle)?.post(url.clone()).body(body).send().await?;
     if !resp.status().is_success() {
         return Err(ApiErr(format!("{} response to {}", resp.status(), url.to_string())));

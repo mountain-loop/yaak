@@ -11,7 +11,7 @@ use crate::commands::{
 };
 use crate::manager::WebsocketManager;
 use tauri::plugin::{Builder, TauriPlugin};
-use tauri::{generate_handler, Manager, Runtime};
+use tauri::{Manager, Runtime, generate_handler};
 use tokio::sync::Mutex;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {

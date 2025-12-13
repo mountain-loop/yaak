@@ -30,7 +30,8 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
         ],
     )?;
 
-    #[cfg(target_os = "macos")] {
+    #[cfg(target_os = "macos")]
+    {
         window_menu.set_as_windows_menu_for_nsapp()?;
     }
 
@@ -48,7 +49,8 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
         ],
     )?;
 
-    #[cfg(target_os = "macos")] {
+    #[cfg(target_os = "macos")]
+    {
         help_menu.set_as_windows_menu_for_nsapp()?;
     }
 
@@ -151,8 +153,11 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
                         .build(app_handle)?,
                     &MenuItemBuilder::with_id("dev.reset_size".to_string(), "Reset Size")
                         .build(app_handle)?,
-                    &MenuItemBuilder::with_id("dev.reset_size_record".to_string(), "Reset Size 16x9")
-                        .build(app_handle)?,
+                    &MenuItemBuilder::with_id(
+                        "dev.reset_size_record".to_string(),
+                        "Reset Size 16x9",
+                    )
+                    .build(app_handle)?,
                     &MenuItemBuilder::with_id(
                         "dev.generate_theme_css".to_string(),
                         "Generate Theme CSS",

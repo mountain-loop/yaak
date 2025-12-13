@@ -62,9 +62,7 @@ pub enum UpdateSource {
 
 impl UpdateSource {
     pub fn from_window<R: Runtime>(window: &WebviewWindow<R>) -> Self {
-        Self::Window {
-            label: window.label().to_string(),
-        }
+        Self::Window { label: window.label().to_string() }
     }
 }
 

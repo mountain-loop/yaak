@@ -4,17 +4,17 @@ use crate::events::{
     TemplateFunctionPreviewType,
 };
 use crate::template_callback::PluginTemplateCallback;
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use keyring::Error::NoEntry;
 use log::{debug, info};
 use std::collections::HashMap;
 use tauri::{AppHandle, Runtime};
-use yaak_common::platform::{get_os, OperatingSystem};
+use yaak_common::platform::{OperatingSystem, get_os};
 use yaak_crypto::manager::EncryptionManagerExt;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result;
-use yaak_templates::{transform_args, FnArg, Parser, Token, Tokens, Val};
+use yaak_templates::{FnArg, Parser, Token, Tokens, Val, transform_args};
 
 pub(crate) fn template_function_secure() -> TemplateFunction {
     TemplateFunction {
@@ -179,9 +179,7 @@ pub fn decrypt_secure_template_function<R: Runtime>(
 
     for token in parsed.tokens.iter() {
         match token {
-            Token::Tag {
-                val: Val::Fn { name, args },
-            } if name == "secure" => {
+            Token::Tag { val: Val::Fn { name, args } } if name == "secure" => {
                 let mut args_map = HashMap::new();
                 for a in args {
                     match a.clone().value {
@@ -228,7 +226,7 @@ pub fn encrypt_secure_template_function<R: Runtime>(
         tokens,
         &PluginTemplateCallback::new(app_handle, plugin_context, RenderPurpose::Preview),
     )?
-        .to_string())
+    .to_string())
 }
 
 pub fn template_function_keychain_run(args: HashMap<String, serde_json::Value>) -> Result<String> {

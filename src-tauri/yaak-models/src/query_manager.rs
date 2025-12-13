@@ -6,7 +6,7 @@ use crate::util::ModelPayload;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::TransactionBehavior;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use tauri::{Manager, Runtime, State};
 
 pub trait QueryManagerExt<'a, R> {
@@ -58,10 +58,7 @@ impl QueryManager {
         pool: Pool<SqliteConnectionManager>,
         events_tx: mpsc::Sender<ModelPayload>,
     ) -> Self {
-        QueryManager {
-            pool: Arc::new(Mutex::new(pool)),
-            events_tx,
-        }
+        QueryManager { pool: Arc::new(Mutex::new(pool)), events_tx }
     }
 
     pub fn connect(&self) -> DbContext<'_> {
@@ -71,10 +68,7 @@ impl QueryManager {
             .expect("Failed to gain lock on DB")
             .get()
             .expect("Failed to get a new DB connection from the pool");
-        DbContext {
-            events_tx: self.events_tx.clone(),
-            conn: ConnectionOrTx::Connection(conn),
-        }
+        DbContext { events_tx: self.events_tx.clone(), conn: ConnectionOrTx::Connection(conn) }
     }
 
     pub fn with_conn<F, T>(&self, func: F) -> T
@@ -88,10 +82,8 @@ impl QueryManager {
             .get()
             .expect("Failed to get new DB connection from the pool");
 
-        let db_context = DbContext {
-            events_tx: self.events_tx.clone(),
-            conn: ConnectionOrTx::Connection(conn),
-        };
+        let db_context =
+            DbContext { events_tx: self.events_tx.clone(), conn: ConnectionOrTx::Connection(conn) };
 
         func(&db_context)
     }
@@ -113,10 +105,8 @@ impl QueryManager {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .expect("Failed to start DB transaction");
 
-        let db_context = DbContext {
-            events_tx: self.events_tx.clone(),
-            conn: ConnectionOrTx::Transaction(&tx),
-        };
+        let db_context =
+            DbContext { events_tx: self.events_tx.clone(), conn: ConnectionOrTx::Transaction(&tx) };
 
         match func(&db_context) {
             Ok(val) => {
