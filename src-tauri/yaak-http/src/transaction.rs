@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::sender::{HttpResponseEvent, HttpSender, SendableHttpResponse};
 use crate::types::SendableHttpRequest;
+use tokio::sync::watch::Receiver;
 
 /// HTTP Transaction that manages the lifecycle of a request, including redirect handling
 pub struct HttpTransaction<S: HttpSender> {
@@ -19,10 +20,11 @@ impl<S: HttpSender> HttpTransaction<S> {
         Self { sender, max_redirects }
     }
 
-    /// Execute the request, following redirects if necessary
-    pub async fn execute(
+    /// Execute the request with cancellation support
+    pub async fn execute_with_cancellation(
         &self,
         request: SendableHttpRequest,
+        mut cancelled_rx: Receiver<bool>,
     ) -> Result<(SendableHttpResponse, Vec<HttpResponseEvent>)> {
         let mut redirect_count = 0;
         let mut current_url = request.url;
@@ -32,6 +34,11 @@ impl<S: HttpSender> HttpTransaction<S> {
         let mut events = Vec::new();
 
         loop {
+            // Check for cancellation before each request
+            if *cancelled_rx.borrow() {
+                return Err(crate::error::Error::BodyError("Request cancelled".to_string()));
+            }
+
             // Build request for this iteration
             let req = SendableHttpRequest {
                 url: current_url.clone(),
@@ -46,7 +53,14 @@ impl<S: HttpSender> HttpTransaction<S> {
                 "redirects".to_string(),
                 request.options.follow_redirects.to_string(),
             ));
-            let response = self.sender.send(req, &mut events).await?;
+
+            // Execute with cancellation support
+            let response = tokio::select! {
+                result = self.sender.send(req, &mut events) => result?,
+                _ = cancelled_rx.changed() => {
+                    return Err(crate::error::Error::BodyError("Request cancelled".to_string()));
+                }
+            };
 
             if !Self::is_redirect(response.status) {
                 return Ok((response, events));
@@ -129,6 +143,7 @@ impl<S: HttpSender> HttpTransaction<S> {
             redirect_count += 1;
         }
     }
+
 
     /// Check if a status code indicates a redirect
     fn is_redirect(status: u16) -> bool {
@@ -222,7 +237,8 @@ mod tests {
             ..Default::default()
         };
 
-        let (result, _) = transaction.execute(request).await.unwrap();
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let (result, _) = transaction.execute_with_cancellation(request, rx).await.unwrap();
         assert_eq!(result.status, 200);
         assert_eq!(result.body, b"OK");
     }
@@ -248,10 +264,15 @@ mod tests {
         let request = SendableHttpRequest {
             url: "https://example.com/old".to_string(),
             method: "GET".to_string(),
+            options: crate::types::SendableHttpRequestOptions {
+                follow_redirects: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
-        let (result, _) = transaction.execute(request).await.unwrap();
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let (result, _) = transaction.execute_with_cancellation(request, rx).await.unwrap();
         assert_eq!(result.status, 200);
         assert_eq!(result.body, b"Final");
     }
@@ -276,15 +297,19 @@ mod tests {
         let request = SendableHttpRequest {
             url: "https://example.com/start".to_string(),
             method: "GET".to_string(),
+            options: crate::types::SendableHttpRequestOptions {
+                follow_redirects: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
-        let result = transaction.execute(request).await;
-        assert!(result.is_err());
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let result = transaction.execute_with_cancellation(request, rx).await;
         if let Err(crate::error::Error::BodyError(msg)) = result {
             assert!(msg.contains("Maximum redirect limit"));
         } else {
-            panic!("Expected BodyError with max redirect message");
+            panic!("Expected BodyError with max redirect message. Got {result:?}");
         }
     }
 

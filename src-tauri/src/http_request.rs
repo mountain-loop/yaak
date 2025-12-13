@@ -29,7 +29,7 @@ use yaak_plugins::events::{
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
-use yaak_templates::{RenderErrorBehavior, RenderOptions};
+use yaak_templates::RenderOptions;
 use yaak_tls::find_client_certificate;
 
 pub async fn send_http_request<R: Runtime>(
@@ -50,53 +50,6 @@ pub async fn send_http_request<R: Runtime>(
         &PluginContext::new(window),
     )
     .await
-}
-
-async fn apply_authentication<R: Runtime>(
-    window: &WebviewWindow<R>,
-    sendable_request: &mut SendableHttpRequest,
-    request: &HttpRequest,
-    auth_context_id: String,
-    plugin_manager: &PluginManager,
-    plugin_context: &PluginContext,
-) -> Result<()> {
-    match &request.authentication_type {
-        None => {
-            // No authentication found. Not even inherited
-        }
-        Some(authentication_type) if authentication_type == "none" => {
-            // Explicitly no authentication
-        }
-        Some(authentication_type) => {
-            let req = CallHttpAuthenticationRequest {
-                context_id: format!("{:x}", md5::compute(auth_context_id)),
-                values: serde_json::from_value(serde_json::to_value(&request.authentication)?)?,
-                url: sendable_request.url.clone(),
-                method: sendable_request.method.clone(),
-                headers: sendable_request
-                    .headers
-                    .iter()
-                    .map(|(name, value)| HttpHeader {
-                        name: name.to_string(),
-                        value: value.to_string(),
-                    })
-                    .collect(),
-            };
-            let plugin_result = plugin_manager
-                .call_http_authentication(&window, &authentication_type, req, plugin_context)
-                .await?;
-
-            for header in plugin_result.set_headers.unwrap_or_default() {
-                sendable_request.insert_header((header.name, header.value));
-            }
-
-            if let Some(params) = plugin_result.set_query_parameters {
-                let params = params.into_iter().map(|p| (p.name, p.value)).collect::<Vec<_>>();
-                sendable_request.url = append_query_params(&sendable_request.url, params);
-            }
-        }
-    }
-    Ok(())
 }
 
 pub async fn send_http_request_with_context<R: Runtime>(
@@ -244,7 +197,8 @@ async fn send_http_request_inner<R: Runtime>(
 
     let (done_tx, done_rx) = oneshot::channel::<Result<HttpResponse>>();
 
-    // let (resp_tx, resp_rx) = oneshot::channel::<std::result::Result<Response, reqwest::Error>>();
+    // Clone the cancelled_rx for the spawned task
+    let cancelled_rx_clone = cancelled_rx.clone();
     {
         let response = response.clone();
         let app_handle = app_handle.clone();
@@ -258,6 +212,7 @@ async fn send_http_request_inner<R: Runtime>(
                 response_id,
                 app_handle.clone(),
                 update_source.clone(),
+                cancelled_rx_clone,
             )
             .await;
 
@@ -482,10 +437,15 @@ async fn execute_transaction<R: Runtime>(
     response_id: String,
     app_handle: tauri::AppHandle<R>,
     update_source: UpdateSource,
+    cancelled_rx: Receiver<bool>,
 ) -> Result<HttpResponse> {
     let sender = ReqwestSender::with_client(client);
     let transaction = HttpTransaction::new(sender);
-    let (final_response, events) = transaction.execute(sendable_request).await?;
+
+    // Execute the transaction with cancellation support
+    let (final_response, events) = transaction
+        .execute_with_cancellation(sendable_request, cancelled_rx)
+        .await?;
 
     let mut resp = response.lock().await.clone();
     resp.headers = final_response
@@ -519,5 +479,55 @@ async fn execute_transaction<R: Runtime>(
         println!("   {}", event);
     }
 
+    // Note: Cookie jar updates would need to be handled here if cookies are being managed
+    // The previous implementation had cookie handling commented out, so keeping it that way
+
     Ok(resp)
+}
+
+async fn apply_authentication<R: Runtime>(
+    window: &WebviewWindow<R>,
+    sendable_request: &mut SendableHttpRequest,
+    request: &HttpRequest,
+    auth_context_id: String,
+    plugin_manager: &PluginManager,
+    plugin_context: &PluginContext,
+) -> Result<()> {
+    match &request.authentication_type {
+        None => {
+            // No authentication found. Not even inherited
+        }
+        Some(authentication_type) if authentication_type == "none" => {
+            // Explicitly no authentication
+        }
+        Some(authentication_type) => {
+            let req = CallHttpAuthenticationRequest {
+                context_id: format!("{:x}", md5::compute(auth_context_id)),
+                values: serde_json::from_value(serde_json::to_value(&request.authentication)?)?,
+                url: sendable_request.url.clone(),
+                method: sendable_request.method.clone(),
+                headers: sendable_request
+                    .headers
+                    .iter()
+                    .map(|(name, value)| HttpHeader {
+                        name: name.to_string(),
+                        value: value.to_string(),
+                    })
+                    .collect(),
+            };
+            let plugin_result = plugin_manager
+                .call_http_authentication(&window, &authentication_type, req, plugin_context)
+                .await?;
+
+            for header in plugin_result.set_headers.unwrap_or_default() {
+                sendable_request.insert_header((header.name, header.value));
+            }
+
+            if let Some(params) = plugin_result.set_query_parameters {
+                let params = params.into_iter().map(|p| (p.name, p.value)).collect::<Vec<_>>();
+                sendable_request.url = append_query_params(&sendable_request.url, params);
+            }
+        }
+    }
+    Ok(())
 }
