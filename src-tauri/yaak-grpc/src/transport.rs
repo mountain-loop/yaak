@@ -1,11 +1,11 @@
 use crate::error::Result;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use hyper_util::client::legacy::connect:: HttpConnector;
+use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
-use hyper_util:: rt::TokioExecutor;
+use hyper_util::rt::TokioExecutor;
 use log::info;
 use tonic::body::BoxBody;
-use yaak_tls: :{get_tls_config, ClientCertificateConfig};
+use yaak_tls::{get_tls_config, ClientCertificateConfig};
 
 // Enable ALPN to allow protocol negotiation between HTTP/1.1 and HTTP/2
 const WITH_ALPN: bool = true;
@@ -32,7 +32,7 @@ pub(crate) fn get_transport(
         .build(connector);
 
     info!(
-        "Created gRPC client validate_certs={} client_cert={} (supports HTTP/1.1 and HTTP/2)",
+        "Created gRPC client validate_certs={} client_cert={}",
         validate_certificates,
         client_cert.is_some()
     );
