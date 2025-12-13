@@ -1,11 +1,10 @@
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
 use log::{debug, info, warn};
-use reqwest::redirect::Policy;
-use reqwest::{Client, Proxy};
+use reqwest::{redirect, Client, Proxy};
 use reqwest_cookie_store::CookieStoreMutex;
 use std::sync::Arc;
-use yaak_tls::{ClientCertificateConfig, get_tls_config};
+use yaak_tls::{get_tls_config, ClientCertificateConfig};
 
 #[derive(Clone)]
 pub struct HttpConnectionProxySettingAuth {
@@ -28,7 +27,6 @@ pub enum HttpConnectionProxySetting {
 #[derive(Clone)]
 pub struct HttpConnectionOptions {
     pub id: String,
-    pub follow_redirects: bool,
     pub validate_certificates: bool,
     pub proxy: HttpConnectionProxySetting,
     pub cookie_provider: Option<Arc<CookieStoreMutex>>,
@@ -39,6 +37,7 @@ impl HttpConnectionOptions {
     pub(crate) fn build_client(&self) -> Result<Client> {
         let mut client = Client::builder()
             .connection_verbose(true)
+            .redirect(redirect::Policy::none())
             .gzip(true)
             .brotli(true)
             .deflate(true)
@@ -52,12 +51,6 @@ impl HttpConnectionOptions {
 
         // Configure DNS resolver
         client = client.dns_resolver(LocalhostResolver::new());
-
-        // Configure redirects
-        client = client.redirect(match self.follow_redirects {
-            true => Policy::limited(10), // TODO: Handle redirects natively
-            false => Policy::none(),
-        });
 
         // Configure cookie provider
         if let Some(p) = &self.cookie_provider {

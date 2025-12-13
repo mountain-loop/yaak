@@ -9,13 +9,14 @@ use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::fs;
 use tokio::fs::create_dir_all;
 use tokio::sync::watch::Receiver;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::manager::HttpConnectionManager;
-use yaak_http::sender::{HttpSender, ReqwestSender};
-use yaak_http::types::{append_query_params, SendableHttpRequest, SendableHttpRequestOptions};
+use yaak_http::sender::ReqwestSender;
+use yaak_http::transaction::HttpTransaction;
+use yaak_http::types::{SendableHttpRequest, SendableHttpRequestOptions, append_query_params};
 use yaak_models::models::{
     CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader, HttpResponseState,
     ProxySetting, ProxySettingAuth,
@@ -109,6 +110,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
 
     // Build the sendable request using the new SendableHttpRequest type
     let options = SendableHttpRequestOptions {
+        follow_redirects: workspace.setting_follow_redirects,
         timeout: if workspace.setting_request_timeout > 0 {
             Some(Duration::from_millis(workspace.setting_request_timeout.unsigned_abs() as u64))
         } else {
@@ -179,7 +181,6 @@ pub async fn send_http_request_with_context<R: Runtime>(
     let client = connection_manager
         .get_client(&HttpConnectionOptions {
             id: plugin_context.id.clone(),
-            follow_redirects: workspace.setting_follow_redirects,
             validate_certificates: workspace.setting_validate_certificates,
             proxy: proxy_setting,
             cookie_provider: maybe_cookie_manager.as_ref().map(|(p, _)| Arc::clone(&p)),
@@ -237,8 +238,6 @@ pub async fn send_http_request_with_context<R: Runtime>(
 
     let (done_tx, done_rx) = oneshot::channel::<HttpResponse>();
 
-    let start = std::time::Instant::now();
-
     // let (resp_tx, resp_rx) = oneshot::channel::<std::result::Result<Response, reqwest::Error>>();
     {
         let response = response.clone();
@@ -247,8 +246,21 @@ pub async fn send_http_request_with_context<R: Runtime>(
         let response_id = response_id.clone();
         tokio::spawn(async move {
             let sender = ReqwestSender::with_client(client);
-            let final_response =
-                sender.send(sendable_request).await.expect("Failed to send request");
+            let transaction = HttpTransaction::new(sender);
+            let (final_response, events) = match transaction.execute(sendable_request).await {
+                Ok(r) => r,
+                Err(e) => {
+                    done_tx
+                        .send(response_err(
+                            &app_handle,
+                            &response.lock().await.clone(),
+                            e.to_string(),
+                            &update_source,
+                        ))
+                        .unwrap();
+                    return;
+                }
+            };
             let mut resp = { response.lock().await.clone() };
             resp.headers = final_response
                 .headers
@@ -278,7 +290,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
                 .db()
                 .update_http_response_if_id(&resp, &update_source)
                 .expect("Failed to update response after connected");
-            for event in final_response.events {
+            for event in events {
                 println!("   {}", event);
             }
             done_tx.send(resp).unwrap();
@@ -463,8 +475,9 @@ pub async fn send_http_request_with_context<R: Runtime>(
             match app_handle.with_db(|c| c.get_http_response(&response_id)) {
                 Ok(mut r) => {
                     r.state = HttpResponseState::Closed;
-                    r.elapsed = start.elapsed().as_millis() as i32;
-                    r.elapsed_headers = start.elapsed().as_millis() as i32;
+                    // TODO
+                    // r.elapsed = start.elapsed().as_millis() as i32;
+                    // r.elapsed_headers = start.elapsed().as_millis() as i32;
                     app_handle.db().update_http_response_if_id(&r, &UpdateSource::from_window(window))
                         .expect("Failed to update response")
                 },

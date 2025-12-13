@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::types::{SendableBody, SendableHttpRequest};
 use async_trait::async_trait;
 use reqwest::{Client, Method, Version};
@@ -46,14 +46,17 @@ pub struct SendableHttpResponse {
     pub body: Vec<u8>,
     pub content_length: Option<u64>,
     pub timing: HttpResponseTiming,
-    pub events: Vec<HttpResponseEvent>,
 }
 
 /// Trait for sending HTTP requests
 #[async_trait]
 pub trait HttpSender: Send + Sync {
     /// Send an HTTP request and return the response
-    async fn send(&self, request: SendableHttpRequest) -> Result<SendableHttpResponse>;
+    async fn send(
+        &self,
+        request: SendableHttpRequest,
+        events: &mut Vec<HttpResponseEvent>,
+    ) -> Result<SendableHttpResponse>;
 }
 
 /// Reqwest-based implementation of HttpSender
@@ -64,7 +67,7 @@ pub struct ReqwestSender {
 impl ReqwestSender {
     /// Create a new ReqwestSender with a default client
     pub fn new() -> Result<Self> {
-        let client = Client::builder().build().map_err(crate::error::Error::Client)?;
+        let client = Client::builder().build().map_err(Error::Client)?;
         Ok(Self { client })
     }
 
@@ -76,12 +79,14 @@ impl ReqwestSender {
 
 #[async_trait]
 impl HttpSender for ReqwestSender {
-    async fn send(&self, request: SendableHttpRequest) -> Result<SendableHttpResponse> {
-        let mut events = Vec::new();
-
+    async fn send(
+        &self,
+        request: SendableHttpRequest,
+        events: &mut Vec<HttpResponseEvent>,
+    ) -> Result<SendableHttpResponse> {
         // Parse the HTTP method
         let method = Method::from_bytes(request.method.as_bytes())
-            .map_err(|e| crate::error::Error::BodyError(format!("Invalid HTTP method: {}", e)))?;
+            .map_err(|e| Error::BodyError(format!("Invalid HTTP method: {}", e)))?;
 
         // Build the request
         let mut req_builder = self.client.request(method, &request.url);
@@ -138,7 +143,14 @@ impl HttpSender for ReqwestSender {
             ));
         }
 
-        let response = self.client.execute(sendable_req).await?;
+        let timeout = sendable_req.timeout().map(|d| d.clone());
+        let response = self.client.execute(sendable_req).await.map_err(|e| {
+            if reqwest::Error::is_timeout(&e) {
+                Error::RequestTimeout(timeout.unwrap_or(Duration::from_secs(0)).clone())
+            } else {
+                Error::Client(e)
+            }
+        })?;
         let status = response.status().as_u16();
         events.push(HttpResponseEvent::ReceiveUrl {
             version: response.version(),
@@ -169,7 +181,6 @@ impl HttpSender for ReqwestSender {
             body,
             content_length,
             timing,
-            events,
         })
     }
 }

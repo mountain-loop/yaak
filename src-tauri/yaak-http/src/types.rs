@@ -48,6 +48,7 @@ pub struct SendableHttpRequest {
 #[derive(Default, Clone)]
 pub struct SendableHttpRequestOptions {
     pub timeout: Option<Duration>,
+    pub follow_redirects: bool,
 }
 
 impl SendableHttpRequest {

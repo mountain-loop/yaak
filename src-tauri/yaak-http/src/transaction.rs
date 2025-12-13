@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::sender::{HttpSender, SendableHttpResponse};
+use crate::sender::{HttpResponseEvent, HttpSender, SendableHttpResponse};
 use crate::types::SendableHttpRequest;
 
 /// HTTP Transaction that manages the lifecycle of a request, including redirect handling
@@ -26,12 +26,16 @@ impl<S: HttpSender> HttpTransaction<S> {
     }
 
     /// Execute the request, following redirects if necessary
-    pub async fn execute(&self, request: SendableHttpRequest) -> Result<SendableHttpResponse> {
+    pub async fn execute(
+        &self,
+        request: SendableHttpRequest,
+    ) -> Result<(SendableHttpResponse, Vec<HttpResponseEvent>)> {
         let mut redirect_count = 0;
         let mut current_url = request.url;
         let mut current_method = request.method;
         let mut current_headers = request.headers;
         let mut current_body = request.body;
+        let mut events = Vec::new();
 
         loop {
             // Build request for this iteration
@@ -44,12 +48,21 @@ impl<S: HttpSender> HttpTransaction<S> {
             };
 
             // Send the request
-            let response = self.sender.send(req).await?;
+            events.push(HttpResponseEvent::Setting(
+                "redirects".to_string(),
+                request.options.follow_redirects.to_string(),
+            ));
+            let response = self.sender.send(req, &mut events).await?;
 
-            // Check if this is a redirect
             if !Self::is_redirect(response.status) {
-                return Ok(response);
+                return Ok((response, events));
             }
+
+            if !request.options.follow_redirects {
+                return Ok((response, events));
+            }
+
+            events.push(HttpResponseEvent::Info("Ignoring the response body".to_string()));
 
             // Check if we've exceeded max redirects
             if redirect_count >= self.max_redirects {
@@ -84,10 +97,17 @@ impl<S: HttpSender> HttpTransaction<S> {
                 format!("{}/{}", base_path, location)
             };
 
+            events.push(HttpResponseEvent::Info(format!(
+                "Issuing redirect {redirect_count} to: {current_url}"
+            )));
+
             // Handle method changes for certain redirect codes
             if response.status == 303 {
                 // 303 See Other always changes to GET
-                current_method = "GET".to_string();
+                if current_method != "GET" {
+                    current_method = "GET".to_string();
+                    events.push(HttpResponseEvent::Info("Changing method to GET".to_string()));
+                }
                 // Remove content-related headers
                 current_headers.retain(|h| {
                     let name_lower = h.0.to_lowercase();
@@ -97,6 +117,7 @@ impl<S: HttpSender> HttpTransaction<S> {
                 // For 301/302, change POST to GET (common browser behavior)
                 // but keep other methods as-is
                 if current_method == "POST" {
+                    events.push(HttpResponseEvent::Info("Changing method to GET".to_string()));
                     current_method = "GET".to_string();
                     // Remove content-related headers
                     current_headers.retain(|h| {
@@ -156,7 +177,7 @@ impl<S: HttpSender> HttpTransaction<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sender::HttpSender;
+    use crate::sender::{HttpResponseEvent, HttpSender};
     use async_trait::async_trait;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -177,7 +198,11 @@ mod tests {
 
     #[async_trait]
     impl HttpSender for MockSender {
-        async fn send(&self, _request: SendableHttpRequest) -> Result<SendableHttpResponse> {
+        async fn send(
+            &self,
+            _request: SendableHttpRequest,
+            _events: &mut Vec<HttpResponseEvent>,
+        ) -> Result<SendableHttpResponse> {
             let mut responses = self.responses.lock().await;
             if responses.is_empty() {
                 Err(crate::error::Error::BodyError("No more mock responses".to_string()))
@@ -205,7 +230,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = transaction.execute(request).await.unwrap();
+        let (result, _) = transaction.execute(request).await.unwrap();
         assert_eq!(result.status, 200);
         assert_eq!(result.body, b"OK");
     }
@@ -238,7 +263,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = transaction.execute(request).await.unwrap();
+        let (result, _) = transaction.execute(request).await.unwrap();
         assert_eq!(result.status, 200);
         assert_eq!(result.body, b"Final");
     }
