@@ -1,14 +1,14 @@
 use crate::error::Result;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::connect:: HttpConnector;
 use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
+use hyper_util:: rt::TokioExecutor;
 use log::info;
 use tonic::body::BoxBody;
-use yaak_tls::{get_tls_config, ClientCertificateConfig};
+use yaak_tls: :{get_tls_config, ClientCertificateConfig};
 
-// I think ALPN breaks this because we're specifying http2_only
-const WITH_ALPN: bool = false;
+// Enable ALPN to allow protocol negotiation between HTTP/1.1 and HTTP/2
+const WITH_ALPN: bool = true;
 
 pub(crate) fn get_transport(
     validate_certificates: bool,
@@ -23,16 +23,16 @@ pub(crate) fn get_transport(
     let connector = HttpsConnectorBuilder::new()
         .with_tls_config(tls_config)
         .https_or_http()
+        .enable_http1()
         .enable_http2()
         .build();
 
     let client = Client::builder(TokioExecutor::new())
         .pool_max_idle_per_host(0)
-        .http2_only(true)
         .build(connector);
 
     info!(
-        "Created gRPC client validate_certs={} client_cert={}",
+        "Created gRPC client validate_certs={} client_cert={} (supports HTTP/1.1 and HTTP/2)",
         validate_certificates,
         client_cert.is_some()
     );
