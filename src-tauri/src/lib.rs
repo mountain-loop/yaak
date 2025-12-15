@@ -43,7 +43,8 @@ use yaak_plugins::events::{
     CallGrpcRequestActionArgs, CallGrpcRequestActionRequest, CallHttpRequestActionArgs,
     CallHttpRequestActionRequest, Color, FilterResponse, GetGrpcRequestActionsResponse,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionConfigResponse,
+    GetHttpRequestActionsResponse, GetHttpCollectionActionsResponse,
+    CallHttpCollectionActionArgs, CallHttpCollectionActionRequest, GetTemplateFunctionConfigResponse,
     GetTemplateFunctionSummaryResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
     PluginContext, RenderPurpose, ShowToastRequest,
 };
@@ -847,6 +848,40 @@ async fn cmd_http_request_actions<R: Runtime>(
 }
 
 #[tauri::command]
+async fn cmd_http_collection_actions<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+) -> YaakResult<Vec<GetHttpCollectionActionsResponse>> {
+    Ok(plugin_manager.get_http_collection_actions(&window).await?)
+}
+
+#[tauri::command]
+async fn cmd_call_http_collection_action<R: Runtime>(
+    window: WebviewWindow<R>,
+    req: CallHttpCollectionActionRequest,
+    plugin_manager: State<'_, PluginManager>,
+) -> YaakResult<()> {
+    let folder = match &req.args.folder {
+        Some(f) => Some(window.db().get_folder(&f.id)?),
+        None => None,
+    };
+    let workspace = match &req.args.workspace {
+        Some(w) => Some(window.db().get_workspace(&w.id)?),
+        None => None,
+    };
+
+    Ok(plugin_manager
+        .call_http_collection_action(
+            &window,
+            CallHttpCollectionActionRequest {
+                args: CallHttpCollectionActionArgs { folder, workspace },
+                ..req
+            },
+        )
+        .await?)
+}
+
+#[tauri::command]
 async fn cmd_grpc_request_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1448,6 +1483,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             cmd_call_http_authentication_action,
             cmd_call_http_request_action,
+            cmd_call_http_collection_action,
             cmd_call_grpc_request_action,
             cmd_check_for_updates,
             cmd_create_grpc_request,
@@ -1467,6 +1503,7 @@ pub fn run() {
             cmd_grpc_reflect,
             cmd_grpc_request_actions,
             cmd_http_request_actions,
+            cmd_http_collection_actions,
             cmd_import_data,
             cmd_install_plugin,
             cmd_metadata,
