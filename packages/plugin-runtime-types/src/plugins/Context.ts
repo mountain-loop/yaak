@@ -57,12 +57,20 @@ export interface Context {
     send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse['httpResponse']>;
     getById(args: GetHttpRequestByIdRequest): Promise<GetHttpRequestByIdResponse['httpRequest']>;
     render(args: RenderHttpRequestRequest): Promise<RenderHttpRequestResponse['httpRequest']>;
+    list(args: { workspaceId?: string; folderId?: string }): Promise<Array<any>>;
+  };
+  folder: {
+    list(args: { workspaceId?: string }): Promise<Array<any>>;
   };
   httpResponse: {
     find(args: FindHttpResponsesRequest): Promise<FindHttpResponsesResponse['httpResponses']>;
   };
   templates: {
     render<T extends JsonValue>(args: TemplateRenderRequest & { data: T }): Promise<T>;
+  };
+  file: {
+    writeText(filePath: string, content: string): Promise<void>;
+    readText(filePath: string): Promise<string>;
   };
   plugin: {
     reload(): void;

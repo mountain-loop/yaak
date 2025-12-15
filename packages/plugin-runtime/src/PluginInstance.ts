@@ -10,6 +10,7 @@ import {
   GrpcRequestAction,
   HttpAuthenticationAction,
   HttpRequestAction,
+  HttpCollectionAction,
   InternalEvent,
   InternalEventPayload,
   ListCookieNamesResponse,
@@ -172,6 +173,24 @@ export class PluginInstance {
         return;
       }
 
+      if (
+        payload.type === 'get_http_collection_actions_request' &&
+        Array.isArray(this.#mod?.httpCollectionActions)
+      ) {
+        const reply: HttpRequestAction[] = this.#mod.httpCollectionActions.map((a) => ({
+          ...a,
+          // Add everything except onSelect
+          onSelect: undefined,
+        }));
+        const replyPayload: InternalEventPayload = {
+          type: 'get_http_collection_actions_response',
+          pluginRefId: this.#workerData.pluginRefId,
+          actions: reply,
+        };
+        this.#sendPayload(context, replyPayload, replyId);
+        return;
+      }
+
       if (payload.type === 'get_themes_request' && Array.isArray(this.#mod?.themes)) {
         const replyPayload: InternalEventPayload = {
           type: 'get_themes_response',
@@ -295,6 +314,18 @@ export class PluginInstance {
         Array.isArray(this.#mod.httpRequestActions)
       ) {
         const action = this.#mod.httpRequestActions[payload.index];
+        if (typeof action?.onSelect === 'function') {
+          await action.onSelect(ctx, payload.args);
+          this.#sendEmpty(context, replyId);
+          return;
+        }
+      }
+
+      if (
+        payload.type === 'call_http_collection_action_request' &&
+        Array.isArray(this.#mod.httpCollectionActions)
+      ) {
+        const action = this.#mod.httpCollectionActions[payload.index];
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
           this.#sendEmpty(context, replyId);
@@ -611,6 +642,26 @@ export class PluginInstance {
           );
           return httpRequest;
         },
+        list: async (args: { workspaceId?: string; folderId?: string }) => {
+          const payload = {
+            type: 'list_http_requests_request',
+            // plugin events use camelCase field names in Rust -> snake_case mapping
+            folderId: args.folderId,
+            workspaceId: args.workspaceId,
+          } as any;
+          const { httpRequests } = await this.#sendForReply<any>(context, payload);
+          return httpRequests as any[];
+        },
+      },
+      folder: {
+        list: async (args: { workspaceId?: string }) => {
+          const payload = {
+            type: 'list_folders_request',
+            workspaceId: args.workspaceId,
+          } as any;
+          const { folders } = await this.#sendForReply<any>(context, payload);
+          return folders as any[];
+        },
       },
       cookies: {
         getValue: async (args: GetCookieValueRequest) => {
@@ -636,6 +687,24 @@ export class PluginInstance {
           const payload = { type: 'template_render_request', ...args } as const;
           const result = await this.#sendForReply<TemplateRenderResponse>(context, payload);
           return result.data as any;
+        },
+      },
+      file: {
+        writeText: async (filePath: string, content: string) => {
+          const payload: InternalEventPayload = {
+            type: 'write_text_file_request',
+            filePath,
+            content,
+          } as any;
+          await this.#sendForReply(context, payload);
+        },
+        readText: async (filePath: string) => {
+          const payload: InternalEventPayload = {
+            type: 'read_text_file_request',
+            filePath,
+          } as any;
+          const result = await this.#sendForReply<any>(context, payload);
+          return result.content;
         },
       },
       store: {
