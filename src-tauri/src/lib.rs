@@ -781,11 +781,15 @@ async fn cmd_http_response_body<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
     response: HttpResponse,
     filter: Option<&str>,
+    app_handle: AppHandle<R>,
 ) -> YaakResult<FilterResponse> {
     let body_path = match response.body_path {
-        None => {
-            return Err(GenericError("Response body path not set".to_string()));
-        }
+        None => match app_handle.db().get_http_response(&response.id) {
+            Err(_) => {
+                return Err(GenericError("Response body path not set".to_string()));
+            }
+            Ok(r) => r.body_path.ok_or(GenericError("Response body path not set".to_string()))?,
+        },
         Some(p) => p,
     };
 
