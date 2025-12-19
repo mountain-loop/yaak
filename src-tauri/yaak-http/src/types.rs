@@ -139,8 +139,7 @@ fn build_url(r: &HttpRequest) -> String {
 }
 
 fn build_headers(r: &HttpRequest) -> Vec<(String, String)> {
-    let mut headers: Vec<(String, String)> = r
-        .headers
+    r.headers
         .iter()
         .filter_map(|h| {
             if h.enabled && !h.name.is_empty() {
@@ -149,19 +148,7 @@ fn build_headers(r: &HttpRequest) -> Vec<(String, String)> {
                 None
             }
         })
-        .collect();
-
-    // Add a default User-Agent if not present
-    if !headers.iter().any(|h| h.0.to_lowercase() == "user-agent") {
-        headers.push(("User-Agent".to_string(), "yaak".to_string()));
-    }
-
-    // Add default Accept if not present
-    if !headers.iter().any(|h| h.0.to_lowercase() == "accept") {
-        headers.push(("Accept".to_string(), "*/*".to_string()));
-    }
-
-    headers
+        .collect()
 }
 
 async fn build_body(

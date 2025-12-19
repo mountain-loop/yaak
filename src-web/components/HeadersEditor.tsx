@@ -34,11 +34,11 @@ export function HeadersEditor({
   const validInheritedHeaders =
     inheritedHeaders?.filter((pair) => pair.enabled && (pair.name || pair.value)) ?? [];
   return (
-    <div className="@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)]">
+    <div className="@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)] gap-y-1.5">
       {validInheritedHeaders.length > 0 ? (
         <DetailsBanner
           color="secondary"
-          className="text-sm mb-1.5"
+          className="text-sm"
           summary={
             <HStack>
               Inherited <CountBadge count={validInheritedHeaders.length} />
