@@ -363,11 +363,12 @@ impl HttpSender for ReqwestSender {
         events.push(HttpResponseEvent::HeaderDownDone);
 
         // Determine content encoding for decompression
+        // HTTP headers are case-insensitive, so we need to search for any casing
         let encoding = ContentEncoding::from_header(
             headers
-                .get("content-encoding")
-                .or_else(|| headers.get("Content-Encoding"))
-                .map(|s| s.as_str()),
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("content-encoding"))
+                .map(|(_, v)| v.as_str()),
         );
 
         // Get the byte stream instead of loading into memory

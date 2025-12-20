@@ -84,11 +84,12 @@ impl<S: HttpSender> HttpTransaction<S> {
             }
 
             // Extract Location header before draining (headers are available immediately)
+            // HTTP headers are case-insensitive, so we need to search for any casing
             let location = response
                 .headers
-                .get("location")
-                .or_else(|| response.headers.get("Location"))
-                .cloned()
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("location"))
+                .map(|(_, v)| v.clone())
                 .ok_or_else(|| {
                     crate::error::Error::RequestError(
                         "Redirect response missing Location header".to_string(),
