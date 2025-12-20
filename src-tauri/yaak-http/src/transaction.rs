@@ -110,7 +110,9 @@ impl<S: HttpSender> HttpTransaction<S> {
             };
 
             events.push(HttpResponseEvent::Info(format!(
-                "Issuing redirect {redirect_count} to: {current_url}"
+                "Issuing redirect {} to: {}",
+                redirect_count + 1,
+                current_url
             )));
 
             // Handle method changes for certain redirect codes
