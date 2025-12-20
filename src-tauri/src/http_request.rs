@@ -332,9 +332,9 @@ async fn execute_transaction<R: Runtime>(
     let mut buf = [0u8; 8192];
 
     loop {
-        // Check for cancellation
+        // Check for cancellation - if we already have headers/body, just close cleanly
         if *cancelled_rx.borrow() {
-            return Err(GenericError("Request was cancelled".to_string()));
+            break;
         }
 
         match body_stream.read(&mut buf).await {
