@@ -21,6 +21,8 @@ pub enum HttpResponseEvent {
     ReceiveUrl { version: Version, status: String },
     HeaderUp(String, String),
     HeaderDown(String, String),
+    HeaderUpDone,
+    HeaderDownDone,
 }
 
 impl Display for HttpResponseEvent {
@@ -33,7 +35,9 @@ impl Display for HttpResponseEvent {
                 write!(f, "< {} {}", version_to_str(version), status)
             }
             HttpResponseEvent::HeaderUp(name, value) => write!(f, "> {}: {}", name, value),
+            HttpResponseEvent::HeaderUpDone => write!(f, ">"),
             HttpResponseEvent::HeaderDown(name, value) => write!(f, "< {}: {}", name, value),
+            HttpResponseEvent::HeaderDownDone => write!(f, "<"),
         }
     }
 }
@@ -45,6 +49,10 @@ pub struct SendableHttpResponse {
     pub headers: HashMap<String, String>,
     pub body: Vec<u8>,
     pub content_length: Option<u64>,
+    /// Size of the body as received over the wire (before decompression)
+    pub body_size_compressed: u64,
+    /// Size of the body after decompression (same as body.len())
+    pub body_size_decompressed: u64,
     pub timing: HttpResponseTiming,
 }
 
@@ -142,6 +150,8 @@ impl HttpSender for ReqwestSender {
                 value.to_str().unwrap_or_default().to_string(),
             ));
         }
+        events.push(HttpResponseEvent::HeaderUpDone);
+        events.push(HttpResponseEvent::Info("Sending request to server".to_string()));
 
         // Map some errors to our own, so they look nicer
         let response = self.client.execute(sendable_req).await.map_err(|e| {
@@ -173,12 +183,22 @@ impl HttpSender for ReqwestSender {
                 headers.insert(key.to_string(), v.to_string());
             }
         }
+        events.push(HttpResponseEvent::HeaderDownDone);
 
         let body = response.bytes().await?.to_vec();
 
         timing.body = start.elapsed();
 
-        Ok(SendableHttpResponse { status, headers, body, content_length, timing })
+        // Size fields are populated later by HttpTransaction after decompression
+        Ok(SendableHttpResponse {
+            status,
+            headers,
+            body,
+            content_length,
+            body_size_compressed: 0,
+            body_size_decompressed: 0,
+            timing,
+        })
     }
 }
 

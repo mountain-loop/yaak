@@ -38,9 +38,10 @@ impl HttpConnectionOptions {
         let mut client = Client::builder()
             .connection_verbose(true)
             .redirect(redirect::Policy::none())
-            .gzip(true)
-            .brotli(true)
-            .deflate(true)
+            // Decompression is handled by HttpTransaction, not reqwest
+            .no_gzip()
+            .no_brotli()
+            .no_deflate()
             .referer(false)
             .tls_info(true);
 

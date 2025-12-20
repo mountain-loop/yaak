@@ -6,12 +6,15 @@ publish = false
 
 [dependencies]
 async-trait = "0.1"
+brotli = "7"
 bytes = "1.5.0"
+flate2 = "1"
+zstd = "0.13"
 hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
 log = { workspace = true }
 mime_guess = "2.0.5"
 regex = "1.11.1"
-reqwest = { workspace = true, features = ["cookies", "gzip", "brotli", "deflate", "rustls-tls-manual-roots-no-provider", "socks", "http2", "stream"] }
+reqwest = { workspace = true, features = ["cookies", "rustls-tls-manual-roots-no-provider", "socks", "http2", "stream"] }
 reqwest_cookie_store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

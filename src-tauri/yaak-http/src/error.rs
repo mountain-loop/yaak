@@ -17,6 +17,9 @@ pub enum Error {
 
     #[error("Timeout of {0:?} reached")]
     RequestTimeout(std::time::Duration),
+
+    #[error("Decompression error: {0}")]
+    DecompressionError(String),
 }
 
 impl Serialize for Error {

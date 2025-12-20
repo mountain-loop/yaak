@@ -4,6 +4,7 @@ use tauri::{Manager, Runtime};
 
 mod chained_reader;
 pub mod client;
+pub mod decompress;
 pub mod dns;
 pub mod error;
 pub mod manager;

@@ -1,3 +1,4 @@
+use crate::decompress::{ContentEncoding, decompress};
 use crate::error::Result;
 use crate::sender::{HttpResponseEvent, HttpSender, SendableHttpResponse};
 use crate::types::SendableHttpRequest;
@@ -62,7 +63,10 @@ impl<S: HttpSender> HttpTransaction<S> {
                 }
             };
 
+            let response = Self::decompress_response(response, &mut events)?;
+
             if !Self::is_redirect(response.status) {
+                // Decompress the response body if needed
                 return Ok((response, events));
             }
 
@@ -144,10 +148,43 @@ impl<S: HttpSender> HttpTransaction<S> {
         }
     }
 
-
     /// Check if a status code indicates a redirect
     fn is_redirect(status: u16) -> bool {
         matches!(status, 301 | 302 | 303 | 307 | 308)
+    }
+
+    /// Decompress the response body based on Content-Encoding header
+    fn decompress_response(
+        mut response: SendableHttpResponse,
+        events: &mut Vec<HttpResponseEvent>,
+    ) -> Result<SendableHttpResponse> {
+        let content_encoding = response
+            .headers
+            .get("content-encoding")
+            .or_else(|| response.headers.get("Content-Encoding"))
+            .map(|s| s.as_str());
+
+        let encoding = ContentEncoding::from_header(content_encoding);
+
+        if encoding == ContentEncoding::Identity {
+            // No compression, just set sizes
+            let size = response.body.len() as u64;
+            response.body_size_compressed = size;
+            response.body_size_decompressed = size;
+            events.push(HttpResponseEvent::Info(format!("Response body not compressed")));
+            return Ok(response);
+        }
+
+        events
+            .push(HttpResponseEvent::Info(format!("Decompressing response body ({:?})", encoding)));
+
+        let result = decompress(response.body, encoding)?;
+
+        response.body = result.data;
+        response.body_size_compressed = result.compressed_size;
+        response.body_size_decompressed = result.decompressed_size;
+
+        Ok(response)
     }
 
     /// Extract the base URL (scheme + host) from a full URL
