@@ -2,7 +2,6 @@ import type { HttpResponse } from '@yaakapp-internal/models';
 import { useMemo } from 'react';
 import { CountBadge } from './core/CountBadge';
 import { DetailsBanner } from './core/DetailsBanner';
-import { Icon } from './core/Icon';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
 
 interface Props {
