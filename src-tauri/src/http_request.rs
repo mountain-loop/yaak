@@ -425,6 +425,13 @@ async fn execute_transaction<R: Runtime>(
     let sender = ReqwestSender::with_client(client);
     let transaction = HttpTransaction::new(sender);
 
+    // Capture request headers before sending (headers will be moved)
+    let request_headers: Vec<HttpResponseHeader> = sendable_request
+        .headers
+        .iter()
+        .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
+        .collect();
+
     // Execute the transaction with cancellation support
     let (final_response, events) =
         transaction.execute_with_cancellation(sendable_request, cancelled_rx).await?;
@@ -435,9 +442,11 @@ async fn execute_transaction<R: Runtime>(
         .into_iter()
         .map(|h| HttpResponseHeader { name: h.0.to_string(), value: h.1.to_string() })
         .collect();
+    resp.request_headers = request_headers;
     resp.status = final_response.status as i32;
     resp.state = HttpResponseState::Closed;
-    resp.content_length = Some(final_response.body.len() as i32);
+    resp.content_length = Some(final_response.body_size_decompressed as i32);
+    resp.content_length_compressed = Some(final_response.body_size_compressed as i32);
     resp.elapsed = final_response.timing.body.as_millis() as i32;
     resp.elapsed_headers = final_response.timing.headers.as_millis() as i32;
 

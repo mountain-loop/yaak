@@ -76,7 +76,8 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         label: 'Headers',
         rightSlot: (
           <CountBadge
-            count={activeResponse?.headers.filter((h) => h.name && h.value).length ?? 0}
+            count2={activeResponse?.headers.length ?? 0}
+            count={activeResponse?.requestHeaders.length ?? 0}
           />
         ),
       },
@@ -85,7 +86,13 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         label: 'Info',
       },
     ],
-    [activeResponse?.headers, mimeType, setViewMode, viewMode],
+    [
+      activeResponse?.headers,
+      mimeType,
+      setViewMode,
+      viewMode,
+      activeResponse?.requestHeaders.length,
+    ],
   );
   const activeTab = activeTabs?.[activeRequestId];
   const setActiveTab = useCallback(
@@ -133,7 +140,10 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 <span>&bull;</span>
                 <HttpResponseDurationTag response={activeResponse} />
                 <span>&bull;</span>
-                <SizeTag contentLength={activeResponse.contentLength ?? 0} />
+                <SizeTag
+                  contentLength={activeResponse.contentLength ?? 0}
+                  contentLengthCompressed={activeResponse.contentLengthCompressed}
+                />
 
                 <div className="ml-auto">
                   <RecentHttpResponsesDropdown
