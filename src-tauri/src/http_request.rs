@@ -437,6 +437,7 @@ async fn execute_transaction<R: Runtime>(
         .collect();
     resp.status = final_response.status as i32;
     resp.state = HttpResponseState::Closed;
+    resp.content_length = Some(final_response.body.len() as i32);
     resp.elapsed = final_response.timing.body.as_millis() as i32;
     resp.elapsed_headers = final_response.timing.headers.as_millis() as i32;
 
