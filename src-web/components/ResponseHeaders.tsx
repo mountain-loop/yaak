@@ -37,17 +37,8 @@ export function ResponseHeaders({ response }: Props) {
       >
         <KeyValueRows>
           {responseHeaders.map((h, i) => (
-            <KeyValueRow
-              labelColor="primary"
-              // biome-ignore lint/suspicious/noArrayIndexKey: none
-              key={i}
-              label={
-                <span className="flex items-center gap-1.5 -ml-1">
-                  <Icon icon="arrow_left" size="2xs" className="text-text-subtlest opacity-60" />
-                  h.name
-                </span>
-              }
-            >
+            // biome-ignore lint/suspicious/noArrayIndexKey: none
+            <KeyValueRow labelColor="primary" key={i} label={h.name}>
               {h.value}
             </KeyValueRow>
           ))}
@@ -63,17 +54,8 @@ export function ResponseHeaders({ response }: Props) {
       >
         <KeyValueRows>
           {requestHeaders.map((h, i) => (
-            <KeyValueRow
-              labelColor="primary"
-              // biome-ignore lint/suspicious/noArrayIndexKey: none
-              key={i}
-              label={
-                <span className="flex items-center gap-1.5 -ml-1">
-                  <Icon icon="arrow_right" size="2xs" className="text-text-subtlest opacity-60" />
-                  h.name
-                </span>
-              }
-            >
+            // biome-ignore lint/suspicious/noArrayIndexKey: none
+            <KeyValueRow labelColor="primary" key={i} label={h.name}>
               {h.value}
             </KeyValueRow>
           ))}
