@@ -1,6 +1,11 @@
 use crate::error::{Error, Result};
+use async_compression::tokio::bufread::{
+    BrotliDecoder, DeflateDecoder as AsyncDeflateDecoder, GzipDecoder,
+    ZstdDecoder as AsyncZstdDecoder,
+};
 use flate2::read::{DeflateDecoder, GzDecoder};
 use std::io::Read;
+use tokio::io::{AsyncBufRead, AsyncRead};
 
 /// Supported compression encodings
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +85,21 @@ fn decompress_brotli(data: &[u8]) -> Result<Vec<u8>> {
 fn decompress_zstd(data: &[u8]) -> Result<Vec<u8>> {
     zstd::stream::decode_all(std::io::Cursor::new(data))
         .map_err(|e| Error::DecompressionError(format!("zstd decompression failed: {}", e)))
+}
+
+/// Create a streaming decompressor that wraps an async reader.
+/// Returns an AsyncRead that decompresses data on-the-fly.
+pub fn streaming_decoder<R: AsyncBufRead + Unpin + Send + 'static>(
+    reader: R,
+    encoding: ContentEncoding,
+) -> Box<dyn AsyncRead + Unpin + Send> {
+    match encoding {
+        ContentEncoding::Identity => Box::new(reader),
+        ContentEncoding::Gzip => Box::new(GzipDecoder::new(reader)),
+        ContentEncoding::Deflate => Box::new(AsyncDeflateDecoder::new(reader)),
+        ContentEncoding::Brotli => Box::new(BrotliDecoder::new(reader)),
+        ContentEncoding::Zstd => Box::new(AsyncZstdDecoder::new(reader)),
+    }
 }
 
 #[cfg(test)]

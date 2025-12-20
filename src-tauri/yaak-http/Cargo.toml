@@ -5,10 +5,12 @@ edition = "2024"
 publish = false
 
 [dependencies]
+async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate", "brotli", "zstd"] }
 async-trait = "0.1"
 brotli = "7"
 bytes = "1.5.0"
 flate2 = "1"
+futures-util = "0.3"
 zstd = "0.13"
 hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
 log = { workspace = true }

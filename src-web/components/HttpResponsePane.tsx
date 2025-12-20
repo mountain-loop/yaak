@@ -156,72 +156,87 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
             )}
           </HStack>
 
-          {activeResponse?.error ? (
-            <Banner color="danger" className="m-2">
-              {activeResponse.error}
-            </Banner>
-          ) : (
-            <Tabs
-              key={activeRequestId} // Freshen tabs on request change
-              value={activeTab}
-              onChangeValue={setActiveTab}
-              tabs={tabs}
-              label="Response"
-              className="ml-3 mr-3 mb-3"
-              tabListClassName="mt-0.5"
-            >
-              <TabContent value={TAB_BODY}>
-                <ErrorBoundary name="Http Response Viewer">
-                  <Suspense>
-                    <ConfirmLargeResponse response={activeResponse}>
-                      {activeResponse.state === 'initialized' ? (
-                        <EmptyStateText>
-                          <VStack space={3}>
-                            <HStack space={3}>
-                              <LoadingIcon className="text-text-subtlest" />
-                              Sending Request
-                            </HStack>
-                            <Button size="sm" variant="border" onClick={() => cancel.mutate()}>
-                              Cancel
-                            </Button>
-                          </VStack>
-                        </EmptyStateText>
-                      ) : activeResponse.state === 'closed' &&
-                        activeResponse.contentLength === 0 ? (
-                        <EmptyStateText>Empty </EmptyStateText>
-                      ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
-                        <EventStreamViewer response={activeResponse} />
-                      ) : mimeType?.match(/^image\/svg/) ? (
-                        <SvgViewer response={activeResponse} />
-                      ) : mimeType?.match(/^image/i) ? (
-                        <EnsureCompleteResponse response={activeResponse} Component={ImageViewer} />
-                      ) : mimeType?.match(/^audio/i) ? (
-                        <EnsureCompleteResponse response={activeResponse} Component={AudioViewer} />
-                      ) : mimeType?.match(/^video/i) ? (
-                        <EnsureCompleteResponse response={activeResponse} Component={VideoViewer} />
-                      ) : mimeType?.match(/pdf/i) ? (
-                        <EnsureCompleteResponse response={activeResponse} Component={PdfViewer} />
-                      ) : mimeType?.match(/csv|tab-separated/i) ? (
-                        <CsvViewer className="pb-2" response={activeResponse} />
-                      ) : (
-                        <HTMLOrTextViewer
-                          textViewerClassName="-mr-2 bg-surface" // Pull to the right
-                          response={activeResponse}
-                          pretty={viewMode === 'pretty'}
-                        />
-                      )}
-                    </ConfirmLargeResponse>
-                  </Suspense>
-                </ErrorBoundary>
-              </TabContent>
-              <TabContent value={TAB_HEADERS}>
-                <ResponseHeaders response={activeResponse} />
-              </TabContent>
-              <TabContent value={TAB_INFO}>
-                <ResponseInfo response={activeResponse} />
-              </TabContent>
-            </Tabs>
-          )}
+          <div className="overflow-hidden flex flex-col min-h-0">
+            {activeResponse?.error && (
+              <Banner color="danger" className="mx-3 mt-1 flex-shrink-0">
+                {activeResponse.error}
+              </Banner>
+            )}
+            {/* Show tabs if we have any data (headers, body, etc.) even if there's an error */}
+            {(activeResponse?.headers.length > 0 ||
+              activeResponse?.bodyPath ||
+              !activeResponse?.error) && (
+              <Tabs
+                key={activeRequestId} // Freshen tabs on request change
+                value={activeTab}
+                onChangeValue={setActiveTab}
+                tabs={tabs}
+                label="Response"
+                className="ml-3 mr-3 mb-3 min-h-0 flex-1"
+                tabListClassName="mt-0.5"
+              >
+                <TabContent value={TAB_BODY}>
+                  <ErrorBoundary name="Http Response Viewer">
+                    <Suspense>
+                      <ConfirmLargeResponse response={activeResponse}>
+                        {activeResponse.state === 'initialized' ? (
+                          <EmptyStateText>
+                            <VStack space={3}>
+                              <HStack space={3}>
+                                <LoadingIcon className="text-text-subtlest" />
+                                Sending Request
+                              </HStack>
+                              <Button size="sm" variant="border" onClick={() => cancel.mutate()}>
+                                Cancel
+                              </Button>
+                            </VStack>
+                          </EmptyStateText>
+                        ) : activeResponse.state === 'closed' &&
+                          activeResponse.contentLength === 0 ? (
+                          <EmptyStateText>Empty </EmptyStateText>
+                        ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
+                          <EventStreamViewer response={activeResponse} />
+                        ) : mimeType?.match(/^image\/svg/) ? (
+                          <SvgViewer response={activeResponse} />
+                        ) : mimeType?.match(/^image/i) ? (
+                          <EnsureCompleteResponse
+                            response={activeResponse}
+                            Component={ImageViewer}
+                          />
+                        ) : mimeType?.match(/^audio/i) ? (
+                          <EnsureCompleteResponse
+                            response={activeResponse}
+                            Component={AudioViewer}
+                          />
+                        ) : mimeType?.match(/^video/i) ? (
+                          <EnsureCompleteResponse
+                            response={activeResponse}
+                            Component={VideoViewer}
+                          />
+                        ) : mimeType?.match(/pdf/i) ? (
+                          <EnsureCompleteResponse response={activeResponse} Component={PdfViewer} />
+                        ) : mimeType?.match(/csv|tab-separated/i) ? (
+                          <CsvViewer className="pb-2" response={activeResponse} />
+                        ) : (
+                          <HTMLOrTextViewer
+                            textViewerClassName="-mr-2 bg-surface" // Pull to the right
+                            response={activeResponse}
+                            pretty={viewMode === 'pretty'}
+                          />
+                        )}
+                      </ConfirmLargeResponse>
+                    </Suspense>
+                  </ErrorBoundary>
+                </TabContent>
+                <TabContent value={TAB_HEADERS}>
+                  <ResponseHeaders response={activeResponse} />
+                </TabContent>
+                <TabContent value={TAB_INFO}>
+                  <ResponseInfo response={activeResponse} />
+                </TabContent>
+              </Tabs>
+            )}
+          </div>
         </div>
       )}
     </div>

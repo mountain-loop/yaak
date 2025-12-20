@@ -7,8 +7,8 @@ use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
-use tokio::fs;
-use tokio::fs::create_dir_all;
+use tokio::fs::{File, create_dir_all};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio::sync::watch::Receiver;
 use yaak_http::client::{
@@ -224,176 +224,6 @@ async fn send_http_request_inner<R: Runtime>(
             _ => Err(GenericError("Ephemeral request was cancelled".to_string())),
         },
     }
-
-    // tokio::spawn(async move {
-    //     let _ = resp_tx.send(client.execute(sendable_req).await);
-    // });
-
-    // let raw_response = tokio::select! {
-    //     Ok(r) = resp_rx => r,
-    //     _ = cancelled_rx.changed() => {
-    //         let mut r = response.lock().await;
-    //         r.elapsed_headers = start.elapsed().as_millis() as i32;
-    //         r.elapsed = start.elapsed().as_millis() as i32;
-    //         return Ok(response_err(&app_handle, &r, "Request was cancelled".to_string(), &update_source));
-    //     }
-    // };
-
-    // {
-    //     let app_handle = app_handle.clone();
-    //     let window = window.clone();
-    //     let cancelled_rx = cancelled_rx.clone();
-    //     let response_id = response_id.clone();
-    //     let response = response.clone();
-    //     let update_source = update_source.clone();
-    //     tokio::spawn(async move {
-    //         match raw_response {
-    //             Ok(mut v) => {
-    //                 let content_length = v.content_length();
-    //                 let response_headers = v.headers().clone();
-    //                 let dir = app_handle.path().app_data_dir().unwrap();
-    //                 let base_dir = dir.join("responses");
-    //                 create_dir_all(base_dir.clone()).await.expect("Failed to create responses dir");
-    //                 let body_path = if response_id.is_empty() {
-    //                     base_dir.join(uuid::Uuid::new_v4().to_string())
-    //                 } else {
-    //                     base_dir.join(response_id.clone())
-    //                 };
-    //
-    //                 {
-    //                     let mut r = response.lock().await;
-    //                     r.body_path = Some(body_path.to_str().unwrap().to_string());
-    //                     r.elapsed_headers = start.elapsed().as_millis() as i32;
-    //                     r.elapsed = start.elapsed().as_millis() as i32;
-    //                     r.status = v.status().as_u16() as i32;
-    //                     r.status_reason = v.status().canonical_reason().map(|s| s.to_string());
-    //                     r.headers = response_headers
-    //                         .iter()
-    //                         .map(|(k, v)| HttpResponseHeader {
-    //                             name: k.as_str().to_string(),
-    //                             value: v.to_str().unwrap_or_default().to_string(),
-    //                         })
-    //                         .collect();
-    //                     r.url = v.url().to_string();
-    //                     r.remote_addr = v.remote_addr().map(|a| a.to_string());
-    //                     r.version = match v.version() {
-    //                         reqwest::Version::HTTP_09 => Some("HTTP/0.9".to_string()),
-    //                         reqwest::Version::HTTP_10 => Some("HTTP/1.0".to_string()),
-    //                         reqwest::Version::HTTP_11 => Some("HTTP/1.1".to_string()),
-    //                         reqwest::Version::HTTP_2 => Some("HTTP/2".to_string()),
-    //                         reqwest::Version::HTTP_3 => Some("HTTP/3".to_string()),
-    //                         _ => None,
-    //                     };
-    //
-    //                     r.state = HttpResponseState::Connected;
-    //                     app_handle
-    //                         .db()
-    //                         .update_http_response_if_id(&r, &update_source)
-    //                         .expect("Failed to update response after connected");
-    //                 }
-    //
-    //                 // Write body to FS
-    //                 let mut f = File::options()
-    //                     .create(true)
-    //                     .truncate(true)
-    //                     .write(true)
-    //                     .open(&body_path)
-    //                     .await
-    //                     .expect("Failed to open file");
-    //
-    //                 let mut written_bytes: usize = 0;
-    //                 loop {
-    //                     let chunk = v.chunk().await;
-    //                     if *cancelled_rx.borrow() {
-    //                         // Request was canceled
-    //                         return;
-    //                     }
-    //                     match chunk {
-    //                         Ok(Some(bytes)) => {
-    //                             let mut r = response.lock().await;
-    //                             r.elapsed = start.elapsed().as_millis() as i32;
-    //                             f.write_all(&bytes).await.expect("Failed to write to file");
-    //                             f.flush().await.expect("Failed to flush file");
-    //                             written_bytes += bytes.len();
-    //                             r.content_length = Some(written_bytes as i32);
-    //                             app_handle
-    //                                 .db()
-    //                                 .update_http_response_if_id(&r, &update_source)
-    //                                 .expect("Failed to update response");
-    //                         }
-    //                         Ok(None) => {
-    //                             break;
-    //                         }
-    //                         Err(e) => {
-    //                             response_err(
-    //                                 &app_handle,
-    //                                 &*response.lock().await,
-    //                                 e.to_string(),
-    //                                 &update_source,
-    //                             );
-    //                             break;
-    //                         }
-    //                     }
-    //                 }
-    //
-    //                 // Set the final content length
-    //                 {
-    //                     let mut r = response.lock().await;
-    //                     r.content_length = match content_length {
-    //                         Some(l) => Some(l as i32),
-    //                         None => Some(written_bytes as i32),
-    //                     };
-    //                     r.state = HttpResponseState::Closed;
-    //                     app_handle
-    //                         .db()
-    //                         .update_http_response_if_id(&r, &UpdateSource::from_window(&window))
-    //                         .expect("Failed to update response");
-    //                 };
-    //
-    //                 // Add cookie store if specified
-    //                 if let Some((cookie_store, mut cookie_jar)) = maybe_cookie_manager {
-    //                     // let cookies = response_headers.get_all(SET_COOKIE).iter().map(|h| {
-    //                     //     println!("RESPONSE COOKIE: {}", h.to_str().unwrap());
-    //                     //     cookie_store::RawCookie::from_str(h.to_str().unwrap())
-    //                     //         .expect("Failed to parse cookie")
-    //                     // });
-    //                     // store.store_response_cookies(cookies, &url);
-    //
-    //                     let json_cookies: Vec<Cookie> = cookie_store
-    //                         .lock()
-    //                         .unwrap()
-    //                         .iter_any()
-    //                         .map(|c| {
-    //                             let json_cookie =
-    //                                 serde_json::to_value(&c).expect("Failed to serialize cookie");
-    //                             serde_json::from_value(json_cookie)
-    //                                 .expect("Failed to deserialize cookie")
-    //                         })
-    //                         .collect::<Vec<_>>();
-    //                     cookie_jar.cookies = json_cookies;
-    //                     if let Err(e) = app_handle
-    //                         .db()
-    //                         .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))
-    //                     {
-    //                         error!("Failed to update cookie jar: {}", e);
-    //                     };
-    //                 }
-    //             }
-    //             Err(e) => {
-    //                 warn!("Failed to execute request {e}");
-    //                 response_err(
-    //                     &app_handle,
-    //                     &*response.lock().await,
-    //                     format!("{e} → {e:?}"),
-    //                     &update_source,
-    //                 );
-    //             }
-    //         };
-    //
-    //         let r = response.lock().await.clone();
-    //         done_tx.send(r).unwrap();
-    //     });
-    // };
 }
 
 pub fn resolve_http_request<R: Runtime>(
@@ -424,6 +254,7 @@ async fn execute_transaction<R: Runtime>(
 ) -> Result<HttpResponse> {
     let sender = ReqwestSender::with_client(client);
     let transaction = HttpTransaction::new(sender);
+    let start = Instant::now();
 
     // Capture request headers before sending (headers will be moved)
     let request_headers: Vec<HttpResponseHeader> = sendable_request
@@ -433,23 +264,11 @@ async fn execute_transaction<R: Runtime>(
         .collect();
 
     // Execute the transaction with cancellation support
-    let (final_response, events) =
-        transaction.execute_with_cancellation(sendable_request, cancelled_rx).await?;
+    // This returns the response with headers, but body is not yet consumed
+    let (http_response, events) =
+        transaction.execute_with_cancellation(sendable_request, cancelled_rx.clone()).await?;
 
-    let mut resp = response.lock().await.clone();
-    resp.headers = final_response
-        .headers
-        .into_iter()
-        .map(|h| HttpResponseHeader { name: h.0.to_string(), value: h.1.to_string() })
-        .collect();
-    resp.request_headers = request_headers;
-    resp.status = final_response.status as i32;
-    resp.state = HttpResponseState::Closed;
-    resp.content_length = Some(final_response.body_size_decompressed as i32);
-    resp.content_length_compressed = Some(final_response.body_size_compressed as i32);
-    resp.elapsed = final_response.timing.body.as_millis() as i32;
-    resp.elapsed_headers = final_response.timing.headers.as_millis() as i32;
-
+    // Prepare the response path before consuming the body
     let dir = app_handle.path().app_data_dir()?;
     let base_dir = dir.join("responses");
     create_dir_all(&base_dir).await?;
@@ -460,7 +279,103 @@ async fn execute_transaction<R: Runtime>(
         base_dir.join(&response_id)
     };
 
-    fs::write(&body_path, final_response.body).await?;
+    // Extract metadata before consuming the body (headers are available immediately)
+    let status = http_response.status;
+    let status_reason = http_response.status_reason.clone();
+    let url = http_response.url.clone();
+    let remote_addr = http_response.remote_addr.clone();
+    let version = http_response.version.clone();
+    let content_length = http_response.content_length;
+    let headers: Vec<HttpResponseHeader> = http_response
+        .headers
+        .iter()
+        .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
+        .collect();
+    let headers_timing = http_response.timing.headers;
+
+    // Update response with headers info and mark as connected
+    {
+        let mut r = response.lock().await;
+        r.body_path = Some(
+            body_path
+                .to_str()
+                .ok_or(GenericError(format!("Invalid path {body_path:?}")))?
+                .to_string(),
+        );
+        r.elapsed_headers = headers_timing.as_millis() as i32;
+        r.elapsed = start.elapsed().as_millis() as i32;
+        r.status = status as i32;
+        r.status_reason = status_reason.clone();
+        r.url = url.clone();
+        r.remote_addr = remote_addr.clone();
+        r.version = version.clone();
+        r.headers = headers.clone();
+        r.request_headers = request_headers.clone();
+        r.state = HttpResponseState::Connected;
+        app_handle.db().update_http_response_if_id(&r, &update_source)?;
+    }
+
+    // Get the body stream for manual consumption
+    let mut body_stream = http_response.into_body_stream()?;
+
+    // Open file for writing
+    let mut file = File::options()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&body_path)
+        .await
+        .map_err(|e| GenericError(format!("Failed to open file: {}", e)))?;
+
+    // Stream body to file, updating DB on each chunk
+    let mut written_bytes: usize = 0;
+    let mut buf = [0u8; 8192];
+
+    loop {
+        // Check for cancellation
+        if *cancelled_rx.borrow() {
+            return Err(GenericError("Request was cancelled".to_string()));
+        }
+
+        match body_stream.read(&mut buf).await {
+            Ok(0) => break, // EOF
+            Ok(n) => {
+                file.write_all(&buf[..n])
+                    .await
+                    .map_err(|e| GenericError(format!("Failed to write to file: {}", e)))?;
+                file.flush()
+                    .await
+                    .map_err(|e| GenericError(format!("Failed to flush file: {}", e)))?;
+                written_bytes += n;
+
+                // Update response in DB with progress
+                let mut r = response.lock().await;
+                r.elapsed = start.elapsed().as_millis() as i32;
+                r.content_length = Some(written_bytes as i32);
+                app_handle.db().update_http_response_if_id(&r, &update_source)?;
+            }
+            Err(e) => {
+                return Err(GenericError(format!("Failed to read response body: {}", e)));
+            }
+        }
+    }
+
+    // Final update with closed state
+    let mut resp = response.lock().await.clone();
+    resp.headers = headers;
+    resp.request_headers = request_headers;
+    resp.status = status as i32;
+    resp.status_reason = status_reason;
+    resp.url = url;
+    resp.remote_addr = remote_addr;
+    resp.version = version;
+    resp.state = HttpResponseState::Closed;
+    resp.content_length = match content_length {
+        Some(l) => Some(l as i32),
+        None => Some(written_bytes as i32),
+    };
+    resp.elapsed = start.elapsed().as_millis() as i32;
+    resp.elapsed_headers = headers_timing.as_millis() as i32;
     resp.body_path = Some(
         body_path.to_str().ok_or(GenericError(format!("Invalid path {body_path:?}",)))?.to_string(),
     );
@@ -470,9 +385,6 @@ async fn execute_transaction<R: Runtime>(
     for event in events {
         println!("   {}", event);
     }
-
-    // Note: Cookie jar updates would need to be handled here if cookies are being managed
-    // The previous implementation had cookie handling commented out, so keeping it that way
 
     Ok(resp)
 }
