@@ -20,6 +20,9 @@ pub enum Error {
 
     #[error("Decompression error: {0}")]
     DecompressionError(String),
+
+    #[error("Failed to read response body: {0}")]
+    BodyReadError(String),
 }
 
 impl Serialize for Error {

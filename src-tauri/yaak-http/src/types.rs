@@ -27,9 +27,9 @@ enum SendableBodyWithMeta {
     },
 }
 
-impl Into<SendableBody> for SendableBodyWithMeta {
-    fn into(self) -> SendableBody {
-        match self {
+impl From<SendableBodyWithMeta> for SendableBody {
+    fn from(value: SendableBodyWithMeta) -> Self {
+        match value {
             SendableBodyWithMeta::Bytes(b) => SendableBody::Bytes(b),
             SendableBodyWithMeta::Stream { data, .. } => SendableBody::Stream(data),
         }

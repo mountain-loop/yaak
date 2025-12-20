@@ -265,7 +265,7 @@ async fn execute_transaction<R: Runtime>(
 
     // Execute the transaction with cancellation support
     // This returns the response with headers, but body is not yet consumed
-    let (http_response, events) =
+    let (http_response, _events) =
         transaction.execute_with_cancellation(sendable_request, cancelled_rx.clone()).await?;
 
     // Prepare the response path before consuming the body
@@ -381,10 +381,6 @@ async fn execute_transaction<R: Runtime>(
     );
 
     app_handle.db().update_http_response_if_id(&resp, &update_source)?;
-
-    for event in events {
-        println!("   {}", event);
-    }
 
     Ok(resp)
 }

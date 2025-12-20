@@ -44,7 +44,7 @@ export function ResponseHeaders({ response }: Props) {
         </KeyValueRows>
       </DetailsBanner>
       <DetailsBanner
-        storageKey={`${response.requestId}.response_headers`}
+        storageKey={`${response.requestId}.request_headers`}
         summary={
           <h2 className="flex items-center">
             Request <CountBadge count={requestHeaders.length} />

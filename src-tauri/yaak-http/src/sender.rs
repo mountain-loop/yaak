@@ -158,10 +158,7 @@ impl HttpResponse {
                     bytes_read += n as u64;
                 }
                 Err(e) => {
-                    return Err(Error::DecompressionError(format!(
-                        "Failed to read response body: {}",
-                        e
-                    )));
+                    return Err(Error::BodyReadError(e.to_string()));
                 }
             }
         }
