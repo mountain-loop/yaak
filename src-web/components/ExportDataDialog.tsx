@@ -128,7 +128,7 @@ function ExportDataDialogContent({
             ))}
           </tbody>
         </table>
-        <DetailsBanner color="secondary" open summary="Extra Settings">
+        <DetailsBanner color="secondary" defaultOpen summary="Extra Settings">
           <Checkbox
             checked={includePrivateEnvironments}
             onChange={setIncludePrivateEnvironments}

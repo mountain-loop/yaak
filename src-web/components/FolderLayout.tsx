@@ -188,7 +188,10 @@ function HttpRequestCard({ request }: { request: HttpRequest }) {
             <span>&bull;</span>
             <HttpResponseDurationTag response={latestResponse} />
             <span>&bull;</span>
-            <SizeTag contentLength={latestResponse.contentLength ?? 0} />
+            <SizeTag
+              contentLength={latestResponse.contentLength ?? 0}
+              contentLengthCompressed={latestResponse.contentLength}
+            />
           </HStack>
         </button>
       ) : (

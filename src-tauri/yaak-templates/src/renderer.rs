@@ -77,6 +77,12 @@ pub struct RenderOptions {
     pub error_behavior: RenderErrorBehavior,
 }
 
+impl RenderOptions {
+    pub fn throw() -> Self {
+        Self { error_behavior: RenderErrorBehavior::Throw }
+    }
+}
+
 impl RenderErrorBehavior {
     pub fn handle(&self, r: Result<String>) -> Result<String> {
         match (self, r) {

@@ -157,7 +157,7 @@ pub async fn render_http_request<T: TemplateCallback>(
     let url = parse_and_render(r.url.clone().as_str(), vars, cb, &opt).await?;
 
     // This doesn't fit perfectly with the concept of "rendering" but it kind of does
-    let (url, url_parameters) = apply_path_placeholders(&url, url_parameters);
+    let (url, url_parameters) = apply_path_placeholders(&url, &url_parameters);
 
     Ok(HttpRequest { url, url_parameters, headers, body, authentication, ..r.to_owned() })
 }

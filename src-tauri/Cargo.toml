@@ -74,6 +74,7 @@ tauri-plugin-window-state = "2.4.1"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tokio-stream = "0.1.17"
+tokio-util = { version = "0.7", features = ["codec"] }
 ts-rs = { workspace = true }
 uuid = "1.12.1"
 yaak-common = { workspace = true }

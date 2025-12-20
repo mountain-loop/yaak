@@ -18,7 +18,7 @@ pub enum Error {
     #[error("Model serialization error: {0}")]
     ModelSerializationError(String),
 
-    #[error("Model error: {0}")]
+    #[error("HTTP error: {0}")]
     GenericError(String),
 
     #[error("DB Migration Failed: {0}")]

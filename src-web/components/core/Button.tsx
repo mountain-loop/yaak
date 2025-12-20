@@ -61,7 +61,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     'x-theme-button',
     `x-theme-button--${variant}`,
     `x-theme-button--${variant}--${color}`,
-    'text-text',
     'border', // They all have borders to ensure the same width
     'max-w-full min-w-0', // Help with truncation
     'hocus:opacity-100', // Force opacity for certain hover effects
@@ -81,7 +80,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     variant === 'solid' && color === 'custom' && 'focus-visible:outline-2 outline-border-focus',
     variant === 'solid' &&
       color !== 'custom' &&
-      'enabled:hocus:text-text enabled:hocus:bg-surface-highlight outline-border-subtle',
+      'text-text enabled:hocus:text-text enabled:hocus:bg-surface-highlight outline-border-subtle',
     variant === 'solid' && color !== 'custom' && color !== 'default' && 'bg-surface',
 
     // Borders

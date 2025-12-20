@@ -59,7 +59,7 @@ pub enum Error {
     #[error("Request error: {0}")]
     RequestError(#[from] reqwest::Error),
 
-    #[error("Generic error: {0}")]
+    #[error("{0}")]
     GenericError(String),
 }
 
