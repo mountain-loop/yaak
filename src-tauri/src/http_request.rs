@@ -4,11 +4,12 @@ use crate::render::render_http_request;
 use crate::response_err;
 use log::debug;
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::{File, create_dir_all};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio::sync::watch::Receiver;
 use yaak_http::client::{
@@ -16,8 +17,12 @@ use yaak_http::client::{
 };
 use yaak_http::manager::HttpConnectionManager;
 use yaak_http::sender::ReqwestSender;
+use yaak_http::tee_reader::TeeReader;
 use yaak_http::transaction::HttpTransaction;
-use yaak_http::types::{SendableHttpRequest, SendableHttpRequestOptions, append_query_params};
+use yaak_http::types::{
+    SendableBody, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
+};
+use yaak_models::blob_manager::{BlobManagerExt, BodyChunk};
 use yaak_models::models::{
     CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
@@ -31,6 +36,9 @@ use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::RenderOptions;
 use yaak_tls::find_client_certificate;
+
+/// Chunk size for storing request bodies (1MB)
+const REQUEST_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -245,7 +253,7 @@ pub fn resolve_http_request<R: Runtime>(
 
 async fn execute_transaction<R: Runtime>(
     client: reqwest::Client,
-    sendable_request: SendableHttpRequest,
+    mut sendable_request: SendableHttpRequest,
     response: Arc<Mutex<HttpResponse>>,
     response_id: &String,
     app_handle: &AppHandle<R>,
@@ -288,6 +296,36 @@ async fn execute_transaction<R: Runtime>(
             }
         });
     };
+
+    // Wrap the request body to capture it as it's sent
+    let (body_chunk_tx, body_chunk_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    sendable_request.body = match sendable_request.body {
+        Some(SendableBody::Bytes(bytes)) => {
+            // For bytes, send a copy to the channel
+            let _ = body_chunk_tx.send(bytes.to_vec());
+            drop(body_chunk_tx); // Signal end of data
+            Some(SendableBody::Bytes(bytes))
+        }
+        Some(SendableBody::Stream(stream)) => {
+            // Wrap stream with TeeReader to capture data as it's read
+            let tee_reader = TeeReader::new(stream, body_chunk_tx);
+            let pinned: Pin<Box<dyn AsyncRead + Send + 'static>> = Box::pin(tee_reader);
+            Some(SendableBody::Stream(pinned))
+        }
+        None => {
+            drop(body_chunk_tx); // Signal no body
+            None
+        }
+    };
+
+    // Spawn task to write request body chunks to blob DB
+    {
+        let body_id = format!("{}.request", response_id);
+        let app_handle = app_handle.clone();
+        tokio::spawn(async move {
+            write_body_chunks_to_db(app_handle, body_id, body_chunk_rx).await;
+        });
+    }
 
     // Execute the transaction with cancellation support
     // This returns the response with headers, but body is not yet consumed
@@ -401,6 +439,39 @@ async fn execute_transaction<R: Runtime>(
     app_handle.db().update_http_response_if_id(&resp, &update_source)?;
 
     Ok(resp)
+}
+
+/// Buffers incoming body chunks and writes them to the blob DB in 1MB chunks.
+async fn write_body_chunks_to_db<R: Runtime>(
+    app_handle: AppHandle<R>,
+    body_id: String,
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+) {
+    let mut buffer = Vec::with_capacity(REQUEST_BODY_CHUNK_SIZE);
+    let mut chunk_index = 0;
+
+    while let Some(data) = rx.recv().await {
+        buffer.extend_from_slice(&data);
+
+        // Flush when buffer reaches chunk size
+        while buffer.len() >= REQUEST_BODY_CHUNK_SIZE {
+            let chunk_data: Vec<u8> = buffer.drain(..REQUEST_BODY_CHUNK_SIZE).collect();
+            let chunk = BodyChunk::new(&body_id, chunk_index, chunk_data);
+            if let Err(e) = app_handle.blobs().insert_chunk(&chunk) {
+                log::error!("Failed to write request body chunk: {}", e);
+                return;
+            }
+            chunk_index += 1;
+        }
+    }
+
+    // Flush remaining data
+    if !buffer.is_empty() {
+        let chunk = BodyChunk::new(&body_id, chunk_index, buffer);
+        if let Err(e) = app_handle.blobs().insert_chunk(&chunk) {
+            log::error!("Failed to write final request body chunk: {}", e);
+        }
+    }
 }
 
 async fn apply_authentication<R: Runtime>(
