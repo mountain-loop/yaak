@@ -23,8 +23,6 @@ pub enum RedirectBehavior {
 
 #[derive(Debug, Clone)]
 pub enum HttpResponseEvent {
-    StartRequest,
-    EndRequest,
     Setting(String, String),
     Info(String),
     Redirect {
@@ -53,8 +51,6 @@ pub enum HttpResponseEvent {
 impl Display for HttpResponseEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HttpResponseEvent::StartRequest => write!(f, "* Start request"),
-            HttpResponseEvent::EndRequest => write!(f, "* End request"),
             HttpResponseEvent::Setting(name, value) => write!(f, "* Setting {}={}", name, value),
             HttpResponseEvent::Info(s) => write!(f, "* {}", s),
             HttpResponseEvent::Redirect { url, status, behavior } => {
@@ -80,8 +76,6 @@ impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
     fn from(event: HttpResponseEvent) -> Self {
         use yaak_models::models::HttpResponseEventData as D;
         match event {
-            HttpResponseEvent::StartRequest => D::StartRequest,
-            HttpResponseEvent::EndRequest => D::EndRequest,
             HttpResponseEvent::Setting(name, value) => D::Setting { name, value },
             HttpResponseEvent::Info(message) => D::Info { message },
             HttpResponseEvent::Redirect { url, status, behavior } => D::Redirect {
@@ -140,9 +134,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for TrackingRead<R> {
                 // Ignore send errors - receiver may have been dropped
                 let _ = self.event_tx.send(HttpResponseEvent::ChunkReceived { bytes: bytes_read });
             } else if !self.ended {
-                // EOF reached - send EndRequest
                 self.ended = true;
-                let _ = self.event_tx.send(HttpResponseEvent::EndRequest);
             }
         }
         result

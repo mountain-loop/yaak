@@ -1446,8 +1446,6 @@ impl UpsertModelInfo for HttpResponse {
 #[serde(tag = "type", rename_all = "snake_case")]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum HttpResponseEventData {
-    StartRequest,
-    EndRequest,
     Setting {
         name: String,
         value: String,

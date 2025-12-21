@@ -41,8 +41,6 @@ impl<S: HttpSender> HttpTransaction<S> {
             let _ = event_tx.send(event);
         };
 
-        send_event(HttpResponseEvent::StartRequest);
-
         loop {
             // Check for cancellation before each request
             if *cancelled_rx.borrow() {
