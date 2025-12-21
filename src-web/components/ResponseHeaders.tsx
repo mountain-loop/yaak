@@ -26,40 +26,52 @@ export function ResponseHeaders({ response }: Props) {
   return (
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
       <DetailsBanner
+        storageKey={`${response.requestId}.request_headers`}
+        summary={
+          <h2 className="flex items-center">
+            Request <CountBadge showZero count={requestHeaders.length} />
+          </h2>
+        }
+      >
+        {requestHeaders.length === 0 ? (
+          <NoHeaders />
+        ) : (
+          <KeyValueRows>
+            {requestHeaders.map((h, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: none
+              <KeyValueRow labelColor="primary" key={i} label={h.name}>
+                {h.value}
+              </KeyValueRow>
+            ))}
+          </KeyValueRows>
+        )}
+      </DetailsBanner>
+      <DetailsBanner
         defaultOpen
         storageKey={`${response.requestId}.response_headers`}
         summary={
           <h2 className="flex items-center">
-            Response <CountBadge count={responseHeaders.length} />
+            Response <CountBadge showZero count={responseHeaders.length} />
           </h2>
         }
       >
-        <KeyValueRows>
-          {responseHeaders.map((h, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: none
-            <KeyValueRow labelColor="primary" key={i} label={h.name}>
-              {h.value}
-            </KeyValueRow>
-          ))}
-        </KeyValueRows>
-      </DetailsBanner>
-      <DetailsBanner
-        storageKey={`${response.requestId}.request_headers`}
-        summary={
-          <h2 className="flex items-center">
-            Request <CountBadge count={requestHeaders.length} />
-          </h2>
-        }
-      >
-        <KeyValueRows>
-          {requestHeaders.map((h, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: none
-            <KeyValueRow labelColor="primary" key={i} label={h.name}>
-              {h.value}
-            </KeyValueRow>
-          ))}
-        </KeyValueRows>
+        {responseHeaders.length === 0 ? (
+          <NoHeaders />
+        ) : (
+          <KeyValueRows>
+            {responseHeaders.map((h, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: none
+              <KeyValueRow labelColor="primary" key={i} label={h.name}>
+                {h.value}
+              </KeyValueRow>
+            ))}
+          </KeyValueRows>
+        )}
       </DetailsBanner>
     </div>
   );
+}
+
+function NoHeaders() {
+  return <span className="text-text-subtlest text-sm italic">No Headers</span>;
 }

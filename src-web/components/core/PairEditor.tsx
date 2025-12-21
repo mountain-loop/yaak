@@ -678,7 +678,7 @@ export function PairEditorRow({
             size="xs"
             icon={isLast || disabled ? 'empty' : 'chevron_down'}
             title="Select form data type"
-            className="text-text-subtle"
+            className="text-text-subtlest"
           />
         </Dropdown>
       )}
@@ -798,7 +798,13 @@ function FileActionsDropdown({
       items={fileItems}
       itemsAfter={itemsAfter}
     >
-      <IconButton iconSize="sm" size="xs" icon="chevron_down" title="Select form data type" />
+      <IconButton
+        iconSize="sm"
+        size="xs"
+        icon="chevron_down"
+        title="Select form data type"
+        className="text-text-subtlest"
+      />
     </RadioDropdown>
   );
 }

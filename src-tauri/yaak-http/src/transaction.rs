@@ -201,12 +201,11 @@ impl<S: HttpSender> HttpTransaction<S> {
 mod tests {
     use super::*;
     use crate::decompress::ContentEncoding;
-    use crate::sender::{HttpResponseEvent, HttpResponseTiming, HttpSender};
+    use crate::sender::{HttpResponseEvent, HttpSender};
     use async_trait::async_trait;
     use std::collections::HashMap;
     use std::pin::Pin;
     use std::sync::Arc;
-    use std::time::Instant;
     use tokio::io::AsyncRead;
     use tokio::sync::Mutex;
 
@@ -246,14 +245,13 @@ mod tests {
                     mock.status,
                     None, // status_reason
                     mock.headers,
+                    HashMap::new(),
                     None,                              // content_length
                     "https://example.com".to_string(), // url
                     None,                              // remote_addr
                     Some("HTTP/1.1".to_string()),      // version
-                    HttpResponseTiming::default(),
                     body_stream,
                     ContentEncoding::Identity,
-                    Instant::now(),
                 ))
             }
         }
@@ -277,7 +275,7 @@ mod tests {
         assert_eq!(result.status, 200);
 
         // Consume the body to verify it
-        let (body, _, _) = result.bytes().await.unwrap();
+        let (body, _) = result.bytes().await.unwrap();
         assert_eq!(body, b"OK");
     }
 
@@ -308,7 +306,7 @@ mod tests {
         let (result, _) = transaction.execute_with_cancellation(request, rx).await.unwrap();
         assert_eq!(result.status, 200);
 
-        let (body, _, _) = result.bytes().await.unwrap();
+        let (body, _) = result.bytes().await.unwrap();
         assert_eq!(body, b"Final");
     }
 
