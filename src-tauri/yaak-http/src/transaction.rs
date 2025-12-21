@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::sender::{HttpResponse, HttpResponseEvent, HttpSender};
 use crate::types::SendableHttpRequest;
+use tokio::sync::mpsc;
 use tokio::sync::watch::Receiver;
 
 /// HTTP Transaction that manages the lifecycle of a request, including redirect handling
@@ -22,17 +23,23 @@ impl<S: HttpSender> HttpTransaction<S> {
 
     /// Execute the request with cancellation support.
     /// Returns an HttpResponse with unconsumed body - caller decides how to consume it.
+    /// Events are sent through the provided channel.
     pub async fn execute_with_cancellation(
         &self,
         request: SendableHttpRequest,
         mut cancelled_rx: Receiver<bool>,
-    ) -> Result<(HttpResponse, Vec<HttpResponseEvent>)> {
+        event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
+    ) -> Result<HttpResponse> {
         let mut redirect_count = 0;
         let mut current_url = request.url;
         let mut current_method = request.method;
         let mut current_headers = request.headers;
         let mut current_body = request.body;
-        let mut events = Vec::new();
+
+        // Helper to send events (ignores errors if receiver is dropped)
+        let send_event = |event: HttpResponseEvent| {
+            let _ = event_tx.send(event);
+        };
 
         loop {
             // Check for cancellation before each request
@@ -50,14 +57,14 @@ impl<S: HttpSender> HttpTransaction<S> {
             };
 
             // Send the request
-            events.push(HttpResponseEvent::Setting(
+            send_event(HttpResponseEvent::Setting(
                 "redirects".to_string(),
                 request.options.follow_redirects.to_string(),
             ));
 
             // Execute with cancellation support
             let response = tokio::select! {
-                result = self.sender.send(req, &mut events) => result?,
+                result = self.sender.send(req, event_tx.clone()) => result?,
                 _ = cancelled_rx.changed() => {
                     return Err(crate::error::Error::RequestCanceledError);
                 }
@@ -65,12 +72,12 @@ impl<S: HttpSender> HttpTransaction<S> {
 
             if !Self::is_redirect(response.status) {
                 // Not a redirect - return the response for caller to consume body
-                return Ok((response, events));
+                return Ok(response);
             }
 
             if !request.options.follow_redirects {
                 // Redirects disabled - return the redirect response as-is
-                return Ok((response, events));
+                return Ok(response);
             }
 
             // Check if we've exceeded max redirects
@@ -99,7 +106,7 @@ impl<S: HttpSender> HttpTransaction<S> {
             // Also get status before draining
             let status = response.status;
 
-            events.push(HttpResponseEvent::Info("Ignoring the response body".to_string()));
+            send_event(HttpResponseEvent::Info("Ignoring the response body".to_string()));
 
             // Drain the redirect response body before following
             response.drain().await?;
@@ -118,7 +125,7 @@ impl<S: HttpSender> HttpTransaction<S> {
                 format!("{}/{}", base_path, location)
             };
 
-            events.push(HttpResponseEvent::Info(format!(
+            send_event(HttpResponseEvent::Info(format!(
                 "Issuing redirect {} to: {}",
                 redirect_count + 1,
                 current_url
@@ -129,7 +136,7 @@ impl<S: HttpSender> HttpTransaction<S> {
                 // 303 See Other always changes to GET
                 if current_method != "GET" {
                     current_method = "GET".to_string();
-                    events.push(HttpResponseEvent::Info("Changing method to GET".to_string()));
+                    send_event(HttpResponseEvent::Info("Changing method to GET".to_string()));
                 }
                 // Remove content-related headers
                 current_headers.retain(|h| {
@@ -140,7 +147,7 @@ impl<S: HttpSender> HttpTransaction<S> {
                 // For 301/302, change POST to GET (common browser behavior)
                 // but keep other methods as-is
                 if current_method == "POST" {
-                    events.push(HttpResponseEvent::Info("Changing method to GET".to_string()));
+                    send_event(HttpResponseEvent::Info("Changing method to GET".to_string()));
                     current_method = "GET".to_string();
                     // Remove content-related headers
                     current_headers.retain(|h| {
@@ -231,7 +238,7 @@ mod tests {
         async fn send(
             &self,
             _request: SendableHttpRequest,
-            _events: &mut Vec<HttpResponseEvent>,
+            _event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
         ) -> Result<HttpResponse> {
             let mut responses = self.responses.lock().await;
             if responses.is_empty() {
@@ -271,7 +278,8 @@ mod tests {
         };
 
         let (_tx, rx) = tokio::sync::watch::channel(false);
-        let (result, _) = transaction.execute_with_cancellation(request, rx).await.unwrap();
+        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let result = transaction.execute_with_cancellation(request, rx, event_tx).await.unwrap();
         assert_eq!(result.status, 200);
 
         // Consume the body to verify it
@@ -303,7 +311,8 @@ mod tests {
         };
 
         let (_tx, rx) = tokio::sync::watch::channel(false);
-        let (result, _) = transaction.execute_with_cancellation(request, rx).await.unwrap();
+        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let result = transaction.execute_with_cancellation(request, rx, event_tx).await.unwrap();
         assert_eq!(result.status, 200);
 
         let (body, _) = result.bytes().await.unwrap();
@@ -334,7 +343,8 @@ mod tests {
         };
 
         let (_tx, rx) = tokio::sync::watch::channel(false);
-        let result = transaction.execute_with_cancellation(request, rx).await;
+        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let result = transaction.execute_with_cancellation(request, rx, event_tx).await;
         if let Err(crate::error::Error::RequestError(msg)) = result {
             assert!(msg.contains("Maximum redirect limit"));
         } else {

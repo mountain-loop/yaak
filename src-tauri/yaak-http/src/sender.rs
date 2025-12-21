@@ -7,12 +7,16 @@ use reqwest::{Client, Method, Version};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt, BufReader, ReadBuf};
+use tokio::sync::mpsc;
 use tokio_util::io::StreamReader;
 
 #[derive(Debug)]
 pub enum HttpResponseEvent {
+    StartRequest,
+    EndRequest,
     Setting(String, String),
     Info(String),
     SendUrl { method: String, path: String },
@@ -21,11 +25,15 @@ pub enum HttpResponseEvent {
     HeaderDown(String, String),
     HeaderUpDone,
     HeaderDownDone,
+    ChunkSent { bytes: usize },
+    ChunkReceived { bytes: usize },
 }
 
 impl Display for HttpResponseEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            HttpResponseEvent::StartRequest => write!(f, "* Start request"),
+            HttpResponseEvent::EndRequest => write!(f, "* End request"),
             HttpResponseEvent::Setting(name, value) => write!(f, "* Setting {}={}", name, value),
             HttpResponseEvent::Info(s) => write!(f, "* {}", s),
             HttpResponseEvent::SendUrl { method, path } => write!(f, "> {} {}", method, path),
@@ -36,6 +44,8 @@ impl Display for HttpResponseEvent {
             HttpResponseEvent::HeaderUpDone => write!(f, ">"),
             HttpResponseEvent::HeaderDown(name, value) => write!(f, "< {}: {}", name, value),
             HttpResponseEvent::HeaderDownDone => write!(f, "<"),
+            HttpResponseEvent::ChunkSent { bytes } => write!(f, "> [{} bytes sent]", bytes),
+            HttpResponseEvent::ChunkReceived { bytes } => write!(f, "< [{} bytes received]", bytes),
         }
     }
 }
@@ -47,6 +57,42 @@ pub struct BodyStats {
     pub size_compressed: u64,
     /// Size of the body after decompression
     pub size_decompressed: u64,
+}
+
+/// An AsyncRead wrapper that sends chunk events as data is read
+pub struct TrackingRead<R> {
+    inner: R,
+    event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
+    ended: bool,
+}
+
+impl<R> TrackingRead<R> {
+    pub fn new(inner: R, event_tx: mpsc::UnboundedSender<HttpResponseEvent>) -> Self {
+        Self { inner, event_tx, ended: false }
+    }
+}
+
+impl<R: AsyncRead + Unpin> AsyncRead for TrackingRead<R> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let before = buf.filled().len();
+        let result = Pin::new(&mut self.inner).poll_read(cx, buf);
+        if let Poll::Ready(Ok(())) = &result {
+            let bytes_read = buf.filled().len() - before;
+            if bytes_read > 0 {
+                // Ignore send errors - receiver may have been dropped
+                let _ = self.event_tx.send(HttpResponseEvent::ChunkReceived { bytes: bytes_read });
+            } else if !self.ended {
+                // EOF reached - send EndRequest
+                self.ended = true;
+                let _ = self.event_tx.send(HttpResponseEvent::EndRequest);
+            }
+        }
+        result
+    }
 }
 
 /// Type alias for the body stream
@@ -215,10 +261,11 @@ impl HttpResponse {
 pub trait HttpSender: Send + Sync {
     /// Send an HTTP request and return the response with headers.
     /// The body is not consumed until you call bytes(), text(), write_to_file(), or drain().
+    /// Events are sent through the provided channel.
     async fn send(
         &self,
         request: SendableHttpRequest,
-        events: &mut Vec<HttpResponseEvent>,
+        event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
     ) -> Result<HttpResponse>;
 }
 
@@ -245,8 +292,15 @@ impl HttpSender for ReqwestSender {
     async fn send(
         &self,
         request: SendableHttpRequest,
-        events: &mut Vec<HttpResponseEvent>,
+        event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
     ) -> Result<HttpResponse> {
+        // Helper to send events (ignores errors if receiver is dropped)
+        let send_event = |event: HttpResponseEvent| {
+            let _ = event_tx.send(event);
+        };
+
+        send_event(HttpResponseEvent::StartRequest);
+
         // Parse the HTTP method
         let method = Method::from_bytes(request.method.as_bytes())
             .map_err(|e| Error::RequestError(format!("Invalid HTTP method: {}", e)))?;
@@ -282,7 +336,7 @@ impl HttpSender for ReqwestSender {
 
         // Send the request
         let sendable_req = req_builder.build()?;
-        events.push(HttpResponseEvent::Setting(
+        send_event(HttpResponseEvent::Setting(
             "timeout".to_string(),
             if request.options.timeout.unwrap_or_default().is_zero() {
                 "Infinity".to_string()
@@ -291,7 +345,7 @@ impl HttpSender for ReqwestSender {
             },
         ));
 
-        events.push(HttpResponseEvent::SendUrl {
+        send_event(HttpResponseEvent::SendUrl {
             path: sendable_req.url().path().to_string(),
             method: sendable_req.method().to_string(),
         });
@@ -300,10 +354,10 @@ impl HttpSender for ReqwestSender {
         for (name, value) in sendable_req.headers() {
             let v = value.to_str().unwrap_or_default().to_string();
             request_headers.insert(name.to_string(), v.clone());
-            events.push(HttpResponseEvent::HeaderUp(name.to_string(), v));
+            send_event(HttpResponseEvent::HeaderUp(name.to_string(), v));
         }
-        events.push(HttpResponseEvent::HeaderUpDone);
-        events.push(HttpResponseEvent::Info("Sending request to server".to_string()));
+        send_event(HttpResponseEvent::HeaderUpDone);
+        send_event(HttpResponseEvent::Info("Sending request to server".to_string()));
 
         // Map some errors to our own, so they look nicer
         let response = self.client.execute(sendable_req).await.map_err(|e| {
@@ -323,7 +377,7 @@ impl HttpSender for ReqwestSender {
         let version = Some(version_to_str(&response.version()));
         let content_length = response.content_length();
 
-        events.push(HttpResponseEvent::ReceiveUrl {
+        send_event(HttpResponseEvent::ReceiveUrl {
             version: response.version(),
             status: response.status().to_string(),
         });
@@ -332,11 +386,11 @@ impl HttpSender for ReqwestSender {
         let mut headers = HashMap::new();
         for (key, value) in response.headers() {
             if let Ok(v) = value.to_str() {
-                events.push(HttpResponseEvent::HeaderDown(key.to_string(), v.to_string()));
+                send_event(HttpResponseEvent::HeaderDown(key.to_string(), v.to_string()));
                 headers.insert(key.to_string(), v.to_string());
             }
         }
-        events.push(HttpResponseEvent::HeaderDownDone);
+        send_event(HttpResponseEvent::HeaderDownDone);
 
         // Determine content encoding for decompression
         // HTTP headers are case-insensitive, so we need to search for any casing
@@ -355,7 +409,9 @@ impl HttpSender for ReqwestSender {
             byte_stream.map(|result| result.map_err(|e| std::io::Error::other(e))),
         );
 
-        let body_stream: BodyStream = Box::pin(stream_reader);
+        // Wrap the stream with tracking to emit chunk received events via the same channel
+        let tracking_reader = TrackingRead::new(stream_reader, event_tx);
+        let body_stream: BodyStream = Box::pin(tracking_reader);
 
         Ok(HttpResponse::new(
             status,

@@ -271,10 +271,20 @@ async fn execute_transaction<R: Runtime>(
         app_handle.db().update_http_response_if_id(&r, &update_source)?;
     }
 
+    // Create channel for receiving events and spawn a task to log them
+    let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(async move {
+        while let Some(event) = event_rx.recv().await {
+            println!("  {}", event);
+        }
+    });
+
     // Execute the transaction with cancellation support
     // This returns the response with headers, but body is not yet consumed
-    let (mut http_response, _events) =
-        transaction.execute_with_cancellation(sendable_request, cancelled_rx.clone()).await?;
+    // Events (headers, settings, chunks) are sent through the channel
+    let mut http_response = transaction
+        .execute_with_cancellation(sendable_request, cancelled_rx.clone(), event_tx)
+        .await?;
 
     // Prepare the response path before consuming the body
     let dir = app_handle.path().app_data_dir()?;
