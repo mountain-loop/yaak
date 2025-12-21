@@ -6,10 +6,12 @@ interface Props {
   count2?: number | true;
   className?: string;
   color?: Color;
+  showZero?: boolean;
 }
 
-export function CountBadge({ count, count2, className, color }: Props) {
-  if (count === 0) return null;
+export function CountBadge({ count, count2, className, color, showZero }: Props) {
+  if (count === 0 && !showZero) return null;
+
   return (
     <div
       aria-hidden

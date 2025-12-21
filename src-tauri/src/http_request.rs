@@ -256,16 +256,24 @@ async fn execute_transaction<R: Runtime>(
     let transaction = HttpTransaction::new(sender);
     let start = Instant::now();
 
-    // Capture request headers before sending (headers will be moved)
+    // Capture request headers before sending
     let request_headers: Vec<HttpResponseHeader> = sendable_request
         .headers
         .iter()
         .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
         .collect();
 
+    {
+        // Update response with headers info and mark as connected
+        let mut r = response.lock().await;
+        r.url = sendable_request.url.clone();
+        r.request_headers = request_headers.clone();
+        app_handle.db().update_http_response_if_id(&r, &update_source)?;
+    }
+
     // Execute the transaction with cancellation support
     // This returns the response with headers, but body is not yet consumed
-    let (http_response, _events) =
+    let (mut http_response, _events) =
         transaction.execute_with_cancellation(sendable_request, cancelled_rx.clone()).await?;
 
     // Prepare the response path before consuming the body
@@ -280,37 +288,30 @@ async fn execute_transaction<R: Runtime>(
     };
 
     // Extract metadata before consuming the body (headers are available immediately)
-    let status = http_response.status;
-    let status_reason = http_response.status_reason.clone();
-    let url = http_response.url.clone();
-    let remote_addr = http_response.remote_addr.clone();
-    let version = http_response.version.clone();
-    let content_length = http_response.content_length;
+    // Url might change, so update again
     let headers: Vec<HttpResponseHeader> = http_response
         .headers
         .iter()
         .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
         .collect();
-    let headers_timing = http_response.timing.headers;
 
-    // Update response with headers info and mark as connected
     {
+        // Update response with headers info and mark as connected
         let mut r = response.lock().await;
-        r.body_path = Some(
-            body_path
-                .to_str()
-                .ok_or(GenericError(format!("Invalid path {body_path:?}")))?
-                .to_string(),
-        );
-        r.elapsed_headers = headers_timing.as_millis() as i32;
-        r.elapsed = start.elapsed().as_millis() as i32;
-        r.status = status as i32;
-        r.status_reason = status_reason.clone();
-        r.url = url.clone();
-        r.remote_addr = remote_addr.clone();
-        r.version = version.clone();
+        r.body_path = Some(body_path.to_string_lossy().to_string());
+        r.elapsed_headers = start.elapsed().as_millis() as i32;
+        r.status = http_response.status as i32;
+        r.status_reason = http_response.status_reason.clone().clone();
+        r.url = http_response.url.clone().clone();
+        r.remote_addr = http_response.remote_addr.clone();
+        r.version = http_response.version.clone().clone();
         r.headers = headers.clone();
-        r.request_headers = request_headers.clone();
+        r.content_length = http_response.content_length.map(|l| l as i32);
+        r.request_headers = http_response
+            .request_headers
+            .iter()
+            .map(|(n, v)| HttpResponseHeader { name: n.clone(), value: v.clone() })
+            .collect();
         r.state = HttpResponseState::Connected;
         app_handle.db().update_http_response_if_id(&r, &update_source)?;
     }
@@ -332,7 +333,7 @@ async fn execute_transaction<R: Runtime>(
     let mut buf = [0u8; 8192];
 
     loop {
-        // Check for cancellation - if we already have headers/body, just close cleanly
+        // Check for cancellation. If we already have headers/body, just close cleanly without error
         if *cancelled_rx.borrow() {
             break;
         }
@@ -350,7 +351,7 @@ async fn execute_transaction<R: Runtime>(
 
                 // Update response in DB with progress
                 let mut r = response.lock().await;
-                r.elapsed = start.elapsed().as_millis() as i32;
+                r.elapsed = start.elapsed().as_millis() as i32; // Approx until the end
                 r.content_length = Some(written_bytes as i32);
                 app_handle.db().update_http_response_if_id(&r, &update_source)?;
             }
@@ -362,20 +363,8 @@ async fn execute_transaction<R: Runtime>(
 
     // Final update with closed state
     let mut resp = response.lock().await.clone();
-    resp.headers = headers;
-    resp.request_headers = request_headers;
-    resp.status = status as i32;
-    resp.status_reason = status_reason;
-    resp.url = url;
-    resp.remote_addr = remote_addr;
-    resp.version = version;
-    resp.state = HttpResponseState::Closed;
-    resp.content_length = match content_length {
-        Some(l) => Some(l as i32),
-        None => Some(written_bytes as i32),
-    };
     resp.elapsed = start.elapsed().as_millis() as i32;
-    resp.elapsed_headers = headers_timing.as_millis() as i32;
+    resp.state = HttpResponseState::Closed;
     resp.body_path = Some(
         body_path.to_str().ok_or(GenericError(format!("Invalid path {body_path:?}",)))?.to_string(),
     );

@@ -7,15 +7,9 @@ use reqwest::{Client, Method, Version};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::pin::Pin;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio_util::io::StreamReader;
-
-#[derive(Debug, Default, Clone)]
-pub struct HttpResponseTiming {
-    pub headers: Duration,
-    pub body: Duration,
-}
 
 #[derive(Debug)]
 pub enum HttpResponseEvent {
@@ -68,6 +62,8 @@ pub struct HttpResponse {
     pub status_reason: Option<String>,
     /// Response headers
     pub headers: HashMap<String, String>,
+    /// Request headers
+    pub request_headers: HashMap<String, String>,
     /// Content-Length from headers (may differ from actual body size)
     pub content_length: Option<u64>,
     /// Final URL (after redirects)
@@ -76,15 +72,11 @@ pub struct HttpResponse {
     pub remote_addr: Option<String>,
     /// HTTP version (e.g., "HTTP/1.1", "HTTP/2")
     pub version: Option<String>,
-    /// Timing information
-    pub timing: HttpResponseTiming,
 
     /// The body stream (consumed when calling bytes(), text(), write_to_file(), or drain())
     body_stream: Option<BodyStream>,
     /// Content-Encoding for decompression
     encoding: ContentEncoding,
-    /// Start time for timing the body read
-    start_time: Instant,
 }
 
 impl std::fmt::Debug for HttpResponse {
@@ -97,7 +89,6 @@ impl std::fmt::Debug for HttpResponse {
             .field("url", &self.url)
             .field("remote_addr", &self.remote_addr)
             .field("version", &self.version)
-            .field("timing", &self.timing)
             .field("body_stream", &"<stream>")
             .field("encoding", &self.encoding)
             .finish()
@@ -111,33 +102,31 @@ impl HttpResponse {
         status: u16,
         status_reason: Option<String>,
         headers: HashMap<String, String>,
+        request_headers: HashMap<String, String>,
         content_length: Option<u64>,
         url: String,
         remote_addr: Option<String>,
         version: Option<String>,
-        timing: HttpResponseTiming,
         body_stream: BodyStream,
         encoding: ContentEncoding,
-        start_time: Instant,
     ) -> Self {
         Self {
             status,
             status_reason,
             headers,
+            request_headers,
             content_length,
             url,
             remote_addr,
             version,
-            timing,
             body_stream: Some(body_stream),
             encoding,
-            start_time,
         }
     }
 
     /// Consume the body and return it as bytes (loads entire body into memory).
     /// Also decompresses the body if Content-Encoding is set.
-    pub async fn bytes(mut self) -> Result<(Vec<u8>, BodyStats, HttpResponseTiming)> {
+    pub async fn bytes(mut self) -> Result<(Vec<u8>, BodyStats)> {
         let stream = self.body_stream.take().ok_or_else(|| {
             Error::RequestError("Response body has already been consumed".to_string())
         })?;
@@ -163,9 +152,6 @@ impl HttpResponse {
             }
         }
 
-        let mut timing = self.timing.clone();
-        timing.body = self.start_time.elapsed();
-
         let stats = BodyStats {
             // For now, we can't easily track compressed size when streaming through decoder
             // Use content_length as an approximation, or decompressed size if identity encoding
@@ -173,21 +159,21 @@ impl HttpResponse {
             size_decompressed: decompressed.len() as u64,
         };
 
-        Ok((decompressed, stats, timing))
+        Ok((decompressed, stats))
     }
 
     /// Consume the body and return it as a UTF-8 string.
-    pub async fn text(self) -> Result<(String, BodyStats, HttpResponseTiming)> {
-        let (bytes, stats, timing) = self.bytes().await?;
+    pub async fn text(self) -> Result<(String, BodyStats)> {
+        let (bytes, stats) = self.bytes().await?;
         let text = String::from_utf8(bytes)
             .map_err(|e| Error::RequestError(format!("Response is not valid UTF-8: {}", e)))?;
-        Ok((text, stats, timing))
+        Ok((text, stats))
     }
 
     /// Take the body stream for manual consumption.
     /// Returns an AsyncRead that decompresses on-the-fly if Content-Encoding is set.
     /// The caller is responsible for reading and processing the stream.
-    pub fn into_body_stream(mut self) -> Result<Box<dyn AsyncRead + Unpin + Send>> {
+    pub fn into_body_stream(&mut self) -> Result<Box<dyn AsyncRead + Unpin + Send>> {
         let stream = self.body_stream.take().ok_or_else(|| {
             Error::RequestError("Response body has already been consumed".to_string())
         })?;
@@ -199,7 +185,7 @@ impl HttpResponse {
     }
 
     /// Discard the body without reading it (useful for redirects).
-    pub async fn drain(mut self) -> Result<HttpResponseTiming> {
+    pub async fn drain(mut self) -> Result<()> {
         let stream = self.body_stream.take().ok_or_else(|| {
             Error::RequestError("Response body has already been consumed".to_string())
         })?;
@@ -220,10 +206,7 @@ impl HttpResponse {
             }
         }
 
-        let mut timing = self.timing.clone();
-        timing.body = self.start_time.elapsed();
-
-        Ok(timing)
+        Ok(())
     }
 }
 
@@ -297,9 +280,6 @@ impl HttpSender for ReqwestSender {
             }
         }
 
-        let start = Instant::now();
-        let mut timing = HttpResponseTiming::default();
-
         // Send the request
         let sendable_req = req_builder.build()?;
         events.push(HttpResponseEvent::Setting(
@@ -316,11 +296,11 @@ impl HttpSender for ReqwestSender {
             method: sendable_req.method().to_string(),
         });
 
+        let mut request_headers = HashMap::new();
         for (name, value) in sendable_req.headers() {
-            events.push(HttpResponseEvent::HeaderUp(
-                name.to_string(),
-                value.to_str().unwrap_or_default().to_string(),
-            ));
+            let v = value.to_str().unwrap_or_default().to_string();
+            request_headers.insert(name.to_string(), v.clone());
+            events.push(HttpResponseEvent::HeaderUp(name.to_string(), v));
         }
         events.push(HttpResponseEvent::HeaderUpDone);
         events.push(HttpResponseEvent::Info("Sending request to server".to_string()));
@@ -341,16 +321,12 @@ impl HttpSender for ReqwestSender {
         let url = response.url().to_string();
         let remote_addr = response.remote_addr().map(|a| a.to_string());
         let version = Some(version_to_str(&response.version()));
+        let content_length = response.content_length();
 
         events.push(HttpResponseEvent::ReceiveUrl {
             version: response.version(),
             status: response.status().to_string(),
         });
-
-        timing.headers = start.elapsed();
-
-        // Extract content length
-        let content_length = response.content_length();
 
         // Extract headers
         let mut headers = HashMap::new();
@@ -385,14 +361,13 @@ impl HttpSender for ReqwestSender {
             status,
             status_reason,
             headers,
+            request_headers,
             content_length,
             url,
             remote_addr,
             version,
-            timing,
             body_stream,
             encoding,
-            start,
         ))
     }
 }
