@@ -1439,6 +1439,121 @@ impl UpsertModelInfo for HttpResponse {
     }
 }
 
+/// Serializable representation of HTTP response events for DB storage.
+/// This mirrors `yaak_http::sender::HttpResponseEvent` but with serde support.
+/// The `From` impl is in yaak-http to avoid circular dependencies.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum HttpResponseEventData {
+    StartRequest,
+    EndRequest,
+    Setting { name: String, value: String },
+    Info { message: String },
+    SendUrl { method: String, path: String },
+    ReceiveUrl { version: String, status: String },
+    HeaderUp { name: String, value: String },
+    HeaderDown { name: String, value: String },
+    HeaderUpDone,
+    HeaderDownDone,
+    ChunkSent { bytes: usize },
+    ChunkReceived { bytes: usize },
+}
+
+impl Default for HttpResponseEventData {
+    fn default() -> Self {
+        Self::Info { message: String::new() }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "http_response_events")]
+pub struct HttpResponseEvent {
+    #[ts(type = "\"http_response_event\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+    pub response_id: String,
+    pub event: HttpResponseEventData,
+}
+
+impl UpsertModelInfo for HttpResponseEvent {
+    fn table_name() -> impl IntoTableRef + IntoIden {
+        HttpResponseEventIden::Table
+    }
+
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        HttpResponseEventIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("re")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (HttpResponseEventIden::CreatedAt, Order::Asc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use HttpResponseEventIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (ResponseId, self.response_id.into()),
+            (Event, serde_json::to_string(&self.event)?.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            HttpResponseEventIden::UpdatedAt,
+            HttpResponseEventIden::Event,
+        ]
+    }
+
+    fn from_row(r: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let event: String = r.get("event")?;
+        Ok(Self {
+            id: r.get("id")?,
+            model: r.get("model")?,
+            workspace_id: r.get("workspace_id")?,
+            response_id: r.get("response_id")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            event: serde_json::from_str(&event).unwrap_or_default(),
+        })
+    }
+}
+
+impl HttpResponseEvent {
+    pub fn new(response_id: &str, workspace_id: &str, event: HttpResponseEventData) -> Self {
+        Self {
+            model: "http_response_event".to_string(),
+            id: Self::generate_id(),
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+            workspace_id: workspace_id.to_string(),
+            response_id: response_id.to_string(),
+            event,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
@@ -2189,6 +2304,7 @@ define_any_model! {
     GrpcRequest,
     HttpRequest,
     HttpResponse,
+    HttpResponseEvent,
     KeyValue,
     Plugin,
     Settings,

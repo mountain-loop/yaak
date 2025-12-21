@@ -13,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, BufReader, ReadBuf};
 use tokio::sync::mpsc;
 use tokio_util::io::StreamReader;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum HttpResponseEvent {
     StartRequest,
     EndRequest,
@@ -46,6 +46,28 @@ impl Display for HttpResponseEvent {
             HttpResponseEvent::HeaderDownDone => write!(f, "<"),
             HttpResponseEvent::ChunkSent { bytes } => write!(f, "> [{} bytes sent]", bytes),
             HttpResponseEvent::ChunkReceived { bytes } => write!(f, "< [{} bytes received]", bytes),
+        }
+    }
+}
+
+impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
+    fn from(event: HttpResponseEvent) -> Self {
+        use yaak_models::models::HttpResponseEventData as D;
+        match event {
+            HttpResponseEvent::StartRequest => D::StartRequest,
+            HttpResponseEvent::EndRequest => D::EndRequest,
+            HttpResponseEvent::Setting(name, value) => D::Setting { name, value },
+            HttpResponseEvent::Info(message) => D::Info { message },
+            HttpResponseEvent::SendUrl { method, path } => D::SendUrl { method, path },
+            HttpResponseEvent::ReceiveUrl { version, status } => {
+                D::ReceiveUrl { version: format!("{:?}", version), status }
+            }
+            HttpResponseEvent::HeaderUp(name, value) => D::HeaderUp { name, value },
+            HttpResponseEvent::HeaderDown(name, value) => D::HeaderDown { name, value },
+            HttpResponseEvent::HeaderUpDone => D::HeaderUpDone,
+            HttpResponseEvent::HeaderDownDone => D::HeaderDownDone,
+            HttpResponseEvent::ChunkSent { bytes } => D::ChunkSent { bytes },
+            HttpResponseEvent::ChunkReceived { bytes } => D::ChunkReceived { bytes },
         }
     }
 }
