@@ -250,7 +250,7 @@ async fn execute_transaction<R: Runtime>(
     response_id: &String,
     app_handle: &AppHandle<R>,
     update_source: &UpdateSource,
-    cancelled_rx: Receiver<bool>,
+    mut cancelled_rx: Receiver<bool>,
 ) -> Result<HttpResponse> {
     let sender = ReqwestSender::with_client(client);
     let transaction = HttpTransaction::new(sender);
@@ -338,7 +338,16 @@ async fn execute_transaction<R: Runtime>(
             break;
         }
 
-        match body_stream.read(&mut buf).await {
+        // Use select! to race between reading and cancellation, so cancellation is immediate
+        let read_result = tokio::select! {
+            biased;
+            _ = cancelled_rx.changed() => {
+                break;
+            }
+            result = body_stream.read(&mut buf) => result,
+        };
+
+        match read_result {
             Ok(0) => break, // EOF
             Ok(n) => {
                 file.write_all(&buf[..n])
