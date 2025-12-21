@@ -14,19 +14,40 @@ use tokio::sync::mpsc;
 use tokio_util::io::StreamReader;
 
 #[derive(Debug, Clone)]
+pub enum RedirectBehavior {
+    /// 307/308: Method and body are preserved
+    Preserve,
+    /// 303 or 301/302 with POST: Method changed to GET, body dropped
+    DropBody,
+}
+
+#[derive(Debug, Clone)]
 pub enum HttpResponseEvent {
     StartRequest,
     EndRequest,
     Setting(String, String),
     Info(String),
-    SendUrl { method: String, path: String },
-    ReceiveUrl { version: Version, status: String },
+    Redirect {
+        url: String,
+        status: u16,
+        behavior: RedirectBehavior,
+    },
+    SendUrl {
+        method: String,
+        path: String,
+    },
+    ReceiveUrl {
+        version: Version,
+        status: String,
+    },
     HeaderUp(String, String),
     HeaderDown(String, String),
-    HeaderUpDone,
-    HeaderDownDone,
-    ChunkSent { bytes: usize },
-    ChunkReceived { bytes: usize },
+    ChunkSent {
+        bytes: usize,
+    },
+    ChunkReceived {
+        bytes: usize,
+    },
 }
 
 impl Display for HttpResponseEvent {
@@ -36,14 +57,19 @@ impl Display for HttpResponseEvent {
             HttpResponseEvent::EndRequest => write!(f, "* End request"),
             HttpResponseEvent::Setting(name, value) => write!(f, "* Setting {}={}", name, value),
             HttpResponseEvent::Info(s) => write!(f, "* {}", s),
+            HttpResponseEvent::Redirect { url, status, behavior } => {
+                let behavior_str = match behavior {
+                    RedirectBehavior::Preserve => "preserve",
+                    RedirectBehavior::DropBody => "drop body",
+                };
+                write!(f, "* Redirect {} -> {} ({})", status, url, behavior_str)
+            }
             HttpResponseEvent::SendUrl { method, path } => write!(f, "> {} {}", method, path),
             HttpResponseEvent::ReceiveUrl { version, status } => {
                 write!(f, "< {} {}", version_to_str(version), status)
             }
             HttpResponseEvent::HeaderUp(name, value) => write!(f, "> {}: {}", name, value),
-            HttpResponseEvent::HeaderUpDone => write!(f, ">"),
             HttpResponseEvent::HeaderDown(name, value) => write!(f, "< {}: {}", name, value),
-            HttpResponseEvent::HeaderDownDone => write!(f, "<"),
             HttpResponseEvent::ChunkSent { bytes } => write!(f, "> [{} bytes sent]", bytes),
             HttpResponseEvent::ChunkReceived { bytes } => write!(f, "< [{} bytes received]", bytes),
         }
@@ -58,14 +84,20 @@ impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
             HttpResponseEvent::EndRequest => D::EndRequest,
             HttpResponseEvent::Setting(name, value) => D::Setting { name, value },
             HttpResponseEvent::Info(message) => D::Info { message },
+            HttpResponseEvent::Redirect { url, status, behavior } => D::Redirect {
+                url,
+                status,
+                behavior: match behavior {
+                    RedirectBehavior::Preserve => "preserve".to_string(),
+                    RedirectBehavior::DropBody => "drop_body".to_string(),
+                },
+            },
             HttpResponseEvent::SendUrl { method, path } => D::SendUrl { method, path },
             HttpResponseEvent::ReceiveUrl { version, status } => {
                 D::ReceiveUrl { version: format!("{:?}", version), status }
             }
             HttpResponseEvent::HeaderUp(name, value) => D::HeaderUp { name, value },
             HttpResponseEvent::HeaderDown(name, value) => D::HeaderDown { name, value },
-            HttpResponseEvent::HeaderUpDone => D::HeaderUpDone,
-            HttpResponseEvent::HeaderDownDone => D::HeaderDownDone,
             HttpResponseEvent::ChunkSent { bytes } => D::ChunkSent { bytes },
             HttpResponseEvent::ChunkReceived { bytes } => D::ChunkReceived { bytes },
         }
@@ -321,8 +353,6 @@ impl HttpSender for ReqwestSender {
             let _ = event_tx.send(event);
         };
 
-        send_event(HttpResponseEvent::StartRequest);
-
         // Parse the HTTP method
         let method = Method::from_bytes(request.method.as_bytes())
             .map_err(|e| Error::RequestError(format!("Invalid HTTP method: {}", e)))?;
@@ -378,7 +408,6 @@ impl HttpSender for ReqwestSender {
             request_headers.insert(name.to_string(), v.clone());
             send_event(HttpResponseEvent::HeaderUp(name.to_string(), v));
         }
-        send_event(HttpResponseEvent::HeaderUpDone);
         send_event(HttpResponseEvent::Info("Sending request to server".to_string()));
 
         // Map some errors to our own, so they look nicer
@@ -412,7 +441,6 @@ impl HttpSender for ReqwestSender {
                 headers.insert(key.to_string(), v.to_string());
             }
         }
-        send_event(HttpResponseEvent::HeaderDownDone);
 
         // Determine content encoding for decompression
         // HTTP headers are case-insensitive, so we need to search for any casing

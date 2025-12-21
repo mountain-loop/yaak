@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::sender::{HttpResponse, HttpResponseEvent, HttpSender};
+use crate::sender::{HttpResponse, HttpResponseEvent, HttpSender, RedirectBehavior};
 use crate::types::SendableHttpRequest;
 use tokio::sync::mpsc;
 use tokio::sync::watch::Receiver;
@@ -40,6 +40,8 @@ impl<S: HttpSender> HttpTransaction<S> {
         let send_event = |event: HttpResponseEvent| {
             let _ = event_tx.send(event);
         };
+
+        send_event(HttpResponseEvent::StartRequest);
 
         loop {
             // Check for cancellation before each request
@@ -125,38 +127,36 @@ impl<S: HttpSender> HttpTransaction<S> {
                 format!("{}/{}", base_path, location)
             };
 
-            send_event(HttpResponseEvent::Info(format!(
-                "Issuing redirect {} to: {}",
-                redirect_count + 1,
-                current_url
-            )));
+            // Determine redirect behavior based on status code and method
+            let behavior = if status == 303 {
+                // 303 See Other always changes to GET
+                RedirectBehavior::DropBody
+            } else if (status == 301 || status == 302) && current_method == "POST" {
+                // For 301/302, change POST to GET (common browser behavior)
+                RedirectBehavior::DropBody
+            } else {
+                // For 307 and 308, the method and body are preserved
+                // Also for 301/302 with non-POST methods
+                RedirectBehavior::Preserve
+            };
+
+            send_event(HttpResponseEvent::Redirect {
+                url: current_url.clone(),
+                status,
+                behavior: behavior.clone(),
+            });
 
             // Handle method changes for certain redirect codes
-            if status == 303 {
-                // 303 See Other always changes to GET
+            if matches!(behavior, RedirectBehavior::DropBody) {
                 if current_method != "GET" {
                     current_method = "GET".to_string();
-                    send_event(HttpResponseEvent::Info("Changing method to GET".to_string()));
                 }
                 // Remove content-related headers
                 current_headers.retain(|h| {
                     let name_lower = h.0.to_lowercase();
                     !name_lower.starts_with("content-") && name_lower != "transfer-encoding"
                 });
-            } else if status == 301 || status == 302 {
-                // For 301/302, change POST to GET (common browser behavior)
-                // but keep other methods as-is
-                if current_method == "POST" {
-                    send_event(HttpResponseEvent::Info("Changing method to GET".to_string()));
-                    current_method = "GET".to_string();
-                    // Remove content-related headers
-                    current_headers.retain(|h| {
-                        let name_lower = h.0.to_lowercase();
-                        !name_lower.starts_with("content-") && name_lower != "transfer-encoding"
-                    });
-                }
             }
-            // For 307 and 308, the method and body are preserved
 
             // Reset body for next iteration (since it was moved in the send call)
             // For redirects that change method to GET or for all redirects since body was consumed

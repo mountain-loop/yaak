@@ -1448,16 +1448,40 @@ impl UpsertModelInfo for HttpResponse {
 pub enum HttpResponseEventData {
     StartRequest,
     EndRequest,
-    Setting { name: String, value: String },
-    Info { message: String },
-    SendUrl { method: String, path: String },
-    ReceiveUrl { version: String, status: String },
-    HeaderUp { name: String, value: String },
-    HeaderDown { name: String, value: String },
-    HeaderUpDone,
-    HeaderDownDone,
-    ChunkSent { bytes: usize },
-    ChunkReceived { bytes: usize },
+    Setting {
+        name: String,
+        value: String,
+    },
+    Info {
+        message: String,
+    },
+    Redirect {
+        url: String,
+        status: u16,
+        behavior: String,
+    },
+    SendUrl {
+        method: String,
+        path: String,
+    },
+    ReceiveUrl {
+        version: String,
+        status: String,
+    },
+    HeaderUp {
+        name: String,
+        value: String,
+    },
+    HeaderDown {
+        name: String,
+        value: String,
+    },
+    ChunkSent {
+        bytes: usize,
+    },
+    ChunkReceived {
+        bytes: usize,
+    },
 }
 
 impl Default for HttpResponseEventData {
