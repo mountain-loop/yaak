@@ -34,8 +34,8 @@ use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
-    GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseState, Plugin, Workspace,
-    WorkspaceMeta,
+    GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState,
+    Plugin, Workspace, WorkspaceMeta,
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
@@ -831,6 +831,17 @@ async fn cmd_get_sse_events(file_path: &str) -> YaakResult<Vec<ServerSentEvent>>
 }
 
 #[tauri::command]
+async fn cmd_get_http_response_events<R: Runtime>(
+    app_handle: AppHandle<R>,
+    response_id: &str,
+) -> YaakResult<Vec<HttpResponseEvent>> {
+    use yaak_models::models::HttpResponseEventIden;
+    let events: Vec<HttpResponseEvent> =
+        app_handle.db().find_many(HttpResponseEventIden::ResponseId, response_id, None)?;
+    Ok(events)
+}
+
+#[tauri::command]
 async fn cmd_import_data<R: Runtime>(
     window: WebviewWindow<R>,
     file_path: &str,
@@ -1462,6 +1473,7 @@ pub fn run() {
             cmd_get_http_authentication_summaries,
             cmd_get_http_authentication_config,
             cmd_get_sse_events,
+            cmd_get_http_response_events,
             cmd_get_workspace_meta,
             cmd_grpc_go,
             cmd_grpc_reflect,

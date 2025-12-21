@@ -17,6 +17,7 @@ type TauriCmd =
   | 'cmd_format_json'
   | 'cmd_get_http_authentication_config'
   | 'cmd_get_http_authentication_summaries'
+  | 'cmd_get_http_response_events'
   | 'cmd_get_sse_events'
   | 'cmd_get_themes'
   | 'cmd_get_workspace_meta'
