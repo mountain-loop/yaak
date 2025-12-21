@@ -41,10 +41,12 @@ export function HttpMethodTagRaw({
   className,
   method,
   short,
+  forceColor,
 }: {
   method: string;
   className?: string;
   short?: boolean;
+  forceColor?: boolean;
 }) {
   let label = method.toUpperCase();
   if (short) {
@@ -54,7 +56,8 @@ export function HttpMethodTagRaw({
 
   const m = method.toUpperCase();
 
-  const colored = useAtomValue(settingsAtom).coloredMethods;
+  const settings = useAtomValue(settingsAtom);
+  const colored = forceColor || settings.coloredMethods;
 
   return (
     <span

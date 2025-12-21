@@ -4,6 +4,7 @@ import type { ComponentType, CSSProperties } from 'react';
 import { lazy, Suspense, useCallback, useMemo } from 'react';
 import { useLocalStorage } from 'react-use';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
+import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useResponseViewMode } from '../hooks/useResponseViewMode';
 import { getMimeTypeFromContentType } from '../lib/contentType';
@@ -23,6 +24,7 @@ import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { ErrorBoundary } from './ErrorBoundary';
 import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
+import { ResponseEvents } from './ResponseEvents';
 import { ResponseHeaders } from './ResponseHeaders';
 import { ResponseInfo } from './ResponseInfo';
 import { AudioViewer } from './responseViewers/AudioViewer';
@@ -46,6 +48,7 @@ interface Props {
 const TAB_BODY = 'body';
 const TAB_HEADERS = 'headers';
 const TAB_INFO = 'info';
+const TAB_EVENTS = 'events';
 
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
@@ -57,12 +60,13 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const contentType = getContentTypeFromHeaders(activeResponse?.headers ?? null);
   const mimeType = contentType == null ? null : getMimeTypeFromContentType(contentType).essence;
 
+  const responseEvents = useHttpResponseEvents(activeResponse);
+
   const tabs = useMemo<TabItem[]>(
     () => [
       {
         value: TAB_BODY,
         label: 'Preview Mode',
-        hidden: (activeResponse?.contentLength || 0) === 0,
         options: {
           value: viewMode,
           onChange: setViewMode,
@@ -83,6 +87,11 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         ),
       },
       {
+        value: TAB_EVENTS,
+        label: 'Timeline',
+        rightSlot: <CountBadge count={responseEvents.data?.length ?? 0} />,
+      },
+      {
         value: TAB_INFO,
         label: 'Info',
       },
@@ -93,7 +102,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       setViewMode,
       viewMode,
       activeResponse?.requestHeaders.length,
-      activeResponse?.contentLength,
+      responseEvents.data?.length,
     ],
   );
   const activeTab = activeTabs?.[activeRequestId];
@@ -223,6 +232,9 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
               </TabContent>
               <TabContent value={TAB_INFO}>
                 <ResponseInfo response={activeResponse} />
+              </TabContent>
+              <TabContent value={TAB_EVENTS}>
+                <ResponseEvents response={activeResponse} />
               </TabContent>
             </Tabs>
           </div>

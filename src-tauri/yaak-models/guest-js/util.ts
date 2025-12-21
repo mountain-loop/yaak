@@ -11,6 +11,7 @@ export function newStoreData(): ModelStoreData {
     grpc_request: {},
     http_request: {},
     http_response: {},
+    http_response_event: {},
     key_value: {},
     plugin: {},
     settings: {},

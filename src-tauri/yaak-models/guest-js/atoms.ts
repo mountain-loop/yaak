@@ -15,6 +15,7 @@ export const grpcEventsAtom = createOrderedModelAtom('grpc_event', 'createdAt', 
 export const grpcRequestsAtom = createModelAtom('grpc_request');
 export const httpRequestsAtom = createModelAtom('http_request');
 export const httpResponsesAtom = createOrderedModelAtom('http_response', 'createdAt', 'desc');
+export const httpResponseEventsAtom = createOrderedModelAtom('http_response_event', 'createdAt', 'asc');
 export const keyValuesAtom = createModelAtom('key_value');
 export const pluginsAtom = createModelAtom('plugin');
 export const settingsAtom = createSingularModelAtom('settings');

@@ -19,8 +19,8 @@ use yaak_http::sender::ReqwestSender;
 use yaak_http::transaction::HttpTransaction;
 use yaak_http::types::{SendableHttpRequest, SendableHttpRequestOptions, append_query_params};
 use yaak_models::models::{
-    CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader, HttpResponseState,
-    ProxySetting, ProxySettingAuth,
+    CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseHeader,
+    HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
@@ -271,10 +271,30 @@ async fn execute_transaction<R: Runtime>(
         app_handle.db().update_http_response_if_id(&r, &update_source)?;
     }
 
+    // Create channel for receiving events and spawn a task to store them in DB
+    let (event_tx, mut event_rx) =
+        tokio::sync::mpsc::unbounded_channel::<yaak_http::sender::HttpResponseEvent>();
+
+    // Write events to DB in a task
+    {
+        let response_id = response_id.clone();
+        let workspace_id = response.lock().await.workspace_id.clone();
+        let app_handle = app_handle.clone();
+        let update_source = update_source.clone();
+        tokio::spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                let db_event = HttpResponseEvent::new(&response_id, &workspace_id, event.into());
+                let _ = app_handle.db().upsert(&db_event, &update_source);
+            }
+        });
+    };
+
     // Execute the transaction with cancellation support
     // This returns the response with headers, but body is not yet consumed
-    let (mut http_response, _events) =
-        transaction.execute_with_cancellation(sendable_request, cancelled_rx.clone()).await?;
+    // Events (headers, settings, chunks) are sent through the channel
+    let mut http_response = transaction
+        .execute_with_cancellation(sendable_request, cancelled_rx.clone(), event_tx)
+        .await?;
 
     // Prepare the response path before consuming the body
     let dir = app_handle.path().app_data_dir()?;
