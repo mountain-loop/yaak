@@ -10,6 +10,7 @@ use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::{File, create_dir_all};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::watch::Receiver;
+use tokio_util::bytes::Bytes;
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
@@ -332,7 +333,7 @@ async fn execute_transaction<R: Runtime>(
     sendable_request.body = match sendable_request.body {
         Some(SendableBody::Bytes(bytes)) => {
             if is_persisted {
-                write_bytes_to_db_sync(response_ctx, &body_id, bytes.to_vec())?;
+                write_bytes_to_db_sync(response_ctx, &body_id, bytes.clone())?;
             }
             Some(SendableBody::Bytes(bytes))
         }
@@ -485,7 +486,7 @@ async fn execute_transaction<R: Runtime>(
 fn write_bytes_to_db_sync<R: Runtime>(
     response_ctx: &mut ResponseContext<R>,
     body_id: &str,
-    data: Vec<u8>,
+    data: Bytes,
 ) -> Result<()> {
     if data.is_empty() {
         return Ok(());
@@ -496,7 +497,7 @@ fn write_bytes_to_db_sync<R: Runtime>(
     let mut chunk_index = 0;
     while offset < data.len() {
         let end = std::cmp::min(offset + REQUEST_BODY_CHUNK_SIZE, data.len());
-        let chunk_data = data[offset..end].to_vec();
+        let chunk_data = data.slice(offset..end).to_vec();
         let chunk = BodyChunk::new(body_id, chunk_index, chunk_data);
         response_ctx.app_handle.blobs().insert_chunk(&chunk)?;
         offset = end;
@@ -537,7 +538,10 @@ async fn write_stream_chunks_to_db<R: Runtime>(
                 &HttpResponseEvent::new(
                     response_id,
                     workspace_id,
-                    yaak_http::sender::HttpResponseEvent::ChunkSent { bytes: data.len() }.into(),
+                    yaak_http::sender::HttpResponseEvent::ChunkSent {
+                        bytes: REQUEST_BODY_CHUNK_SIZE,
+                    }
+                    .into(),
                 ),
                 update_source,
             )?;
