@@ -1,17 +1,15 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
 import { type ReactNode, useMemo } from 'react';
-import { useSaveResponse } from '../hooks/useSaveResponse';
+import { getRequestBodyText as getHttpResponseRequestBodyText } from '../hooks/useHttpRequestBody';
 import { useToggle } from '../hooks/useToggle';
 import { isProbablyTextContentType } from '../lib/contentType';
 import { getContentTypeFromHeaders } from '../lib/model_util';
-import { getResponseBodyText } from '../lib/responseBody';
 import { CopyButton } from './CopyButton';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
 import { SizeTag } from './core/SizeTag';
 import { HStack } from './core/Stacks';
-import { getRequestBodyText as getHttpResponseRequestBodyText } from '../hooks/useHttpRequestBody';
 
 interface Props {
   children: ReactNode;
