@@ -2,7 +2,7 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::render::render_http_request;
 use crate::response_err;
-use log::debug;
+use log::{debug, warn};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -19,8 +19,8 @@ use yaak_http::sender::ReqwestSender;
 use yaak_http::transaction::HttpTransaction;
 use yaak_http::types::{SendableHttpRequest, SendableHttpRequestOptions, append_query_params};
 use yaak_models::models::{
-    CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseHeader,
-    HttpResponseState, ProxySetting, ProxySettingAuth,
+    Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent,
+    HttpResponseHeader, HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
@@ -206,6 +206,29 @@ async fn send_http_request_inner<R: Runtime>(
         cancelled_rx.clone(),
     )
     .await;
+
+    // Persist cookies back to the database after the request completes
+    if let Some((cookie_store, mut cj)) = maybe_cookie_manager {
+        match cookie_store.lock() {
+            Ok(store) => {
+                let cookies: Vec<Cookie> = store
+                    .iter_any()
+                    .filter_map(|c| {
+                        // Convert cookie_store::Cookie -> yaak_models::Cookie via serde
+                        let json_cookie = serde_json::to_value(c).ok()?;
+                        serde_json::from_value(json_cookie).ok()
+                    })
+                    .collect();
+                cj.cookies = cookies;
+                if let Err(e) = window.db().upsert_cookie_jar(&cj, &update_source) {
+                    warn!("Failed to persist cookies to database: {}", e);
+                }
+            }
+            Err(e) => {
+                warn!("Failed to lock cookie store: {}", e);
+            }
+        }
+    }
 
     match final_resp {
         Ok(r) => Ok(r),
