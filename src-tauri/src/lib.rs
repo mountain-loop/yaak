@@ -1190,23 +1190,6 @@ async fn cmd_send_http_request<R: Runtime>(
     Ok(r)
 }
 
-fn response_err<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    response: &HttpResponse,
-    error: String,
-    update_source: &UpdateSource,
-) -> HttpResponse {
-    warn!("Failed to send request: {error:?}");
-    let mut response = response.clone();
-    response.state = HttpResponseState::Closed;
-    response.error = Some(error.clone());
-    response = app_handle
-        .db()
-        .update_http_response_if_id(&response, update_source)
-        .expect("Failed to update response");
-    response
-}
-
 #[tauri::command]
 async fn cmd_install_plugin<R: Runtime>(
     directory: &str,
