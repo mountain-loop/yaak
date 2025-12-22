@@ -210,8 +210,8 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                           </VStack>
                         </EmptyStateText>
                       ) : activeResponse.state === 'closed' &&
-                        activeResponse.contentLength === 0 ? (
-                        <EmptyStateText>Empty </EmptyStateText>
+                        (activeResponse.contentLength ?? 0) === 0 ? (
+                        <EmptyStateText>Empty</EmptyStateText>
                       ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
                         <EventStreamViewer response={activeResponse} />
                       ) : mimeType?.match(/^image\/svg/) ? (
