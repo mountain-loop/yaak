@@ -1329,6 +1329,7 @@ pub struct HttpResponse {
     pub error: Option<String>,
     pub headers: Vec<HttpResponseHeader>,
     pub remote_addr: Option<String>,
+    pub request_content_length: Option<i32>,
     pub request_headers: Vec<HttpResponseHeader>,
     pub status: i32,
     pub status_reason: Option<String>,
@@ -1382,6 +1383,7 @@ impl UpsertModelInfo for HttpResponse {
             (StatusReason, self.status_reason.into()),
             (Url, self.url.into()),
             (Version, self.version.into()),
+            (RequestContentLength, self.request_content_length.into()),
         ])
     }
 
@@ -1396,6 +1398,7 @@ impl UpsertModelInfo for HttpResponse {
             HttpResponseIden::Error,
             HttpResponseIden::Headers,
             HttpResponseIden::RemoteAddr,
+            HttpResponseIden::RequestContentLength,
             HttpResponseIden::RequestHeaders,
             HttpResponseIden::State,
             HttpResponseIden::Status,
@@ -1431,6 +1434,7 @@ impl UpsertModelInfo for HttpResponse {
             state: serde_json::from_str(format!(r#""{state}""#).as_str()).unwrap(),
             body_path: r.get("body_path")?,
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            request_content_length: r.get("request_content_length").unwrap_or_default(),
             request_headers: serde_json::from_str(
                 r.get::<_, String>("request_headers").unwrap_or_default().as_str(),
             )

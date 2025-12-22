@@ -24,6 +24,7 @@ import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { ErrorBoundary } from './ErrorBoundary';
 import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
+import { RequestBodyViewer } from './RequestBodyViewer';
 import { ResponseEvents } from './ResponseEvents';
 import { ResponseHeaders } from './ResponseHeaders';
 import { ResponseInfo } from './ResponseInfo';
@@ -46,6 +47,7 @@ interface Props {
 }
 
 const TAB_BODY = 'body';
+const TAB_REQUEST = 'request';
 const TAB_HEADERS = 'headers';
 const TAB_INFO = 'info';
 const TAB_EVENTS = 'events';
@@ -77,6 +79,15 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         },
       },
       {
+        value: TAB_REQUEST,
+        label: 'Request',
+        rightSlot:
+          activeResponse?.requestContentLength != null &&
+          activeResponse.requestContentLength > 0 ? (
+            <CountBadge count={true} />
+          ) : null,
+      },
+      {
         value: TAB_HEADERS,
         label: 'Headers',
         rightSlot: (
@@ -98,11 +109,12 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     ],
     [
       activeResponse?.headers,
+      activeResponse?.requestContentLength,
+      activeResponse?.requestHeaders.length,
       mimeType,
+      responseEvents.data?.length,
       setViewMode,
       viewMode,
-      activeResponse?.requestHeaders.length,
-      responseEvents.data?.length,
     ],
   );
   const activeTab = activeTabs?.[activeRequestId];
@@ -226,6 +238,9 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                     </ConfirmLargeResponse>
                   </Suspense>
                 </ErrorBoundary>
+              </TabContent>
+              <TabContent value={TAB_REQUEST}>
+                <RequestBodyViewer response={activeResponse} />
               </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />

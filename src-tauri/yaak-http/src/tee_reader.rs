@@ -41,3 +41,117 @@ impl<R: AsyncRead + Unpin> AsyncRead for TeeReader<R> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+    use tokio::io::AsyncReadExt;
+
+    #[tokio::test]
+    async fn test_tee_reader_captures_all_data() {
+        let data = b"Hello, World!";
+        let cursor = Cursor::new(data.to_vec());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let mut tee = TeeReader::new(cursor, tx);
+        let mut output = Vec::new();
+        tee.read_to_end(&mut output).await.unwrap();
+
+        // Verify the reader returns the correct data
+        assert_eq!(output, data);
+
+        // Verify the channel received the data
+        let mut captured = Vec::new();
+        while let Ok(chunk) = rx.try_recv() {
+            captured.extend(chunk);
+        }
+        assert_eq!(captured, data);
+    }
+
+    #[tokio::test]
+    async fn test_tee_reader_with_chunked_reads() {
+        let data = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let cursor = Cursor::new(data.to_vec());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let mut tee = TeeReader::new(cursor, tx);
+
+        // Read in small chunks
+        let mut buf = [0u8; 5];
+        let mut output = Vec::new();
+        loop {
+            let n = tee.read(&mut buf).await.unwrap();
+            if n == 0 {
+                break;
+            }
+            output.extend_from_slice(&buf[..n]);
+        }
+
+        // Verify the reader returns the correct data
+        assert_eq!(output, data);
+
+        // Verify the channel received all chunks
+        let mut captured = Vec::new();
+        while let Ok(chunk) = rx.try_recv() {
+            captured.extend(chunk);
+        }
+        assert_eq!(captured, data);
+    }
+
+    #[tokio::test]
+    async fn test_tee_reader_empty_data() {
+        let data: Vec<u8> = vec![];
+        let cursor = Cursor::new(data.clone());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let mut tee = TeeReader::new(cursor, tx);
+        let mut output = Vec::new();
+        tee.read_to_end(&mut output).await.unwrap();
+
+        // Verify empty output
+        assert!(output.is_empty());
+
+        // Verify no data was sent to channel
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn test_tee_reader_works_when_receiver_dropped() {
+        let data = b"Hello, World!";
+        let cursor = Cursor::new(data.to_vec());
+        let (tx, rx) = mpsc::unbounded_channel();
+
+        // Drop the receiver before reading
+        drop(rx);
+
+        let mut tee = TeeReader::new(cursor, tx);
+        let mut output = Vec::new();
+
+        // Should still work even though receiver is dropped
+        tee.read_to_end(&mut output).await.unwrap();
+        assert_eq!(output, data);
+    }
+
+    #[tokio::test]
+    async fn test_tee_reader_large_data() {
+        // Test with 1MB of data
+        let data: Vec<u8> = (0..1024 * 1024).map(|i| (i % 256) as u8).collect();
+        let cursor = Cursor::new(data.clone());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let mut tee = TeeReader::new(cursor, tx);
+        let mut output = Vec::new();
+        tee.read_to_end(&mut output).await.unwrap();
+
+        // Verify the reader returns the correct data
+        assert_eq!(output, data);
+
+        // Verify the channel received all data
+        let mut captured = Vec::new();
+        while let Ok(chunk) = rx.try_recv() {
+            captured.extend(chunk);
+        }
+        assert_eq!(captured, data);
+    }
+}

@@ -114,6 +114,34 @@ impl BlobContext {
     }
 }
 
+/// Get total size of a body without loading data.
+impl BlobContext {
+    pub fn get_body_size(&self, body_id: &str) -> Result<usize> {
+        let size: i64 = self
+            .conn
+            .query_row(
+                "SELECT COALESCE(SUM(LENGTH(data)), 0) FROM body_chunks WHERE body_id = ?1",
+                params![body_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        Ok(size as usize)
+    }
+
+    /// Check if a body exists.
+    pub fn body_exists(&self, body_id: &str) -> Result<bool> {
+        let count: i64 = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM body_chunks WHERE body_id = ?1",
+                params![body_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        Ok(count > 0)
+    }
+}
+
 /// Run migrations for the blob database.
 pub fn migrate_blob_db(pool: &Pool<SqliteConnectionManager>) -> Result<()> {
     info!("Running blob database migrations");
@@ -176,4 +204,169 @@ pub fn migrate_blob_db(pool: &Pool<SqliteConnectionManager>) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_pool() -> Pool<SqliteConnectionManager> {
+        let manager = SqliteConnectionManager::memory();
+        let pool = Pool::builder().max_size(1).build(manager).unwrap();
+        migrate_blob_db(&pool).unwrap();
+        pool
+    }
+
+    #[test]
+    fn test_insert_and_get_chunks() {
+        let pool = create_test_pool();
+        let manager = BlobManager::new(pool);
+        let ctx = manager.connect();
+
+        let body_id = "rs_test123.request";
+        let chunk1 = BodyChunk::new(body_id, 0, b"Hello, ".to_vec());
+        let chunk2 = BodyChunk::new(body_id, 1, b"World!".to_vec());
+
+        ctx.insert_chunk(&chunk1).unwrap();
+        ctx.insert_chunk(&chunk2).unwrap();
+
+        let chunks = ctx.get_chunks(body_id).unwrap();
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].chunk_index, 0);
+        assert_eq!(chunks[0].data, b"Hello, ");
+        assert_eq!(chunks[1].chunk_index, 1);
+        assert_eq!(chunks[1].data, b"World!");
+    }
+
+    #[test]
+    fn test_get_chunks_ordered_by_index() {
+        let pool = create_test_pool();
+        let manager = BlobManager::new(pool);
+        let ctx = manager.connect();
+
+        let body_id = "rs_test123.request";
+
+        // Insert out of order
+        ctx.insert_chunk(&BodyChunk::new(body_id, 2, b"C".to_vec())).unwrap();
+        ctx.insert_chunk(&BodyChunk::new(body_id, 0, b"A".to_vec())).unwrap();
+        ctx.insert_chunk(&BodyChunk::new(body_id, 1, b"B".to_vec())).unwrap();
+
+        let chunks = ctx.get_chunks(body_id).unwrap();
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0].data, b"A");
+        assert_eq!(chunks[1].data, b"B");
+        assert_eq!(chunks[2].data, b"C");
+    }
+
+    #[test]
+    fn test_delete_chunks() {
+        let pool = create_test_pool();
+        let manager = BlobManager::new(pool);
+        let ctx = manager.connect();
+
+        let body_id = "rs_test123.request";
+        ctx.insert_chunk(&BodyChunk::new(body_id, 0, b"data".to_vec())).unwrap();
+
+        assert!(ctx.body_exists(body_id).unwrap());
+
+        ctx.delete_chunks(body_id).unwrap();
+
+        assert!(!ctx.body_exists(body_id).unwrap());
+        assert_eq!(ctx.get_chunks(body_id).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_delete_chunks_like() {
+        let pool = create_test_pool();
+        let manager = BlobManager::new(pool);
+        let ctx = manager.connect();
+
+        // Insert chunks for same response but different body types
+        ctx.insert_chunk(&BodyChunk::new("rs_abc.request", 0, b"req".to_vec())).unwrap();
+        ctx.insert_chunk(&BodyChunk::new("rs_abc.response", 0, b"resp".to_vec())).unwrap();
+        ctx.insert_chunk(&BodyChunk::new("rs_other.request", 0, b"other".to_vec())).unwrap();
+
+        // Delete all bodies for rs_abc
+        ctx.delete_chunks_like("rs_abc.%").unwrap();
+
+        // rs_abc bodies should be gone
+        assert!(!ctx.body_exists("rs_abc.request").unwrap());
+        assert!(!ctx.body_exists("rs_abc.response").unwrap());
+
+        // rs_other should still exist
+        assert!(ctx.body_exists("rs_other.request").unwrap());
+    }
+
+    #[test]
+    fn test_get_body_size() {
+        let pool = create_test_pool();
+        let manager = BlobManager::new(pool);
+        let ctx = manager.connect();
+
+        let body_id = "rs_test123.request";
+        ctx.insert_chunk(&BodyChunk::new(body_id, 0, b"Hello".to_vec())).unwrap();
+        ctx.insert_chunk(&BodyChunk::new(body_id, 1, b"World".to_vec())).unwrap();
+
+        let size = ctx.get_body_size(body_id).unwrap();
+        assert_eq!(size, 10); // "Hello" + "World" = 10 bytes
+    }
+
+    #[test]
+    fn test_get_body_size_empty() {
+        let pool = create_test_pool();
+        let manager = BlobManager::new(pool);
+        let ctx = manager.connect();
+
+        let size = ctx.get_body_size("nonexistent").unwrap();
+        assert_eq!(size, 0);
+    }
+
+    #[test]
+    fn test_body_exists() {
+        let pool = create_test_pool();
+        let manager = BlobManager::new(pool);
+        let ctx = manager.connect();
+
+        assert!(!ctx.body_exists("rs_test.request").unwrap());
+
+        ctx.insert_chunk(&BodyChunk::new("rs_test.request", 0, b"data".to_vec())).unwrap();
+
+        assert!(ctx.body_exists("rs_test.request").unwrap());
+    }
+
+    #[test]
+    fn test_multiple_bodies_isolated() {
+        let pool = create_test_pool();
+        let manager = BlobManager::new(pool);
+        let ctx = manager.connect();
+
+        ctx.insert_chunk(&BodyChunk::new("body1", 0, b"data1".to_vec())).unwrap();
+        ctx.insert_chunk(&BodyChunk::new("body2", 0, b"data2".to_vec())).unwrap();
+
+        let chunks1 = ctx.get_chunks("body1").unwrap();
+        let chunks2 = ctx.get_chunks("body2").unwrap();
+
+        assert_eq!(chunks1.len(), 1);
+        assert_eq!(chunks1[0].data, b"data1");
+        assert_eq!(chunks2.len(), 1);
+        assert_eq!(chunks2[0].data, b"data2");
+    }
+
+    #[test]
+    fn test_large_chunk() {
+        let pool = create_test_pool();
+        let manager = BlobManager::new(pool);
+        let ctx = manager.connect();
+
+        // 1MB chunk
+        let large_data: Vec<u8> = (0..1024 * 1024).map(|i| (i % 256) as u8).collect();
+        let body_id = "rs_large.request";
+
+        ctx.insert_chunk(&BodyChunk::new(body_id, 0, large_data.clone())).unwrap();
+
+        let chunks = ctx.get_chunks(body_id).unwrap();
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].data, large_data);
+        assert_eq!(ctx.get_body_size(body_id).unwrap(), 1024 * 1024);
+    }
 }
