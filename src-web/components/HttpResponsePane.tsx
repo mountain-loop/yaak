@@ -82,10 +82,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         value: TAB_REQUEST,
         label: 'Request',
         rightSlot:
-          activeResponse?.requestContentLength != null &&
-          activeResponse.requestContentLength > 0 ? (
-            <CountBadge count={true} />
-          ) : null,
+          (activeResponse?.requestContentLength ?? 0) > 0 ? <CountBadge count={true} /> : null,
       },
       {
         value: TAB_HEADERS,

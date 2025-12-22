@@ -266,6 +266,7 @@ async fn execute_transaction<R: Runtime>(
     update_source: &UpdateSource,
     mut cancelled_rx: Receiver<bool>,
 ) -> Result<HttpResponse> {
+    let workspace_id = { response.lock().await.workspace_id.clone() };
     let sender = ReqwestSender::with_client(client);
     let transaction = HttpTransaction::new(sender);
     let start = Instant::now();
@@ -293,13 +294,13 @@ async fn execute_transaction<R: Runtime>(
     // Write events to DB in a task
     {
         let response_id = response_id.to_string();
-        let workspace_id = response.lock().await.workspace_id.clone();
         let app_handle = app_handle.clone();
         let update_source = update_source.clone();
+        let workspace_id = workspace_id.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 let db_event = HttpResponseEvent::new(&response_id, &workspace_id, event.into());
-                let _ = app_handle.db().upsert(&db_event, &update_source);
+                let _ = app_handle.db().upsert_http_response_event(&db_event, &update_source);
             }
         });
     };
@@ -318,11 +319,19 @@ async fn execute_transaction<R: Runtime>(
             let pinned: Pin<Box<dyn AsyncRead + Send + 'static>> = Box::pin(tee_reader);
 
             // Spawn task to write request body chunks to blob DB
-            let response_id = response_id.to_string();
             let app_handle = app_handle.clone();
-            tauri::async_runtime::spawn(async {
-                if let Err(e) =
-                    write_stream_chunks_to_db(app_handle, body_id, response_id, body_chunk_rx).await
+            let response_id = response_id.to_string();
+            let workspace_id = workspace_id.clone();
+            let body_id = body_id.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = write_stream_chunks_to_db(
+                    app_handle,
+                    &body_id,
+                    &workspace_id,
+                    &response_id,
+                    body_chunk_rx,
+                )
+                .await
                 {
                     error!("Error writing stream chunks to DB: {}", e);
                 };
@@ -487,8 +496,9 @@ fn write_bytes_to_db_sync<R: Runtime>(
 
 async fn write_stream_chunks_to_db<R: Runtime>(
     app_handle: AppHandle<R>,
-    body_id: String,
-    response_id: String,
+    body_id: &str,
+    workspace_id: &str,
+    response_id: &str,
     mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
 ) -> Result<()> {
     let mut buffer = Vec::with_capacity(REQUEST_BODY_CHUNK_SIZE);
@@ -504,17 +514,33 @@ async fn write_stream_chunks_to_db<R: Runtime>(
         while buffer.len() >= REQUEST_BODY_CHUNK_SIZE {
             debug!("Writing chunk {chunk_index} to DB");
             let chunk_data: Vec<u8> = buffer.drain(..REQUEST_BODY_CHUNK_SIZE).collect();
-            let chunk = BodyChunk::new(&body_id, chunk_index, chunk_data);
+            let chunk = BodyChunk::new(body_id, chunk_index, chunk_data);
             app_handle.blobs().insert_chunk(&chunk)?;
+            app_handle.db().upsert_http_response_event(
+                &HttpResponseEvent::new(
+                    response_id,
+                    workspace_id,
+                    yaak_http::sender::HttpResponseEvent::ChunkSent { bytes: data.len() }.into(),
+                ),
+                &UpdateSource::Background,
+            )?;
             chunk_index += 1;
         }
     }
 
     // Flush remaining data
     if !buffer.is_empty() {
-        let chunk = BodyChunk::new(&body_id, chunk_index, buffer);
+        let chunk = BodyChunk::new(body_id, chunk_index, buffer);
         debug!("Flushing remaining data {chunk_index} {}", chunk.data.len());
         app_handle.blobs().insert_chunk(&chunk)?;
+        app_handle.db().upsert_http_response_event(
+            &HttpResponseEvent::new(
+                response_id,
+                workspace_id,
+                yaak_http::sender::HttpResponseEvent::ChunkSent { bytes: chunk.data.len() }.into(),
+            ),
+            &UpdateSource::Background,
+        )?;
     }
 
     // Update the response with the total request body size

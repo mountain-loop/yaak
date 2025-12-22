@@ -252,20 +252,6 @@ type EventDisplay = {
 
 function getEventDisplay(event: HttpResponseEventData): EventDisplay {
   switch (event.type) {
-    case 'start_request':
-      return {
-        icon: 'info',
-        color: 'secondary',
-        label: 'Start',
-        summary: 'Request started',
-      };
-    case 'end_request':
-      return {
-        icon: 'info',
-        color: 'secondary',
-        label: 'End',
-        summary: 'Request complete',
-      };
     case 'setting':
       return {
         icon: 'settings',
@@ -321,14 +307,14 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
         icon: 'info',
         color: 'secondary',
         label: 'Chunk',
-        summary: `${event.bytes} bytes sent`,
+        summary: `${formatBytes(event.bytes)} chunk sent`,
       };
     case 'chunk_received':
       return {
         icon: 'info',
         color: 'secondary',
         label: 'Chunk',
-        summary: `${event.bytes} bytes received`,
+        summary: `${formatBytes(event.bytes)} chunk received`,
       };
     default:
       return {

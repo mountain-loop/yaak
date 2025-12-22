@@ -853,9 +853,7 @@ async fn cmd_get_http_response_events<R: Runtime>(
     app_handle: AppHandle<R>,
     response_id: &str,
 ) -> YaakResult<Vec<HttpResponseEvent>> {
-    use yaak_models::models::HttpResponseEventIden;
-    let events: Vec<HttpResponseEvent> =
-        app_handle.db().find_many(HttpResponseEventIden::ResponseId, response_id, None)?;
+    let events: Vec<HttpResponseEvent> = app_handle.db().list_http_response_events(response_id)?;
     Ok(events)
 }
 
