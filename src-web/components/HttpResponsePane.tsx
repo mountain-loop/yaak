@@ -25,7 +25,7 @@ import { EmptyStateText } from './EmptyStateText';
 import { ErrorBoundary } from './ErrorBoundary';
 import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
 import { RequestBodyViewer } from './RequestBodyViewer';
-import { ResponseEvents } from './ResponseEvents';
+import { HttpResponseTimeline } from './HttpResponseTimeline';
 import { ResponseHeaders } from './ResponseHeaders';
 import { ResponseInfo } from './ResponseInfo';
 import { AudioViewer } from './responseViewers/AudioViewer';
@@ -50,7 +50,7 @@ const TAB_BODY = 'body';
 const TAB_REQUEST = 'request';
 const TAB_HEADERS = 'headers';
 const TAB_INFO = 'info';
-const TAB_EVENTS = 'events';
+const TAB_TIMELINE = 'timeline';
 
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
@@ -95,7 +95,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         ),
       },
       {
-        value: TAB_EVENTS,
+        value: TAB_TIMELINE,
         label: 'Timeline',
         rightSlot: <CountBadge count={responseEvents.data?.length ?? 0} />,
       },
@@ -245,8 +245,8 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
               <TabContent value={TAB_INFO}>
                 <ResponseInfo response={activeResponse} />
               </TabContent>
-              <TabContent value={TAB_EVENTS}>
-                <ResponseEvents response={activeResponse} />
+              <TabContent value={TAB_TIMELINE}>
+                <HttpResponseTimeline response={activeResponse} />
               </TabContent>
             </Tabs>
           </div>

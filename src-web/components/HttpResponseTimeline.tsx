@@ -5,7 +5,7 @@ import type {
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { format } from 'date-fns';
-import { Fragment, type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
 import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
@@ -20,15 +20,11 @@ interface Props {
   response: HttpResponse;
 }
 
-export function ResponseEvents({ response }: Props) {
-  return (
-    <Fragment key={response.id}>
-      <ActualResponseEvents response={response} />
-    </Fragment>
-  );
+export function HttpResponseTimeline({ response }: Props) {
+  return <Inner key={response.id} response={response} />;
 }
 
-function ActualResponseEvents({ response }: Props) {
+function Inner({ response }: Props) {
   const [activeEventIndex, setActiveEventIndex] = useState<number | null>(null);
   const { data: events, error, isLoading } = useHttpResponseEvents(response);
 

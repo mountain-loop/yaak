@@ -506,7 +506,6 @@ async fn write_stream_chunks_to_db<R: Runtime>(
     let mut total_bytes: usize = 0;
 
     while let Some(data) = rx.recv().await {
-        debug!("Received stream chunk {chunk_index}");
         total_bytes += data.len();
         buffer.extend_from_slice(&data);
 
