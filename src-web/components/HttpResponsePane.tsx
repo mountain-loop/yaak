@@ -24,7 +24,8 @@ import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { ErrorBoundary } from './ErrorBoundary';
 import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
-import { ResponseEvents } from './ResponseEvents';
+import { RequestBodyViewer } from './RequestBodyViewer';
+import { HttpResponseTimeline } from './HttpResponseTimeline';
 import { ResponseHeaders } from './ResponseHeaders';
 import { ResponseInfo } from './ResponseInfo';
 import { AudioViewer } from './responseViewers/AudioViewer';
@@ -34,6 +35,7 @@ import { HTMLOrTextViewer } from './responseViewers/HTMLOrTextViewer';
 import { ImageViewer } from './responseViewers/ImageViewer';
 import { SvgViewer } from './responseViewers/SvgViewer';
 import { VideoViewer } from './responseViewers/VideoViewer';
+import { ConfirmLargeResponseRequest } from './ConfirmLargeResponseRequest';
 
 const PdfViewer = lazy(() =>
   import('./responseViewers/PdfViewer').then((m) => ({ default: m.PdfViewer })),
@@ -46,9 +48,10 @@ interface Props {
 }
 
 const TAB_BODY = 'body';
+const TAB_REQUEST = 'request';
 const TAB_HEADERS = 'headers';
 const TAB_INFO = 'info';
-const TAB_EVENTS = 'events';
+const TAB_TIMELINE = 'timeline';
 
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
@@ -77,6 +80,12 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         },
       },
       {
+        value: TAB_REQUEST,
+        label: 'Request',
+        rightSlot:
+          (activeResponse?.requestContentLength ?? 0) > 0 ? <CountBadge count={true} /> : null,
+      },
+      {
         value: TAB_HEADERS,
         label: 'Headers',
         rightSlot: (
@@ -87,7 +96,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         ),
       },
       {
-        value: TAB_EVENTS,
+        value: TAB_TIMELINE,
         label: 'Timeline',
         rightSlot: <CountBadge count={responseEvents.data?.length ?? 0} />,
       },
@@ -98,11 +107,12 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     ],
     [
       activeResponse?.headers,
+      activeResponse?.requestContentLength,
+      activeResponse?.requestHeaders.length,
       mimeType,
+      responseEvents.data?.length,
       setViewMode,
       viewMode,
-      activeResponse?.requestHeaders.length,
-      responseEvents.data?.length,
     ],
   );
   const activeTab = activeTabs?.[activeRequestId];
@@ -200,8 +210,8 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                           </VStack>
                         </EmptyStateText>
                       ) : activeResponse.state === 'closed' &&
-                        activeResponse.contentLength === 0 ? (
-                        <EmptyStateText>Empty </EmptyStateText>
+                        (activeResponse.contentLength ?? 0) === 0 ? (
+                        <EmptyStateText>Empty</EmptyStateText>
                       ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
                         <EventStreamViewer response={activeResponse} />
                       ) : mimeType?.match(/^image\/svg/) ? (
@@ -227,14 +237,19 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                   </Suspense>
                 </ErrorBoundary>
               </TabContent>
+              <TabContent value={TAB_REQUEST}>
+                <ConfirmLargeResponseRequest response={activeResponse}>
+                  <RequestBodyViewer response={activeResponse} />
+                </ConfirmLargeResponseRequest>
+              </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />
               </TabContent>
               <TabContent value={TAB_INFO}>
                 <ResponseInfo response={activeResponse} />
               </TabContent>
-              <TabContent value={TAB_EVENTS}>
-                <ResponseEvents response={activeResponse} />
+              <TabContent value={TAB_TIMELINE}>
+                <HttpResponseTimeline response={activeResponse} />
               </TabContent>
             </Tabs>
           </div>

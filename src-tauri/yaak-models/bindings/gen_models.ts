@@ -38,7 +38,7 @@ export type HttpRequest = { model: "http_request", id: string, createdAt: string
 
 export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, id?: string, };
 
-export type HttpResponse = { model: "http_response", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, bodyPath: string | null, contentLength: number | null, contentLengthCompressed: number | null, elapsed: number, elapsedHeaders: number, error: string | null, headers: Array<HttpResponseHeader>, remoteAddr: string | null, requestHeaders: Array<HttpResponseHeader>, status: number, statusReason: string | null, state: HttpResponseState, url: string, version: string | null, };
+export type HttpResponse = { model: "http_response", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, bodyPath: string | null, contentLength: number | null, contentLengthCompressed: number | null, elapsed: number, elapsedHeaders: number, error: string | null, headers: Array<HttpResponseHeader>, remoteAddr: string | null, requestContentLength: number | null, requestHeaders: Array<HttpResponseHeader>, status: number, statusReason: string | null, state: HttpResponseState, url: string, version: string | null, };
 
 export type HttpResponseEvent = { model: "http_response_event", id: string, createdAt: string, updatedAt: string, workspaceId: string, responseId: string, event: HttpResponseEventData, };
 
@@ -47,7 +47,7 @@ export type HttpResponseEvent = { model: "http_response_event", id: string, crea
  * This mirrors `yaak_http::sender::HttpResponseEvent` but with serde support.
  * The `From` impl is in yaak-http to avoid circular dependencies.
  */
-export type HttpResponseEventData = { "type": "start_request" } | { "type": "end_request" } | { "type": "setting", name: string, value: string, } | { "type": "info", message: string, } | { "type": "redirect", url: string, status: number, behavior: string, } | { "type": "send_url", method: string, path: string, } | { "type": "receive_url", version: string, status: string, } | { "type": "header_up", name: string, value: string, } | { "type": "header_down", name: string, value: string, } | { "type": "chunk_sent", bytes: number, } | { "type": "chunk_received", bytes: number, };
+export type HttpResponseEventData = { "type": "setting", name: string, value: string, } | { "type": "info", message: string, } | { "type": "redirect", url: string, status: number, behavior: string, } | { "type": "send_url", method: string, path: string, } | { "type": "receive_url", version: string, status: string, } | { "type": "header_up", name: string, value: string, } | { "type": "header_down", name: string, value: string, } | { "type": "chunk_sent", bytes: number, } | { "type": "chunk_received", bytes: number, };
 
 export type HttpResponseHeader = { name: string, value: string, };
 

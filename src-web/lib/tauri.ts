@@ -25,6 +25,7 @@ type TauriCmd =
   | 'cmd_grpc_reflect'
   | 'cmd_grpc_request_actions'
   | 'cmd_http_request_actions'
+  | 'cmd_http_request_body'
   | 'cmd_http_response_body'
   | 'cmd_import_data'
   | 'cmd_install_plugin'

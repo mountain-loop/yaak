@@ -8,6 +8,7 @@ mod grpc_connections;
 mod grpc_events;
 mod grpc_requests;
 mod http_requests;
+mod http_response_events;
 mod http_responses;
 mod key_values;
 mod plugin_key_values;
