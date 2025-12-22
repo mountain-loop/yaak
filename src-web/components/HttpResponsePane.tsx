@@ -35,6 +35,7 @@ import { HTMLOrTextViewer } from './responseViewers/HTMLOrTextViewer';
 import { ImageViewer } from './responseViewers/ImageViewer';
 import { SvgViewer } from './responseViewers/SvgViewer';
 import { VideoViewer } from './responseViewers/VideoViewer';
+import { ConfirmLargeResponseRequest } from './ConfirmLargeResponseRequest';
 
 const PdfViewer = lazy(() =>
   import('./responseViewers/PdfViewer').then((m) => ({ default: m.PdfViewer })),
@@ -237,7 +238,9 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 </ErrorBoundary>
               </TabContent>
               <TabContent value={TAB_REQUEST}>
-                <RequestBodyViewer response={activeResponse} />
+                <ConfirmLargeResponseRequest response={activeResponse}>
+                  <RequestBodyViewer response={activeResponse} />
+                </ConfirmLargeResponseRequest>
               </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />
