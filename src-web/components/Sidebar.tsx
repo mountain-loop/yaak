@@ -37,6 +37,7 @@ import { getCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import { useHotKey } from '../hooks/useHotKey';
 import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
+import { getHttpCollectionActions } from '../hooks/useHttpCollectionActions';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { getModelAncestors } from '../hooks/useModelAncestors';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
@@ -372,6 +373,17 @@ function Sidebar({ className }: { className?: string }) {
           onSelect: async () => {
             const request = getModel('grpc_request', child.id);
             if (request != null) await a.call(request);
+          },
+        })),
+        ...(items.length === 1 && (child.model === 'folder' || child.model === 'workspace')
+          ? await getHttpCollectionActions()
+          : []
+        ).map((a) => ({
+          label: a.label,
+          leftSlot: <Icon icon={a.icon ?? 'empty'} />,
+          onSelect: async () => {
+            const model = getModel(child.model, child.id);
+            if (model != null) await a.call(model as any);
           },
         })),
       ];

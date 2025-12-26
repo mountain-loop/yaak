@@ -20,6 +20,7 @@ use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, ErrorResponse, FindHttpResponsesResponse,
     GetCookieValueResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent,
+    ListHttpRequestsResponse,
     InternalEventPayload, ListCookieNamesResponse, RenderGrpcRequestResponse,
     RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest,
     TemplateRenderResponse, WindowInfoResponse, WindowNavigateEvent,
@@ -59,6 +60,30 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             Ok(Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
                 http_responses,
             })))
+        }
+        InternalEventPayload::ListHttpRequestsRequest(req) => {
+            let mut http_requests = Vec::new();
+            if let Some(folder_id) = req.folder_id {
+                http_requests = app_handle
+                    .db()
+                    .list_http_requests_for_folder_recursive(&folder_id)?;
+            } else if let Some(workspace_id) = req.workspace_id {
+                http_requests = app_handle.db().list_http_requests(&workspace_id)?;
+            }
+
+            Ok(Some(InternalEventPayload::ListHttpRequestsResponse(ListHttpRequestsResponse {
+                http_requests,
+            })))
+        }
+        InternalEventPayload::ListFoldersRequest(req) => {
+            let mut folders = Vec::new();
+            if let Some(workspace_id) = req.workspace_id {
+                folders = app_handle.db().list_folders(&workspace_id)?;
+            }
+
+            Ok(Some(InternalEventPayload::ListFoldersResponse(
+                yaak_plugins::events::ListFoldersResponse { folders },
+            )))
         }
         InternalEventPayload::GetHttpRequestByIdRequest(req) => {
             let http_request = app_handle.db().get_http_request(&req.id).ok();
@@ -351,6 +376,26 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 workspace_id,
                 environment_id,
             })))
+        }
+        InternalEventPayload::WriteTextFileRequest(req) => {
+            use std::fs;
+            use std::path::Path;
+            
+            // Ensure the directory exists
+            if let Some(parent) = Path::new(&req.file_path).parent() {
+                fs::create_dir_all(parent)?;
+            }
+            
+            fs::write(&req.file_path, &req.content)?;
+            Ok(Some(InternalEventPayload::WriteTextFileResponse(EmptyPayload {})))
+        }
+        InternalEventPayload::ReadTextFileRequest(req) => {
+            use std::fs;
+            
+            let content = fs::read_to_string(&req.file_path)?;
+            Ok(Some(InternalEventPayload::ReadTextFileResponse(
+                yaak_plugins::events::ReadTextFileResponse { content },
+            )))
         }
         _ => Ok(None),
     }

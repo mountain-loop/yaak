@@ -10,6 +10,7 @@ use crate::events::{
     FilterRequest, FilterResponse, GetGrpcRequestActionsResponse,
     GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
     GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
+    GetHttpCollectionActionsResponse, CallHttpCollectionActionRequest,
     GetTemplateFunctionConfigRequest, GetTemplateFunctionConfigResponse,
     GetTemplateFunctionSummaryResponse, GetThemesRequest, GetThemesResponse, ImportRequest,
     ImportResponse, InternalEvent, InternalEventPayload, JsonPrimitive, PluginContext,
@@ -482,6 +483,27 @@ impl PluginManager {
         Ok(all_actions)
     }
 
+    pub async fn get_http_collection_actions<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+    ) -> Result<Vec<GetHttpCollectionActionsResponse>> {
+        let reply_events = self
+            .send_and_wait(
+                &PluginContext::new(window),
+                &InternalEventPayload::GetHttpCollectionActionsRequest(EmptyPayload {}),
+            )
+            .await?;
+
+        let mut all_actions = Vec::new();
+        for event in reply_events {
+            if let InternalEventPayload::GetHttpCollectionActionsResponse(resp) = event.payload {
+                all_actions.push(resp.clone());
+            }
+        }
+
+        Ok(all_actions)
+    }
+
     pub async fn get_template_function_config<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
@@ -558,6 +580,23 @@ impl PluginManager {
         let event = plugin.build_event_to_send(
             &PluginContext::new(window),
             &InternalEventPayload::CallHttpRequestActionRequest(req),
+            None,
+        );
+        plugin.send(&event).await?;
+        Ok(())
+    }
+
+    pub async fn call_http_collection_action<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+        req: CallHttpCollectionActionRequest,
+    ) -> Result<()> {
+        let ref_id = req.plugin_ref_id.clone();
+        let plugin =
+            self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
+        let event = plugin.build_event_to_send(
+            &PluginContext::new(window),
+            &InternalEventPayload::CallHttpCollectionActionRequest(req),
             None,
         );
         plugin.send(&event).await?;
