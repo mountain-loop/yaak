@@ -11,7 +11,7 @@
 }
 
 @tokens {
-  Text { ![$] Text? | "$" (@eof | ![{] Text?) }
+  Text { ![$] Text? | "$" (@eof | ![{] Text? | "{" ![[] Text?) }
 }
 
 @external propSource highlight from "./highlight"
