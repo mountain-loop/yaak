@@ -1,6 +1,6 @@
-import type { CallWebSocketRequestActionArgs, WebSocketRequestAction } from '../bindings/gen_events';
+import type { CallWebsocketRequestActionArgs, WebsocketRequestAction } from '../bindings/gen_events';
 import type { Context } from './Context';
 
-export type WebSocketRequestActionPlugin = WebSocketRequestAction & {
-  onSelect(ctx: Context, args: CallWebSocketRequestActionArgs): Promise<void> | void;
+export type WebsocketRequestActionPlugin = WebsocketRequestAction & {
+  onSelect(ctx: Context, args: CallWebsocketRequestActionArgs): Promise<void> | void;
 };

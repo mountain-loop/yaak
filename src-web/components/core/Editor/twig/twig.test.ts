@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: We're testing this, specifically
+
 import { describe, expect, test } from 'vitest';
 import { parser } from './twig';
 

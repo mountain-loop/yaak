@@ -7,13 +7,13 @@ use crate::events::{
     CallHttpAuthenticationActionArgs, CallHttpAuthenticationActionRequest,
     CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
     CallTemplateFunctionArgs, CallTemplateFunctionRequest, CallTemplateFunctionResponse,
-    CallWebSocketRequestActionRequest, CallWorkspaceActionRequest, EmptyPayload, ErrorResponse,
+    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, EmptyPayload, ErrorResponse,
     FilterRequest, FilterResponse, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
     GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
     GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
     GetTemplateFunctionConfigRequest, GetTemplateFunctionConfigResponse,
     GetTemplateFunctionSummaryResponse, GetThemesRequest, GetThemesResponse,
-    GetWebSocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportRequest, ImportResponse,
+    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportRequest, ImportResponse,
     InternalEvent, InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose,
 };
 use crate::native_template_functions::{template_function_keyring, template_function_secure};
@@ -486,17 +486,17 @@ impl PluginManager {
     pub async fn get_websocket_request_actions<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
-    ) -> Result<Vec<GetWebSocketRequestActionsResponse>> {
+    ) -> Result<Vec<GetWebsocketRequestActionsResponse>> {
         let reply_events = self
             .send_and_wait(
                 &PluginContext::new(window),
-                &InternalEventPayload::GetWebSocketRequestActionsRequest(EmptyPayload {}),
+                &InternalEventPayload::GetWebsocketRequestActionsRequest(EmptyPayload {}),
             )
             .await?;
 
         let mut all_actions = Vec::new();
         for event in reply_events {
-            if let InternalEventPayload::GetWebSocketRequestActionsResponse(resp) = event.payload {
+            if let InternalEventPayload::GetWebsocketRequestActionsResponse(resp) = event.payload {
                 all_actions.push(resp.clone());
             }
         }
@@ -631,14 +631,14 @@ impl PluginManager {
     pub async fn call_websocket_request_action<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
-        req: CallWebSocketRequestActionRequest,
+        req: CallWebsocketRequestActionRequest,
     ) -> Result<()> {
         let ref_id = req.plugin_ref_id.clone();
         let plugin =
             self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
         let event = plugin.build_event_to_send(
             &PluginContext::new(window),
-            &InternalEventPayload::CallWebSocketRequestActionRequest(req),
+            &InternalEventPayload::CallWebsocketRequestActionRequest(req),
             None,
         );
         plugin.send(&event).await?;

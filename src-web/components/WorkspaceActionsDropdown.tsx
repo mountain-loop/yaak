@@ -14,6 +14,7 @@ import {
 } from '../hooks/useActiveWorkspace';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
+import { useWorkspaceActions } from '../hooks/useWorkspaceActions';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { revealInFinderText } from '../lib/reveal';
@@ -36,6 +37,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   const createWorkspace = useCreateWorkspace();
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const { mutate: deleteSendHistory } = useDeleteSendHistory();
+  const workspaceActions = useWorkspaceActions();
 
   const { workspaceItems, itemsAfter } = useMemo<{
     workspaceItems: RadioDropdownItem[];
@@ -49,6 +51,14 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     }));
 
     const itemsAfter: DropdownItem[] = [
+      ...workspaceActions.map((a) => ({
+        label: a.label,
+        leftSlot: <Icon icon={a.icon ?? 'empty'} />,
+        onSelect: async () => {
+          if (workspace != null) await a.call(workspace);
+        },
+      })),
+      ...(workspaceActions.length > 0 ? [{ type: 'separator' as const }] : []),
       {
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
