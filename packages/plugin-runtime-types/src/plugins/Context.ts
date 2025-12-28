@@ -6,6 +6,10 @@ import type {
   GetHttpRequestByIdRequest,
   GetHttpRequestByIdResponse,
   ListCookieNamesResponse,
+  ListFoldersRequest,
+  ListFoldersResponse,
+  ListHttpRequestsRequest,
+  ListHttpRequestsResponse,
   OpenWindowRequest,
   PromptTextRequest,
   PromptTextResponse,
@@ -57,10 +61,10 @@ export interface Context {
     send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse['httpResponse']>;
     getById(args: GetHttpRequestByIdRequest): Promise<GetHttpRequestByIdResponse['httpRequest']>;
     render(args: RenderHttpRequestRequest): Promise<RenderHttpRequestResponse['httpRequest']>;
-    list(args: { workspaceId?: string; folderId?: string }): Promise<Array<any>>;
+    list(args?: ListHttpRequestsRequest): Promise<ListHttpRequestsResponse['httpRequests']>;
   };
   folder: {
-    list(args: { workspaceId?: string }): Promise<Array<any>>;
+    list(args?: ListFoldersRequest): Promise<ListFoldersResponse['folders']>;
   };
   httpResponse: {
     find(args: FindHttpResponsesRequest): Promise<FindHttpResponsesResponse['httpResponses']>;

@@ -63,23 +63,25 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             })))
         }
         InternalEventPayload::ListHttpRequestsRequest(req) => {
-            let mut http_requests = Vec::new();
-            if let Some(folder_id) = req.folder_id {
-                http_requests =
-                    app_handle.db().list_http_requests_for_folder_recursive(&folder_id)?;
-            } else if let Some(workspace_id) = req.workspace_id {
-                http_requests = app_handle.db().list_http_requests(&workspace_id)?;
-            }
+            let w = get_window_from_plugin_context(app_handle, &plugin_context)?;
+            let workspace = workspace_from_window(&w)
+                .ok_or(PluginErr("Failed to get workspace from window".into()))?;
+
+            let http_requests = if let Some(folder_id) = req.folder_id {
+                app_handle.db().list_http_requests_for_folder_recursive(&folder_id)?
+            } else {
+                app_handle.db().list_http_requests(&workspace.id)?
+            };
 
             Ok(Some(InternalEventPayload::ListHttpRequestsResponse(ListHttpRequestsResponse {
                 http_requests,
             })))
         }
-        InternalEventPayload::ListFoldersRequest(req) => {
-            let mut folders = Vec::new();
-            if let Some(workspace_id) = req.workspace_id {
-                folders = app_handle.db().list_folders(&workspace_id)?;
-            }
+        InternalEventPayload::ListFoldersRequest(_req) => {
+            let w = get_window_from_plugin_context(app_handle, &plugin_context)?;
+            let workspace = workspace_from_window(&w)
+                .ok_or(PluginErr("Failed to get workspace from window".into()))?;
+            let folders = app_handle.db().list_folders(&workspace.id)?;
 
             Ok(Some(InternalEventPayload::ListFoldersResponse(
                 yaak_plugins::events::ListFoldersResponse { folders },
