@@ -18,7 +18,11 @@ interface Props {
   stateKey: string | null;
   pretty?: boolean;
   className?: string;
-  onFilter?: (filter: string) => { data: string | null; isPending: boolean; error: boolean };
+  onFilter?: (filter: string) => {
+    data: string | null | undefined;
+    isPending: boolean;
+    error: boolean;
+  };
 }
 
 const useFilterText = createGlobalState<Record<string, string | null>>({});

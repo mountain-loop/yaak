@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useResponseBodyText } from '../../hooks/useResponseBodyText';
 import { languageFromContentType } from '../../lib/contentType';
 import { getContentTypeFromHeaders } from '../../lib/model_util';
+import type { EditorProps } from '../core/Editor/Editor';
 import { EmptyStateText } from '../EmptyStateText';
 import { TextViewer } from './TextViewer';
 import { WebPageViewer } from './WebPageViewer';
@@ -42,7 +43,7 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
 interface HttpTextViewerProps {
   response: HttpResponse;
   text: string;
-  language: string;
+  language: EditorProps['language'];
   pretty: boolean;
   className?: string;
 }
