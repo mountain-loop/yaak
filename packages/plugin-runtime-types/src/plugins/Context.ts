@@ -68,10 +68,6 @@ export interface Context {
   templates: {
     render<T extends JsonValue>(args: TemplateRenderRequest & { data: T }): Promise<T>;
   };
-  file: {
-    writeText(filePath: string, content: string): Promise<void>;
-    readText(filePath: string): Promise<string>;
-  };
   plugin: {
     reload(): void;
   };

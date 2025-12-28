@@ -21,10 +21,10 @@ use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, ErrorResponse, FindHttpResponsesResponse,
     GetCookieValueResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent,
-    ListHttpRequestsResponse,
-    InternalEventPayload, ListCookieNamesResponse, RenderGrpcRequestResponse,
-    RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest,
-    TemplateRenderResponse, WindowInfoResponse, WindowNavigateEvent,
+    InternalEventPayload, ListCookieNamesResponse, ListHttpRequestsResponse,
+    RenderGrpcRequestResponse, RenderHttpRequestResponse, SendHttpRequestResponse,
+    SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse, WindowInfoResponse,
+    WindowNavigateEvent,
 };
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -65,9 +65,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         InternalEventPayload::ListHttpRequestsRequest(req) => {
             let mut http_requests = Vec::new();
             if let Some(folder_id) = req.folder_id {
-                http_requests = app_handle
-                    .db()
-                    .list_http_requests_for_folder_recursive(&folder_id)?;
+                http_requests =
+                    app_handle.db().list_http_requests_for_folder_recursive(&folder_id)?;
             } else if let Some(workspace_id) = req.workspace_id {
                 http_requests = app_handle.db().list_http_requests(&workspace_id)?;
             }
@@ -380,26 +379,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 environment_id,
             })))
         }
-        InternalEventPayload::WriteTextFileRequest(req) => {
-            use std::fs;
-            use std::path::Path;
-            
-            // Ensure the directory exists
-            if let Some(parent) = Path::new(&req.file_path).parent() {
-                fs::create_dir_all(parent)?;
-            }
-            
-            fs::write(&req.file_path, &req.content)?;
-            Ok(Some(InternalEventPayload::WriteTextFileResponse(EmptyPayload {})))
-        }
-        InternalEventPayload::ReadTextFileRequest(req) => {
-            use std::fs;
-            
-            let content = fs::read_to_string(&req.file_path)?;
-            Ok(Some(InternalEventPayload::ReadTextFileResponse(
-                yaak_plugins::events::ReadTextFileResponse { content },
-            )))
-        }
+
         _ => Ok(None),
     }
 }

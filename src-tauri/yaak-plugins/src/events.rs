@@ -163,11 +163,6 @@ pub enum InternalEventPayload {
     GetThemesRequest(GetThemesRequest),
     GetThemesResponse(GetThemesResponse),
 
-    WriteTextFileRequest(WriteTextFileRequest),
-    WriteTextFileResponse(EmptyPayload),
-    ReadTextFileRequest(ReadTextFileRequest),
-    ReadTextFileResponse(ReadTextFileResponse),
-
     /// Returned when a plugin doesn't get run, just so the server
     /// has something to listen for
     EmptyResponse(EmptyPayload),
@@ -1318,26 +1313,4 @@ pub struct DeleteKeyValueRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct DeleteKeyValueResponse {
     pub deleted: bool,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "gen_events.ts")]
-pub struct WriteTextFileRequest {
-    pub file_path: String,
-    pub content: String,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "gen_events.ts")]
-pub struct ReadTextFileRequest {
-    pub file_path: String,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "gen_events.ts")]
-pub struct ReadTextFileResponse {
-    pub content: String,
 }
