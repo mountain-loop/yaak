@@ -57,7 +57,11 @@ function RequestBodyViewerInner({ response }: Props) {
   // Route to appropriate viewer based on content type
   if (mimeType?.match(/^multipart/i)) {
     const boundary = contentType?.split('boundary=')[1] ?? 'unknown';
-    return <MultipartViewer data={body} boundary={boundary} idPrefix={`request.${response.id}`} />;
+    // Create a copy because parseMultipart may detach the buffer
+    const bodyCopy = new Uint8Array(body);
+    return (
+      <MultipartViewer data={bodyCopy} boundary={boundary} idPrefix={`request.${response.id}`} />
+    );
   }
 
   if (mimeType?.match(/^image\/svg/i)) {
