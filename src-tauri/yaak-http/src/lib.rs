@@ -11,6 +11,7 @@ pub mod manager;
 pub mod path_placeholders;
 mod proto;
 pub mod sender;
+pub mod tee_reader;
 pub mod transaction;
 pub mod types;
 

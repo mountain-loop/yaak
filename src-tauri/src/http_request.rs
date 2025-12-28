@@ -1,23 +1,27 @@
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::render::render_http_request;
-use crate::response_err;
 use log::{debug, warn};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::{File, create_dir_all};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::Mutex;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::watch::Receiver;
+use tokio_util::bytes::Bytes;
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::manager::HttpConnectionManager;
 use yaak_http::sender::ReqwestSender;
+use yaak_http::tee_reader::TeeReader;
 use yaak_http::transaction::HttpTransaction;
-use yaak_http::types::{SendableHttpRequest, SendableHttpRequestOptions, append_query_params};
+use yaak_http::types::{
+    SendableBody, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
+};
+use yaak_models::blob_manager::{BlobManagerExt, BodyChunk};
 use yaak_models::models::{
     Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent,
     HttpResponseHeader, HttpResponseState, ProxySetting, ProxySettingAuth,
@@ -31,6 +35,55 @@ use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::RenderOptions;
 use yaak_tls::find_client_certificate;
+
+/// Chunk size for storing request bodies (1MB)
+const REQUEST_BODY_CHUNK_SIZE: usize = 1024 * 1024;
+
+/// Context for managing response state during HTTP transactions.
+/// Handles both persisted responses (stored in DB) and ephemeral responses (in-memory only).
+struct ResponseContext<R: Runtime> {
+    app_handle: AppHandle<R>,
+    response: HttpResponse,
+    update_source: UpdateSource,
+}
+
+impl<R: Runtime> ResponseContext<R> {
+    fn new(app_handle: AppHandle<R>, response: HttpResponse, update_source: UpdateSource) -> Self {
+        Self { app_handle, response, update_source }
+    }
+
+    /// Whether this response is persisted (has a non-empty ID)
+    fn is_persisted(&self) -> bool {
+        !self.response.id.is_empty()
+    }
+
+    /// Update the response state. For persisted responses, fetches from DB, applies the
+    /// closure, and updates the DB. For ephemeral responses, just applies the closure
+    /// to the in-memory response.
+    fn update<F>(&mut self, func: F) -> Result<()>
+    where
+        F: FnOnce(&mut HttpResponse),
+    {
+        if self.is_persisted() {
+            let r = self.app_handle.with_tx(|tx| {
+                let mut r = tx.get_http_response(&self.response.id)?;
+                func(&mut r);
+                tx.update_http_response_if_id(&r, &self.update_source)?;
+                Ok(r)
+            })?;
+            self.response = r;
+            Ok(())
+        } else {
+            func(&mut self.response);
+            Ok(())
+        }
+    }
+
+    /// Get the current response state
+    fn response(&self) -> &HttpResponse {
+        &self.response
+    }
+}
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -62,25 +115,38 @@ pub async fn send_http_request_with_context<R: Runtime>(
     plugin_context: &PluginContext,
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
-    let response = Arc::new(Mutex::new(og_response.clone()));
     let update_source = UpdateSource::from_window(window);
+    let mut response_ctx =
+        ResponseContext::new(app_handle.clone(), og_response.clone(), update_source);
 
     // Execute the inner send logic and handle errors consistently
+    let start = Instant::now();
     let result = send_http_request_inner(
         window,
         unrendered_request,
-        og_response,
         environment,
         cookie_jar,
         cancelled_rx,
         plugin_context,
+        &mut response_ctx,
     )
     .await;
 
     match result {
         Ok(response) => Ok(response),
         Err(e) => {
-            Ok(response_err(&app_handle, &*response.lock().await, e.to_string(), &update_source))
+            let error = e.to_string();
+            let elapsed = start.elapsed().as_millis() as i32;
+            warn!("Failed to send request: {error:?}");
+            let _ = response_ctx.update(|r| {
+                r.state = HttpResponseState::Closed;
+                r.elapsed = elapsed;
+                if r.elapsed_headers == 0 {
+                    r.elapsed_headers = elapsed;
+                }
+                r.error = Some(error);
+            });
+            Ok(response_ctx.response().clone())
         }
     }
 }
@@ -88,26 +154,24 @@ pub async fn send_http_request_with_context<R: Runtime>(
 async fn send_http_request_inner<R: Runtime>(
     window: &WebviewWindow<R>,
     unrendered_request: &HttpRequest,
-    og_response: &HttpResponse,
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
     cancelled_rx: &Receiver<bool>,
     plugin_context: &PluginContext,
+    response_ctx: &mut ResponseContext<R>,
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
     let connection_manager = app_handle.state::<HttpConnectionManager>();
     let settings = window.db().get_settings();
-    let wrk_id = &unrendered_request.workspace_id;
-    let fld_id = unrendered_request.folder_id.as_deref();
-    let env_id = environment.map(|e| e.id);
-    let resp_id = og_response.id.clone();
-    let workspace = window.db().get_workspace(wrk_id)?;
-    let response = Arc::new(Mutex::new(og_response.clone()));
-    let update_source = UpdateSource::from_window(window);
+    let workspace_id = &unrendered_request.workspace_id;
+    let folder_id = unrendered_request.folder_id.as_deref();
+    let environment_id = environment.map(|e| e.id);
+    let workspace = window.db().get_workspace(workspace_id)?;
     let (resolved, auth_context_id) = resolve_http_request(window, unrendered_request)?;
     let cb = PluginTemplateCallback::new(window.app_handle(), &plugin_context, RenderPurpose::Send);
-    let env_chain = window.db().resolve_environments(&workspace.id, fld_id, env_id.as_deref())?;
+    let env_chain =
+        window.db().resolve_environments(&workspace.id, folder_id, environment_id.as_deref())?;
     let request = render_http_request(&resolved, env_chain, &cb, &RenderOptions::throw()).await?;
 
     // Build the sendable request using the new SendableHttpRequest type
@@ -195,17 +259,30 @@ async fn send_http_request_inner<R: Runtime>(
     )
     .await?;
 
-    let start_for_cancellation = Instant::now();
-    let final_resp = execute_transaction(
-        client,
-        sendable_request,
-        response.clone(),
-        &resp_id,
-        &app_handle,
-        &update_source,
-        cancelled_rx.clone(),
-    )
-    .await;
+    let result =
+        execute_transaction(client, sendable_request, response_ctx, cancelled_rx.clone()).await;
+
+    // Wait for blob writing to complete and check for errors
+    let final_result = match result {
+        Ok((response, maybe_blob_write_handle)) => {
+            // Check if blob writing failed
+            if let Some(handle) = maybe_blob_write_handle {
+                if let Ok(Err(e)) = handle.await {
+                    // Update response with the storage error
+                    let _ = response_ctx.update(|r| {
+                        let error_msg =
+                            format!("Request succeeded but failed to store request body: {}", e);
+                        r.error = Some(match &r.error {
+                            Some(existing) => format!("{}; {}", existing, error_msg),
+                            None => error_msg,
+                        });
+                    });
+                }
+            }
+            Ok(response)
+        }
+        Err(e) => Err(e),
+    };
 
     // Persist cookies back to the database after the request completes
     if let Some((cookie_store, mut cj)) = maybe_cookie_manager {
@@ -220,7 +297,7 @@ async fn send_http_request_inner<R: Runtime>(
                     })
                     .collect();
                 cj.cookies = cookies;
-                if let Err(e) = window.db().upsert_cookie_jar(&cj, &update_source) {
+                if let Err(e) = window.db().upsert_cookie_jar(&cj, &UpdateSource::Background) {
                     warn!("Failed to persist cookies to database: {}", e);
                 }
             }
@@ -230,23 +307,7 @@ async fn send_http_request_inner<R: Runtime>(
         }
     }
 
-    match final_resp {
-        Ok(r) => Ok(r),
-        Err(e) => match app_handle.db().get_http_response(&resp_id) {
-            Ok(mut r) => {
-                r.state = HttpResponseState::Closed;
-                r.elapsed = start_for_cancellation.elapsed().as_millis() as i32;
-                r.elapsed_headers = start_for_cancellation.elapsed().as_millis() as i32;
-                r.error = Some(e.to_string());
-                app_handle
-                    .db()
-                    .update_http_response_if_id(&r, &UpdateSource::from_window(window))
-                    .expect("Failed to update response");
-                Ok(r)
-            }
-            _ => Err(GenericError("Ephemeral request was cancelled".to_string())),
-        },
-    }
+    final_result
 }
 
 pub fn resolve_http_request<R: Runtime>(
@@ -268,13 +329,15 @@ pub fn resolve_http_request<R: Runtime>(
 
 async fn execute_transaction<R: Runtime>(
     client: reqwest::Client,
-    sendable_request: SendableHttpRequest,
-    response: Arc<Mutex<HttpResponse>>,
-    response_id: &String,
-    app_handle: &AppHandle<R>,
-    update_source: &UpdateSource,
+    mut sendable_request: SendableHttpRequest,
+    response_ctx: &mut ResponseContext<R>,
     mut cancelled_rx: Receiver<bool>,
-) -> Result<HttpResponse> {
+) -> Result<(HttpResponse, Option<tauri::async_runtime::JoinHandle<Result<()>>>)> {
+    let app_handle = &response_ctx.app_handle.clone();
+    let response_id = response_ctx.response().id.clone();
+    let workspace_id = response_ctx.response().workspace_id.clone();
+    let is_persisted = response_ctx.is_persisted();
+
     let sender = ReqwestSender::with_client(client);
     let transaction = HttpTransaction::new(sender);
     let start = Instant::now();
@@ -286,30 +349,85 @@ async fn execute_transaction<R: Runtime>(
         .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
         .collect();
 
-    {
-        // Update response with headers info and mark as connected
-        let mut r = response.lock().await;
+    // Update response with headers info
+    response_ctx.update(|r| {
         r.url = sendable_request.url.clone();
-        r.request_headers = request_headers.clone();
-        app_handle.db().update_http_response_if_id(&r, &update_source)?;
-    }
+        r.request_headers = request_headers;
+    })?;
 
-    // Create channel for receiving events and spawn a task to store them in DB
+    // Create bounded channel for receiving events and spawn a task to store them in DB
+    // Buffer size of 100 events provides backpressure if DB writes are slow
     let (event_tx, mut event_rx) =
-        tokio::sync::mpsc::unbounded_channel::<yaak_http::sender::HttpResponseEvent>();
+        tokio::sync::mpsc::channel::<yaak_http::sender::HttpResponseEvent>(100);
 
-    // Write events to DB in a task
-    {
+    // Write events to DB in a task (only for persisted responses)
+    if is_persisted {
         let response_id = response_id.clone();
-        let workspace_id = response.lock().await.workspace_id.clone();
         let app_handle = app_handle.clone();
-        let update_source = update_source.clone();
+        let update_source = response_ctx.update_source.clone();
+        let workspace_id = workspace_id.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 let db_event = HttpResponseEvent::new(&response_id, &workspace_id, event.into());
-                let _ = app_handle.db().upsert(&db_event, &update_source);
+                let _ = app_handle.db().upsert_http_response_event(&db_event, &update_source);
             }
         });
+    } else {
+        // For ephemeral responses, just drain the events
+        tokio::spawn(async move { while event_rx.recv().await.is_some() {} });
+    };
+
+    // Capture request body as it's sent (only for persisted responses)
+    let body_id = format!("{}.request", response_id);
+    let maybe_blob_write_handle = match sendable_request.body {
+        Some(SendableBody::Bytes(bytes)) => {
+            if is_persisted {
+                write_bytes_to_db_sync(response_ctx, &body_id, bytes.clone())?;
+            }
+            sendable_request.body = Some(SendableBody::Bytes(bytes));
+            None
+        }
+        Some(SendableBody::Stream(stream)) => {
+            // Wrap stream with TeeReader to capture data as it's read
+            // Bounded channel with buffer size of 10 chunks (~10MB) provides backpressure
+            let (body_chunk_tx, body_chunk_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(10);
+            let tee_reader = TeeReader::new(stream, body_chunk_tx);
+            let pinned: Pin<Box<dyn AsyncRead + Send + 'static>> = Box::pin(tee_reader);
+
+            let handle = if is_persisted {
+                // Spawn task to write request body chunks to blob DB
+                let app_handle = app_handle.clone();
+                let response_id = response_id.clone();
+                let workspace_id = workspace_id.clone();
+                let body_id = body_id.clone();
+                let update_source = response_ctx.update_source.clone();
+                Some(tauri::async_runtime::spawn(async move {
+                    write_stream_chunks_to_db(
+                        app_handle,
+                        &body_id,
+                        &workspace_id,
+                        &response_id,
+                        &update_source,
+                        body_chunk_rx,
+                    )
+                    .await
+                }))
+            } else {
+                // For ephemeral responses, just drain the body chunks
+                tauri::async_runtime::spawn(async move {
+                    let mut rx = body_chunk_rx;
+                    while rx.recv().await.is_some() {}
+                });
+                None
+            };
+
+            sendable_request.body = Some(SendableBody::Stream(pinned));
+            handle
+        }
+        None => {
+            sendable_request.body = None;
+            None
+        }
     };
 
     // Execute the transaction with cancellation support
@@ -320,44 +438,42 @@ async fn execute_transaction<R: Runtime>(
         .await?;
 
     // Prepare the response path before consuming the body
-    let dir = app_handle.path().app_data_dir()?;
-    let base_dir = dir.join("responses");
-    create_dir_all(&base_dir).await?;
-
     let body_path = if response_id.is_empty() {
-        base_dir.join(uuid::Uuid::new_v4().to_string())
+        // Ephemeral responses: use OS temp directory for automatic cleanup
+        let temp_dir = std::env::temp_dir().join("yaak-ephemeral-responses");
+        create_dir_all(&temp_dir).await?;
+        temp_dir.join(uuid::Uuid::new_v4().to_string())
     } else {
+        // Persisted responses: use app data directory
+        let dir = app_handle.path().app_data_dir()?;
+        let base_dir = dir.join("responses");
+        create_dir_all(&base_dir).await?;
         base_dir.join(&response_id)
     };
 
     // Extract metadata before consuming the body (headers are available immediately)
     // Url might change, so update again
-    let headers: Vec<HttpResponseHeader> = http_response
-        .headers
-        .iter()
-        .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
-        .collect();
-
-    {
-        // Update response with headers info and mark as connected
-        let mut r = response.lock().await;
+    response_ctx.update(|r| {
         r.body_path = Some(body_path.to_string_lossy().to_string());
         r.elapsed_headers = start.elapsed().as_millis() as i32;
         r.status = http_response.status as i32;
-        r.status_reason = http_response.status_reason.clone().clone();
-        r.url = http_response.url.clone().clone();
+        r.status_reason = http_response.status_reason.clone();
+        r.url = http_response.url.clone();
         r.remote_addr = http_response.remote_addr.clone();
-        r.version = http_response.version.clone().clone();
-        r.headers = headers.clone();
-        r.content_length = http_response.content_length.map(|l| l as i32);
+        r.version = http_response.version.clone();
+        r.headers = http_response
+            .headers
+            .iter()
+            .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
+            .collect();
+        r.content_length = http_response.content_length.map(|l| l as i64);
+        r.state = HttpResponseState::Connected;
         r.request_headers = http_response
             .request_headers
             .iter()
             .map(|(n, v)| HttpResponseHeader { name: n.clone(), value: v.clone() })
             .collect();
-        r.state = HttpResponseState::Connected;
-        app_handle.db().update_http_response_if_id(&r, &update_source)?;
-    }
+    })?;
 
     // Get the body stream for manual consumption
     let mut body_stream = http_response.into_body_stream()?;
@@ -371,9 +487,13 @@ async fn execute_transaction<R: Runtime>(
         .await
         .map_err(|e| GenericError(format!("Failed to open file: {}", e)))?;
 
-    // Stream body to file, updating DB on each chunk
+    // Stream body to file, with throttled DB updates to avoid excessive writes
     let mut written_bytes: usize = 0;
+    let mut last_update_time = start;
     let mut buf = [0u8; 8192];
+
+    // Throttle settings: update DB at most every 100ms
+    const UPDATE_INTERVAL_MS: u128 = 100;
 
     loop {
         // Check for cancellation. If we already have headers/body, just close cleanly without error
@@ -401,11 +521,17 @@ async fn execute_transaction<R: Runtime>(
                     .map_err(|e| GenericError(format!("Failed to flush file: {}", e)))?;
                 written_bytes += n;
 
-                // Update response in DB with progress
-                let mut r = response.lock().await;
-                r.elapsed = start.elapsed().as_millis() as i32; // Approx until the end
-                r.content_length = Some(written_bytes as i32);
-                app_handle.db().update_http_response_if_id(&r, &update_source)?;
+                // Throttle DB updates: only update if enough time has passed
+                let now = Instant::now();
+                let elapsed_since_update = now.duration_since(last_update_time).as_millis();
+
+                if elapsed_since_update >= UPDATE_INTERVAL_MS {
+                    response_ctx.update(|r| {
+                        r.elapsed = start.elapsed().as_millis() as i32;
+                        r.content_length = Some(written_bytes as i64);
+                    })?;
+                    last_update_time = now;
+                }
             }
             Err(e) => {
                 return Err(GenericError(format!("Failed to read response body: {}", e)));
@@ -413,17 +539,108 @@ async fn execute_transaction<R: Runtime>(
         }
     }
 
-    // Final update with closed state
-    let mut resp = response.lock().await.clone();
-    resp.elapsed = start.elapsed().as_millis() as i32;
-    resp.state = HttpResponseState::Closed;
-    resp.body_path = Some(
-        body_path.to_str().ok_or(GenericError(format!("Invalid path {body_path:?}",)))?.to_string(),
-    );
+    // Final update with closed state and accurate byte count
+    response_ctx.update(|r| {
+        r.elapsed = start.elapsed().as_millis() as i32;
+        r.content_length = Some(written_bytes as i64);
+        r.state = HttpResponseState::Closed;
+    })?;
 
-    app_handle.db().update_http_response_if_id(&resp, &update_source)?;
+    Ok((response_ctx.response().clone(), maybe_blob_write_handle))
+}
 
-    Ok(resp)
+fn write_bytes_to_db_sync<R: Runtime>(
+    response_ctx: &mut ResponseContext<R>,
+    body_id: &str,
+    data: Bytes,
+) -> Result<()> {
+    if data.is_empty() {
+        return Ok(());
+    }
+
+    // Write in chunks if data is large
+    let mut offset = 0;
+    let mut chunk_index = 0;
+    while offset < data.len() {
+        let end = std::cmp::min(offset + REQUEST_BODY_CHUNK_SIZE, data.len());
+        let chunk_data = data.slice(offset..end).to_vec();
+        let chunk = BodyChunk::new(body_id, chunk_index, chunk_data);
+        response_ctx.app_handle.blobs().insert_chunk(&chunk)?;
+        offset = end;
+        chunk_index += 1;
+    }
+
+    // Update the response with the total request body size
+    response_ctx.update(|r| {
+        r.request_content_length = Some(data.len() as i64);
+    })?;
+
+    Ok(())
+}
+
+async fn write_stream_chunks_to_db<R: Runtime>(
+    app_handle: AppHandle<R>,
+    body_id: &str,
+    workspace_id: &str,
+    response_id: &str,
+    update_source: &UpdateSource,
+    mut rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
+) -> Result<()> {
+    let mut buffer = Vec::with_capacity(REQUEST_BODY_CHUNK_SIZE);
+    let mut chunk_index = 0;
+    let mut total_bytes: usize = 0;
+
+    while let Some(data) = rx.recv().await {
+        total_bytes += data.len();
+        buffer.extend_from_slice(&data);
+
+        // Flush when buffer reaches chunk size
+        while buffer.len() >= REQUEST_BODY_CHUNK_SIZE {
+            debug!("Writing chunk {chunk_index} to DB");
+            let chunk_data: Vec<u8> = buffer.drain(..REQUEST_BODY_CHUNK_SIZE).collect();
+            let chunk = BodyChunk::new(body_id, chunk_index, chunk_data);
+            app_handle.blobs().insert_chunk(&chunk)?;
+            app_handle.db().upsert_http_response_event(
+                &HttpResponseEvent::new(
+                    response_id,
+                    workspace_id,
+                    yaak_http::sender::HttpResponseEvent::ChunkSent {
+                        bytes: REQUEST_BODY_CHUNK_SIZE,
+                    }
+                    .into(),
+                ),
+                update_source,
+            )?;
+            chunk_index += 1;
+        }
+    }
+
+    // Flush remaining data
+    if !buffer.is_empty() {
+        let chunk = BodyChunk::new(body_id, chunk_index, buffer);
+        debug!("Flushing remaining data {chunk_index} {}", chunk.data.len());
+        app_handle.blobs().insert_chunk(&chunk)?;
+        app_handle.db().upsert_http_response_event(
+            &HttpResponseEvent::new(
+                response_id,
+                workspace_id,
+                yaak_http::sender::HttpResponseEvent::ChunkSent { bytes: chunk.data.len() }.into(),
+            ),
+            update_source,
+        )?;
+    }
+
+    // Update the response with the total request body size
+    app_handle.with_tx(|tx| {
+        debug!("Updating final body length {total_bytes}");
+        if let Ok(mut response) = tx.get_http_response(&response_id) {
+            response.request_content_length = Some(total_bytes as i64);
+            tx.update_http_response_if_id(&response, update_source)?;
+        }
+        Ok(())
+    })?;
+
+    Ok(())
 }
 
 async fn apply_authentication<R: Runtime>(

@@ -110,12 +110,12 @@ pub struct BodyStats {
 /// An AsyncRead wrapper that sends chunk events as data is read
 pub struct TrackingRead<R> {
     inner: R,
-    event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
+    event_tx: mpsc::Sender<HttpResponseEvent>,
     ended: bool,
 }
 
 impl<R> TrackingRead<R> {
-    pub fn new(inner: R, event_tx: mpsc::UnboundedSender<HttpResponseEvent>) -> Self {
+    pub fn new(inner: R, event_tx: mpsc::Sender<HttpResponseEvent>) -> Self {
         Self { inner, event_tx, ended: false }
     }
 }
@@ -131,8 +131,9 @@ impl<R: AsyncRead + Unpin> AsyncRead for TrackingRead<R> {
         if let Poll::Ready(Ok(())) = &result {
             let bytes_read = buf.filled().len() - before;
             if bytes_read > 0 {
-                // Ignore send errors - receiver may have been dropped
-                let _ = self.event_tx.send(HttpResponseEvent::ChunkReceived { bytes: bytes_read });
+                // Ignore send errors - receiver may have been dropped or channel is full
+                let _ =
+                    self.event_tx.try_send(HttpResponseEvent::ChunkReceived { bytes: bytes_read });
             } else if !self.ended {
                 self.ended = true;
             }
@@ -311,7 +312,7 @@ pub trait HttpSender: Send + Sync {
     async fn send(
         &self,
         request: SendableHttpRequest,
-        event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
+        event_tx: mpsc::Sender<HttpResponseEvent>,
     ) -> Result<HttpResponse>;
 }
 
@@ -338,11 +339,11 @@ impl HttpSender for ReqwestSender {
     async fn send(
         &self,
         request: SendableHttpRequest,
-        event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
+        event_tx: mpsc::Sender<HttpResponseEvent>,
     ) -> Result<HttpResponse> {
-        // Helper to send events (ignores errors if receiver is dropped)
+        // Helper to send events (ignores errors if receiver is dropped or channel is full)
         let send_event = |event: HttpResponseEvent| {
-            let _ = event_tx.send(event);
+            let _ = event_tx.try_send(event);
         };
 
         // Parse the HTTP method

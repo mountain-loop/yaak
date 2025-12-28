@@ -32,6 +32,7 @@ use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::GrpcHandle;
 use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_mac_window::AppHandleMacWindowExt;
+use yaak_models::blob_manager::BlobManagerExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
     GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState,
@@ -784,7 +785,7 @@ async fn cmd_http_response_body<R: Runtime>(
 ) -> YaakResult<FilterResponse> {
     let body_path = match response.body_path {
         None => {
-            return Err(GenericError("Response body path not set".to_string()));
+            return Ok(FilterResponse { content: String::new(), error: None });
         }
         Some(p) => p,
     };
@@ -807,6 +808,23 @@ async fn cmd_http_response_body<R: Runtime>(
         }
         _ => Ok(FilterResponse { content: body, error: None }),
     }
+}
+
+#[tauri::command]
+async fn cmd_http_request_body<R: Runtime>(
+    app_handle: AppHandle<R>,
+    response_id: &str,
+) -> YaakResult<Option<Vec<u8>>> {
+    let body_id = format!("{}.request", response_id);
+    let chunks = app_handle.blobs().get_chunks(&body_id)?;
+
+    if chunks.is_empty() {
+        return Ok(None);
+    }
+
+    // Concatenate all chunks
+    let body: Vec<u8> = chunks.into_iter().flat_map(|c| c.data).collect();
+    Ok(Some(body))
 }
 
 #[tauri::command]
@@ -835,9 +853,7 @@ async fn cmd_get_http_response_events<R: Runtime>(
     app_handle: AppHandle<R>,
     response_id: &str,
 ) -> YaakResult<Vec<HttpResponseEvent>> {
-    use yaak_models::models::HttpResponseEventIden;
-    let events: Vec<HttpResponseEvent> =
-        app_handle.db().find_many(HttpResponseEventIden::ResponseId, response_id, None)?;
+    let events: Vec<HttpResponseEvent> = app_handle.db().list_http_response_events(response_id)?;
     Ok(events)
 }
 
@@ -1115,6 +1131,7 @@ async fn cmd_send_http_request<R: Runtime>(
     //   that has not yet been saved in the DB.
     request: HttpRequest,
 ) -> YaakResult<HttpResponse> {
+    let blobs = app_handle.blob_manager();
     let response = app_handle.db().upsert_http_response(
         &HttpResponse {
             request_id: request.id.clone(),
@@ -1122,6 +1139,7 @@ async fn cmd_send_http_request<R: Runtime>(
             ..Default::default()
         },
         &UpdateSource::from_window(&window),
+        &blobs,
     )?;
 
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
@@ -1167,28 +1185,12 @@ async fn cmd_send_http_request<R: Runtime>(
                     ..resp
                 },
                 &UpdateSource::from_window(&window),
+                &blobs,
             )?
         }
     };
 
     Ok(r)
-}
-
-fn response_err<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    response: &HttpResponse,
-    error: String,
-    update_source: &UpdateSource,
-) -> HttpResponse {
-    warn!("Failed to send request: {error:?}");
-    let mut response = response.clone();
-    response.state = HttpResponseState::Closed;
-    response.error = Some(error.clone());
-    response = app_handle
-        .db()
-        .update_http_response_if_id(&response, update_source)
-        .expect("Failed to update response");
-    response
 }
 
 #[tauri::command]
@@ -1468,6 +1470,7 @@ pub fn run() {
             cmd_delete_send_history,
             cmd_dismiss_notification,
             cmd_export_data,
+            cmd_http_request_body,
             cmd_http_response_body,
             cmd_format_json,
             cmd_get_http_authentication_summaries,
