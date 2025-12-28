@@ -642,22 +642,19 @@ export class PluginInstance {
           );
           return httpRequest;
         },
-        list: async (args: { workspaceId?: string; folderId?: string }) => {
+        list: async (args?: { folderId?: string }) => {
           const payload = {
             type: 'list_http_requests_request',
-            // plugin events use camelCase field names in Rust -> snake_case mapping
-            folderId: args.folderId,
-            workspaceId: args.workspaceId,
+            folderId: args?.folderId,
           } as any;
           const { httpRequests } = await this.#sendForReply<any>(context, payload);
           return httpRequests as any[];
         },
       },
       folder: {
-        list: async (args: { workspaceId?: string }) => {
+        list: async () => {
           const payload = {
             type: 'list_folders_request',
-            workspaceId: args.workspaceId,
           } as any;
           const { folders } = await this.#sendForReply<any>(context, payload);
           return folders as any[];

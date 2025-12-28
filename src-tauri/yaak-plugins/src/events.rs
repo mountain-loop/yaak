@@ -1235,8 +1235,6 @@ pub struct FindHttpResponsesResponse {
 pub struct ListHttpRequestsRequest {
     #[ts(optional)]
     pub folder_id: Option<String>,
-    #[ts(optional)]
-    pub workspace_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -1249,10 +1247,7 @@ pub struct ListHttpRequestsResponse {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
-pub struct ListFoldersRequest {
-    #[ts(optional)]
-    pub workspace_id: Option<String>,
-}
+pub struct ListFoldersRequest {}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
