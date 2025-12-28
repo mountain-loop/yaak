@@ -37,7 +37,7 @@ import { getCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import { useHotKey } from '../hooks/useHotKey';
 import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
-import { getWebSocketRequestActions } from '../hooks/useWebSocketRequestActions';
+import { getWebsocketRequestActions } from '../hooks/useWebsocketRequestActions';
 import { getFolderActions } from '../hooks/useFolderActions';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { getModelAncestors } from '../hooks/useModelAncestors';
@@ -377,7 +377,7 @@ function Sidebar({ className }: { className?: string }) {
           },
         })),
         ...(items.length === 1 && child.model === 'websocket_request'
-          ? await getWebSocketRequestActions()
+          ? await getWebsocketRequestActions()
           : []
         ).map((a) => ({
           label: a.label,

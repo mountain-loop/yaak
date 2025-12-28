@@ -103,7 +103,16 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     ];
 
     return { workspaceItems, itemsAfter };
-  }, [workspaces, workspaceMeta, deleteSendHistory, createWorkspace, workspace?.id]);
+  }, [
+    workspaces,
+    workspaceMeta,
+    deleteSendHistory,
+    createWorkspace,
+    workspace?.id,
+    workspace,
+    workspaceActions.map,
+    workspaceActions.length,
+  ]);
 
   const handleSwitchWorkspace = useCallback(async (workspaceId: string | null) => {
     if (workspaceId == null) return;
