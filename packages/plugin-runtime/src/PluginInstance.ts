@@ -174,16 +174,49 @@ export class PluginInstance {
       }
 
       if (
-        payload.type === 'get_http_collection_actions_request' &&
-        Array.isArray(this.#mod?.httpCollectionActions)
+        payload.type === 'get_websocket_request_actions_request' &&
+        Array.isArray(this.#mod?.websocketRequestActions)
       ) {
-        const reply: HttpRequestAction[] = this.#mod.httpCollectionActions.map((a) => ({
+        const reply = this.#mod.websocketRequestActions.map((a) => ({
           ...a,
-          // Add everything except onSelect
           onSelect: undefined,
         }));
         const replyPayload: InternalEventPayload = {
-          type: 'get_http_collection_actions_response',
+          type: 'get_websocket_request_actions_response',
+          pluginRefId: this.#workerData.pluginRefId,
+          actions: reply,
+        };
+        this.#sendPayload(context, replyPayload, replyId);
+        return;
+      }
+
+      if (
+        payload.type === 'get_workspace_actions_request' &&
+        Array.isArray(this.#mod?.workspaceActions)
+      ) {
+        const reply = this.#mod.workspaceActions.map((a) => ({
+          ...a,
+          onSelect: undefined,
+        }));
+        const replyPayload: InternalEventPayload = {
+          type: 'get_workspace_actions_response',
+          pluginRefId: this.#workerData.pluginRefId,
+          actions: reply,
+        };
+        this.#sendPayload(context, replyPayload, replyId);
+        return;
+      }
+
+      if (
+        payload.type === 'get_folder_actions_request' &&
+        Array.isArray(this.#mod?.folderActions)
+      ) {
+        const reply = this.#mod.folderActions.map((a) => ({
+          ...a,
+          onSelect: undefined,
+        }));
+        const replyPayload: InternalEventPayload = {
+          type: 'get_folder_actions_response',
           pluginRefId: this.#workerData.pluginRefId,
           actions: reply,
         };
@@ -322,10 +355,34 @@ export class PluginInstance {
       }
 
       if (
-        payload.type === 'call_http_collection_action_request' &&
-        Array.isArray(this.#mod.httpCollectionActions)
+        payload.type === 'call_websocket_request_action_request' &&
+        Array.isArray(this.#mod.websocketRequestActions)
       ) {
-        const action = this.#mod.httpCollectionActions[payload.index];
+        const action = this.#mod.websocketRequestActions[payload.index];
+        if (typeof action?.onSelect === 'function') {
+          await action.onSelect(ctx, payload.args);
+          this.#sendEmpty(context, replyId);
+          return;
+        }
+      }
+
+      if (
+        payload.type === 'call_workspace_action_request' &&
+        Array.isArray(this.#mod.workspaceActions)
+      ) {
+        const action = this.#mod.workspaceActions[payload.index];
+        if (typeof action?.onSelect === 'function') {
+          await action.onSelect(ctx, payload.args);
+          this.#sendEmpty(context, replyId);
+          return;
+        }
+      }
+
+      if (
+        payload.type === 'call_folder_action_request' &&
+        Array.isArray(this.#mod.folderActions)
+      ) {
+        const action = this.#mod.folderActions[payload.index];
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
           this.#sendEmpty(context, replyId);

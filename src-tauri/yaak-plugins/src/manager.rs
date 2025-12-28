@@ -3,18 +3,18 @@ use crate::error::Error::{
 };
 use crate::error::Result;
 use crate::events::{
-    BootRequest, CallGrpcRequestActionRequest, CallHttpAuthenticationActionArgs,
-    CallHttpAuthenticationActionRequest, CallHttpAuthenticationRequest,
-    CallHttpAuthenticationResponse, CallHttpRequestActionRequest, CallTemplateFunctionArgs,
-    CallTemplateFunctionRequest, CallTemplateFunctionResponse, EmptyPayload, ErrorResponse,
-    FilterRequest, FilterResponse, GetGrpcRequestActionsResponse,
+    BootRequest, CallFolderActionRequest, CallGrpcRequestActionRequest,
+    CallHttpAuthenticationActionArgs, CallHttpAuthenticationActionRequest,
+    CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
+    CallTemplateFunctionArgs, CallTemplateFunctionRequest, CallTemplateFunctionResponse,
+    CallWebSocketRequestActionRequest, CallWorkspaceActionRequest, EmptyPayload, ErrorResponse,
+    FilterRequest, FilterResponse, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
     GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
     GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
-    GetHttpCollectionActionsResponse, CallHttpCollectionActionRequest,
     GetTemplateFunctionConfigRequest, GetTemplateFunctionConfigResponse,
-    GetTemplateFunctionSummaryResponse, GetThemesRequest, GetThemesResponse, ImportRequest,
-    ImportResponse, InternalEvent, InternalEventPayload, JsonPrimitive, PluginContext,
-    RenderPurpose,
+    GetTemplateFunctionSummaryResponse, GetThemesRequest, GetThemesResponse,
+    GetWebSocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportRequest, ImportResponse,
+    InternalEvent, InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose,
 };
 use crate::native_template_functions::{template_function_keyring, template_function_secure};
 use crate::nodejs::start_nodejs_plugin_runtime;
@@ -483,20 +483,62 @@ impl PluginManager {
         Ok(all_actions)
     }
 
-    pub async fn get_http_collection_actions<R: Runtime>(
+    pub async fn get_websocket_request_actions<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
-    ) -> Result<Vec<GetHttpCollectionActionsResponse>> {
+    ) -> Result<Vec<GetWebSocketRequestActionsResponse>> {
         let reply_events = self
             .send_and_wait(
                 &PluginContext::new(window),
-                &InternalEventPayload::GetHttpCollectionActionsRequest(EmptyPayload {}),
+                &InternalEventPayload::GetWebSocketRequestActionsRequest(EmptyPayload {}),
             )
             .await?;
 
         let mut all_actions = Vec::new();
         for event in reply_events {
-            if let InternalEventPayload::GetHttpCollectionActionsResponse(resp) = event.payload {
+            if let InternalEventPayload::GetWebSocketRequestActionsResponse(resp) = event.payload {
+                all_actions.push(resp.clone());
+            }
+        }
+
+        Ok(all_actions)
+    }
+
+    pub async fn get_workspace_actions<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+    ) -> Result<Vec<GetWorkspaceActionsResponse>> {
+        let reply_events = self
+            .send_and_wait(
+                &PluginContext::new(window),
+                &InternalEventPayload::GetWorkspaceActionsRequest(EmptyPayload {}),
+            )
+            .await?;
+
+        let mut all_actions = Vec::new();
+        for event in reply_events {
+            if let InternalEventPayload::GetWorkspaceActionsResponse(resp) = event.payload {
+                all_actions.push(resp.clone());
+            }
+        }
+
+        Ok(all_actions)
+    }
+
+    pub async fn get_folder_actions<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+    ) -> Result<Vec<GetFolderActionsResponse>> {
+        let reply_events = self
+            .send_and_wait(
+                &PluginContext::new(window),
+                &InternalEventPayload::GetFolderActionsRequest(EmptyPayload {}),
+            )
+            .await?;
+
+        let mut all_actions = Vec::new();
+        for event in reply_events {
+            if let InternalEventPayload::GetFolderActionsResponse(resp) = event.payload {
                 all_actions.push(resp.clone());
             }
         }
@@ -586,17 +628,51 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn call_http_collection_action<R: Runtime>(
+    pub async fn call_websocket_request_action<R: Runtime>(
         &self,
         window: &WebviewWindow<R>,
-        req: CallHttpCollectionActionRequest,
+        req: CallWebSocketRequestActionRequest,
     ) -> Result<()> {
         let ref_id = req.plugin_ref_id.clone();
         let plugin =
             self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
         let event = plugin.build_event_to_send(
             &PluginContext::new(window),
-            &InternalEventPayload::CallHttpCollectionActionRequest(req),
+            &InternalEventPayload::CallWebSocketRequestActionRequest(req),
+            None,
+        );
+        plugin.send(&event).await?;
+        Ok(())
+    }
+
+    pub async fn call_workspace_action<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+        req: CallWorkspaceActionRequest,
+    ) -> Result<()> {
+        let ref_id = req.plugin_ref_id.clone();
+        let plugin =
+            self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
+        let event = plugin.build_event_to_send(
+            &PluginContext::new(window),
+            &InternalEventPayload::CallWorkspaceActionRequest(req),
+            None,
+        );
+        plugin.send(&event).await?;
+        Ok(())
+    }
+
+    pub async fn call_folder_action<R: Runtime>(
+        &self,
+        window: &WebviewWindow<R>,
+        req: CallFolderActionRequest,
+    ) -> Result<()> {
+        let ref_id = req.plugin_ref_id.clone();
+        let plugin =
+            self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
+        let event = plugin.build_event_to_send(
+            &PluginContext::new(window),
+            &InternalEventPayload::CallFolderActionRequest(req),
             None,
         );
         plugin.send(&event).await?;
