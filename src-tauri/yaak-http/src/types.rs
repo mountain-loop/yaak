@@ -326,8 +326,14 @@ async fn build_multipart_body(
 
         if file_path.is_empty() {
             // Text field
-            let header =
-                format!("Content-Disposition: form-data; name=\"{}\"\r\n\r\n{}", name, value);
+            let header = if !content_type.is_empty() {
+                format!(
+                    "Content-Disposition: form-data; name=\"{}\"\r\nContent-Type: {}\r\n\r\n{}",
+                    name, content_type, value
+                )
+            } else {
+                format!("Content-Disposition: form-data; name=\"{}\"\r\n\r\n{}", name, value)
+            };
             let header_bytes = header.into_bytes();
             total_size += header_bytes.len();
             readers.push(ReaderType::Bytes(header_bytes));

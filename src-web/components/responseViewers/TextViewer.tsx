@@ -1,11 +1,9 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { createGlobalState } from 'react-use';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useFormatText } from '../../hooks/useFormatText';
-import { useResponseBodyText } from '../../hooks/useResponseBodyText';
 import type { EditorProps } from '../core/Editor/Editor';
 import { hyperlink } from '../core/Editor/hyperlink/extension';
 import { Editor } from '../core/Editor/LazyEditor';
@@ -15,29 +13,37 @@ import { Input } from '../core/Input';
 const extraExtensions = [hyperlink];
 
 interface Props {
-  pretty: boolean;
-  className?: string;
   text: string;
   language: EditorProps['language'];
-  response: HttpResponse;
-  requestId: string;
+  stateKey: string | null;
+  pretty?: boolean;
+  className?: string;
+  onFilter?: (filter: string) => {
+    data: string | null | undefined;
+    isPending: boolean;
+    error: boolean;
+  };
 }
 
 const useFilterText = createGlobalState<Record<string, string | null>>({});
 
-export function TextViewer({ language, text, response, requestId, pretty, className }: Props) {
+export function TextViewer({ language, text, stateKey, pretty, className, onFilter }: Props) {
   const [filterTextMap, setFilterTextMap] = useFilterText();
-  const filterText = filterTextMap[requestId] ?? null;
+  const filterText = stateKey ? (filterTextMap[stateKey] ?? null) : null;
   const debouncedFilterText = useDebouncedValue(filterText);
   const setFilterText = useCallback(
     (v: string | null) => {
-      setFilterTextMap((m) => ({ ...m, [requestId]: v }));
+      if (!stateKey) return;
+      setFilterTextMap((m) => ({ ...m, [stateKey]: v }));
     },
-    [setFilterTextMap, requestId],
+    [setFilterTextMap, stateKey],
   );
 
   const isSearching = filterText != null;
-  const filteredResponse = useResponseBodyText({ response, filter: debouncedFilterText ?? null });
+  const filteredResponse =
+    onFilter && debouncedFilterText
+      ? onFilter(debouncedFilterText)
+      : { data: null, isPending: false, error: false };
 
   const toggleSearch = useCallback(() => {
     if (isSearching) {
@@ -47,7 +53,7 @@ export function TextViewer({ language, text, response, requestId, pretty, classN
     }
   }, [isSearching, setFilterText]);
 
-  const canFilter = language === 'json' || language === 'xml' || language === 'html';
+  const canFilter = onFilter && (language === 'json' || language === 'xml' || language === 'html');
 
   const actions = useMemo<ReactNode[]>(() => {
     const nodes: ReactNode[] = [];
@@ -58,7 +64,7 @@ export function TextViewer({ language, text, response, requestId, pretty, classN
       nodes.push(
         <div key="input" className="w-full !opacity-100">
           <Input
-            key={requestId}
+            key={stateKey ?? 'filter'}
             validate={!filteredResponse.error}
             hideLabel
             autoFocus
@@ -70,7 +76,7 @@ export function TextViewer({ language, text, response, requestId, pretty, classN
             defaultValue={filterText}
             onKeyDown={(e) => e.key === 'Escape' && toggleSearch()}
             onChange={setFilterText}
-            stateKey={`filter.${response.id}`}
+            stateKey={stateKey ? `filter.${stateKey}` : null}
           />
         </div>,
       );
@@ -96,13 +102,12 @@ export function TextViewer({ language, text, response, requestId, pretty, classN
     filteredResponse.isPending,
     isSearching,
     language,
-    requestId,
-    response,
+    stateKey,
     setFilterText,
     toggleSearch,
   ]);
 
-  const formattedBody = useFormatText({ text, language, pretty });
+  const formattedBody = useFormatText({ text, language, pretty: pretty ?? false });
   if (formattedBody == null) {
     return null;
   }
@@ -132,8 +137,7 @@ export function TextViewer({ language, text, response, requestId, pretty, classN
       language={language}
       actions={actions}
       extraExtensions={extraExtensions}
-      // State key for storing fold state
-      stateKey={`response.body.${response.id}`}
+      stateKey={stateKey}
     />
   );
 }

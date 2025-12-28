@@ -20,7 +20,7 @@ export default function RouteError({ error }: { error: unknown }) {
           {stack && (
             <DetailsBanner
               color="secondary"
-              className="mt-3 select-auto text-xs"
+              className="mt-3 select-auto text-xs max-h-[40vh]"
               summary="Stack Trace"
             >
               <div className="mt-2 text-xs">{stack}</div>

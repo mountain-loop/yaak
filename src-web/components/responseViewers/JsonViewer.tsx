@@ -1,21 +1,15 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import { useResponseBodyText } from '../../hooks/useResponseBodyText';
 import { JsonAttributeTree } from '../core/JsonAttributeTree';
 
 interface Props {
-  response: HttpResponse;
+  text: string;
   className?: string;
 }
 
-export function JsonViewer({ response, className }: Props) {
-  const rawBody = useResponseBodyText({ response, filter: null });
-
-  if (rawBody.isLoading || rawBody.data == null) return null;
-
+export function JsonViewer({ text, className }: Props) {
   let parsed = {};
   try {
-    parsed = JSON.parse(rawBody.data);
+    parsed = JSON.parse(text);
   } catch {
     // Nothing yet
   }

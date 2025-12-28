@@ -1,20 +1,17 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import Papa from 'papaparse';
 import { useMemo } from 'react';
-import { useResponseBodyText } from '../../hooks/useResponseBodyText';
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
 
 interface Props {
-  response: HttpResponse;
+  text: string | null;
   className?: string;
 }
 
-export function CsvViewer({ response, className }: Props) {
-  const body = useResponseBodyText({ response, filter: null });
+export function CsvViewer({ text, className }: Props) {
   return (
     <div className="overflow-auto h-full">
-      <CsvViewerInner text={body.data ?? null} className={className} />
+      <CsvViewerInner text={text} className={className} />
     </div>
   );
 }
