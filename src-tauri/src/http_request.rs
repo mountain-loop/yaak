@@ -262,6 +262,28 @@ async fn send_http_request_inner<R: Runtime>(
     let result =
         execute_transaction(client, sendable_request, response_ctx, cancelled_rx.clone()).await;
 
+    // Wait for blob writing to complete and check for errors
+    let final_result = match result {
+        Ok((response, maybe_blob_write_handle)) => {
+            // Check if blob writing failed
+            if let Some(handle) = maybe_blob_write_handle {
+                if let Ok(Err(e)) = handle.await {
+                    // Update response with the storage error
+                    let _ = response_ctx.update(|r| {
+                        let error_msg =
+                            format!("Request succeeded but failed to store request body: {}", e);
+                        r.error = Some(match &r.error {
+                            Some(existing) => format!("{}; {}", existing, error_msg),
+                            None => error_msg,
+                        });
+                    });
+                }
+            }
+            Ok(response)
+        }
+        Err(e) => Err(e),
+    };
+
     // Persist cookies back to the database after the request completes
     if let Some((cookie_store, mut cj)) = maybe_cookie_manager {
         match cookie_store.lock() {
@@ -285,7 +307,7 @@ async fn send_http_request_inner<R: Runtime>(
         }
     }
 
-    result
+    final_result
 }
 
 pub fn resolve_http_request<R: Runtime>(
@@ -310,7 +332,7 @@ async fn execute_transaction<R: Runtime>(
     mut sendable_request: SendableHttpRequest,
     response_ctx: &mut ResponseContext<R>,
     mut cancelled_rx: Receiver<bool>,
-) -> Result<HttpResponse> {
+) -> Result<(HttpResponse, Option<tauri::async_runtime::JoinHandle<Result<()>>>)> {
     let app_handle = &response_ctx.app_handle.clone();
     let response_id = response_ctx.response().id.clone();
     let workspace_id = response_ctx.response().workspace_id.clone();
@@ -357,12 +379,13 @@ async fn execute_transaction<R: Runtime>(
 
     // Capture request body as it's sent (only for persisted responses)
     let body_id = format!("{}.request", response_id);
-    sendable_request.body = match sendable_request.body {
+    let maybe_blob_write_handle = match sendable_request.body {
         Some(SendableBody::Bytes(bytes)) => {
             if is_persisted {
                 write_bytes_to_db_sync(response_ctx, &body_id, bytes.clone())?;
             }
-            Some(SendableBody::Bytes(bytes))
+            sendable_request.body = Some(SendableBody::Bytes(bytes));
+            None
         }
         Some(SendableBody::Stream(stream)) => {
             // Wrap stream with TeeReader to capture data as it's read
@@ -371,15 +394,15 @@ async fn execute_transaction<R: Runtime>(
             let tee_reader = TeeReader::new(stream, body_chunk_tx);
             let pinned: Pin<Box<dyn AsyncRead + Send + 'static>> = Box::pin(tee_reader);
 
-            if is_persisted {
+            let handle = if is_persisted {
                 // Spawn task to write request body chunks to blob DB
                 let app_handle = app_handle.clone();
                 let response_id = response_id.clone();
                 let workspace_id = workspace_id.clone();
                 let body_id = body_id.clone();
                 let update_source = response_ctx.update_source.clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Err(e) = write_stream_chunks_to_db(
+                Some(tauri::async_runtime::spawn(async move {
+                    write_stream_chunks_to_db(
                         app_handle,
                         &body_id,
                         &workspace_id,
@@ -388,22 +411,23 @@ async fn execute_transaction<R: Runtime>(
                         body_chunk_rx,
                     )
                     .await
-                    {
-                        error!("Error writing stream chunks to DB: {}", e);
-                    };
-                });
+                }))
             } else {
                 // For ephemeral responses, just drain the body chunks
                 tauri::async_runtime::spawn(async move {
                     let mut rx = body_chunk_rx;
                     while rx.recv().await.is_some() {}
                 });
-            }
+                None
+            };
 
-            // For streams, size is determined after streaming completes
-            Some(SendableBody::Stream(pinned))
+            sendable_request.body = Some(SendableBody::Stream(pinned));
+            handle
         }
-        None => None,
+        None => {
+            sendable_request.body = None;
+            None
+        }
     };
 
     // Execute the transaction with cancellation support
@@ -519,7 +543,7 @@ async fn execute_transaction<R: Runtime>(
         r.state = HttpResponseState::Closed;
     })?;
 
-    Ok(response_ctx.response().clone())
+    Ok((response_ctx.response().clone(), maybe_blob_write_handle))
 }
 
 fn write_bytes_to_db_sync<R: Runtime>(
