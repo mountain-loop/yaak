@@ -23,7 +23,8 @@ export function MultipartViewer({ response }: Props) {
   const contentTypeHeader = getContentTypeFromHeaders(response.headers);
   const boundary = contentTypeHeader?.split('boundary=')[1] ?? 'unknown';
 
-  const parsed = parseMultipart(body.data, { boundary });
+  const maxFileSize = 1024 * 1024 * 10; // 10MB
+  const parsed = parseMultipart(body.data, { boundary, maxFileSize });
   const parts = Array.from(parsed);
 
   return (
