@@ -1,7 +1,7 @@
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::render::render_http_request;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -438,13 +438,16 @@ async fn execute_transaction<R: Runtime>(
         .await?;
 
     // Prepare the response path before consuming the body
-    let dir = app_handle.path().app_data_dir()?;
-    let base_dir = dir.join("responses");
-    create_dir_all(&base_dir).await?;
-
     let body_path = if response_id.is_empty() {
-        base_dir.join(uuid::Uuid::new_v4().to_string())
+        // Ephemeral responses: use OS temp directory for automatic cleanup
+        let temp_dir = std::env::temp_dir().join("yaak-ephemeral-responses");
+        create_dir_all(&temp_dir).await?;
+        temp_dir.join(uuid::Uuid::new_v4().to_string())
     } else {
+        // Persisted responses: use app data directory
+        let dir = app_handle.path().app_data_dir()?;
+        let base_dir = dir.join("responses");
+        create_dir_all(&base_dir).await?;
         base_dir.join(&response_id)
     };
 
