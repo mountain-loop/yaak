@@ -15,7 +15,8 @@ import('react-pdf').then(({ pdfjs }) => {
 });
 
 interface Props {
-  bodyPath: string;
+  bodyPath?: string;
+  data?: Uint8Array;
 }
 
 const options = {
@@ -23,7 +24,7 @@ const options = {
   standardFontDataUrl: '/standard_fonts/',
 };
 
-export function PdfViewer({ bodyPath }: Props) {
+export function PdfViewer({ bodyPath, data }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [numPages, setNumPages] = useState<number>();
 
@@ -33,7 +34,7 @@ export function PdfViewer({ bodyPath }: Props) {
     setNumPages(nextNumPages);
   };
 
-  const src = convertFileSrc(bodyPath);
+  const src = bodyPath ? convertFileSrc(bodyPath) : data;
   return (
     <div ref={containerRef} className="w-full h-full overflow-y-auto">
       <Document

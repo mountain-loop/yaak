@@ -1,4 +1,5 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
+import { lazy, Suspense } from 'react';
 import { useHttpRequestBody } from '../hooks/useHttpRequestBody';
 import { getMimeTypeFromContentType, languageFromContentType } from '../lib/contentType';
 import { EmptyStateText } from './EmptyStateText';
@@ -9,6 +10,10 @@ import { MultipartViewer } from './responseViewers/MultipartViewer';
 import { SvgViewer } from './responseViewers/SvgViewer';
 import { TextViewer } from './responseViewers/TextViewer';
 import { WebPageViewer } from './responseViewers/WebPageViewer';
+
+const PdfViewer = lazy(() =>
+  import('./responseViewers/PdfViewer').then((m) => ({ default: m.PdfViewer })),
+);
 
 interface Props {
   response: HttpResponse;
@@ -67,6 +72,14 @@ function RequestBodyViewerInner({ response }: Props) {
 
   if (mimeType?.match(/^text\/html/i)) {
     return <WebPageViewer html={bodyText} />;
+  }
+
+  if (mimeType?.match(/pdf/i)) {
+    return (
+      <Suspense fallback={<LoadingIcon />}>
+        <PdfViewer data={body} />
+      </Suspense>
+    );
   }
 
   return (

@@ -1,13 +1,16 @@
 import { type MultipartPart, parseMultipart } from '@mjackson/multipart-parser';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { languageFromContentType } from '../../lib/contentType';
 import { Icon } from '../core/Icon';
+import { LoadingIcon } from '../core/LoadingIcon';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { CsvViewer } from './CsvViewer';
 import { ImageViewer } from './ImageViewer';
 import { SvgViewer } from './SvgViewer';
 import { TextViewer } from './TextViewer';
 import { WebPageViewer } from './WebPageViewer';
+
+const PdfViewer = lazy(() => import('./PdfViewer').then((m) => ({ default: m.PdfViewer })));
 
 interface Props {
   data: Uint8Array;
@@ -42,7 +45,7 @@ export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Prop
               />
             </div>
           ) : part.filename ? (
-            <Icon icon="table" />
+            <Icon icon="file" />
           ) : null,
       }))}
     >
@@ -82,6 +85,14 @@ function Part({ part }: { part: MultipartPart }) {
 
   if (mimeType?.match(/^text\/html/i) || detectedLanguage === 'html') {
     return <WebPageViewer html={content} />;
+  }
+
+  if (mimeType?.match(/pdf/i)) {
+    return (
+      <Suspense fallback={<LoadingIcon />}>
+        <PdfViewer data={part.arrayBuffer} />
+      </Suspense>
+    );
   }
 
   return <TextViewer text={content} language={detectedLanguage} stateKey={null} />;
