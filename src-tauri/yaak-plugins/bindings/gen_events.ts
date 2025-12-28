@@ -4,6 +4,10 @@ import type { JsonValue } from "./serde_json/JsonValue";
 
 export type BootRequest = { dir: string, watch: boolean, };
 
+export type CallFolderActionArgs = { folder: Folder, };
+
+export type CallFolderActionRequest = { index: number, pluginRefId: string, args: CallFolderActionArgs, };
+
 export type CallGrpcRequestActionArgs = { grpcRequest: GrpcRequest, protoFiles: Array<string>, };
 
 export type CallGrpcRequestActionRequest = { index: number, pluginRefId: string, args: CallGrpcRequestActionArgs, };
@@ -26,10 +30,6 @@ setHeaders?: Array<HttpHeader>,
  */
 setQueryParameters?: Array<HttpHeader>, };
 
-export type CallHttpCollectionActionArgs = { folder?: Folder, workspace?: Workspace, };
-
-export type CallHttpCollectionActionRequest = { index: number, pluginRefId: string, args: CallHttpCollectionActionArgs, };
-
 export type CallHttpRequestActionArgs = { httpRequest: HttpRequest, };
 
 export type CallHttpRequestActionRequest = { index: number, pluginRefId: string, args: CallHttpRequestActionArgs, };
@@ -39,6 +39,14 @@ export type CallTemplateFunctionArgs = { purpose: RenderPurpose, values: { [key 
 export type CallTemplateFunctionRequest = { name: string, args: CallTemplateFunctionArgs, };
 
 export type CallTemplateFunctionResponse = { value: string | null, error?: string, };
+
+export type CallWebSocketRequestActionArgs = { websocketRequest: WebsocketRequest, };
+
+export type CallWebSocketRequestActionRequest = { index: number, pluginRefId: string, args: CallWebSocketRequestActionArgs, };
+
+export type CallWorkspaceActionArgs = { workspace: Workspace, };
+
+export type CallWorkspaceActionRequest = { index: number, pluginRefId: string, args: CallWorkspaceActionArgs, };
 
 export type CloseWindowRequest = { label: string, };
 
@@ -77,6 +85,8 @@ export type FilterResponse = { content: string, error?: string, };
 export type FindHttpResponsesRequest = { requestId: string, limit?: number, };
 
 export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
+
+export type FolderAction = { label: string, icon?: Icon, };
 
 export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "h_stack" } & FormInputHStack | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
 
@@ -349,6 +359,8 @@ export type GetCookieValueRequest = { name: string, };
 
 export type GetCookieValueResponse = { value: string | null, };
 
+export type GetFolderActionsResponse = { actions: Array<FolderAction>, pluginRefId: string, };
+
 export type GetGrpcRequestActionsResponse = { actions: Array<GrpcRequestAction>, pluginRefId: string, };
 
 export type GetHttpAuthenticationConfigRequest = { contextId: string, values: { [key in string]?: JsonPrimitive }, };
@@ -356,8 +368,6 @@ export type GetHttpAuthenticationConfigRequest = { contextId: string, values: { 
 export type GetHttpAuthenticationConfigResponse = { args: Array<FormInput>, pluginRefId: string, actions?: Array<HttpAuthenticationAction>, };
 
 export type GetHttpAuthenticationSummaryResponse = { name: string, label: string, shortLabel: string, };
-
-export type GetHttpCollectionActionsResponse = { actions: Array<HttpCollectionAction>, pluginRefId: string, };
 
 export type GetHttpRequestActionsResponse = { actions: Array<HttpRequestAction>, pluginRefId: string, };
 
@@ -379,11 +389,13 @@ export type GetThemesRequest = Record<string, never>;
 
 export type GetThemesResponse = { themes: Array<Theme>, };
 
+export type GetWebSocketRequestActionsResponse = { actions: Array<WebSocketRequestAction>, pluginRefId: string, };
+
+export type GetWorkspaceActionsResponse = { actions: Array<WorkspaceAction>, pluginRefId: string, };
+
 export type GrpcRequestAction = { label: string, icon?: Icon, };
 
 export type HttpAuthenticationAction = { label: string, icon?: Icon, };
-
-export type HttpCollectionAction = { label: string, icon?: Icon, };
 
 export type HttpHeader = { name: string, value: string, };
 
@@ -399,7 +411,7 @@ export type ImportResponse = { resources: ImportResources, };
 
 export type InternalEvent = { id: string, pluginRefId: string, pluginName: string, replyId: string | null, context: PluginContext, payload: InternalEventPayload, };
 
-export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } | { "type": "reload_response" } & ReloadResponse | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "list_cookie_names_request" } & ListCookieNamesRequest | { "type": "list_cookie_names_response" } & ListCookieNamesResponse | { "type": "get_cookie_value_request" } & GetCookieValueRequest | { "type": "get_cookie_value_response" } & GetCookieValueResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_http_collection_actions_request" } & EmptyPayload | { "type": "get_http_collection_actions_response" } & GetHttpCollectionActionsResponse | { "type": "call_http_collection_action_request" } & CallHttpCollectionActionRequest | { "type": "get_grpc_request_actions_request" } & EmptyPayload | { "type": "get_grpc_request_actions_response" } & GetGrpcRequestActionsResponse | { "type": "call_grpc_request_action_request" } & CallGrpcRequestActionRequest | { "type": "get_template_function_summary_request" } & EmptyPayload | { "type": "get_template_function_summary_response" } & GetTemplateFunctionSummaryResponse | { "type": "get_template_function_config_request" } & GetTemplateFunctionConfigRequest | { "type": "get_template_function_config_response" } & GetTemplateFunctionConfigResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_summary_request" } & EmptyPayload | { "type": "get_http_authentication_summary_response" } & GetHttpAuthenticationSummaryResponse | { "type": "get_http_authentication_config_request" } & GetHttpAuthenticationConfigRequest | { "type": "get_http_authentication_config_response" } & GetHttpAuthenticationConfigResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "call_http_authentication_action_request" } & CallHttpAuthenticationActionRequest | { "type": "call_http_authentication_action_response" } & EmptyPayload | { "type": "copy_text_request" } & CopyTextRequest | { "type": "copy_text_response" } & EmptyPayload | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "render_grpc_request_request" } & RenderGrpcRequestRequest | { "type": "render_grpc_request_response" } & RenderGrpcRequestResponse | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "get_key_value_request" } & GetKeyValueRequest | { "type": "get_key_value_response" } & GetKeyValueResponse | { "type": "set_key_value_request" } & SetKeyValueRequest | { "type": "set_key_value_response" } & SetKeyValueResponse | { "type": "delete_key_value_request" } & DeleteKeyValueRequest | { "type": "delete_key_value_response" } & DeleteKeyValueResponse | { "type": "open_window_request" } & OpenWindowRequest | { "type": "window_navigate_event" } & WindowNavigateEvent | { "type": "window_close_event" } | { "type": "close_window_request" } & CloseWindowRequest | { "type": "show_toast_request" } & ShowToastRequest | { "type": "show_toast_response" } & EmptyPayload | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "window_info_request" } & WindowInfoRequest | { "type": "window_info_response" } & WindowInfoResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "list_http_requests_request" } & ListHttpRequestsRequest | { "type": "list_http_requests_response" } & ListHttpRequestsResponse | { "type": "list_folders_request" } & ListFoldersRequest | { "type": "list_folders_response" } & ListFoldersResponse | { "type": "get_themes_request" } & GetThemesRequest | { "type": "get_themes_response" } & GetThemesResponse | { "type": "empty_response" } & EmptyPayload | { "type": "error_response" } & ErrorResponse;
+export type InternalEventPayload = { "type": "boot_request" } & BootRequest | { "type": "boot_response" } | { "type": "reload_response" } & ReloadResponse | { "type": "terminate_request" } | { "type": "terminate_response" } | { "type": "import_request" } & ImportRequest | { "type": "import_response" } & ImportResponse | { "type": "filter_request" } & FilterRequest | { "type": "filter_response" } & FilterResponse | { "type": "export_http_request_request" } & ExportHttpRequestRequest | { "type": "export_http_request_response" } & ExportHttpRequestResponse | { "type": "send_http_request_request" } & SendHttpRequestRequest | { "type": "send_http_request_response" } & SendHttpRequestResponse | { "type": "list_cookie_names_request" } & ListCookieNamesRequest | { "type": "list_cookie_names_response" } & ListCookieNamesResponse | { "type": "get_cookie_value_request" } & GetCookieValueRequest | { "type": "get_cookie_value_response" } & GetCookieValueResponse | { "type": "get_http_request_actions_request" } & EmptyPayload | { "type": "get_http_request_actions_response" } & GetHttpRequestActionsResponse | { "type": "call_http_request_action_request" } & CallHttpRequestActionRequest | { "type": "get_web_socket_request_actions_request" } & EmptyPayload | { "type": "get_web_socket_request_actions_response" } & GetWebSocketRequestActionsResponse | { "type": "call_web_socket_request_action_request" } & CallWebSocketRequestActionRequest | { "type": "get_workspace_actions_request" } & EmptyPayload | { "type": "get_workspace_actions_response" } & GetWorkspaceActionsResponse | { "type": "call_workspace_action_request" } & CallWorkspaceActionRequest | { "type": "get_folder_actions_request" } & EmptyPayload | { "type": "get_folder_actions_response" } & GetFolderActionsResponse | { "type": "call_folder_action_request" } & CallFolderActionRequest | { "type": "get_grpc_request_actions_request" } & EmptyPayload | { "type": "get_grpc_request_actions_response" } & GetGrpcRequestActionsResponse | { "type": "call_grpc_request_action_request" } & CallGrpcRequestActionRequest | { "type": "get_template_function_summary_request" } & EmptyPayload | { "type": "get_template_function_summary_response" } & GetTemplateFunctionSummaryResponse | { "type": "get_template_function_config_request" } & GetTemplateFunctionConfigRequest | { "type": "get_template_function_config_response" } & GetTemplateFunctionConfigResponse | { "type": "call_template_function_request" } & CallTemplateFunctionRequest | { "type": "call_template_function_response" } & CallTemplateFunctionResponse | { "type": "get_http_authentication_summary_request" } & EmptyPayload | { "type": "get_http_authentication_summary_response" } & GetHttpAuthenticationSummaryResponse | { "type": "get_http_authentication_config_request" } & GetHttpAuthenticationConfigRequest | { "type": "get_http_authentication_config_response" } & GetHttpAuthenticationConfigResponse | { "type": "call_http_authentication_request" } & CallHttpAuthenticationRequest | { "type": "call_http_authentication_response" } & CallHttpAuthenticationResponse | { "type": "call_http_authentication_action_request" } & CallHttpAuthenticationActionRequest | { "type": "call_http_authentication_action_response" } & EmptyPayload | { "type": "copy_text_request" } & CopyTextRequest | { "type": "copy_text_response" } & EmptyPayload | { "type": "render_http_request_request" } & RenderHttpRequestRequest | { "type": "render_http_request_response" } & RenderHttpRequestResponse | { "type": "render_grpc_request_request" } & RenderGrpcRequestRequest | { "type": "render_grpc_request_response" } & RenderGrpcRequestResponse | { "type": "template_render_request" } & TemplateRenderRequest | { "type": "template_render_response" } & TemplateRenderResponse | { "type": "get_key_value_request" } & GetKeyValueRequest | { "type": "get_key_value_response" } & GetKeyValueResponse | { "type": "set_key_value_request" } & SetKeyValueRequest | { "type": "set_key_value_response" } & SetKeyValueResponse | { "type": "delete_key_value_request" } & DeleteKeyValueRequest | { "type": "delete_key_value_response" } & DeleteKeyValueResponse | { "type": "open_window_request" } & OpenWindowRequest | { "type": "window_navigate_event" } & WindowNavigateEvent | { "type": "window_close_event" } | { "type": "close_window_request" } & CloseWindowRequest | { "type": "show_toast_request" } & ShowToastRequest | { "type": "show_toast_response" } & EmptyPayload | { "type": "prompt_text_request" } & PromptTextRequest | { "type": "prompt_text_response" } & PromptTextResponse | { "type": "window_info_request" } & WindowInfoRequest | { "type": "window_info_response" } & WindowInfoResponse | { "type": "get_http_request_by_id_request" } & GetHttpRequestByIdRequest | { "type": "get_http_request_by_id_response" } & GetHttpRequestByIdResponse | { "type": "find_http_responses_request" } & FindHttpResponsesRequest | { "type": "find_http_responses_response" } & FindHttpResponsesResponse | { "type": "list_http_requests_request" } & ListHttpRequestsRequest | { "type": "list_http_requests_response" } & ListHttpRequestsResponse | { "type": "list_folders_request" } & ListFoldersRequest | { "type": "list_folders_response" } & ListFoldersResponse | { "type": "get_themes_request" } & GetThemesRequest | { "type": "get_themes_response" } & GetThemesResponse | { "type": "empty_response" } & EmptyPayload | { "type": "error_response" } & ErrorResponse;
 
 export type JsonPrimitive = string | number | boolean | null;
 
@@ -509,6 +521,8 @@ export type ThemeComponentColors = { surface?: string, surfaceHighlight?: string
 
 export type ThemeComponents = { dialog?: ThemeComponentColors, menu?: ThemeComponentColors, toast?: ThemeComponentColors, sidebar?: ThemeComponentColors, responsePane?: ThemeComponentColors, appHeader?: ThemeComponentColors, button?: ThemeComponentColors, banner?: ThemeComponentColors, templateTag?: ThemeComponentColors, urlBar?: ThemeComponentColors, editor?: ThemeComponentColors, input?: ThemeComponentColors, };
 
+export type WebSocketRequestAction = { label: string, icon?: Icon, };
+
 export type WindowInfoRequest = { label: string, };
 
 export type WindowInfoResponse = { requestId: string | null, environmentId: string | null, workspaceId: string | null, label: string, };
@@ -516,3 +530,5 @@ export type WindowInfoResponse = { requestId: string | null, environmentId: stri
 export type WindowNavigateEvent = { url: string, };
 
 export type WindowSize = { width: number, height: number, };
+
+export type WorkspaceAction = { label: string, icon?: Icon, };

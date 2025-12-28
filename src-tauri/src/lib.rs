@@ -41,13 +41,15 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
 use yaak_plugins::events::{
-    CallGrpcRequestActionArgs, CallGrpcRequestActionRequest, CallHttpRequestActionArgs,
-    CallHttpRequestActionRequest, Color, FilterResponse, GetGrpcRequestActionsResponse,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetHttpCollectionActionsResponse,
-    CallHttpCollectionActionArgs, CallHttpCollectionActionRequest, GetTemplateFunctionConfigResponse,
-    GetTemplateFunctionSummaryResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
-    PluginContext, RenderPurpose, ShowToastRequest,
+    CallFolderActionArgs, CallFolderActionRequest, CallGrpcRequestActionArgs,
+    CallGrpcRequestActionRequest, CallHttpRequestActionArgs, CallHttpRequestActionRequest,
+    CallWebSocketRequestActionArgs, CallWebSocketRequestActionRequest, CallWorkspaceActionArgs,
+    CallWorkspaceActionRequest, Color, FilterResponse, GetFolderActionsResponse,
+    GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
+    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse,
+    GetWebSocketRequestActionsResponse, GetWorkspaceActionsResponse, InternalEvent,
+    InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose, ShowToastRequest,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::PluginMetadata;
@@ -875,35 +877,73 @@ async fn cmd_http_request_actions<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_http_collection_actions<R: Runtime>(
+async fn cmd_websocket_request_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetHttpCollectionActionsResponse>> {
-    Ok(plugin_manager.get_http_collection_actions(&window).await?)
+) -> YaakResult<Vec<GetWebSocketRequestActionsResponse>> {
+    Ok(plugin_manager.get_websocket_request_actions(&window).await?)
 }
 
 #[tauri::command]
-async fn cmd_call_http_collection_action<R: Runtime>(
+async fn cmd_call_websocket_request_action<R: Runtime>(
     window: WebviewWindow<R>,
-    req: CallHttpCollectionActionRequest,
+    req: CallWebSocketRequestActionRequest,
     plugin_manager: State<'_, PluginManager>,
 ) -> YaakResult<()> {
-    let folder = match &req.args.folder {
-        Some(f) => Some(window.db().get_folder(&f.id)?),
-        None => None,
-    };
-    let workspace = match &req.args.workspace {
-        Some(w) => Some(window.db().get_workspace(&w.id)?),
-        None => None,
-    };
-
+    let websocket_request = window.db().get_websocket_request(&req.args.websocket_request.id)?;
     Ok(plugin_manager
-        .call_http_collection_action(
+        .call_websocket_request_action(
             &window,
-            CallHttpCollectionActionRequest {
-                args: CallHttpCollectionActionArgs { folder, workspace },
+            CallWebSocketRequestActionRequest {
+                args: CallWebSocketRequestActionArgs { websocket_request },
                 ..req
             },
+        )
+        .await?)
+}
+
+#[tauri::command]
+async fn cmd_workspace_actions<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+) -> YaakResult<Vec<GetWorkspaceActionsResponse>> {
+    Ok(plugin_manager.get_workspace_actions(&window).await?)
+}
+
+#[tauri::command]
+async fn cmd_call_workspace_action<R: Runtime>(
+    window: WebviewWindow<R>,
+    req: CallWorkspaceActionRequest,
+    plugin_manager: State<'_, PluginManager>,
+) -> YaakResult<()> {
+    let workspace = window.db().get_workspace(&req.args.workspace.id)?;
+    Ok(plugin_manager
+        .call_workspace_action(
+            &window,
+            CallWorkspaceActionRequest { args: CallWorkspaceActionArgs { workspace }, ..req },
+        )
+        .await?)
+}
+
+#[tauri::command]
+async fn cmd_folder_actions<R: Runtime>(
+    window: WebviewWindow<R>,
+    plugin_manager: State<'_, PluginManager>,
+) -> YaakResult<Vec<GetFolderActionsResponse>> {
+    Ok(plugin_manager.get_folder_actions(&window).await?)
+}
+
+#[tauri::command]
+async fn cmd_call_folder_action<R: Runtime>(
+    window: WebviewWindow<R>,
+    req: CallFolderActionRequest,
+    plugin_manager: State<'_, PluginManager>,
+) -> YaakResult<()> {
+    let folder = window.db().get_folder(&req.args.folder.id)?;
+    Ok(plugin_manager
+        .call_folder_action(
+            &window,
+            CallFolderActionRequest { args: CallFolderActionArgs { folder }, ..req },
         )
         .await?)
 }
@@ -1496,7 +1536,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             cmd_call_http_authentication_action,
             cmd_call_http_request_action,
-            cmd_call_http_collection_action,
+            cmd_call_websocket_request_action,
+            cmd_call_workspace_action,
+            cmd_call_folder_action,
             cmd_call_grpc_request_action,
             cmd_check_for_updates,
             cmd_create_grpc_request,
@@ -1518,7 +1560,9 @@ pub fn run() {
             cmd_grpc_reflect,
             cmd_grpc_request_actions,
             cmd_http_request_actions,
-            cmd_http_collection_actions,
+            cmd_websocket_request_actions,
+            cmd_workspace_actions,
+            cmd_folder_actions,
             cmd_import_data,
             cmd_install_plugin,
             cmd_metadata,
