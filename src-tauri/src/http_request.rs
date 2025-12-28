@@ -460,9 +460,13 @@ async fn execute_transaction<R: Runtime>(
         .await
         .map_err(|e| GenericError(format!("Failed to open file: {}", e)))?;
 
-    // Stream body to file, updating DB on each chunk
+    // Stream body to file, with throttled DB updates to avoid excessive writes
     let mut written_bytes: usize = 0;
+    let mut last_update_time = start;
     let mut buf = [0u8; 8192];
+
+    // Throttle settings: update DB at most every 100ms
+    const UPDATE_INTERVAL_MS: u128 = 100;
 
     loop {
         // Check for cancellation. If we already have headers/body, just close cleanly without error
@@ -490,11 +494,17 @@ async fn execute_transaction<R: Runtime>(
                     .map_err(|e| GenericError(format!("Failed to flush file: {}", e)))?;
                 written_bytes += n;
 
-                // Update response with progress
-                response_ctx.update(|r| {
-                    r.elapsed = start.elapsed().as_millis() as i32;
-                    r.content_length = Some(written_bytes as i32);
-                })?;
+                // Throttle DB updates: only update if enough time has passed
+                let now = Instant::now();
+                let elapsed_since_update = now.duration_since(last_update_time).as_millis();
+
+                if elapsed_since_update >= UPDATE_INTERVAL_MS {
+                    response_ctx.update(|r| {
+                        r.elapsed = start.elapsed().as_millis() as i32;
+                        r.content_length = Some(written_bytes as i32);
+                    })?;
+                    last_update_time = now;
+                }
             }
             Err(e) => {
                 return Err(GenericError(format!("Failed to read response body: {}", e)));
@@ -502,9 +512,10 @@ async fn execute_transaction<R: Runtime>(
         }
     }
 
-    // Final update with closed state
+    // Final update with closed state and accurate byte count
     response_ctx.update(|r| {
         r.elapsed = start.elapsed().as_millis() as i32;
+        r.content_length = Some(written_bytes as i32);
         r.state = HttpResponseState::Closed;
     })?;
 
