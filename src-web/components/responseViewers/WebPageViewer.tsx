@@ -1,26 +1,22 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
 import { useMemo } from 'react';
-import { useResponseBodyText } from '../../hooks/useResponseBodyText';
 
 interface Props {
-  response: HttpResponse;
+  html: string;
+  baseUrl?: string;
 }
 
-export function WebPageViewer({ response }: Props) {
-  const { url } = response;
-  const body = useResponseBodyText({ response, filter: null }).data ?? '';
-
+export function WebPageViewer({ html, baseUrl }: Props) {
   const contentForIframe: string | undefined = useMemo(() => {
-    if (body.includes('<head>')) {
-      return body.replace(/<head>/gi, `<head><base href="${url}"/>`);
+    if (baseUrl && html.includes('<head>')) {
+      return html.replace(/<head>/gi, `<head><base href="${baseUrl}"/>`);
     }
-    return body;
-  }, [url, body]);
+    return html;
+  }, [baseUrl, html]);
 
   return (
     <div className="h-full pb-3">
       <iframe
-        key={body ? 'has-body' : 'no-body'}
+        key={html ? 'has-body' : 'no-body'}
         title="Yaak response preview"
         srcDoc={contentForIframe}
         sandbox="allow-scripts allow-forms"
