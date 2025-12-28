@@ -439,7 +439,7 @@ async fn execute_transaction<R: Runtime>(
             .iter()
             .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
             .collect();
-        r.content_length = http_response.content_length.map(|l| l as i32);
+        r.content_length = http_response.content_length.map(|l| l as i64);
         r.state = HttpResponseState::Connected;
         r.request_headers = http_response
             .request_headers
@@ -501,7 +501,7 @@ async fn execute_transaction<R: Runtime>(
                 if elapsed_since_update >= UPDATE_INTERVAL_MS {
                     response_ctx.update(|r| {
                         r.elapsed = start.elapsed().as_millis() as i32;
-                        r.content_length = Some(written_bytes as i32);
+                        r.content_length = Some(written_bytes as i64);
                     })?;
                     last_update_time = now;
                 }
@@ -515,7 +515,7 @@ async fn execute_transaction<R: Runtime>(
     // Final update with closed state and accurate byte count
     response_ctx.update(|r| {
         r.elapsed = start.elapsed().as_millis() as i32;
-        r.content_length = Some(written_bytes as i32);
+        r.content_length = Some(written_bytes as i64);
         r.state = HttpResponseState::Closed;
     })?;
 
@@ -545,7 +545,7 @@ fn write_bytes_to_db_sync<R: Runtime>(
 
     // Update the response with the total request body size
     response_ctx.update(|r| {
-        r.request_content_length = Some(data.len() as i32);
+        r.request_content_length = Some(data.len() as i64);
     })?;
 
     Ok(())
@@ -607,7 +607,7 @@ async fn write_stream_chunks_to_db<R: Runtime>(
     app_handle.with_tx(|tx| {
         debug!("Updating final body length {total_bytes}");
         if let Ok(mut response) = tx.get_http_response(&response_id) {
-            response.request_content_length = Some(total_bytes as i32);
+            response.request_content_length = Some(total_bytes as i64);
             tx.update_http_response_if_id(&response, update_source)?;
         }
         Ok(())
