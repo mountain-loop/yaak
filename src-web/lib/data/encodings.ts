@@ -1,1 +1,1 @@
-export const encodings = ['*', 'gzip', 'compress', 'deflate', 'br', 'identity'];
+export const encodings = ['*', 'gzip', 'compress', 'deflate', 'br', 'zstd', 'identity'];

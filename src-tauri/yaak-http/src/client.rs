@@ -1,11 +1,9 @@
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
 use log::{debug, info, warn};
-use reqwest::redirect::Policy;
-use reqwest::{Client, Proxy};
+use reqwest::{Client, Proxy, redirect};
 use reqwest_cookie_store::CookieStoreMutex;
 use std::sync::Arc;
-use std::time::Duration;
 use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 #[derive(Clone)]
@@ -29,11 +27,9 @@ pub enum HttpConnectionProxySetting {
 #[derive(Clone)]
 pub struct HttpConnectionOptions {
     pub id: String,
-    pub follow_redirects: bool,
     pub validate_certificates: bool,
     pub proxy: HttpConnectionProxySetting,
     pub cookie_provider: Option<Arc<CookieStoreMutex>>,
-    pub timeout: Option<Duration>,
     pub client_certificate: Option<ClientCertificateConfig>,
 }
 
@@ -41,9 +37,11 @@ impl HttpConnectionOptions {
     pub(crate) fn build_client(&self) -> Result<Client> {
         let mut client = Client::builder()
             .connection_verbose(true)
-            .gzip(true)
-            .brotli(true)
-            .deflate(true)
+            .redirect(redirect::Policy::none())
+            // Decompression is handled by HttpTransaction, not reqwest
+            .no_gzip()
+            .no_brotli()
+            .no_deflate()
             .referer(false)
             .tls_info(true);
 
@@ -54,12 +52,6 @@ impl HttpConnectionOptions {
 
         // Configure DNS resolver
         client = client.dns_resolver(LocalhostResolver::new());
-
-        // Configure redirects
-        client = client.redirect(match self.follow_redirects {
-            true => Policy::limited(10), // TODO: Handle redirects natively
-            false => Policy::none(),
-        });
 
         // Configure cookie provider
         if let Some(p) = &self.cookie_provider {
@@ -77,11 +69,6 @@ impl HttpConnectionOptions {
                     client = client.proxy(p)
                 }
             }
-        }
-
-        // Configure timeout
-        if let Some(d) = self.timeout {
-            client = client.timeout(d);
         }
 
         info!(

@@ -1,33 +1,30 @@
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::render::render_http_request;
-use crate::response_err;
-use http::header::{ACCEPT, USER_AGENT};
-use http::{HeaderMap, HeaderName, HeaderValue};
-use log::{debug, error, warn};
-use mime_guess::Mime;
-use reqwest::{Method, Response};
-use reqwest::{Url, multipart};
+use log::{debug, warn};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
-use serde_json::Value;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
-use tauri::{Manager, Runtime, WebviewWindow};
-use tokio::fs;
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::{File, create_dir_all};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::watch::Receiver;
-use tokio::sync::{Mutex, oneshot};
+use tokio_util::bytes::Bytes;
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::manager::HttpConnectionManager;
+use yaak_http::sender::ReqwestSender;
+use yaak_http::tee_reader::TeeReader;
+use yaak_http::transaction::HttpTransaction;
+use yaak_http::types::{
+    SendableBody, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
+};
+use yaak_models::blob_manager::{BlobManagerExt, BodyChunk};
 use yaak_models::models::{
-    Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseHeader,
-    HttpResponseState, ProxySetting, ProxySettingAuth,
+    Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent,
+    HttpResponseHeader, HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;
@@ -36,8 +33,57 @@ use yaak_plugins::events::{
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
-use yaak_templates::{RenderErrorBehavior, RenderOptions};
+use yaak_templates::RenderOptions;
 use yaak_tls::find_client_certificate;
+
+/// Chunk size for storing request bodies (1MB)
+const REQUEST_BODY_CHUNK_SIZE: usize = 1024 * 1024;
+
+/// Context for managing response state during HTTP transactions.
+/// Handles both persisted responses (stored in DB) and ephemeral responses (in-memory only).
+struct ResponseContext<R: Runtime> {
+    app_handle: AppHandle<R>,
+    response: HttpResponse,
+    update_source: UpdateSource,
+}
+
+impl<R: Runtime> ResponseContext<R> {
+    fn new(app_handle: AppHandle<R>, response: HttpResponse, update_source: UpdateSource) -> Self {
+        Self { app_handle, response, update_source }
+    }
+
+    /// Whether this response is persisted (has a non-empty ID)
+    fn is_persisted(&self) -> bool {
+        !self.response.id.is_empty()
+    }
+
+    /// Update the response state. For persisted responses, fetches from DB, applies the
+    /// closure, and updates the DB. For ephemeral responses, just applies the closure
+    /// to the in-memory response.
+    fn update<F>(&mut self, func: F) -> Result<()>
+    where
+        F: FnOnce(&mut HttpResponse),
+    {
+        if self.is_persisted() {
+            let r = self.app_handle.with_tx(|tx| {
+                let mut r = tx.get_http_response(&self.response.id)?;
+                func(&mut r);
+                tx.update_http_response_if_id(&r, &self.update_source)?;
+                Ok(r)
+            })?;
+            self.response = r;
+            Ok(())
+        } else {
+            func(&mut self.response);
+            Ok(())
+        }
+    }
+
+    /// Get the current response state
+    fn response(&self) -> &HttpResponse {
+        &self.response
+    }
+}
 
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -65,62 +111,81 @@ pub async fn send_http_request_with_context<R: Runtime>(
     og_response: &HttpResponse,
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
-    cancelled_rx: &mut Receiver<bool>,
+    cancelled_rx: &Receiver<bool>,
     plugin_context: &PluginContext,
+) -> Result<HttpResponse> {
+    let app_handle = window.app_handle().clone();
+    let update_source = UpdateSource::from_window(window);
+    let mut response_ctx =
+        ResponseContext::new(app_handle.clone(), og_response.clone(), update_source);
+
+    // Execute the inner send logic and handle errors consistently
+    let start = Instant::now();
+    let result = send_http_request_inner(
+        window,
+        unrendered_request,
+        environment,
+        cookie_jar,
+        cancelled_rx,
+        plugin_context,
+        &mut response_ctx,
+    )
+    .await;
+
+    match result {
+        Ok(response) => Ok(response),
+        Err(e) => {
+            let error = e.to_string();
+            let elapsed = start.elapsed().as_millis() as i32;
+            warn!("Failed to send request: {error:?}");
+            let _ = response_ctx.update(|r| {
+                r.state = HttpResponseState::Closed;
+                r.elapsed = elapsed;
+                if r.elapsed_headers == 0 {
+                    r.elapsed_headers = elapsed;
+                }
+                r.error = Some(error);
+            });
+            Ok(response_ctx.response().clone())
+        }
+    }
+}
+
+async fn send_http_request_inner<R: Runtime>(
+    window: &WebviewWindow<R>,
+    unrendered_request: &HttpRequest,
+    environment: Option<Environment>,
+    cookie_jar: Option<CookieJar>,
+    cancelled_rx: &Receiver<bool>,
+    plugin_context: &PluginContext,
+    response_ctx: &mut ResponseContext<R>,
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = app_handle.state::<PluginManager>();
     let connection_manager = app_handle.state::<HttpConnectionManager>();
     let settings = window.db().get_settings();
-    let workspace = window.db().get_workspace(&unrendered_request.workspace_id)?;
+    let workspace_id = &unrendered_request.workspace_id;
+    let folder_id = unrendered_request.folder_id.as_deref();
     let environment_id = environment.map(|e| e.id);
-    let environment_chain = window.db().resolve_environments(
-        &unrendered_request.workspace_id,
-        unrendered_request.folder_id.as_deref(),
-        environment_id.as_deref(),
-    )?;
-
-    let response_id = og_response.id.clone();
-    let response = Arc::new(Mutex::new(og_response.clone()));
-
-    let update_source = UpdateSource::from_window(window);
-
-    let (resolved_request, auth_context_id) = match resolve_http_request(window, unrendered_request)
-    {
-        Ok(r) => r,
-        Err(e) => {
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                e.to_string(),
-                &update_source,
-            ));
-        }
-    };
-
+    let workspace = window.db().get_workspace(workspace_id)?;
+    let (resolved, auth_context_id) = resolve_http_request(window, unrendered_request)?;
     let cb = PluginTemplateCallback::new(window.app_handle(), &plugin_context, RenderPurpose::Send);
+    let env_chain =
+        window.db().resolve_environments(&workspace.id, folder_id, environment_id.as_deref())?;
+    let request = render_http_request(&resolved, env_chain, &cb, &RenderOptions::throw()).await?;
 
-    let opt = RenderOptions { error_behavior: RenderErrorBehavior::Throw };
-
-    let request = match render_http_request(&resolved_request, environment_chain, &cb, &opt).await {
-        Ok(r) => r,
-        Err(e) => {
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                e.to_string(),
-                &update_source,
-            ));
-        }
+    // Build the sendable request using the new SendableHttpRequest type
+    let options = SendableHttpRequestOptions {
+        follow_redirects: workspace.setting_follow_redirects,
+        timeout: if workspace.setting_request_timeout > 0 {
+            Some(Duration::from_millis(workspace.setting_request_timeout.unsigned_abs() as u64))
+        } else {
+            None
+        },
     };
+    let mut sendable_request = SendableHttpRequest::from_http_request(&request, options).await?;
 
-    let mut url_string = request.url.clone();
-
-    url_string = ensure_proto(&url_string);
-    if !url_string.starts_with("http://") && !url_string.starts_with("https://") {
-        url_string = format!("http://{}", url_string);
-    }
-    debug!("Sending request to {} {url_string}", request.method);
+    debug!("Sending request to {} {}", sendable_request.method, sendable_request.url);
 
     let proxy_setting = match settings.proxy {
         None => HttpConnectionProxySetting::System,
@@ -144,7 +209,8 @@ pub async fn send_http_request_with_context<R: Runtime>(
         }
     };
 
-    let client_certificate = find_client_certificate(&url_string, &settings.client_certificates);
+    let client_certificate =
+        find_client_certificate(&sendable_request.url, &settings.client_certificates);
 
     // Add cookie store if specified
     let maybe_cookie_manager = match cookie_jar.clone() {
@@ -175,523 +241,73 @@ pub async fn send_http_request_with_context<R: Runtime>(
     let client = connection_manager
         .get_client(&HttpConnectionOptions {
             id: plugin_context.id.clone(),
-            follow_redirects: workspace.setting_follow_redirects,
             validate_certificates: workspace.setting_validate_certificates,
             proxy: proxy_setting,
             cookie_provider: maybe_cookie_manager.as_ref().map(|(p, _)| Arc::clone(&p)),
             client_certificate,
-            timeout: if workspace.setting_request_timeout > 0 {
-                Some(Duration::from_millis(workspace.setting_request_timeout.unsigned_abs() as u64))
-            } else {
-                None
-            },
         })
         .await?;
 
-    // Render query parameters
-    let mut query_params = Vec::new();
-    for p in request.url_parameters.clone() {
-        if !p.enabled || p.name.is_empty() {
-            continue;
-        }
-        query_params.push((p.name, p.value));
-    }
+    // Apply authentication to the request
+    apply_authentication(
+        &window,
+        &mut sendable_request,
+        &request,
+        auth_context_id,
+        &plugin_manager,
+        plugin_context,
+    )
+    .await?;
 
-    let url = match Url::from_str(&url_string) {
-        Ok(u) => u,
-        Err(e) => {
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                format!("Failed to parse URL \"{}\": {}", url_string, e.to_string()),
-                &update_source,
-            ));
+    let result =
+        execute_transaction(client, sendable_request, response_ctx, cancelled_rx.clone()).await;
+
+    // Wait for blob writing to complete and check for errors
+    let final_result = match result {
+        Ok((response, maybe_blob_write_handle)) => {
+            // Check if blob writing failed
+            if let Some(handle) = maybe_blob_write_handle {
+                if let Ok(Err(e)) = handle.await {
+                    // Update response with the storage error
+                    let _ = response_ctx.update(|r| {
+                        let error_msg =
+                            format!("Request succeeded but failed to store request body: {}", e);
+                        r.error = Some(match &r.error {
+                            Some(existing) => format!("{}; {}", existing, error_msg),
+                            None => error_msg,
+                        });
+                    });
+                }
+            }
+            Ok(response)
         }
+        Err(e) => Err(e),
     };
 
-    let m = Method::from_str(&request.method.to_uppercase())
-        .map_err(|e| GenericError(e.to_string()))?;
-    let mut request_builder = client.request(m, url).query(&query_params);
-
-    let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_static("yaak"));
-    headers.insert(ACCEPT, HeaderValue::from_static("*/*"));
-
-    // TODO: Set cookie header ourselves once we also handle redirects. We need to do this
-    //  because reqwest doesn't give us a way to inspect the headers it sent (we have to do
-    //  everything manually to know that).
-    // if let Some(cookie_store) = maybe_cookie_store.clone() {
-    //     let values1 = cookie_store.get_request_values(&url);
-    //     let raw_value = cookie_store.get_request_values(&url)
-    //         .map(|(name, value)| format!("{}={}", name, value))
-    //         .collect::<Vec<_>>()
-    //         .join("; ");
-    //     headers.insert(
-    //         COOKIE,
-    //         HeaderValue::from_str(&raw_value).expect("Failed to create cookie header"),
-    //     );
-    // }
-
-    for h in request.headers.clone() {
-        if h.name.is_empty() && h.value.is_empty() {
-            continue;
-        }
-
-        if !h.enabled {
-            continue;
-        }
-
-        let header_name = match HeaderName::from_str(&h.name) {
-            Ok(n) => n,
-            Err(e) => {
-                error!("Failed to create header name: {}", e);
-                continue;
-            }
-        };
-        let header_value = match HeaderValue::from_str(&h.value) {
-            Ok(n) => n,
-            Err(e) => {
-                error!("Failed to create header value: {}", e);
-                continue;
-            }
-        };
-
-        headers.insert(header_name, header_value);
-    }
-
-    let request_body = request.body.clone();
-    if let Some(body_type) = &request.body_type.clone() {
-        if body_type == "graphql" {
-            let query = get_str_h(&request_body, "query");
-            let variables = get_str_h(&request_body, "variables");
-            if request.method.to_lowercase() == "get" {
-                request_builder = request_builder.query(&[("query", query)]);
-                if !variables.trim().is_empty() {
-                    request_builder = request_builder.query(&[("variables", variables)]);
-                }
-            } else {
-                let body = if variables.trim().is_empty() {
-                    format!(r#"{{"query":{}}}"#, serde_json::to_string(query).unwrap_or_default())
-                } else {
-                    format!(
-                        r#"{{"query":{},"variables":{variables}}}"#,
-                        serde_json::to_string(query).unwrap_or_default()
-                    )
-                };
-                request_builder = request_builder.body(body.to_owned());
-            }
-        } else if body_type == "application/x-www-form-urlencoded"
-            && request_body.contains_key("form")
-        {
-            let mut form_params = Vec::new();
-            let form = request_body.get("form");
-            if let Some(f) = form {
-                match f.as_array() {
-                    None => {}
-                    Some(a) => {
-                        for p in a {
-                            let enabled = get_bool(p, "enabled", true);
-                            let name = get_str(p, "name");
-                            if !enabled || name.is_empty() {
-                                continue;
-                            }
-                            let value = get_str(p, "value");
-                            form_params.push((name, value));
-                        }
-                    }
-                }
-            }
-            request_builder = request_builder.form(&form_params);
-        } else if body_type == "binary" && request_body.contains_key("filePath") {
-            let file_path = request_body
-                .get("filePath")
-                .ok_or(GenericError("filePath not set".to_string()))?
-                .as_str()
-                .unwrap_or_default();
-
-            match fs::read(file_path).await.map_err(|e| e.to_string()) {
-                Ok(f) => {
-                    request_builder = request_builder.body(f);
-                }
-                Err(e) => {
-                    return Ok(response_err(
-                        &app_handle,
-                        &*response.lock().await,
-                        e,
-                        &update_source,
-                    ));
-                }
-            }
-        } else if body_type == "multipart/form-data" && request_body.contains_key("form") {
-            let mut multipart_form = multipart::Form::new();
-            if let Some(form_definition) = request_body.get("form") {
-                match form_definition.as_array() {
-                    None => {}
-                    Some(fd) => {
-                        for p in fd {
-                            let enabled = get_bool(p, "enabled", true);
-                            let name = get_str(p, "name").to_string();
-
-                            if !enabled || name.is_empty() {
-                                continue;
-                            }
-
-                            let file_path = get_str(p, "file").to_owned();
-                            let value = get_str(p, "value").to_owned();
-
-                            let mut part = if file_path.is_empty() {
-                                multipart::Part::text(value.clone())
-                            } else {
-                                match fs::read(file_path.clone()).await {
-                                    Ok(f) => multipart::Part::bytes(f),
-                                    Err(e) => {
-                                        return Ok(response_err(
-                                            &app_handle,
-                                            &*response.lock().await,
-                                            e.to_string(),
-                                            &update_source,
-                                        ));
-                                    }
-                                }
-                            };
-
-                            let content_type = get_str(p, "contentType");
-
-                            // Set or guess mimetype
-                            if !content_type.is_empty() {
-                                part = match part.mime_str(content_type) {
-                                    Ok(p) => p,
-                                    Err(e) => {
-                                        return Ok(response_err(
-                                            &app_handle,
-                                            &*response.lock().await,
-                                            format!("Invalid mime for multi-part entry {e:?}"),
-                                            &update_source,
-                                        ));
-                                    }
-                                };
-                            } else if !file_path.is_empty() {
-                                let default_mime =
-                                    Mime::from_str("application/octet-stream").unwrap();
-                                let mime =
-                                    mime_guess::from_path(file_path.clone()).first_or(default_mime);
-                                part = match part.mime_str(mime.essence_str()) {
-                                    Ok(p) => p,
-                                    Err(e) => {
-                                        return Ok(response_err(
-                                            &app_handle,
-                                            &*response.lock().await,
-                                            format!("Invalid mime for multi-part entry {e:?}"),
-                                            &update_source,
-                                        ));
-                                    }
-                                };
-                            }
-
-                            // Set a file path if it is not empty
-                            if !file_path.is_empty() {
-                                let user_filename = get_str(p, "filename").to_owned();
-                                let filename = if user_filename.is_empty() {
-                                    PathBuf::from(file_path)
-                                        .file_name()
-                                        .unwrap_or_default()
-                                        .to_string_lossy()
-                                        .to_string()
-                                } else {
-                                    user_filename
-                                };
-                                part = part.file_name(filename);
-                            }
-
-                            multipart_form = multipart_form.part(name, part);
-                        }
-                    }
-                }
-            }
-            headers.remove("Content-Type"); // reqwest will add this automatically
-            request_builder = request_builder.multipart(multipart_form);
-        } else if request_body.contains_key("text") {
-            let body = get_str_h(&request_body, "text");
-            request_builder = request_builder.body(body.to_owned());
-        } else {
-            warn!("Unsupported body type: {}", body_type);
-        }
-    } else {
-        // No body set
-        let method = request.method.to_ascii_lowercase();
-        let is_body_method = method == "post" || method == "put" || method == "patch";
-        // Add Content-Length for methods that commonly accept a body because some servers
-        // will error if they don't receive it.
-        if is_body_method && !headers.contains_key("content-length") {
-            headers.insert("Content-Length", HeaderValue::from_static("0"));
-        }
-    }
-
-    // Add headers last, because previous steps may modify them
-    request_builder = request_builder.headers(headers);
-
-    let mut sendable_req = match request_builder.build() {
-        Ok(r) => r,
-        Err(e) => {
-            warn!("Failed to build request builder {e:?}");
-            return Ok(response_err(
-                &app_handle,
-                &*response.lock().await,
-                e.to_string(),
-                &update_source,
-            ));
-        }
-    };
-
-    match request.authentication_type {
-        None => {
-            // No authentication found. Not even inherited
-        }
-        Some(authentication_type) if authentication_type == "none" => {
-            // Explicitly no authentication
-        }
-        Some(authentication_type) => {
-            let req = CallHttpAuthenticationRequest {
-                context_id: format!("{:x}", md5::compute(auth_context_id)),
-                values: serde_json::from_value(serde_json::to_value(&request.authentication)?)?,
-                url: sendable_req.url().to_string(),
-                method: sendable_req.method().to_string(),
-                headers: sendable_req
-                    .headers()
-                    .iter()
-                    .map(|(name, value)| HttpHeader {
-                        name: name.to_string(),
-                        value: value.to_str().unwrap_or_default().to_string(),
+    // Persist cookies back to the database after the request completes
+    if let Some((cookie_store, mut cj)) = maybe_cookie_manager {
+        match cookie_store.lock() {
+            Ok(store) => {
+                let cookies: Vec<Cookie> = store
+                    .iter_any()
+                    .filter_map(|c| {
+                        // Convert cookie_store::Cookie -> yaak_models::Cookie via serde
+                        let json_cookie = serde_json::to_value(c).ok()?;
+                        serde_json::from_value(json_cookie).ok()
                     })
-                    .collect(),
-            };
-            let auth_result = plugin_manager
-                .call_http_authentication(&window, &authentication_type, req, plugin_context)
-                .await;
-            let plugin_result = match auth_result {
-                Ok(r) => r,
-                Err(e) => {
-                    return Ok(response_err(
-                        &app_handle,
-                        &*response.lock().await,
-                        e.to_string(),
-                        &update_source,
-                    ));
+                    .collect();
+                cj.cookies = cookies;
+                if let Err(e) = window.db().upsert_cookie_jar(&cj, &UpdateSource::Background) {
+                    warn!("Failed to persist cookies to database: {}", e);
                 }
-            };
-
-            let headers = sendable_req.headers_mut();
-            for header in plugin_result.set_headers.unwrap_or_default() {
-                match (HeaderName::from_str(&header.name), HeaderValue::from_str(&header.value)) {
-                    (Ok(name), Ok(value)) => {
-                        headers.insert(name, value);
-                    }
-                    _ => continue,
-                };
             }
-
-            if let Some(params) = plugin_result.set_query_parameters {
-                let mut query_pairs = sendable_req.url_mut().query_pairs_mut();
-                for p in params {
-                    query_pairs.append_pair(&p.name, &p.value);
-                }
+            Err(e) => {
+                warn!("Failed to lock cookie store: {}", e);
             }
         }
     }
 
-    let (resp_tx, resp_rx) = oneshot::channel::<std::result::Result<Response, reqwest::Error>>();
-    let (done_tx, done_rx) = oneshot::channel::<HttpResponse>();
-
-    let start = std::time::Instant::now();
-
-    tokio::spawn(async move {
-        let _ = resp_tx.send(client.execute(sendable_req).await);
-    });
-
-    let raw_response = tokio::select! {
-        Ok(r) = resp_rx => r,
-        _ = cancelled_rx.changed() => {
-            let mut r = response.lock().await;
-            r.elapsed_headers = start.elapsed().as_millis() as i32;
-            r.elapsed = start.elapsed().as_millis() as i32;
-            return Ok(response_err(&app_handle, &r, "Request was cancelled".to_string(), &update_source));
-        }
-    };
-
-    {
-        let app_handle = app_handle.clone();
-        let window = window.clone();
-        let cancelled_rx = cancelled_rx.clone();
-        let response_id = response_id.clone();
-        let response = response.clone();
-        let update_source = update_source.clone();
-        tokio::spawn(async move {
-            match raw_response {
-                Ok(mut v) => {
-                    let content_length = v.content_length();
-                    let response_headers = v.headers().clone();
-                    let dir = app_handle.path().app_data_dir().unwrap();
-                    let base_dir = dir.join("responses");
-                    create_dir_all(base_dir.clone()).await.expect("Failed to create responses dir");
-                    let body_path = if response_id.is_empty() {
-                        base_dir.join(uuid::Uuid::new_v4().to_string())
-                    } else {
-                        base_dir.join(response_id.clone())
-                    };
-
-                    {
-                        let mut r = response.lock().await;
-                        r.body_path = Some(body_path.to_str().unwrap().to_string());
-                        r.elapsed_headers = start.elapsed().as_millis() as i32;
-                        r.elapsed = start.elapsed().as_millis() as i32;
-                        r.status = v.status().as_u16() as i32;
-                        r.status_reason = v.status().canonical_reason().map(|s| s.to_string());
-                        r.headers = response_headers
-                            .iter()
-                            .map(|(k, v)| HttpResponseHeader {
-                                name: k.as_str().to_string(),
-                                value: v.to_str().unwrap_or_default().to_string(),
-                            })
-                            .collect();
-                        r.url = v.url().to_string();
-                        r.remote_addr = v.remote_addr().map(|a| a.to_string());
-                        r.version = match v.version() {
-                            reqwest::Version::HTTP_09 => Some("HTTP/0.9".to_string()),
-                            reqwest::Version::HTTP_10 => Some("HTTP/1.0".to_string()),
-                            reqwest::Version::HTTP_11 => Some("HTTP/1.1".to_string()),
-                            reqwest::Version::HTTP_2 => Some("HTTP/2".to_string()),
-                            reqwest::Version::HTTP_3 => Some("HTTP/3".to_string()),
-                            _ => None,
-                        };
-
-                        r.state = HttpResponseState::Connected;
-                        app_handle
-                            .db()
-                            .update_http_response_if_id(&r, &update_source)
-                            .expect("Failed to update response after connected");
-                    }
-
-                    // Write body to FS
-                    let mut f = File::options()
-                        .create(true)
-                        .truncate(true)
-                        .write(true)
-                        .open(&body_path)
-                        .await
-                        .expect("Failed to open file");
-
-                    let mut written_bytes: usize = 0;
-                    loop {
-                        let chunk = v.chunk().await;
-                        if *cancelled_rx.borrow() {
-                            // Request was canceled
-                            return;
-                        }
-                        match chunk {
-                            Ok(Some(bytes)) => {
-                                let mut r = response.lock().await;
-                                r.elapsed = start.elapsed().as_millis() as i32;
-                                f.write_all(&bytes).await.expect("Failed to write to file");
-                                f.flush().await.expect("Failed to flush file");
-                                written_bytes += bytes.len();
-                                r.content_length = Some(written_bytes as i32);
-                                app_handle
-                                    .db()
-                                    .update_http_response_if_id(&r, &update_source)
-                                    .expect("Failed to update response");
-                            }
-                            Ok(None) => {
-                                break;
-                            }
-                            Err(e) => {
-                                response_err(
-                                    &app_handle,
-                                    &*response.lock().await,
-                                    e.to_string(),
-                                    &update_source,
-                                );
-                                break;
-                            }
-                        }
-                    }
-
-                    // Set the final content length
-                    {
-                        let mut r = response.lock().await;
-                        r.content_length = match content_length {
-                            Some(l) => Some(l as i32),
-                            None => Some(written_bytes as i32),
-                        };
-                        r.state = HttpResponseState::Closed;
-                        app_handle
-                            .db()
-                            .update_http_response_if_id(&r, &UpdateSource::from_window(&window))
-                            .expect("Failed to update response");
-                    };
-
-                    // Add cookie store if specified
-                    if let Some((cookie_store, mut cookie_jar)) = maybe_cookie_manager {
-                        // let cookies = response_headers.get_all(SET_COOKIE).iter().map(|h| {
-                        //     println!("RESPONSE COOKIE: {}", h.to_str().unwrap());
-                        //     cookie_store::RawCookie::from_str(h.to_str().unwrap())
-                        //         .expect("Failed to parse cookie")
-                        // });
-                        // store.store_response_cookies(cookies, &url);
-
-                        let json_cookies: Vec<Cookie> = cookie_store
-                            .lock()
-                            .unwrap()
-                            .iter_any()
-                            .map(|c| {
-                                let json_cookie =
-                                    serde_json::to_value(&c).expect("Failed to serialize cookie");
-                                serde_json::from_value(json_cookie)
-                                    .expect("Failed to deserialize cookie")
-                            })
-                            .collect::<Vec<_>>();
-                        cookie_jar.cookies = json_cookies;
-                        if let Err(e) = app_handle
-                            .db()
-                            .upsert_cookie_jar(&cookie_jar, &UpdateSource::from_window(&window))
-                        {
-                            error!("Failed to update cookie jar: {}", e);
-                        };
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to execute request {e}");
-                    response_err(
-                        &app_handle,
-                        &*response.lock().await,
-                        format!("{e} → {e:?}"),
-                        &update_source,
-                    );
-                }
-            };
-
-            let r = response.lock().await.clone();
-            done_tx.send(r).unwrap();
-        });
-    };
-
-    let app_handle = app_handle.clone();
-    Ok(tokio::select! {
-        Ok(r) = done_rx => r,
-        _ = cancelled_rx.changed() => {
-            match app_handle.with_db(|c| c.get_http_response(&response_id)) {
-                Ok(mut r) => {
-                    r.state = HttpResponseState::Closed;
-                    r.elapsed = start.elapsed().as_millis() as i32;
-                    r.elapsed_headers = start.elapsed().as_millis() as i32;
-                    app_handle.db().update_http_response_if_id(&r, &UpdateSource::from_window(window))
-                        .expect("Failed to update response")
-                },
-                _ => {
-                    response_err(&app_handle, &*response.lock().await, "Ephemeral request was cancelled".to_string(), &update_source)
-                }.clone(),
-            }
-        }
-    })
+    final_result
 }
 
 pub fn resolve_http_request<R: Runtime>(
@@ -711,46 +327,365 @@ pub fn resolve_http_request<R: Runtime>(
     Ok((new_request, authentication_context_id))
 }
 
-fn ensure_proto(url_str: &str) -> String {
-    if url_str.starts_with("http://") || url_str.starts_with("https://") {
-        return url_str.to_string();
-    }
+async fn execute_transaction<R: Runtime>(
+    client: reqwest::Client,
+    mut sendable_request: SendableHttpRequest,
+    response_ctx: &mut ResponseContext<R>,
+    mut cancelled_rx: Receiver<bool>,
+) -> Result<(HttpResponse, Option<tauri::async_runtime::JoinHandle<Result<()>>>)> {
+    let app_handle = &response_ctx.app_handle.clone();
+    let response_id = response_ctx.response().id.clone();
+    let workspace_id = response_ctx.response().workspace_id.clone();
+    let is_persisted = response_ctx.is_persisted();
 
-    // Url::from_str will fail without a proto, so add one
-    let parseable_url = format!("http://{}", url_str);
-    if let Ok(u) = Url::from_str(parseable_url.as_str()) {
-        match u.host() {
-            Some(host) => {
-                let h = host.to_string();
-                // These TLDs force HTTPS
-                if h.ends_with(".app") || h.ends_with(".dev") || h.ends_with(".page") {
-                    return format!("https://{url_str}");
+    let sender = ReqwestSender::with_client(client);
+    let transaction = HttpTransaction::new(sender);
+    let start = Instant::now();
+
+    // Capture request headers before sending
+    let request_headers: Vec<HttpResponseHeader> = sendable_request
+        .headers
+        .iter()
+        .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
+        .collect();
+
+    // Update response with headers info
+    response_ctx.update(|r| {
+        r.url = sendable_request.url.clone();
+        r.request_headers = request_headers;
+    })?;
+
+    // Create bounded channel for receiving events and spawn a task to store them in DB
+    // Buffer size of 100 events provides backpressure if DB writes are slow
+    let (event_tx, mut event_rx) =
+        tokio::sync::mpsc::channel::<yaak_http::sender::HttpResponseEvent>(100);
+
+    // Write events to DB in a task (only for persisted responses)
+    if is_persisted {
+        let response_id = response_id.clone();
+        let app_handle = app_handle.clone();
+        let update_source = response_ctx.update_source.clone();
+        let workspace_id = workspace_id.clone();
+        tokio::spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                let db_event = HttpResponseEvent::new(&response_id, &workspace_id, event.into());
+                let _ = app_handle.db().upsert_http_response_event(&db_event, &update_source);
+            }
+        });
+    } else {
+        // For ephemeral responses, just drain the events
+        tokio::spawn(async move { while event_rx.recv().await.is_some() {} });
+    };
+
+    // Capture request body as it's sent (only for persisted responses)
+    let body_id = format!("{}.request", response_id);
+    let maybe_blob_write_handle = match sendable_request.body {
+        Some(SendableBody::Bytes(bytes)) => {
+            if is_persisted {
+                write_bytes_to_db_sync(response_ctx, &body_id, bytes.clone())?;
+            }
+            sendable_request.body = Some(SendableBody::Bytes(bytes));
+            None
+        }
+        Some(SendableBody::Stream(stream)) => {
+            // Wrap stream with TeeReader to capture data as it's read
+            // Use unbounded channel to ensure all data is captured without blocking the HTTP request
+            let (body_chunk_tx, body_chunk_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+            let tee_reader = TeeReader::new(stream, body_chunk_tx);
+            let pinned: Pin<Box<dyn AsyncRead + Send + 'static>> = Box::pin(tee_reader);
+
+            let handle = if is_persisted {
+                // Spawn task to write request body chunks to blob DB
+                let app_handle = app_handle.clone();
+                let response_id = response_id.clone();
+                let workspace_id = workspace_id.clone();
+                let body_id = body_id.clone();
+                let update_source = response_ctx.update_source.clone();
+                Some(tauri::async_runtime::spawn(async move {
+                    write_stream_chunks_to_db(
+                        app_handle,
+                        &body_id,
+                        &workspace_id,
+                        &response_id,
+                        &update_source,
+                        body_chunk_rx,
+                    )
+                    .await
+                }))
+            } else {
+                // For ephemeral responses, just drain the body chunks
+                tauri::async_runtime::spawn(async move {
+                    let mut rx = body_chunk_rx;
+                    while rx.recv().await.is_some() {}
+                });
+                None
+            };
+
+            sendable_request.body = Some(SendableBody::Stream(pinned));
+            handle
+        }
+        None => {
+            sendable_request.body = None;
+            None
+        }
+    };
+
+    // Execute the transaction with cancellation support
+    // This returns the response with headers, but body is not yet consumed
+    // Events (headers, settings, chunks) are sent through the channel
+    let mut http_response = transaction
+        .execute_with_cancellation(sendable_request, cancelled_rx.clone(), event_tx)
+        .await?;
+
+    // Prepare the response path before consuming the body
+    let body_path = if response_id.is_empty() {
+        // Ephemeral responses: use OS temp directory for automatic cleanup
+        let temp_dir = std::env::temp_dir().join("yaak-ephemeral-responses");
+        create_dir_all(&temp_dir).await?;
+        temp_dir.join(uuid::Uuid::new_v4().to_string())
+    } else {
+        // Persisted responses: use app data directory
+        let dir = app_handle.path().app_data_dir()?;
+        let base_dir = dir.join("responses");
+        create_dir_all(&base_dir).await?;
+        base_dir.join(&response_id)
+    };
+
+    // Extract metadata before consuming the body (headers are available immediately)
+    // Url might change, so update again
+    response_ctx.update(|r| {
+        r.body_path = Some(body_path.to_string_lossy().to_string());
+        r.elapsed_headers = start.elapsed().as_millis() as i32;
+        r.status = http_response.status as i32;
+        r.status_reason = http_response.status_reason.clone();
+        r.url = http_response.url.clone();
+        r.remote_addr = http_response.remote_addr.clone();
+        r.version = http_response.version.clone();
+        r.headers = http_response
+            .headers
+            .iter()
+            .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
+            .collect();
+        r.content_length = http_response.content_length.map(|l| l as i64);
+        r.state = HttpResponseState::Connected;
+        r.request_headers = http_response
+            .request_headers
+            .iter()
+            .map(|(n, v)| HttpResponseHeader { name: n.clone(), value: v.clone() })
+            .collect();
+    })?;
+
+    // Get the body stream for manual consumption
+    let mut body_stream = http_response.into_body_stream()?;
+
+    // Open file for writing
+    let mut file = File::options()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&body_path)
+        .await
+        .map_err(|e| GenericError(format!("Failed to open file: {}", e)))?;
+
+    // Stream body to file, with throttled DB updates to avoid excessive writes
+    let mut written_bytes: usize = 0;
+    let mut last_update_time = start;
+    let mut buf = [0u8; 8192];
+
+    // Throttle settings: update DB at most every 100ms
+    const UPDATE_INTERVAL_MS: u128 = 100;
+
+    loop {
+        // Check for cancellation. If we already have headers/body, just close cleanly without error
+        if *cancelled_rx.borrow() {
+            break;
+        }
+
+        // Use select! to race between reading and cancellation, so cancellation is immediate
+        let read_result = tokio::select! {
+            biased;
+            _ = cancelled_rx.changed() => {
+                break;
+            }
+            result = body_stream.read(&mut buf) => result,
+        };
+
+        match read_result {
+            Ok(0) => break, // EOF
+            Ok(n) => {
+                file.write_all(&buf[..n])
+                    .await
+                    .map_err(|e| GenericError(format!("Failed to write to file: {}", e)))?;
+                file.flush()
+                    .await
+                    .map_err(|e| GenericError(format!("Failed to flush file: {}", e)))?;
+                written_bytes += n;
+
+                // Throttle DB updates: only update if enough time has passed
+                let now = Instant::now();
+                let elapsed_since_update = now.duration_since(last_update_time).as_millis();
+
+                if elapsed_since_update >= UPDATE_INTERVAL_MS {
+                    response_ctx.update(|r| {
+                        r.elapsed = start.elapsed().as_millis() as i32;
+                        r.content_length = Some(written_bytes as i64);
+                    })?;
+                    last_update_time = now;
                 }
             }
-            None => {}
+            Err(e) => {
+                return Err(GenericError(format!("Failed to read response body: {}", e)));
+            }
         }
     }
 
-    format!("http://{url_str}")
+    // Final update with closed state and accurate byte count
+    response_ctx.update(|r| {
+        r.elapsed = start.elapsed().as_millis() as i32;
+        r.content_length = Some(written_bytes as i64);
+        r.state = HttpResponseState::Closed;
+    })?;
+
+    Ok((response_ctx.response().clone(), maybe_blob_write_handle))
 }
 
-fn get_bool(v: &Value, key: &str, fallback: bool) -> bool {
-    match v.get(key) {
-        None => fallback,
-        Some(v) => v.as_bool().unwrap_or(fallback),
+fn write_bytes_to_db_sync<R: Runtime>(
+    response_ctx: &mut ResponseContext<R>,
+    body_id: &str,
+    data: Bytes,
+) -> Result<()> {
+    if data.is_empty() {
+        return Ok(());
     }
+
+    // Write in chunks if data is large
+    let mut offset = 0;
+    let mut chunk_index = 0;
+    while offset < data.len() {
+        let end = std::cmp::min(offset + REQUEST_BODY_CHUNK_SIZE, data.len());
+        let chunk_data = data.slice(offset..end).to_vec();
+        let chunk = BodyChunk::new(body_id, chunk_index, chunk_data);
+        response_ctx.app_handle.blobs().insert_chunk(&chunk)?;
+        offset = end;
+        chunk_index += 1;
+    }
+
+    // Update the response with the total request body size
+    response_ctx.update(|r| {
+        r.request_content_length = Some(data.len() as i64);
+    })?;
+
+    Ok(())
 }
 
-fn get_str<'a>(v: &'a Value, key: &str) -> &'a str {
-    match v.get(key) {
-        None => "",
-        Some(v) => v.as_str().unwrap_or_default(),
+async fn write_stream_chunks_to_db<R: Runtime>(
+    app_handle: AppHandle<R>,
+    body_id: &str,
+    workspace_id: &str,
+    response_id: &str,
+    update_source: &UpdateSource,
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+) -> Result<()> {
+    let mut buffer = Vec::with_capacity(REQUEST_BODY_CHUNK_SIZE);
+    let mut chunk_index = 0;
+    let mut total_bytes: usize = 0;
+
+    while let Some(data) = rx.recv().await {
+        total_bytes += data.len();
+        buffer.extend_from_slice(&data);
+
+        // Flush when buffer reaches chunk size
+        while buffer.len() >= REQUEST_BODY_CHUNK_SIZE {
+            debug!("Writing chunk {chunk_index} to DB");
+            let chunk_data: Vec<u8> = buffer.drain(..REQUEST_BODY_CHUNK_SIZE).collect();
+            let chunk = BodyChunk::new(body_id, chunk_index, chunk_data);
+            app_handle.blobs().insert_chunk(&chunk)?;
+            app_handle.db().upsert_http_response_event(
+                &HttpResponseEvent::new(
+                    response_id,
+                    workspace_id,
+                    yaak_http::sender::HttpResponseEvent::ChunkSent {
+                        bytes: REQUEST_BODY_CHUNK_SIZE,
+                    }
+                    .into(),
+                ),
+                update_source,
+            )?;
+            chunk_index += 1;
+        }
     }
+
+    // Flush remaining data
+    if !buffer.is_empty() {
+        let chunk = BodyChunk::new(body_id, chunk_index, buffer);
+        debug!("Flushing remaining data {chunk_index} {}", chunk.data.len());
+        app_handle.blobs().insert_chunk(&chunk)?;
+        app_handle.db().upsert_http_response_event(
+            &HttpResponseEvent::new(
+                response_id,
+                workspace_id,
+                yaak_http::sender::HttpResponseEvent::ChunkSent { bytes: chunk.data.len() }.into(),
+            ),
+            update_source,
+        )?;
+    }
+
+    // Update the response with the total request body size
+    app_handle.with_tx(|tx| {
+        debug!("Updating final body length {total_bytes}");
+        if let Ok(mut response) = tx.get_http_response(&response_id) {
+            response.request_content_length = Some(total_bytes as i64);
+            tx.update_http_response_if_id(&response, update_source)?;
+        }
+        Ok(())
+    })?;
+
+    Ok(())
 }
 
-fn get_str_h<'a>(v: &'a BTreeMap<String, Value>, key: &str) -> &'a str {
-    match v.get(key) {
-        None => "",
-        Some(v) => v.as_str().unwrap_or_default(),
+async fn apply_authentication<R: Runtime>(
+    window: &WebviewWindow<R>,
+    sendable_request: &mut SendableHttpRequest,
+    request: &HttpRequest,
+    auth_context_id: String,
+    plugin_manager: &PluginManager,
+    plugin_context: &PluginContext,
+) -> Result<()> {
+    match &request.authentication_type {
+        None => {
+            // No authentication found. Not even inherited
+        }
+        Some(authentication_type) if authentication_type == "none" => {
+            // Explicitly no authentication
+        }
+        Some(authentication_type) => {
+            let req = CallHttpAuthenticationRequest {
+                context_id: format!("{:x}", md5::compute(auth_context_id)),
+                values: serde_json::from_value(serde_json::to_value(&request.authentication)?)?,
+                url: sendable_request.url.clone(),
+                method: sendable_request.method.clone(),
+                headers: sendable_request
+                    .headers
+                    .iter()
+                    .map(|(name, value)| HttpHeader {
+                        name: name.to_string(),
+                        value: value.to_string(),
+                    })
+                    .collect(),
+            };
+            let plugin_result = plugin_manager
+                .call_http_authentication(&window, &authentication_type, req, plugin_context)
+                .await?;
+
+            for header in plugin_result.set_headers.unwrap_or_default() {
+                sendable_request.insert_header((header.name, header.value));
+            }
+
+            if let Some(params) = plugin_result.set_query_parameters {
+                let params = params.into_iter().map(|p| (p.name, p.value)).collect::<Vec<_>>();
+                sendable_request.url = append_query_params(&sendable_request.url, params);
+            }
+        }
     }
+    Ok(())
 }

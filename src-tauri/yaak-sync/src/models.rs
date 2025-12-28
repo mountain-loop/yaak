@@ -208,6 +208,7 @@ impl TryFrom<AnyModel> for SyncModel {
             AnyModel::GrpcConnection(m) => return Err(UnknownModel(m.model)),
             AnyModel::GrpcEvent(m) => return Err(UnknownModel(m.model)),
             AnyModel::HttpResponse(m) => return Err(UnknownModel(m.model)),
+            AnyModel::HttpResponseEvent(m) => return Err(UnknownModel(m.model)),
             AnyModel::KeyValue(m) => return Err(UnknownModel(m.model)),
             AnyModel::Plugin(m) => return Err(UnknownModel(m.model)),
             AnyModel::Settings(m) => return Err(UnknownModel(m.model)),

@@ -34,3 +34,5 @@ out
 
 .tmp
 tmp
+.zed
+codebook.toml

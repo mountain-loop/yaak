@@ -10,7 +10,7 @@ interface Props {
 export function KeyValueRows({ children }: Props) {
   children = Array.isArray(children) ? children : [children];
   return (
-    <table className="text-xs font-mono min-w-0 w-full mb-auto">
+    <table className="text-editor font-mono min-w-0 w-full mb-auto">
       <tbody className="divide-y divide-surface-highlight">
         {children.map((child, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: none

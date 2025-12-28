@@ -53,7 +53,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
 
   return (
     <DetailsBanner
-      open={defaultOpen.current}
+      defaultOpen={defaultOpen.current}
       summary={
         <HStack alignItems="center" justifyContent="between" space={2} className="w-full">
           <HStack space={1.5}>

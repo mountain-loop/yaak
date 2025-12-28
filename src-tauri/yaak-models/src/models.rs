@@ -1322,12 +1322,15 @@ pub struct HttpResponse {
     pub request_id: String,
 
     pub body_path: Option<String>,
-    pub content_length: Option<i32>,
+    pub content_length: Option<i64>,
+    pub content_length_compressed: Option<i64>,
     pub elapsed: i32,
     pub elapsed_headers: i32,
     pub error: Option<String>,
     pub headers: Vec<HttpResponseHeader>,
     pub remote_addr: Option<String>,
+    pub request_content_length: Option<i64>,
+    pub request_headers: Vec<HttpResponseHeader>,
     pub status: i32,
     pub status_reason: Option<String>,
     pub state: HttpResponseState,
@@ -1368,16 +1371,19 @@ impl UpsertModelInfo for HttpResponse {
             (WorkspaceId, self.workspace_id.into()),
             (BodyPath, self.body_path.into()),
             (ContentLength, self.content_length.into()),
+            (ContentLengthCompressed, self.content_length_compressed.into()),
             (Elapsed, self.elapsed.into()),
             (ElapsedHeaders, self.elapsed_headers.into()),
             (Error, self.error.into()),
             (Headers, serde_json::to_string(&self.headers)?.into()),
             (RemoteAddr, self.remote_addr.into()),
+            (RequestHeaders, serde_json::to_string(&self.request_headers)?.into()),
             (State, serde_json::to_value(self.state)?.as_str().into()),
             (Status, self.status.into()),
             (StatusReason, self.status_reason.into()),
             (Url, self.url.into()),
             (Version, self.version.into()),
+            (RequestContentLength, self.request_content_length.into()),
         ])
     }
 
@@ -1386,11 +1392,14 @@ impl UpsertModelInfo for HttpResponse {
             HttpResponseIden::UpdatedAt,
             HttpResponseIden::BodyPath,
             HttpResponseIden::ContentLength,
+            HttpResponseIden::ContentLengthCompressed,
             HttpResponseIden::Elapsed,
             HttpResponseIden::ElapsedHeaders,
             HttpResponseIden::Error,
             HttpResponseIden::Headers,
             HttpResponseIden::RemoteAddr,
+            HttpResponseIden::RequestContentLength,
+            HttpResponseIden::RequestHeaders,
             HttpResponseIden::State,
             HttpResponseIden::Status,
             HttpResponseIden::StatusReason,
@@ -1415,6 +1424,7 @@ impl UpsertModelInfo for HttpResponse {
             error: r.get("error")?,
             url: r.get("url")?,
             content_length: r.get("content_length")?,
+            content_length_compressed: r.get("content_length_compressed").unwrap_or_default(),
             version: r.get("version")?,
             elapsed: r.get("elapsed")?,
             elapsed_headers: r.get("elapsed_headers")?,
@@ -1424,7 +1434,149 @@ impl UpsertModelInfo for HttpResponse {
             state: serde_json::from_str(format!(r#""{state}""#).as_str()).unwrap(),
             body_path: r.get("body_path")?,
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            request_content_length: r.get("request_content_length").unwrap_or_default(),
+            request_headers: serde_json::from_str(
+                r.get::<_, String>("request_headers").unwrap_or_default().as_str(),
+            )
+            .unwrap_or_default(),
         })
+    }
+}
+
+/// Serializable representation of HTTP response events for DB storage.
+/// This mirrors `yaak_http::sender::HttpResponseEvent` but with serde support.
+/// The `From` impl is in yaak-http to avoid circular dependencies.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum HttpResponseEventData {
+    Setting {
+        name: String,
+        value: String,
+    },
+    Info {
+        message: String,
+    },
+    Redirect {
+        url: String,
+        status: u16,
+        behavior: String,
+    },
+    SendUrl {
+        method: String,
+        path: String,
+    },
+    ReceiveUrl {
+        version: String,
+        status: String,
+    },
+    HeaderUp {
+        name: String,
+        value: String,
+    },
+    HeaderDown {
+        name: String,
+        value: String,
+    },
+    ChunkSent {
+        bytes: usize,
+    },
+    ChunkReceived {
+        bytes: usize,
+    },
+}
+
+impl Default for HttpResponseEventData {
+    fn default() -> Self {
+        Self::Info { message: String::new() }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "http_response_events")]
+pub struct HttpResponseEvent {
+    #[ts(type = "\"http_response_event\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+    pub response_id: String,
+    pub event: HttpResponseEventData,
+}
+
+impl UpsertModelInfo for HttpResponseEvent {
+    fn table_name() -> impl IntoTableRef + IntoIden {
+        HttpResponseEventIden::Table
+    }
+
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        HttpResponseEventIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("re")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (HttpResponseEventIden::CreatedAt, Order::Asc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use HttpResponseEventIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (ResponseId, self.response_id.into()),
+            (Event, serde_json::to_string(&self.event)?.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            HttpResponseEventIden::UpdatedAt,
+            HttpResponseEventIden::Event,
+        ]
+    }
+
+    fn from_row(r: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let event: String = r.get("event")?;
+        Ok(Self {
+            id: r.get("id")?,
+            model: r.get("model")?,
+            workspace_id: r.get("workspace_id")?,
+            response_id: r.get("response_id")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            event: serde_json::from_str(&event).unwrap_or_default(),
+        })
+    }
+}
+
+impl HttpResponseEvent {
+    pub fn new(response_id: &str, workspace_id: &str, event: HttpResponseEventData) -> Self {
+        Self {
+            model: "http_response_event".to_string(),
+            id: Self::generate_id(),
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+            workspace_id: workspace_id.to_string(),
+            response_id: response_id.to_string(),
+            event,
+        }
     }
 }
 
@@ -2178,6 +2330,7 @@ define_any_model! {
     GrpcRequest,
     HttpRequest,
     HttpResponse,
+    HttpResponseEvent,
     KeyValue,
     Plugin,
     Settings,
