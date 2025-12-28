@@ -3,7 +3,7 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import './PdfViewer.css';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Document, Page } from 'react-pdf';
 import { useContainerSize } from '../../hooks/useContainerQuery';
 
@@ -27,14 +27,24 @@ const options = {
 export function PdfViewer({ bodyPath, data }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [numPages, setNumPages] = useState<number>();
+  const [src, setSrc] = useState<string | { data: Uint8Array }>();
 
   const { width: containerWidth } = useContainerSize(containerRef);
+
+  useEffect(() => {
+    if (bodyPath) {
+      setSrc(convertFileSrc(bodyPath));
+    } else if (data) {
+      // react-pdf accepts { data: Uint8Array } for raw PDF data
+      setSrc({ data });
+    } else {
+      setSrc(undefined);
+    }
+  }, [bodyPath, data]);
 
   const onDocumentLoadSuccess = ({ numPages: nextNumPages }: PDFDocumentProxy): void => {
     setNumPages(nextNumPages);
   };
-
-  const src = bodyPath ? convertFileSrc(bodyPath) : data;
   return (
     <div ref={containerRef} className="w-full h-full overflow-y-auto">
       <Document
