@@ -94,7 +94,11 @@ export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Prop
 function Part({ part }: { part: MultipartPart }) {
   const mimeType = part.headers.contentType.mediaType ?? null;
   const contentTypeHeader = part.headers.get('content-type');
-  const content = new TextDecoder().decode(part.arrayBuffer);
+
+  // Access arrayBuffer only once and create a copy to avoid detachment issues
+  const arrayBuffer = part.arrayBuffer;
+  const arrayBufferCopy = arrayBuffer.slice(0); // Create a copy
+  const content = new TextDecoder().decode(arrayBufferCopy);
 
   // Fallback: detect content type from content if not provided
   const detectedLanguage = languageFromContentType(contentTypeHeader, content);
@@ -104,15 +108,15 @@ function Part({ part }: { part: MultipartPart }) {
   }
 
   if (mimeType?.match(/^image/i)) {
-    return <ImageViewer data={part.arrayBuffer} className="pb-2" />;
+    return <ImageViewer data={arrayBuffer} className="pb-2" />;
   }
 
   if (mimeType?.match(/^audio/i)) {
-    return <AudioViewer data={part.arrayBuffer} />;
+    return <AudioViewer data={arrayBuffer} />;
   }
 
   if (mimeType?.match(/^video/i)) {
-    return <VideoViewer data={part.arrayBuffer} />;
+    return <VideoViewer data={arrayBuffer} />;
   }
 
   if (mimeType?.match(/csv|tab-separated/i)) {
@@ -126,7 +130,7 @@ function Part({ part }: { part: MultipartPart }) {
   if (mimeType?.match(/pdf/i)) {
     return (
       <Suspense fallback={<LoadingIcon />}>
-        <PdfViewer data={part.arrayBuffer} />
+        <PdfViewer data={arrayBuffer} />
       </Suspense>
     );
   }
