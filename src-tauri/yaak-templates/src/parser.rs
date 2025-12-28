@@ -323,7 +323,7 @@ impl Parser {
             let is_valid = if start_pos == self.pos {
                 ch.is_alphanumeric() || ch == '_' // The first char is more restrictive
             } else {
-                ch.is_alphanumeric() || ch == '_' || ch == '-'
+                ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '.'
             };
             if is_valid {
                 text.push(ch);
@@ -538,6 +538,22 @@ mod tests {
             p.parse()?.tokens,
             vec![
                 Token::Tag { val: Val::Var { name: "a_b".into() } },
+                Token::Eof
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn var_dots() -> Result<()> {
+        let mut p = Parser::new("${[ a.b ]}");
+        assert_eq!(
+            p.parse()?.tokens,
+            vec![
+                Token::Tag {
+                    val: Val::Var { name: "a.b".into() }
+                },
                 Token::Eof
             ]
         );
