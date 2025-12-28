@@ -1,9 +1,6 @@
 import { type MultipartPart, parseMultipart } from '@mjackson/multipart-parser';
-import type { HttpResponse } from '@yaakapp-internal/models';
 import { useState } from 'react';
-import { useResponseBodyBytes } from '../../hooks/useResponseBodyText';
-import { getMimeTypeFromContentType, languageFromContentType } from '../../lib/contentType';
-import { getContentTypeFromHeaders } from '../../lib/model_util';
+import { languageFromContentType } from '../../lib/contentType';
 import { Icon } from '../core/Icon';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { CsvViewer } from './CsvViewer';
@@ -13,20 +10,16 @@ import { TextViewer } from './TextViewer';
 import { WebPageViewer } from './WebPageViewer';
 
 interface Props {
-  response: HttpResponse;
+  data: Uint8Array;
+  boundary: string;
+  idPrefix?: string;
 }
 
-export function MultipartViewer({ response }: Props) {
-  const body = useResponseBodyBytes({ response });
+export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Props) {
   const [tab, setTab] = useState<string>();
 
-  if (body.data == null) return null;
-
-  const contentTypeHeader = getContentTypeFromHeaders(response.headers);
-  const boundary = contentTypeHeader?.split('boundary=')[1] ?? 'unknown';
-
   const maxFileSize = 1024 * 1024 * 10; // 10MB
-  const parsed = parseMultipart(body.data, { boundary, maxFileSize });
+  const parsed = parseMultipart(data, { boundary, maxFileSize });
   const parts = Array.from(parsed);
 
   return (
@@ -56,7 +49,7 @@ export function MultipartViewer({ response }: Props) {
       {parts.map((part, i) => (
         <TabContent
           // biome-ignore lint/suspicious/noArrayIndexKey: Nothing else to key on
-          key={response.id + part.name + i}
+          key={idPrefix + part.name + i}
           value={part.name ?? ''}
           className="pl-3 !pt-0"
         >

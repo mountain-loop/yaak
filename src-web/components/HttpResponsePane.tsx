@@ -6,7 +6,7 @@ import { useLocalStorage } from 'react-use';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
-import { useResponseBodyText } from '../hooks/useResponseBodyText';
+import { useResponseBodyBytes, useResponseBodyText } from '../hooks/useResponseBodyText';
 import { useResponseViewMode } from '../hooks/useResponseViewMode';
 import { getMimeTypeFromContentType } from '../lib/contentType';
 import { getContentTypeFromHeaders } from '../lib/model_util';
@@ -225,7 +225,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                       ) : mimeType?.match(/^video/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={VideoViewer} />
                       ) : mimeType?.match(/^multipart/i) && viewMode === 'pretty' ? (
-                        <MultipartViewer response={activeResponse} />
+                        <HttpMultipartViewer response={activeResponse} />
                       ) : mimeType?.match(/pdf/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={PdfViewer} />
                       ) : mimeType?.match(/csv|tab-separated/i) ? (
@@ -298,4 +298,15 @@ function HttpCsvViewer({ response, className }: { response: HttpResponse; classN
   const body = useResponseBodyText({ response, filter: null });
 
   return <CsvViewer text={body.data ?? null} className={className} />;
+}
+
+function HttpMultipartViewer({ response }: { response: HttpResponse }) {
+  const body = useResponseBodyBytes({ response });
+
+  if (body.data == null) return null;
+
+  const contentTypeHeader = getContentTypeFromHeaders(response.headers);
+  const boundary = contentTypeHeader?.split('boundary=')[1] ?? 'unknown';
+
+  return <MultipartViewer data={body.data} boundary={boundary} idPrefix={response.id} />;
 }

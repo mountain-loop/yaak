@@ -5,6 +5,7 @@ import { EmptyStateText } from './EmptyStateText';
 import { LoadingIcon } from './core/LoadingIcon';
 import { CsvViewer } from './responseViewers/CsvViewer';
 import { ImageViewer } from './responseViewers/ImageViewer';
+import { MultipartViewer } from './responseViewers/MultipartViewer';
 import { SvgViewer } from './responseViewers/SvgViewer';
 import { TextViewer } from './responseViewers/TextViewer';
 import { WebPageViewer } from './responseViewers/WebPageViewer';
@@ -47,6 +48,11 @@ function RequestBodyViewerInner({ response }: Props) {
   const language = languageFromContentType(contentType, bodyText);
 
   // Route to appropriate viewer based on content type
+  if (mimeType?.match(/^multipart/i)) {
+    const boundary = contentType?.split('boundary=')[1] ?? 'unknown';
+    return <MultipartViewer data={body} boundary={boundary} idPrefix={`request.${response.id}`} />;
+  }
+
   if (mimeType?.match(/^image\/svg/i)) {
     return <SvgViewer text={bodyText} />;
   }
