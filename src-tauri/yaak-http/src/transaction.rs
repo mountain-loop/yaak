@@ -28,7 +28,7 @@ impl<S: HttpSender> HttpTransaction<S> {
         &self,
         request: SendableHttpRequest,
         mut cancelled_rx: Receiver<bool>,
-        event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
+        event_tx: mpsc::Sender<HttpResponseEvent>,
     ) -> Result<HttpResponse> {
         let mut redirect_count = 0;
         let mut current_url = request.url;
@@ -36,9 +36,9 @@ impl<S: HttpSender> HttpTransaction<S> {
         let mut current_headers = request.headers;
         let mut current_body = request.body;
 
-        // Helper to send events (ignores errors if receiver is dropped)
+        // Helper to send events (ignores errors if receiver is dropped or channel is full)
         let send_event = |event: HttpResponseEvent| {
-            let _ = event_tx.send(event);
+            let _ = event_tx.try_send(event);
         };
 
         loop {
@@ -236,7 +236,7 @@ mod tests {
         async fn send(
             &self,
             _request: SendableHttpRequest,
-            _event_tx: mpsc::UnboundedSender<HttpResponseEvent>,
+            _event_tx: mpsc::Sender<HttpResponseEvent>,
         ) -> Result<HttpResponse> {
             let mut responses = self.responses.lock().await;
             if responses.is_empty() {
@@ -276,7 +276,7 @@ mod tests {
         };
 
         let (_tx, rx) = tokio::sync::watch::channel(false);
-        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let (event_tx, _event_rx) = mpsc::channel(100);
         let result = transaction.execute_with_cancellation(request, rx, event_tx).await.unwrap();
         assert_eq!(result.status, 200);
 
@@ -309,7 +309,7 @@ mod tests {
         };
 
         let (_tx, rx) = tokio::sync::watch::channel(false);
-        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let (event_tx, _event_rx) = mpsc::channel(100);
         let result = transaction.execute_with_cancellation(request, rx, event_tx).await.unwrap();
         assert_eq!(result.status, 200);
 
@@ -341,7 +341,7 @@ mod tests {
         };
 
         let (_tx, rx) = tokio::sync::watch::channel(false);
-        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let (event_tx, _event_rx) = mpsc::channel(100);
         let result = transaction.execute_with_cancellation(request, rx, event_tx).await;
         if let Err(crate::error::Error::RequestError(msg)) = result {
             assert!(msg.contains("Maximum redirect limit"));
