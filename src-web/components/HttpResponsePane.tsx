@@ -10,6 +10,7 @@ import { useResponseViewMode } from '../hooks/useResponseViewMode';
 import { getMimeTypeFromContentType } from '../lib/contentType';
 import { getContentTypeFromHeaders } from '../lib/model_util';
 import { ConfirmLargeResponse } from './ConfirmLargeResponse';
+import { ConfirmLargeResponseRequest } from './ConfirmLargeResponseRequest';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
@@ -23,9 +24,9 @@ import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { ErrorBoundary } from './ErrorBoundary';
+import { HttpResponseTimeline } from './HttpResponseTimeline';
 import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
 import { RequestBodyViewer } from './RequestBodyViewer';
-import { HttpResponseTimeline } from './HttpResponseTimeline';
 import { ResponseHeaders } from './ResponseHeaders';
 import { ResponseInfo } from './ResponseInfo';
 import { AudioViewer } from './responseViewers/AudioViewer';
@@ -35,7 +36,6 @@ import { HTMLOrTextViewer } from './responseViewers/HTMLOrTextViewer';
 import { ImageViewer } from './responseViewers/ImageViewer';
 import { SvgViewer } from './responseViewers/SvgViewer';
 import { VideoViewer } from './responseViewers/VideoViewer';
-import { ConfirmLargeResponseRequest } from './ConfirmLargeResponseRequest';
 
 const PdfViewer = lazy(() =>
   import('./responseViewers/PdfViewer').then((m) => ({ default: m.PdfViewer })),

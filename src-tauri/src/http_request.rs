@@ -275,7 +275,7 @@ async fn send_http_request_inner<R: Runtime>(
                     })
                     .collect();
                 cj.cookies = cookies;
-                if let Err(e) = window.db().upsert_cookie_jar(&cj, &update_source) {
+                if let Err(e) = window.db().upsert_cookie_jar(&cj, &UpdateSource::Background) {
                     warn!("Failed to persist cookies to database: {}", e);
                 }
             }
