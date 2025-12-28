@@ -6,14 +6,14 @@ use tokio::sync::mpsc;
 
 /// A reader that forwards all read data to a channel while also returning it to the caller.
 /// This allows capturing request body data as it's being sent.
-/// Uses a bounded channel to provide backpressure if the receiver is slow.
+/// Uses an unbounded channel to ensure all data is captured without blocking the request.
 pub struct TeeReader<R> {
     inner: R,
-    tx: mpsc::Sender<Vec<u8>>,
+    tx: mpsc::UnboundedSender<Vec<u8>>,
 }
 
 impl<R> TeeReader<R> {
-    pub fn new(inner: R, tx: mpsc::Sender<Vec<u8>>) -> Self {
+    pub fn new(inner: R, tx: mpsc::UnboundedSender<Vec<u8>>) -> Self {
         Self { inner, tx }
     }
 }
@@ -32,21 +32,9 @@ impl<R: AsyncRead + Unpin> AsyncRead for TeeReader<R> {
                 if after_len > before_len {
                     // Data was read, send a copy to the channel
                     let data = buf.filled()[before_len..after_len].to_vec();
-                    // Use try_send to avoid blocking. If channel is full, we drop the data
-                    // rather than blocking the HTTP request. This provides backpressure
-                    // by slowing down the reader when the DB writer can't keep up.
-                    match self.tx.try_send(data) {
-                        Ok(_) => {} // Successfully sent
-                        Err(mpsc::error::TrySendError::Full(_)) => {
-                            // Channel is full - apply backpressure by returning Pending
-                            // This will cause the reader to be polled again later
-                            cx.waker().wake_by_ref();
-                            return Poll::Pending;
-                        }
-                        Err(mpsc::error::TrySendError::Closed(_)) => {
-                            // Receiver dropped - continue without capturing
-                        }
-                    }
+                    // Send to unbounded channel - this never blocks
+                    // Ignore error if receiver is closed
+                    let _ = self.tx.send(data);
                 }
                 Poll::Ready(Ok(()))
             }
@@ -66,7 +54,7 @@ mod tests {
     async fn test_tee_reader_captures_all_data() {
         let data = b"Hello, World!";
         let cursor = Cursor::new(data.to_vec());
-        let (tx, mut rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::unbounded_channel();
 
         let mut tee = TeeReader::new(cursor, tx);
         let mut output = Vec::new();
@@ -87,7 +75,7 @@ mod tests {
     async fn test_tee_reader_with_chunked_reads() {
         let data = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         let cursor = Cursor::new(data.to_vec());
-        let (tx, mut rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::unbounded_channel();
 
         let mut tee = TeeReader::new(cursor, tx);
 
@@ -117,7 +105,7 @@ mod tests {
     async fn test_tee_reader_empty_data() {
         let data: Vec<u8> = vec![];
         let cursor = Cursor::new(data.clone());
-        let (tx, mut rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::unbounded_channel();
 
         let mut tee = TeeReader::new(cursor, tx);
         let mut output = Vec::new();
@@ -134,7 +122,7 @@ mod tests {
     async fn test_tee_reader_works_when_receiver_dropped() {
         let data = b"Hello, World!";
         let cursor = Cursor::new(data.to_vec());
-        let (tx, rx) = mpsc::channel(10);
+        let (tx, rx) = mpsc::unbounded_channel();
 
         // Drop the receiver before reading
         drop(rx);
@@ -152,7 +140,7 @@ mod tests {
         // Test with 1MB of data
         let data: Vec<u8> = (0..1024 * 1024).map(|i| (i % 256) as u8).collect();
         let cursor = Cursor::new(data.clone());
-        let (tx, mut rx) = mpsc::channel(100);
+        let (tx, mut rx) = mpsc::unbounded_channel();
 
         let mut tee = TeeReader::new(cursor, tx);
         let mut output = Vec::new();
