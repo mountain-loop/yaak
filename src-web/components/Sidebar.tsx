@@ -37,6 +37,7 @@ import { getCreateDropdownItems } from '../hooks/useCreateDropdownItems';
 import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import { useHotKey } from '../hooks/useHotKey';
 import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
+import { getWebSocketRequestActions } from '../hooks/useWebSocketRequestActions';
 import { getWorkspaceActions } from '../hooks/useWorkspaceActions';
 import { getFolderActions } from '../hooks/useFolderActions';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
@@ -373,6 +374,17 @@ function Sidebar({ className }: { className?: string }) {
           leftSlot: <Icon icon={a.icon ?? 'empty'} />,
           onSelect: async () => {
             const request = getModel('grpc_request', child.id);
+            if (request != null) await a.call(request);
+          },
+        })),
+        ...(items.length === 1 && child.model === 'websocket_request'
+          ? await getWebSocketRequestActions()
+          : []
+        ).map((a) => ({
+          label: a.label,
+          leftSlot: <Icon icon={a.icon ?? 'empty'} />,
+          onSelect: async () => {
+            const request = getModel('websocket_request', child.id);
             if (request != null) await a.call(request);
           },
         })),
