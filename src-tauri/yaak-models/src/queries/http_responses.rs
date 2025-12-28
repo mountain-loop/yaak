@@ -1,3 +1,4 @@
+use crate::blob_manager::BlobManager;
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{HttpResponse, HttpResponseIden, HttpResponseState};
@@ -58,12 +59,20 @@ impl<'a> DbContext<'a> {
         &self,
         http_response: &HttpResponse,
         source: &UpdateSource,
+        blob_manager: &BlobManager,
     ) -> Result<HttpResponse> {
         // Delete the body file if it exists
         if let Some(p) = http_response.body_path.clone() {
             if let Err(e) = fs::remove_file(p) {
                 error!("Failed to delete body file: {}", e);
             };
+        }
+
+        // Delete request body blobs (pattern: {response_id}.request)
+        let blob_ctx = blob_manager.connect();
+        let body_id = format!("{}.request", http_response.id);
+        if let Err(e) = blob_ctx.delete_chunks(&body_id) {
+            error!("Failed to delete request body blobs: {}", e);
         }
 
         Ok(self.delete(http_response, source)?)
@@ -73,12 +82,13 @@ impl<'a> DbContext<'a> {
         &self,
         http_response: &HttpResponse,
         source: &UpdateSource,
+        blob_manager: &BlobManager,
     ) -> Result<HttpResponse> {
         let responses = self.list_http_responses_for_request(&http_response.request_id, None)?;
 
         for m in responses.iter().skip(MAX_HISTORY_ITEMS - 1) {
             debug!("Deleting old HTTP response {}", http_response.id);
-            self.delete_http_response(&m, source)?;
+            self.delete_http_response(&m, source, blob_manager)?;
         }
 
         self.upsert(http_response, source)

@@ -1,5 +1,7 @@
 src-tauri/vendored/**/* linguist-generated=true
 src-tauri/gen/schemas/**/* linguist-generated=true
+**/bindings/* linguist-generated=true
+src-tauri/yaak-templates/pkg/* linguist-generated=true
 
 # Ensure consistent line endings for test files that check exact content
 src-tauri/yaak-http/tests/test.txt text eol=lf

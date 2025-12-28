@@ -12,6 +12,7 @@ use log::error;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use yaak_common::window::WorkspaceWindowTrait;
+use yaak_models::blob_manager::BlobManagerExt;
 use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManagerExt;
@@ -219,6 +220,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let http_response = if http_request.id.is_empty() {
                 HttpResponse::default()
             } else {
+                let blobs = window.blob_manager();
                 window.db().upsert_http_response(
                     &HttpResponse {
                         request_id: http_request.id.clone(),
@@ -226,6 +228,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                         ..Default::default()
                     },
                     &UpdateSource::Plugin,
+                    &blobs,
                 )?
             };
 

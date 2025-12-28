@@ -10,6 +10,7 @@ import { useResponseViewMode } from '../hooks/useResponseViewMode';
 import { getMimeTypeFromContentType } from '../lib/contentType';
 import { getContentTypeFromHeaders } from '../lib/model_util';
 import { ConfirmLargeResponse } from './ConfirmLargeResponse';
+import { ConfirmLargeResponseRequest } from './ConfirmLargeResponseRequest';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
@@ -23,8 +24,9 @@ import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { ErrorBoundary } from './ErrorBoundary';
+import { HttpResponseTimeline } from './HttpResponseTimeline';
 import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
-import { ResponseTimeline } from './ResponseEvents';
+import { RequestBodyViewer } from './RequestBodyViewer';
 import { ResponseHeaders } from './ResponseHeaders';
 import { ResponseInfo } from './ResponseInfo';
 import { AudioViewer } from './responseViewers/AudioViewer';
@@ -46,9 +48,10 @@ interface Props {
 }
 
 const TAB_BODY = 'body';
+const TAB_REQUEST = 'request';
 const TAB_HEADERS = 'headers';
 const TAB_INFO = 'info';
-const TAB_TIMELINE = 'events';
+const TAB_TIMELINE = 'timeline';
 
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
@@ -77,6 +80,12 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         },
       },
       {
+        value: TAB_REQUEST,
+        label: 'Request',
+        rightSlot:
+          (activeResponse?.requestContentLength ?? 0) > 0 ? <CountBadge count={true} /> : null,
+      },
+      {
         value: TAB_HEADERS,
         label: 'Headers',
         rightSlot: (
@@ -98,11 +107,12 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     ],
     [
       activeResponse?.headers,
+      activeResponse?.requestContentLength,
+      activeResponse?.requestHeaders.length,
       mimeType,
+      responseEvents.data?.length,
       setViewMode,
       viewMode,
-      activeResponse?.requestHeaders.length,
-      responseEvents.data?.length,
     ],
   );
   const activeTab = activeTabs?.[activeRequestId];
@@ -200,8 +210,8 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                           </VStack>
                         </EmptyStateText>
                       ) : activeResponse.state === 'closed' &&
-                        activeResponse.contentLength === 0 ? (
-                        <EmptyStateText>Empty </EmptyStateText>
+                        (activeResponse.contentLength ?? 0) === 0 ? (
+                        <EmptyStateText>Empty</EmptyStateText>
                       ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
                         <EventStreamViewer response={activeResponse} />
                       ) : mimeType?.match(/^image\/svg/) ? (
@@ -227,6 +237,11 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                   </Suspense>
                 </ErrorBoundary>
               </TabContent>
+              <TabContent value={TAB_REQUEST}>
+                <ConfirmLargeResponseRequest response={activeResponse}>
+                  <RequestBodyViewer response={activeResponse} />
+                </ConfirmLargeResponseRequest>
+              </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />
               </TabContent>
@@ -234,7 +249,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 <ResponseInfo response={activeResponse} />
               </TabContent>
               <TabContent value={TAB_TIMELINE}>
-                <ResponseTimeline response={activeResponse} />
+                <HttpResponseTimeline response={activeResponse} />
               </TabContent>
             </Tabs>
           </div>

@@ -1,3 +1,4 @@
+use crate::blob_manager::BlobManagerExt;
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::models::{AnyModel, GraphQlIntrospection, GrpcEvent, Settings, WebsocketEvent};
@@ -8,6 +9,7 @@ use tauri::{AppHandle, Runtime, WebviewWindow};
 #[tauri::command]
 pub(crate) fn upsert<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> Result<String> {
     let db = window.db();
+    let blobs = window.blob_manager();
     let source = &UpdateSource::from_window(&window);
     let id = match model {
         AnyModel::CookieJar(m) => db.upsert_cookie_jar(&m, source)?.id,
@@ -15,7 +17,7 @@ pub(crate) fn upsert<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> R
         AnyModel::Folder(m) => db.upsert_folder(&m, source)?.id,
         AnyModel::GrpcRequest(m) => db.upsert_grpc_request(&m, source)?.id,
         AnyModel::HttpRequest(m) => db.upsert_http_request(&m, source)?.id,
-        AnyModel::HttpResponse(m) => db.upsert_http_response(&m, source)?.id,
+        AnyModel::HttpResponse(m) => db.upsert_http_response(&m, source, &blobs)?.id,
         AnyModel::KeyValue(m) => db.upsert_key_value(&m, source)?.id,
         AnyModel::Plugin(m) => db.upsert_plugin(&m, source)?.id,
         AnyModel::Settings(m) => db.upsert_settings(&m, source)?.id,
@@ -30,6 +32,7 @@ pub(crate) fn upsert<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> R
 
 #[tauri::command]
 pub(crate) fn delete<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> Result<String> {
+    let blobs = window.blob_manager();
     // Use transaction for deletions because it might recurse
     window.with_tx(|tx| {
         let source = &UpdateSource::from_window(&window);
@@ -40,7 +43,7 @@ pub(crate) fn delete<R: Runtime>(window: WebviewWindow<R>, model: AnyModel) -> R
             AnyModel::GrpcConnection(m) => tx.delete_grpc_connection(&m, source)?.id,
             AnyModel::GrpcRequest(m) => tx.delete_grpc_request(&m, source)?.id,
             AnyModel::HttpRequest(m) => tx.delete_http_request(&m, source)?.id,
-            AnyModel::HttpResponse(m) => tx.delete_http_response(&m, source)?.id,
+            AnyModel::HttpResponse(m) => tx.delete_http_response(&m, source, &blobs)?.id,
             AnyModel::Plugin(m) => tx.delete_plugin(&m, source)?.id,
             AnyModel::WebsocketConnection(m) => tx.delete_websocket_connection(&m, source)?.id,
             AnyModel::WebsocketRequest(m) => tx.delete_websocket_request(&m, source)?.id,

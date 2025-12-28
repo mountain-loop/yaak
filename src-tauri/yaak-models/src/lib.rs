@@ -1,3 +1,4 @@
+use crate::blob_manager::{BlobManager, migrate_blob_db};
 use crate::commands::*;
 use crate::migrate::migrate_db;
 use crate::query_manager::QueryManager;
@@ -14,6 +15,7 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 mod commands;
 
+pub mod blob_manager;
 mod connection_or_tx;
 pub mod db_context;
 pub mod error;
@@ -50,7 +52,9 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             create_dir_all(app_path.clone()).expect("Problem creating App directory!");
 
             let db_file_path = app_path.join("db.sqlite");
+            let blob_db_file_path = app_path.join("blobs.sqlite");
 
+            // Main database pool
             let manager = SqliteConnectionManager::file(db_file_path);
             let pool = Pool::builder()
                 .max_size(100) // Up from 10 (just in case)
@@ -68,7 +72,26 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 return Err(Box::from(e.to_string()));
             };
 
+            // Blob database pool
+            let blob_manager = SqliteConnectionManager::file(blob_db_file_path);
+            let blob_pool = Pool::builder()
+                .max_size(50)
+                .connection_timeout(Duration::from_secs(10))
+                .build(blob_manager)
+                .unwrap();
+
+            if let Err(e) = migrate_blob_db(&blob_pool) {
+                error!("Failed to run blob database migration {e:?}");
+                app_handle
+                    .dialog()
+                    .message(e.to_string())
+                    .kind(MessageDialogKind::Error)
+                    .blocking_show();
+                return Err(Box::from(e.to_string()));
+            };
+
             app_handle.manage(SqliteConnection::new(pool.clone()));
+            app_handle.manage(BlobManager::new(blob_pool));
 
             {
                 let (tx, rx) = mpsc::channel();

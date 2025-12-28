@@ -5,7 +5,7 @@ import type {
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { format } from 'date-fns';
-import { Fragment, type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
 import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
@@ -20,12 +20,8 @@ interface Props {
   response: HttpResponse;
 }
 
-export function ResponseTimeline({ response }: Props) {
-  return (
-    <Fragment key={response.id}>
-      <Inner response={response} />
-    </Fragment>
-  );
+export function HttpResponseTimeline({ response }: Props) {
+  return <Inner key={response.id} response={response} />;
 }
 
 function Inner({ response }: Props) {
@@ -252,20 +248,6 @@ type EventDisplay = {
 
 function getEventDisplay(event: HttpResponseEventData): EventDisplay {
   switch (event.type) {
-    case 'start_request':
-      return {
-        icon: 'info',
-        color: 'secondary',
-        label: 'Start',
-        summary: 'Request started',
-      };
-    case 'end_request':
-      return {
-        icon: 'info',
-        color: 'secondary',
-        label: 'End',
-        summary: 'Request complete',
-      };
     case 'setting':
       return {
         icon: 'settings',
@@ -321,14 +303,14 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
         icon: 'info',
         color: 'secondary',
         label: 'Chunk',
-        summary: `${event.bytes} bytes sent`,
+        summary: `${formatBytes(event.bytes)} chunk sent`,
       };
     case 'chunk_received':
       return {
         icon: 'info',
         color: 'secondary',
         label: 'Chunk',
-        summary: `${event.bytes} bytes received`,
+        summary: `${formatBytes(event.bytes)} chunk received`,
       };
     default:
       return {
