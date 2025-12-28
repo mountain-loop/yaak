@@ -91,9 +91,9 @@ pub enum InternalEventPayload {
     CallHttpRequestActionRequest(CallHttpRequestActionRequest),
 
     // WebSocket Request Actions
-    GetWebSocketRequestActionsRequest(EmptyPayload),
-    GetWebSocketRequestActionsResponse(GetWebSocketRequestActionsResponse),
-    CallWebSocketRequestActionRequest(CallWebSocketRequestActionRequest),
+    GetWebsocketRequestActionsRequest(EmptyPayload),
+    GetWebsocketRequestActionsResponse(GetWebsocketRequestActionsResponse),
+    CallWebsocketRequestActionRequest(CallWebsocketRequestActionRequest),
 
     // Workspace Actions
     GetWorkspaceActionsRequest(EmptyPayload),
@@ -1143,15 +1143,15 @@ pub struct CallHttpRequestActionArgs {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
-pub struct GetWebSocketRequestActionsResponse {
-    pub actions: Vec<WebSocketRequestAction>,
+pub struct GetWebsocketRequestActionsResponse {
+    pub actions: Vec<WebsocketRequestAction>,
     pub plugin_ref_id: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
-pub struct WebSocketRequestAction {
+pub struct WebsocketRequestAction {
     pub label: String,
     #[ts(optional)]
     pub icon: Option<Icon>,
@@ -1160,16 +1160,16 @@ pub struct WebSocketRequestAction {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
-pub struct CallWebSocketRequestActionRequest {
+pub struct CallWebsocketRequestActionRequest {
     pub index: i32,
     pub plugin_ref_id: String,
-    pub args: CallWebSocketRequestActionArgs,
+    pub args: CallWebsocketRequestActionArgs,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
-pub struct CallWebSocketRequestActionArgs {
+pub struct CallWebsocketRequestActionArgs {
     pub websocket_request: WebsocketRequest,
 }
 

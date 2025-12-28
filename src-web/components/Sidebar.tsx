@@ -38,7 +38,6 @@ import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import { useHotKey } from '../hooks/useHotKey';
 import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { getWebSocketRequestActions } from '../hooks/useWebSocketRequestActions';
-import { getWorkspaceActions } from '../hooks/useWorkspaceActions';
 import { getFolderActions } from '../hooks/useFolderActions';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { getModelAncestors } from '../hooks/useModelAncestors';
@@ -388,24 +387,13 @@ function Sidebar({ className }: { className?: string }) {
             if (request != null) await a.call(request);
           },
         })),
-        ...(items.length === 1 && child.model === 'workspace'
-          ? await getWorkspaceActions()
-          : []
-        ).map((a) => ({
-          label: a.label,
-          leftSlot: <Icon icon={a.icon ?? 'empty'} />,
-          onSelect: async () => {
-            const model = getModel(child.model, child.id);
-            if (model != null) await a.call(model as any);
-          },
-        })),
         ...(items.length === 1 && child.model === 'folder' ? await getFolderActions() : []).map(
           (a) => ({
             label: a.label,
             leftSlot: <Icon icon={a.icon ?? 'empty'} />,
             onSelect: async () => {
-              const model = getModel(child.model, child.id);
-              if (model != null) await a.call(model as any);
+              const model = getModel('folder', child.id);
+              if (model != null) await a.call(model);
             },
           }),
         ),

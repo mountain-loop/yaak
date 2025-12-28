@@ -43,12 +43,12 @@ use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_re
 use yaak_plugins::events::{
     CallFolderActionArgs, CallFolderActionRequest, CallGrpcRequestActionArgs,
     CallGrpcRequestActionRequest, CallHttpRequestActionArgs, CallHttpRequestActionRequest,
-    CallWebSocketRequestActionArgs, CallWebSocketRequestActionRequest, CallWorkspaceActionArgs,
+    CallWebsocketRequestActionArgs, CallWebsocketRequestActionRequest, CallWorkspaceActionArgs,
     CallWorkspaceActionRequest, Color, FilterResponse, GetFolderActionsResponse,
     GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
     GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
     GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse,
-    GetWebSocketRequestActionsResponse, GetWorkspaceActionsResponse, InternalEvent,
+    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, InternalEvent,
     InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose, ShowToastRequest,
 };
 use yaak_plugins::manager::PluginManager;
@@ -880,22 +880,22 @@ async fn cmd_http_request_actions<R: Runtime>(
 async fn cmd_websocket_request_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetWebSocketRequestActionsResponse>> {
+) -> YaakResult<Vec<GetWebsocketRequestActionsResponse>> {
     Ok(plugin_manager.get_websocket_request_actions(&window).await?)
 }
 
 #[tauri::command]
 async fn cmd_call_websocket_request_action<R: Runtime>(
     window: WebviewWindow<R>,
-    req: CallWebSocketRequestActionRequest,
+    req: CallWebsocketRequestActionRequest,
     plugin_manager: State<'_, PluginManager>,
 ) -> YaakResult<()> {
     let websocket_request = window.db().get_websocket_request(&req.args.websocket_request.id)?;
     Ok(plugin_manager
         .call_websocket_request_action(
             &window,
-            CallWebSocketRequestActionRequest {
-                args: CallWebSocketRequestActionArgs { websocket_request },
+            CallWebsocketRequestActionRequest {
+                args: CallWebsocketRequestActionArgs { websocket_request },
                 ..req
             },
         )

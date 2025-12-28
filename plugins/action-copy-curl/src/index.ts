@@ -22,45 +22,6 @@ export const plugin: PluginDefinition = {
       },
     },
   ],
-  websocketRequestActions: [
-    {
-      label: 'Test WebSocket Action',
-      icon: 'bug',
-      async onSelect(ctx, args) {
-        await ctx.toast.show({
-          message: `WebSocket action called for: ${args.websocketRequest.name}`,
-          icon: 'bug',
-          color: 'info',
-        });
-      },
-    },
-  ],
-  workspaceActions: [
-    {
-      label: 'Test Workspace Action',
-      icon: 'bug',
-      async onSelect(ctx, args) {
-        await ctx.toast.show({
-          message: `Workspace action called for: ${args.workspace.name}`,
-          icon: 'bug',
-          color: 'info',
-        });
-      },
-    },
-  ],
-  folderActions: [
-    {
-      label: 'Test Folder Action',
-      icon: 'bug',
-      async onSelect(ctx, args) {
-        await ctx.toast.show({
-          message: `Folder action called for: ${args.folder.name}`,
-          icon: 'bug',
-          color: 'info',
-        });
-      },
-    },
-  ],
 };
 
 export async function convertToCurl(request: Partial<HttpRequest>) {
