@@ -389,8 +389,8 @@ async fn execute_transaction<R: Runtime>(
         }
         Some(SendableBody::Stream(stream)) => {
             // Wrap stream with TeeReader to capture data as it's read
-            // Bounded channel with buffer size of 10 chunks (~10MB) provides backpressure
-            let (body_chunk_tx, body_chunk_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(10);
+            // Use unbounded channel to ensure all data is captured without blocking the HTTP request
+            let (body_chunk_tx, body_chunk_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
             let tee_reader = TeeReader::new(stream, body_chunk_tx);
             let pinned: Pin<Box<dyn AsyncRead + Send + 'static>> = Box::pin(tee_reader);
 
@@ -584,7 +584,7 @@ async fn write_stream_chunks_to_db<R: Runtime>(
     workspace_id: &str,
     response_id: &str,
     update_source: &UpdateSource,
-    mut rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
 ) -> Result<()> {
     let mut buffer = Vec::with_capacity(REQUEST_BODY_CHUNK_SIZE);
     let mut chunk_index = 0;
