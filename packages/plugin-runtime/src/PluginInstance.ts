@@ -689,24 +689,6 @@ export class PluginInstance {
           return result.data as any;
         },
       },
-      file: {
-        writeText: async (filePath: string, content: string) => {
-          const payload: InternalEventPayload = {
-            type: 'write_text_file_request',
-            filePath,
-            content,
-          } as any;
-          await this.#sendForReply(context, payload);
-        },
-        readText: async (filePath: string) => {
-          const payload: InternalEventPayload = {
-            type: 'read_text_file_request',
-            filePath,
-          } as any;
-          const result = await this.#sendForReply<any>(context, payload);
-          return result.content;
-        },
-      },
       store: {
         get: async <T>(key: string) => {
           const payload = { type: 'get_key_value_request', key } as const;
