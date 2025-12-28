@@ -95,28 +95,27 @@ function Part({ part }: { part: MultipartPart }) {
   const mimeType = part.headers.contentType.mediaType ?? null;
   const contentTypeHeader = part.headers.get('content-type');
 
-  // Access arrayBuffer only once and create a copy to avoid detachment issues
-  const arrayBuffer = part.arrayBuffer;
-  const arrayBufferCopy = arrayBuffer.slice(0); // Create a copy
-  const content = new TextDecoder().decode(arrayBufferCopy);
-
-  // Fallback: detect content type from content if not provided
-  const detectedLanguage = languageFromContentType(contentTypeHeader, content);
+  const { uint8Array, content, detectedLanguage } = useMemo(() => {
+    const uint8Array = new Uint8Array(part.arrayBuffer);
+    const content = new TextDecoder().decode(part.arrayBuffer);
+    const detectedLanguage = languageFromContentType(contentTypeHeader, content);
+    return { uint8Array, content, detectedLanguage };
+  }, [part, contentTypeHeader]);
 
   if (mimeType?.match(/^image\/svg/i)) {
     return <SvgViewer text={content} className="pb-2" />;
   }
 
   if (mimeType?.match(/^image/i)) {
-    return <ImageViewer data={arrayBuffer} className="pb-2" />;
+    return <ImageViewer data={part.arrayBuffer} className="pb-2" />;
   }
 
   if (mimeType?.match(/^audio/i)) {
-    return <AudioViewer data={arrayBuffer} />;
+    return <AudioViewer data={uint8Array} />;
   }
 
   if (mimeType?.match(/^video/i)) {
-    return <VideoViewer data={arrayBuffer} />;
+    return <VideoViewer data={uint8Array} />;
   }
 
   if (mimeType?.match(/csv|tab-separated/i)) {
@@ -130,7 +129,7 @@ function Part({ part }: { part: MultipartPart }) {
   if (mimeType?.match(/pdf/i)) {
     return (
       <Suspense fallback={<LoadingIcon />}>
-        <PdfViewer data={arrayBuffer} />
+        <PdfViewer data={uint8Array} />
       </Suspense>
     );
   }

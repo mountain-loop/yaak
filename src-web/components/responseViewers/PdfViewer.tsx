@@ -35,8 +35,10 @@ export function PdfViewer({ bodyPath, data }: Props) {
     if (bodyPath) {
       setSrc(convertFileSrc(bodyPath));
     } else if (data) {
-      // react-pdf accepts { data: Uint8Array } for raw PDF data
-      setSrc({ data });
+      // Create a copy to avoid "Buffer is already detached" errors
+      // This happens when the ArrayBuffer is transferred/detached elsewhere
+      const dataCopy = new Uint8Array(data);
+      setSrc({ data: dataCopy });
     } else {
       setSrc(undefined);
     }
