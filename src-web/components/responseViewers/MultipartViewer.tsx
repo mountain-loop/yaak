@@ -4,10 +4,12 @@ import { languageFromContentType } from '../../lib/contentType';
 import { Icon } from '../core/Icon';
 import { LoadingIcon } from '../core/LoadingIcon';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
+import { AudioViewer } from './AudioViewer';
 import { CsvViewer } from './CsvViewer';
 import { ImageViewer } from './ImageViewer';
 import { SvgViewer } from './SvgViewer';
 import { TextViewer } from './TextViewer';
+import { VideoViewer } from './VideoViewer';
 import { WebPageViewer } from './WebPageViewer';
 
 const PdfViewer = lazy(() => import('./PdfViewer').then((m) => ({ default: m.PdfViewer })));
@@ -77,6 +79,14 @@ function Part({ part }: { part: MultipartPart }) {
 
   if (mimeType?.match(/^image/i)) {
     return <ImageViewer data={part.arrayBuffer} className="pb-2" />;
+  }
+
+  if (mimeType?.match(/^audio/i)) {
+    return <AudioViewer data={part.arrayBuffer} />;
+  }
+
+  if (mimeType?.match(/^video/i)) {
+    return <VideoViewer data={part.arrayBuffer} />;
   }
 
   if (mimeType?.match(/csv|tab-separated/i)) {

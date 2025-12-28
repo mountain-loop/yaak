@@ -4,11 +4,13 @@ import { useHttpRequestBody } from '../hooks/useHttpRequestBody';
 import { getMimeTypeFromContentType, languageFromContentType } from '../lib/contentType';
 import { EmptyStateText } from './EmptyStateText';
 import { LoadingIcon } from './core/LoadingIcon';
+import { AudioViewer } from './responseViewers/AudioViewer';
 import { CsvViewer } from './responseViewers/CsvViewer';
 import { ImageViewer } from './responseViewers/ImageViewer';
 import { MultipartViewer } from './responseViewers/MultipartViewer';
 import { SvgViewer } from './responseViewers/SvgViewer';
 import { TextViewer } from './responseViewers/TextViewer';
+import { VideoViewer } from './responseViewers/VideoViewer';
 import { WebPageViewer } from './responseViewers/WebPageViewer';
 
 const PdfViewer = lazy(() =>
@@ -64,6 +66,14 @@ function RequestBodyViewerInner({ response }: Props) {
 
   if (mimeType?.match(/^image/i)) {
     return <ImageViewer data={body.buffer} />;
+  }
+
+  if (mimeType?.match(/^audio/i)) {
+    return <AudioViewer data={body} />;
+  }
+
+  if (mimeType?.match(/^video/i)) {
+    return <VideoViewer data={body} />;
   }
 
   if (mimeType?.match(/csv|tab-separated/i)) {
