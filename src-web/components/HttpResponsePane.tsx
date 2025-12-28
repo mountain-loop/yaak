@@ -6,6 +6,7 @@ import { useLocalStorage } from 'react-use';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
+import { useResponseBodyText } from '../hooks/useResponseBodyText';
 import { useResponseViewMode } from '../hooks/useResponseViewMode';
 import { getMimeTypeFromContentType } from '../lib/contentType';
 import { getContentTypeFromHeaders } from '../lib/model_util';
@@ -216,7 +217,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                       ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
                         <EventStreamViewer response={activeResponse} />
                       ) : mimeType?.match(/^image\/svg/) ? (
-                        <SvgViewer response={activeResponse} />
+                        <HttpSvgViewer response={activeResponse} />
                       ) : mimeType?.match(/^image/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={ImageViewer} />
                       ) : mimeType?.match(/^audio/i) ? (
@@ -228,7 +229,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                       ) : mimeType?.match(/pdf/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={PdfViewer} />
                       ) : mimeType?.match(/csv|tab-separated/i) ? (
-                        <CsvViewer className="pb-2" response={activeResponse} />
+                        <HttpCsvViewer className="pb-2" response={activeResponse} />
                       ) : (
                         <HTMLOrTextViewer
                           textViewerClassName="-mr-2 bg-surface" // Pull to the right
@@ -283,4 +284,18 @@ function EnsureCompleteResponse({
   }
 
   return <Component bodyPath={response.bodyPath} />;
+}
+
+function HttpSvgViewer({ response }: { response: HttpResponse }) {
+  const body = useResponseBodyText({ response, filter: null });
+
+  if (!body.data) return null;
+
+  return <SvgViewer text={body.data} />;
+}
+
+function HttpCsvViewer({ response, className }: { response: HttpResponse; className?: string }) {
+  const body = useResponseBodyText({ response, filter: null });
+
+  return <CsvViewer text={body.data ?? null} className={className} />;
 }

@@ -2,8 +2,8 @@ import type { HttpResponse } from '@yaakapp-internal/models';
 import { useHttpRequestBody } from '../hooks/useHttpRequestBody';
 import { languageFromContentType } from '../lib/contentType';
 import { EmptyStateText } from './EmptyStateText';
-import { Editor } from './core/Editor/LazyEditor';
 import { LoadingIcon } from './core/LoadingIcon';
+import { TextViewer } from './responseViewers/TextViewer';
 
 interface Props {
   response: HttpResponse;
@@ -42,11 +42,6 @@ function RequestBodyViewerInner({ response }: Props) {
   const language = languageFromContentType(contentType, bodyText);
 
   return (
-    <Editor
-      readOnly
-      defaultValue={bodyText}
-      language={language}
-      stateKey={`request.body.${response.id}`}
-    />
+    <TextViewer text={bodyText} language={language} stateKey={`request.body.${response.id}`} />
   );
 }

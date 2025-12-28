@@ -4,11 +4,11 @@ import { useState } from 'react';
 import { useResponseBodyBytes } from '../../hooks/useResponseBodyText';
 import { getMimeTypeFromContentType, languageFromContentType } from '../../lib/contentType';
 import { getContentTypeFromHeaders } from '../../lib/model_util';
-import { Editor } from '../core/Editor/LazyEditor';
 import { Icon } from '../core/Icon';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
-import { CsvViewerInner } from './CsvViewer';
+import { CsvViewer } from './CsvViewer';
 import { ImageViewer } from './ImageViewer';
+import { TextViewer } from './TextViewer';
 
 interface Props {
   response: HttpResponse;
@@ -75,10 +75,10 @@ function Part({ part }: { part: MultipartPart }) {
 
   if (mimeType?.match(/csv|tab-separated/i)) {
     const content = new TextDecoder().decode(part.arrayBuffer);
-    return <CsvViewerInner text={content} />;
+    return <CsvViewer text={content} />;
   }
 
   const content = new TextDecoder().decode(part.arrayBuffer);
   const language = languageFromContentType(contentType, content);
-  return <Editor readOnly defaultValue={content} language={language} stateKey={null} />;
+  return <TextViewer text={content} language={language} stateKey={null} />;
 }
