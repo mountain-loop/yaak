@@ -1131,6 +1131,7 @@ async fn cmd_send_http_request<R: Runtime>(
     //   that has not yet been saved in the DB.
     request: HttpRequest,
 ) -> YaakResult<HttpResponse> {
+    let blobs = app_handle.blob_manager();
     let response = app_handle.db().upsert_http_response(
         &HttpResponse {
             request_id: request.id.clone(),
@@ -1138,6 +1139,7 @@ async fn cmd_send_http_request<R: Runtime>(
             ..Default::default()
         },
         &UpdateSource::from_window(&window),
+        &blobs,
     )?;
 
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
@@ -1183,6 +1185,7 @@ async fn cmd_send_http_request<R: Runtime>(
                     ..resp
                 },
                 &UpdateSource::from_window(&window),
+                &blobs,
             )?
         }
     };
