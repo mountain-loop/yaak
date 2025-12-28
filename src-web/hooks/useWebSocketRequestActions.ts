@@ -1,24 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import type { WebsocketRequest } from '@yaakapp-internal/models';
 import type {
-  CallWebSocketRequestActionRequest,
-  GetWebSocketRequestActionsResponse,
-  WebSocketRequestAction,
+  CallWebsocketRequestActionRequest,
+  GetWebsocketRequestActionsResponse,
+  WebsocketRequestAction,
 } from '@yaakapp-internal/plugins';
 import { useMemo } from 'react';
 import { invokeCmd } from '../lib/tauri';
 import { usePluginsKey } from './usePlugins';
 
-export type CallableWebSocketRequestAction = Pick<WebSocketRequestAction, 'label' | 'icon'> & {
+export type CallableWebSocketRequestAction = Pick<WebsocketRequestAction, 'label' | 'icon'> & {
   call: (request: WebsocketRequest) => Promise<void>;
 };
 
-export function useWebSocketRequestActions() {
+export function useWebsocketRequestActions() {
   const pluginsKey = usePluginsKey();
 
   const actionsResult = useQuery<CallableWebSocketRequestAction[]>({
     queryKey: ['websocket_request_actions', pluginsKey],
-    queryFn: () => getWebSocketRequestActions(),
+    queryFn: () => getWebsocketRequestActions(),
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: none
@@ -29,16 +29,16 @@ export function useWebSocketRequestActions() {
   return actions;
 }
 
-export async function getWebSocketRequestActions() {
-  const responses = await invokeCmd<GetWebSocketRequestActionsResponse[]>(
+export async function getWebsocketRequestActions() {
+  const responses = await invokeCmd<GetWebsocketRequestActionsResponse[]>(
     'cmd_websocket_request_actions',
   );
   const actions = responses.flatMap((r) =>
-    r.actions.map((a, i) => ({
+    r.actions.map((a: WebsocketRequestAction, i: number) => ({
       label: a.label,
       icon: a.icon,
       call: async (websocketRequest: WebsocketRequest) => {
-        const payload: CallWebSocketRequestActionRequest = {
+        const payload: CallWebsocketRequestActionRequest = {
           index: i,
           pluginRefId: r.pluginRefId,
           args: { websocketRequest },
