@@ -1,6 +1,7 @@
 import { type MultipartPart, parseMultipart } from '@mjackson/multipart-parser';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { languageFromContentType } from '../../lib/contentType';
+import { Banner } from '../core/Banner';
 import { Icon } from '../core/Icon';
 import { LoadingIcon } from '../core/LoadingIcon';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
@@ -23,9 +24,34 @@ interface Props {
 export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Props) {
   const [tab, setTab] = useState<string>();
 
-  const maxFileSize = 1024 * 1024 * 10; // 10MB
-  const parsed = parseMultipart(data, { boundary, maxFileSize });
-  const parts = Array.from(parsed);
+  const parseResult = useMemo(() => {
+    try {
+      const maxFileSize = 1024 * 1024 * 10; // 10MB
+      const parsed = parseMultipart(data, { boundary, maxFileSize });
+      const parts = Array.from(parsed);
+      return { parts, error: null };
+    } catch (err) {
+      return { parts: [], error: err instanceof Error ? err.message : String(err) };
+    }
+  }, [data, boundary]);
+
+  const { parts, error } = parseResult;
+
+  if (error) {
+    return (
+      <Banner color="danger" className="m-3">
+        Failed to parse multipart data: {error}
+      </Banner>
+    );
+  }
+
+  if (parts.length === 0) {
+    return (
+      <Banner color="info" className="m-3">
+        No multipart parts found
+      </Banner>
+    );
+  }
 
   return (
     <Tabs
