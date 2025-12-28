@@ -10,7 +10,6 @@ import {
   GrpcRequestAction,
   HttpAuthenticationAction,
   HttpRequestAction,
-  HttpCollectionAction,
   InternalEvent,
   InternalEventPayload,
   ListCookieNamesResponse,
