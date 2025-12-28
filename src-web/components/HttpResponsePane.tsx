@@ -224,7 +224,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                         <EnsureCompleteResponse response={activeResponse} Component={AudioViewer} />
                       ) : mimeType?.match(/^video/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={VideoViewer} />
-                      ) : mimeType?.match(/^multipart/i) ? (
+                      ) : mimeType?.match(/^multipart/i) && viewMode === 'pretty' ? (
                         <MultipartViewer response={activeResponse} />
                       ) : mimeType?.match(/pdf/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={PdfViewer} />

@@ -8,7 +8,9 @@ import { Icon } from '../core/Icon';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { CsvViewer } from './CsvViewer';
 import { ImageViewer } from './ImageViewer';
+import { SvgViewer } from './SvgViewer';
 import { TextViewer } from './TextViewer';
+import { WebPageViewer } from './WebPageViewer';
 
 interface Props {
   response: HttpResponse;
@@ -47,7 +49,7 @@ export function MultipartViewer({ response }: Props) {
               />
             </div>
           ) : part.filename ? (
-            <Icon icon="file_text" />
+            <Icon icon="table" />
           ) : null,
       }))}
     >
@@ -66,19 +68,28 @@ export function MultipartViewer({ response }: Props) {
 }
 
 function Part({ part }: { part: MultipartPart }) {
-  const contentType = part.headers.get('content-type');
-  const mimeType = contentType == null ? null : getMimeTypeFromContentType(contentType).essence;
+  const mimeType = part.headers.contentType.mediaType ?? null;
+  const contentTypeHeader = part.headers.get('content-type');
+  const content = new TextDecoder().decode(part.arrayBuffer);
+
+  // Fallback: detect content type from content if not provided
+  const detectedLanguage = languageFromContentType(contentTypeHeader, content);
+
+  if (mimeType?.match(/^image\/svg/i)) {
+    return <SvgViewer text={content} className="pb-2" />;
+  }
 
   if (mimeType?.match(/^image/i)) {
     return <ImageViewer data={part.arrayBuffer} className="pb-2" />;
   }
 
   if (mimeType?.match(/csv|tab-separated/i)) {
-    const content = new TextDecoder().decode(part.arrayBuffer);
     return <CsvViewer text={content} />;
   }
 
-  const content = new TextDecoder().decode(part.arrayBuffer);
-  const language = languageFromContentType(contentType, content);
-  return <TextViewer text={content} language={language} stateKey={null} />;
+  if (mimeType?.match(/^text\/html/i) || detectedLanguage === 'html') {
+    return <WebPageViewer html={content} />;
+  }
+
+  return <TextViewer text={content} language={detectedLanguage} stateKey={null} />;
 }
