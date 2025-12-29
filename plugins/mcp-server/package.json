@@ -1,0 +1,27 @@
+{
+  "name": "@yaak/mcp-server",
+  "displayName": "MCP Server",
+  "description": "Expose Yaak functionality via Model Context Protocol",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mountain-loop/yaak.git",
+    "directory": "plugins/mcp-server"
+  },
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev"
+  },
+  "dependencies": {
+    "@hono/mcp": "^0.2.3",
+    "@hono/node-server": "^1.19.7",
+    "@modelcontextprotocol/sdk": "^1.25.1",
+    "hono": "^4.11.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3"
+  }
+}
