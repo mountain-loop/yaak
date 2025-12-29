@@ -1,14 +1,14 @@
 {
-  "name": "@yaak/mcp-server",
+  "name": "@yaakapp/mcp-server",
+  "private": true,
+  "version": "0.1.0",
   "displayName": "MCP Server",
   "description": "Expose Yaak functionality via Model Context Protocol",
   "repository": {
     "type": "git",
     "url": "https://github.com/mountain-loop/yaak.git",
-    "directory": "plugins/mcp-server"
+    "directory": "plugins-external/mcp-server"
   },
-  "private": true,
-  "version": "0.1.0",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"
