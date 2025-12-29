@@ -114,11 +114,9 @@ impl CookieStore {
                 let domain_lower = domain.to_lowercase();
                 url_host == domain_lower || url_host.ends_with(&format!(".{}", domain_lower))
             }
-            CookieDomain::NotPresent => {
-                // When domain is not present, it's a host-only cookie for the request host
-                true
-            }
-            CookieDomain::Empty => false,
+            // NotPresent and Empty should never occur in practice since we always set domain
+            // when parsing Set-Cookie headers. Treat as non-matching to be safe.
+            CookieDomain::NotPresent | CookieDomain::Empty => false,
         };
 
         if !domain_matches {
