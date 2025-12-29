@@ -37,13 +37,6 @@ impl CookieStore {
         self.cookies.lock().unwrap().clone()
     }
 
-    /// Get cookies that should be sent for the given URL
-    pub fn get_cookies_for_url(&self, url: &Url) -> Vec<(&str, &str)> {
-        // We need to return owned data since we're borrowing from the mutex
-        // This method will be used differently - see get_cookie_header instead
-        Vec::new()
-    }
-
     /// Get the Cookie header value for the given URL
     pub fn get_cookie_header(&self, url: &Url) -> Option<String> {
         let cookies = self.cookies.lock().unwrap();
