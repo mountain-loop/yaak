@@ -1,23 +1,33 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 import type { McpServerContext } from '../types.js';
+import { getWorkspaceContext } from './helpers.js';
 
-export const listFoldersTool = {
-  name: 'list_folders',
-  config: {
-    title: 'List Folders',
-    description: 'List all folders in the current workspace',
-    inputSchema: z.object({}),
-  },
-  handler: async (_args: Record<string, never>, ctx: McpServerContext) => {
-    const folders = await ctx.yaak.folder.list();
+export function registerFolderTools(server: McpServer, ctx: McpServerContext) {
+  server.registerTool(
+    'list_folders',
+    {
+      title: 'List Folders',
+      description: 'List all folders in a workspace',
+      inputSchema: z.object({
+        workspaceId: z
+          .string()
+          .optional()
+          .describe('Workspace ID (required if multiple workspaces are open)'),
+      }),
+    },
+    async ({ workspaceId }) => {
+      const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
+      const folders = await workspaceCtx.yaak.folder.list();
 
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(folders, null, 2),
-        },
-      ],
-    };
-  },
-};
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(folders, null, 2),
+          },
+        ],
+      };
+    },
+  );
+}

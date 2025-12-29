@@ -21,10 +21,10 @@ use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, ErrorResponse, FindHttpResponsesResponse,
     GetCookieValueResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent,
-    InternalEventPayload, ListCookieNamesResponse, ListHttpRequestsResponse,
+    InternalEventPayload, ListCookieNamesResponse, ListHttpRequestsResponse, ListWorkspacesResponse,
     RenderGrpcRequestResponse, RenderHttpRequestResponse, SendHttpRequestResponse,
     SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse, WindowInfoResponse,
-    WindowNavigateEvent,
+    WindowNavigateEvent, WorkspaceInfo,
 };
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -379,6 +379,24 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 request_id,
                 workspace_id,
                 environment_id,
+            })))
+        }
+
+        InternalEventPayload::ListWorkspacesRequest(_) => {
+            let mut workspaces = Vec::new();
+
+            for (_, window) in app_handle.webview_windows() {
+                if let Some(workspace) = workspace_from_window(&window) {
+                    workspaces.push(WorkspaceInfo {
+                        id: workspace.id.clone(),
+                        name: workspace.name.clone(),
+                        label: window.label().to_string(),
+                    });
+                }
+            }
+
+            Ok(Some(InternalEventPayload::ListWorkspacesResponse(ListWorkspacesResponse {
+                workspaces,
             })))
         }
 

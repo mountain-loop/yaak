@@ -13,6 +13,7 @@ import {
   InternalEvent,
   InternalEventPayload,
   ListCookieNamesResponse,
+  ListWorkspacesResponse,
   PluginContext,
   PromptTextResponse,
   RenderGrpcRequestResponse,
@@ -766,6 +767,29 @@ export class PluginInstance {
       plugin: {
         reload: () => {
           this.#sendPayload(context, { type: 'reload_response', silent: true }, null);
+        },
+      },
+      workspace: {
+        list: async () => {
+          const payload = {
+            type: 'list_workspaces_request'
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<ListWorkspacesResponse>(context, payload);
+          return response.workspaces.map((w) => ({
+            id: w.id,
+            name: w.name,
+            // Hide label from plugin authors, but keep it for internal routing
+            _label: (w as any).label as string,
+          }));
+        },
+        withContext: (workspaceHandle: { id: string; name: string; _label?: string }) => {
+          // Create a new context with the workspace's window label
+          const newContext: PluginContext = {
+            ...context,
+            label: workspaceHandle._label || null,
+            workspaceId: workspaceHandle.id,
+          };
+          return this.#newCtx(newContext);
         },
       },
     };

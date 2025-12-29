@@ -1,3 +1,4 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Color, Icon } from '@yaakapp/api';
 import * as z from 'zod/v4';
 import type { McpServerContext } from '../types.js';
@@ -24,41 +25,35 @@ const COLOR_VALUES = [
   'danger',
 ] as const satisfies readonly Color[];
 
-export const showToastTool = {
-  name: 'show_toast',
-  config: {
-    title: 'Show Toast',
-    description: 'Show a toast notification in Yaak',
-    inputSchema: z.object({
-      message: z.string().describe('The message to display'),
-      icon: z.enum(ICON_VALUES).optional().describe('Icon name'),
-      color: z.enum(COLOR_VALUES).optional().describe('Toast color'),
-      timeout: z.number().optional().describe('Timeout in milliseconds'),
-    }),
-  },
-  handler: async (
+export function registerToastTools(server: McpServer, ctx: McpServerContext) {
+  server.registerTool(
+    'show_toast',
     {
-      message,
-      icon,
-      color,
-      timeout,
-    }: { message: string; icon?: Icon; color?: Color; timeout?: number },
-    ctx: McpServerContext,
-  ) => {
-    await ctx.yaak.toast.show({
-      message,
-      icon,
-      color,
-      timeout,
-    });
+      title: 'Show Toast',
+      description: 'Show a toast notification in Yaak',
+      inputSchema: z.object({
+        message: z.string().describe('The message to display'),
+        icon: z.enum(ICON_VALUES).optional().describe('Icon name'),
+        color: z.enum(COLOR_VALUES).optional().describe('Toast color'),
+        timeout: z.number().optional().describe('Timeout in milliseconds'),
+      }),
+    },
+    async ({ message, icon, color, timeout }) => {
+      await ctx.yaak.toast.show({
+        message,
+        icon,
+        color,
+        timeout,
+      });
 
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `✓ Toast shown: "${message}"`,
-        },
-      ],
-    };
-  },
-};
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `✓ Toast shown: "${message}"`,
+          },
+        ],
+      };
+    },
+  );
+}

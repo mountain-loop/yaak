@@ -21,8 +21,11 @@ import type {
   SendHttpRequestResponse,
   ShowToastRequest,
   TemplateRenderRequest,
+  WorkspaceInfo,
 } from '../bindings/gen_events.ts';
 import type { JsonValue } from '../bindings/serde_json/JsonValue';
+
+export type WorkspaceHandle = Pick<WorkspaceInfo, 'id' | 'name'>;
 
 export interface Context {
   clipboard: {
@@ -74,5 +77,9 @@ export interface Context {
   };
   plugin: {
     reload(): void;
+  };
+  workspace: {
+    list(): Promise<WorkspaceHandle[]>;
+    withContext(handle: WorkspaceHandle): Context;
   };
 }

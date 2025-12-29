@@ -1,9 +1,14 @@
+import { serve } from '@hono/node-server';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { Hono } from 'hono';
-import { serve } from '@hono/node-server';
+import { registerClipboardTools } from './tools/clipboard.js';
+import { registerFolderTools } from './tools/folder.js';
+import { registerHttpRequestTools } from './tools/httpRequest.js';
+import { registerToastTools } from './tools/toast.js';
+import { registerWindowTools } from './tools/window.js';
+import { registerWorkspaceTools } from './tools/workspace.js';
 import type { McpServerContext } from './types.js';
-import * as tools from './tools/index.js';
 
 export function createMcpServer(ctx: McpServerContext, port: number) {
   const server = new McpServer({
@@ -12,20 +17,12 @@ export function createMcpServer(ctx: McpServerContext, port: number) {
   });
 
   // Register all tools
-  const allTools = [
-    tools.showToastTool,
-    tools.copyToClipboardTool,
-    tools.listHttpRequestsTool,
-    tools.getHttpRequestTool,
-    tools.sendHttpRequestTool,
-    tools.listFoldersTool,
-    tools.getWorkspaceIdTool,
-    tools.getEnvironmentIdTool,
-  ];
-
-  for (const tool of allTools) {
-    server.registerTool(tool.name, tool.config, (args) => tool.handler(args, ctx));
-  }
+  registerToastTools(server, ctx);
+  registerClipboardTools(server, ctx);
+  registerHttpRequestTools(server, ctx);
+  registerFolderTools(server, ctx);
+  registerWindowTools(server, ctx);
+  registerWorkspaceTools(server, ctx);
 
   // Create a stateless transport
   const transport = new WebStandardStreamableHTTPServerTransport();
