@@ -1,4 +1,6 @@
 import type {
+  DeleteModelRequest,
+  DeleteModelResponse,
   FindHttpResponsesRequest,
   FindHttpResponsesResponse,
   GetCookieValueRequest,
@@ -21,8 +23,11 @@ import type {
   SendHttpRequestResponse,
   ShowToastRequest,
   TemplateRenderRequest,
+  UpsertModelRequest,
+  UpsertModelResponse,
   WorkspaceInfo,
 } from '../bindings/gen_events.ts';
+import type { HttpRequest } from '../bindings/gen_models.ts';
 import type { JsonValue } from '../bindings/serde_json/JsonValue';
 
 export type WorkspaceHandle = Pick<WorkspaceInfo, 'id' | 'name'>;
@@ -65,6 +70,15 @@ export interface Context {
     getById(args: GetHttpRequestByIdRequest): Promise<GetHttpRequestByIdResponse['httpRequest']>;
     render(args: RenderHttpRequestRequest): Promise<RenderHttpRequestResponse['httpRequest']>;
     list(args?: ListHttpRequestsRequest): Promise<ListHttpRequestsResponse['httpRequests']>;
+    create(
+      args: Omit<Partial<HttpRequest>, 'id' | 'model' | 'createdAt' | 'updatedAt'> &
+        Pick<HttpRequest, 'workspaceId' | 'url'>,
+    ): Promise<HttpRequest>;
+    update(
+      args: Omit<Partial<HttpRequest>, 'model' | 'createdAt' | 'updatedAt'> &
+        Pick<HttpRequest, 'id'>,
+    ): Promise<HttpRequest>;
+    delete(args: { id: string }): Promise<HttpRequest>;
   };
   folder: {
     list(args?: ListFoldersRequest): Promise<ListFoldersResponse['folders']>;

@@ -92,4 +92,130 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       };
     },
   );
+
+  server.registerTool(
+    'create_http_request',
+    {
+      title: 'Create HTTP Request',
+      description: 'Create a new HTTP request',
+      inputSchema: z.object({
+        workspaceId: z
+          .string()
+          .optional()
+          .describe('Workspace ID (required if multiple workspaces are open)'),
+        name: z
+          .string()
+          .optional()
+          .describe('Request name (empty string to auto-generate from URL)'),
+        url: z.string().describe('Request URL'),
+        method: z.string().optional().describe('HTTP method (defaults to GET)'),
+        folderId: z.string().optional().describe('Parent folder ID'),
+        description: z.string().optional().describe('Request description'),
+        headers: z
+          .array(
+            z.object({
+              name: z.string(),
+              value: z.string(),
+              enabled: z.boolean().default(true),
+            }),
+          )
+          .optional()
+          .describe('Request headers'),
+        urlParameters: z
+          .array(
+            z.object({
+              name: z.string(),
+              value: z.string(),
+              enabled: z.boolean().default(true),
+            }),
+          )
+          .optional()
+          .describe('URL query parameters'),
+      }),
+    },
+    async ({ workspaceId, ...args }) => {
+      const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
+
+      // Get workspace ID from the workspace list
+      const workspaces = await workspaceCtx.yaak.workspace.list();
+      if (workspaces.length === 0) {
+        throw new Error('No workspace is open');
+      }
+      const actualWorkspaceId = workspaceId ?? workspaces[0]?.id;
+      if (!actualWorkspaceId) {
+        throw new Error('No workspace is open');
+      }
+
+      const httpRequest = await workspaceCtx.yaak.httpRequest.create({
+        workspaceId: actualWorkspaceId,
+        ...args,
+      });
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(httpRequest, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'update_http_request',
+    {
+      title: 'Update HTTP Request',
+      description: 'Update an existing HTTP request',
+      inputSchema: z.object({
+        id: z.string().describe('HTTP request ID to update'),
+        workspaceId: z.string().describe('Workspace ID'),
+        name: z.string().optional().describe('Request name'),
+        url: z.string().optional().describe('Request URL'),
+        method: z.string().optional().describe('HTTP method'),
+        folderId: z.string().optional().describe('Parent folder ID'),
+        description: z.string().optional().describe('Request description'),
+        headers: z
+          .array(
+            z.object({
+              name: z.string(),
+              value: z.string(),
+              enabled: z.boolean().default(true),
+            }),
+          )
+          .optional()
+          .describe('Request headers'),
+        urlParameters: z
+          .array(
+            z.object({
+              name: z.string(),
+              value: z.string(),
+              enabled: z.boolean().default(true),
+            }),
+          )
+          .optional()
+          .describe('URL query parameters'),
+      }),
+    },
+    async ({ id, ...updates }) => {
+      const httpRequest = await ctx.yaak.httpRequest.update({ id, ...updates });
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(httpRequest, null, 2) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'delete_http_request',
+    {
+      title: 'Delete HTTP Request',
+      description: 'Delete an HTTP request by ID',
+      inputSchema: z.object({
+        id: z.string().describe('HTTP request ID to delete'),
+      }),
+    },
+    async ({ id }) => {
+      const httpRequest = await ctx.yaak.httpRequest.delete({ id });
+      return {
+        content: [
+          { type: 'text' as const, text: `Deleted: ${httpRequest.name} (${httpRequest.id})` },
+        ],
+      };
+    },
+  );
 }

@@ -2,6 +2,7 @@ import { applyFormInputDefaults, validateTemplateFunctionArgs } from '@yaakapp-i
 import {
   BootRequest,
   DeleteKeyValueResponse,
+  DeleteModelResponse,
   FindHttpResponsesResponse,
   GetCookieValueRequest,
   GetCookieValueResponse,
@@ -9,6 +10,7 @@ import {
   GetKeyValueResponse,
   GrpcRequestAction,
   HttpAuthenticationAction,
+  HttpRequest,
   HttpRequestAction,
   InternalEvent,
   InternalEventPayload,
@@ -21,6 +23,7 @@ import {
   SendHttpRequestResponse,
   TemplateFunction,
   TemplateRenderResponse,
+  UpsertModelResponse,
   WindowInfoResponse,
 } from '@yaakapp-internal/plugins';
 import { Context, PluginDefinition } from '@yaakapp/api';
@@ -706,6 +709,40 @@ export class PluginInstance {
           } as any;
           const { httpRequests } = await this.#sendForReply<any>(context, payload);
           return httpRequests as any[];
+        },
+        create: async (args) => {
+          const payload = {
+            type: 'upsert_model_request',
+            model: {
+              name: '',
+              method: 'GET',
+              ...args,
+              id: '',
+              model: 'http_request',
+            },
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
+          return response.model as HttpRequest;
+        },
+        update: async (args) => {
+          const payload = {
+            type: 'upsert_model_request',
+            model: {
+              model: 'http_request',
+              ...args,
+            },
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
+          return response.model as HttpRequest;
+        },
+        delete: async (args) => {
+          const payload = {
+            type: 'delete_model_request',
+            model: 'http_request',
+            id: args.id,
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<DeleteModelResponse>(context, payload);
+          return response.model as HttpRequest;
         },
       },
       folder: {

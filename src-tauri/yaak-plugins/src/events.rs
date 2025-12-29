@@ -4,7 +4,8 @@ use tauri::{Runtime, WebviewWindow};
 use ts_rs::TS;
 use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::models::{
-    Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest, Workspace,
+    AnyModel, Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest,
+    Workspace,
 };
 use yaak_models::util::generate_prefixed_id;
 
@@ -173,6 +174,12 @@ pub enum InternalEventPayload {
     ListHttpRequestsResponse(ListHttpRequestsResponse),
     ListFoldersRequest(ListFoldersRequest),
     ListFoldersResponse(ListFoldersResponse),
+
+    UpsertModelRequest(UpsertModelRequest),
+    UpsertModelResponse(UpsertModelResponse),
+
+    DeleteModelRequest(DeleteModelRequest),
+    DeleteModelResponse(DeleteModelResponse),
 
     GetThemesRequest(GetThemesRequest),
     GetThemesResponse(GetThemesResponse),
@@ -1353,6 +1360,35 @@ pub struct ListFoldersRequest {}
 #[ts(export, export_to = "gen_events.ts")]
 pub struct ListFoldersResponse {
     pub folders: Vec<Folder>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct UpsertModelRequest {
+    pub model: AnyModel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct UpsertModelResponse {
+    pub model: AnyModel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct DeleteModelRequest {
+    pub model: String,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct DeleteModelResponse {
+    pub model: AnyModel,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
