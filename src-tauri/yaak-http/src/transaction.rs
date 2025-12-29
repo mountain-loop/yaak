@@ -264,7 +264,6 @@ mod tests {
     use crate::decompress::ContentEncoding;
     use crate::sender::{HttpResponseEvent, HttpSender};
     use async_trait::async_trait;
-    use std::collections::HashMap;
     use std::pin::Pin;
     use std::sync::Arc;
     use tokio::io::AsyncRead;
@@ -277,7 +276,7 @@ mod tests {
 
     struct MockResponse {
         status: u16,
-        headers: HashMap<String, String>,
+        headers: Vec<(String, String)>,
         body: Vec<u8>,
     }
 
@@ -306,7 +305,7 @@ mod tests {
                     mock.status,
                     None, // status_reason
                     mock.headers,
-                    HashMap::new(),
+                    vec![],
                     None,                              // content_length
                     "https://example.com".to_string(), // url
                     None,                              // remote_addr
@@ -320,7 +319,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_no_redirect() {
-        let response = MockResponse { status: 200, headers: HashMap::new(), body: b"OK".to_vec() };
+        let response = MockResponse { status: 200, headers: vec![], body: b"OK".to_vec() };
         let sender = MockSender::new(vec![response]);
         let transaction = HttpTransaction::new(sender);
 
@@ -343,12 +342,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_single_redirect() {
-        let mut redirect_headers = HashMap::new();
-        redirect_headers.insert("Location".to_string(), "https://example.com/new".to_string());
+        let redirect_headers = vec![("Location".to_string(), "https://example.com/new".to_string())];
 
         let responses = vec![
             MockResponse { status: 302, headers: redirect_headers, body: vec![] },
-            MockResponse { status: 200, headers: HashMap::new(), body: b"Final".to_vec() },
+            MockResponse { status: 200, headers: vec![], body: b"Final".to_vec() },
         ];
 
         let sender = MockSender::new(responses);
@@ -375,8 +373,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_max_redirects_exceeded() {
-        let mut redirect_headers = HashMap::new();
-        redirect_headers.insert("Location".to_string(), "https://example.com/loop".to_string());
+        let redirect_headers = vec![("Location".to_string(), "https://example.com/loop".to_string())];
 
         // Create more redirects than allowed
         let responses: Vec<MockResponse> = (0..12)
@@ -474,8 +471,8 @@ mod tests {
                 Ok(HttpResponse::new(
                     200,
                     None,
-                    HashMap::new(),
-                    HashMap::new(),
+                    vec![],
+                    vec![],
                     None,
                     "https://example.com".to_string(),
                     None,
@@ -528,8 +525,7 @@ mod tests {
                 _request: SendableHttpRequest,
                 _event_tx: mpsc::Sender<HttpResponseEvent>,
             ) -> Result<HttpResponse> {
-                let mut headers = HashMap::new();
-                headers.insert("set-cookie".to_string(), "session=xyz789; Path=/".to_string());
+                let headers = vec![("set-cookie".to_string(), "session=xyz789; Path=/".to_string())];
 
                 let body_stream: Pin<Box<dyn AsyncRead + Send>> =
                     Box::pin(std::io::Cursor::new(vec![]));
@@ -537,7 +533,7 @@ mod tests {
                     200,
                     None,
                     headers,
-                    HashMap::new(),
+                    vec![],
                     None,
                     "https://example.com".to_string(),
                     None,
@@ -570,6 +566,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_multiple_set_cookie_headers() {
+        // This test verifies that multiple Set-Cookie headers are preserved
+        // (previously they were lost due to using HashMap instead of Vec)
+        let cookie_store = CookieStore::new();
+
+        struct MultipleSetCookieSender;
+
+        #[async_trait]
+        impl HttpSender for MultipleSetCookieSender {
+            async fn send(
+                &self,
+                _request: SendableHttpRequest,
+                _event_tx: mpsc::Sender<HttpResponseEvent>,
+            ) -> Result<HttpResponse> {
+                // Return multiple Set-Cookie headers (common in real-world responses)
+                let headers = vec![
+                    ("set-cookie".to_string(), "session_id=abc123; Path=/".to_string()),
+                    ("set-cookie".to_string(), "preferences=dark_mode; Path=/".to_string()),
+                    ("set-cookie".to_string(), "tracking=xyz789; Path=/".to_string()),
+                ];
+
+                let body_stream: Pin<Box<dyn AsyncRead + Send>> =
+                    Box::pin(std::io::Cursor::new(vec![]));
+                Ok(HttpResponse::new(
+                    200,
+                    None,
+                    headers,
+                    vec![],
+                    None,
+                    "https://example.com".to_string(),
+                    None,
+                    Some("HTTP/1.1".to_string()),
+                    body_stream,
+                    ContentEncoding::Identity,
+                ))
+            }
+        }
+
+        let sender = MultipleSetCookieSender;
+        let transaction = HttpTransaction::with_cookie_store(sender, cookie_store.clone());
+
+        let request = SendableHttpRequest {
+            url: "https://example.com/api".to_string(),
+            method: "GET".to_string(),
+            headers: vec![],
+            ..Default::default()
+        };
+
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let (event_tx, _event_rx) = mpsc::channel(100);
+        let result = transaction.execute_with_cancellation(request, rx, event_tx).await;
+        assert!(result.is_ok());
+
+        // Verify all three cookies were stored (this would fail with HashMap)
+        let cookies = cookie_store.get_all_cookies();
+        assert_eq!(cookies.len(), 3, "All three Set-Cookie headers should be preserved");
+
+        // Verify each cookie is present
+        let cookie_values: Vec<&str> = cookies.iter().map(|c| c.raw_cookie.as_str()).collect();
+        assert!(
+            cookie_values.iter().any(|c| c.contains("session_id=abc123")),
+            "session_id cookie should be present"
+        );
+        assert!(
+            cookie_values.iter().any(|c| c.contains("preferences=dark_mode")),
+            "preferences cookie should be present"
+        );
+        assert!(
+            cookie_values.iter().any(|c| c.contains("tracking=xyz789")),
+            "tracking cookie should be present"
+        );
+    }
+
+    #[tokio::test]
     async fn test_cookies_across_redirects() {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -595,9 +665,10 @@ mod tests {
 
                 let (status, headers) = if count == 0 {
                     // First request: return redirect with Set-Cookie
-                    let mut h = HashMap::new();
-                    h.insert("location".to_string(), "https://example.com/final".to_string());
-                    h.insert("set-cookie".to_string(), "redirect_cookie=value1".to_string());
+                    let h = vec![
+                        ("location".to_string(), "https://example.com/final".to_string()),
+                        ("set-cookie".to_string(), "redirect_cookie=value1".to_string()),
+                    ];
                     (302, h)
                 } else {
                     // Second request: verify cookie was sent
@@ -610,7 +681,7 @@ mod tests {
                         "Redirect cookie should be included"
                     );
 
-                    (200, HashMap::new())
+                    (200, vec![])
                 };
 
                 let body_stream: Pin<Box<dyn AsyncRead + Send>> =
@@ -619,7 +690,7 @@ mod tests {
                     status,
                     None,
                     headers,
-                    HashMap::new(),
+                    vec![],
                     None,
                     "https://example.com".to_string(),
                     None,
