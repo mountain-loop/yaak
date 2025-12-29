@@ -31,7 +31,11 @@ impl<S: HttpSender> HttpTransaction<S> {
     }
 
     /// Create a new transaction with custom max redirects and a cookie store
-    pub fn with_options(sender: S, max_redirects: usize, cookie_store: Option<CookieStore>) -> Self {
+    pub fn with_options(
+        sender: S,
+        max_redirects: usize,
+        cookie_store: Option<CookieStore>,
+    ) -> Self {
         Self { sender, max_redirects, cookie_store }
     }
 
@@ -456,10 +460,8 @@ mod tests {
                 _event_tx: mpsc::Sender<HttpResponseEvent>,
             ) -> Result<HttpResponse> {
                 // Verify the Cookie header was injected
-                let cookie_header = request
-                    .headers
-                    .iter()
-                    .find(|(k, _)| k.eq_ignore_ascii_case("cookie"));
+                let cookie_header =
+                    request.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("cookie"));
 
                 assert!(cookie_header.is_some(), "Cookie header should be present");
                 assert!(
@@ -599,15 +601,10 @@ mod tests {
                     (302, h)
                 } else {
                     // Second request: verify cookie was sent
-                    let cookie_header = request
-                        .headers
-                        .iter()
-                        .find(|(k, _)| k.eq_ignore_ascii_case("cookie"));
+                    let cookie_header =
+                        request.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("cookie"));
 
-                    assert!(
-                        cookie_header.is_some(),
-                        "Cookie header should be present on redirect"
-                    );
+                    assert!(cookie_header.is_some(), "Cookie header should be present on redirect");
                     assert!(
                         cookie_header.unwrap().1.contains("redirect_cookie=value1"),
                         "Redirect cookie should be included"

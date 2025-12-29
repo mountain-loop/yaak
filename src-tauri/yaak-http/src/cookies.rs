@@ -141,11 +141,7 @@ fn parse_cookie_name_value(raw_cookie: &str) -> Option<(String, String)> {
     let name = parts.next()?.trim().to_string();
     let value = parts.next().unwrap_or("").trim().to_string();
 
-    if name.is_empty() {
-        None
-    } else {
-        Some((name, value))
-    }
+    if name.is_empty() { None } else { Some((name, value)) }
 }
 
 /// Parse a Set-Cookie header into a Cookie
@@ -202,11 +198,7 @@ fn default_cookie_path(request_path: &str) -> String {
 
     // Find the last slash
     if let Some(last_slash) = request_path.rfind('/') {
-        if last_slash == 0 {
-            "/".to_string()
-        } else {
-            request_path[..last_slash].to_string()
-        }
+        if last_slash == 0 { "/".to_string() } else { request_path[..last_slash].to_string() }
     } else {
         "/".to_string()
     }
@@ -273,10 +265,7 @@ mod tests {
             parse_cookie_name_value("name=value; Path=/; HttpOnly"),
             Some(("name".to_string(), "value".to_string()))
         );
-        assert_eq!(
-            parse_cookie_name_value("empty="),
-            Some(("empty".to_string(), "".to_string()))
-        );
+        assert_eq!(parse_cookie_name_value("empty="), Some(("empty".to_string(), "".to_string())));
         assert_eq!(parse_cookie_name_value(""), None);
     }
 

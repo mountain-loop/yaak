@@ -244,8 +244,14 @@ async fn send_http_request_inner<R: Runtime>(
     .await?;
 
     let cookie_store = maybe_cookie_store.as_ref().map(|(cs, _)| cs.clone());
-    let result =
-        execute_transaction(client, sendable_request, response_ctx, cancelled_rx.clone(), cookie_store).await;
+    let result = execute_transaction(
+        client,
+        sendable_request,
+        response_ctx,
+        cancelled_rx.clone(),
+        cookie_store,
+    )
+    .await;
 
     // Wait for blob writing to complete and check for errors
     let final_result = match result {
