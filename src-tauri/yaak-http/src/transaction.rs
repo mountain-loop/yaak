@@ -1,24 +1,38 @@
+use crate::cookies::CookieStore;
 use crate::error::Result;
 use crate::sender::{HttpResponse, HttpResponseEvent, HttpSender, RedirectBehavior};
 use crate::types::SendableHttpRequest;
+use log::debug;
 use tokio::sync::mpsc;
 use tokio::sync::watch::Receiver;
+use url::Url;
 
 /// HTTP Transaction that manages the lifecycle of a request, including redirect handling
 pub struct HttpTransaction<S: HttpSender> {
     sender: S,
     max_redirects: usize,
+    cookie_store: Option<CookieStore>,
 }
 
 impl<S: HttpSender> HttpTransaction<S> {
     /// Create a new transaction with default settings
     pub fn new(sender: S) -> Self {
-        Self { sender, max_redirects: 10 }
+        Self { sender, max_redirects: 10, cookie_store: None }
     }
 
     /// Create a new transaction with custom max redirects
     pub fn with_max_redirects(sender: S, max_redirects: usize) -> Self {
-        Self { sender, max_redirects }
+        Self { sender, max_redirects, cookie_store: None }
+    }
+
+    /// Create a new transaction with a cookie store
+    pub fn with_cookie_store(sender: S, cookie_store: CookieStore) -> Self {
+        Self { sender, max_redirects: 10, cookie_store: Some(cookie_store) }
+    }
+
+    /// Create a new transaction with custom max redirects and a cookie store
+    pub fn with_options(sender: S, max_redirects: usize, cookie_store: Option<CookieStore>) -> Self {
+        Self { sender, max_redirects, cookie_store }
     }
 
     /// Execute the request with cancellation support.
@@ -47,11 +61,32 @@ impl<S: HttpSender> HttpTransaction<S> {
                 return Err(crate::error::Error::RequestCanceledError);
             }
 
+            // Inject cookies into headers if we have a cookie store
+            let headers_with_cookies = if let Some(cookie_store) = &self.cookie_store {
+                let mut headers = current_headers.clone();
+                if let Ok(url) = Url::parse(&current_url) {
+                    if let Some(cookie_header) = cookie_store.get_cookie_header(&url) {
+                        debug!("Injecting Cookie header: {}", cookie_header);
+                        // Check if there's already a Cookie header and merge if so
+                        if let Some(existing) =
+                            headers.iter_mut().find(|h| h.0.eq_ignore_ascii_case("cookie"))
+                        {
+                            existing.1 = format!("{}; {}", existing.1, cookie_header);
+                        } else {
+                            headers.push(("Cookie".to_string(), cookie_header));
+                        }
+                    }
+                }
+                headers
+            } else {
+                current_headers.clone()
+            };
+
             // Build request for this iteration
             let req = SendableHttpRequest {
                 url: current_url.clone(),
                 method: current_method.clone(),
-                headers: current_headers.clone(),
+                headers: headers_with_cookies,
                 body: current_body,
                 options: request.options.clone(),
             };
@@ -69,6 +104,23 @@ impl<S: HttpSender> HttpTransaction<S> {
                     return Err(crate::error::Error::RequestCanceledError);
                 }
             };
+
+            // Parse Set-Cookie headers and store cookies
+            if let Some(cookie_store) = &self.cookie_store {
+                if let Ok(url) = Url::parse(&current_url) {
+                    let set_cookie_headers: Vec<String> = response
+                        .headers
+                        .iter()
+                        .filter(|(k, _)| k.eq_ignore_ascii_case("set-cookie"))
+                        .map(|(_, v)| v.clone())
+                        .collect();
+
+                    if !set_cookie_headers.is_empty() {
+                        debug!("Storing {} cookies from response", set_cookie_headers.len());
+                        cookie_store.store_cookies_from_response(&url, &set_cookie_headers);
+                    }
+                }
+            }
 
             if !Self::is_redirect(response.status) {
                 // Not a redirect - return the response for caller to consume body
@@ -387,5 +439,218 @@ mod tests {
 
         let result = HttpTransaction::<MockSender>::extract_base_path("https://example.com/");
         assert_eq!(result.unwrap(), "https://example.com");
+    }
+
+    #[tokio::test]
+    async fn test_cookie_injection() {
+        // Create a mock sender that verifies the Cookie header was injected
+        struct CookieVerifyingSender {
+            expected_cookie: String,
+        }
+
+        #[async_trait]
+        impl HttpSender for CookieVerifyingSender {
+            async fn send(
+                &self,
+                request: SendableHttpRequest,
+                _event_tx: mpsc::Sender<HttpResponseEvent>,
+            ) -> Result<HttpResponse> {
+                // Verify the Cookie header was injected
+                let cookie_header = request
+                    .headers
+                    .iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case("cookie"));
+
+                assert!(cookie_header.is_some(), "Cookie header should be present");
+                assert!(
+                    cookie_header.unwrap().1.contains(&self.expected_cookie),
+                    "Cookie header should contain expected value"
+                );
+
+                let body_stream: Pin<Box<dyn AsyncRead + Send>> =
+                    Box::pin(std::io::Cursor::new(vec![]));
+                Ok(HttpResponse::new(
+                    200,
+                    None,
+                    HashMap::new(),
+                    HashMap::new(),
+                    None,
+                    "https://example.com".to_string(),
+                    None,
+                    Some("HTTP/1.1".to_string()),
+                    body_stream,
+                    ContentEncoding::Identity,
+                ))
+            }
+        }
+
+        use yaak_models::models::{Cookie, CookieDomain, CookieExpires};
+
+        // Create a cookie store with a test cookie
+        let cookie = Cookie {
+            raw_cookie: "session=abc123".to_string(),
+            domain: CookieDomain::HostOnly("example.com".to_string()),
+            expires: CookieExpires::SessionEnd,
+            path: ("/".to_string(), false),
+        };
+        let cookie_store = CookieStore::from_cookies(vec![cookie]);
+
+        let sender = CookieVerifyingSender { expected_cookie: "session=abc123".to_string() };
+        let transaction = HttpTransaction::with_cookie_store(sender, cookie_store);
+
+        let request = SendableHttpRequest {
+            url: "https://example.com/api".to_string(),
+            method: "GET".to_string(),
+            headers: vec![],
+            ..Default::default()
+        };
+
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let (event_tx, _event_rx) = mpsc::channel(100);
+        let result = transaction.execute_with_cancellation(request, rx, event_tx).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_set_cookie_parsing() {
+        // Create a cookie store
+        let cookie_store = CookieStore::new();
+
+        // Mock sender that returns a Set-Cookie header
+        struct SetCookieSender;
+
+        #[async_trait]
+        impl HttpSender for SetCookieSender {
+            async fn send(
+                &self,
+                _request: SendableHttpRequest,
+                _event_tx: mpsc::Sender<HttpResponseEvent>,
+            ) -> Result<HttpResponse> {
+                let mut headers = HashMap::new();
+                headers.insert("set-cookie".to_string(), "session=xyz789; Path=/".to_string());
+
+                let body_stream: Pin<Box<dyn AsyncRead + Send>> =
+                    Box::pin(std::io::Cursor::new(vec![]));
+                Ok(HttpResponse::new(
+                    200,
+                    None,
+                    headers,
+                    HashMap::new(),
+                    None,
+                    "https://example.com".to_string(),
+                    None,
+                    Some("HTTP/1.1".to_string()),
+                    body_stream,
+                    ContentEncoding::Identity,
+                ))
+            }
+        }
+
+        let sender = SetCookieSender;
+        let transaction = HttpTransaction::with_cookie_store(sender, cookie_store.clone());
+
+        let request = SendableHttpRequest {
+            url: "https://example.com/login".to_string(),
+            method: "POST".to_string(),
+            headers: vec![],
+            ..Default::default()
+        };
+
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let (event_tx, _event_rx) = mpsc::channel(100);
+        let result = transaction.execute_with_cancellation(request, rx, event_tx).await;
+        assert!(result.is_ok());
+
+        // Verify the cookie was stored
+        let cookies = cookie_store.get_all_cookies();
+        assert_eq!(cookies.len(), 1);
+        assert!(cookies[0].raw_cookie.contains("session=xyz789"));
+    }
+
+    #[tokio::test]
+    async fn test_cookies_across_redirects() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        // Create a cookie store
+        let cookie_store = CookieStore::new();
+
+        // Track request count
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let request_count_clone = request_count.clone();
+
+        struct RedirectWithCookiesSender {
+            request_count: Arc<AtomicUsize>,
+        }
+
+        #[async_trait]
+        impl HttpSender for RedirectWithCookiesSender {
+            async fn send(
+                &self,
+                request: SendableHttpRequest,
+                _event_tx: mpsc::Sender<HttpResponseEvent>,
+            ) -> Result<HttpResponse> {
+                let count = self.request_count.fetch_add(1, Ordering::SeqCst);
+
+                let (status, headers) = if count == 0 {
+                    // First request: return redirect with Set-Cookie
+                    let mut h = HashMap::new();
+                    h.insert("location".to_string(), "https://example.com/final".to_string());
+                    h.insert("set-cookie".to_string(), "redirect_cookie=value1".to_string());
+                    (302, h)
+                } else {
+                    // Second request: verify cookie was sent
+                    let cookie_header = request
+                        .headers
+                        .iter()
+                        .find(|(k, _)| k.eq_ignore_ascii_case("cookie"));
+
+                    assert!(
+                        cookie_header.is_some(),
+                        "Cookie header should be present on redirect"
+                    );
+                    assert!(
+                        cookie_header.unwrap().1.contains("redirect_cookie=value1"),
+                        "Redirect cookie should be included"
+                    );
+
+                    (200, HashMap::new())
+                };
+
+                let body_stream: Pin<Box<dyn AsyncRead + Send>> =
+                    Box::pin(std::io::Cursor::new(vec![]));
+                Ok(HttpResponse::new(
+                    status,
+                    None,
+                    headers,
+                    HashMap::new(),
+                    None,
+                    "https://example.com".to_string(),
+                    None,
+                    Some("HTTP/1.1".to_string()),
+                    body_stream,
+                    ContentEncoding::Identity,
+                ))
+            }
+        }
+
+        let sender = RedirectWithCookiesSender { request_count: request_count_clone };
+        let transaction = HttpTransaction::with_cookie_store(sender, cookie_store);
+
+        let request = SendableHttpRequest {
+            url: "https://example.com/start".to_string(),
+            method: "GET".to_string(),
+            headers: vec![],
+            options: crate::types::SendableHttpRequestOptions {
+                follow_redirects: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let (event_tx, _event_rx) = mpsc::channel(100);
+        let result = transaction.execute_with_cancellation(request, rx, event_tx).await;
+        assert!(result.is_ok());
+        assert_eq!(request_count.load(Ordering::SeqCst), 2);
     }
 }

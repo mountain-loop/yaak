@@ -2,9 +2,7 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::render::render_http_request;
 use log::{debug, warn};
-use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::{File, create_dir_all};
@@ -14,6 +12,7 @@ use tokio_util::bytes::Bytes;
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
+use yaak_http::cookies::CookieStore;
 use yaak_http::manager::HttpConnectionManager;
 use yaak_http::sender::ReqwestSender;
 use yaak_http::tee_reader::TeeReader;
@@ -212,28 +211,14 @@ async fn send_http_request_inner<R: Runtime>(
     let client_certificate =
         find_client_certificate(&sendable_request.url, &settings.client_certificates);
 
-    // Add cookie store if specified
-    let maybe_cookie_manager = match cookie_jar.clone() {
+    // Create cookie store if a cookie jar is specified
+    let maybe_cookie_store = match cookie_jar.clone() {
         Some(CookieJar { id, .. }) => {
-            // NOTE: WE need to refetch the cookie jar because a chained request might have
+            // NOTE: We need to refetch the cookie jar because a chained request might have
             //  updated cookies when we rendered the request.
             let cj = window.db().get_cookie_jar(&id)?;
-            // HACK: Can't construct Cookie without serde, so we have to do this
-            let cookies = cj
-                .cookies
-                .iter()
-                .filter_map(|cookie| {
-                    let json_cookie = serde_json::to_value(cookie).ok()?;
-                    serde_json::from_value(json_cookie).ok()?
-                })
-                .map(|c| Ok(c))
-                .collect::<Vec<Result<_>>>();
-
-            let cookie_store = CookieStore::from_cookies(cookies, true)?;
-            let cookie_store = CookieStoreMutex::new(cookie_store);
-            let cookie_store = Arc::new(cookie_store);
-            let cookie_provider = Arc::clone(&cookie_store);
-            Some((cookie_provider, cj))
+            let cookie_store = CookieStore::from_cookies(cj.cookies.clone());
+            Some((cookie_store, cj))
         }
         None => None,
     };
@@ -243,7 +228,6 @@ async fn send_http_request_inner<R: Runtime>(
             id: plugin_context.id.clone(),
             validate_certificates: workspace.setting_validate_certificates,
             proxy: proxy_setting,
-            cookie_provider: maybe_cookie_manager.as_ref().map(|(p, _)| Arc::clone(&p)),
             client_certificate,
         })
         .await?;
@@ -259,8 +243,9 @@ async fn send_http_request_inner<R: Runtime>(
     )
     .await?;
 
+    let cookie_store = maybe_cookie_store.as_ref().map(|(cs, _)| cs.clone());
     let result =
-        execute_transaction(client, sendable_request, response_ctx, cancelled_rx.clone()).await;
+        execute_transaction(client, sendable_request, response_ctx, cancelled_rx.clone(), cookie_store).await;
 
     // Wait for blob writing to complete and check for errors
     let final_result = match result {
@@ -285,25 +270,11 @@ async fn send_http_request_inner<R: Runtime>(
     };
 
     // Persist cookies back to the database after the request completes
-    if let Some((cookie_store, mut cj)) = maybe_cookie_manager {
-        match cookie_store.lock() {
-            Ok(store) => {
-                let cookies: Vec<Cookie> = store
-                    .iter_any()
-                    .filter_map(|c| {
-                        // Convert cookie_store::Cookie -> yaak_models::Cookie via serde
-                        let json_cookie = serde_json::to_value(c).ok()?;
-                        serde_json::from_value(json_cookie).ok()
-                    })
-                    .collect();
-                cj.cookies = cookies;
-                if let Err(e) = window.db().upsert_cookie_jar(&cj, &UpdateSource::Background) {
-                    warn!("Failed to persist cookies to database: {}", e);
-                }
-            }
-            Err(e) => {
-                warn!("Failed to lock cookie store: {}", e);
-            }
+    if let Some((cookie_store, mut cj)) = maybe_cookie_store {
+        let cookies = cookie_store.get_all_cookies();
+        cj.cookies = cookies;
+        if let Err(e) = window.db().upsert_cookie_jar(&cj, &UpdateSource::Background) {
+            warn!("Failed to persist cookies to database: {}", e);
         }
     }
 
@@ -332,6 +303,7 @@ async fn execute_transaction<R: Runtime>(
     mut sendable_request: SendableHttpRequest,
     response_ctx: &mut ResponseContext<R>,
     mut cancelled_rx: Receiver<bool>,
+    cookie_store: Option<CookieStore>,
 ) -> Result<(HttpResponse, Option<tauri::async_runtime::JoinHandle<Result<()>>>)> {
     let app_handle = &response_ctx.app_handle.clone();
     let response_id = response_ctx.response().id.clone();
@@ -339,7 +311,10 @@ async fn execute_transaction<R: Runtime>(
     let is_persisted = response_ctx.is_persisted();
 
     let sender = ReqwestSender::with_client(client);
-    let transaction = HttpTransaction::new(sender);
+    let transaction = match cookie_store {
+        Some(cs) => HttpTransaction::with_cookie_store(sender, cs),
+        None => HttpTransaction::new(sender),
+    };
     let start = Instant::now();
 
     // Capture request headers before sending
