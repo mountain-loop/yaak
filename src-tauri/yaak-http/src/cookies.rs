@@ -83,7 +83,7 @@ impl CookieStore {
                     "Storing cookie: {} for domain {:?}",
                     parse_cookie_name_value(&cookie.raw_cookie)
                         .map(|(n, _)| n)
-                        .unwrap_or("unknown"),
+                        .unwrap_or_else(|| "unknown".to_string()),
                     cookie.domain
                 );
                 cookies.push(cookie);
