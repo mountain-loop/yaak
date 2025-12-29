@@ -2,8 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import type { Folder } from '@yaakapp-internal/models';
 import type {
   CallFolderActionRequest,
-  GetFolderActionsResponse,
   FolderAction,
+  GetFolderActionsResponse,
 } from '@yaakapp-internal/plugins';
 import { useMemo } from 'react';
 import { invokeCmd } from '../lib/tauri';

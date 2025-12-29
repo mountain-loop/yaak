@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 import type { McpServerContext } from '../types.js';
+import { getWorkspaceContext } from './helpers.js';
 
 export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
   server.registerTool(
@@ -11,7 +12,8 @@ export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
       inputSchema: z.object({}),
     },
     async () => {
-      const workspaceId = await ctx.yaak.window.workspaceId();
+      const workspaceCtx = await getWorkspaceContext(ctx);
+      const workspaceId = await workspaceCtx.yaak.window.workspaceId();
 
       return {
         content: [
@@ -32,7 +34,8 @@ export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
       inputSchema: z.object({}),
     },
     async () => {
-      const environmentId = await ctx.yaak.window.environmentId();
+      const workspaceCtx = await getWorkspaceContext(ctx);
+      const environmentId = await workspaceCtx.yaak.window.environmentId();
 
       return {
         content: [
