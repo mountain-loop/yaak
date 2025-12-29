@@ -152,6 +152,13 @@ fn parse_set_cookie(header_value: &str, request_url: &Url) -> Option<Cookie> {
     let domain = if let Some(domain_attr) = parsed.domain() {
         // Domain attribute present - this is a suffix match
         let domain = domain_attr.trim_start_matches('.').to_lowercase();
+
+        // Reject single-component domains (TLDs) except localhost
+        if is_single_component_domain(&domain) && !is_localhost(&domain) {
+            debug!("Rejecting cookie with single-component domain: {}", domain);
+            return None;
+        }
+
         CookieDomain::Suffix(domain)
     } else {
         // No domain attribute - host-only cookie
@@ -247,6 +254,31 @@ fn parse_cookie_date(date_str: &str) -> Result<SystemTime, ()> {
     let timestamp: i64 = date_str.parse().map_err(|_| ())?;
     let duration = Duration::from_secs(timestamp.max(0) as u64);
     Ok(UNIX_EPOCH + duration)
+}
+
+/// Check if a domain is a single-component domain (TLD)
+/// e.g., "com", "org", "net" - domains without any dots
+fn is_single_component_domain(domain: &str) -> bool {
+    // Empty or only dots
+    let trimmed = domain.trim_matches('.');
+    if trimmed.is_empty() {
+        return true;
+    }
+    // IPv6 addresses use colons, not dots - don't consider them single-component
+    if domain.contains(':') {
+        return false;
+    }
+    !trimmed.contains('.')
+}
+
+/// Check if a domain is localhost or a localhost variant
+fn is_localhost(domain: &str) -> bool {
+    let lower = domain.to_lowercase();
+    lower == "localhost"
+        || lower.ends_with(".localhost")
+        || lower == "127.0.0.1"
+        || lower == "::1"
+        || lower == "[::1]"
 }
 
 #[cfg(test)]
@@ -360,5 +392,100 @@ mod tests {
 
         // Should only have one cookie
         assert_eq!(store.get_all_cookies().len(), 1);
+    }
+
+    #[test]
+    fn test_is_single_component_domain() {
+        // Single-component domains (TLDs)
+        assert!(is_single_component_domain("com"));
+        assert!(is_single_component_domain("org"));
+        assert!(is_single_component_domain("net"));
+        assert!(is_single_component_domain("localhost")); // Still single-component, but allowed separately
+
+        // Multi-component domains
+        assert!(!is_single_component_domain("example.com"));
+        assert!(!is_single_component_domain("sub.example.com"));
+        assert!(!is_single_component_domain("co.uk"));
+
+        // Edge cases
+        assert!(is_single_component_domain("")); // Empty is treated as single-component
+        assert!(is_single_component_domain(".")); // Only dots
+        assert!(is_single_component_domain("..")); // Only dots
+
+        // IPv6 addresses (have colons, not dots)
+        assert!(!is_single_component_domain("::1")); // IPv6 localhost
+        assert!(!is_single_component_domain("[::1]")); // Bracketed IPv6
+        assert!(!is_single_component_domain("2001:db8::1")); // IPv6 address
+    }
+
+    #[test]
+    fn test_is_localhost() {
+        // Localhost variants
+        assert!(is_localhost("localhost"));
+        assert!(is_localhost("LOCALHOST")); // Case-insensitive
+        assert!(is_localhost("sub.localhost"));
+        assert!(is_localhost("app.sub.localhost"));
+
+        // IP localhost
+        assert!(is_localhost("127.0.0.1"));
+        assert!(is_localhost("::1"));
+        assert!(is_localhost("[::1]"));
+
+        // Not localhost
+        assert!(!is_localhost("example.com"));
+        assert!(!is_localhost("localhost.com")); // .com domain, not localhost
+        assert!(!is_localhost("notlocalhost"));
+    }
+
+    #[test]
+    fn test_reject_tld_cookies() {
+        let store = CookieStore::new();
+        let url = Url::parse("https://example.com/").unwrap();
+
+        // Try to set a cookie with Domain=com (TLD)
+        store.store_cookies_from_response(&url, &["bad=cookie; Domain=com".to_string()]);
+
+        // Should be rejected - no cookies stored
+        assert_eq!(store.get_all_cookies().len(), 0);
+        assert!(store.get_cookie_header(&url).is_none());
+    }
+
+    #[test]
+    fn test_allow_localhost_cookies() {
+        let store = CookieStore::new();
+        let url = Url::parse("http://localhost:3000/").unwrap();
+
+        // Cookie with Domain=localhost should be allowed
+        store.store_cookies_from_response(&url, &["session=abc; Domain=localhost".to_string()]);
+
+        // Should be accepted
+        assert_eq!(store.get_all_cookies().len(), 1);
+        assert!(store.get_cookie_header(&url).is_some());
+    }
+
+    #[test]
+    fn test_allow_127_0_0_1_cookies() {
+        let store = CookieStore::new();
+        let url = Url::parse("http://127.0.0.1:8080/").unwrap();
+
+        // Cookie without Domain attribute (host-only) should work
+        store.store_cookies_from_response(&url, &["session=xyz".to_string()]);
+
+        // Should be accepted
+        assert_eq!(store.get_all_cookies().len(), 1);
+        assert!(store.get_cookie_header(&url).is_some());
+    }
+
+    #[test]
+    fn test_allow_normal_domain_cookies() {
+        let store = CookieStore::new();
+        let url = Url::parse("https://example.com/").unwrap();
+
+        // Cookie with valid domain should be allowed
+        store.store_cookies_from_response(&url, &["session=abc; Domain=example.com".to_string()]);
+
+        // Should be accepted
+        assert_eq!(store.get_all_cookies().len(), 1);
+        assert!(store.get_cookie_header(&url).is_some());
     }
 }
