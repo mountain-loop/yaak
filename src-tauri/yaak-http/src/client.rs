@@ -2,8 +2,6 @@ use crate::dns::LocalhostResolver;
 use crate::error::Result;
 use log::{debug, info, warn};
 use reqwest::{Client, Proxy, redirect};
-use reqwest_cookie_store::CookieStoreMutex;
-use std::sync::Arc;
 use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 #[derive(Clone)]
@@ -29,7 +27,6 @@ pub struct HttpConnectionOptions {
     pub id: String,
     pub validate_certificates: bool,
     pub proxy: HttpConnectionProxySetting,
-    pub cookie_provider: Option<Arc<CookieStoreMutex>>,
     pub client_certificate: Option<ClientCertificateConfig>,
 }
 
@@ -52,11 +49,6 @@ impl HttpConnectionOptions {
 
         // Configure DNS resolver
         client = client.dns_resolver(LocalhostResolver::new());
-
-        // Configure cookie provider
-        if let Some(p) = &self.cookie_provider {
-            client = client.cookie_provider(Arc::clone(&p));
-        }
 
         // Configure proxy
         match self.proxy.clone() {

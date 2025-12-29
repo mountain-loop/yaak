@@ -9,15 +9,16 @@ async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate", "
 async-trait = "0.1"
 brotli = "7"
 bytes = "1.5.0"
+cookie = "0.18.1"
 flate2 = "1"
 futures-util = "0.3"
+url = "2"
 zstd = "0.13"
 hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
 log = { workspace = true }
 mime_guess = "2.0.5"
 regex = "1.11.1"
-reqwest = { workspace = true, features = ["cookies", "rustls-tls-manual-roots-no-provider", "socks", "http2", "stream"] }
-reqwest_cookie_store = { workspace = true }
+reqwest = { workspace = true, features = ["rustls-tls-manual-roots-no-provider", "socks", "http2", "stream"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tauri = { workspace = true }

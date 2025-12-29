@@ -6,10 +6,12 @@ use log::debug;
 use log::{info, warn};
 use std::str::FromStr;
 use tauri::http::{HeaderMap, HeaderName};
-use tauri::{AppHandle, Runtime, State, Url, WebviewWindow};
+use tauri::{AppHandle, Runtime, State, WebviewWindow};
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
+use url::Url;
+use yaak_http::cookies::CookieStore;
 use yaak_http::path_placeholders::apply_path_placeholders;
 use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
@@ -302,35 +304,13 @@ pub(crate) async fn connect<R: Runtime>(
     // Add cookies to WS HTTP Upgrade
     if let Some(id) = cookie_jar_id {
         let cookie_jar = app_handle.db().get_cookie_jar(&id)?;
+        let store = CookieStore::from_cookies(cookie_jar.cookies);
 
-        let cookies = cookie_jar
-            .cookies
-            .iter()
-            .filter_map(|cookie| {
-                // HACK: same as in src-tauri/src/http_request.rs
-                let json_cookie = serde_json::to_value(cookie).ok()?;
-                match serde_json::from_value(json_cookie) {
-                    Ok(cookie) => Some(Ok(cookie)),
-                    Err(_e) => None,
-                }
-            })
-            .collect::<Vec<Result<_>>>();
-
-        let store = reqwest_cookie_store::CookieStore::from_cookies(cookies, true)?;
-
-        // Convert WS URL -> HTTP URL bc reqwest_cookie_store's `get_request_values`
-        // strictly matches based on Path/HttpOnly/Secure attributes even though WS upgrades are HTTP requests
+        // Convert WS URL -> HTTP URL because our cookie store matches based on
+        // Path/HttpOnly/Secure attributes even though WS upgrades are HTTP requests
         let http_url = convert_ws_url_to_http(&url);
-        let pairs: Vec<_> = store.get_request_values(&http_url).collect();
-        debug!("Inserting {} cookies into WS upgrade to {}", pairs.len(), url);
-
-        let cookie_header_value = pairs
-            .into_iter()
-            .map(|(name, value)| format!("{}={}", name, value))
-            .collect::<Vec<_>>()
-            .join("; ");
-
-        if !cookie_header_value.is_empty() {
+        if let Some(cookie_header_value) = store.get_cookie_header(&http_url) {
+            debug!("Inserting cookies into WS upgrade to {}: {}", url, cookie_header_value);
             headers.insert(
                 HeaderName::from_static("cookie"),
                 HeaderValue::from_str(&cookie_header_value).unwrap(),
