@@ -551,9 +551,7 @@ mod tests {
         assert_eq!(
             p.parse()?.tokens,
             vec![
-                Token::Tag {
-                    val: Val::Var { name: "a.b".into() }
-                },
+                Token::Tag { val: Val::Var { name: "a.b".into() } },
                 Token::Eof
             ]
         );
