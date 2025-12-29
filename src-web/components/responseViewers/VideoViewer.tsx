@@ -13,7 +13,7 @@ export function VideoViewer({ bodyPath, data }: Props) {
     if (bodyPath) {
       setSrc(convertFileSrc(bodyPath));
     } else if (data) {
-      const blob = new Blob([data], { type: 'video/mp4' });
+      const blob = new Blob([new Uint8Array(data)], { type: 'video/mp4' });
       const url = URL.createObjectURL(blob);
       setSrc(url);
       return () => URL.revokeObjectURL(url);
