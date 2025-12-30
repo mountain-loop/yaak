@@ -1,0 +1,11 @@
+{
+  "name": "@yaak/themes-vscode",
+  "displayName": "VSCode Themes",
+  "description": "Popular Visual Studio Code themes ported to Yaak",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev"
+  }
+}

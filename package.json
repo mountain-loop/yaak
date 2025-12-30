@@ -44,6 +44,7 @@
     "plugins/template-function-request",
     "plugins/template-function-response",
     "plugins/themes-yaak",
+    "plugins/themes-vscode",
     "src-tauri",
     "src-tauri/yaak-crypto",
     "src-tauri/yaak-fonts",
