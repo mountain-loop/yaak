@@ -11,6 +11,7 @@
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
     "plugins-external/mcp-server",
+    "plugins-external/template-function-faker",
     "plugins/action-copy-curl",
     "plugins/action-copy-grpcurl",
     "plugins/auth-apikey",

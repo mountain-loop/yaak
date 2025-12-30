@@ -1,0 +1,23 @@
+{
+  "name": "@yaakapp/faker",
+  "private": true,
+  "version": "0.1.0",
+  "displayName": "Faker",
+  "description": "Template functions for generating fake data using FakerJS",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mountain-loop/yaak.git",
+    "directory": "plugins-external/faker"
+  },
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^10.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3"
+  }
+}
