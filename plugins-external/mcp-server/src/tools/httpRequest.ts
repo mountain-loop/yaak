@@ -133,21 +133,15 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
           .describe('URL query parameters'),
       }),
     },
-    async ({ workspaceId, ...args }) => {
-      const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
-
-      // Get workspace ID from the workspace list
-      const workspaces = await workspaceCtx.yaak.workspace.list();
-      if (workspaces.length === 0) {
-        throw new Error('No workspace is open');
-      }
-      const actualWorkspaceId = workspaceId ?? workspaces[0]?.id;
-      if (!actualWorkspaceId) {
+    async ({ workspaceId: ogWorkspaceId, ...args }) => {
+      const workspaceCtx = await getWorkspaceContext(ctx, ogWorkspaceId);
+      const workspaceId = await workspaceCtx.yaak.window.workspaceId();
+      if (!workspaceId) {
         throw new Error('No workspace is open');
       }
 
       const httpRequest = await workspaceCtx.yaak.httpRequest.create({
-        workspaceId: actualWorkspaceId,
+        workspaceId: workspaceId,
         ...args,
       });
 
@@ -164,7 +158,10 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       description: 'Update an existing HTTP request',
       inputSchema: z.object({
         id: z.string().describe('HTTP request ID to update'),
-        workspaceId: z.string().describe('Workspace ID'),
+        workspaceId: z
+          .string()
+          .optional()
+          .describe('Workspace ID (required if multiple workspaces are open)'),
         name: z.string().optional().describe('Request name'),
         url: z.string().optional().describe('Request URL'),
         method: z.string().optional().describe('HTTP method'),
@@ -192,8 +189,9 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
           .describe('URL query parameters'),
       }),
     },
-    async ({ id, ...updates }) => {
-      const httpRequest = await ctx.yaak.httpRequest.update({ id, ...updates });
+    async ({ id, workspaceId, ...updates }) => {
+      const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
+      const httpRequest = await workspaceCtx.yaak.httpRequest.update({ id, ...updates });
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(httpRequest, null, 2) }],
       };
