@@ -23880,18 +23880,14 @@ function registerHttpRequestTools(server, ctx) {
         ).optional().describe("URL query parameters")
       })
     },
-    async ({ workspaceId, ...args }) => {
-      const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
-      const workspaces = await workspaceCtx.yaak.workspace.list();
-      if (workspaces.length === 0) {
-        throw new Error("No workspace is open");
-      }
-      const actualWorkspaceId = workspaceId ?? workspaces[0]?.id;
-      if (!actualWorkspaceId) {
+    async ({ workspaceId: ogWorkspaceId, ...args }) => {
+      const workspaceCtx = await getWorkspaceContext(ctx, ogWorkspaceId);
+      const workspaceId = await workspaceCtx.yaak.window.workspaceId();
+      if (!workspaceId) {
         throw new Error("No workspace is open");
       }
       const httpRequest = await workspaceCtx.yaak.httpRequest.create({
-        workspaceId: actualWorkspaceId,
+        workspaceId,
         ...args
       });
       return {
@@ -23906,7 +23902,7 @@ function registerHttpRequestTools(server, ctx) {
       description: "Update an existing HTTP request",
       inputSchema: object2({
         id: string2().describe("HTTP request ID to update"),
-        workspaceId: string2().describe("Workspace ID"),
+        workspaceId: string2().optional().describe("Workspace ID (required if multiple workspaces are open)"),
         name: string2().optional().describe("Request name"),
         url: string2().optional().describe("Request URL"),
         method: string2().optional().describe("HTTP method"),
@@ -23928,8 +23924,9 @@ function registerHttpRequestTools(server, ctx) {
         ).optional().describe("URL query parameters")
       })
     },
-    async ({ id, ...updates }) => {
-      const httpRequest = await ctx.yaak.httpRequest.update({ id, ...updates });
+    async ({ id, workspaceId, ...updates }) => {
+      const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
+      const httpRequest = await workspaceCtx.yaak.httpRequest.update({ id, ...updates });
       return {
         content: [{ type: "text", text: JSON.stringify(httpRequest, null, 2) }]
       };
