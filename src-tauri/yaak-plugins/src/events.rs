@@ -4,7 +4,8 @@ use tauri::{Runtime, WebviewWindow};
 use ts_rs::TS;
 use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::models::{
-    Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest, Workspace,
+    AnyModel, Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest,
+    Workspace,
 };
 use yaak_models::util::generate_prefixed_id;
 
@@ -161,6 +162,9 @@ pub enum InternalEventPayload {
     WindowInfoRequest(WindowInfoRequest),
     WindowInfoResponse(WindowInfoResponse),
 
+    ListWorkspacesRequest(ListWorkspacesRequest),
+    ListWorkspacesResponse(ListWorkspacesResponse),
+
     GetHttpRequestByIdRequest(GetHttpRequestByIdRequest),
     GetHttpRequestByIdResponse(GetHttpRequestByIdResponse),
 
@@ -170,6 +174,12 @@ pub enum InternalEventPayload {
     ListHttpRequestsResponse(ListHttpRequestsResponse),
     ListFoldersRequest(ListFoldersRequest),
     ListFoldersResponse(ListFoldersResponse),
+
+    UpsertModelRequest(UpsertModelRequest),
+    UpsertModelResponse(UpsertModelResponse),
+
+    DeleteModelRequest(DeleteModelRequest),
+    DeleteModelResponse(DeleteModelResponse),
 
     GetThemesRequest(GetThemesRequest),
     GetThemesResponse(GetThemesResponse),
@@ -570,6 +580,28 @@ pub struct WindowInfoResponse {
     pub request_id: Option<String>,
     pub environment_id: Option<String>,
     pub workspace_id: Option<String>,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct ListWorkspacesRequest {}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct ListWorkspacesResponse {
+    pub workspaces: Vec<WorkspaceInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct WorkspaceInfo {
+    pub id: String,
+    pub name: String,
+    #[ts(skip)]
     pub label: String,
 }
 
@@ -1328,6 +1360,35 @@ pub struct ListFoldersRequest {}
 #[ts(export, export_to = "gen_events.ts")]
 pub struct ListFoldersResponse {
     pub folders: Vec<Folder>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct UpsertModelRequest {
+    pub model: AnyModel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct UpsertModelResponse {
+    pub model: AnyModel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct DeleteModelRequest {
+    pub model: String,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct DeleteModelResponse {
+    pub model: AnyModel,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
