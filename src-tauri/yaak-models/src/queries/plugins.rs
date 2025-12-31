@@ -8,8 +8,16 @@ impl<'a> DbContext<'a> {
         self.find_one(PluginIden::Id, id)
     }
 
+    pub fn get_plugin_by_directory(&self, directory: &str) -> Result<Plugin> {
+        self.find_one(PluginIden::Directory, directory)
+    }
+
     pub fn list_plugins(&self) -> Result<Vec<Plugin>> {
         self.find_all()
+    }
+
+    pub fn list_enabled_plugins(&self) -> Result<Vec<Plugin>> {
+        self.find_many(PluginIden::Enabled, true)
     }
 
     pub fn delete_plugin(&self, plugin: &Plugin, source: &UpdateSource) -> Result<Plugin> {

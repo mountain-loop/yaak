@@ -35,10 +35,10 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Mutex, mpsc};
 use tokio::time::{Instant, timeout};
-use yaak_models::models::Environment;
+use yaak_models::models::{Environment, Plugin};
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::render::make_vars_hashmap;
-use yaak_models::util::generate_id;
+use yaak_models::util::{UpdateSource, generate_id};
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result as TemplateResult;
 use yaak_templates::{RenderErrorBehavior, RenderOptions, render_json_value_raw};
@@ -178,18 +178,45 @@ impl PluginManager {
 
         info!("Loading bundled plugins from {plugins_dir:?}");
 
-        let bundled_plugin_dirs: Vec<PluginCandidate> = read_plugins_dir(&plugins_dir)
+        // Read bundled plugin directories from disk
+        let bundled_plugin_dirs: Vec<String> = read_plugins_dir(&plugins_dir)
             .await
-            .expect(format!("Failed to read plugins dir: {:?}", plugins_dir).as_str())
+            .expect(format!("Failed to read plugins dir: {:?}", plugins_dir).as_str());
+
+        // Sync bundled plugins to the database (upsert with url=None to mark as bundled)
+        for dir in &bundled_plugin_dirs {
+            // Check if plugin already exists in the database
+            let existing = app_handle.db().get_plugin_by_directory(dir);
+            if existing.is_err() {
+                // Plugin not in database, add it as enabled by default
+                let plugin = Plugin {
+                    directory: dir.clone(),
+                    enabled: true,
+                    url: None, // None indicates bundled plugin
+                    ..Default::default()
+                };
+                if let Err(e) = app_handle.db().upsert_plugin(&plugin, &UpdateSource::Background) {
+                    warn!("Failed to sync bundled plugin to database: {e:?}");
+                }
+            }
+        }
+
+        // Get all enabled plugins from database (includes both bundled and installed)
+        let enabled_plugins = app_handle.db().list_enabled_plugins().unwrap_or_default();
+
+        // Filter to only include plugins whose directories exist
+        // (bundled plugins must be in bundled_plugin_dirs, installed plugins have url set)
+        let plugin_dirs: Vec<PluginCandidate> = enabled_plugins
             .iter()
-            .map(|d| PluginCandidate { dir: d.into() })
+            .filter(|p| {
+                // Bundled plugins: directory must be in bundled_plugin_dirs
+                // Installed plugins: have a url set
+                p.url.is_some() || bundled_plugin_dirs.contains(&p.directory)
+            })
+            .map(|p| PluginCandidate { dir: p.directory.clone() })
             .collect();
 
-        let plugins = app_handle.db().list_plugins().unwrap_or_default();
-        let installed_plugin_dirs: Vec<PluginCandidate> =
-            plugins.iter().map(|p| PluginCandidate { dir: p.directory.to_owned() }).collect();
-
-        [bundled_plugin_dirs, installed_plugin_dirs].concat()
+        plugin_dirs
     }
 
     pub async fn uninstall(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {
