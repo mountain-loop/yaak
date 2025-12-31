@@ -17,7 +17,7 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn list_enabled_plugins(&self) -> Result<Vec<Plugin>> {
-        self.find_many(PluginIden::Enabled, true)
+        self.find_many(PluginIden::Enabled, true, None)
     }
 
     pub fn delete_plugin(&self, plugin: &Plugin, source: &UpdateSource) -> Result<Plugin> {

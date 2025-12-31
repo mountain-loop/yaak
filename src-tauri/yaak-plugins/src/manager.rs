@@ -181,7 +181,7 @@ impl PluginManager {
         // Read bundled plugin directories from disk
         let bundled_plugin_dirs: Vec<String> = read_plugins_dir(&plugins_dir)
             .await
-            .expect(format!("Failed to read plugins dir: {:?}", plugins_dir).as_str());
+            .expect(&format!("Failed to read plugins dir: {:?}", plugins_dir));
 
         // Sync bundled plugins to the database (upsert with url=None to mark as bundled)
         for dir in &bundled_plugin_dirs {
