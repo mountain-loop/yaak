@@ -34,6 +34,11 @@ export function createMcpServer(ctx: McpServerContext, port: number) {
   // Connect server to transport
   server.connect(transport).then(() => {
     console.log(`MCP Server running at http://127.0.0.1:${port}/mcp`);
+    ctx.yaak.toast.show({
+      message: `MCP Server running on port ${port}`,
+      icon: 'check_circle',
+      color: 'success',
+    });
   });
 
   // Start the HTTP server
