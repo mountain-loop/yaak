@@ -20,10 +20,10 @@ export const nord: Theme = {
   },
   components: {
     sidebar: {
-      backdrop: 'hsl(220,16%,22%)',
+      surface: 'hsl(220,16%,22%)',
     },
     appHeader: {
-      backdrop: 'hsl(220,14%,28%)',
+      surface: 'hsl(220,14%,28%)',
     },
   },
 };
@@ -33,25 +33,53 @@ export const nordLight: Theme = {
   label: 'Nord Light',
   dark: false,
   base: {
-    surface: 'hsl(220,27%,98%)',
-    surfaceHighlight: 'hsl(220,24%,94%)',
-    text: 'hsl(220,16%,22%)',
-    textSubtle: 'hsl(220,15%,30%)',
-    textSubtlest: 'hsl(220,14%,40%)',
-    primary: 'hsl(193,43%,52%)',
-    secondary: 'hsl(210,34%,54%)',
-    info: 'hsl(179,25%,50%)',
-    success: 'hsl(92,28%,48%)',
-    notice: 'hsl(40,71%,52%)',
-    warning: 'hsl(14,51%,53%)',
-    danger: 'hsl(354,42%,56%)',
+    surface: '#eceff4',
+    surfaceHighlight: '#e5e9f0',
+    text: '#24292e',
+    textSubtle: '#444d56',
+    textSubtlest: '#586069',
+    primary: '#2188ff',
+    secondary: '#586069',
+    info: '#005cc5',
+    success: '#28a745',
+    notice: '#e36209',
+    warning: '#e36209',
+    danger: '#cb2431',
   },
   components: {
     sidebar: {
-      backdrop: 'hsl(220,24%,94%)',
+      surface: '#e5e9f0',
     },
     appHeader: {
-      backdrop: 'hsl(220,27%,98%)',
+      surface: '#e5e9f0',
+    },
+  },
+};
+
+export const nordLightBrighter: Theme = {
+  id: 'nord-light-brighter',
+  label: 'Nord Light Brighter',
+  dark: false,
+  base: {
+    surface: '#ffffff',
+    surfaceHighlight: '#f6f8fa',
+    text: '#24292e',
+    textSubtle: '#444d56',
+    textSubtlest: '#586069',
+    primary: '#2188ff',
+    secondary: '#586069',
+    info: '#005cc5',
+    success: '#28a745',
+    notice: '#e36209',
+    warning: '#e36209',
+    danger: '#cb2431',
+  },
+  components: {
+    sidebar: {
+      surface: '#f6f8fa',
+    },
+    appHeader: {
+      surface: '#f6f8fa',
     },
   },
 };
