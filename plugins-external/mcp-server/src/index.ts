@@ -7,9 +7,11 @@ let mcpServer: Awaited<ReturnType<typeof createMcpServer>> | null = null;
 
 export const plugin: PluginDefinition = {
   async init(ctx: Context) {
-    console.log('Initializing MCP Server plugin');
-
-    mcpServer = createMcpServer({ yaak: ctx }, serverPort);
+    // Start the server after waiting, so there's an active window open to do things
+    // like show the startup toast.
+    setTimeout(() => {
+      mcpServer = createMcpServer({ yaak: ctx }, serverPort);
+    }, 5000);
   },
 
   async dispose() {
