@@ -49,21 +49,40 @@ import { githubDarkDimmed } from './themes/github-dimmed';
 import { slackAubergine } from './themes/slack';
 import { noctisAzureus } from './themes/noctis';
 import { blulocoDark, blulocoLight } from './themes/bluloco';
+import { fleetLight, fleetDarkPurple, fleetDark } from './themes/fleet';
 
 export const plugin: PluginDefinition = {
   themes: [
-    // Yaak themes
-    highContrast,
-    highContrastDark,
+    andromeda,
+    atomOneDark,
+    ayuDark,
+    ayuLight,
+    ayuMirage,
+    blulocoDark,
+    blulocoLight,
     catppuccinFrappe,
+    catppuccinLatte,
     catppuccinMacchiato,
     catppuccinMocha,
-    catppuccinLatte,
+    cobalt2,
     dracula,
+    everforestDark,
+    everforestLight,
+    fleetDark,
+    fleetDarkPurple,
+    fleetLight,
     githubDark,
+    githubDarkDimmed,
     githubLight,
     gruvbox,
+    highContrast,
+    highContrastDark,
+    horizon,
     hotdogStand,
+    lightOwl,
+    materialDarker,
+    materialOcean,
+    materialPalenight,
     monokaiPro,
     monokaiProClassic,
     monokaiProMachine,
@@ -71,73 +90,27 @@ export const plugin: PluginDefinition = {
     monokaiProRistretto,
     monokaiProSpectrum,
     moonlight,
+    nightOwl,
+    noctisAzureus,
     nord,
+    oneDarkPro,
+    pandaSyntax,
     relaxing,
     rosePine,
-    rosePineMoon,
     rosePineDawn,
-    triangle,
-
-    // VSCode themes - One Dark variants
-    oneDarkPro,
-    atomOneDark,
-
-    // Material Theme variants
-    materialPalenight,
-    materialOcean,
-    materialDarker,
-
-    // Night Owl variants
-    nightOwl,
-    lightOwl,
-
-    // Tokyo Night variants
-    tokyoNight,
-    tokyoNightStorm,
-    tokyoNightDay,
-
-    // Solarized variants
-    solarizedDark,
-    solarizedLight,
-
-    // Ayu variants
-    ayuDark,
-    ayuMirage,
-    ayuLight,
-
-    // Retro / Neon themes
-    synthwave84,
+    rosePineMoon,
     shadesOfPurple,
     shadesOfPurpleSuperDark,
-
-    // Blue themes
-    cobalt2,
-    noctisAzureus,
-
-    // Warm themes
-    horizon,
-
-    // Minimal themes
-    pandaSyntax,
+    slackAubergine,
+    solarizedDark,
+    solarizedLight,
+    synthwave84,
+    tokyoNight,
+    tokyoNightDay,
+    tokyoNightStorm,
+    triangle,
     vitesseDark,
     vitesseLight,
-
-    // Nature themes
-    everforestDark,
-    everforestLight,
-
-    // Space themes
-    andromeda,
     winterIsComing,
-
-    // GitHub themes
-    githubDarkDimmed,
-
-    // App-inspired themes
-    slackAubergine,
-
-    // Bluloco themes
-    blulocoDark,
-    blulocoLight,
   ],
 };
