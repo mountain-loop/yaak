@@ -185,7 +185,7 @@ export function Workspace() {
           />
           <div // Add a subtle border bottom
             style={environmentBgStyle}
-            className="absolute left-0 right-0 bottom-0 h-[0.5px] opacity-20"
+            className="absolute left-0 right-0 -bottom-[1px] h-[1px] opacity-20"
           />
         </div>
         <WorkspaceHeader className="pointer-events-none" />
