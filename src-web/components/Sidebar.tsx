@@ -27,8 +27,6 @@ import { selectAtom } from 'jotai/utils';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
-import { activeCookieJarAtom } from '../hooks/useActiveCookieJar';
-import { activeEnvironmentAtom } from '../hooks/useActiveEnvironment';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
@@ -330,20 +328,6 @@ function Sidebar({ className }: { className?: string }) {
           hidden: !(items.length === 1 && child.model === 'folder'),
           leftSlot: <Icon icon="folder_cog" />,
           onSelect: () => openFolderSettings(child.id),
-        },
-        {
-          label: 'Send All',
-          hidden: !(items.length === 1 && child.model === 'folder'),
-          leftSlot: <Icon icon="send_horizontal" />,
-          onSelect: () => {
-            const environment = jotaiStore.get(activeEnvironmentAtom);
-            const cookieJar = jotaiStore.get(activeCookieJarAtom);
-            invokeCmd('cmd_send_folder', {
-              folderId: child.id,
-              environmentId: environment?.id,
-              cookieJarId: cookieJar?.id,
-            });
-          },
         },
         {
           label: 'Send',
