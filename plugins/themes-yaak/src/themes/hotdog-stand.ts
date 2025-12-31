@@ -1,0 +1,58 @@
+import type { Theme } from '@yaakapp/api';
+
+export const hotdogStand: Theme = {
+  id: 'hotdog-stand',
+  label: 'Hotdog Stand',
+  dark: true,
+  base: {
+    surface: 'hsl(0,100%,50%)',
+    surfaceHighlight: 'hsl(0,0%,0%)',
+    text: 'hsl(0,0%,100%)',
+    textSubtle: 'hsl(0,0%,100%)',
+    textSubtlest: 'hsl(60,100%,50%)',
+    border: 'hsl(0,0%,0%)',
+    primary: 'hsl(60,100%,50%)',
+    secondary: 'hsl(60,100%,50%)',
+    info: 'hsl(60,100%,50%)',
+    success: 'hsl(60,100%,50%)',
+    notice: 'hsl(60,100%,50%)',
+    warning: 'hsl(60,100%,50%)',
+    danger: 'hsl(60,100%,50%)',
+  },
+  components: {
+    appHeader: {
+      surface: 'hsl(0,0%,0%)',
+      text: 'hsl(0,0%,100%)',
+      textSubtle: 'hsl(60,100%,50%)',
+      textSubtlest: 'hsl(0,100%,50%)',
+    },
+    menu: {
+      surface: 'hsl(0,0%,0%)',
+      border: 'hsl(0,100%,50%)',
+      surfaceHighlight: 'hsl(0,100%,50%)',
+      text: 'hsl(0,0%,100%)',
+      textSubtle: 'hsl(60,100%,50%)',
+      textSubtlest: 'hsl(60,100%,50%)',
+    },
+    button: {
+      surface: 'hsl(0,0%,0%)',
+      text: 'hsl(0,0%,100%)',
+      primary: 'hsl(0,0%,0%)',
+      secondary: 'hsl(0,0%,100%)',
+      info: 'hsl(0,0%,0%)',
+      success: 'hsl(60,100%,50%)',
+      notice: 'hsl(60,100%,50%)',
+      warning: 'hsl(0,0%,0%)',
+      danger: 'hsl(0,100%,50%)',
+    },
+    editor: {
+      primary: 'hsl(0,0%,100%)',
+      secondary: 'hsl(0,0%,100%)',
+      info: 'hsl(0,0%,100%)',
+      success: 'hsl(0,0%,100%)',
+      notice: 'hsl(60,100%,50%)',
+      warning: 'hsl(0,0%,100%)',
+      danger: 'hsl(0,0%,100%)',
+    },
+  },
+};
