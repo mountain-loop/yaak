@@ -1,7 +1,7 @@
 {
   "name": "@yaak/mcp-server",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.3",
   "displayName": "MCP Server",
   "description": "Expose Yaak functionality via Model Context Protocol",
   "minYaakVersion": "2025.10.0-beta.6",
