@@ -22,8 +22,8 @@ use yaak_http::types::{
 };
 use yaak_models::blob_manager::{BlobManagerExt, BodyChunk};
 use yaak_models::models::{
-    Cookie, CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent,
-    HttpResponseHeader, HttpResponseState, ProxySetting, ProxySettingAuth,
+    CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseHeader,
+    HttpResponseState, ProxySetting, ProxySettingAuth,
 };
 use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::UpdateSource;

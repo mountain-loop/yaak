@@ -248,7 +248,6 @@ pub fn find_client_certificate(
 
         // Match host (case-insensitive)
         if !cert.host.eq_ignore_ascii_case(host) {
-            debug!("Client certificate host does not match {} != {} (cert)", host, cert.host);
             continue;
         }
 
