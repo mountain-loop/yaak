@@ -1,29 +1,30 @@
 import type { Theme } from '@yaakapp/api';
 
 export const nightOwl: Theme = {
-  id: 'vscode-night-owl',
+  id: 'night-owl',
   label: 'Night Owl',
   dark: true,
   base: {
-    surface: 'hsl(207, 95%, 8%)', // #011627
+    surface: 'hsl(207, 95%, 8%)',
     surfaceHighlight: 'hsl(207, 50%, 14%)',
-    text: 'hsl(213, 50%, 90%)', // #d6deeb
+    text: 'hsl(213, 50%, 90%)',
     textSubtle: 'hsl(213, 30%, 70%)',
     textSubtlest: 'hsl(213, 20%, 50%)',
-    primary: 'hsl(261, 51%, 51%)', // #7e57c2 (cursor purple)
+    border: 'hsl(207, 50%, 14%)',
+    primary: 'hsl(261, 51%, 51%)',
     secondary: 'hsl(213, 30%, 60%)',
-    info: 'hsl(220, 100%, 75%)', // #82aaff
-    success: 'hsl(145, 100%, 43%)', // #22da6e
-    notice: 'hsl(62, 61%, 71%)', // #addb67 (yellow)
-    warning: 'hsl(4, 90%, 58%)', // #ef5350
-    danger: 'hsl(4, 90%, 58%)', // #ef5350
+    info: 'hsl(220, 100%, 75%)',
+    success: 'hsl(145, 100%, 43%)',
+    notice: 'hsl(62, 61%, 71%)',
+    warning: 'hsl(4, 90%, 58%)',
+    danger: 'hsl(4, 90%, 58%)',
   },
   components: {
     dialog: {
       surface: 'hsl(207, 95%, 6%)',
     },
     sidebar: {
-      surface: 'hsl(207, 70%, 10%)',
+      surface: 'hsl(207, 95%, 8%)',
       border: 'hsl(207, 50%, 14%)',
     },
     appHeader: {
@@ -36,6 +37,7 @@ export const nightOwl: Theme = {
     },
     button: {
       primary: 'hsl(261, 51%, 45%)',
+      secondary: 'hsl(213, 30%, 60%)',
       info: 'hsl(220, 100%, 68%)',
       success: 'hsl(145, 100%, 38%)',
       notice: 'hsl(62, 61%, 64%)',
@@ -46,21 +48,21 @@ export const nightOwl: Theme = {
 };
 
 export const lightOwl: Theme = {
-  id: 'vscode-light-owl',
+  id: 'light-owl',
   label: 'Light Owl',
   dark: false,
   base: {
-    surface: 'hsl(0, 0%, 98%)', // #FBFBFB
+    surface: 'hsl(0, 0%, 98%)',
     surfaceHighlight: 'hsl(210, 18%, 94%)',
-    text: 'hsl(224, 26%, 27%)', // #403f53
+    text: 'hsl(224, 26%, 27%)',
     textSubtle: 'hsl(224, 15%, 45%)',
     textSubtlest: 'hsl(224, 10%, 55%)',
-    primary: 'hsl(283, 100%, 41%)', // #994cc3
+    primary: 'hsl(283, 100%, 41%)',
     secondary: 'hsl(224, 15%, 50%)',
-    info: 'hsl(219, 75%, 40%)', // #4876d6
+    info: 'hsl(219, 75%, 40%)',
     success: 'hsl(145, 70%, 35%)',
-    notice: 'hsl(36, 95%, 40%)', // #c96765
-    warning: 'hsl(0, 55%, 55%)', // #bc5454
+    notice: 'hsl(36, 95%, 40%)',
+    warning: 'hsl(0, 55%, 55%)',
     danger: 'hsl(0, 55%, 50%)',
   },
   components: {

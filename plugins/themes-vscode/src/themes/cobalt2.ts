@@ -1,47 +1,47 @@
 import type { Theme } from '@yaakapp/api';
 
 export const cobalt2: Theme = {
-  id: 'vscode-cobalt2',
+  id: 'cobalt2',
   label: 'Cobalt2',
   dark: true,
   base: {
-    surface: 'hsl(200, 50%, 19%)', // #193549
-    surfaceHighlight: 'hsl(200, 43%, 25%)', // #1F4662
-    text: 'hsl(0, 0%, 100%)', // #fff
-    textSubtle: 'hsl(0, 0%, 67%)', // #aaa
-    textSubtlest: 'hsl(0, 0%, 50%)',
-    primary: 'hsl(50, 100%, 50%)', // #ffc600 (yellow)
-    secondary: 'hsl(180, 100%, 57%)', // #2AFFDF (mint)
-    info: 'hsl(180, 100%, 80%)', // #9EFFFF (light blue)
-    success: 'hsl(180, 100%, 57%)', // #2AFFDF (mint)
-    notice: 'hsl(50, 100%, 50%)', // #ffc600 (yellow)
-    warning: 'hsl(33, 100%, 50%)', // #ff9d00 (orange)
-    danger: 'hsl(330, 100%, 50%)', // #ff0088 (hot pink)
+    surface: '#193549',
+    surfaceHighlight: '#1f4662',
+    text: '#d2e1f1',
+    textSubtle: '#709ac8',
+    textSubtlest: '#55749e',
+    primary: '#ffc600',
+    secondary: '#819fc3',
+    info: '#0088FF',
+    success: '#3AD900',
+    notice: '#FFEE80',
+    warning: '#FF9D00',
+    danger: '#FF628C',
   },
   components: {
-    dialog: {
-      surface: 'hsl(200, 55%, 14%)', // #15232D
-    },
     sidebar: {
-      surface: 'hsl(200, 53%, 16%)', // #122738
-      border: 'hsl(200, 55%, 12%)',
+      surface: '#13283a',
+      border: '#102332',
+    },
+    input: {
+      border: '#1f4561',
     },
     appHeader: {
-      surface: 'hsl(200, 53%, 16%)',
-      border: 'hsl(200, 55%, 12%)',
+      surface: '#13283a',
+      border: '#112636',
     },
     responsePane: {
-      surface: 'hsl(200, 50%, 17%)',
-      border: 'hsl(200, 45%, 21%)',
+      surface: '#13283a',
+      border: '#112636',
     },
     button: {
-      primary: 'hsl(50, 100%, 45%)',
-      secondary: 'hsl(180, 100%, 50%)',
-      info: 'hsl(180, 100%, 73%)',
-      success: 'hsl(180, 100%, 50%)',
-      notice: 'hsl(50, 100%, 45%)',
-      warning: 'hsl(33, 100%, 45%)',
-      danger: 'hsl(330, 100%, 45%)',
+      primary: '#ffc600',
+      secondary: '#709ac8',
+      info: '#0088FF',
+      success: '#3AD900',
+      notice: '#ecdc6a',
+      warning: '#FF9D00',
+      danger: '#FF628C',
     },
   },
 };

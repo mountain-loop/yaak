@@ -1,22 +1,22 @@
 import type { Theme } from '@yaakapp/api';
 
 export const atomOneDark: Theme = {
-  id: 'vscode-atom-one-dark',
+  id: 'atom-one-dark',
   label: 'Atom One Dark',
   dark: true,
   base: {
-    surface: 'hsl(220, 13%, 18%)', // #282c34
+    surface: 'hsl(220, 13%, 18%)',
     surfaceHighlight: 'hsl(219, 13%, 22%)',
-    text: 'hsl(219, 14%, 71%)', // #abb2bf
-    textSubtle: 'hsl(220, 9%, 55%)', // #5c6370
+    text: 'hsl(219, 14%, 71%)',
+    textSubtle: 'hsl(220, 9%, 55%)',
     textSubtlest: 'hsl(220, 8%, 45%)',
-    primary: 'hsl(286, 60%, 67%)', // #c678dd (purple)
-    secondary: 'hsl(187, 47%, 55%)', // #56b6c2 (cyan)
-    info: 'hsl(207, 82%, 66%)', // #61afef (blue)
-    success: 'hsl(95, 38%, 62%)', // #98c379 (green)
-    notice: 'hsl(39, 67%, 69%)', // #e5c07b (yellow)
-    warning: 'hsl(29, 54%, 61%)', // #d19a66 (orange)
-    danger: 'hsl(355, 65%, 65%)', // #e06c75 (red)
+    primary: 'hsl(286, 60%, 67%)',
+    secondary: 'hsl(220, 9%, 55%)',
+    info: 'hsl(207, 82%, 66%)',
+    success: 'hsl(95, 38%, 62%)',
+    notice: 'hsl(39, 67%, 69%)',
+    warning: 'hsl(29, 54%, 61%)',
+    danger: 'hsl(355, 65%, 65%)',
   },
   components: {
     dialog: {
@@ -27,7 +27,7 @@ export const atomOneDark: Theme = {
       border: 'hsl(220, 13%, 20%)',
     },
     appHeader: {
-      surface: 'hsl(220, 13%, 12%)', // #21252b
+      surface: 'hsl(220, 13%, 12%)',
       border: 'hsl(220, 13%, 18%)',
     },
     responsePane: {
@@ -36,7 +36,7 @@ export const atomOneDark: Theme = {
     },
     button: {
       primary: 'hsl(286, 60%, 60%)',
-      secondary: 'hsl(187, 47%, 48%)',
+      secondary: 'hsl(220, 9%, 48%)',
       info: 'hsl(207, 82%, 59%)',
       success: 'hsl(95, 38%, 55%)',
       notice: 'hsl(39, 67%, 62%)',

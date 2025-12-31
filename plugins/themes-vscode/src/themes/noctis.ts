@@ -1,22 +1,22 @@
 import type { Theme } from '@yaakapp/api';
 
 export const noctisAzureus: Theme = {
-  id: 'vscode-noctis-azureus',
+  id: 'noctis-azureus',
   label: 'Noctis Azureus',
   dark: true,
   base: {
-    surface: 'hsl(210, 35%, 14%)', // #0D2137
+    surface: 'hsl(210, 35%, 14%)',
     surfaceHighlight: 'hsl(210, 30%, 19%)',
-    text: 'hsl(180, 45%, 85%)', // #B2CACD
+    text: 'hsl(180, 45%, 85%)',
     textSubtle: 'hsl(180, 25%, 60%)',
     textSubtlest: 'hsl(180, 18%, 45%)',
-    primary: 'hsl(175, 60%, 55%)', // #49E9A6 (teal/mint)
-    secondary: 'hsl(200, 70%, 65%)', // #7fd0df (cyan)
-    info: 'hsl(200, 70%, 65%)', // cyan
-    success: 'hsl(85, 55%, 60%)', // #aad94c (green)
-    notice: 'hsl(45, 90%, 60%)', // #e4b649 (yellow)
-    warning: 'hsl(25, 85%, 58%)', // #e97749 (orange)
-    danger: 'hsl(355, 75%, 62%)', // #df769b (pink/red)
+    primary: 'hsl(175, 60%, 55%)',
+    secondary: 'hsl(200, 70%, 65%)',
+    info: 'hsl(200, 70%, 65%)',
+    success: 'hsl(85, 55%, 60%)',
+    notice: 'hsl(45, 90%, 60%)',
+    warning: 'hsl(25, 85%, 58%)',
+    danger: 'hsl(355, 75%, 62%)',
   },
   components: {
     dialog: {

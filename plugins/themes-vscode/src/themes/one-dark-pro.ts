@@ -1,22 +1,22 @@
 import type { Theme } from '@yaakapp/api';
 
 export const oneDarkPro: Theme = {
-  id: 'vscode-one-dark-pro',
+  id: 'one-dark-pro',
   label: 'One Dark Pro',
   dark: true,
   base: {
-    surface: 'hsl(220, 13%, 18%)', // #282c34
+    surface: 'hsl(220, 13%, 18%)',
     surfaceHighlight: 'hsl(220, 13%, 22%)',
-    text: 'hsl(219, 14%, 71%)', // #abb2bf
+    text: 'hsl(219, 14%, 71%)',
     textSubtle: 'hsl(219, 10%, 53%)',
     textSubtlest: 'hsl(220, 9%, 45%)',
-    primary: 'hsl(286, 60%, 67%)', // #c678dd (purple)
+    primary: 'hsl(286, 60%, 67%)',
     secondary: 'hsl(219, 14%, 60%)',
-    info: 'hsl(207, 82%, 66%)', // #61afef (blue)
-    success: 'hsl(95, 38%, 62%)', // #98c379 (green)
-    notice: 'hsl(39, 67%, 69%)', // #e5c07b (yellow)
-    warning: 'hsl(29, 54%, 61%)', // #d19a66 (orange)
-    danger: 'hsl(355, 65%, 65%)', // #e06c75 (red)
+    info: 'hsl(207, 82%, 66%)',
+    success: 'hsl(95, 38%, 62%)',
+    notice: 'hsl(39, 67%, 69%)',
+    warning: 'hsl(29, 54%, 61%)',
+    danger: 'hsl(355, 65%, 65%)',
   },
   components: {
     sidebar: {

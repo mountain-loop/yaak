@@ -1,22 +1,22 @@
 import type { Theme } from '@yaakapp/api';
 
 export const winterIsComing: Theme = {
-  id: 'vscode-winter-is-coming',
+  id: 'winter-is-coming',
   label: 'Winter is Coming',
   dark: true,
   base: {
-    surface: 'hsl(216, 50%, 10%)', // #011627 (similar to Night Owl)
+    surface: 'hsl(216, 50%, 10%)',
     surfaceHighlight: 'hsl(216, 40%, 15%)',
-    text: 'hsl(210, 20%, 88%)', // #d6deeb
+    text: 'hsl(210, 20%, 88%)',
     textSubtle: 'hsl(210, 15%, 60%)',
     textSubtlest: 'hsl(210, 10%, 45%)',
-    primary: 'hsl(176, 85%, 60%)', // #4EC9B0 (teal)
-    secondary: 'hsl(210, 65%, 65%)', // #87CEFA (light blue)
-    info: 'hsl(210, 65%, 65%)', // #87CEFA
-    success: 'hsl(100, 65%, 55%)', // #5db66f (green)
-    notice: 'hsl(45, 100%, 65%)', // #DCDCAA (yellow)
-    warning: 'hsl(30, 90%, 55%)', // #ce9178 (orange)
-    danger: 'hsl(350, 100%, 65%)', // #F14C4C (red)
+    primary: 'hsl(176, 85%, 60%)',
+    secondary: 'hsl(210, 15%, 60%)',
+    info: 'hsl(210, 65%, 65%)',
+    success: 'hsl(100, 65%, 55%)',
+    notice: 'hsl(45, 100%, 65%)',
+    warning: 'hsl(30, 90%, 55%)',
+    danger: 'hsl(350, 100%, 65%)',
   },
   components: {
     dialog: {
@@ -36,7 +36,7 @@ export const winterIsComing: Theme = {
     },
     button: {
       primary: 'hsl(176, 85%, 53%)',
-      secondary: 'hsl(210, 65%, 58%)',
+      secondary: 'hsl(210, 15%, 53%)',
       info: 'hsl(210, 65%, 58%)',
       success: 'hsl(100, 65%, 48%)',
       notice: 'hsl(45, 100%, 58%)',

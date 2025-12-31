@@ -1,76 +1,77 @@
 import type { Theme } from '@yaakapp/api';
 
 export const solarizedDark: Theme = {
-  id: 'vscode-solarized-dark',
+  id: 'solarized-dark',
   label: 'Solarized Dark',
   dark: true,
   base: {
-    surface: 'hsl(192, 100%, 11%)', // #002b36 (base03)
-    surfaceHighlight: 'hsl(192, 90%, 14%)', // #073642 (base02)
-    text: 'hsl(186, 8%, 55%)', // #839496 (base0)
-    textSubtle: 'hsl(194, 14%, 40%)', // #657b83 (base00)
-    textSubtlest: 'hsl(195, 12%, 35%)',
-    primary: 'hsl(237, 43%, 60%)', // #6c71c4 (violet)
-    secondary: 'hsl(186, 8%, 50%)',
-    info: 'hsl(205, 69%, 49%)', // #268bd2 (blue)
-    success: 'hsl(68, 100%, 30%)', // #859900 (green)
-    notice: 'hsl(45, 100%, 35%)', // #b58900 (yellow)
-    warning: 'hsl(18, 89%, 44%)', // #cb4b16 (orange)
-    danger: 'hsl(1, 71%, 52%)', // #dc322f (red)
+    surface: '#002b36',
+    surfaceHighlight: '#073642',
+    text: '#839496',
+    textSubtle: '#657b83',
+    textSubtlest: '#586e75',
+    primary: '#268bd2',
+    secondary: '#657b83',
+    info: '#268bd2',
+    success: '#859900',
+    notice: '#b58900',
+    warning: '#cb4b16',
+    danger: '#dc322f',
   },
   components: {
     dialog: {
-      surface: 'hsl(192, 100%, 8%)',
+      surface: '#002b36',
     },
     sidebar: {
-      surface: 'hsl(192, 90%, 14%)',
-      border: 'hsl(192, 80%, 18%)',
+      surface: '#073642',
+      border: 'hsl(192,81%,17%)',
     },
     appHeader: {
-      surface: 'hsl(192, 100%, 9%)',
-      border: 'hsl(192, 80%, 15%)',
+      surface: '#002b36',
+      border: 'hsl(192,81%,16%)',
     },
     responsePane: {
-      surface: 'hsl(192, 90%, 14%)',
-      border: 'hsl(192, 80%, 18%)',
+      surface: '#073642',
+      border: 'hsl(192,81%,17%)',
     },
     button: {
-      primary: 'hsl(237, 43%, 53%)',
-      info: 'hsl(205, 69%, 43%)',
-      success: 'hsl(68, 100%, 25%)',
-      notice: 'hsl(45, 100%, 30%)',
-      warning: 'hsl(18, 89%, 38%)',
-      danger: 'hsl(1, 71%, 46%)',
+      primary: '#268bd2',
+      secondary: '#657b83',
+      info: '#268bd2',
+      success: '#859900',
+      notice: '#b58900',
+      warning: '#cb4b16',
+      danger: '#dc322f',
     },
   },
 };
 
 export const solarizedLight: Theme = {
-  id: 'vscode-solarized-light',
+  id: 'solarized-light',
   label: 'Solarized Light',
   dark: false,
   base: {
-    surface: 'hsl(44, 87%, 94%)', // #fdf6e3 (base3)
-    surfaceHighlight: 'hsl(44, 45%, 90%)', // #eee8d5 (base2)
-    text: 'hsl(194, 14%, 40%)', // #657b83 (base00)
-    textSubtle: 'hsl(195, 12%, 46%)', // #586e75 (base01)
-    textSubtlest: 'hsl(186, 8%, 55%)',
-    primary: 'hsl(237, 43%, 60%)', // #6c71c4 (violet)
-    secondary: 'hsl(194, 14%, 45%)',
-    info: 'hsl(205, 69%, 49%)', // #268bd2 (blue)
-    success: 'hsl(68, 100%, 30%)', // #859900 (green)
-    notice: 'hsl(45, 100%, 35%)', // #b58900 (yellow)
-    warning: 'hsl(18, 89%, 44%)', // #cb4b16 (orange)
-    danger: 'hsl(1, 71%, 52%)', // #dc322f (red)
+    surface: '#fdf6e3',
+    surfaceHighlight: '#eee8d5',
+    text: '#657b83',
+    textSubtle: '#839496',
+    textSubtlest: '#93a1a1',
+    primary: '#268bd2',
+    secondary: '#839496',
+    info: '#268bd2',
+    success: '#859900',
+    notice: '#b58900',
+    warning: '#cb4b16',
+    danger: '#dc322f',
   },
   components: {
     sidebar: {
-      surface: 'hsl(44, 45%, 90%)',
-      border: 'hsl(44, 30%, 85%)',
+      surface: '#eee8d5',
+      border: '#d3cbb7',
     },
     appHeader: {
-      surface: 'hsl(44, 45%, 88%)',
-      border: 'hsl(44, 30%, 83%)',
+      surface: '#eee8d5',
+      border: '#d3cbb7',
     },
   },
 };

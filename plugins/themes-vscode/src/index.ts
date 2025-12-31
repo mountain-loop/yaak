@@ -10,7 +10,7 @@ import { tokyoNight, tokyoNightStorm, tokyoNightDay } from './themes/tokyo-night
 import { solarizedDark, solarizedLight } from './themes/solarized';
 import { ayuDark, ayuMirage, ayuLight } from './themes/ayu';
 import { synthwave84 } from './themes/synthwave-84';
-import { shadesOfPurple } from './themes/shades-of-purple';
+import { shadesOfPurple, shadesOfPurpleSuperDark } from './themes/shades-of-purple';
 import { cobalt2 } from './themes/cobalt2';
 import { horizon } from './themes/horizon';
 import { pandaSyntax } from './themes/panda';
@@ -56,6 +56,7 @@ export const plugin: PluginDefinition = {
     // Retro / Neon themes
     synthwave84,
     shadesOfPurple,
+    shadesOfPurpleSuperDark,
 
     // Blue themes
     cobalt2,
