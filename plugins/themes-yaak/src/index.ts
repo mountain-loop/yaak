@@ -21,7 +21,7 @@ import {
   monokaiProSpectrum,
 } from './themes/monokai-pro';
 import { moonlight } from './themes/moonlight';
-import { nord } from './themes/nord';
+import { nord, nordLight } from './themes/nord';
 import { relaxing } from './themes/relaxing';
 import { rosePine, rosePineMoon, rosePineDawn } from './themes/rose-pine';
 import { triangle } from './themes/triangle';
@@ -93,6 +93,7 @@ export const plugin: PluginDefinition = {
     nightOwl,
     noctisAzureus,
     nord,
+    nordLight,
     oneDarkPro,
     pandaSyntax,
     relaxing,
