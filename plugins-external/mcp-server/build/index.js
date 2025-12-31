@@ -6737,11 +6737,11 @@ var require_dist = __commonJS({
 });
 
 // src/index.ts
-var src_exports = {};
-__export(src_exports, {
+var index_exports = {};
+__export(index_exports, {
   plugin: () => plugin
 });
-module.exports = __toCommonJS(src_exports);
+module.exports = __toCommonJS(index_exports);
 
 // ../../node_modules/@hono/node-server/dist/index.mjs
 var import_http = require("http");
@@ -14659,6 +14659,7 @@ var JSONSchemaGenerator = class {
             _json.readOnly = true;
             break;
           }
+          // passthrough types
           case "promise": {
             this.process(def.innerType, params);
             result.ref = def.innerType;
@@ -14951,6 +14952,7 @@ function isTransforming(_schema, _ctx) {
     case "set": {
       return isTransforming(def.valueType, ctx);
     }
+    // inner types
     case "promise":
     case "optional":
     case "nonoptional":
@@ -15010,10 +15012,10 @@ var ZodMiniType = /* @__PURE__ */ $constructor("ZodMiniType", (inst, def) => {
   };
   inst.clone = (_def, params) => clone(inst, _def, params);
   inst.brand = () => inst;
-  inst.register = (reg, meta) => {
+  inst.register = ((reg, meta) => {
     reg.add(inst, meta);
     return inst;
-  };
+  });
 });
 var ZodMiniObject = /* @__PURE__ */ $constructor("ZodMiniObject", (inst, def) => {
   $ZodObject.init(inst, def);
@@ -15276,10 +15278,10 @@ var ZodType2 = /* @__PURE__ */ $constructor("ZodType", (inst, def) => {
   };
   inst.clone = (def2, params) => clone(inst, def2, params);
   inst.brand = () => inst;
-  inst.register = (reg, meta) => {
+  inst.register = ((reg, meta) => {
     reg.add(inst, meta);
     return inst;
-  };
+  });
   inst.parse = (data, params) => parse2(inst, data, params, { callee: inst.parse });
   inst.safeParse = (data, params) => safeParse3(inst, data, params);
   inst.parseAsync = async (data, params) => parseAsync2(inst, data, params, { callee: inst.parseAsync });
@@ -17238,11 +17240,13 @@ function assertCompleteRequestPrompt(request) {
   if (request.params.ref.type !== "ref/prompt") {
     throw new TypeError(`Expected CompleteRequestPrompt, but got ${request.params.ref.type}`);
   }
+  void request;
 }
 function assertCompleteRequestResourceTemplate(request) {
   if (request.params.ref.type !== "ref/resource") {
     throw new TypeError(`Expected CompleteRequestResourceTemplate, but got ${request.params.ref.type}`);
   }
+  void request;
 }
 var CompleteResultSchema = ResultSchema.extend({
   completion: looseObject({
@@ -23083,7 +23087,7 @@ var Hono = class _Hono {
 var emptyParam = [];
 function match(method, path) {
   const matchers = this.buildAllMatchers();
-  const match2 = (method2, path2) => {
+  const match2 = ((method2, path2) => {
     const matcher = matchers[method2] || matchers[METHOD_NAME_ALL];
     const staticMatch = matcher[2][path2];
     if (staticMatch) {
@@ -23095,7 +23099,7 @@ function match(method, path) {
     }
     const index = match3.indexOf("", 1);
     return [matcher[1][index], match3];
-  };
+  });
   this.match = match2;
   return match2(method, path);
 }
@@ -23693,31 +23697,6 @@ var Hono2 = class extends Hono {
   }
 };
 
-// src/tools/clipboard.ts
-function registerClipboardTools(server, ctx) {
-  server.registerTool(
-    "copy_to_clipboard",
-    {
-      title: "Copy to Clipboard",
-      description: "Copy text to the system clipboard",
-      inputSchema: object2({
-        text: string2().describe("The text to copy")
-      })
-    },
-    async ({ text }) => {
-      await ctx.yaak.clipboard.copyText(text);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `\u2713 Copied to clipboard: "${text.substring(0, 100)}${text.length > 100 ? "..." : ""}"`
-          }
-        ]
-      };
-    }
-  );
-}
-
 // src/tools/helpers.ts
 async function getWorkspaceContext(ctx, workspaceId) {
   const workspaces = await ctx.yaak.workspace.list();
@@ -24075,7 +24054,6 @@ function createMcpServer(ctx, port) {
     version: "0.1.0"
   });
   registerToastTools(server, ctx);
-  registerClipboardTools(server, ctx);
   registerHttpRequestTools(server, ctx);
   registerFolderTools(server, ctx);
   registerWindowTools(server, ctx);

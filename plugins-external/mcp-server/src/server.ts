@@ -2,7 +2,6 @@ import { serve } from '@hono/node-server';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { Hono } from 'hono';
-import { registerClipboardTools } from './tools/clipboard.js';
 import { registerFolderTools } from './tools/folder.js';
 import { registerHttpRequestTools } from './tools/httpRequest.js';
 import { registerToastTools } from './tools/toast.js';
@@ -18,7 +17,6 @@ export function createMcpServer(ctx: McpServerContext, port: number) {
 
   // Register all tools
   registerToastTools(server, ctx);
-  registerClipboardTools(server, ctx);
   registerHttpRequestTools(server, ctx);
   registerFolderTools(server, ctx);
   registerWindowTools(server, ctx);
