@@ -1,7 +1,8 @@
+import { applyFormInputDefaults } from '@yaakapp-internal/lib/templateFunction';
 import { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
 import { Context, DynamicTemplateFunctionArg } from '@yaakapp/api';
 import { describe, expect, test } from 'vitest';
-import { applyDynamicFormInput, applyFormInputDefaults } from '../src/common';
+import { applyDynamicFormInput } from '../src/common';
 
 describe('applyFormInputDefaults', () => {
   test('Works with top-level select', () => {

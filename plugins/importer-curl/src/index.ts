@@ -198,7 +198,8 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
       // - Single dash followed by a letter: -X, -H, -d
       // - Double dash followed by a letter: --data-raw, --header
       // This prevents mistaking data that starts with dashes (like multipart boundaries ------) as flags
-      const nextEntryIsFlag = typeof nextEntry === 'string' &&
+      const nextEntryIsFlag =
+        typeof nextEntry === 'string' &&
         (nextEntry.match(/^-[a-zA-Z]/) || nextEntry.match(/^--[a-zA-Z]/));
       if (isSingleDash && name.length > 1) {
         // Handle squished arguments like -XPOST
@@ -328,7 +329,9 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
   ];
 
   // Check if this is multipart form data in --data-raw (Chrome DevTools format)
-  let multipartFormDataFromRaw: { name: string; value?: string; file?: string; enabled: boolean }[] | null = null;
+  let multipartFormDataFromRaw:
+    | { name: string; value?: string; file?: string; enabled: boolean }[]
+    | null = null;
   if (mimeType === 'multipart/form-data' && boundary && rawDataValues.length > 0) {
     const rawBody = rawDataValues.join('');
     multipartFormDataFromRaw = parseMultipartFormData(rawBody, boundary);
