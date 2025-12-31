@@ -47,7 +47,6 @@ import { jotaiStore } from '../lib/jotai';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { isSidebarFocused } from '../lib/scopes';
 import { navigateToRequestOrFolderOrWorkspace } from '../lib/setWorkspaceSearchParams';
-import { invokeCmd } from '../lib/tauri';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import type { FieldDef } from './core/Editor/filter/extension';

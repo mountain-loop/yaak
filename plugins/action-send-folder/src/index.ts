@@ -1,4 +1,4 @@
-import type { Folder, PluginDefinition } from '@yaakapp/api';
+import type { PluginDefinition } from '@yaakapp/api';
 
 export const plugin: PluginDefinition = {
   folderActions: [
