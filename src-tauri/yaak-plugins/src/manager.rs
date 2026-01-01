@@ -227,32 +227,27 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn add_plugin_by_dir(
-        &self,
-        plugin_context: &PluginContext,
-        dir: &str,
-        enabled: bool,
-    ) -> Result<()> {
-        info!("Adding plugin by dir {dir}");
+    pub async fn add_plugin(&self, plugin_context: &PluginContext, plugin: &Plugin) -> Result<()> {
+        info!("Adding plugin by dir {}", plugin.directory);
 
         let maybe_tx = self.ws_service.app_to_plugin_events_tx.lock().await;
         let tx = match &*maybe_tx {
             None => return Err(ClientNotInitializedErr),
             Some(tx) => tx,
         };
-        let plugin_handle = PluginHandle::new(dir, enabled, tx.clone())?;
-        let dir_path = Path::new(dir);
+        let plugin_handle = PluginHandle::new(&plugin.directory, plugin.enabled, tx.clone())?;
+        let dir_path = Path::new(&plugin.directory);
         let is_vendored = dir_path.starts_with(self.vendored_plugin_dir.as_path());
         let is_installed = dir_path.starts_with(self.installed_plugin_dir.as_path());
 
         // Boot the plugin if it's enabled
-        if enabled {
+        if plugin.enabled {
             let event = self
                 .send_to_plugin_and_wait(
                     plugin_context,
                     &plugin_handle,
                     &InternalEventPayload::BootRequest(BootRequest {
-                        dir: dir.to_string(),
+                        dir: plugin.directory.clone(),
                         watch: !is_vendored && !is_installed,
                     }),
                 )
@@ -264,7 +259,7 @@ impl PluginManager {
         }
 
         let mut plugin_handles = self.plugin_handles.lock().await;
-        plugin_handles.retain(|p| p.dir != dir);
+        plugin_handles.retain(|p| p.dir != plugin.directory);
         plugin_handles.push(plugin_handle.clone());
 
         Ok(())
@@ -285,9 +280,7 @@ impl PluginManager {
                     continue;
                 }
             }
-            if let Err(e) =
-                self.add_plugin_by_dir(plugin_context, &plugin.directory, plugin.enabled).await
-            {
+            if let Err(e) = self.add_plugin(plugin_context, &plugin).await {
                 warn!("Failed to add plugin {} {e:?}", plugin.directory);
             }
         }
