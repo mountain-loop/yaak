@@ -1276,12 +1276,16 @@ async fn cmd_install_plugin<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<Plugin> {
-    plugin_manager.add_plugin_by_dir(&PluginContext::new(&window), &directory, true).await?;
-
-    Ok(app_handle.db().upsert_plugin(
-        &Plugin { directory: directory.into(), url, ..Default::default() },
+    let plugin = app_handle.db().upsert_plugin(
+        &Plugin { directory: directory.into(), url, enabled: true, ..Default::default() },
         &UpdateSource::from_window(&window),
-    )?)
+    )?;
+
+    plugin_manager
+        .add_plugin_by_dir(&PluginContext::new(&window), &plugin.directory, plugin.enabled)
+        .await?;
+
+    Ok(plugin)
 }
 
 #[tauri::command]
