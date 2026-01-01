@@ -89,7 +89,7 @@
     "tauri-before-dev": "workspaces-run --parallel -- npm run --workspaces --if-present dev"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.7",
+    "@biomejs/biome": "^2.3.10",
     "@tauri-apps/cli": "^2.9.6",
     "@yaakapp/cli": "^0.3.4",
     "nodejs-file-downloader": "^4.13.0",
