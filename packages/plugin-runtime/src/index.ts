@@ -1,7 +1,7 @@
 import type { InternalEvent } from '@yaakapp/api';
+import WebSocket from 'ws';
 import { EventChannel } from './EventChannel';
 import { PluginHandle } from './PluginHandle';
-import WebSocket from 'ws';
 
 const port = process.env.PORT;
 if (!port) {
@@ -66,4 +66,8 @@ async function handleIncoming(msg: string) {
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
 });
