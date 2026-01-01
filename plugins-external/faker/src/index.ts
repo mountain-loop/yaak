@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { PluginDefinition, TemplateFunctionArg } from '@yaakapp/api';
+import type { DynamicTemplateFunctionArg, PluginDefinition } from '@yaakapp/api';
 
 const modules = [
   'airline',
@@ -33,7 +33,7 @@ function normalizeResult(result: unknown): string {
 }
 
 // Whatever Yaak’s arg type shape is – rough example
-function args(modName: string, fnName: string): TemplateFunctionArg[] {
+function args(modName: string, fnName: string): DynamicTemplateFunctionArg[] {
   return [
     {
       type: 'banner',
@@ -58,8 +58,7 @@ function args(modName: string, fnName: string): TemplateFunctionArg[] {
 
 export const plugin: PluginDefinition = {
   templateFunctions: modules.flatMap((modName) => {
-    // @ts-expect-error - Dynamic access to faker modules
-    const mod = faker[modName];
+    const mod = faker[modName as keyof typeof faker];
     return Object.keys(mod)
       .filter((n) => n !== 'faker')
       .map((fnName) => ({
