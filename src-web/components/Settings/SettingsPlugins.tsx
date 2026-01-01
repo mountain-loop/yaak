@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type { Plugin } from '@yaakapp-internal/models';
-import { pluginsAtom } from '@yaakapp-internal/models';
+import { patchModel, pluginsAtom } from '@yaakapp-internal/models';
 import type { PluginVersion } from '@yaakapp-internal/plugins';
 import {
   checkPluginUpdates,
@@ -18,6 +18,7 @@ import { usePluginsKey, useRefreshPlugins } from '../../hooks/usePlugins';
 import { showConfirmDelete } from '../../lib/confirm';
 import { minPromiseMillis } from '../../lib/minPromiseMillis';
 import { Button } from '../core/Button';
+import { Checkbox } from '../core/Checkbox';
 import { CountBadge } from '../core/CountBadge';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';
@@ -34,6 +35,8 @@ import { SelectFile } from '../SelectFile';
 export function SettingsPlugins() {
   const [directory, setDirectory] = useState<string | null>(null);
   const plugins = useAtomValue(pluginsAtom);
+  const bundledPlugins = plugins.filter((p) => p.url == null);
+  const installedPlugins = plugins.filter((p) => p.url != null);
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
   const [tab, setTab] = useState<string>();
@@ -49,7 +52,12 @@ export function SettingsPlugins() {
           {
             label: 'Installed',
             value: 'installed',
-            rightSlot: <CountBadge count={plugins.length} />,
+            rightSlot: <CountBadge count={installedPlugins.length} />,
+          },
+          {
+            label: 'Bundled',
+            value: 'bundled',
+            rightSlot: <CountBadge count={bundledPlugins.length} />,
           },
         ]}
       >
@@ -101,6 +109,9 @@ export function SettingsPlugins() {
             </footer>
           </div>
         </TabContent>
+        <TabContent value="bundled" className="pb-0">
+          <BundledPlugins />
+        </TabContent>
       </Tabs>
     </div>
   );
@@ -119,6 +130,27 @@ function PluginTableRowForInstalledPlugin({ plugin }: { plugin: Plugin }) {
       name={info.name}
       displayName={info.displayName}
       url={plugin.url}
+      showCheckbox={true}
+      showUninstall={true}
+    />
+  );
+}
+
+function PluginTableRowForBundledPlugin({ plugin }: { plugin: Plugin }) {
+  const info = usePluginInfo(plugin.id).data;
+  if (info == null) {
+    return null;
+  }
+
+  return (
+    <PluginTableRow
+      plugin={plugin}
+      version={info.version}
+      name={info.name}
+      displayName={info.displayName}
+      url={plugin.url}
+      showCheckbox={true}
+      showUninstall={false}
     />
   );
 }
@@ -134,6 +166,7 @@ function PluginTableRowForRemotePluginVersion({ pluginVersion }: { pluginVersion
       name={pluginVersion.name}
       displayName={pluginVersion.displayName}
       url={pluginVersion.url}
+      showCheckbox={false}
     />
   );
 }
@@ -144,12 +177,16 @@ function PluginTableRow({
   version,
   displayName,
   url,
+  showCheckbox = true,
+  showUninstall = true,
 }: {
   plugin: Plugin | null;
   name: string;
   version: string;
   displayName: string;
   url: string | null;
+  showCheckbox?: boolean;
+  showUninstall?: boolean;
 }) {
   const updates = usePluginUpdates();
   const latestVersion = updates.data?.plugins.find((u) => u.name === name)?.version;
@@ -158,9 +195,26 @@ function PluginTableRow({
     mutationFn: (name: string) => installPlugin(name, null),
   });
   const uninstall = usePromptUninstall(plugin?.id ?? null, displayName);
+  const refreshPlugins = useRefreshPlugins();
 
   return (
     <TableRow>
+      {showCheckbox && (
+        <TableCell className="!py-0">
+          <Checkbox
+            hideLabel
+            title={plugin?.enabled ? 'Disable plugin' : 'Enable plugin'}
+            checked={plugin?.enabled ?? false}
+            disabled={plugin == null}
+            onChange={async (enabled) => {
+              if (plugin) {
+                await patchModel(plugin, { enabled });
+                refreshPlugins.mutate();
+              }
+            }}
+          />
+        </TableCell>
+      )}
       <TableCell className="font-semibold">
         {url ? (
           <Link noUnderline href={url}>
@@ -169,6 +223,9 @@ function PluginTableRow({
         ) : (
           displayName
         )}
+      </TableCell>
+      <TableCell>
+        <InlineCode>{name}</InlineCode>
       </TableCell>
       <TableCell>
         <HStack space={1.5}>
@@ -206,7 +263,7 @@ function PluginTableRow({
               Install
             </Button>
           ) : null}
-          {uninstall != null && (
+          {showUninstall && uninstall != null && (
             <Button
               size="xs"
               title="Uninstall plugin"
@@ -253,6 +310,7 @@ function PluginSearch() {
           <Table scrollable>
             <TableHead>
               <TableRow>
+                <TableHeaderCell>Display Name</TableHeaderCell>
                 <TableHeaderCell>Name</TableHeaderCell>
                 <TableHeaderCell>Version</TableHeaderCell>
                 <TableHeaderCell />
@@ -271,7 +329,7 @@ function PluginSearch() {
 }
 
 function InstalledPlugins() {
-  const plugins = useAtomValue(pluginsAtom);
+  const plugins = useAtomValue(pluginsAtom).filter((p) => p.url != null);
 
   return plugins.length === 0 ? (
     <div className="pb-4">
@@ -285,6 +343,8 @@ function InstalledPlugins() {
     <Table scrollable>
       <TableHead>
         <TableRow>
+          <TableHeaderCell className="w-0" />
+          <TableHeaderCell>Display Name</TableHeaderCell>
           <TableHeaderCell>Name</TableHeaderCell>
           <TableHeaderCell>Version</TableHeaderCell>
           <TableHeaderCell />
@@ -293,6 +353,33 @@ function InstalledPlugins() {
       <tbody className="divide-y divide-surface-highlight">
         {plugins.map((p) => (
           <PluginTableRowForInstalledPlugin key={p.id} plugin={p} />
+        ))}
+      </tbody>
+    </Table>
+  );
+}
+
+function BundledPlugins() {
+  const plugins = useAtomValue(pluginsAtom).filter((p) => p.url == null);
+
+  return plugins.length === 0 ? (
+    <div className="pb-4">
+      <EmptyStateText className="text-center">No bundled plugins found.</EmptyStateText>
+    </div>
+  ) : (
+    <Table scrollable>
+      <TableHead>
+        <TableRow>
+          <TableHeaderCell className="w-0" />
+          <TableHeaderCell>Display Name</TableHeaderCell>
+          <TableHeaderCell>Name</TableHeaderCell>
+          <TableHeaderCell>Version</TableHeaderCell>
+          <TableHeaderCell />
+        </TableRow>
+      </TableHead>
+      <tbody className="divide-y divide-surface-highlight">
+        {plugins.map((p) => (
+          <PluginTableRowForBundledPlugin key={p.id} plugin={p} />
         ))}
       </tbody>
     </Table>

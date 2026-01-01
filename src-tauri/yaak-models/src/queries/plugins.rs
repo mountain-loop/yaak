@@ -8,6 +8,10 @@ impl<'a> DbContext<'a> {
         self.find_one(PluginIden::Id, id)
     }
 
+    pub fn get_plugin_by_directory(&self, directory: &str) -> Option<Plugin> {
+        self.find_optional(PluginIden::Directory, directory)
+    }
+
     pub fn list_plugins(&self) -> Result<Vec<Plugin>> {
         self.find_all()
     }
