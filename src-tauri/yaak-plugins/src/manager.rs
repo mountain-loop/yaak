@@ -247,18 +247,16 @@ impl PluginManager {
 
         // Boot the plugin if it's enabled
         if enabled {
-            let event = timeout(
-                Duration::from_secs(5),
-                self.send_to_plugin_and_wait(
+            let event = self
+                .send_to_plugin_and_wait(
                     plugin_context,
                     &plugin_handle,
                     &InternalEventPayload::BootRequest(BootRequest {
                         dir: dir.to_string(),
                         watch: !is_vendored && !is_installed,
                     }),
-                ),
-            )
-            .await??;
+                )
+                .await?;
 
             if !matches!(event.payload, InternalEventPayload::BootResponse) {
                 return Err(UnknownEventErr);
@@ -410,19 +408,30 @@ impl PluginManager {
             tokio::spawn(async move {
                 let mut found_events = Vec::new();
 
-                while let Some(event) = rx.recv().await {
-                    let matched_sent_event = events_to_send
-                        .iter()
-                        .find(|e| Some(e.id.to_owned()) == event.reply_id)
-                        .is_some();
-                    if matched_sent_event {
-                        found_events.push(event.clone());
-                    };
+                let collect_events = async {
+                    while let Some(event) = rx.recv().await {
+                        let matched_sent_event = events_to_send
+                            .iter()
+                            .find(|e| Some(e.id.to_owned()) == event.reply_id)
+                            .is_some();
+                        if matched_sent_event {
+                            found_events.push(event.clone());
+                        };
 
-                    let found_them_all = found_events.len() == events_to_send.len();
-                    if found_them_all {
-                        break;
+                        let found_them_all = found_events.len() == events_to_send.len();
+                        if found_them_all {
+                            break;
+                        }
                     }
+                };
+
+                // Timeout after 10 seconds to prevent hanging forever if plugin doesn't respond
+                if let Err(_) = timeout(Duration::from_secs(5), collect_events).await {
+                    warn!(
+                        "Timeout waiting for plugin responses. Got {}/{} responses",
+                        found_events.len(),
+                        events_to_send.len()
+                    );
                 }
 
                 found_events
