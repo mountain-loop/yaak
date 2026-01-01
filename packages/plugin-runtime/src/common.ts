@@ -1,8 +1,8 @@
+import type { Context, DynamicAuthenticationArg, DynamicTemplateFunctionArg } from '@yaakapp/api';
 import type {
   CallHttpAuthenticationActionArgs,
   CallTemplateFunctionArgs,
 } from '@yaakapp-internal/plugins';
-import type { Context, DynamicAuthenticationArg, DynamicTemplateFunctionArg } from '@yaakapp/api';
 
 export async function applyDynamicFormInput(
   ctx: Context,
@@ -23,20 +23,24 @@ export async function applyDynamicFormInput(
 ): Promise<(DynamicTemplateFunctionArg | DynamicAuthenticationArg)[]> {
   const resolvedArgs: (DynamicTemplateFunctionArg | DynamicAuthenticationArg)[] = [];
   for (const { dynamic, ...arg } of args) {
-    const newArg: DynamicTemplateFunctionArg | DynamicAuthenticationArg = {
-      ...arg,
-      ...(typeof dynamic === 'function'
+    const dynamicResult =
+      typeof dynamic === 'function'
         ? await dynamic(
             ctx,
             callArgs as CallTemplateFunctionArgs & CallHttpAuthenticationActionArgs,
           )
-        : undefined),
-    };
+        : undefined;
+
+    const newArg = {
+      ...arg,
+      ...dynamicResult,
+    } as DynamicTemplateFunctionArg | DynamicAuthenticationArg;
+
     if ('inputs' in newArg && Array.isArray(newArg.inputs)) {
       try {
         newArg.inputs = await applyDynamicFormInput(
           ctx,
-          newArg.inputs,
+          newArg.inputs as DynamicTemplateFunctionArg[],
           callArgs as CallTemplateFunctionArgs & CallHttpAuthenticationActionArgs,
         );
       } catch (e) {

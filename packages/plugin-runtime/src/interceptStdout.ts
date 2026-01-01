@@ -5,16 +5,16 @@ export function interceptStdout(intercept: (text: string) => string) {
   const old_stderr_write = process.stderr.write;
 
   process.stdout.write = ((write) =>
-    (text: string, ...args: unknown[]) => {
+    ((text: string, ...args: never[]) => {
       write.call(process.stdout, interceptor(text, intercept), ...args);
       return true;
-    })(process.stdout.write);
+    }) as typeof process.stdout.write)(process.stdout.write);
 
   process.stderr.write = ((write) =>
-    (text: string, ...args: unknown[]) => {
+    ((text: string, ...args: never[]) => {
       write.call(process.stderr, interceptor(text, intercept), ...args);
       return true;
-    })(process.stderr.write);
+    }) as typeof process.stderr.write)(process.stderr.write);
 
   // puts back to original
   return function unhook() {
