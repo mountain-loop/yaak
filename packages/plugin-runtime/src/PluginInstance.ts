@@ -1,5 +1,8 @@
-import { applyFormInputDefaults, validateTemplateFunctionArgs } from '@yaakapp-internal/lib/templateFunction';
 import {
+  applyFormInputDefaults,
+  validateTemplateFunctionArgs,
+} from '@yaakapp-internal/lib/templateFunction';
+import type {
   BootRequest,
   DeleteKeyValueResponse,
   DeleteModelResponse,
@@ -12,9 +15,13 @@ import {
   HttpAuthenticationAction,
   HttpRequest,
   HttpRequestAction,
+  ImportResources,
   InternalEvent,
   InternalEventPayload,
   ListCookieNamesResponse,
+  ListFoldersResponse,
+  ListHttpRequestsRequest,
+  ListHttpRequestsResponse,
   ListWorkspacesResponse,
   PluginContext,
   PromptTextResponse,
@@ -22,11 +29,12 @@ import {
   RenderHttpRequestResponse,
   SendHttpRequestResponse,
   TemplateFunction,
+  TemplateRenderRequest,
   TemplateRenderResponse,
   UpsertModelResponse,
   WindowInfoResponse,
 } from '@yaakapp-internal/plugins';
-import { Context, PluginDefinition } from '@yaakapp/api';
+import type { Context, PluginDefinition } from '@yaakapp/api';
 import console from 'node:console';
 import { type Stats, statSync, watch } from 'node:fs';
 import path from 'node:path';
@@ -56,7 +64,7 @@ export class PluginInstance {
       await this.#onMessage(event);
     });
 
-    this.#mod = {} as any;
+    this.#mod = {};
 
     const fileChangeCallback = async () => {
       await this.#mod?.dispose?.();
@@ -120,8 +128,7 @@ export class PluginInstance {
         if (reply != null) {
           const replyPayload: InternalEventPayload = {
             type: 'import_response',
-            // deno-lint-ignore no-explicit-any
-            resources: reply.resources as any,
+            resources: reply.resources as ImportResources,
           };
           this.#sendPayload(context, replyPayload, replyId);
           return;
@@ -262,7 +269,7 @@ export class PluginInstance {
         payload.type === 'get_template_function_config_request' &&
         Array.isArray(this.#mod?.templateFunctions)
       ) {
-        let templateFunction = this.#mod.templateFunctions.find((f) => f.name === payload.name);
+        const templateFunction = this.#mod.templateFunctions.find((f) => f.name === payload.name);
         if (templateFunction == null) {
           this.#sendEmpty(context, replyId);
           return;
@@ -381,10 +388,7 @@ export class PluginInstance {
         }
       }
 
-      if (
-        payload.type === 'call_folder_action_request' &&
-        Array.isArray(this.#mod.folderActions)
-      ) {
+      if (payload.type === 'call_folder_action_request' && Array.isArray(this.#mod.folderActions)) {
         const action = this.#mod.folderActions[payload.index];
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
@@ -703,12 +707,15 @@ export class PluginInstance {
           return httpRequest;
         },
         list: async (args?: { folderId?: string }) => {
-          const payload = {
+          const payload: InternalEventPayload = {
             type: 'list_http_requests_request',
             folderId: args?.folderId,
-          } as any;
-          const { httpRequests } = await this.#sendForReply<any>(context, payload);
-          return httpRequests as any[];
+          } satisfies ListHttpRequestsRequest & { type: 'list_http_requests_request' };
+          const { httpRequests } = await this.#sendForReply<ListHttpRequestsResponse>(
+            context,
+            payload,
+          );
+          return httpRequests;
         },
         create: async (args) => {
           const payload = {
@@ -747,11 +754,9 @@ export class PluginInstance {
       },
       folder: {
         list: async () => {
-          const payload = {
-            type: 'list_folders_request',
-          } as any;
-          const { folders } = await this.#sendForReply<any>(context, payload);
-          return folders as any[];
+          const payload = { type: 'list_folders_request' } as const;
+          const { folders } = await this.#sendForReply<ListFoldersResponse>(context, payload);
+          return folders;
         },
       },
       cookies: {
@@ -774,9 +779,10 @@ export class PluginInstance {
          * Invoke Yaak's template engine to render a value. If the value is a nested type
          * (eg. object), it will be recursively rendered.
          */
-        render: async (args) => {
+        render: async (args: TemplateRenderRequest) => {
           const payload = { type: 'template_render_request', ...args } as const;
           const result = await this.#sendForReply<TemplateRenderResponse>(context, payload);
+          // biome-ignore lint/suspicious/noExplicitAny: That's okay
           return result.data as any;
         },
       },
@@ -809,15 +815,19 @@ export class PluginInstance {
       workspace: {
         list: async () => {
           const payload = {
-            type: 'list_workspaces_request'
+            type: 'list_workspaces_request',
           } as InternalEventPayload;
           const response = await this.#sendForReply<ListWorkspacesResponse>(context, payload);
-          return response.workspaces.map((w) => ({
-            id: w.id,
-            name: w.name,
-            // Hide label from plugin authors, but keep it for internal routing
-            _label: (w as any).label as string,
-          }));
+          return response.workspaces.map((w) => {
+            // Internal workspace info includes label field not in public API
+            type WorkspaceInfoInternal = typeof w & { label?: string };
+            return {
+              id: w.id,
+              name: w.name,
+              // Hide label from plugin authors, but keep it for internal routing
+              _label: (w as WorkspaceInfoInternal).label as string,
+            };
+          });
         },
         withContext: (workspaceHandle: { id: string; name: string; _label?: string }) => {
           // Create a new context with the workspace's window label

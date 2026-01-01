@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
-import { useDebouncedValue } from './useDebouncedValue';
 import { usePluginsKey } from './usePlugins';
 
 const httpAuthenticationSummariesAtom = atom<GetHttpAuthenticationSummaryResponse[]>([]);

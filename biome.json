@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.7/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
   "linter": {
     "enabled": true,
     "rules": {
@@ -43,7 +43,9 @@
       "!src-web/tailwind.config.cjs",
       "!src-web/postcss.config.cjs",
       "!src-web/vite.config.ts",
-      "!src-web/routeTree.gen.ts"
+      "!src-web/routeTree.gen.ts",
+      "!packages/plugin-runtime-types/lib",
+      "!**/bindings"
     ]
   }
 }

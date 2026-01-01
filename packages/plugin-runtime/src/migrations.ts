@@ -7,7 +7,7 @@ export function migrateTemplateFunctionSelectOptions(
     if (a.type === 'select') {
       a.options = a.options.map((o) => ({
         ...o,
-        label: o.label || (o as any).name,
+        label: o.label || (o as { name?: string }).name,
       }));
     }
     return a;
