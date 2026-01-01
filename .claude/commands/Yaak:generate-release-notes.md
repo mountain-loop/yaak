@@ -8,7 +8,9 @@ Generate formatted release notes for Yaak releases by analyzing git history and 
 ## What to do
 
 1. Identifies the version tag and previous version
-2. Retrieves all commits between versions (scoped to stable or beta)
+2. Retrieves all commits between versions 
+   - If the version is a beta version, it retrieves commits between the beta version and previous beta version
+   - If the version is a stable version, it retrieves commits between the stable version and the previous stable version
 3. Fetches PR descriptions for linked issues to find:
    - Feedback URLs (feedback.yaak.app)
    - Additional context and descriptions

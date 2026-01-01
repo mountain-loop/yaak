@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Color, Icon } from '@yaakapp/api';
-import * as z from 'zod/v4';
+import * as z from 'zod';
 import type { McpServerContext } from '../types.js';
 
 const ICON_VALUES = [

@@ -1,3 +1,7 @@
+import console from 'node:console';
+import { type Stats, statSync, watch } from 'node:fs';
+import path from 'node:path';
+import type { Context, PluginDefinition } from '@yaakapp/api';
 import {
   applyFormInputDefaults,
   validateTemplateFunctionArgs,
@@ -34,10 +38,6 @@ import type {
   UpsertModelResponse,
   WindowInfoResponse,
 } from '@yaakapp-internal/plugins';
-import type { Context, PluginDefinition } from '@yaakapp/api';
-import console from 'node:console';
-import { type Stats, statSync, watch } from 'node:fs';
-import path from 'node:path';
 import { applyDynamicFormInput } from './common';
 import { EventChannel } from './EventChannel';
 import { migrateTemplateFunctionSelectOptions } from './migrations';
