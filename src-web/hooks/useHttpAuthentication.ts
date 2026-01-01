@@ -36,7 +36,6 @@ export function useSubscribeHttpAuthentication() {
         );
         setNumResults(result.length);
         jotaiStore.set(httpAuthenticationSummariesAtom, result);
-        console.log('REFRESHED PLUGINS', result.length);
         return result;
       } catch (err) {
         showErrorToast('http-authentication-error', err);
