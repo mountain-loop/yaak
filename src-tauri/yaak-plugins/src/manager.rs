@@ -105,7 +105,7 @@ impl PluginManager {
 
         // Handle when client plugin runtime disconnects
         tauri::async_runtime::spawn(async move {
-            while let Some(_) = client_disconnect_rx.recv().await {
+            while (client_disconnect_rx.recv().await).is_some() {
                 // Happens when the app is closed
                 info!("Plugin runtime client disconnected");
             }
@@ -181,7 +181,7 @@ impl PluginManager {
 
         // Ensure all bundled plugins make it into the database
         for dir in &bundled_plugin_dirs {
-            if let None = app_handle.db().get_plugin_by_directory(dir) {
+            if app_handle.db().get_plugin_by_directory(dir).is_none() {
                 app_handle.db().upsert_plugin(
                     &Plugin {
                         directory: dir.clone(),
@@ -410,10 +410,8 @@ impl PluginManager {
 
                 let collect_events = async {
                     while let Some(event) = rx.recv().await {
-                        let matched_sent_event = events_to_send
-                            .iter()
-                            .find(|e| Some(e.id.to_owned()) == event.reply_id)
-                            .is_some();
+                        let matched_sent_event =
+                            events_to_send.iter().any(|e| Some(e.id.to_owned()) == event.reply_id);
                         if matched_sent_event {
                             found_events.push(event.clone());
                         };
@@ -426,7 +424,7 @@ impl PluginManager {
                 };
 
                 // Timeout after 10 seconds to prevent hanging forever if plugin doesn't respond
-                if let Err(_) = timeout(Duration::from_secs(5), collect_events).await {
+                if timeout(Duration::from_secs(5), collect_events).await.is_err() {
                     warn!(
                         "Timeout waiting for plugin responses. Got {}/{} responses",
                         found_events.len(),
@@ -622,7 +620,7 @@ impl PluginManager {
         // We don't want to fail for this op because the UI will not be able to list any auth types then
         let render_opt = RenderOptions { error_behavior: RenderErrorBehavior::ReturnEmpty };
         let rendered_values = render_json_value_raw(json!(values), vars, &cb, &render_opt).await?;
-        let context_id = format!("{:x}", md5::compute(model_id.to_string()));
+        let context_id = format!("{:x}", md5::compute(model_id));
 
         let event = self
             .send_to_plugin_and_wait(
@@ -790,7 +788,7 @@ impl PluginManager {
         // We don't want to fail for this op because the UI will not be able to list any auth types then
         let render_opt = RenderOptions { error_behavior: RenderErrorBehavior::ReturnEmpty };
         let rendered_values = render_json_value_raw(json!(values), vars, &cb, &render_opt).await?;
-        let context_id = format!("{:x}", md5::compute(model_id.to_string()));
+        let context_id = format!("{:x}", md5::compute(model_id));
         let event = self
             .send_to_plugin_and_wait(
                 &PluginContext::new(window),
@@ -840,7 +838,7 @@ impl PluginManager {
             .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
             .ok_or(PluginNotFoundErr(auth_name.into()))?;
 
-        let context_id = format!("{:x}", md5::compute(model_id.to_string()));
+        let context_id = format!("{:x}", md5::compute(model_id));
         self.send_to_plugin_and_wait(
             &PluginContext::new(window),
             &plugin,
@@ -867,7 +865,7 @@ impl PluginManager {
         plugin_context: &PluginContext,
     ) -> Result<CallHttpAuthenticationResponse> {
         let disabled = match req.values.get("disabled") {
-            Some(JsonPrimitive::Boolean(v)) => v.clone(),
+            Some(JsonPrimitive::Boolean(v)) => *v,
             _ => false,
         };
 
