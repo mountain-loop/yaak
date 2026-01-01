@@ -5,6 +5,7 @@ import { useAtomValue } from 'jotai';
 import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { allRequestsAtom } from '../hooks/useAllRequests';
+import { useFolderActions } from '../hooks/useFolderActions';
 import { useLatestHttpResponse } from '../hooks/useLatestHttpResponse';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { showDialog } from '../lib/dialog';
@@ -30,12 +31,22 @@ interface Props {
 export function FolderLayout({ folder, style }: Props) {
   const folders = useAtomValue(foldersAtom);
   const requests = useAtomValue(allRequestsAtom);
+  const folderActions = useFolderActions();
+  const sendAllAction = useMemo(
+    () => folderActions.find((a) => a.label === 'Send All'),
+    [folderActions],
+  );
+
   const children = useMemo(() => {
     return [
       ...folders.filter((f) => f.folderId === folder.id),
       ...requests.filter((r) => r.folderId === folder.id),
     ];
   }, [folder.id, folders, requests]);
+
+  const handleSendAll = useCallback(() => {
+    sendAllAction?.call(folder);
+  }, [sendAllAction, folder]);
 
   return (
     <div style={style} className="p-6 pt-4 overflow-y-auto @container">
@@ -48,6 +59,8 @@ export function FolderLayout({ folder, style }: Props) {
             color="secondary"
             size="sm"
             variant="border"
+            onClick={handleSendAll}
+            disabled={sendAllAction == null}
           >
             Send All
           </Button>

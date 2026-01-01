@@ -5,6 +5,9 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }
+
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }
 

@@ -1,28 +1,20 @@
-import process from "node:process";
+import process from 'node:process';
 
-export function interceptStdout(
-  intercept: (text: string) => string,
-) {
+export function interceptStdout(intercept: (text: string) => string) {
   const old_stdout_write = process.stdout.write;
   const old_stderr_write = process.stderr.write;
 
-  process.stdout.write = (function (write) {
-    return function (text: string) {
-      arguments[0] = interceptor(text, intercept);
-      // deno-lint-ignore no-explicit-any
-      write.apply(process.stdout, arguments as any);
+  process.stdout.write = ((write) =>
+    ((text: string, ...args: never[]) => {
+      write.call(process.stdout, interceptor(text, intercept), ...args);
       return true;
-    };
-  })(process.stdout.write);
+    }) as typeof process.stdout.write)(process.stdout.write);
 
-  process.stderr.write = (function (write) {
-    return function (text: string) {
-      arguments[0] = interceptor(text, intercept);
-      // deno-lint-ignore no-explicit-any
-      write.apply(process.stderr, arguments as any);
+  process.stderr.write = ((write) =>
+    ((text: string, ...args: never[]) => {
+      write.call(process.stderr, interceptor(text, intercept), ...args);
       return true;
-    };
-  })(process.stderr.write);
+    }) as typeof process.stderr.write)(process.stderr.write);
 
   // puts back to original
   return function unhook() {
@@ -32,6 +24,5 @@ export function interceptStdout(
 }
 
 function interceptor(text: string, fn: (text: string) => string) {
-  return fn(text).replace(/\n$/, "") +
-    (fn(text) && /\n$/.test(text) ? "\n" : "");
+  return fn(text).replace(/\n$/, '') + (fn(text) && /\n$/.test(text) ? '\n' : '');
 }

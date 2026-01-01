@@ -423,7 +423,7 @@ export type ListCookieNamesRequest = {};
 
 export type ListCookieNamesResponse = { names: Array<string>, };
 
-export type ListFoldersRequest = Record<string, never>;
+export type ListFoldersRequest = {};
 
 export type ListFoldersResponse = { folders: Array<Folder>, };
 

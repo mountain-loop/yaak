@@ -21,10 +21,10 @@ use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{
     Color, DeleteKeyValueResponse, EmptyPayload, ErrorResponse, FindHttpResponsesResponse,
     GetCookieValueResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent,
-    InternalEventPayload, ListCookieNamesResponse, ListHttpRequestsResponse, ListWorkspacesResponse,
-    RenderGrpcRequestResponse, RenderHttpRequestResponse, SendHttpRequestResponse,
-    SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse, WindowInfoResponse,
-    WindowNavigateEvent, WorkspaceInfo,
+    InternalEventPayload, ListCookieNamesResponse, ListHttpRequestsResponse,
+    ListWorkspacesResponse, RenderGrpcRequestResponse, RenderHttpRequestResponse,
+    SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse,
+    WindowInfoResponse, WindowNavigateEvent, WorkspaceInfo,
 };
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -107,7 +107,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     Workspace(app_handle.db().upsert_workspace(m, &UpdateSource::Plugin)?)
                 }
                 _ => {
-                    return Err(PluginErr("Upsert not supported for this model type".into()).into())
+                    return Err(PluginErr("Upsert not supported for this model type".into()).into());
                 }
             };
 
@@ -118,14 +118,10 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         InternalEventPayload::DeleteModelRequest(req) => {
             let model = match req.model.as_str() {
                 "http_request" => AnyModel::HttpRequest(
-                    app_handle
-                        .db()
-                        .delete_http_request_by_id(&req.id, &UpdateSource::Plugin)?,
+                    app_handle.db().delete_http_request_by_id(&req.id, &UpdateSource::Plugin)?,
                 ),
                 "grpc_request" => AnyModel::GrpcRequest(
-                    app_handle
-                        .db()
-                        .delete_grpc_request_by_id(&req.id, &UpdateSource::Plugin)?,
+                    app_handle.db().delete_grpc_request_by_id(&req.id, &UpdateSource::Plugin)?,
                 ),
                 "websocket_request" => AnyModel::WebsocketRequest(
                     app_handle
@@ -133,17 +129,13 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                         .delete_websocket_request_by_id(&req.id, &UpdateSource::Plugin)?,
                 ),
                 "folder" => AnyModel::Folder(
-                    app_handle
-                        .db()
-                        .delete_folder_by_id(&req.id, &UpdateSource::Plugin)?,
+                    app_handle.db().delete_folder_by_id(&req.id, &UpdateSource::Plugin)?,
                 ),
                 "environment" => AnyModel::Environment(
-                    app_handle
-                        .db()
-                        .delete_environment_by_id(&req.id, &UpdateSource::Plugin)?,
+                    app_handle.db().delete_environment_by_id(&req.id, &UpdateSource::Plugin)?,
                 ),
                 _ => {
-                    return Err(PluginErr("Delete not supported for this model type".into()).into())
+                    return Err(PluginErr("Delete not supported for this model type".into()).into());
                 }
             };
 

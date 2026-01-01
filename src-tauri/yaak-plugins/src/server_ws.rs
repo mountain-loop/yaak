@@ -73,10 +73,17 @@ impl PluginRuntimeServerWebsocket {
 
                         // Skip non-text messages
                         if !msg.is_text() {
-                            return;
+                            warn!("Received non-text message from plugin runtime");
+                            continue;
                         }
 
-                        let msg_text = msg.into_text().unwrap();
+                        let msg_text = match msg.into_text() {
+                            Ok(text) => text,
+                            Err(e) => {
+                                error!("Failed to convert message to text: {e:?}");
+                                continue;
+                            }
+                        };
                         let event = match serde_json::from_str::<InternalEventRawPayload>(&msg_text) {
                             Ok(e) => e,
                             Err(e) => {
@@ -117,9 +124,18 @@ impl PluginRuntimeServerWebsocket {
                                 return;
                             },
                             Some(event) => {
-                                let event_bytes = serde_json::to_string(&event).unwrap();
+                                let event_bytes = match serde_json::to_string(&event) {
+                                    Ok(bytes) => bytes,
+                                    Err(e) => {
+                                        error!("Failed to serialize event: {:?}", e);
+                                        continue;
+                                    }
+                                };
                                 let msg = Message::text(event_bytes);
-                                ws_sender.send(msg).await.unwrap();
+                                if let Err(e) = ws_sender.send(msg).await {
+                                    error!("Failed to send message to plugin runtime: {:?}", e);
+                                    break;
+                                }
                             }
                         }
                     }

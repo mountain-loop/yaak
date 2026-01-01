@@ -5,12 +5,16 @@ import { jotaiStore } from '../lib/jotai';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { invokeCmd } from '../lib/tauri';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
+import { useDebouncedValue } from './useDebouncedValue';
 import { invalidateAllPluginInfo } from './usePluginInfo';
 
 export function usePluginsKey() {
-  return useAtomValue(pluginsAtom)
+  const pluginKey = useAtomValue(pluginsAtom)
     .map((p) => p.id + p.updatedAt)
     .join(',');
+
+  // Debounce plugins both for efficiency and to give plugins a chance to reload after the DB updates
+  return useDebouncedValue(pluginKey, 1000);
 }
 
 /**

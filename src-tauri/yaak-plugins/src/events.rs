@@ -1351,8 +1351,8 @@ pub struct ListHttpRequestsResponse {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "gen_events.ts")]
+#[serde(default)]
+#[ts(export, type = "{}", export_to = "gen_events.ts")]
 pub struct ListFoldersRequest {}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

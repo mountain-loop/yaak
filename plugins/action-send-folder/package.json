@@ -1,0 +1,16 @@
+{
+  "name": "@yaak/action-send-folder",
+  "displayName": "Send All",
+  "description": "Send all HTTP requests in a folder sequentially",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mountain-loop/yaak.git",
+    "directory": "plugins/action-send-folder"
+  },
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev"
+  }
+}

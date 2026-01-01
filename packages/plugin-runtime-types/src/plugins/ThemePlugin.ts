@@ -1,3 +1,3 @@
-import { Theme } from '../bindings/gen_events';
+import type { Theme } from '../bindings/gen_events';
 
 export type ThemePlugin = Theme;
