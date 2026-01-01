@@ -1282,7 +1282,7 @@ async fn cmd_install_plugin<R: Runtime>(
     )?;
 
     plugin_manager
-        .add_plugin_by_dir(&PluginContext::new(&window), &plugin.directory, plugin.enabled)
+        .add_plugin(&PluginContext::new(&window), &plugin.directory, plugin.enabled)
         .await?;
 
     Ok(plugin)
