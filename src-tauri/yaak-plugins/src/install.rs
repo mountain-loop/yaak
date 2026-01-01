@@ -55,7 +55,7 @@ pub async fn download_and_install<R: Runtime>(
     zip_extract::extract(Cursor::new(&bytes), &plugin_dir, true)?;
     info!("Extracted plugin {} to {}", plugin_version.id, plugin_dir_str);
 
-    plugin_manager.add_plugin_by_dir(&PluginContext::new(&window), &plugin_dir_str).await?;
+    plugin_manager.add_plugin_by_dir(&PluginContext::new(&window), &plugin_dir_str, true).await?;
 
     window.db().upsert_plugin(
         &Plugin {

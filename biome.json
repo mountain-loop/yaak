@@ -39,8 +39,6 @@
       "!**/dist",
       "!**/build",
       "!scripts",
-      "!packages/plugin-runtime",
-      "!packages/plugin-runtime-types",
       "!src-tauri",
       "!src-web/tailwind.config.cjs",
       "!src-web/postcss.config.cjs",

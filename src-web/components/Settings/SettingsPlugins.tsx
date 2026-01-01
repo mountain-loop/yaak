@@ -195,6 +195,7 @@ function PluginTableRow({
     mutationFn: (name: string) => installPlugin(name, null),
   });
   const uninstall = usePromptUninstall(plugin?.id ?? null, displayName);
+  const refreshPlugins = useRefreshPlugins();
 
   return (
     <TableRow>
@@ -205,9 +206,10 @@ function PluginTableRow({
             title={plugin?.enabled ? 'Disable plugin' : 'Enable plugin'}
             checked={plugin?.enabled ?? false}
             disabled={plugin == null}
-            onChange={(enabled) => {
+            onChange={async (enabled) => {
               if (plugin) {
-                patchModel(plugin, { enabled });
+                await patchModel(plugin, { enabled });
+                refreshPlugins.mutate();
               }
             }}
           />

@@ -1,5 +1,6 @@
 use crate::error::Error::{
-    AuthPluginNotFound, ClientNotInitializedErr, PluginErr, PluginNotFoundErr, UnknownEventErr,
+    self, AuthPluginNotFound, ClientNotInitializedErr, PluginErr, PluginNotFoundErr,
+    UnknownEventErr,
 };
 use crate::error::Result;
 use crate::events::{
@@ -46,16 +47,11 @@ use yaak_templates::{RenderErrorBehavior, RenderOptions, render_json_value_raw};
 #[derive(Clone)]
 pub struct PluginManager {
     subscribers: Arc<Mutex<HashMap<String, mpsc::Sender<InternalEvent>>>>,
-    plugins: Arc<Mutex<Vec<PluginHandle>>>,
+    plugin_handles: Arc<Mutex<Vec<PluginHandle>>>,
     kill_tx: tokio::sync::watch::Sender<bool>,
     ws_service: Arc<PluginRuntimeServerWebsocket>,
     vendored_plugin_dir: PathBuf,
     pub(crate) installed_plugin_dir: PathBuf,
-}
-
-#[derive(Clone)]
-struct PluginCandidate {
-    dir: String,
 }
 
 impl PluginManager {
@@ -80,7 +76,7 @@ impl PluginManager {
             .join("installed-plugins");
 
         let plugin_manager = PluginManager {
-            plugins: Default::default(),
+            plugin_handles: Default::default(),
             subscribers: Default::default(),
             ws_service: Arc::new(ws_service.clone()),
             kill_tx: kill_server_tx,
@@ -163,10 +159,10 @@ impl PluginManager {
         plugin_manager
     }
 
-    async fn list_plugin_dirs<R: Runtime>(
+    async fn list_available_plugins<R: Runtime>(
         &self,
         app_handle: &AppHandle<R>,
-    ) -> Vec<PluginCandidate> {
+    ) -> Result<Vec<Plugin>> {
         let plugins_dir = if is_dev() {
             // Use plugins directly for easy development
             env::current_dir()
@@ -183,40 +179,22 @@ impl PluginManager {
             .await
             .expect(&format!("Failed to read plugins dir: {:?}", plugins_dir));
 
-        // Sync bundled plugins to the database (upsert with url=None to mark as bundled)
+        // Ensure all bundled plugins make it into the database
         for dir in &bundled_plugin_dirs {
-            // Check if plugin already exists in the database
-            let existing = app_handle.db().get_plugin_by_directory(dir);
-            if existing.is_err() {
-                // Plugin not in database, add it as enabled by default
-                let plugin = Plugin {
-                    directory: dir.clone(),
-                    enabled: true,
-                    url: None, // None indicates bundled plugin
-                    ..Default::default()
-                };
-                if let Err(e) = app_handle.db().upsert_plugin(&plugin, &UpdateSource::Background) {
-                    warn!("Failed to sync bundled plugin to database: {e:?}");
-                }
+            if let None = app_handle.db().get_plugin_by_directory(dir) {
+                app_handle.db().upsert_plugin(
+                    &Plugin {
+                        directory: dir.clone(),
+                        enabled: true,
+                        url: None,
+                        ..Default::default()
+                    },
+                    &UpdateSource::Background,
+                )?;
             }
         }
 
-        // Get all enabled plugins from database (includes both bundled and installed)
-        let enabled_plugins = app_handle.db().list_enabled_plugins().unwrap_or_default();
-
-        // Filter to only include plugins whose directories exist
-        // (bundled plugins must be in bundled_plugin_dirs, installed plugins have url set)
-        let plugin_dirs: Vec<PluginCandidate> = enabled_plugins
-            .iter()
-            .filter(|p| {
-                // Bundled plugins: directory must be in bundled_plugin_dirs
-                // Installed plugins: have a url set
-                p.url.is_some() || bundled_plugin_dirs.contains(&p.directory)
-            })
-            .map(|p| PluginCandidate { dir: p.directory.clone() })
-            .collect();
-
-        plugin_dirs
+        Ok(app_handle.db().list_plugins()?)
     }
 
     pub async fn uninstall(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {
@@ -229,16 +207,18 @@ impl PluginManager {
         plugin_context: &PluginContext,
         plugin: &PluginHandle,
     ) -> Result<()> {
-        // Terminate the plugin
-        self.send_to_plugin_and_wait(
-            plugin_context,
-            plugin,
-            &InternalEventPayload::TerminateRequest,
-        )
-        .await?;
+        // Terminate the plugin if it's enabled
+        if plugin.enabled {
+            self.send_to_plugin_and_wait(
+                plugin_context,
+                plugin,
+                &InternalEventPayload::TerminateRequest,
+            )
+            .await?;
+        }
 
         // Remove the plugin from the list
-        let mut plugins = self.plugins.lock().await;
+        let mut plugins = self.plugin_handles.lock().await;
         let pos = plugins.iter().position(|p| p.ref_id == plugin.ref_id);
         if let Some(pos) = pos {
             plugins.remove(pos);
@@ -247,7 +227,12 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn add_plugin_by_dir(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {
+    pub async fn add_plugin_by_dir(
+        &self,
+        plugin_context: &PluginContext,
+        dir: &str,
+        enabled: bool,
+    ) -> Result<()> {
         info!("Adding plugin by dir {dir}");
 
         let maybe_tx = self.ws_service.app_to_plugin_events_tx.lock().await;
@@ -255,32 +240,34 @@ impl PluginManager {
             None => return Err(ClientNotInitializedErr),
             Some(tx) => tx,
         };
-        let plugin_handle = PluginHandle::new(dir, tx.clone())?;
+        let plugin_handle = PluginHandle::new(dir, enabled, tx.clone())?;
         let dir_path = Path::new(dir);
         let is_vendored = dir_path.starts_with(self.vendored_plugin_dir.as_path());
         let is_installed = dir_path.starts_with(self.installed_plugin_dir.as_path());
 
-        // Boot the plugin
-        let event = timeout(
-            Duration::from_secs(5),
-            self.send_to_plugin_and_wait(
-                plugin_context,
-                &plugin_handle,
-                &InternalEventPayload::BootRequest(BootRequest {
-                    dir: dir.to_string(),
-                    watch: !is_vendored && !is_installed,
-                }),
-            ),
-        )
-        .await??;
+        // Boot the plugin if it's enabled
+        if enabled {
+            let event = timeout(
+                Duration::from_secs(5),
+                self.send_to_plugin_and_wait(
+                    plugin_context,
+                    &plugin_handle,
+                    &InternalEventPayload::BootRequest(BootRequest {
+                        dir: dir.to_string(),
+                        watch: !is_vendored && !is_installed,
+                    }),
+                ),
+            )
+            .await??;
 
-        if !matches!(event.payload, InternalEventPayload::BootResponse) {
-            return Err(UnknownEventErr);
+            if !matches!(event.payload, InternalEventPayload::BootResponse) {
+                return Err(UnknownEventErr);
+            }
         }
 
-        let mut plugins = self.plugins.lock().await;
-        plugins.retain(|p| p.dir != dir);
-        plugins.push(plugin_handle.clone());
+        let mut plugin_handles = self.plugin_handles.lock().await;
+        plugin_handles.retain(|p| p.dir != dir);
+        plugin_handles.push(plugin_handle.clone());
 
         Ok(())
     }
@@ -290,22 +277,24 @@ impl PluginManager {
         app_handle: &AppHandle<R>,
         plugin_context: &PluginContext,
     ) -> Result<()> {
+        info!("Initializing all plugins");
         let start = Instant::now();
-        let candidates = self.list_plugin_dirs(app_handle).await;
-        for candidate in candidates.clone() {
-            // First remove the plugin if it exists
-            if let Some(plugin) = self.get_plugin_by_dir(candidate.dir.as_str()).await {
-                if let Err(e) = self.remove_plugin(plugin_context, &plugin).await {
-                    error!("Failed to remove plugin {} {e:?}", candidate.dir);
+        for plugin in self.list_available_plugins(app_handle).await?.clone() {
+            // First remove the plugin if it exists and is enabled
+            if let Some(plugin_handle) = self.get_plugin_by_dir(&plugin.directory).await {
+                if let Err(e) = self.remove_plugin(plugin_context, &plugin_handle).await {
+                    error!("Failed to remove plugin {} {e:?}", plugin.directory);
                     continue;
                 }
             }
-            if let Err(e) = self.add_plugin_by_dir(plugin_context, candidate.dir.as_str()).await {
-                warn!("Failed to add plugin {} {e:?}", candidate.dir);
+            if let Err(e) =
+                self.add_plugin_by_dir(plugin_context, &plugin.directory, plugin.enabled).await
+            {
+                warn!("Failed to add plugin {} {e:?}", plugin.directory);
             }
         }
 
-        let plugins = self.plugins.lock().await;
+        let plugins = self.plugin_handles.lock().await;
         let names = plugins.iter().map(|p| p.dir.to_string()).collect::<Vec<String>>();
         info!(
             "Initialized {} plugins in {:?}:\n  - {}",
@@ -351,15 +340,15 @@ impl PluginManager {
     }
 
     pub async fn get_plugin_by_ref_id(&self, ref_id: &str) -> Option<PluginHandle> {
-        self.plugins.lock().await.iter().find(|p| p.ref_id == ref_id).cloned()
+        self.plugin_handles.lock().await.iter().find(|p| p.ref_id == ref_id).cloned()
     }
 
     pub async fn get_plugin_by_dir(&self, dir: &str) -> Option<PluginHandle> {
-        self.plugins.lock().await.iter().find(|p| p.dir == dir).cloned()
+        self.plugin_handles.lock().await.iter().find(|p| p.dir == dir).cloned()
     }
 
     pub async fn get_plugin_by_name(&self, name: &str) -> Option<PluginHandle> {
-        for plugin in self.plugins.lock().await.iter().cloned() {
+        for plugin in self.plugin_handles.lock().await.iter().cloned() {
             let info = plugin.info();
             if info.name == name {
                 return Some(plugin);
@@ -374,9 +363,19 @@ impl PluginManager {
         plugin: &PluginHandle,
         payload: &InternalEventPayload,
     ) -> Result<InternalEvent> {
+        if !plugin.enabled {
+            return Err(Error::PluginErr(format!("Plugin {} is disabled", plugin.metadata.name)));
+        }
+
         let events =
             self.send_to_plugins_and_wait(plugin_context, payload, vec![plugin.to_owned()]).await?;
-        Ok(events.first().unwrap().to_owned())
+        Ok(events
+            .first()
+            .ok_or(Error::PluginErr(format!(
+                "No plugin events returned for: {}",
+                plugin.metadata.name
+            )))?
+            .to_owned())
     }
 
     async fn send_and_wait(
@@ -384,7 +383,7 @@ impl PluginManager {
         plugin_context: &PluginContext,
         payload: &InternalEventPayload,
     ) -> Result<Vec<InternalEvent>> {
-        let plugins = { self.plugins.lock().await.clone() };
+        let plugins = { self.plugin_handles.lock().await.clone() };
         self.send_to_plugins_and_wait(plugin_context, payload, plugins).await
     }
 
@@ -400,6 +399,7 @@ impl PluginManager {
         // 1. Build the events with IDs and everything
         let events_to_send = plugins
             .iter()
+            .filter(|p| p.enabled)
             .map(|p| p.build_event_to_send(plugin_context, payload, None))
             .collect::<Vec<InternalEvent>>();
 

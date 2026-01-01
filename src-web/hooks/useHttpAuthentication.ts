@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
+import { useDebouncedValue } from './useDebouncedValue';
 import { usePluginsKey } from './usePlugins';
 
 const httpAuthenticationSummariesAtom = atom<GetHttpAuthenticationSummaryResponse[]>([]);
@@ -36,6 +37,7 @@ export function useSubscribeHttpAuthentication() {
         );
         setNumResults(result.length);
         jotaiStore.set(httpAuthenticationSummariesAtom, result);
+        console.log('REFRESHED PLUGINS', result.length);
         return result;
       } catch (err) {
         showErrorToast('http-authentication-error', err);
