@@ -156,6 +156,7 @@ export function TextViewer({
     history,
     removeFromHistory,
     clearHistory,
+    togglePin,
     handleKeyDown,
   ]);
 

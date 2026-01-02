@@ -308,7 +308,7 @@ export class PluginInstance {
         payload.values = applyFormInputDefaults(args, payload.values);
         const resolvedArgs = await applyDynamicFormInput(ctx, args, payload);
         const resolvedActions: HttpAuthenticationAction[] = [];
-        for (const { onSelect, ...action } of actions ?? []) {
+        for (const { onSelect: _onSelect, ...action } of actions ?? []) {
           resolvedActions.push(action);
         }
 

@@ -90,7 +90,7 @@ export function useInputHistory({ stateKey, maxItems }: UseInputHistoryOptions) 
         color: 'danger',
       });
     }
-  }, [stateKey, setHistory, history]);
+  }, [stateKey, setHistory]);
 
   const removeFromHistory = useCallback(
     async (value: string) => {
@@ -122,7 +122,11 @@ export function useInputHistory({ stateKey, maxItems }: UseInputHistoryOptions) 
 
         await setHistory(updated);
         
-        const item = updated.find((i) => i.value === value);
+        const pinnedItem = updated.find((i) => i.value === value);
+        showToast({
+          message: pinnedItem?.pinned ? 'Filter pinned' : 'Filter unpinned',
+          color: 'success',
+        });
       } catch (error) {
         console.error('Failed to toggle pin:', error);
         showToast({

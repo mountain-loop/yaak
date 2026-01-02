@@ -103,17 +103,15 @@ export function FilterHistoryDropdown({
               </div>
               {dateStr && <div className="text-xs text-text-subtlest mt-0.5">{dateStr}</div>}
             </div>
-            <div className="flex items-center gap-0.5 flex-shrink-0">
-              {/* {isSelected ? <Icon icon="check" className="text-primary" /> : <Icon icon="empty" />} */}
-              {/* biome-ignore lint/a11y/noStaticElementInteractions: Delete action within dropdown menu item
-              TODO: need to refactor the dropdown components should not render the item as button */}
-            </div>
           </div>
         ),
         leftSlot: isSelected ? <Icon icon="check" className="text-primary" /> : <Icon icon="empty" />,
         rightSlot: (
           <div className="flex items-center gap-0.5">
+            {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button as parent dropdown item is already a button */}
             <span
+              role="button"
+              tabIndex={0}
               className={classNames(
                 "flex items-center justify-center w-5 h-5 rounded cursor-pointer transition-all duration-150",
                 item.pinned
@@ -132,7 +130,10 @@ export function FilterHistoryDropdown({
                 className={item.pinned ? "rotate-45" : ""}
               />
             </span>
+            {/* biome-ignore lint/a11y/useSemanticElements: Cannot use button as parent dropdown item is already a button */}
             <span
+              role="button"
+              tabIndex={0}
               className="flex items-center justify-center w-5 h-5 rounded text-text-subtlest group-hover:text-danger group-focus:text-danger hover:!text-danger hover:bg-danger/10 cursor-pointer opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-all duration-150"
               title="Remove from history"
               onClick={(e) => {
