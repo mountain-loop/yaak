@@ -1,5 +1,4 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import * as z from 'zod';
 import type { McpServerContext } from '../types.js';
 
 export function registerWorkspaceTools(server: McpServer, ctx: McpServerContext) {
@@ -8,7 +7,6 @@ export function registerWorkspaceTools(server: McpServer, ctx: McpServerContext)
     {
       title: 'List Workspaces',
       description: 'List all open workspaces in Yaak',
-      inputSchema: z.object({}),
     },
     async () => {
       const workspaces = await ctx.yaak.workspace.list();
