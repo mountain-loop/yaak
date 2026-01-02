@@ -45,7 +45,9 @@ export type SettingsTab = (typeof tabs)[number];
 
 export default function Settings({ hide }: Props) {
   const { tab: tabFromQuery } = useSearch({ from: '/workspaces/$workspaceId/settings' });
-  const [tab, setTab] = useState<string | undefined>(tabFromQuery);
+  // Parse tab and subtab (e.g., "plugins:installed")
+  const [mainTab, subtab] = tabFromQuery?.split(':') ?? [];
+  const [tab, setTab] = useState<string | undefined>(mainTab || tabFromQuery);
   const settings = useAtomValue(settingsAtom);
   const plugins = useAtomValue(pluginsAtom);
   const licenseCheck = useLicense();
@@ -118,7 +120,7 @@ export default function Settings({ hide }: Props) {
           <SettingsTheme />
         </TabContent>
         <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1 px-6 !py-4">
-          <SettingsPlugins />
+          <SettingsPlugins defaultSubtab={tab === TAB_PLUGINS ? subtab : undefined} />
         </TabContent>
         <TabContent value={TAB_PROXY} className="overflow-y-auto h-full px-6 !py-4">
           <SettingsProxy />
