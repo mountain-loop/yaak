@@ -65,7 +65,7 @@ export const plugin: PluginDefinition = {
         name: ['faker', modName, fnName].join('.'),
         args: args(modName, fnName),
         async onRender(_ctx, args) {
-          const fn = mod[fnName] as (...a: unknown[]) => unknown;
+          const fn = mod[fnName as keyof typeof mod] as (...a: unknown[]) => unknown;
           const options = args.values.options;
 
           // No options supplied
