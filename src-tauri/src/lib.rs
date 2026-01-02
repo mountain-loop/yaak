@@ -1281,9 +1281,7 @@ async fn cmd_install_plugin<R: Runtime>(
         &UpdateSource::from_window(&window),
     )?;
 
-    plugin_manager
-        .add_plugin(&PluginContext::new(&window), &plugin.directory, plugin.enabled)
-        .await?;
+    plugin_manager.add_plugin(&PluginContext::new(&window), &plugin).await?;
 
     Ok(plugin)
 }
