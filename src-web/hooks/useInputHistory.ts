@@ -9,6 +9,7 @@ import { useKeyValue } from './useKeyValue';
 export interface HistoryItem {
   value: string;
   timestamp: number;
+  pinned?: boolean;
 }
 
 interface UseInputHistoryOptions {
@@ -35,20 +36,31 @@ export function useInputHistory({ stateKey, maxItems }: UseInputHistoryOptions) 
         const sanitized = prepareHistoryInput(value);
         if (!sanitized) return;
 
-        // Use Set for deduplication (keep most recent)
-        const existingValues = new Set((history ?? []).map((item) => item.value));
+        // Check if item already exists and is pinned - if so, skip silently
+        const existingItem = (history ?? []).find((item) => item.value === sanitized);
+        if (existingItem?.pinned) {
+          return;
+        }
 
-        // Remove if exists, will add to front
-        existingValues.delete(sanitized);
-
-        // Create new history with timestamp
+        // Create new history item
         const newItem: HistoryItem = {
           value: sanitized,
           timestamp: Date.now(),
         };
 
         const filteredHistory = (history ?? []).filter((item) => item.value !== sanitized);
-        const updated = [newItem, ...filteredHistory].slice(0, effectiveMaxItems);
+        
+        // Separate pinned and unpinned items
+        const pinnedItems = filteredHistory.filter((item) => item.pinned);
+        const unpinnedItems = filteredHistory.filter((item) => !item.pinned);
+        
+        // Add new item to unpinned and apply limit only to unpinned items
+        const limitedUnpinned = [newItem, ...unpinnedItems].slice(0, effectiveMaxItems);
+        
+        // Combine: pinned items always stay, unpinned items are limited
+        const updated = [...pinnedItems, ...limitedUnpinned];
+
+        await setHistory(updated);
 
         await setHistory(updated);
       } catch (error) {
@@ -99,6 +111,29 @@ export function useInputHistory({ stateKey, maxItems }: UseInputHistoryOptions) 
     [history, stateKey, setHistory],
   );
 
+  const togglePin = useCallback(
+    async (value: string) => {
+      if (!stateKey) return;
+
+      try {
+        const updated = (history ?? []).map((item) =>
+          item.value === value ? { ...item, pinned: !item.pinned } : item,
+        );
+
+        await setHistory(updated);
+        
+        const item = updated.find((i) => i.value === value);
+      } catch (error) {
+        console.error('Failed to toggle pin:', error);
+        showToast({
+          message: 'Failed to toggle pin',
+          color: 'danger',
+        });
+      }
+    },
+    [history, stateKey, setHistory],
+  );
+
   const historyItems = useMemo(() => history ?? [], [history]);
 
   return {
@@ -106,5 +141,6 @@ export function useInputHistory({ stateKey, maxItems }: UseInputHistoryOptions) 
     addToHistory,
     clearHistory,
     removeFromHistory,
+    togglePin,
   };
 }

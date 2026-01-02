@@ -52,7 +52,7 @@ export function TextViewer({
     [setFilterTextMap, stateKey],
   );
 
-  const { history, addToHistory, clearHistory, removeFromHistory } = useInputHistory({
+  const { history, addToHistory, clearHistory, removeFromHistory, togglePin } = useInputHistory({
     stateKey: historyStateKey ?? null,
   });
 
@@ -122,6 +122,7 @@ export function TextViewer({
               onSelect={setFilterText}
               onRemove={removeFromHistory}
               onClearAll={clearHistory}
+              onTogglePin={togglePin}
             />
           </HStack>
         </div>,
