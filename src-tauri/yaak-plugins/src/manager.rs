@@ -8,14 +8,15 @@ use crate::events::{
     CallHttpAuthenticationActionArgs, CallHttpAuthenticationActionRequest,
     CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
     CallTemplateFunctionArgs, CallTemplateFunctionRequest, CallTemplateFunctionResponse,
-    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, EmptyPayload, ErrorResponse,
-    FilterRequest, FilterResponse, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
-    GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
-    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
-    GetTemplateFunctionConfigRequest, GetTemplateFunctionConfigResponse,
-    GetTemplateFunctionSummaryResponse, GetThemesRequest, GetThemesResponse,
-    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportRequest, ImportResponse,
-    InternalEvent, InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose,
+    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, Color, EmptyPayload,
+    ErrorResponse, FilterRequest, FilterResponse, GetFolderActionsResponse,
+    GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigRequest,
+    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
+    GetHttpRequestActionsResponse, GetTemplateFunctionConfigRequest,
+    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesRequest,
+    GetThemesResponse, GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, Icon,
+    ImportRequest, ImportResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
+    PluginContext, RenderPurpose, ShowToastRequest,
 };
 use crate::native_template_functions::{template_function_keyring, template_function_secure};
 use crate::nodejs::start_nodejs_plugin_runtime;
@@ -30,7 +31,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Manager, Runtime, WebviewWindow, is_dev};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use tokio::fs::read_dir;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::error::TrySendError;
@@ -286,6 +287,21 @@ impl PluginManager {
             }
             if let Err(e) = self.add_plugin(plugin_context, &plugin).await {
                 warn!("Failed to add plugin {} {e:?}", plugin.directory);
+
+                // Extract a user-friendly plugin name from the directory path
+                let plugin_name = plugin.directory.split('/').last().unwrap_or(&plugin.directory);
+
+                // Show a toast for all plugin failures
+                let toast = ShowToastRequest {
+                    message: format!("Failed to start plugin '{}': {}", plugin_name, e),
+                    color: Some(Color::Danger),
+                    icon: Some(Icon::AlertTriangle),
+                    timeout: Some(10000),
+                };
+
+                if let Err(emit_err) = app_handle.emit("show_toast", toast) {
+                    error!("Failed to emit toast for plugin error: {emit_err:?}");
+                }
             }
         }
 
