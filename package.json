@@ -10,8 +10,11 @@
     "packages/common-lib",
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
+    "plugins-external/mcp-server",
+    "plugins-external/template-function-faker",
     "plugins/action-copy-curl",
     "plugins/action-copy-grpcurl",
+    "plugins/action-send-folder",
     "plugins/auth-apikey",
     "plugins/auth-aws",
     "plugins/auth-basic",
@@ -87,7 +90,7 @@
     "tauri-before-dev": "workspaces-run --parallel -- npm run --workspaces --if-present dev"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.7",
+    "@biomejs/biome": "^2.3.10",
     "@tauri-apps/cli": "^2.9.6",
     "@yaakapp/cli": "^0.3.4",
     "nodejs-file-downloader": "^4.13.0",

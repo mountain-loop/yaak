@@ -1,16 +1,16 @@
 import type { InternalEvent } from '@yaakapp/api';
+import WebSocket from 'ws';
 import { EventChannel } from './EventChannel';
 import { PluginHandle } from './PluginHandle';
-import WebSocket from 'ws';
 
 const port = process.env.PORT;
 if (!port) {
-  throw new Error('Plugin runtime missing PORT')
+  throw new Error('Plugin runtime missing PORT');
 }
 
 const host = process.env.HOST;
 if (!host) {
-  throw new Error('Plugin runtime missing HOST')
+  throw new Error('Plugin runtime missing HOST');
 }
 
 const pluginToAppEvents = new EventChannel();
@@ -26,7 +26,7 @@ ws.on('message', async (e: Buffer) => {
   }
 });
 ws.on('open', () => console.log('Plugin runtime connected to websocket'));
-ws.on('error', (err: any) => console.error('Plugin runtime websocket error', err));
+ws.on('error', (err: unknown) => console.error('Plugin runtime websocket error', err));
 ws.on('close', (code: number) => console.log('Plugin runtime websocket closed', code));
 
 // Listen for incoming events from plugins
@@ -39,7 +39,12 @@ async function handleIncoming(msg: string) {
   const pluginEvent: InternalEvent = JSON.parse(msg);
   // Handle special event to bootstrap plugin
   if (pluginEvent.payload.type === 'boot_request') {
-    const plugin = new PluginHandle(pluginEvent.pluginRefId, pluginEvent.context, pluginEvent.payload, pluginToAppEvents);
+    const plugin = new PluginHandle(
+      pluginEvent.pluginRefId,
+      pluginEvent.context,
+      pluginEvent.payload,
+      pluginToAppEvents,
+    );
     plugins[pluginEvent.pluginRefId] = plugin;
   }
 
@@ -61,4 +66,8 @@ async function handleIncoming(msg: string) {
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
 });

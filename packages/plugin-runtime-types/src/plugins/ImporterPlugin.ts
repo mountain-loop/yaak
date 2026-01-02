@@ -1,5 +1,5 @@
-import { ImportResources } from '../bindings/gen_events';
-import { AtLeast, MaybePromise } from '../helpers';
+import type { ImportResources } from '../bindings/gen_events';
+import type { AtLeast, MaybePromise } from '../helpers';
 import type { Context } from './Context';
 
 type RootFields = 'name' | 'id' | 'model';

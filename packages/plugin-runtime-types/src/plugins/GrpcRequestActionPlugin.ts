@@ -1,4 +1,4 @@
-import { CallGrpcRequestActionArgs, GrpcRequestAction } from '../bindings/gen_events';
+import type { CallGrpcRequestActionArgs, GrpcRequestAction } from '../bindings/gen_events';
 import type { Context } from './Context';
 
 export type GrpcRequestActionPlugin = GrpcRequestAction & {

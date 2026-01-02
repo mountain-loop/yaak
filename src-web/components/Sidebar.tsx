@@ -27,29 +27,26 @@ import { selectAtom } from 'jotai/utils';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
-import { activeCookieJarAtom } from '../hooks/useActiveCookieJar';
-import { activeEnvironmentAtom } from '../hooks/useActiveEnvironment';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { getCreateDropdownItems } from '../hooks/useCreateDropdownItems';
+import { getFolderActions } from '../hooks/useFolderActions';
 import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import { useHotKey } from '../hooks/useHotKey';
 import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
-import { getWebsocketRequestActions } from '../hooks/useWebsocketRequestActions';
-import { getFolderActions } from '../hooks/useFolderActions';
 import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
 import { getModelAncestors } from '../hooks/useModelAncestors';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
+import { getWebsocketRequestActions } from '../hooks/useWebsocketRequestActions';
 import { deepEqualAtom } from '../lib/atoms';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { jotaiStore } from '../lib/jotai';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { isSidebarFocused } from '../lib/scopes';
 import { navigateToRequestOrFolderOrWorkspace } from '../lib/setWorkspaceSearchParams';
-import { invokeCmd } from '../lib/tauri';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import type { FieldDef } from './core/Editor/filter/extension';
@@ -330,20 +327,6 @@ function Sidebar({ className }: { className?: string }) {
           hidden: !(items.length === 1 && child.model === 'folder'),
           leftSlot: <Icon icon="folder_cog" />,
           onSelect: () => openFolderSettings(child.id),
-        },
-        {
-          label: 'Send All',
-          hidden: !(items.length === 1 && child.model === 'folder'),
-          leftSlot: <Icon icon="send_horizontal" />,
-          onSelect: () => {
-            const environment = jotaiStore.get(activeEnvironmentAtom);
-            const cookieJar = jotaiStore.get(activeCookieJarAtom);
-            invokeCmd('cmd_send_folder', {
-              folderId: child.id,
-              environmentId: environment?.id,
-              cookieJarId: cookieJar?.id,
-            });
-          },
         },
         {
           label: 'Send',

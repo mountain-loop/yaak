@@ -10,12 +10,13 @@ use tokio::sync::{Mutex, mpsc};
 pub struct PluginHandle {
     pub ref_id: String,
     pub dir: String,
+    pub enabled: bool,
     pub(crate) to_plugin_tx: Arc<Mutex<mpsc::Sender<InternalEvent>>>,
     pub(crate) metadata: PluginMetadata,
 }
 
 impl PluginHandle {
-    pub fn new(dir: &str, tx: mpsc::Sender<InternalEvent>) -> Result<Self> {
+    pub fn new(dir: &str, enabled: bool, tx: mpsc::Sender<InternalEvent>) -> Result<Self> {
         let ref_id = gen_id();
         let metadata = get_plugin_meta(&Path::new(dir))?;
 
@@ -23,6 +24,7 @@ impl PluginHandle {
             ref_id: ref_id.clone(),
             dir: dir.to_string(),
             to_plugin_tx: Arc::new(Mutex::new(tx)),
+            enabled,
             metadata,
         })
     }

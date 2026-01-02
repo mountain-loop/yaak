@@ -36,6 +36,7 @@ out
 tmp
 .zed
 codebook.toml
+target
 
 # Devenv
 .devenv*
@@ -47,3 +48,4 @@ devenv.local.yaml
 
 # pre-commit
 .pre-commit-config.yaml
+

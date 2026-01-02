@@ -1,10 +1,10 @@
-import { AuthenticationPlugin } from './AuthenticationPlugin';
+import type { AuthenticationPlugin } from './AuthenticationPlugin';
 
 import type { Context } from './Context';
 import type { FilterPlugin } from './FilterPlugin';
-import { GrpcRequestActionPlugin } from './GrpcRequestActionPlugin';
+import type { GrpcRequestActionPlugin } from './GrpcRequestActionPlugin';
 import type { HttpRequestActionPlugin } from './HttpRequestActionPlugin';
-import type { WebsocketRequestActionPlugin } from './WebSocketRequestActionPlugin';
+import type { WebsocketRequestActionPlugin } from './WebsocketRequestActionPlugin';
 import type { WorkspaceActionPlugin } from './WorkspaceActionPlugin';
 import type { FolderActionPlugin } from './FolderActionPlugin';
 import type { ImporterPlugin } from './ImporterPlugin';
