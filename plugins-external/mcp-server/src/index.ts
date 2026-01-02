@@ -9,6 +9,7 @@ export const plugin: PluginDefinition = {
   async init(ctx: Context) {
     // Start the server after waiting, so there's an active window open to do things
     // like show the startup toast.
+    console.log('Initializing MCP Server plugin');
     setTimeout(() => {
       mcpServer = createMcpServer({ yaak: ctx }, serverPort);
     }, 5000);
