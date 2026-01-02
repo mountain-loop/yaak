@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{fs, panic};
+use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, RunEvent, State, WebviewWindow, is_dev};
 use tauri::{Listener, Runtime};
 use tauri::{Manager, WindowEvent};
@@ -82,6 +83,7 @@ struct AppMetaData {
     name: String,
     app_data_dir: String,
     app_log_dir: String,
+    vendored_plugin_dir: String,
     feature_updater: bool,
     feature_license: bool,
 }
@@ -90,12 +92,15 @@ struct AppMetaData {
 async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
     let app_data_dir = app_handle.path().app_data_dir()?;
     let app_log_dir = app_handle.path().app_log_dir()?;
+    let vendored_plugin_dir =
+        app_handle.path().resolve("vendored/plugins", BaseDirectory::Resource)?;
     Ok(AppMetaData {
         is_dev: is_dev(),
         version: app_handle.package_info().version.to_string(),
         name: app_handle.package_info().name.to_string(),
         app_data_dir: app_data_dir.to_string_lossy().to_string(),
         app_log_dir: app_log_dir.to_string_lossy().to_string(),
+        vendored_plugin_dir: vendored_plugin_dir.to_string_lossy().to_string(),
         feature_license: cfg!(feature = "license"),
         feature_updater: cfg!(feature = "updater"),
     })
