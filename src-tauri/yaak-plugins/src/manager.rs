@@ -254,6 +254,10 @@ impl PluginManager {
                 .await?;
 
             if !matches!(event.payload, InternalEventPayload::BootResponse) {
+                // Add it to the plugin handles anyway...
+                let mut plugin_handles = self.plugin_handles.lock().await;
+                plugin_handles.retain(|p| p.dir != plugin.directory);
+                plugin_handles.push(plugin_handle.clone());
                 return Err(UnknownEventErr);
             }
         }

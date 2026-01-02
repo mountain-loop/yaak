@@ -57,6 +57,7 @@ pub async fn check_plugin_updates<R: Runtime>(
         .db()
         .list_plugins()?
         .into_iter()
+        .filter(|p| p.url.is_some()) // Only check plugins with URLs (from registry)
         .filter_map(|p| match get_plugin_meta(&Path::new(&p.directory)) {
             Ok(m) => Some(PluginNameVersion { name: m.name, version: m.version }),
             Err(e) => {
@@ -123,8 +124,8 @@ pub struct PluginSearchResponse {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_api.ts")]
 pub struct PluginNameVersion {
-    name: String,
-    version: String,
+    pub name: String,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]

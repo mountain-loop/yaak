@@ -1,7 +1,13 @@
 import { emit } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type { InternalEvent, ShowToastRequest } from '@yaakapp-internal/plugins';
-import type { UpdateInfo, UpdateResponse, YaakNotification } from '@yaakapp-internal/tauri';
+import { updateAllPlugins } from '@yaakapp-internal/plugins';
+import type {
+  PluginUpdateNotification,
+  UpdateInfo,
+  UpdateResponse,
+  YaakNotification,
+} from '@yaakapp-internal/tauri';
 import { openSettings } from '../commands/openSettings';
 import { Button } from '../components/core/Button';
 import { ButtonInfiniteLoading } from '../components/core/ButtonInfiniteLoading';
@@ -44,91 +50,163 @@ export function initGlobalListeners() {
     }
   });
 
-  const UPDATE_TOAST_ID = 'update-info'; // Share the ID to replace the toast
-
   listenToTauriEvent<string>('update_installed', async ({ payload: version }) => {
-    showToast({
-      id: UPDATE_TOAST_ID,
-      color: 'primary',
-      timeout: null,
-      message: (
-        <VStack>
-          <h2 className="font-semibold">Yaak {version} was installed</h2>
-          <p className="text-text-subtle text-sm">Start using the new version now?</p>
-        </VStack>
-      ),
-      action: ({ hide }) => (
-        <ButtonInfiniteLoading
-          size="xs"
-          className="mr-auto min-w-[5rem]"
-          color="primary"
-          loadingChildren="Restarting..."
-          onClick={() => {
-            hide();
-            setTimeout(() => invokeCmd('cmd_restart', {}), 200);
-          }}
-        >
-          Relaunch Yaak
-        </ButtonInfiniteLoading>
-      ),
-    });
+    console.log('Got update installed event', version);
+    showUpdateInstalledToast(version);
   });
 
   // Listen for update events
-  listenToTauriEvent<UpdateInfo>(
-    'update_available',
-    async ({ payload: { version, replyEventId, downloaded } }) => {
-      console.log('Received update available event', { replyEventId, version, downloaded });
-      jotaiStore.set(updateAvailableAtom, { version, downloaded });
-
-      // Acknowledge the event, so we don't time out and try the fallback update logic
-      await emit<UpdateResponse>(replyEventId, { type: 'ack' });
-
-      showToast({
-        id: UPDATE_TOAST_ID,
-        color: 'info',
-        timeout: null,
-        message: (
-          <VStack>
-            <h2 className="font-semibold">Yaak {version} is available</h2>
-            <p className="text-text-subtle text-sm">
-              {downloaded ? 'Do you want to install' : 'Download and install'} the update?
-            </p>
-          </VStack>
-        ),
-        action: () => (
-          <HStack space={1.5}>
-            <ButtonInfiniteLoading
-              size="xs"
-              color="info"
-              className="min-w-[10rem]"
-              loadingChildren={downloaded ? 'Installing...' : 'Downloading...'}
-              onClick={async () => {
-                await emit<UpdateResponse>(replyEventId, { type: 'action', action: 'install' });
-              }}
-            >
-              {downloaded ? 'Install Now' : 'Download and Install'}
-            </ButtonInfiniteLoading>
-            <Button
-              size="xs"
-              color="info"
-              variant="border"
-              rightSlot={<Icon icon="external_link" />}
-              onClick={async () => {
-                await openUrl(`https://yaak.app/changelog/${version}`);
-              }}
-            >
-              What&apos;s New
-            </Button>
-          </HStack>
-        ),
-      });
-    },
-  );
+  listenToTauriEvent<UpdateInfo>('update_available', async ({ payload }) => {
+    console.log('Got update available', payload);
+    showUpdateAvailableToast(payload);
+  });
 
   listenToTauriEvent<YaakNotification>('notification', ({ payload }) => {
     console.log('Got notification event', payload);
     showNotificationToast(payload);
+  });
+
+  // Listen for plugin update events
+  listenToTauriEvent<PluginUpdateNotification>('plugin_updates_available', ({ payload }) => {
+    console.log('Got plugin updates event', payload);
+    showPluginUpdatesToast(payload);
+  });
+}
+
+function showUpdateInstalledToast(version: string) {
+  const UPDATE_TOAST_ID = 'update-info';
+
+  showToast({
+    id: UPDATE_TOAST_ID,
+    color: 'primary',
+    timeout: null,
+    message: (
+      <VStack>
+        <h2 className="font-semibold">Yaak {version} was installed</h2>
+        <p className="text-text-subtle text-sm">Start using the new version now?</p>
+      </VStack>
+    ),
+    action: ({ hide }) => (
+      <ButtonInfiniteLoading
+        size="xs"
+        className="mr-auto min-w-[5rem]"
+        color="primary"
+        loadingChildren="Restarting..."
+        onClick={() => {
+          hide();
+          setTimeout(() => invokeCmd('cmd_restart', {}), 200);
+        }}
+      >
+        Relaunch Yaak
+      </ButtonInfiniteLoading>
+    ),
+  });
+}
+
+async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
+  const UPDATE_TOAST_ID = 'update-info';
+  const { version, replyEventId, downloaded } = updateInfo;
+
+  jotaiStore.set(updateAvailableAtom, { version, downloaded });
+
+  // Acknowledge the event, so we don't time out and try the fallback update logic
+  await emit<UpdateResponse>(replyEventId, { type: 'ack' });
+
+  showToast({
+    id: UPDATE_TOAST_ID,
+    color: 'info',
+    timeout: null,
+    message: (
+      <VStack>
+        <h2 className="font-semibold">Yaak {version} is available</h2>
+        <p className="text-text-subtle text-sm">
+          {downloaded ? 'Do you want to install' : 'Download and install'} the update?
+        </p>
+      </VStack>
+    ),
+    action: () => (
+      <HStack space={1.5}>
+        <ButtonInfiniteLoading
+          size="xs"
+          color="info"
+          className="min-w-[10rem]"
+          loadingChildren={downloaded ? 'Installing...' : 'Downloading...'}
+          onClick={async () => {
+            await emit<UpdateResponse>(replyEventId, { type: 'action', action: 'install' });
+          }}
+        >
+          {downloaded ? 'Install Now' : 'Download and Install'}
+        </ButtonInfiniteLoading>
+        <Button
+          size="xs"
+          color="info"
+          variant="border"
+          rightSlot={<Icon icon="external_link" />}
+          onClick={async () => {
+            await openUrl(`https://yaak.app/changelog/${version}`);
+          }}
+        >
+          What&apos;s New
+        </Button>
+      </HStack>
+    ),
+  });
+}
+
+function showPluginUpdatesToast(updateInfo: PluginUpdateNotification) {
+  const PLUGIN_UPDATE_TOAST_ID = 'plugin-updates';
+  const count = updateInfo.updateCount;
+  const pluginNames = updateInfo.plugins.map((p: { name: string }) => p.name);
+
+  showToast({
+    id: PLUGIN_UPDATE_TOAST_ID,
+    color: 'info',
+    timeout: null,
+    message: (
+      <VStack>
+        <h2 className="font-semibold">
+          {count === 1 ? '1 plugin update' : `${count} plugin updates`} available
+        </h2>
+        <p className="text-text-subtle text-sm">
+          {count === 1
+            ? pluginNames[0]
+            : `${pluginNames.slice(0, 2).join(', ')}${count > 2 ? `, and ${count - 2} more` : ''}`}
+        </p>
+      </VStack>
+    ),
+    action: ({ hide }) => (
+      <HStack space={1.5}>
+        <ButtonInfiniteLoading
+          size="xs"
+          color="info"
+          className="min-w-[5rem]"
+          loadingChildren="Updating..."
+          onClick={async () => {
+            const updated = await updateAllPlugins();
+            hide();
+            if (updated.length > 0) {
+              showToast({
+                color: 'success',
+                message: `Successfully updated ${updated.length} plugin${updated.length === 1 ? '' : 's'}`,
+              });
+            }
+          }}
+        >
+          Update All
+        </ButtonInfiniteLoading>
+        <Button
+          size="xs"
+          color="info"
+          variant="border"
+          onClick={() => {
+            hide();
+            openSettings.mutate('plugins:installed');
+          }}
+        >
+          View Updates
+        </Button>
+      </HStack>
+    ),
   });
 }
 

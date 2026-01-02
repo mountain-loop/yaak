@@ -43,14 +43,18 @@ function isPluginBundled(plugin: Plugin, vendoredPluginDir: string): boolean {
   );
 }
 
-export function SettingsPlugins() {
+interface SettingsPluginsProps {
+  defaultSubtab?: string;
+}
+
+export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
   const [directory, setDirectory] = useState<string | null>(null);
   const plugins = useAtomValue(pluginsAtom);
   const bundledPlugins = plugins.filter((p) => isPluginBundled(p, appInfo.vendoredPluginDir));
   const installedPlugins = plugins.filter((p) => !isPluginBundled(p, appInfo.vendoredPluginDir));
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
-  const [tab, setTab] = useState<string>();
+  const [tab, setTab] = useState<string | undefined>(defaultSubtab);
   return (
     <div className="h-full">
       <Tabs
