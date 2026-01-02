@@ -15,6 +15,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
 import { usePluginsKey, useRefreshPlugins } from '../../hooks/usePlugins';
+import { appInfo } from '../../lib/appInfo';
 import { showConfirmDelete } from '../../lib/confirm';
 import { minPromiseMillis } from '../../lib/minPromiseMillis';
 import { Button } from '../core/Button';
@@ -32,11 +33,21 @@ import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { EmptyStateText } from '../EmptyStateText';
 import { SelectFile } from '../SelectFile';
 
+function isPluginBundled(plugin: Plugin, vendoredPluginDir: string): boolean {
+  const normalizedDir = plugin.directory.replace(/\\/g, '/');
+  const normalizedVendoredDir = vendoredPluginDir.replace(/\\/g, '/');
+  return (
+    normalizedDir.includes(normalizedVendoredDir) ||
+    normalizedDir.includes('vendored/plugins') ||
+    normalizedDir.includes('/plugins/')
+  );
+}
+
 export function SettingsPlugins() {
   const [directory, setDirectory] = useState<string | null>(null);
   const plugins = useAtomValue(pluginsAtom);
-  const bundledPlugins = plugins.filter((p) => p.url == null);
-  const installedPlugins = plugins.filter((p) => p.url != null);
+  const bundledPlugins = plugins.filter((p) => isPluginBundled(p, appInfo.vendoredPluginDir));
+  const installedPlugins = plugins.filter((p) => !isPluginBundled(p, appInfo.vendoredPluginDir));
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
   const [tab, setTab] = useState<string>();
@@ -66,7 +77,7 @@ export function SettingsPlugins() {
         </TabContent>
         <TabContent value="installed" className="pb-0">
           <div className="h-full grid grid-rows-[minmax(0,1fr)_auto]">
-            <InstalledPlugins />
+            <InstalledPlugins plugins={installedPlugins} />
             <footer className="grid grid-cols-[minmax(0,1fr)_auto] -mx-4 py-2 px-4 border-t bg-surface-highlight border-border-subtle min-w-0">
               <SelectFile
                 size="xs"
@@ -110,7 +121,7 @@ export function SettingsPlugins() {
           </div>
         </TabContent>
         <TabContent value="bundled" className="pb-0">
-          <BundledPlugins />
+          <BundledPlugins plugins={bundledPlugins} />
         </TabContent>
       </Tabs>
     </div>
@@ -328,9 +339,7 @@ function PluginSearch() {
   );
 }
 
-function InstalledPlugins() {
-  const plugins = useAtomValue(pluginsAtom).filter((p) => p.url != null);
-
+function InstalledPlugins({ plugins }: { plugins: Plugin[] }) {
   return plugins.length === 0 ? (
     <div className="pb-4">
       <EmptyStateText className="text-center">
@@ -359,9 +368,7 @@ function InstalledPlugins() {
   );
 }
 
-function BundledPlugins() {
-  const plugins = useAtomValue(pluginsAtom).filter((p) => p.url == null);
-
+function BundledPlugins({ plugins }: { plugins: Plugin[] }) {
   return plugins.length === 0 ? (
     <div className="pb-4">
       <EmptyStateText className="text-center">No bundled plugins found.</EmptyStateText>
