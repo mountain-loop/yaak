@@ -296,6 +296,12 @@ pub struct Workspace {
     #[serde(default = "default_true")]
     pub setting_follow_redirects: bool,
     pub setting_request_timeout: i32,
+    #[serde(default = "default_history_limit")]
+    pub setting_max_filter_history: i32,
+}
+
+fn default_history_limit() -> i32 {
+    20
 }
 
 impl UpsertModelInfo for Workspace {
@@ -336,6 +342,7 @@ impl UpsertModelInfo for Workspace {
             (SettingFollowRedirects, self.setting_follow_redirects.into()),
             (SettingRequestTimeout, self.setting_request_timeout.into()),
             (SettingValidateCertificates, self.setting_validate_certificates.into()),
+            (SettingMaxFilterHistory, self.setting_max_filter_history.into()),
         ])
     }
 
@@ -352,6 +359,7 @@ impl UpsertModelInfo for Workspace {
             WorkspaceIden::SettingFollowRedirects,
             WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingValidateCertificates,
+            WorkspaceIden::SettingMaxFilterHistory,
         ]
     }
 
@@ -375,6 +383,7 @@ impl UpsertModelInfo for Workspace {
             setting_follow_redirects: row.get("setting_follow_redirects")?,
             setting_request_timeout: row.get("setting_request_timeout")?,
             setting_validate_certificates: row.get("setting_validate_certificates")?,
+            setting_max_filter_history: row.get("setting_max_filter_history").unwrap_or(20),
         })
     }
 }

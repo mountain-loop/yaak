@@ -20,6 +20,7 @@ impl<'a> DbContext<'a> {
         source: &UpdateSource,
     ) -> Result<HttpRequest> {
         self.delete_all_http_responses_for_request(m.id.as_str(), source)?;
+        self.delete_filter_history_for_request(m.id.as_str(), source)?;
         self.delete(m, source)
     }
 

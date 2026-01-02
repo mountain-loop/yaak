@@ -4,11 +4,14 @@ import { useCallback, useMemo } from 'react';
 import { createGlobalState } from 'react-use';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useFormatText } from '../../hooks/useFormatText';
+import { useInputHistory } from '../../hooks/useInputHistory';
 import type { EditorProps } from '../core/Editor/Editor';
 import { hyperlink } from '../core/Editor/hyperlink/extension';
 import { Editor } from '../core/Editor/LazyEditor';
+import { HStack } from '../core/Stacks';
 import { IconButton } from '../core/IconButton';
 import { Input } from '../core/Input';
+import { FilterHistoryDropdown } from './FilterHistoryDropdown';
 
 const extraExtensions = [hyperlink];
 
@@ -16,6 +19,7 @@ interface Props {
   text: string;
   language: EditorProps['language'];
   stateKey: string | null;
+  historyStateKey?: string | null;
   pretty?: boolean;
   className?: string;
   onFilter?: (filter: string) => {
@@ -27,10 +31,19 @@ interface Props {
 
 const useFilterText = createGlobalState<Record<string, string | null>>({});
 
-export function TextViewer({ language, text, stateKey, pretty, className, onFilter }: Props) {
+export function TextViewer({
+  language,
+  text,
+  stateKey,
+  historyStateKey,
+  pretty,
+  className,
+  onFilter,
+}: Props) {
   const [filterTextMap, setFilterTextMap] = useFilterText();
   const filterText = stateKey ? (filterTextMap[stateKey] ?? null) : null;
   const debouncedFilterText = useDebouncedValue(filterText);
+
   const setFilterText = useCallback(
     (v: string | null) => {
       if (!stateKey) return;
@@ -38,6 +51,10 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
     },
     [setFilterTextMap, stateKey],
   );
+
+  const { history, addToHistory, clearHistory, removeFromHistory } = useInputHistory({
+    stateKey: historyStateKey ?? null,
+  });
 
   const isSearching = filterText != null;
   const filteredResponse =
@@ -55,6 +72,26 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
 
   const canFilter = onFilter && (language === 'json' || language === 'xml' || language === 'html');
 
+  const handleFilterCommit = useCallback(
+    (value: string) => {
+      if (value.trim() && !filteredResponse.error) {
+        addToHistory(value);
+      }
+    },
+    [addToHistory, filteredResponse.error],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        toggleSearch();
+      } else if (e.key === 'Enter' && filterText) {
+        handleFilterCommit(filterText);
+      }
+    },
+    [toggleSearch, filterText, handleFilterCommit],
+  );
+
   const actions = useMemo<ReactNode[]>(() => {
     const nodes: ReactNode[] = [];
 
@@ -63,21 +100,30 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
     if (isSearching) {
       nodes.push(
         <div key="input" className="w-full !opacity-100">
-          <Input
-            key={stateKey ?? 'filter'}
-            validate={!filteredResponse.error}
-            hideLabel
-            autoFocus
-            containerClassName="bg-surface"
-            size="sm"
-            placeholder={language === 'json' ? 'JSONPath expression' : 'XPath expression'}
-            label="Filter expression"
-            name="filter"
-            defaultValue={filterText}
-            onKeyDown={(e) => e.key === 'Escape' && toggleSearch()}
-            onChange={setFilterText}
-            stateKey={stateKey ? `filter.${stateKey}` : null}
-          />
+          <HStack space={0.5}>
+            <Input
+              key={stateKey ?? 'filter'}
+              validate={!filteredResponse.error}
+              hideLabel
+              autoFocus
+              containerClassName="bg-surface"
+              size="sm"
+              placeholder={language === 'json' ? 'JSONPath expression' : 'XPath expression'}
+              label="Filter expression"
+              name="filter"
+              defaultValue={filterText}
+              onKeyDown={handleKeyDown}
+              onChange={setFilterText}
+              stateKey={historyStateKey ?? null}
+            />
+            <FilterHistoryDropdown
+              history={history}
+              currentValue={filterText}
+              onSelect={setFilterText}
+              onRemove={removeFromHistory}
+              onClearAll={clearHistory}
+            />
+          </HStack>
         </div>,
       );
     }
@@ -103,8 +149,13 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
     isSearching,
     language,
     stateKey,
+    historyStateKey,
     setFilterText,
     toggleSearch,
+    history,
+    removeFromHistory,
+    clearHistory,
+    handleKeyDown,
   ]);
 
   const formattedBody = useFormatText({ text, language, pretty: pretty ?? false });

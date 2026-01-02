@@ -6,6 +6,7 @@ use chrono::NaiveDateTime;
 use log::error;
 use sea_query::{Asterisk, Cond, Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
+use std::collections::HashMap;
 
 impl<'a> DbContext<'a> {
     pub fn list_key_values(&self) -> Result<Vec<KeyValue>> {
@@ -171,6 +172,40 @@ impl<'a> DbContext<'a> {
         };
 
         self.delete(&kv, source)?;
+        Ok(())
+    }
+
+    /// Delete filter history for a request
+    pub fn delete_filter_history_for_request(
+        &self,
+        request_id: &str,
+        source: &UpdateSource,
+    ) -> Result<()> {
+        // Use the per-request pattern: request.{requestId}.filter%
+        let key_prefix = format!("request.{}.filter", request_id);
+        let search_pattern = format!("{}%", key_prefix);
+        
+        let (sql, params) = Query::select()
+            .from(KeyValueIden::Table)
+            .column(Asterisk)
+            .cond_where(
+                Cond::all()
+                    .add(Expr::col(KeyValueIden::Namespace).eq("no_sync"))
+                    .add(Expr::col(KeyValueIden::Key).like(search_pattern)),
+            )
+            .build_rusqlite(SqliteQueryBuilder);
+        
+        let mut stmt = self.conn.prepare(sql.as_str())?;
+        let items: Vec<KeyValue> = stmt
+            .query_map(&*params.as_params(), KeyValue::from_row)?
+            .filter_map(|v| v.ok())
+            .collect();
+        
+        // Delete each entry
+        for kv in items {
+            self.delete(&kv, source)?;
+        }
+        
         Ok(())
     }
 }
