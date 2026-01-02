@@ -1,5 +1,4 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import * as z from 'zod';
 import type { McpServerContext } from '../types.js';
 import { getWorkspaceContext } from './helpers.js';
 
@@ -9,7 +8,7 @@ export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
     {
       title: 'Get Workspace ID',
       description: 'Get the current workspace ID',
-      inputSchema: z.object({}),
+      inputSchema: {},
     },
     async () => {
       const workspaceCtx = await getWorkspaceContext(ctx);
@@ -31,7 +30,7 @@ export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
     {
       title: 'Get Environment ID',
       description: 'Get the current environment ID',
-      inputSchema: z.object({}),
+      inputSchema: {},
     },
     async () => {
       const workspaceCtx = await getWorkspaceContext(ctx);

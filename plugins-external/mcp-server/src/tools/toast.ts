@@ -31,12 +31,12 @@ export function registerToastTools(server: McpServer, ctx: McpServerContext) {
     {
       title: 'Show Toast',
       description: 'Show a toast notification in Yaak',
-      inputSchema: z.object({
+      inputSchema: {
         message: z.string().describe('The message to display'),
         icon: z.enum(ICON_VALUES).optional().describe('Icon name'),
         color: z.enum(COLOR_VALUES).optional().describe('Toast color'),
         timeout: z.number().optional().describe('Timeout in milliseconds'),
-      }),
+      },
     },
     async ({ message, icon, color, timeout }) => {
       await ctx.yaak.toast.show({
