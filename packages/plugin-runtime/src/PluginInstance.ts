@@ -69,15 +69,25 @@ export class PluginInstance {
     const fileChangeCallback = async () => {
       await this.#mod?.dispose?.();
       this.#importModule();
-      await this.#mod?.init?.(this.#newCtx(workerData.context));
-      return this.#sendPayload(
-        workerData.context,
-        {
-          type: 'reload_response',
-          silent: false,
-        },
-        null,
-      );
+      const ctx = this.#newCtx(workerData.context);
+      try {
+        await this.#mod?.init?.(ctx);
+        this.#sendPayload(
+          workerData.context,
+          {
+            type: 'reload_response',
+            silent: false,
+          },
+          null,
+        );
+      } catch (err: unknown) {
+        ctx.toast.show({
+          message: `Failed to initialize plugin ${this.#workerData.bootRequest.dir.split('/').pop()}: ${err}`,
+          color: 'notice',
+          icon: 'alert_triangle',
+          timeout: 30000,
+        });
+      }
     };
 
     if (this.#workerData.bootRequest.watch) {
