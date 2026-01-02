@@ -182,8 +182,14 @@ function showPluginUpdatesToast(updateInfo: PluginUpdateNotification) {
           className="min-w-[5rem]"
           loadingChildren="Updating..."
           onClick={async () => {
+            const updated = await updateAllPlugins();
             hide();
-            await updateAllPlugins();
+            if (updated.length > 0) {
+              showToast({
+                color: 'success',
+                message: `Successfully updated ${updated.length} plugin${updated.length === 1 ? '' : 's'}`,
+              });
+            }
           }}
         >
           Update All
@@ -194,7 +200,7 @@ function showPluginUpdatesToast(updateInfo: PluginUpdateNotification) {
           variant="border"
           onClick={() => {
             hide();
-            openSettings.mutate('plugins');
+            openSettings.mutate('plugins:installed');
           }}
         >
           View Updates

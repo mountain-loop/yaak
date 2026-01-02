@@ -5,7 +5,10 @@ import { jotaiStore } from '../lib/jotai';
 import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
 
-export const openSettings = createFastMutation<void, string, SettingsTab | null>({
+// Allow tab with optional subtab (e.g., "plugins:installed")
+type SettingsTabWithSubtab = SettingsTab | `${SettingsTab}:${string}` | null;
+
+export const openSettings = createFastMutation<void, string, SettingsTabWithSubtab>({
   mutationKey: ['open_settings'],
   mutationFn: async (tab) => {
     const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
@@ -14,7 +17,7 @@ export const openSettings = createFastMutation<void, string, SettingsTab | null>
     const location = router.buildLocation({
       to: '/workspaces/$workspaceId/settings',
       params: { workspaceId },
-      search: { tab: tab ?? undefined },
+      search: { tab: (tab ?? undefined) as SettingsTab | undefined },
     });
 
     await invokeCmd('cmd_new_child_window', {
