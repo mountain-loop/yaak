@@ -679,7 +679,8 @@ function TreeInner<T extends { id: string }>(
             className={classNames(
               '[&_.tree-item.selected_.tree-item-inner]:text-text',
               '[&:focus-within]:[&_.tree-item.selected]:bg-surface-active',
-              '[&:not(:focus-within)]:[&_.tree-item.selected]:bg-surface-highlight',
+              '[&:not(:focus-within)]:[&_.tree-item.selected:not([data-context-menu-open])]:bg-surface-highlight',
+              '[&_.tree-item.selected[data-context-menu-open]]:bg-surface-active',
               // Round the items, but only if the ends of the selection.
               // Also account for the drop marker being in between items
               '[&_.tree-item]:rounded-md',

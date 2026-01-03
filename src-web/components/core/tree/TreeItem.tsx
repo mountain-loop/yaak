@@ -235,6 +235,12 @@ function TreeItem_<T extends { id: string }>({
 
       e.preventDefault();
       e.stopPropagation();
+
+      // Set data attribute on the list item to preserve active state
+      if (listItemRef.current) {
+        listItemRef.current.setAttribute('data-context-menu-open', 'true');
+      }
+
       const items = await getContextMenu(node.item);
       setShowContextMenu({ items, x: e.clientX ?? 100, y: e.clientY ?? 100 });
     },
@@ -242,6 +248,10 @@ function TreeItem_<T extends { id: string }>({
   );
 
   const handleCloseContextMenu = useCallback(() => {
+    // Remove data attribute when context menu closes
+    if (listItemRef.current) {
+      listItemRef.current.removeAttribute('data-context-menu-open');
+    }
     setShowContextMenu(null);
   }, []);
 
