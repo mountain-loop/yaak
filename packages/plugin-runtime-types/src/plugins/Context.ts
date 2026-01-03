@@ -53,6 +53,7 @@ export interface Context {
         onClose?: () => void;
       },
     ): Promise<{ close: () => void }>;
+    openExternalUrl(url: string): Promise<void>;
   };
   cookies: {
     listNames(): Promise<ListCookieNamesResponse['names']>;

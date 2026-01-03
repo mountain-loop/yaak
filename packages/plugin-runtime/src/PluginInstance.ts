@@ -646,6 +646,12 @@ export class PluginInstance {
             },
           };
         },
+        openExternalUrl: async (url) => {
+          await this.#sendForReply(context, {
+            type: 'open_external_url_request',
+            url,
+          });
+        },
       },
       prompt: {
         text: async (args) => {
