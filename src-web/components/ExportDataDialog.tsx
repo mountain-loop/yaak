@@ -81,7 +81,14 @@ function ExportDataDialogContent({
     });
     onHide();
     onSuccess(exportPath);
-  }, [includePrivateEnvironments, includePrivateRequests, onHide, onSuccess, selectedWorkspaces, workspaces]);
+  }, [
+    includePrivateEnvironments,
+    includePrivateRequests,
+    onHide,
+    onSuccess,
+    selectedWorkspaces,
+    workspaces,
+  ]);
 
   const allSelected = workspaces.every((w) => selectedWorkspaces[w.id]);
   const numSelected = Object.values(selectedWorkspaces).filter(Boolean).length;
