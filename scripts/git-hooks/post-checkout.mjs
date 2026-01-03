@@ -52,41 +52,35 @@ try {
     .filter(line => line.startsWith('worktree '))
     .map(line => line.replace('worktree ', '').trim());
 
-  // Count worktrees with .env.local to determine next port
-  let worktreeCount = 0;
-
   // Skip the first worktree (main) since it uses default ports
   for (let i = 1; i < worktreePaths.length; i++) {
     const worktreePath = worktreePaths[i];
     const envPath = path.join(worktreePath, '.env.local');
 
     if (fs.existsSync(envPath)) {
-      worktreeCount++;
       const content = fs.readFileSync(envPath, 'utf8');
 
       const mcpMatch = content.match(/^YAAK_PLUGIN_MCP_SERVER_PORT=(\d+)/m);
       if (mcpMatch) {
         const port = parseInt(mcpMatch[1], 10);
-        if (port >= maxMcpPort) {
-          maxMcpPort = port + 1;
+        if (port > maxMcpPort) {
+          maxMcpPort = port;
         }
       }
 
       const devMatch = content.match(/^YAAK_DEV_PORT=(\d+)/m);
       if (devMatch) {
         const port = parseInt(devMatch[1], 10);
-        if (port >= maxDevPort) {
-          maxDevPort = port + 1;
+        if (port > maxDevPort) {
+          maxDevPort = port;
         }
       }
     }
   }
 
-  // If no worktrees with .env.local exist yet, this is the first one
-  if (worktreeCount === 0) {
-    maxDevPort = 1421;
-    maxMcpPort = 64344;
-  }
+  // Increment to get the next available port
+  maxDevPort++;
+  maxMcpPort++;
 } catch (err) {
   console.error('Warning: Could not check other worktrees for port conflicts:', err.message);
   // Continue with default ports
@@ -130,7 +124,10 @@ try {
 
       try {
         // Check if it's gitignored - run from main worktree directory
-        execSync(`git -C "${mainWorktreePath}" check-ignore -q "${folder}"`, { stdio: 'pipe' });
+        execSync('git check-ignore -q ' + JSON.stringify(folder), {
+          stdio: 'pipe',
+          cwd: mainWorktreePath
+        });
 
         // It's gitignored, copy it
         fs.cpSync(sourcePath, destPath, { recursive: true });
@@ -145,7 +142,7 @@ try {
   // Continue anyway
 }
 
-// Run npm init to install dependencies and bootstrap
+// Run npm run init to install dependencies and bootstrap
 console.log('\nRunning npm run init to install dependencies and bootstrap...');
 try {
   execSync('npm run init', { stdio: 'inherit' });
