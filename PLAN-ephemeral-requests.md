@@ -76,6 +76,30 @@ SyncModel::WebsocketRequest(r) if !r.public => { /* same */ }
 SyncModel::Folder(f) if !f.public => { /* same */ }
 ```
 
+#### 1.4 Update export to exclude private items by default
+
+**Files to modify:**
+- `src-tauri/yaak-models/src/util.rs` - `get_workspace_export_resources()` function
+
+Add filtering for folders and requests (same pattern as environments):
+```rust
+data.resources.folders.append(
+    &mut db.list_folders(workspace_id)?
+        .into_iter()
+        .filter(|f| include_private_environments || f.public)
+        .collect(),
+);
+data.resources.http_requests.append(
+    &mut db.list_http_requests(workspace_id)?
+        .into_iter()
+        .filter(|r| include_private_environments || r.public)
+        .collect(),
+);
+// Same for grpc_requests, websocket_requests
+```
+
+**Note:** Reuse the existing `include_private_environments` parameter (rename to `include_private` in future if desired). The UI checkbox "Include private environments" will include all private items.
+
 ### Phase 2: Frontend - TypeScript Types
 
 **Files to modify:**
@@ -178,6 +202,7 @@ This enables `is:private` filter in the sidebar search.
 | `src-tauri/yaak-models/src/models.rs` | Add `public` field to 4 models |
 | `src-tauri/yaak-models/migrations/*.sql` | New migration for `public` column |
 | `src-tauri/yaak-sync/src/sync.rs` | Extend `IgnorePrivate` handling to all model types |
+| `src-tauri/yaak-models/src/util.rs` | Filter private items from export |
 
 ### TypeScript (Frontend)
 | File | Changes |
