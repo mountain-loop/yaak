@@ -153,6 +153,9 @@ pub enum InternalEventPayload {
     WindowCloseEvent,
     CloseWindowRequest(CloseWindowRequest),
 
+    OpenExternalUrlRequest(OpenExternalUrlRequest),
+    OpenExternalUrlResponse(EmptyPayload),
+
     ShowToastRequest(ShowToastRequest),
     ShowToastResponse(EmptyPayload),
 
@@ -490,6 +493,13 @@ pub struct OpenWindowRequest {
 
     #[ts(optional)]
     pub data_dir_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct OpenExternalUrlRequest {
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

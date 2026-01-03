@@ -11,6 +11,7 @@ use cookie::Cookie;
 use log::error;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_opener::OpenerExt;
 use yaak_common::window::WorkspaceWindowTrait;
 use yaak_models::blob_manager::BlobManagerExt;
 use yaak_models::models::{AnyModel, HttpResponse, Plugin};
@@ -369,6 +370,10 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 window.close()?;
             }
             Ok(None)
+        }
+        InternalEventPayload::OpenExternalUrlRequest(req) => {
+            app_handle.opener().open_url(&req.url, None::<&str>)?;
+            Ok(Some(InternalEventPayload::OpenExternalUrlResponse(EmptyPayload {})))
         }
         InternalEventPayload::SetKeyValueRequest(req) => {
             let name = plugin_handle.info().name;
