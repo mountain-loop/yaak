@@ -73,14 +73,14 @@ export function Workspace() {
 
       const newWidth = startWidth.current + (x - xStart);
       if (newWidth < 50) {
-        await setSidebarHidden(true);
+        if (!sidebarHidden) await setSidebarHidden(true);
         resetWidth();
       } else {
-        await setSidebarHidden(false);
+        if (sidebarHidden) await setSidebarHidden(false);
         setWidth(newWidth);
       }
     },
-    [width, setSidebarHidden, resetWidth, setWidth],
+    [width, sidebarHidden, setSidebarHidden, resetWidth, setWidth],
   );
 
   const handleResizeStart = useCallback(() => {
