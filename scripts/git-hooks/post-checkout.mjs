@@ -12,7 +12,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -124,7 +124,7 @@ try {
 
       try {
         // Check if it's gitignored - run from main worktree directory
-        execSync('git check-ignore -q ' + JSON.stringify(folder), {
+        execFileSync('git', ['check-ignore', '-q', folder], {
           stdio: 'pipe',
           cwd: mainWorktreePath
         });
