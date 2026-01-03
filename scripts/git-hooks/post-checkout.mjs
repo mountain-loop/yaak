@@ -80,6 +80,45 @@ fs.writeFileSync(envLocalPath, envContent, 'utf8');
 console.log(`Created .env.local with YAAK_PLUGIN_MCP_SERVER_PORT=${maxPort}`);
 console.log('Vite dev server will auto-increment from port 1420 if already in use');
 
+// Copy gitignored editor config folders from main worktree (.zed, .vscode, .claude, etc.)
+// This ensures your editor settings, tasks, and configurations are available in the new worktree
+// without needing to manually copy them or commit them to git.
+try {
+  const worktreeList = execSync('git worktree list --porcelain', { encoding: 'utf8' });
+  const mainWorktreePath = worktreeList
+    .split('\n')
+    .find(line => line.startsWith('worktree '))
+    ?.replace('worktree ', '')
+    .trim();
+
+  if (mainWorktreePath) {
+    // Find all .* folders in main worktree root that are gitignored
+    const entries = fs.readdirSync(mainWorktreePath, { withFileTypes: true });
+    const dotFolders = entries
+      .filter(entry => entry.isDirectory() && entry.name.startsWith('.'))
+      .map(entry => entry.name);
+
+    for (const folder of dotFolders) {
+      const sourcePath = path.join(mainWorktreePath, folder);
+      const destPath = path.join(process.cwd(), folder);
+
+      try {
+        // Check if it's gitignored by trying to add it
+        execSync(`git check-ignore -q "${sourcePath}"`, { stdio: 'pipe' });
+
+        // It's gitignored, copy it
+        fs.cpSync(sourcePath, destPath, { recursive: true });
+        console.log(`Copied ${folder} from main worktree`);
+      } catch {
+        // Not gitignored or doesn't exist, skip
+      }
+    }
+  }
+} catch (err) {
+  console.warn('Warning: Could not copy files from main worktree:', err.message);
+  // Continue anyway
+}
+
 // Run npm init to install dependencies and bootstrap
 console.log('\nRunning npm run init to install dependencies and bootstrap...');
 try {
