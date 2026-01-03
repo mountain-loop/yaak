@@ -41,6 +41,9 @@ pub enum Error {
     #[error(transparent)]
     ClipboardError(#[from] tauri_plugin_clipboard_manager::Error),
 
+    #[error(transparent)]
+    OpenerError(#[from] tauri_plugin_opener::Error),
+
     #[error("Updater error: {0}")]
     UpdaterError(#[from] tauri_plugin_updater::Error),
 
