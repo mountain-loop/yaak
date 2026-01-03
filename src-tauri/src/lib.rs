@@ -1422,43 +1422,48 @@ async fn cmd_check_for_updates<R: Runtime>(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    #[allow(unused_mut)]
-    let mut builder = tauri::Builder::default()
-        .plugin(
-            Builder::default()
-                .targets([
-                    Target::new(TargetKind::Stdout),
-                    Target::new(TargetKind::LogDir { file_name: None }),
-                    Target::new(TargetKind::Webview),
-                ])
-                .level_for("plugin_runtime", log::LevelFilter::Info)
-                .level_for("cookie_store", log::LevelFilter::Info)
-                .level_for("eventsource_client::event_parser", log::LevelFilter::Info)
-                .level_for("h2", log::LevelFilter::Info)
-                .level_for("hyper", log::LevelFilter::Info)
-                .level_for("hyper_util", log::LevelFilter::Info)
-                .level_for("hyper_rustls", log::LevelFilter::Info)
-                .level_for("reqwest", log::LevelFilter::Info)
-                .level_for("sqlx", log::LevelFilter::Debug)
-                .level_for("tao", log::LevelFilter::Info)
-                .level_for("tokio_util", log::LevelFilter::Info)
-                .level_for("tonic", log::LevelFilter::Info)
-                .level_for("tower", log::LevelFilter::Info)
-                .level_for("tracing", log::LevelFilter::Warn)
-                .level_for("swc_ecma_codegen", log::LevelFilter::Off)
-                .level_for("swc_ecma_transforms_base", log::LevelFilter::Off)
-                .with_colors(ColoredLevelConfig::default())
-                .level(if is_dev() { log::LevelFilter::Debug } else { log::LevelFilter::Info })
-                .build(),
-        )
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    let mut builder = tauri::Builder::default().plugin(
+        Builder::default()
+            .targets([
+                Target::new(TargetKind::Stdout),
+                Target::new(TargetKind::LogDir { file_name: None }),
+                Target::new(TargetKind::Webview),
+            ])
+            .level_for("plugin_runtime", log::LevelFilter::Info)
+            .level_for("cookie_store", log::LevelFilter::Info)
+            .level_for("eventsource_client::event_parser", log::LevelFilter::Info)
+            .level_for("h2", log::LevelFilter::Info)
+            .level_for("hyper", log::LevelFilter::Info)
+            .level_for("hyper_util", log::LevelFilter::Info)
+            .level_for("hyper_rustls", log::LevelFilter::Info)
+            .level_for("reqwest", log::LevelFilter::Info)
+            .level_for("sqlx", log::LevelFilter::Debug)
+            .level_for("tao", log::LevelFilter::Info)
+            .level_for("tokio_util", log::LevelFilter::Info)
+            .level_for("tonic", log::LevelFilter::Info)
+            .level_for("tower", log::LevelFilter::Info)
+            .level_for("tracing", log::LevelFilter::Warn)
+            .level_for("swc_ecma_codegen", log::LevelFilter::Off)
+            .level_for("swc_ecma_transforms_base", log::LevelFilter::Off)
+            .with_colors(ColoredLevelConfig::default())
+            .level(if is_dev() { log::LevelFilter::Debug } else { log::LevelFilter::Info })
+            .build(),
+    );
+
+    // Only enable single-instance in production builds. In dev mode, we want to allow
+    // multiple instances for testing and worktree workflows (running multiple branches).
+    if !is_dev() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // When trying to open a new app instance (common operation on Linux),
             // focus the first existing window we find instead of opening a new one
             // TODO: Keep track of the last focused window and always focus that one
             if let Some(window) = app.webview_windows().values().next() {
                 let _ = window.set_focus();
             }
-        }))
+        }));
+    }
+
+    builder = builder
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         // Don't restore StateFlags::DECORATIONS because we want to be able to toggle them on/off on a restart
