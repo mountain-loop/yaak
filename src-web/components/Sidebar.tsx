@@ -416,9 +416,10 @@ function Sidebar({ className }: { className?: string }) {
           onSelect: () => actions['sidebar.selected.duplicate'].cb(items),
         },
         {
-          label: 'Create Private Copy',
+          label: 'Duplicate (Private)',
           leftSlot: <Icon icon="lock" />,
-          hidden: items.length > 1 || child.model === 'folder',
+          hidden:
+            items.length > 1 || child.model === 'folder' || ('public' in child && !child.public),
           onSelect: async () => {
             if (child.model === 'folder') return;
             const newId = await duplicateModel({ ...child, public: false });
@@ -730,20 +731,11 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
 });
 
 function getItemKey(item: SidebarModel) {
-  const responses = jotaiStore.get(httpResponsesAtom);
-  const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
   const url = 'url' in item ? item.url : 'n/a';
   const method = 'method' in item ? item.method : 'n/a';
   const service = 'service' in item ? item.service : 'n/a';
-  return [
-    item.id,
-    item.name,
-    url,
-    method,
-    service,
-    latestResponse?.elapsed,
-    latestResponse?.id ?? 'n/a',
-  ].join('::');
+  const isPublic = 'public' in item ? item.public : true;
+  return [item.id, item.name, url, method, service, isPublic].join('::');
 }
 
 const SidebarLeftSlot = memo(function SidebarLeftSlot({

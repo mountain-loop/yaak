@@ -1,8 +1,4 @@
 use crate::error::Result;
-use crate::models::HttpRequestIden::{
-    Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
-    Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
-};
 use crate::util::{UpdateSource, generate_prefixed_id};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
@@ -879,6 +875,7 @@ impl UpsertModelInfo for HttpRequest {
         self,
         source: &UpdateSource,
     ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use HttpRequestIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
@@ -900,6 +897,7 @@ impl UpsertModelInfo for HttpRequest {
     }
 
     fn update_columns() -> Vec<impl IntoIden> {
+        use HttpRequestIden::*;
         vec![
             UpdatedAt,
             WorkspaceId,

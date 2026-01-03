@@ -311,13 +311,15 @@ fn workspace_models<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_id: &str,
 ) -> Result<Vec<SyncModel>> {
-    // We want to include private environments here so that we can take them into account during
-    // the sync process. Otherwise, they would be treated as deleted.
+    // We want to include private environments and requests
+    // in the sync process. Otherwise, they would be treated as deleted.
     let include_private_environments = true;
+    let include_private_requests = true;
     let resources = get_workspace_export_resources(
         app_handle,
         vec![workspace_id],
         include_private_environments,
+        include_private_requests,
     )?
     .resources;
     let workspace = resources.workspaces.iter().find(|w| w.id == workspace_id);
