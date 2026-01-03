@@ -19,8 +19,8 @@ const standardFontsDir = normalizePath(
 
 // https://vitejs.dev/config/
 export default defineConfig(async ({ mode }) => {
-  // Load env file based on `mode` in the current working directory.
-  const env = loadEnv(mode, process.cwd(), '');
+  // Load env file from project root (one level up from src-web)
+  const env = loadEnv(mode, path.join(process.cwd(), '..'), 'YAAK_');
 
   return {
   plugins: [
