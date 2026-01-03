@@ -80,25 +80,44 @@ SyncModel::Folder(f) if !f.public => { /* same */ }
 
 **Files to modify:**
 - `src-tauri/yaak-models/src/util.rs` - `get_workspace_export_resources()` function
+- `src-tauri/src/commands.rs` (or wherever `cmd_export_data` is defined) - Add new parameter
+- `src-web/components/ExportDataDialog.tsx` - Add new checkbox
 
-Add filtering for folders and requests (same pattern as environments):
+Add new parameter `include_private_requests: bool` and filter accordingly:
 ```rust
-data.resources.folders.append(
-    &mut db.list_folders(workspace_id)?
-        .into_iter()
-        .filter(|f| include_private_environments || f.public)
-        .collect(),
-);
-data.resources.http_requests.append(
-    &mut db.list_http_requests(workspace_id)?
-        .into_iter()
-        .filter(|r| include_private_environments || r.public)
-        .collect(),
-);
-// Same for grpc_requests, websocket_requests
+pub fn get_workspace_export_resources<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    workspace_ids: Vec<&str>,
+    include_private_environments: bool,
+    include_private_requests: bool,  // NEW
+) -> Result<WorkspaceExport> {
+    // ... existing environment filtering ...
+
+    data.resources.folders.append(
+        &mut db.list_folders(workspace_id)?
+            .into_iter()
+            .filter(|f| include_private_requests || f.public)
+            .collect(),
+    );
+    data.resources.http_requests.append(
+        &mut db.list_http_requests(workspace_id)?
+            .into_iter()
+            .filter(|r| include_private_requests || r.public)
+            .collect(),
+    );
+    // Same for grpc_requests, websocket_requests
+}
 ```
 
-**Note:** Reuse the existing `include_private_environments` parameter (rename to `include_private` in future if desired). The UI checkbox "Include private environments" will include all private items.
+**UI Update:** Add second checkbox in `ExportDataDialog.tsx`:
+```typescript
+<Checkbox
+  checked={includePrivateRequests}
+  onChange={setIncludePrivateRequests}
+  title="Include private requests"
+  help='Requests and folders marked as "private" will be exported'
+/>
+```
 
 ### Phase 2: Frontend - TypeScript Types
 
@@ -209,6 +228,7 @@ This enables `is:private` filter in the sidebar search.
 |------|---------|
 | `src-web/lib/createPrivateCopy.ts` | New file - private copy logic |
 | `src-web/components/Sidebar.tsx` | Context menu item, visual indicator, filter field |
+| `src-web/components/ExportDataDialog.tsx` | Add "Include private requests" checkbox |
 | `src-web/hooks/useHttpRequestActions.tsx` | "Make Private/Public" toggle |
 | `src-web/hooks/useGrpcRequestActions.tsx` | "Make Private/Public" toggle |
 | `src-web/hooks/useWebsocketRequestActions.tsx` | "Make Private/Public" toggle |
