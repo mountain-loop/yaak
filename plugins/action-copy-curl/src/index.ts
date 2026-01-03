@@ -14,6 +14,7 @@ export const plugin: PluginDefinition = {
         });
         const data = await convertToCurl(rendered_request);
         await ctx.clipboard.copyText(data);
+        ctx.window.openExternalUrl('https://yaak.app');
         await ctx.toast.show({
           message: 'Command copied to clipboard',
           icon: 'copy',
