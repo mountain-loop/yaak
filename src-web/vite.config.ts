@@ -1,7 +1,6 @@
 // @ts-ignore
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
-import { internalIpV4 } from 'internal-ip';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { defineConfig, normalizePath } from 'vite';
@@ -18,10 +17,9 @@ const standardFontsDir = normalizePath(
   path.join(path.dirname(require.resolve('pdfjs-dist/package.json')), 'standard_fonts'),
 );
 
-const mobile = !!/android|ios/.exec(process.env.TAURI_ENV_PLATFORM ?? '');
-
 // https://vitejs.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async () => {
+  return {
   plugins: [
     wasm(),
     tanstackRouter({
@@ -54,16 +52,9 @@ export default defineConfig(async () => ({
   },
   clearScreen: false,
   server: {
-    port: 1420,
+    port: parseInt(process.env.YAAK_DEV_PORT ?? '1420', 10),
     strictPort: true,
-    host: mobile ? '0.0.0.0' : false,
-    hmr: mobile
-      ? {
-          protocol: 'ws',
-          host: await internalIpV4(),
-          port: 1421,
-        }
-      : undefined,
   },
   envPrefix: ['VITE_', 'TAURI_'],
-}));
+};
+});

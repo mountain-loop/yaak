@@ -1,7 +1,7 @@
 import type { Context, PluginDefinition } from '@yaakapp/api';
 import { createMcpServer } from './server.js';
 
-const serverPort = 64343;
+const serverPort = parseInt(process.env.YAAK_PLUGIN_MCP_SERVER_PORT ?? '64343', 10);
 
 let mcpServer: Awaited<ReturnType<typeof createMcpServer>> | null = null;
 
