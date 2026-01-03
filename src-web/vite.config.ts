@@ -51,8 +51,8 @@ export default defineConfig(async () => ({
   },
   clearScreen: false,
   server: {
-    port: 1420,
-    strictPort: false,
+    port: parseInt(process.env.YAAK_DEV_PORT ?? '1420', 10),
+    strictPort: true,
   },
   envPrefix: ['VITE_', 'TAURI_'],
 }));
