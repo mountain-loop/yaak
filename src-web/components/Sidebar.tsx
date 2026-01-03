@@ -417,7 +417,8 @@ function Sidebar({ className }: { className?: string }) {
         },
         {
           label: 'Duplicate (Private)',
-          leftSlot: <Icon icon="lock" />,
+          hotKeyAction: 'model.duplicate_private',
+          leftSlot: <Icon icon="copy" />,
           hidden:
             items.length > 1 || child.model === 'folder' || ('public' in child && !child.public),
           onSelect: async () => {
@@ -787,10 +788,14 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
 
   return (
     <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
-      <div className="truncate">{resolvedModelName(item)}</div>
       {isPrivate && (
-        <Icon icon="lock" className="text-text-subtlest" title="Private (not synced)" />
+        <Icon
+          icon="eye_closed"
+          className="text-text-subtlest flex-shrink-0"
+          title="Private (not synced)"
+        />
       )}
+      <div className="truncate">{resolvedModelName(item)}</div>
       {response != null && (
         <div className="ml-auto">
           {response.state !== 'closed' ? (

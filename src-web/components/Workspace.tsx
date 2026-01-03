@@ -269,4 +269,8 @@ function useGlobalWorkspaceHooks() {
   useHotKey('model.duplicate', () =>
     duplicateRequestOrFolderAndNavigate(jotaiStore.get(activeRequestAtom)),
   );
+
+  useHotKey('model.duplicate_private', () =>
+    duplicateRequestOrFolderAndNavigate(jotaiStore.get(activeRequestAtom), { makePrivate: true }),
+  );
 }
