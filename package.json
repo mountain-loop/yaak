@@ -62,6 +62,8 @@
     "src-web"
   ],
   "scripts": {
+    "prepare": "husky",
+    "init": "npm install && npm run bootstrap",
     "start": "npm run app-dev",
     "app-build": "tauri build",
     "app-dev": "tauri dev --no-watch --config ./src-tauri/tauri.development.conf.json",
@@ -87,12 +89,14 @@
     "replace-version": "node scripts/replace-version.cjs",
     "tauri": "tauri",
     "tauri-before-build": "npm run bootstrap",
-    "tauri-before-dev": "workspaces-run --parallel -- npm run --workspaces --if-present dev"
+    "tauri-before-dev": "workspaces-run --parallel -- npm run --workspaces --if-present dev",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
     "@tauri-apps/cli": "^2.9.6",
     "@yaakapp/cli": "^0.3.4",
+    "husky": "^9.1.7",
     "nodejs-file-downloader": "^4.13.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.8.3",
