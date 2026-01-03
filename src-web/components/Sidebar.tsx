@@ -416,6 +416,26 @@ function Sidebar({ className }: { className?: string }) {
           onSelect: () => actions['sidebar.selected.duplicate'].cb(items),
         },
         {
+          label: 'Create Private Copy',
+          leftSlot: <Icon icon="lock" />,
+          hidden: items.length > 1 || child.model === 'folder',
+          onSelect: async () => {
+            if (child.model === 'folder') return;
+            const newId = await duplicateModel({ ...child, public: false });
+            navigateToRequestOrFolderOrWorkspace(newId, child.model);
+          },
+        },
+        {
+          label: 'public' in child && !child.public ? 'Make Public' : 'Make Private',
+          leftSlot: <Icon icon={'public' in child && !child.public ? 'lock_open' : 'lock'} />,
+          hidden: items.length > 1 || child.model === 'folder',
+          onSelect: async () => {
+            if (child.model === 'folder') return;
+            const isCurrentlyPublic = 'public' in child ? child.public : true;
+            await patchModel(child, { public: !isCurrentlyPublic });
+          },
+        },
+        {
           label: 'Move',
           leftSlot: <Icon icon="arrow_right_circle" />,
           hidden:
@@ -771,9 +791,14 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
     ),
   );
 
+  const isPrivate = 'public' in item && !item.public;
+
   return (
     <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
       <div className="truncate">{resolvedModelName(item)}</div>
+      {isPrivate && (
+        <Icon icon="lock" className="text-text-subtlest" title="Private (not synced)" />
+      )}
       {response != null && (
         <div className="ml-auto">
           {response.state !== 'closed' ? (
@@ -811,6 +836,11 @@ function getItemFields(node: TreeNode<SidebarModel>): Record<string, string> {
 
   if (node.parent?.item.model === 'folder') {
     fields.folder = node.parent.item.name;
+  }
+
+  // Add private field for filtering (is:private)
+  if ('public' in item) {
+    fields.private = item.public ? 'false' : 'true';
   }
 
   return fields;

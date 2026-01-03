@@ -43,6 +43,7 @@ function ExportDataDialogContent({
   activeWorkspace: Workspace;
 }) {
   const [includePrivateEnvironments, setIncludePrivateEnvironments] = useState<boolean>(false);
+  const [includePrivateRequests, setIncludePrivateRequests] = useState<boolean>(false);
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<Record<string, boolean>>({
     [activeWorkspace.id]: true,
   });
@@ -76,10 +77,11 @@ function ExportDataDialogContent({
       workspaceIds: ids,
       exportPath,
       includePrivateEnvironments: includePrivateEnvironments,
+      includePrivateRequests: includePrivateRequests,
     });
     onHide();
     onSuccess(exportPath);
-  }, [includePrivateEnvironments, onHide, onSuccess, selectedWorkspaces, workspaces]);
+  }, [includePrivateEnvironments, includePrivateRequests, onHide, onSuccess, selectedWorkspaces, workspaces]);
 
   const allSelected = workspaces.every((w) => selectedWorkspaces[w.id]);
   const numSelected = Object.values(selectedWorkspaces).filter(Boolean).length;
@@ -133,7 +135,13 @@ function ExportDataDialogContent({
             checked={includePrivateEnvironments}
             onChange={setIncludePrivateEnvironments}
             title="Include private environments"
-            help='Environments marked as "sharable" will be exported by default'
+            help='Environments marked as "private" will be exported'
+          />
+          <Checkbox
+            checked={includePrivateRequests}
+            onChange={setIncludePrivateRequests}
+            title="Include private requests"
+            help='Requests marked as "private" will be exported'
           />
         </DetailsBanner>
       </VStack>

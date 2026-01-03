@@ -847,6 +847,8 @@ pub struct HttpRequest {
     #[serde(default = "default_http_method")]
     pub method: String,
     pub name: String,
+    #[serde(default = "default_true")]
+    pub public: bool,
     pub sort_priority: f64,
     pub url: String,
     pub url_parameters: Vec<HttpUrlParameter>,
@@ -892,6 +894,7 @@ impl UpsertModelInfo for HttpRequest {
             (Authentication, serde_json::to_string(&self.authentication)?.into()),
             (AuthenticationType, self.authentication_type.into()),
             (Headers, serde_json::to_string(&self.headers)?.into()),
+            (Public, self.public.into()),
             (SortPriority, self.sort_priority.into()),
         ])
     }
@@ -911,6 +914,7 @@ impl UpsertModelInfo for HttpRequest {
             AuthenticationType,
             Url,
             UrlParameters,
+            Public,
             SortPriority,
         ]
     }
@@ -935,6 +939,7 @@ impl UpsertModelInfo for HttpRequest {
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
             method: row.get("method")?,
             name: row.get("name")?,
+            public: row.get("public")?,
             sort_priority: row.get("sort_priority")?,
             url: row.get("url")?,
             url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
@@ -1088,6 +1093,8 @@ pub struct WebsocketRequest {
     pub headers: Vec<HttpRequestHeader>,
     pub message: String,
     pub name: String,
+    #[serde(default = "default_true")]
+    pub public: bool,
     pub sort_priority: f64,
     pub url: String,
     pub url_parameters: Vec<HttpUrlParameter>,
@@ -1130,6 +1137,7 @@ impl UpsertModelInfo for WebsocketRequest {
             (Headers, serde_json::to_string(&self.headers)?.into()),
             (Message, self.message.into()),
             (Name, self.name.trim().into()),
+            (Public, self.public.into()),
             (SortPriority, self.sort_priority.into()),
             (Url, self.url.into()),
             (UrlParameters, serde_json::to_string(&self.url_parameters)?.into()),
@@ -1147,6 +1155,7 @@ impl UpsertModelInfo for WebsocketRequest {
             WebsocketRequestIden::Headers,
             WebsocketRequestIden::Message,
             WebsocketRequestIden::Name,
+            WebsocketRequestIden::Public,
             WebsocketRequestIden::SortPriority,
             WebsocketRequestIden::Url,
             WebsocketRequestIden::UrlParameters,
@@ -1176,6 +1185,7 @@ impl UpsertModelInfo for WebsocketRequest {
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
             folder_id: row.get("folder_id")?,
             name: row.get("name")?,
+            public: row.get("public")?,
         })
     }
 }
@@ -1674,6 +1684,8 @@ pub struct GrpcRequest {
     pub metadata: Vec<HttpRequestHeader>,
     pub method: Option<String>,
     pub name: String,
+    #[serde(default = "default_true")]
+    pub public: bool,
     pub service: Option<String>,
     pub sort_priority: f64,
     pub url: String,
@@ -1720,6 +1732,7 @@ impl UpsertModelInfo for GrpcRequest {
             (AuthenticationType, self.authentication_type.into()),
             (Authentication, serde_json::to_string(&self.authentication)?.into()),
             (Metadata, serde_json::to_string(&self.metadata)?.into()),
+            (Public, self.public.into()),
         ])
     }
 
@@ -1738,6 +1751,7 @@ impl UpsertModelInfo for GrpcRequest {
             GrpcRequestIden::AuthenticationType,
             GrpcRequestIden::Authentication,
             GrpcRequestIden::Metadata,
+            GrpcRequestIden::Public,
         ]
     }
 
@@ -1762,6 +1776,7 @@ impl UpsertModelInfo for GrpcRequest {
             authentication_type: row.get("authentication_type")?,
             authentication: serde_json::from_str(authentication.as_str()).unwrap_or_default(),
             url: row.get("url")?,
+            public: row.get("public")?,
             sort_priority: row.get("sort_priority")?,
             metadata: serde_json::from_str(metadata.as_str()).unwrap_or_default(),
         })

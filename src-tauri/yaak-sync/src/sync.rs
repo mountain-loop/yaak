@@ -131,6 +131,15 @@ pub(crate) fn get_db_candidates<R: Runtime>(
                         SyncModel::Environment(e) if !e.public => {
                             return Some(DbCandidate::Deleted(existing_sync_state.to_owned()));
                         }
+                        SyncModel::HttpRequest(r) if !r.public => {
+                            return Some(DbCandidate::Deleted(existing_sync_state.to_owned()));
+                        }
+                        SyncModel::GrpcRequest(r) if !r.public => {
+                            return Some(DbCandidate::Deleted(existing_sync_state.to_owned()));
+                        }
+                        SyncModel::WebsocketRequest(r) if !r.public => {
+                            return Some(DbCandidate::Deleted(existing_sync_state.to_owned()));
+                        }
                         _ => {}
                     };
 
@@ -149,10 +158,11 @@ pub(crate) fn get_db_candidates<R: Runtime>(
                 }
                 None => {
                     return match model {
-                        SyncModel::Environment(e) if !e.public => {
-                            // No sync state yet, so ignore the model
-                            None
-                        }
+                        // Private models are never synced
+                        SyncModel::Environment(e) if !e.public => None,
+                        SyncModel::HttpRequest(r) if !r.public => None,
+                        SyncModel::GrpcRequest(r) if !r.public => None,
+                        SyncModel::WebsocketRequest(r) if !r.public => None,
                         _ => {
                             // No sync state yet, so the model was just added
                             Some(DbCandidate::Added(model.to_owned()))
