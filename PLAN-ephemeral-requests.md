@@ -6,7 +6,7 @@ Yaak auto-saves all changes. When using filesystem sync with Git, any new reques
 
 ## Solution: `public` Field (Like Environments)
 
-Following the existing pattern for environments (which have a `public` boolean), add the same field to requests and folders. Private items (`public: false`):
+Following the existing pattern for environments (which have a `public` boolean), add the same field to requests (not folders - too much inheritance complexity). Private items (`public: false`):
 - Are stored in the local database (persist across app restarts)
 - Are **excluded from filesystem sync** (never written to YAML files)
 - Can be created anywhere in the folder hierarchy
@@ -39,7 +39,7 @@ This is about **sync exclusion**, not temporariness. Users can keep private requ
 **Files to modify:**
 - `src-tauri/yaak-models/src/models.rs`
 
-Add to `HttpRequest`, `GrpcRequest`, `WebsocketRequest`, `Folder`:
+Add to `HttpRequest`, `GrpcRequest`, `WebsocketRequest`:
 ```rust
 #[serde(default = "default_true")]
 pub public: bool,
@@ -56,7 +56,6 @@ Update `insert_values()`, `update_columns()`, and `from_row()` for each model.
 ALTER TABLE http_requests ADD COLUMN public INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE grpc_requests ADD COLUMN public INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE websocket_requests ADD COLUMN public INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE folders ADD COLUMN public INTEGER NOT NULL DEFAULT 1;
 ```
 
 #### 1.3 Update sync to exclude private items
@@ -73,7 +72,6 @@ SyncModel::HttpRequest(r) if !r.public => {
 }
 SyncModel::GrpcRequest(r) if !r.public => { /* same */ }
 SyncModel::WebsocketRequest(r) if !r.public => { /* same */ }
-SyncModel::Folder(f) if !f.public => { /* same */ }
 ```
 
 #### 1.4 Update export to exclude private items by default
@@ -93,12 +91,6 @@ pub fn get_workspace_export_resources<R: Runtime>(
 ) -> Result<WorkspaceExport> {
     // ... existing environment filtering ...
 
-    data.resources.folders.append(
-        &mut db.list_folders(workspace_id)?
-            .into_iter()
-            .filter(|f| include_private_requests || f.public)
-            .collect(),
-    );
     data.resources.http_requests.append(
         &mut db.list_http_requests(workspace_id)?
             .into_iter()
@@ -115,7 +107,7 @@ pub fn get_workspace_export_resources<R: Runtime>(
   checked={includePrivateRequests}
   onChange={setIncludePrivateRequests}
   title="Include private requests"
-  help='Requests and folders marked as "private" will be exported'
+  help='Requests marked as "private" will be exported'
 />
 ```
 
@@ -218,7 +210,7 @@ This enables `is:private` filter in the sidebar search.
 ### Rust (Backend)
 | File | Changes |
 |------|---------|
-| `src-tauri/yaak-models/src/models.rs` | Add `public` field to 4 models |
+| `src-tauri/yaak-models/src/models.rs` | Add `public` field to 3 request models |
 | `src-tauri/yaak-models/migrations/*.sql` | New migration for `public` column |
 | `src-tauri/yaak-sync/src/sync.rs` | Extend `IgnorePrivate` handling to all model types |
 | `src-tauri/yaak-models/src/util.rs` | Filter private items from export |
@@ -239,7 +231,7 @@ This enables `is:private` filter in the sidebar search.
 ## Future Enhancements (Out of Scope)
 
 1. **Auto-cleanup option**: Setting to delete private requests on app launch or after N days
-2. **Private folders**: Create private folders for grouping test requests (included in initial scope if desired)
+2. **Private folders**: Would require solving inheritance complexity (what if private folder has public request?)
 3. **Keyboard shortcut**: `Cmd+Shift+D` to create private copy of active request
 4. **Import as private**: Option when importing to mark all imported items as private
 
@@ -251,4 +243,4 @@ This enables `is:private` filter in the sidebar search.
 2. **Terminology**: "Private" in UI (matches field, clear meaning) ✓
 3. **Icon**: `lock` / `unlock` for private/public states ✓
 4. **Lifecycle**: Private requests persist until manually deleted (auto-cleanup is future enhancement) ✓
-5. **Folder support**: Yes, folders will also support `public` field ✓
+5. **Folder support**: No - too much inheritance complexity (private folder with public request, drag/drop edge cases, ancestor tree walking). Only requests support `public` field. ✓
