@@ -41,6 +41,7 @@ if (fs.existsSync(envLocalPath)) {
 console.log('Detected new worktree - configuring ports in .env.local');
 
 // Find the highest ports in use across all worktrees
+// Main worktree (first in list) is assumed to use default ports 1420/64343
 let maxMcpPort = 64343;
 let maxDevPort = 1420;
 
@@ -51,9 +52,16 @@ try {
     .filter(line => line.startsWith('worktree '))
     .map(line => line.replace('worktree ', '').trim());
 
-  for (const worktreePath of worktreePaths) {
+  // Count worktrees with .env.local to determine next port
+  let worktreeCount = 0;
+
+  // Skip the first worktree (main) since it uses default ports
+  for (let i = 1; i < worktreePaths.length; i++) {
+    const worktreePath = worktreePaths[i];
     const envPath = path.join(worktreePath, '.env.local');
+
     if (fs.existsSync(envPath)) {
+      worktreeCount++;
       const content = fs.readFileSync(envPath, 'utf8');
 
       const mcpMatch = content.match(/^YAAK_PLUGIN_MCP_SERVER_PORT=(\d+)/m);
@@ -72,6 +80,12 @@ try {
         }
       }
     }
+  }
+
+  // If no worktrees with .env.local exist yet, this is the first one
+  if (worktreeCount === 0) {
+    maxDevPort = 1421;
+    maxMcpPort = 64344;
   }
 } catch (err) {
   console.error('Warning: Could not check other worktrees for port conflicts:', err.message);
@@ -115,8 +129,8 @@ try {
       const destPath = path.join(process.cwd(), folder);
 
       try {
-        // Check if it's gitignored by trying to add it
-        execSync(`git check-ignore -q "${sourcePath}"`, { stdio: 'pipe' });
+        // Check if it's gitignored - run from main worktree directory
+        execSync(`git -C "${mainWorktreePath}" check-ignore -q "${folder}"`, { stdio: 'pipe' });
 
         // It's gitignored, copy it
         fs.cpSync(sourcePath, destPath, { recursive: true });
