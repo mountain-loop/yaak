@@ -6,12 +6,15 @@ import { navigateToRequestOrFolderOrWorkspace } from './setWorkspaceSearchParams
 
 export async function duplicateRequestOrFolderAndNavigate(
   model: Folder | HttpRequest | GrpcRequest | WebsocketRequest | null,
+  options?: { makePrivate?: boolean },
 ) {
   if (model == null) {
     throw new Error('Cannot duplicate null item');
   }
 
-  const newId = await duplicateModel(model);
+  const modelToDuplicate =
+    options?.makePrivate && 'public' in model ? { ...model, public: false } : model;
+  const newId = await duplicateModel(modelToDuplicate);
   const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
   if (workspaceId == null || model.model === 'folder') return;
 

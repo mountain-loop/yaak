@@ -1137,9 +1137,14 @@ async fn cmd_export_data<R: Runtime>(
     export_path: &str,
     workspace_ids: Vec<&str>,
     include_private_environments: bool,
+    include_private_requests: bool,
 ) -> YaakResult<()> {
-    let export_data =
-        get_workspace_export_resources(&app_handle, workspace_ids, include_private_environments)?;
+    let export_data = get_workspace_export_resources(
+        &app_handle,
+        workspace_ids,
+        include_private_environments,
+        include_private_requests,
+    )?;
     let f = File::options()
         .create(true)
         .truncate(true)

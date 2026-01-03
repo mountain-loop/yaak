@@ -47,7 +47,7 @@ export function createMcpServer(ctx: McpServerContext, port: number) {
       fetch: app.fetch,
     },
     (info) => {
-      console.log('Started MCP server on ', info.address);
+      console.log('Started MCP server on', `${info.address}:${info.port}`);
       ctx.yaak.toast.show({
         message: `MCP Server running on http://127.0.0.1:${info.port}`,
         icon: 'info',

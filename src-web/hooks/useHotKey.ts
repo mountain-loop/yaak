@@ -17,6 +17,7 @@ export type HotkeyAction =
   | 'hotkeys.showHelp'
   | 'model.create'
   | 'model.duplicate'
+  | 'model.duplicate_private'
   | 'request.send'
   | 'request.rename'
   | 'switcher.next'
@@ -45,6 +46,7 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'hotkeys.showHelp': ['CmdCtrl+Shift+/', 'CmdCtrl+Shift+?'], // when shift is pressed, it might be a question mark
   'model.create': ['CmdCtrl+n'],
   'model.duplicate': ['CmdCtrl+d'],
+  'model.duplicate_private': ['CmdCtrl+Shift+d', 'CmdCtrl+Shift+D'],
   'switcher.next': ['Control+Shift+Tab'],
   'switcher.prev': ['Control+Tab'],
   'switcher.toggle': ['CmdCtrl+p'],
@@ -70,6 +72,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'hotkeys.showHelp': 'Show Keyboard Shortcuts',
   'model.create': 'New Request',
   'model.duplicate': 'Duplicate Request',
+  'model.duplicate_private': 'Duplicate Request (Private)',
   'request.rename': 'Rename Active Request',
   'request.send': 'Send Active Request',
   'switcher.next': 'Go To Previous Request',

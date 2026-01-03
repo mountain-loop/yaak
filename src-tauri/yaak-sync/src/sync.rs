@@ -131,6 +131,15 @@ pub(crate) fn get_db_candidates<R: Runtime>(
                         SyncModel::Environment(e) if !e.public => {
                             return Some(DbCandidate::Deleted(existing_sync_state.to_owned()));
                         }
+                        SyncModel::HttpRequest(r) if !r.public => {
+                            return Some(DbCandidate::Deleted(existing_sync_state.to_owned()));
+                        }
+                        SyncModel::GrpcRequest(r) if !r.public => {
+                            return Some(DbCandidate::Deleted(existing_sync_state.to_owned()));
+                        }
+                        SyncModel::WebsocketRequest(r) if !r.public => {
+                            return Some(DbCandidate::Deleted(existing_sync_state.to_owned()));
+                        }
                         _ => {}
                     };
 
@@ -149,10 +158,11 @@ pub(crate) fn get_db_candidates<R: Runtime>(
                 }
                 None => {
                     return match model {
-                        SyncModel::Environment(e) if !e.public => {
-                            // No sync state yet, so ignore the model
-                            None
-                        }
+                        // Private models are never synced
+                        SyncModel::Environment(e) if !e.public => None,
+                        SyncModel::HttpRequest(r) if !r.public => None,
+                        SyncModel::GrpcRequest(r) if !r.public => None,
+                        SyncModel::WebsocketRequest(r) if !r.public => None,
                         _ => {
                             // No sync state yet, so the model was just added
                             Some(DbCandidate::Added(model.to_owned()))
@@ -301,13 +311,15 @@ fn workspace_models<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_id: &str,
 ) -> Result<Vec<SyncModel>> {
-    // We want to include private environments here so that we can take them into account during
-    // the sync process. Otherwise, they would be treated as deleted.
+    // We want to include private environments and requests
+    // in the sync process. Otherwise, they would be treated as deleted.
     let include_private_environments = true;
+    let include_private_requests = true;
     let resources = get_workspace_export_resources(
         app_handle,
         vec![workspace_id],
         include_private_environments,
+        include_private_requests,
     )?
     .resources;
     let workspace = resources.workspaces.iter().find(|w| w.id == workspace_id);

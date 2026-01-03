@@ -416,6 +416,28 @@ function Sidebar({ className }: { className?: string }) {
           onSelect: () => actions['sidebar.selected.duplicate'].cb(items),
         },
         {
+          label: 'Duplicate (Private)',
+          hotKeyAction: 'model.duplicate_private',
+          leftSlot: <Icon icon="copy" />,
+          hidden:
+            items.length > 1 || child.model === 'folder' || ('public' in child && !child.public),
+          onSelect: async () => {
+            if (child.model === 'folder') return;
+            const newId = await duplicateModel({ ...child, public: false });
+            navigateToRequestOrFolderOrWorkspace(newId, child.model);
+          },
+        },
+        {
+          label: 'public' in child && !child.public ? 'Make Public' : 'Make Private',
+          leftSlot: <Icon icon={'public' in child && !child.public ? 'lock_open' : 'lock'} />,
+          hidden: items.length > 1 || child.model === 'folder',
+          onSelect: async () => {
+            if (child.model === 'folder') return;
+            const isCurrentlyPublic = 'public' in child ? child.public : true;
+            await patchModel(child, { public: !isCurrentlyPublic });
+          },
+        },
+        {
           label: 'Move',
           leftSlot: <Icon icon="arrow_right_circle" />,
           hidden:
@@ -710,20 +732,11 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
 });
 
 function getItemKey(item: SidebarModel) {
-  const responses = jotaiStore.get(httpResponsesAtom);
-  const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
   const url = 'url' in item ? item.url : 'n/a';
   const method = 'method' in item ? item.method : 'n/a';
   const service = 'service' in item ? item.service : 'n/a';
-  return [
-    item.id,
-    item.name,
-    url,
-    method,
-    service,
-    latestResponse?.elapsed,
-    latestResponse?.id ?? 'n/a',
-  ].join('::');
+  const isPublic = 'public' in item ? item.public : true;
+  return [item.id, item.name, url, method, service, isPublic].join('::');
 }
 
 const SidebarLeftSlot = memo(function SidebarLeftSlot({
@@ -771,8 +784,17 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
     ),
   );
 
+  const isPrivate = 'public' in item && !item.public;
+
   return (
     <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
+      {isPrivate && (
+        <Icon
+          icon="eye_closed"
+          className="text-text-subtlest flex-shrink-0"
+          title="Private (not synced)"
+        />
+      )}
       <div className="truncate">{resolvedModelName(item)}</div>
       {response != null && (
         <div className="ml-auto">
@@ -811,6 +833,11 @@ function getItemFields(node: TreeNode<SidebarModel>): Record<string, string> {
 
   if (node.parent?.item.model === 'folder') {
     fields.folder = node.parent.item.name;
+  }
+
+  // Add private field for filtering (is:private)
+  if ('public' in item) {
+    fields.private = item.public ? 'false' : 'true';
   }
 
   return fields;

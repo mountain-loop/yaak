@@ -123,6 +123,7 @@ pub fn get_workspace_export_resources<R: Runtime>(
     app_handle: &AppHandle<R>,
     workspace_ids: Vec<&str>,
     include_private_environments: bool,
+    include_private_requests: bool,
 ) -> Result<WorkspaceExport> {
     let mut data = WorkspaceExport {
         yaak_version: app_handle.package_info().version.clone().to_string(),
@@ -149,9 +150,27 @@ pub fn get_workspace_export_resources<R: Runtime>(
                 .collect(),
         );
         data.resources.folders.append(&mut db.list_folders(workspace_id)?);
-        data.resources.http_requests.append(&mut db.list_http_requests(workspace_id)?);
-        data.resources.grpc_requests.append(&mut db.list_grpc_requests(workspace_id)?);
-        data.resources.websocket_requests.append(&mut db.list_websocket_requests(workspace_id)?);
+        data.resources.http_requests.append(
+            &mut db
+                .list_http_requests(workspace_id)?
+                .into_iter()
+                .filter(|r| include_private_requests || r.public)
+                .collect(),
+        );
+        data.resources.grpc_requests.append(
+            &mut db
+                .list_grpc_requests(workspace_id)?
+                .into_iter()
+                .filter(|r| include_private_requests || r.public)
+                .collect(),
+        );
+        data.resources.websocket_requests.append(
+            &mut db
+                .list_websocket_requests(workspace_id)?
+                .into_iter()
+                .filter(|r| include_private_requests || r.public)
+                .collect(),
+        );
     }
 
     Ok(data)

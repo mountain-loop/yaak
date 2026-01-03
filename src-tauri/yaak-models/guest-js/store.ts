@@ -155,6 +155,8 @@ export function duplicateModel<M extends AnyModel['model'], T extends ExtractMod
           return false;
         } else if (resolvedModelName(m) !== name) {
           return false;
+        } else if ('public' in m && 'public' in model && m.public !== model.public) {
+          return false;
         }
         return true;
       });
