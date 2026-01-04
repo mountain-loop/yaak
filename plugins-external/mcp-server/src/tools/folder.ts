@@ -9,12 +9,12 @@ export function registerFolderTools(server: McpServer, ctx: McpServerContext) {
     {
       title: 'List Folders',
       description: 'List all folders in a workspace',
-      inputSchema: z.object({
+      inputSchema: {
         workspaceId: z
           .string()
           .optional()
           .describe('Workspace ID (required if multiple workspaces are open)'),
-      }),
+      },
     },
     async ({ workspaceId }) => {
       const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
