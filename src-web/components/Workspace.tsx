@@ -33,7 +33,7 @@ import { jotaiStore } from '../lib/jotai';
 import { CreateDropdown } from './CreateDropdown';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { HotKeyList } from './core/HotKeyList';
+import { HotkeyList } from './core/HotkeyList';
 import { FeedbackLink } from './core/Link';
 import { HStack } from './core/Stacks';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -233,7 +233,7 @@ function WorkspaceBody() {
   }
 
   return (
-    <HotKeyList
+    <HotkeyList
       hotkeys={['model.create', 'sidebar.focus', 'settings.show']}
       bottomSlot={
         <HStack space={1} justifyContent="center" className="mt-3">

@@ -13,11 +13,13 @@ export type TabItem =
       value: string;
       label: string;
       hidden?: boolean;
+      leftSlot?: ReactNode;
       rightSlot?: ReactNode;
     }
   | {
       value: string;
       options: Omit<RadioDropdownProps, 'children'>;
+      leftSlot?: ReactNode;
       rightSlot?: ReactNode;
     };
 
@@ -95,7 +97,7 @@ export function Tabs({
       >
         <div
           className={classNames(
-            layout === 'horizontal' && 'flex flex-col gap-1 w-full pb-3 mb-auto',
+            layout === 'horizontal' && 'flex flex-col w-full pb-3 mb-auto',
             layout === 'vertical' && 'flex flex-row flex-shrink-0 gap-2 w-full',
           )}
         >
@@ -107,7 +109,6 @@ export function Tabs({
             const isActive = t.value === value;
 
             const btnProps: Partial<ButtonProps> = {
-              size: 'sm',
               color: 'custom',
               justify: layout === 'horizontal' ? 'start' : 'center',
               onClick: isActive ? undefined : () => onChangeValue(t.value),
@@ -142,6 +143,7 @@ export function Tabs({
                   onChange={t.options.onChange}
                 >
                   <Button
+                    leftSlot={t.leftSlot}
                     rightSlot={
                       <div className="flex items-center">
                         {t.rightSlot}
@@ -165,7 +167,7 @@ export function Tabs({
               );
             }
             return (
-              <Button key={t.value} rightSlot={t.rightSlot} {...btnProps}>
+              <Button key={t.value} leftSlot={t.leftSlot} rightSlot={t.rightSlot} {...btnProps}>
                 {t.label}
               </Button>
             );

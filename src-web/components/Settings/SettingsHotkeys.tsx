@@ -1,16 +1,26 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   defaultHotkeys,
+  formatHotkeyString,
+  getHotkeyScope,
   type HotkeyAction,
   hotkeyActions,
   hotkeysAtom,
-  useHotKeyLabel,
+  useHotkeyLabel,
 } from '../../hooks/useHotKey';
+import { capitalize } from '../../lib/capitalize';
+import { showDialog } from '../../lib/dialog';
 import { Button } from '../core/Button';
+import { Dropdown, type DropdownItem } from '../core/Dropdown';
 import { Heading } from '../core/Heading';
+import { HotkeyRaw } from '../core/Hotkey';
+import { Icon } from '../core/Icon';
+import { IconButton } from '../core/IconButton';
 import { HStack, VStack } from '../core/Stacks';
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
 
 const HOLD_KEYS = ['Shift', 'Control', 'Alt', 'Meta'];
 const LAYOUT_INSENSITIVE_KEYS = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote'];
@@ -38,22 +48,8 @@ function eventToHotkeyString(e: KeyboardEvent): string | null {
     parts.push('Shift');
   }
 
-  // Get the main key
-  let key: string;
-  if (LAYOUT_INSENSITIVE_KEYS.includes(e.code)) {
-    // Use code for layout-insensitive keys (e.g., Equal, Minus)
-    key = e.code;
-  } else if (e.code.startsWith('Key')) {
-    // For letter keys, use the letter from code (e.g., KeyK -> k)
-    key = e.code.slice(3).toLowerCase();
-  } else if (e.code.startsWith('Digit')) {
-    // For number keys, use the number
-    key = e.code.slice(5);
-  } else {
-    // For other keys, use the key value
-    key = e.key;
-  }
-
+  // Get the main key - use the same logic as useHotKey.ts
+  const key = LAYOUT_INSENSITIVE_KEYS.includes(e.code) ? e.code : e.key;
   parts.push(key);
 
   return parts.join('+');
@@ -72,35 +68,45 @@ export function SettingsHotkeys() {
       <div className="mb-3">
         <Heading>Keyboard Shortcuts</Heading>
         <p className="text-text-subtle">
-          Click a shortcut and press keys to record a new binding. Press Escape to cancel.
+          Click the menu button to add, remove, or reset keyboard shortcuts.
         </p>
       </div>
-      <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
-        {hotkeyActions.map((action) => (
-          <HotkeyRow
-            key={action}
-            action={action}
-            currentKeys={hotkeys[action]}
-            defaultKeys={defaultHotkeys[action]}
-            onSave={async (keys) => {
-              const newHotkeys = { ...settings.hotkeys };
-              if (arraysEqual(keys, defaultHotkeys[action])) {
-                // Remove from settings if it matches default (use default)
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableHeaderCell>Scope</TableHeaderCell>
+            <TableHeaderCell>Action</TableHeaderCell>
+            <TableHeaderCell>Shortcut</TableHeaderCell>
+            <TableHeaderCell></TableHeaderCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {hotkeyActions.map((action) => (
+            <HotkeyRow
+              key={action}
+              action={action}
+              currentKeys={hotkeys[action]}
+              defaultKeys={defaultHotkeys[action]}
+              onSave={async (keys) => {
+                const newHotkeys = { ...settings.hotkeys };
+                if (arraysEqual(keys, defaultHotkeys[action])) {
+                  // Remove from settings if it matches default (use default)
+                  delete newHotkeys[action];
+                } else {
+                  // Store the keys (including empty array to disable)
+                  newHotkeys[action] = keys;
+                }
+                await patchModel(settings, { hotkeys: newHotkeys });
+              }}
+              onReset={async () => {
+                const newHotkeys = { ...settings.hotkeys };
                 delete newHotkeys[action];
-              } else {
-                // Store the keys (including empty array to disable)
-                newHotkeys[action] = keys;
-              }
-              await patchModel(settings, { hotkeys: newHotkeys });
-            }}
-            onReset={async () => {
-              const newHotkeys = { ...settings.hotkeys };
-              delete newHotkeys[action];
-              await patchModel(settings, { hotkeys: newHotkeys });
-            }}
-          />
-        ))}
-      </div>
+                await patchModel(settings, { hotkeys: newHotkeys });
+              }}
+            />
+          ))}
+        </TableBody>
+      </Table>
     </VStack>
   );
 }
@@ -114,48 +120,149 @@ interface HotkeyRowProps {
 }
 
 function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: HotkeyRowProps) {
-  const label = useHotKeyLabel(action);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordedKey, setRecordedKey] = useState<string | null>(null);
-  const recorderRef = useRef<HTMLDivElement>(null);
+  const label = useHotkeyLabel(action);
+  const scope = capitalize(getHotkeyScope(action).replace(/_/g, ' '));
   const isCustomized = !arraysEqual(currentKeys, defaultKeys);
   const isDisabled = currentKeys.length === 0;
 
   const handleStartRecording = useCallback(() => {
-    setRecordedKey(null);
-    setIsRecording(true);
-  }, []);
+    showDialog({
+      id: `record-hotkey-${action}`,
+      title: label,
+      size: 'sm',
+      render: ({ hide }) => (
+        <RecordHotkeyDialog
+          label={label}
+          onSave={async (key) => {
+            await onSave([...currentKeys, key]);
+            hide();
+          }}
+          onCancel={hide}
+        />
+      ),
+    });
+  }, [action, label, currentKeys, onSave]);
 
-  const handleCancel = useCallback(() => {
-    setIsRecording(false);
-    setRecordedKey(null);
-  }, []);
+  const handleRemove = useCallback(
+    async (keyToRemove: string) => {
+      const newKeys = currentKeys.filter((k) => k !== keyToRemove);
+      await onSave(newKeys);
+    },
+    [currentKeys, onSave],
+  );
 
-  const handleSave = useCallback(async () => {
-    if (recordedKey) {
-      await onSave([recordedKey]);
+  const handleClearAll = useCallback(async () => {
+    await onSave([]);
+  }, [onSave]);
+
+  // Build dropdown items dynamically
+  const dropdownItems: DropdownItem[] = [
+    {
+      label: 'Add Keyboard Shortcut',
+      leftSlot: <Icon icon="plus" />,
+      onSelect: handleStartRecording,
+    },
+  ];
+
+  // Add remove options for each existing shortcut
+  if (!isDisabled) {
+    currentKeys.forEach((key) => {
+      dropdownItems.push({
+        label: (
+          <HStack space={1.5}>
+            <span>Remove</span>
+            <HotkeyRaw labelParts={formatHotkeyString(key)} variant="with-bg" className="text-xs" />
+          </HStack>
+        ),
+        leftSlot: <Icon icon="trash" />,
+        onSelect: () => handleRemove(key),
+      });
+    });
+
+    if (currentKeys.length > 1) {
+      dropdownItems.push(
+        {
+          type: 'separator',
+        },
+        {
+          label: 'Remove All Shortcuts',
+          leftSlot: <Icon icon="trash" />,
+          onSelect: handleClearAll,
+        },
+      );
     }
-    setIsRecording(false);
-    setRecordedKey(null);
-  }, [recordedKey, onSave]);
+  }
 
-  // Focus the recorder when we start recording
-  useEffect(() => {
-    if (isRecording && recorderRef.current) {
-      recorderRef.current.focus();
-    }
-  }, [isRecording]);
+  if (isCustomized) {
+    dropdownItems.push({
+      type: 'separator',
+    });
+    dropdownItems.push({
+      label: 'Reset to Default',
+      leftSlot: <Icon icon="refresh" />,
+      onSelect: onReset,
+    });
+  }
 
-  // Handle key capture
+  return (
+    <TableRow>
+      <TableCell>
+        <span className="text-sm text-text-subtlest">{scope}</span>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm">{label}</span>
+      </TableCell>
+      <TableCell>
+        <HStack space={1.5} className="py-1">
+          {isDisabled ? (
+            <span className="text-text-subtlest">Disabled</span>
+          ) : (
+            currentKeys.map((k) => (
+              <HotkeyRaw key={k} labelParts={formatHotkeyString(k)} variant="with-bg" />
+            ))
+          )}
+        </HStack>
+      </TableCell>
+      <TableCell align="right">
+        <Dropdown items={dropdownItems}>
+          <IconButton
+            icon="ellipsis_vertical"
+            size="sm"
+            title="Hotkey actions"
+            className="ml-auto text-text-subtlest"
+          />
+        </Dropdown>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((v, i) => v === sortedB[i]);
+}
+
+interface RecordHotkeyDialogProps {
+  label: string;
+  onSave: (key: string) => void;
+  onCancel: () => void;
+}
+
+function RecordHotkeyDialog({ label, onSave, onCancel }: RecordHotkeyDialogProps) {
+  const [recordedKey, setRecordedKey] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+
   useEffect(() => {
-    if (!isRecording) return;
+    if (!isFocused) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
       if (e.key === 'Escape') {
-        handleCancel();
+        onCancel();
         return;
       }
 
@@ -169,65 +276,51 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
     return () => {
       window.removeEventListener('keydown', handleKeyDown, { capture: true });
     };
-  }, [isRecording, handleCancel]);
+  }, [isFocused, onCancel]);
+
+  const handleSave = useCallback(() => {
+    if (recordedKey) {
+      onSave(recordedKey);
+    }
+  }, [recordedKey, onSave]);
 
   return (
-    <>
-      <span className="text-sm">{label}</span>
-      {isRecording ? (
-        <HStack space={1}>
-          <div
-            ref={recorderRef}
-            tabIndex={0}
-            data-disable-hotkey
-            className="w-48 px-2 py-1 text-xs font-mono bg-surface-highlight border border-border-subtle rounded focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            {recordedKey ?? 'Press keys...'}
-          </div>
-          <Button size="xs" color="primary" onClick={handleSave} disabled={!recordedKey}>
-            Save
-          </Button>
-          <Button size="xs" color="secondary" onClick={handleCancel}>
-            Cancel
-          </Button>
-        </HStack>
-      ) : (
-        <HStack space={1}>
-          <code
-            className="text-xs bg-surface-highlight px-1.5 py-0.5 rounded cursor-pointer hover:bg-surface-active"
-            onClick={handleStartRecording}
-          >
-            {isDisabled ? '(disabled)' : currentKeys.join(', ')}
-          </code>
-          {isCustomized && (
-            <span className="text-xs text-notice" title={`Default: ${defaultKeys.join(', ')}`}>
-              (customized)
-            </span>
+    <VStack space={4}>
+      <div>
+        <p className="text-text-subtle mb-2">
+          Record a key combination for <span className="font-semibold">{label}</span>
+        </p>
+        <button
+          type="button"
+          data-disable-hotkey
+          aria-label="Keyboard shortcut input"
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.currentTarget.focus();
+          }}
+          className={classNames(
+            'flex items-center justify-center',
+            'px-4 py-2 rounded-lg bg-surface-highlight border outline-none cursor-default w-full',
+            'border-border-subtle focus:border-border-focus',
           )}
-        </HStack>
-      )}
-      <HStack space={1}>
-        <Button size="xs" color="secondary" onClick={handleStartRecording}>
-          Edit
+        >
+          {recordedKey ? (
+            <HotkeyRaw labelParts={formatHotkeyString(recordedKey)} />
+          ) : (
+            <span className="text-text-subtlest">Press keys...</span>
+          )}
+        </button>
+      </div>
+      <HStack space={2} justifyContent="end">
+        <Button color="secondary" onClick={onCancel}>
+          Cancel
         </Button>
-        {!isDisabled && (
-          <Button size="xs" color="secondary" onClick={() => onSave([])}>
-            Clear
-          </Button>
-        )}
-        {isCustomized && (
-          <Button size="xs" color="secondary" onClick={onReset}>
-            Reset
-          </Button>
-        )}
+        <Button color="primary" onClick={handleSave} disabled={!recordedKey}>
+          Save
+        </Button>
       </HStack>
-    </>
+    </VStack>
   );
-}
-
-function arraysEqual(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-  const sortedA = [...a].sort();
-  const sortedB = [...b].sort();
-  return sortedA.every((v, i) => v === sortedB[i]);
 }

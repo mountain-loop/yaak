@@ -14,7 +14,7 @@ export type HotkeyAction =
   | 'app.zoom_out'
   | 'app.zoom_reset'
   | 'command_palette.toggle'
-  | 'environmentEditor.toggle'
+  | 'environment_editor.toggle'
   | 'hotkeys.showHelp'
   | 'model.create'
   | 'model.duplicate'
@@ -41,7 +41,7 @@ const defaultHotkeysMac: Record<HotkeyAction, string[]> = {
   'app.zoom_out': ['Meta+Minus'],
   'app.zoom_reset': ['Meta+0'],
   'command_palette.toggle': ['Meta+k'],
-  'environmentEditor.toggle': ['Meta+Shift+e'],
+  'environment_editor.toggle': ['Meta+Shift+e'],
   'request.rename': ['Control+Shift+r'],
   'request.send': ['Meta+Enter', 'Meta+r'],
   'hotkeys.showHelp': ['Meta+Shift+/'],
@@ -69,7 +69,7 @@ const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
   'app.zoom_out': ['Control+Minus'],
   'app.zoom_reset': ['Control+0'],
   'command_palette.toggle': ['Control+k'],
-  'environmentEditor.toggle': ['Control+Shift+e'],
+  'environment_editor.toggle': ['Control+Shift+e'],
   'request.rename': ['F2'],
   'request.send': ['Control+Enter', 'Control+r'],
   'hotkeys.showHelp': ['Control+Shift+/'],
@@ -122,7 +122,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'app.zoom_out': 'Zoom Out',
   'app.zoom_reset': 'Zoom to Actual Size',
   'command_palette.toggle': 'Toggle Command Palette',
-  'environmentEditor.toggle': 'Edit Environments',
+  'environment_editor.toggle': 'Edit Environments',
   'hotkeys.showHelp': 'Show Keyboard Shortcuts',
   'model.create': 'New Request',
   'model.duplicate': 'Duplicate Request',
@@ -146,7 +146,16 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
 
 const layoutInsensitiveKeys = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote'];
 
-export const hotkeyActions: HotkeyAction[] = Object.keys(defaultHotkeys) as (keyof typeof defaultHotkeys)[];
+export const hotkeyActions: HotkeyAction[] = (
+  Object.keys(defaultHotkeys) as (keyof typeof defaultHotkeys)[]
+).sort((a, b) => {
+  const scopeA = a.split('.')[0] || '';
+  const scopeB = b.split('.')[0] || '';
+  if (scopeA !== scopeB) {
+    return scopeA.localeCompare(scopeB);
+  }
+  return hotkeyLabels[a].localeCompare(hotkeyLabels[b]);
+});
 
 export type HotKeyOptions = {
   enable?: boolean | (() => boolean);
@@ -289,17 +298,16 @@ function handleKeyDown(e: KeyboardEvent) {
   clearCurrentKeysDebounced();
 }
 
-export function useHotKeyLabel(action: HotkeyAction): string {
+export function useHotkeyLabel(action: HotkeyAction): string {
   return hotkeyLabels[action];
 }
 
-export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {
-  const hotkeys = useAtomValue(hotkeysAtom);
-  const trigger = action != null ? (hotkeys[action]?.[0] ?? null) : null;
-  if (trigger == null) {
-    return null;
-  }
+export function getHotkeyScope(action: HotkeyAction): string {
+  const scope = action.split('.')[0];
+  return scope || '';
+}
 
+export function formatHotkeyString(trigger: string): string[] {
   const os = type();
   const parts = trigger.split('+');
   const labelParts: string[] = [];
@@ -344,6 +352,16 @@ export function useFormattedHotkey(action: HotkeyAction | null): string[] | null
     return labelParts;
   }
   return [labelParts.join('+')];
+}
+
+export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {
+  const hotkeys = useAtomValue(hotkeysAtom);
+  const trigger = action != null ? (hotkeys[action]?.[0] ?? null) : null;
+  if (trigger == null) {
+    return null;
+  }
+
+  return formatHotkeyString(trigger);
 }
 
 function compareKeys(keysA: string[], keysB: string[]) {

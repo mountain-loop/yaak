@@ -34,7 +34,7 @@ import { jotaiStore } from '../../lib/jotai';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { Overlay } from '../Overlay';
 import { Button } from './Button';
-import { HotKey } from './HotKey';
+import { Hotkey } from './Hotkey';
 import { Icon } from './Icon';
 import { LoadingIcon } from './LoadingIcon';
 import { Separator } from './Separator';
@@ -630,7 +630,7 @@ function MenuItem({ className, focused, onFocus, item, onSelect, ...props }: Men
     [focused],
   );
 
-  const rightSlot = item.rightSlot ?? <HotKey action={item.hotKeyAction ?? null} />;
+  const rightSlot = item.rightSlot ?? <Hotkey action={item.hotKeyAction ?? null} />;
 
   return (
     <Button
