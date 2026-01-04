@@ -46,7 +46,7 @@ import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import { CookieDialog } from './CookieDialog';
 import { Button } from './core/Button';
 import { Heading } from './core/Heading';
-import { HotKey } from './core/HotKey';
+import { Hotkey } from './core/Hotkey';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { Icon } from './core/Icon';
 import { PlainInput } from './core/PlainInput';
@@ -139,7 +139,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       {
         key: 'environment.edit',
         label: 'Edit Environment',
-        action: 'environmentEditor.toggle',
+        action: 'environment_editor.toggle',
         onSelect: () => editEnvironment(activeEnvironment),
       },
       {
@@ -493,5 +493,5 @@ function CommandPaletteItem({
 }
 
 function CommandPaletteAction({ action }: { action: HotkeyAction }) {
-  return <HotKey className="ml-auto" action={action} />;
+  return <Hotkey className="ml-auto" action={action} />;
 }

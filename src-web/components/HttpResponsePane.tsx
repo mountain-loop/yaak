@@ -15,7 +15,7 @@ import { ConfirmLargeResponseRequest } from './ConfirmLargeResponseRequest';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
-import { HotKeyList } from './core/HotKeyList';
+import { HotkeyList } from './core/HotkeyList';
 import { HttpResponseDurationTag } from './core/HttpResponseDurationTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
 import { LoadingIcon } from './core/LoadingIcon';
@@ -139,7 +139,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       )}
     >
       {activeResponse == null ? (
-        <HotKeyList hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']} />
+        <HotkeyList hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']} />
       ) : (
         <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">
           <HStack

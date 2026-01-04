@@ -1,10 +1,10 @@
 import { hotkeyActions } from '../hooks/useHotKey';
-import { HotKeyList } from './core/HotKeyList';
+import { HotkeyList } from './core/HotkeyList';
 
 export function KeyboardShortcutsDialog() {
   return (
     <div className="grid h-full">
-      <HotKeyList hotkeys={hotkeyActions} className="pb-6" />
+      <HotkeyList hotkeys={hotkeyActions} className="pb-6" />
     </div>
   );
 }

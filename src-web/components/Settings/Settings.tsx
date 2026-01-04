@@ -10,11 +10,13 @@ import { useKeyPressEvent } from 'react-use';
 import { appInfo } from '../../lib/appInfo';
 import { capitalize } from '../../lib/capitalize';
 import { CountBadge } from '../core/CountBadge';
+import { Icon } from '../core/Icon';
 import { HStack } from '../core/Stacks';
 import { TabContent, type TabItem, Tabs } from '../core/Tabs/Tabs';
 import { HeaderSize } from '../HeaderSize';
 import { SettingsCertificates } from './SettingsCertificates';
 import { SettingsGeneral } from './SettingsGeneral';
+import { SettingsHotkeys } from './SettingsHotkeys';
 import { SettingsInterface } from './SettingsInterface';
 import { SettingsLicense } from './SettingsLicense';
 import { SettingsPlugins } from './SettingsPlugins';
@@ -28,6 +30,7 @@ interface Props {
 const TAB_GENERAL = 'general';
 const TAB_INTERFACE = 'interface';
 const TAB_THEME = 'theme';
+const TAB_SHORTCUTS = 'shortcuts';
 const TAB_PROXY = 'proxy';
 const TAB_CERTIFICATES = 'certificates';
 const TAB_PLUGINS = 'plugins';
@@ -36,6 +39,7 @@ const tabs = [
   TAB_GENERAL,
   TAB_THEME,
   TAB_INTERFACE,
+  TAB_SHORTCUTS,
   TAB_CERTIFICATES,
   TAB_PROXY,
   TAB_PLUGINS,
@@ -97,6 +101,24 @@ export default function Settings({ hide }: Props) {
             value,
             label: capitalize(value),
             hidden: !appInfo.featureLicense && value === TAB_LICENSE,
+            leftSlot:
+              value === TAB_GENERAL ? (
+                <Icon icon="settings" className="text-secondary" />
+              ) : value === TAB_THEME ? (
+                <Icon icon="palette" className="text-secondary" />
+              ) : value === TAB_INTERFACE ? (
+                <Icon icon="columns_2" className="text-secondary" />
+              ) : value === TAB_SHORTCUTS ? (
+                <Icon icon="keyboard" className="text-secondary" />
+              ) : value === TAB_CERTIFICATES ? (
+                <Icon icon="shield_check" className="text-secondary" />
+              ) : value === TAB_PROXY ? (
+                <Icon icon="wifi" className="text-secondary" />
+              ) : value === TAB_PLUGINS ? (
+                <Icon icon="puzzle" className="text-secondary" />
+              ) : value === TAB_LICENSE ? (
+                <Icon icon="key_round" className="text-secondary" />
+              ) : null,
             rightSlot:
               value === TAB_CERTIFICATES ? (
                 <CountBadge count={settings.clientCertificates.length} />
@@ -118,6 +140,9 @@ export default function Settings({ hide }: Props) {
         </TabContent>
         <TabContent value={TAB_THEME} className="overflow-y-auto h-full px-6 !py-4">
           <SettingsTheme />
+        </TabContent>
+        <TabContent value={TAB_SHORTCUTS} className="overflow-y-auto h-full px-6 !py-4">
+          <SettingsHotkeys />
         </TabContent>
         <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1 px-6 !py-4">
           <SettingsPlugins defaultSubtab={tab === TAB_PLUGINS ? subtab : undefined} />

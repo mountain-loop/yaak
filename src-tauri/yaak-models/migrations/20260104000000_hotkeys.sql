@@ -1,0 +1,1 @@
+ALTER TABLE settings ADD COLUMN hotkeys TEXT DEFAULT '{}' NOT NULL;

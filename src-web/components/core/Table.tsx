@@ -51,12 +51,21 @@ export function TableRow({ children }: { children: ReactNode }) {
   return <tr>{children}</tr>;
 }
 
-export function TableCell({ children, className }: { children: ReactNode; className?: string }) {
+export function TableCell({
+  children,
+  className,
+  align = 'left',
+}: {
+  children: ReactNode;
+  className?: string;
+  align?: 'left' | 'center' | 'right';
+}) {
   return (
     <td
       className={classNames(
         className,
-        'py-2 [&:not(:first-child)]:pl-4 text-left whitespace-nowrap',
+        'py-2 [&:not(:first-child)]:pl-4 whitespace-nowrap',
+        align === 'left' ? 'text-left' : align === 'center' ? 'text-center' : 'text-right',
       )}
     >
       {children}
