@@ -231,6 +231,7 @@ impl PluginManager {
                 plugin_context,
                 plugin,
                 &InternalEventPayload::TerminateRequest,
+                Duration::from_secs(5),
             )
             .await?;
         }
@@ -268,6 +269,7 @@ impl PluginManager {
                         dir: plugin.directory.clone(),
                         watch: !is_vendored && !is_installed,
                     }),
+                    Duration::from_secs(5),
                 )
                 .await?;
 
@@ -390,13 +392,20 @@ impl PluginManager {
         plugin_context: &PluginContext,
         plugin: &PluginHandle,
         payload: &InternalEventPayload,
+        timeout_duration: Duration,
     ) -> Result<InternalEvent> {
         if !plugin.enabled {
             return Err(Error::PluginErr(format!("Plugin {} is disabled", plugin.metadata.name)));
         }
 
-        let events =
-            self.send_to_plugins_and_wait(plugin_context, payload, vec![plugin.to_owned()]).await?;
+        let events = self
+            .send_to_plugins_and_wait(
+                plugin_context,
+                payload,
+                vec![plugin.to_owned()],
+                timeout_duration,
+            )
+            .await?;
         Ok(events
             .first()
             .ok_or(Error::PluginErr(format!(
@@ -410,9 +419,10 @@ impl PluginManager {
         &self,
         plugin_context: &PluginContext,
         payload: &InternalEventPayload,
+        timeout_duration: Duration,
     ) -> Result<Vec<InternalEvent>> {
         let plugins = { self.plugin_handles.lock().await.clone() };
-        self.send_to_plugins_and_wait(plugin_context, payload, plugins).await
+        self.send_to_plugins_and_wait(plugin_context, payload, plugins, timeout_duration).await
     }
 
     async fn send_to_plugins_and_wait(
@@ -420,6 +430,7 @@ impl PluginManager {
         plugin_context: &PluginContext,
         payload: &InternalEventPayload,
         plugins: Vec<PluginHandle>,
+        timeout_duration: Duration,
     ) -> Result<Vec<InternalEvent>> {
         let label = format!("wait[{}.{}]", plugins.len(), payload.type_name());
         let (rx_id, mut rx) = self.subscribe(label.as_str()).await;
@@ -453,8 +464,8 @@ impl PluginManager {
                     }
                 };
 
-                // Timeout after 10 seconds to prevent hanging forever if plugin doesn't respond
-                if timeout(Duration::from_secs(5), collect_events).await.is_err() {
+                // Timeout to prevent hanging forever if plugin doesn't respond
+                if timeout(timeout_duration, collect_events).await.is_err() {
                     warn!(
                         "Timeout waiting for plugin responses. Got {}/{} responses",
                         found_events.len(),
@@ -492,6 +503,7 @@ impl PluginManager {
             .send_and_wait(
                 &PluginContext::new(window),
                 &InternalEventPayload::GetThemesRequest(GetThemesRequest {}),
+                Duration::from_secs(5),
             )
             .await?;
 
@@ -513,6 +525,7 @@ impl PluginManager {
             .send_and_wait(
                 &PluginContext::new(window),
                 &InternalEventPayload::GetGrpcRequestActionsRequest(EmptyPayload {}),
+                Duration::from_secs(5),
             )
             .await?;
 
@@ -534,6 +547,7 @@ impl PluginManager {
             .send_and_wait(
                 &PluginContext::new(window),
                 &InternalEventPayload::GetHttpRequestActionsRequest(EmptyPayload {}),
+                Duration::from_secs(5),
             )
             .await?;
 
@@ -555,6 +569,7 @@ impl PluginManager {
             .send_and_wait(
                 &PluginContext::new(window),
                 &InternalEventPayload::GetWebsocketRequestActionsRequest(EmptyPayload {}),
+                Duration::from_secs(5),
             )
             .await?;
 
@@ -576,6 +591,7 @@ impl PluginManager {
             .send_and_wait(
                 &PluginContext::new(window),
                 &InternalEventPayload::GetWorkspaceActionsRequest(EmptyPayload {}),
+                Duration::from_secs(5),
             )
             .await?;
 
@@ -597,6 +613,7 @@ impl PluginManager {
             .send_and_wait(
                 &PluginContext::new(window),
                 &InternalEventPayload::GetFolderActionsRequest(EmptyPayload {}),
+                Duration::from_secs(5),
             )
             .await?;
 
@@ -663,6 +680,7 @@ impl PluginManager {
                         context_id,
                     },
                 ),
+                Duration::from_secs(5),
             )
             .await?;
         match event.payload {
@@ -769,6 +787,7 @@ impl PluginManager {
             .send_and_wait(
                 &plugin_context,
                 &InternalEventPayload::GetHttpAuthenticationSummaryRequest(EmptyPayload {}),
+                Duration::from_secs(5),
             )
             .await?;
 
@@ -829,6 +848,7 @@ impl PluginManager {
                         context_id,
                     },
                 ),
+                Duration::from_secs(5),
             )
             .await?;
         match event.payload {
@@ -882,6 +902,7 @@ impl PluginManager {
                     },
                 },
             ),
+            Duration::from_secs(300), // 5 minutes for OAuth flows
         )
         .await?;
         Ok(())
@@ -919,6 +940,7 @@ impl PluginManager {
                 plugin_context,
                 &plugin,
                 &InternalEventPayload::CallHttpAuthenticationRequest(req),
+                Duration::from_secs(300), // 5 minutes for OAuth flows
             )
             .await?;
         match event.payload {
@@ -940,6 +962,7 @@ impl PluginManager {
             .send_and_wait(
                 &plugin_context,
                 &InternalEventPayload::GetTemplateFunctionSummaryRequest(EmptyPayload {}),
+                Duration::from_secs(5),
             )
             .await?;
 
@@ -972,7 +995,11 @@ impl PluginManager {
         };
 
         let events = self
-            .send_and_wait(plugin_context, &InternalEventPayload::CallTemplateFunctionRequest(req))
+            .send_and_wait(
+                plugin_context,
+                &InternalEventPayload::CallTemplateFunctionRequest(req),
+                Duration::from_secs(300), // 5 minutes for user interactions (OAuth, prompts, etc.)
+            )
             .await
             .map_err(|e| RenderError(format!("Failed to call template function {e:}")))?;
 
@@ -1009,6 +1036,7 @@ impl PluginManager {
                 &InternalEventPayload::ImportRequest(ImportRequest {
                     content: content.to_string(),
                 }),
+                Duration::from_secs(5),
             )
             .await?;
 
@@ -1051,6 +1079,7 @@ impl PluginManager {
                     filter: filter.to_string(),
                     content: content.to_string(),
                 }),
+                Duration::from_secs(5),
             )
             .await?;
 
