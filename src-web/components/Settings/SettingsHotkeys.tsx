@@ -1,4 +1,3 @@
-import { type } from '@tauri-apps/plugin-os';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -16,7 +15,7 @@ import { HStack, VStack } from '../core/Stacks';
 const HOLD_KEYS = ['Shift', 'Control', 'Alt', 'Meta'];
 const LAYOUT_INSENSITIVE_KEYS = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote'];
 
-/** Convert a KeyboardEvent to a hotkey string like "CmdCtrl+Shift+K" */
+/** Convert a KeyboardEvent to a hotkey string like "Meta+Shift+k" or "Control+Shift+k" */
 function eventToHotkeyString(e: KeyboardEvent): string | null {
   // Don't capture modifier-only key presses
   if (HOLD_KEYS.includes(e.key)) {
@@ -24,22 +23,17 @@ function eventToHotkeyString(e: KeyboardEvent): string | null {
   }
 
   const parts: string[] = [];
-  const os = type();
 
-  // Add modifiers in consistent order
-  // Use CmdCtrl for Meta (macOS) or Control (Windows/Linux)
-  if ((os === 'macos' && e.metaKey) || (os !== 'macos' && e.ctrlKey)) {
-    parts.push('CmdCtrl');
+  // Add modifiers in consistent order (Meta, Control, Alt, Shift)
+  if (e.metaKey) {
+    parts.push('Meta');
   }
-  // Add Control separately on macOS (for shortcuts like Control+Enter)
-  if (os === 'macos' && e.ctrlKey) {
+  if (e.ctrlKey) {
     parts.push('Control');
   }
-  // Add Alt
   if (e.altKey) {
     parts.push('Alt');
   }
-  // Add Shift
   if (e.shiftKey) {
     parts.push('Shift');
   }

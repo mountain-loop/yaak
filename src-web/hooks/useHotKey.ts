@@ -35,32 +35,65 @@ export type HotkeyAction =
   | 'url_bar.focus'
   | 'workspace_settings.show';
 
-export const defaultHotkeys: Record<HotkeyAction, string[]> = {
-  'app.zoom_in': ['CmdCtrl+Equal'],
-  'app.zoom_out': ['CmdCtrl+Minus'],
-  'app.zoom_reset': ['CmdCtrl+0'],
-  'command_palette.toggle': ['CmdCtrl+k'],
-  'environmentEditor.toggle': ['CmdCtrl+Shift+E', 'CmdCtrl+Shift+e'],
-  'request.rename': type() === 'macos' ? ['Control+Shift+r'] : ['F2'],
-  'request.send': ['CmdCtrl+Enter', 'CmdCtrl+r'],
-  'hotkeys.showHelp': ['CmdCtrl+Shift+/', 'CmdCtrl+Shift+?'], // when shift is pressed, it might be a question mark
-  'model.create': ['CmdCtrl+n'],
-  'model.duplicate': ['CmdCtrl+d'],
+/** Default hotkeys for macOS (uses Meta for Cmd) */
+const defaultHotkeysMac: Record<HotkeyAction, string[]> = {
+  'app.zoom_in': ['Meta+Equal'],
+  'app.zoom_out': ['Meta+Minus'],
+  'app.zoom_reset': ['Meta+0'],
+  'command_palette.toggle': ['Meta+k'],
+  'environmentEditor.toggle': ['Meta+Shift+e'],
+  'request.rename': ['Control+Shift+r'],
+  'request.send': ['Meta+Enter', 'Meta+r'],
+  'hotkeys.showHelp': ['Meta+Shift+/'],
+  'model.create': ['Meta+n'],
+  'model.duplicate': ['Meta+d'],
   'switcher.next': ['Control+Shift+Tab'],
   'switcher.prev': ['Control+Tab'],
-  'switcher.toggle': ['CmdCtrl+p'],
-  'settings.show': ['CmdCtrl+,'],
-  'sidebar.filter': ['CmdCtrl+f'],
-  'sidebar.expand_all': ['CmdCtrl+Shift+Equal'],
-  'sidebar.collapse_all': ['CmdCtrl+Shift+Minus'],
-  'sidebar.selected.delete': ['Delete', 'CmdCtrl+Backspace'],
-  'sidebar.selected.duplicate': ['CmdCtrl+d'],
+  'switcher.toggle': ['Meta+p'],
+  'settings.show': ['Meta+,'],
+  'sidebar.filter': ['Meta+f'],
+  'sidebar.expand_all': ['Meta+Shift+Equal'],
+  'sidebar.collapse_all': ['Meta+Shift+Minus'],
+  'sidebar.selected.delete': ['Delete', 'Meta+Backspace'],
+  'sidebar.selected.duplicate': ['Meta+d'],
   'sidebar.selected.rename': ['Enter'],
-  'sidebar.focus': ['CmdCtrl+b'],
-  'sidebar.context_menu': type() === 'macos' ? ['Control+Enter'] : ['Alt+Insert'],
-  'url_bar.focus': ['CmdCtrl+l'],
-  'workspace_settings.show': ['CmdCtrl+;'],
+  'sidebar.focus': ['Meta+b'],
+  'sidebar.context_menu': ['Control+Enter'],
+  'url_bar.focus': ['Meta+l'],
+  'workspace_settings.show': ['Meta+;'],
 };
+
+/** Default hotkeys for Windows/Linux (uses Control for Ctrl) */
+const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
+  'app.zoom_in': ['Control+Equal'],
+  'app.zoom_out': ['Control+Minus'],
+  'app.zoom_reset': ['Control+0'],
+  'command_palette.toggle': ['Control+k'],
+  'environmentEditor.toggle': ['Control+Shift+e'],
+  'request.rename': ['F2'],
+  'request.send': ['Control+Enter', 'Control+r'],
+  'hotkeys.showHelp': ['Control+Shift+/'],
+  'model.create': ['Control+n'],
+  'model.duplicate': ['Control+d'],
+  'switcher.next': ['Control+Shift+Tab'],
+  'switcher.prev': ['Control+Tab'],
+  'switcher.toggle': ['Control+p'],
+  'settings.show': ['Control+,'],
+  'sidebar.filter': ['Control+f'],
+  'sidebar.expand_all': ['Control+Shift+Equal'],
+  'sidebar.collapse_all': ['Control+Shift+Minus'],
+  'sidebar.selected.delete': ['Delete', 'Control+Backspace'],
+  'sidebar.selected.duplicate': ['Control+d'],
+  'sidebar.selected.rename': ['Enter'],
+  'sidebar.focus': ['Control+b'],
+  'sidebar.context_menu': ['Alt+Insert'],
+  'url_bar.focus': ['Control+l'],
+  'workspace_settings.show': ['Control+;'],
+};
+
+/** Get the default hotkeys for the current platform */
+export const defaultHotkeys: Record<HotkeyAction, string[]> =
+  type() === 'macos' ? defaultHotkeysMac : defaultHotkeysOther;
 
 /** Atom that provides the effective hotkeys by merging defaults with user settings */
 export const hotkeysAtom = atom((get) => {
@@ -236,8 +269,7 @@ function handleKeyDown(e: KeyboardEvent) {
 
       for (const hkKey of hkKeys) {
         const keys = hkKey.split('+');
-        const adjustedKeys = keys.map(resolveHotkeyKey);
-        if (compareKeys(adjustedKeys, Array.from(currentKeysWithModifiers))) {
+        if (compareKeys(keys, Array.from(currentKeysWithModifiers))) {
           if (!options.allowDefault) {
             e.preventDefault();
             e.stopPropagation();
@@ -274,18 +306,22 @@ export function useFormattedHotkey(action: HotkeyAction | null): string[] | null
 
   for (const p of parts) {
     if (os === 'macos') {
-      if (p === 'CmdCtrl') {
+      if (p === 'Meta') {
         labelParts.push('⌘');
       } else if (p === 'Shift') {
         labelParts.push('⇧');
       } else if (p === 'Control') {
         labelParts.push('⌃');
+      } else if (p === 'Alt') {
+        labelParts.push('⌥');
       } else if (p === 'Enter') {
         labelParts.push('↩');
       } else if (p === 'Tab') {
         labelParts.push('⇥');
       } else if (p === 'Backspace') {
         labelParts.push('⌫');
+      } else if (p === 'Delete') {
+        labelParts.push('⌦');
       } else if (p === 'Minus') {
         labelParts.push('-');
       } else if (p === 'Plus') {
@@ -296,7 +332,7 @@ export function useFormattedHotkey(action: HotkeyAction | null): string[] | null
         labelParts.push(capitalize(p));
       }
     } else {
-      if (p === 'CmdCtrl') {
+      if (p === 'Control') {
         labelParts.push('Ctrl');
       } else {
         labelParts.push(capitalize(p));
@@ -309,13 +345,6 @@ export function useFormattedHotkey(action: HotkeyAction | null): string[] | null
   }
   return [labelParts.join('+')];
 }
-
-const resolveHotkeyKey = (key: string) => {
-  const os = type();
-  if (key === 'CmdCtrl' && os === 'macos') return 'Meta';
-  if (key === 'CmdCtrl') return 'Control';
-  return key;
-};
 
 function compareKeys(keysA: string[], keysB: string[]) {
   if (keysA.length !== keysB.length) return false;
