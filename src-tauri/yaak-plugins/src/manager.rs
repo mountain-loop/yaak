@@ -195,24 +195,7 @@ impl PluginManager {
             }
         }
 
-        // Filter to only "available" plugins for this runtime context.
-        // The database stores all plugins globally (to persist enabled/disabled state),
-        // but we only want to load plugins that are actually present:
-        // 1. Bundled plugins from the current build/worktree
-        // 2. User-installed plugins (always available)
-        // This prevents duplicate plugin loading when switching between worktrees or builds.
-        let all_plugins = app_handle.db().list_plugins()?;
-        let available_plugins: Vec<Plugin> = all_plugins
-            .into_iter()
-            .filter(|plugin| {
-                let dir_path = Path::new(&plugin.directory);
-                let is_bundled = bundled_plugin_dirs.contains(&plugin.directory);
-                let is_installed = dir_path.starts_with(self.installed_plugin_dir.as_path());
-                is_bundled || is_installed
-            })
-            .collect();
-
-        Ok(available_plugins)
+        Ok(app_handle.db().list_plugins()?)
     }
 
     pub async fn uninstall(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {
