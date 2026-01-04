@@ -148,7 +148,6 @@ pub struct Settings {
     pub autoupdate: bool,
     pub auto_download_updates: bool,
     pub check_notifications: bool,
-    #[ts(type = "Record<string, string[]>")]
     pub hotkeys: HashMap<String, Vec<String>>,
 }
 
