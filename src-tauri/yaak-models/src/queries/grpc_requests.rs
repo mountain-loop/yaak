@@ -20,6 +20,7 @@ impl<'a> DbContext<'a> {
         source: &UpdateSource,
     ) -> Result<GrpcRequest> {
         self.delete_all_grpc_connections_for_request(m.id.as_str(), source)?;
+        self.delete_filter_history_for_request(m.id.as_str(), source)?;
         self.delete(m, source)
     }
 

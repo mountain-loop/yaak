@@ -4,6 +4,7 @@ import { useAtomValue } from 'jotai';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { appInfo } from '../../lib/appInfo';
+import { HISTORY_LIMITS } from '../../lib/historyConstants';
 import { revealInFinderText } from '../../lib/reveal';
 import { CargoFeature } from '../CargoFeature';
 import { Checkbox } from '../core/Checkbox';
@@ -115,6 +116,28 @@ export function SettingsGeneral() {
           validate={(value) => Number.parseInt(value, 10) >= 0}
           onChange={(v) =>
             patchModel(workspace, { settingRequestTimeout: Number.parseInt(v, 10) || 0 })
+          }
+          type="number"
+        />
+
+        <PlainInput
+          required
+          size="sm"
+          name="maxFilterHistory"
+          label="Max Filter History"
+          labelClassName="w-[14rem]"
+          placeholder="20"
+          labelPosition="left"
+          defaultValue={`${workspace.settingMaxFilterHistory ?? HISTORY_LIMITS.DEFAULT_MAX_ITEMS}`}
+          validate={(value) => {
+            const num = Number.parseInt(value, 10);
+            return num >= HISTORY_LIMITS.MIN_MAX_ITEMS && num <= HISTORY_LIMITS.MAX_MAX_ITEMS;
+          }}
+          help={`Number of filter expressions to remember (${HISTORY_LIMITS.MIN_MAX_ITEMS}-${HISTORY_LIMITS.MAX_MAX_ITEMS}). Applies to JSONPath/XPath response filters.`}
+          onChange={(v) =>
+            patchModel(workspace, {
+              settingMaxFilterHistory: Number.parseInt(v, 10) || HISTORY_LIMITS.DEFAULT_MAX_ITEMS,
+            })
           }
           type="number"
         />

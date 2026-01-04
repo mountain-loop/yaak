@@ -2,6 +2,7 @@ import type { HttpResponse } from '@yaakapp-internal/models';
 import { useMemo, useState } from 'react';
 import { useResponseBodyText } from '../../hooks/useResponseBodyText';
 import { languageFromContentType } from '../../lib/contentType';
+import { getFilterType } from '../../lib/filterType';
 import { getContentTypeFromHeaders } from '../../lib/model_util';
 import type { EditorProps } from '../core/Editor/Editor';
 import { EmptyStateText } from '../EmptyStateText';
@@ -64,11 +65,15 @@ function HttpTextViewer({ response, text, language, pretty, className }: HttpTex
     [filteredBody],
   );
 
+  // Compute history key per request with filter type based on language
+  const historyStateKey = `request.${response.requestId}.filter.${getFilterType(language)}`;
+
   return (
     <TextViewer
       text={text}
       language={language}
       stateKey={`response.body.${response.id}`}
+      historyStateKey={historyStateKey}
       pretty={pretty}
       className={className}
       onFilter={filterCallback}

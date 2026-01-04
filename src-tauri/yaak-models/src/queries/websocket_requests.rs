@@ -20,6 +20,7 @@ impl<'a> DbContext<'a> {
         source: &UpdateSource,
     ) -> Result<WebsocketRequest> {
         self.delete_all_websocket_connections_for_request(websocket_request.id.as_str(), source)?;
+        self.delete_filter_history_for_request(websocket_request.id.as_str(), source)?;
         self.delete(websocket_request, source)
     }
 
