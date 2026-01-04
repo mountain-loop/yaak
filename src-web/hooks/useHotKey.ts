@@ -69,9 +69,10 @@ export const hotkeysAtom = atom((get) => {
 
   // Merge default hotkeys with custom hotkeys from settings
   // Custom hotkeys override defaults for the same action
+  // An empty array means the hotkey is intentionally disabled
   const merged: Record<HotkeyAction, string[]> = { ...defaultHotkeys };
   for (const [action, keys] of Object.entries(customHotkeys)) {
-    if (action in defaultHotkeys && Array.isArray(keys) && keys.length > 0) {
+    if (action in defaultHotkeys && Array.isArray(keys)) {
       merged[action as HotkeyAction] = keys;
     }
   }

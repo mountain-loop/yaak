@@ -39,10 +39,11 @@ export function SettingsHotkeys() {
             defaultKeys={defaultHotkeys[action]}
             onSave={async (keys) => {
               const newHotkeys = { ...settings.hotkeys };
-              if (keys.length === 0 || arraysEqual(keys, defaultHotkeys[action])) {
-                // Remove custom hotkey if empty or matches default
+              if (arraysEqual(keys, defaultHotkeys[action])) {
+                // Remove from settings if it matches default (use default)
                 delete newHotkeys[action];
               } else {
+                // Store the keys (including empty array to disable)
                 newHotkeys[action] = keys;
               }
               await patchModel(settings, { hotkeys: newHotkeys });
@@ -72,6 +73,7 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const isCustomized = !arraysEqual(currentKeys, defaultKeys);
+  const isDisabled = currentKeys.length === 0;
 
   const handleStartEdit = useCallback(() => {
     setEditValue(currentKeys.join(', '));
@@ -136,7 +138,7 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
             className="text-xs bg-surface-highlight px-1.5 py-0.5 rounded cursor-pointer hover:bg-surface-active"
             onClick={handleStartEdit}
           >
-            {currentKeys.join(', ') || '(none)'}
+            {isDisabled ? '(disabled)' : currentKeys.join(', ')}
           </code>
           {isCustomized && (
             <span className="text-xs text-notice" title={`Default: ${defaultKeys.join(', ')}`}>
@@ -149,6 +151,11 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
         <Button size="xs" color="secondary" onClick={handleStartEdit}>
           Edit
         </Button>
+        {!isDisabled && (
+          <Button size="xs" color="secondary" onClick={() => onSave([])}>
+            Clear
+          </Button>
+        )}
         {isCustomized && (
           <Button size="xs" color="secondary" onClick={onReset}>
             Reset
