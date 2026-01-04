@@ -1,6 +1,7 @@
 import { type } from '@tauri-apps/plugin-os';
 import { debounce } from '@yaakapp-internal/lib';
-import { atom } from 'jotai';
+import { settingsAtom } from '@yaakapp-internal/models';
+import { atom, useAtomValue } from 'jotai';
 import { useEffect } from 'react';
 import { capitalize } from '../lib/capitalize';
 import { jotaiStore } from '../lib/jotai';
@@ -34,7 +35,7 @@ export type HotkeyAction =
   | 'url_bar.focus'
   | 'workspace_settings.show';
 
-const hotkeys: Record<HotkeyAction, string[]> = {
+export const defaultHotkeys: Record<HotkeyAction, string[]> = {
   'app.zoom_in': ['CmdCtrl+Equal'],
   'app.zoom_out': ['CmdCtrl+Minus'],
   'app.zoom_reset': ['CmdCtrl+0'],
@@ -60,6 +61,27 @@ const hotkeys: Record<HotkeyAction, string[]> = {
   'url_bar.focus': ['CmdCtrl+l'],
   'workspace_settings.show': ['CmdCtrl+;'],
 };
+
+/** Atom that provides the effective hotkeys by merging defaults with user settings */
+export const hotkeysAtom = atom((get) => {
+  const settings = get(settingsAtom);
+  const customHotkeys = settings?.hotkeys ?? {};
+
+  // Merge default hotkeys with custom hotkeys from settings
+  // Custom hotkeys override defaults for the same action
+  const merged: Record<HotkeyAction, string[]> = { ...defaultHotkeys };
+  for (const [action, keys] of Object.entries(customHotkeys)) {
+    if (action in defaultHotkeys && Array.isArray(keys) && keys.length > 0) {
+      merged[action as HotkeyAction] = keys;
+    }
+  }
+  return merged;
+});
+
+/** Helper function to get current hotkeys from the store */
+function getHotkeys(): Record<HotkeyAction, string[]> {
+  return jotaiStore.get(hotkeysAtom);
+}
 
 const hotkeyLabels: Record<HotkeyAction, string> = {
   'app.zoom_in': 'Zoom In',
@@ -90,7 +112,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
 
 const layoutInsensitiveKeys = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote'];
 
-export const hotkeyActions: HotkeyAction[] = Object.keys(hotkeys) as (keyof typeof hotkeys)[];
+export const hotkeyActions: HotkeyAction[] = Object.keys(defaultHotkeys) as (keyof typeof defaultHotkeys)[];
 
 export type HotKeyOptions = {
   enable?: boolean | (() => boolean);
@@ -200,6 +222,7 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 
   const executed: string[] = [];
+  const hotkeys = getHotkeys();
   outer: for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
     for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
       if (hkAction !== action) {
@@ -238,6 +261,7 @@ export function useHotKeyLabel(action: HotkeyAction): string {
 }
 
 export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {
+  const hotkeys = useAtomValue(hotkeysAtom);
   const trigger = action != null ? (hotkeys[action]?.[0] ?? null) : null;
   if (trigger == null) {
     return null;
