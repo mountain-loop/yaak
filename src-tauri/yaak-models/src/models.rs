@@ -11,6 +11,7 @@ use sea_query::{IntoColumnRef, IntoIden, IntoTableRef, Order, SimpleExpr, enum_d
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use ts_rs::TS;
@@ -147,6 +148,7 @@ pub struct Settings {
     pub autoupdate: bool,
     pub auto_download_updates: bool,
     pub check_notifications: bool,
+    pub hotkeys: HashMap<String, Vec<String>>,
 }
 
 impl UpsertModelInfo for Settings {
@@ -180,6 +182,7 @@ impl UpsertModelInfo for Settings {
             Some(p) => Some(serde_json::to_string(&p)?),
         };
         let client_certificates = serde_json::to_string(&self.client_certificates)?;
+        let hotkeys = serde_json::to_string(&self.hotkeys)?;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
@@ -204,6 +207,7 @@ impl UpsertModelInfo for Settings {
             (ColoredMethods, self.colored_methods.into()),
             (CheckNotifications, self.check_notifications.into()),
             (Proxy, proxy.into()),
+            (Hotkeys, hotkeys.into()),
         ])
     }
 
@@ -231,6 +235,7 @@ impl UpsertModelInfo for Settings {
             SettingsIden::AutoDownloadUpdates,
             SettingsIden::ColoredMethods,
             SettingsIden::CheckNotifications,
+            SettingsIden::Hotkeys,
         ]
     }
 
@@ -241,6 +246,7 @@ impl UpsertModelInfo for Settings {
         let proxy: Option<String> = row.get("proxy")?;
         let client_certificates: String = row.get("client_certificates")?;
         let editor_keymap: String = row.get("editor_keymap")?;
+        let hotkeys: String = row.get("hotkeys")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -267,6 +273,7 @@ impl UpsertModelInfo for Settings {
             hide_license_badge: row.get("hide_license_badge")?,
             colored_methods: row.get("colored_methods")?,
             check_notifications: row.get("check_notifications")?,
+            hotkeys: serde_json::from_str(&hotkeys).unwrap_or_default(),
         })
     }
 }

@@ -18,7 +18,7 @@ import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { Editor } from './core/Editor/LazyEditor';
-import { HotKeyList } from './core/HotKeyList';
+import { HotkeyList } from './core/HotkeyList';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { LoadingIcon } from './core/LoadingIcon';
@@ -71,7 +71,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
       minHeightPx={20}
       firstSlot={() =>
         activeConnection == null ? (
-          <HotKeyList
+          <HotkeyList
             hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']}
           />
         ) : (

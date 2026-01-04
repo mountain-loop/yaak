@@ -45,7 +45,7 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         : []) as DropdownItem[]),
       {
         label: 'Manage Environments',
-        hotKeyAction: 'environmentEditor.toggle',
+        hotKeyAction: 'environment_editor.toggle',
         leftSlot: <Icon icon="box" />,
         onSelect: () => editEnvironment(activeEnvironment),
       },

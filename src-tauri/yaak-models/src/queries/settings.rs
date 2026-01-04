@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{EditorKeymap, Settings, SettingsIden};
@@ -38,6 +40,7 @@ impl<'a> DbContext<'a> {
             hide_license_badge: false,
             auto_download_updates: true,
             check_notifications: true,
+            hotkeys: HashMap::new(),
         };
         self.upsert(&settings, &UpdateSource::Background).expect("Failed to upsert settings")
     }

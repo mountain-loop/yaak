@@ -127,6 +127,7 @@ import {
   UploadIcon,
   VariableIcon,
   Wand2Icon,
+  WifiIcon,
   WrenchIcon,
   XIcon,
 } from 'lucide-react';
@@ -260,6 +261,7 @@ const icons = {
   update: RefreshCcwIcon,
   upload: UploadIcon,
   variable: VariableIcon,
+  wifi: WifiIcon,
   wrench: WrenchIcon,
   x: XIcon,
   _unknown: ShieldAlertIcon,
