@@ -15,6 +15,7 @@ import { TabContent, type TabItem, Tabs } from '../core/Tabs/Tabs';
 import { HeaderSize } from '../HeaderSize';
 import { SettingsCertificates } from './SettingsCertificates';
 import { SettingsGeneral } from './SettingsGeneral';
+import { SettingsHotkeys } from './SettingsHotkeys';
 import { SettingsInterface } from './SettingsInterface';
 import { SettingsLicense } from './SettingsLicense';
 import { SettingsPlugins } from './SettingsPlugins';
@@ -28,6 +29,7 @@ interface Props {
 const TAB_GENERAL = 'general';
 const TAB_INTERFACE = 'interface';
 const TAB_THEME = 'theme';
+const TAB_HOTKEYS = 'hotkeys';
 const TAB_PROXY = 'proxy';
 const TAB_CERTIFICATES = 'certificates';
 const TAB_PLUGINS = 'plugins';
@@ -36,6 +38,7 @@ const tabs = [
   TAB_GENERAL,
   TAB_THEME,
   TAB_INTERFACE,
+  TAB_HOTKEYS,
   TAB_CERTIFICATES,
   TAB_PROXY,
   TAB_PLUGINS,
@@ -118,6 +121,9 @@ export default function Settings({ hide }: Props) {
         </TabContent>
         <TabContent value={TAB_THEME} className="overflow-y-auto h-full px-6 !py-4">
           <SettingsTheme />
+        </TabContent>
+        <TabContent value={TAB_HOTKEYS} className="overflow-y-auto h-full px-6 !py-4">
+          <SettingsHotkeys />
         </TabContent>
         <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1 px-6 !py-4">
           <SettingsPlugins defaultSubtab={tab === TAB_PLUGINS ? subtab : undefined} />
