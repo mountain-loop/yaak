@@ -8,7 +8,6 @@ export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
     {
       title: 'Get Workspace ID',
       description: 'Get the current workspace ID',
-      inputSchema: {},
     },
     async () => {
       const workspaceCtx = await getWorkspaceContext(ctx);
@@ -30,7 +29,6 @@ export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
     {
       title: 'Get Environment ID',
       description: 'Get the current environment ID',
-      inputSchema: {},
     },
     async () => {
       const workspaceCtx = await getWorkspaceContext(ctx);

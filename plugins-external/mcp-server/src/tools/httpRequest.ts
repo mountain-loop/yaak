@@ -9,12 +9,12 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
     {
       title: 'List HTTP Requests',
       description: 'List all HTTP requests in a workspace',
-      inputSchema: z.object({
+      inputSchema: {
         workspaceId: z
           .string()
           .optional()
           .describe('Workspace ID (required if multiple workspaces are open)'),
-      }),
+      },
     },
     async ({ workspaceId }) => {
       const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
@@ -36,13 +36,13 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
     {
       title: 'Get HTTP Request',
       description: 'Get details of a specific HTTP request by ID',
-      inputSchema: z.object({
+      inputSchema: {
         id: z.string().describe('The HTTP request ID'),
         workspaceId: z
           .string()
           .optional()
           .describe('Workspace ID (required if multiple workspaces are open)'),
-      }),
+      },
     },
     async ({ id, workspaceId }) => {
       const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
@@ -64,14 +64,14 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
     {
       title: 'Send HTTP Request',
       description: 'Send an HTTP request and get the response',
-      inputSchema: z.object({
+      inputSchema: {
         id: z.string().describe('The HTTP request ID to send'),
         environmentId: z.string().optional().describe('Optional environment ID to use'),
         workspaceId: z
           .string()
           .optional()
           .describe('Workspace ID (required if multiple workspaces are open)'),
-      }),
+      },
     },
     async ({ id, workspaceId }) => {
       const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
@@ -98,7 +98,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
     {
       title: 'Create HTTP Request',
       description: 'Create a new HTTP request',
-      inputSchema: z.object({
+      inputSchema: {
         workspaceId: z
           .string()
           .optional()
@@ -167,7 +167,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
               '- "awsv4": { accessKeyId: "...", secretAccessKey: "...", service: "sts", region: "us-east-1", sessionToken: "..." }\n' +
               '- "none": {}',
           ),
-      }),
+      },
     },
     async ({ workspaceId: ogWorkspaceId, ...args }) => {
       const workspaceCtx = await getWorkspaceContext(ctx, ogWorkspaceId);
@@ -192,7 +192,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
     {
       title: 'Update HTTP Request',
       description: 'Update an existing HTTP request',
-      inputSchema: z.object({
+      inputSchema: {
         id: z.string().describe('HTTP request ID to update'),
         workspaceId: z.string().describe('Workspace ID'),
         name: z.string().optional().describe('Request name'),
@@ -256,7 +256,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
               '- "awsv4": { accessKeyId: "...", secretAccessKey: "...", service: "sts", region: "us-east-1", sessionToken: "..." }\n' +
               '- "none": {}',
           ),
-      }),
+      },
     },
     async ({ id, workspaceId, ...updates }) => {
       const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
@@ -282,9 +282,9 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
     {
       title: 'Delete HTTP Request',
       description: 'Delete an HTTP request by ID',
-      inputSchema: z.object({
+      inputSchema: {
         id: z.string().describe('HTTP request ID to delete'),
-      }),
+      },
     },
     async ({ id }) => {
       const httpRequest = await ctx.yaak.httpRequest.delete({ id });
