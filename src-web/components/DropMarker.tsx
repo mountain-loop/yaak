@@ -15,9 +15,9 @@ export const DropMarker = memo(
         style={style}
         className={classNames(
           className,
-          'absolute pointer-events-none z-50 top-0 bottom-0',
+          'absolute pointer-events-none z-50',
           orientation === 'horizontal' && 'w-full',
-          orientation === 'vertical' && 'w-0',
+          orientation === 'vertical' && 'w-0 top-0 bottom-0',
         )}
       >
         <div
