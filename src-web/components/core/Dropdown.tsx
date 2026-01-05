@@ -177,18 +177,23 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
 
   const child = useMemo(() => {
     const existingChild = Children.only(children);
+    const originalOnClick = existingChild.props?.onClick;
     const props: HTMLAttributes<HTMLButtonElement> & { ref: RefObject<HTMLButtonElement | null> } =
       {
         ...existingChild.props,
         ref: buttonRef,
         'aria-haspopup': 'true',
-        onClick:
-          existingChild.props?.onClick ??
-          ((e: MouseEvent<HTMLButtonElement>) => {
+        onClick: (e: MouseEvent<HTMLButtonElement>) => {
+          // Call original onClick first if it exists
+          originalOnClick?.(e);
+
+          // Only toggle dropdown if event wasn't prevented
+          if (!e.defaultPrevented) {
             e.preventDefault();
             e.stopPropagation();
             handleSetIsOpen((o) => !o); // Toggle dropdown
-          }),
+          }
+        },
       };
     return cloneElement(existingChild, props);
   }, [children, handleSetIsOpen]);

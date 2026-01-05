@@ -208,7 +208,7 @@ function TreeItem_<T extends { id: string }>({
       const isFolder = node.children != null;
       const hasChildren = (node.children?.length ?? 0) > 0;
       const isCollapsed = jotaiStore.get(isCollapsedFamily({ treeId, itemId: node.item.id }));
-      if (isCollapsed && isFolder && hasChildren && side === 'below') {
+      if (isCollapsed && isFolder && hasChildren && side === 'after') {
         setDropHover('animate');
         clearTimeout(startedHoverTimeout.current);
         startedHoverTimeout.current = setTimeout(() => {
@@ -221,7 +221,7 @@ function TreeItem_<T extends { id: string }>({
             );
           });
         }, HOVER_CLOSED_FOLDER_DELAY);
-      } else if (isFolder && !hasChildren && side === 'below') {
+      } else if (isFolder && !hasChildren && side === 'after') {
         setDropHover('drop');
       } else {
         clearDropHover();
