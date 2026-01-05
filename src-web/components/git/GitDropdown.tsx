@@ -62,6 +62,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     checkout.mutate(
       { branch, force },
       {
+        disableToastError: true,
         async onError(err) {
           if (!force) {
             // Checkout failed so ask user if they want to force it
@@ -78,7 +79,11 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             }
           } else {
             // Checkout failed
-            showErrorToast('git-checkout-error', String(err));
+            showErrorToast({
+              id: 'git-checkout-error',
+              title: 'Error checking out branch',
+              message: String(err),
+            });
           }
         },
         async onSuccess(branchName) {
@@ -132,8 +137,13 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
         await branch.mutateAsync(
           { branch: name },
           {
+            disableToastError: true,
             onError: (err) => {
-              showErrorToast('git-branch-error', String(err));
+              showErrorToast({
+                id: 'git-branch-error',
+                title: 'Error creating branch',
+                message: String(err),
+              });
             },
           },
         );
@@ -163,6 +173,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                 await mergeBranch.mutateAsync(
                   { branch, force: false },
                   {
+                    disableToastError: true,
                     onSettled: hide,
                     onSuccess() {
                       showToast({
@@ -177,7 +188,11 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                       sync({ force: true });
                     },
                     onError(err) {
-                      showErrorToast('git-merged-branch-error', String(err));
+                      showErrorToast({
+                        id: 'git-merged-branch-error',
+                        title: 'Error merging branch',
+                        message: String(err),
+                      });
                     },
                   },
                 );
@@ -208,8 +223,13 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           await deleteBranch.mutateAsync(
             { branch: currentBranch },
             {
+              disableToastError: true,
               onError(err) {
-                showErrorToast('git-delete-branch-error', String(err));
+                showErrorToast({
+                  id: 'git-delete-branch-error',
+                  title: 'Error deleting branch',
+                  message: String(err),
+                });
               },
               async onSuccess() {
                 await sync({ force: true });
@@ -226,9 +246,14 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       waitForOnSelect: true,
       async onSelect() {
         await push.mutateAsync(undefined, {
+          disableToastError: true,
           onSuccess: handlePullResult,
           onError(err) {
-            showErrorToast('git-pull-error', String(err));
+            showErrorToast({
+              id: 'git-push-error',
+              title: 'Error pushing changes',
+              message: String(err),
+            });
           },
         });
       },
@@ -240,9 +265,14 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       waitForOnSelect: true,
       async onSelect() {
         await pull.mutateAsync(undefined, {
+          disableToastError: true,
           onSuccess: handlePullResult,
           onError(err) {
-            showErrorToast('git-pull-error', String(err));
+            showErrorToast({
+              id: 'git-pull-error',
+              title: 'Error pulling changes',
+              message: String(err),
+            });
           },
         });
       },
