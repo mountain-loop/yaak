@@ -33,26 +33,48 @@ pub(crate) fn git_push(dir: &Path) -> Result<PushResult> {
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
     let combined = stdout + stderr;
+    let combined_lower = combined.to_lowercase();
 
     info!("Pushed to repo status={} {combined}", out.status);
 
-    if combined.to_lowercase().contains("could not read") {
-        return Ok(PushResult::NeedsCredentials { url: remote_url.to_string(), error: None });
+    // Helper to check if this is a credentials error
+    let is_credentials_error = || {
+        combined_lower.contains("could not read")
+            || combined_lower.contains("unable to access")
+            || combined_lower.contains("authentication failed")
+    };
+
+    // Check for explicit rejection indicators first (e.g., protected branch rejections)
+    // These can occur even if some git servers don't properly set exit codes
+    if combined_lower.contains("rejected") || combined_lower.contains("failed to push") {
+        if is_credentials_error() {
+            return Ok(PushResult::NeedsCredentials {
+                url: remote_url.to_string(),
+                error: Some(combined.to_string()),
+            });
+        }
+        return Err(GenericError(format!("Failed to push: {combined}")));
     }
 
-    if combined.to_lowercase().contains("unable to access") {
-        return Ok(PushResult::NeedsCredentials {
-            url: remote_url.to_string(),
-            error: Some(combined.to_string()),
-        });
-    }
-
-    if combined.to_lowercase().contains("up-to-date") {
-        return Ok(PushResult::UpToDate);
-    }
-
+    // Check exit status for any other failures
     if !out.status.success() {
-        return Err(GenericError(format!("Failed to push {combined}")));
+        if combined_lower.contains("could not read") {
+            return Ok(PushResult::NeedsCredentials { url: remote_url.to_string(), error: None });
+        }
+        if combined_lower.contains("unable to access")
+            || combined_lower.contains("authentication failed")
+        {
+            return Ok(PushResult::NeedsCredentials {
+                url: remote_url.to_string(),
+                error: Some(combined.to_string()),
+            });
+        }
+        return Err(GenericError(format!("Failed to push: {combined}")));
+    }
+
+    // Success cases (exit code 0 and no rejection indicators)
+    if combined_lower.contains("up-to-date") {
+        return Ok(PushResult::UpToDate);
     }
 
     Ok(PushResult::Success { message: format!("Pushed to {}/{}", remote_name, branch_name) })
