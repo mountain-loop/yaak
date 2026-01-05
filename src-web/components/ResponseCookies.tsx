@@ -117,6 +117,7 @@ export function ResponseCookies({ response }: Props) {
   return (
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
       <DetailsBanner
+        defaultOpen
         storageKey={`${response.requestId}.sent_cookies`}
         summary={
           <h2 className="flex items-center">
