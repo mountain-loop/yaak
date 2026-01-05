@@ -234,6 +234,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             onChangeValue={setActiveTab}
             tabs={tabs}
             tabListClassName="mt-1 !mb-1.5"
+            storageKey="websocket_request_tabs_order"
           >
             <TabContent value={TAB_AUTH}>
               <HttpAuthenticationEditor model={activeRequest} />

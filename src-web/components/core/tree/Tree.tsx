@@ -486,11 +486,11 @@ function TreeInner<T extends { id: string }>(
       let hoveredParent = node.parent;
       const dragIndex = selectableItems.findIndex((n) => n.node.item.id === item.id) ?? -1;
       const hovered = selectableItems[dragIndex]?.node ?? null;
-      const hoveredIndex = dragIndex + (side === 'above' ? 0 : 1);
-      let hoveredChildIndex = overSelectableItem.index + (side === 'above' ? 0 : 1);
+      const hoveredIndex = dragIndex + (side === 'before' ? 0 : 1);
+      let hoveredChildIndex = overSelectableItem.index + (side === 'before' ? 0 : 1);
 
-      // Move into the folder if it's open and we're moving below it
-      if (hovered?.children != null && side === 'below') {
+      // Move into the folder if it's open and we're moving after it
+      if (hovered?.children != null && side === 'after') {
         hoveredParent = hovered;
         hoveredChildIndex = 0;
       }

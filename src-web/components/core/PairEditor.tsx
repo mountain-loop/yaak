@@ -224,7 +224,7 @@ export function PairEditor({
 
       const side = computeSideForDragMove(overPair.id, e);
       const overIndex = pairs.findIndex((p) => p.id === overId);
-      const hoveredIndex = overIndex + (side === 'above' ? 0 : 1);
+      const hoveredIndex = overIndex + (side === 'before' ? 0 : 1);
 
       setHoveredIndex(hoveredIndex);
     },
