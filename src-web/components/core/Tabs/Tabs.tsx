@@ -1,19 +1,18 @@
 import type { DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
 import {
+  closestCenter,
   DndContext,
   DragOverlay,
   PointerSensor,
-  pointerWithin,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
 import classNames from 'classnames';
-import { useAtom } from 'jotai';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { atomWithKVStorage } from '../../../lib/atoms/atomWithKVStorage';
+import { useKeyValue } from '../../../hooks/useKeyValue';
 import { computeSideForDragMove } from '../../../lib/dnd';
 import { DropMarker } from '../../DropMarker';
 import { ErrorBoundary } from '../../ErrorBoundary';
@@ -80,7 +79,7 @@ export function Tabs({
 
   // Reorder tabs based on saved order when tabs or savedOrder changes
   useEffect(() => {
-    if (!storageKey || savedOrder.length === 0) {
+    if (!storageKey || savedOrder == null || savedOrder.length === 0) {
       setOrderedTabs(originalTabs);
       return;
     }
@@ -154,13 +153,19 @@ export function Tabs({
       const overTab = tabs.find((t) => t.value === overId);
       if (overTab == null) return setHoveredIndex(null);
 
-      const side = computeSideForDragMove(overTab.value, e);
+      // For vertical layout, tabs are arranged horizontally (side-by-side)
+      const orientation = layout === 'vertical' ? 'horizontal' : 'vertical';
+      const side = computeSideForDragMove(overTab.value, e, orientation);
+
+      // If computeSideForDragMove returns null (shouldn't happen but be safe), default to 'below'
+      if (side === null) return setHoveredIndex(null);
+
       const overIndex = tabs.findIndex((t) => t.value === overId);
       const hoveredIndex = overIndex + (side === 'above' ? 0 : 1);
 
       setHoveredIndex(hoveredIndex);
     },
-    [tabs],
+    [tabs, layout],
   );
 
   const onDragCancel = useCallback(() => {
@@ -196,31 +201,45 @@ export function Tabs({
     [tabs, hoveredIndex, setSavedOrder],
   );
 
-  const tabButtons = useMemo(
-    () =>
-      tabs.map((t, i) => {
-        if ('hidden' in t && t.hidden) {
-          return null;
-        }
+  const tabButtons = useMemo(() => {
+    const items: ReactNode[] = [];
+    tabs.forEach((t, i) => {
+      if ('hidden' in t && t.hidden) {
+        return;
+      }
 
-        const isActive = t.value === value;
+      const isActive = t.value === value;
+      const showDropMarkerBefore = hoveredIndex === i;
 
-        return (
-          <TabButton
-            key={t.value}
-            tab={t}
-            isActive={isActive}
-            addBorders={addBorders}
-            layout={layout}
-            reorderable={reorderable}
-            isDragging={isDragging?.value === t.value}
-            onChangeValue={onChangeValue}
-            showDropMarker={hoveredIndex === i}
-          />
+      if (showDropMarkerBefore) {
+        items.push(
+          <div
+            key={`marker-${t.value}`}
+            className={classNames(
+              'relative',
+              layout === 'vertical' ? 'w-0' : 'h-0',
+            )}
+          >
+            <DropMarker orientation={layout === 'vertical' ? 'vertical' : 'horizontal'} />
+          </div>
         );
-      }),
-    [tabs, value, addBorders, layout, reorderable, isDragging, onChangeValue, hoveredIndex],
-  );
+      }
+
+      items.push(
+        <TabButton
+          key={t.value}
+          tab={t}
+          isActive={isActive}
+          addBorders={addBorders}
+          layout={layout}
+          reorderable={reorderable}
+          isDragging={isDragging?.value === t.value}
+          onChangeValue={onChangeValue}
+        />
+      );
+    });
+    return items;
+  }, [tabs, value, addBorders, layout, reorderable, isDragging, onChangeValue, hoveredIndex]);
 
   const tabList = (
     <div
@@ -240,11 +259,20 @@ export function Tabs({
       <div
         className={classNames(
           layout === 'horizontal' && 'flex flex-col w-full pb-3 mb-auto',
-          layout === 'vertical' && 'flex flex-row flex-shrink-0 gap-2 w-full',
+          layout === 'vertical' && 'flex flex-row flex-shrink-0 w-full',
         )}
       >
         {tabButtons}
-        {hoveredIndex === tabs.length && <DropMarker />}
+        {hoveredIndex === tabs.length && (
+          <div
+            className={classNames(
+              'relative',
+              layout === 'vertical' ? 'w-0' : 'h-0',
+            )}
+          >
+            <DropMarker orientation={layout === 'vertical' ? 'vertical' : 'horizontal'} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -268,7 +296,7 @@ export function Tabs({
           onDragEnd={onDragEnd}
           onDragStart={onDragStart}
           onDragCancel={onDragCancel}
-          collisionDetection={pointerWithin}
+          collisionDetection={closestCenter}
         >
           {tabList}
           <DragOverlay dropAnimation={null}>
@@ -281,7 +309,6 @@ export function Tabs({
                 reorderable={false}
                 isDragging={false}
                 onChangeValue={onChangeValue}
-                showDropMarker={false}
                 overlay
               />
             )}
@@ -303,7 +330,6 @@ interface TabButtonProps {
   reorderable: boolean;
   isDragging: boolean;
   onChangeValue: (value: string) => void;
-  showDropMarker: boolean;
   overlay?: boolean;
 }
 
@@ -315,10 +341,13 @@ function TabButton({
   reorderable,
   isDragging,
   onChangeValue,
-  showDropMarker,
   overlay = false,
 }: TabButtonProps) {
-  const { attributes, listeners, setNodeRef: setDraggableRef } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableRef,
+  } = useDraggable({
     id: tab.value,
     disabled: !reorderable,
   });
@@ -327,8 +356,8 @@ function TabButton({
     disabled: !reorderable,
   });
 
-  const handleSetRef = useCallback(
-    (n: HTMLButtonElement | null) => {
+  const handleSetWrapperRef = useCallback(
+    (n: HTMLDivElement | null) => {
       if (reorderable) {
         setDraggableRef(n);
         setDroppableRef(n);
@@ -360,12 +389,9 @@ function TabButton({
     ),
   };
 
-  // Merge drag listeners with button props if reorderable
-  const combinedProps = reorderable && !overlay ? { ...btnProps, ...attributes, ...listeners } : btnProps;
-
   const buttonContent = (() => {
     if ('options' in tab) {
-      const option = tab.options.items.find((i) => 'value' in i && i.value === tab.options?.value);
+      const option = tab.options.items.find((i) => 'value' in i && i.value === tab.options.value);
       return (
         <RadioDropdown
           key={tab.value}
@@ -376,7 +402,6 @@ function TabButton({
           onChange={tab.options.onChange}
         >
           <Button
-            ref={handleSetRef}
             leftSlot={tab.leftSlot}
             rightSlot={
               <div className="flex items-center">
@@ -391,7 +416,7 @@ function TabButton({
                 />
               </div>
             }
-            {...combinedProps}
+            {...btnProps}
           >
             {option && 'shortLabel' in option && option.shortLabel
               ? option.shortLabel
@@ -401,17 +426,27 @@ function TabButton({
       );
     }
     return (
-      <Button ref={handleSetRef} leftSlot={tab.leftSlot} rightSlot={tab.rightSlot} {...combinedProps}>
-        {'label' in tab ? tab.label : tab.value}
+      <Button
+        leftSlot={tab.leftSlot}
+        rightSlot={tab.rightSlot}
+        {...btnProps}
+      >
+        {'label' in tab && tab.label ? tab.label : tab.value}
       </Button>
     );
   })();
 
+  // Apply drag handlers to wrapper, not button
+  const wrapperProps = reorderable && !overlay ? { ...attributes, ...listeners } : {};
+
   return (
-    <>
-      {showDropMarker && <DropMarker />}
+    <div
+      ref={handleSetWrapperRef}
+      className={classNames('relative', layout === 'vertical' && 'mr-2')}
+      {...wrapperProps}
+    >
       {buttonContent}
-    </>
+    </div>
   );
 }
 
