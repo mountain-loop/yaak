@@ -91,7 +91,6 @@ export default function Settings({ hide }: Props) {
       )}
       <Tabs
         layout="horizontal"
-        storageKey="settings"
         value={tab}
         addBorders
         tabListClassName="min-w-[10rem] bg-surface x-theme-sidebar border-r border-border pl-3"
