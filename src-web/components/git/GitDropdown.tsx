@@ -62,6 +62,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     checkout.mutate(
       { branch, force },
       {
+        disableToastError: true,
         async onError(err) {
           if (!force) {
             // Checkout failed so ask user if they want to force it
@@ -132,6 +133,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
         await branch.mutateAsync(
           { branch: name },
           {
+            disableToastError: true,
             onError: (err) => {
               showErrorToast('git-branch-error', String(err));
             },
@@ -163,6 +165,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                 await mergeBranch.mutateAsync(
                   { branch, force: false },
                   {
+                    disableToastError: true,
                     onSettled: hide,
                     onSuccess() {
                       showToast({
@@ -208,6 +211,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           await deleteBranch.mutateAsync(
             { branch: currentBranch },
             {
+              disableToastError: true,
               onError(err) {
                 showErrorToast('git-delete-branch-error', String(err));
               },
@@ -226,9 +230,10 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       waitForOnSelect: true,
       async onSelect() {
         await push.mutateAsync(undefined, {
+          disableToastError: true,
           onSuccess: handlePullResult,
           onError(err) {
-            showErrorToast('git-pull-error', String(err));
+            showErrorToast('git-push-error', String(err));
           },
         });
       },
@@ -240,6 +245,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       waitForOnSelect: true,
       async onSelect() {
         await pull.mutateAsync(undefined, {
+          disableToastError: true,
           onSuccess: handlePullResult,
           onError(err) {
             showErrorToast('git-pull-error', String(err));

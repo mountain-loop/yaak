@@ -49,7 +49,7 @@ export function showErrorToast<T>(id: string, message: T) {
   return showToast({
     id,
     message: String(message),
-    timeout: 8000,
+    timeout: 85000,
     color: 'danger',
   });
 }
