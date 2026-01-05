@@ -38,7 +38,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
         </thead>
         <tbody className="divide-y divide-surface-highlight">
           {cookieJar?.cookies.map((c: Cookie) => (
-            <tr key={c.domain + c.raw_cookie + c.path + c.expires}>
+            <tr key={JSON.stringify(c)}>
               <td className="py-2 select-text cursor-text font-mono font-semibold max-w-0">
                 {cookieDomain(c)}
               </td>
