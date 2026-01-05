@@ -57,7 +57,7 @@ pub struct PluginManager {
 
 impl PluginManager {
     pub fn new<R: Runtime>(app_handle: AppHandle<R>) -> PluginManager {
-        let (events_tx, mut events_rx) = mpsc::channel(128);
+        let (events_tx, mut events_rx) = mpsc::channel(2048);
         let (kill_server_tx, kill_server_rx) = tokio::sync::watch::channel(false);
 
         let (client_disconnect_tx, mut client_disconnect_rx) = mpsc::channel(128);
@@ -320,7 +320,7 @@ impl PluginManager {
     }
 
     pub async fn subscribe(&self, label: &str) -> (String, mpsc::Receiver<InternalEvent>) {
-        let (tx, rx) = mpsc::channel(128);
+        let (tx, rx) = mpsc::channel(2048);
         let rx_id = format!("{label}_{}", generate_id());
         self.subscribers.lock().await.insert(rx_id.clone(), tx);
         (rx_id, rx)
