@@ -29,7 +29,6 @@ import { HttpResponseTimeline } from './HttpResponseTimeline';
 import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
 import { RequestBodyViewer } from './RequestBodyViewer';
 import { ResponseHeaders } from './ResponseHeaders';
-import { ResponseInfo } from './ResponseInfo';
 import { AudioViewer } from './responseViewers/AudioViewer';
 import { CsvViewer } from './responseViewers/CsvViewer';
 import { EventStreamViewer } from './responseViewers/EventStreamViewer';
@@ -52,7 +51,6 @@ interface Props {
 const TAB_BODY = 'body';
 const TAB_REQUEST = 'request';
 const TAB_HEADERS = 'headers';
-const TAB_INFO = 'info';
 const TAB_TIMELINE = 'timeline';
 
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
@@ -71,12 +69,12 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     () => [
       {
         value: TAB_BODY,
-        label: 'Preview Mode',
+        label: 'Response',
         options: {
           value: viewMode,
           onChange: setViewMode,
           items: [
-            { label: 'Pretty', value: 'pretty' },
+            { label: 'Response', value: 'pretty' },
             ...(mimeType?.startsWith('image') ? [] : [{ label: 'Raw', value: 'raw' }]),
           ],
         },
@@ -101,10 +99,6 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         value: TAB_TIMELINE,
         label: 'Timeline',
         rightSlot: <CountBadge count={responseEvents.data?.length ?? 0} />,
-      },
-      {
-        value: TAB_INFO,
-        label: 'Info',
       },
     ],
     [
@@ -248,9 +242,6 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
               </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />
-              </TabContent>
-              <TabContent value={TAB_INFO}>
-                <ResponseInfo response={activeResponse} />
               </TabContent>
               <TabContent value={TAB_TIMELINE}>
                 <HttpResponseTimeline response={activeResponse} />
