@@ -1,6 +1,21 @@
+import type { DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import classNames from 'classnames';
+import { useAtom } from 'jotai';
 import type { ReactNode } from 'react';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { atomWithKVStorage } from '../../../lib/atoms/atomWithKVStorage';
+import { computeSideForDragMove } from '../../../lib/dnd';
+import { DropMarker } from '../../DropMarker';
 import { ErrorBoundary } from '../../ErrorBoundary';
 import type { ButtonProps } from '../Button';
 import { Button } from '../Button';
@@ -33,6 +48,7 @@ interface Props {
   children: ReactNode;
   addBorders?: boolean;
   layout?: 'horizontal' | 'vertical';
+  storageKey?: string | string[];
 }
 
 export function Tabs({
@@ -40,13 +56,62 @@ export function Tabs({
   onChangeValue,
   label,
   children,
-  tabs,
+  tabs: originalTabs,
   className,
   tabListClassName,
   addBorders,
   layout = 'vertical',
+  storageKey,
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const reorderable = !!storageKey;
+
+  // Use key-value storage for persistence if storageKey is provided
+  const { value: savedOrder, set: setSavedOrder } = useKeyValue<string[]>({
+    namespace: 'global',
+    key: storageKey ?? ['tabs_order', 'default'],
+    fallback: [],
+  });
+
+  // State for ordered tabs
+  const [orderedTabs, setOrderedTabs] = useState<TabItem[]>(originalTabs);
+  const [isDragging, setIsDragging] = useState<TabItem | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  // Reorder tabs based on saved order when tabs or savedOrder changes
+  useEffect(() => {
+    if (!storageKey || savedOrder.length === 0) {
+      setOrderedTabs(originalTabs);
+      return;
+    }
+
+    // Create a map of tab values to tab items
+    const tabMap = new Map(originalTabs.map((tab) => [tab.value, tab]));
+
+    // Reorder based on saved order, adding any new tabs at the end
+    const reordered: TabItem[] = [];
+    const seenValues = new Set<string>();
+
+    // Add tabs in saved order
+    for (const value of savedOrder) {
+      const tab = tabMap.get(value);
+      if (tab) {
+        reordered.push(tab);
+        seenValues.add(value);
+      }
+    }
+
+    // Add any new tabs that weren't in the saved order
+    for (const tab of originalTabs) {
+      if (!seenValues.has(tab.value)) {
+        reordered.push(tab);
+      }
+    }
+
+    setOrderedTabs(reordered);
+  }, [originalTabs, savedOrder, storageKey]);
+
+  const tabs = storageKey ? orderedTabs : originalTabs;
 
   value = value ?? tabs[0]?.value;
 
@@ -70,6 +135,120 @@ export function Tabs({
     }
   }, [value]);
 
+  // Drag and drop handlers
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const onDragStart = useCallback(
+    (e: DragStartEvent) => {
+      const tab = tabs.find((t) => t.value === e.active.id);
+      setIsDragging(tab ?? null);
+    },
+    [tabs],
+  );
+
+  const onDragMove = useCallback(
+    (e: DragMoveEvent) => {
+      const overId = e.over?.id as string | undefined;
+      if (!overId) return setHoveredIndex(null);
+
+      const overTab = tabs.find((t) => t.value === overId);
+      if (overTab == null) return setHoveredIndex(null);
+
+      const side = computeSideForDragMove(overTab.value, e);
+      const overIndex = tabs.findIndex((t) => t.value === overId);
+      const hoveredIndex = overIndex + (side === 'above' ? 0 : 1);
+
+      setHoveredIndex(hoveredIndex);
+    },
+    [tabs],
+  );
+
+  const onDragCancel = useCallback(() => {
+    setIsDragging(null);
+    setHoveredIndex(null);
+  }, []);
+
+  const onDragEnd = useCallback(
+    (e: DragEndEvent) => {
+      setIsDragging(null);
+      setHoveredIndex(null);
+
+      const activeId = e.active.id as string | undefined;
+      const overId = e.over?.id as string | undefined;
+      if (!activeId || !overId || activeId === overId) return;
+
+      const from = tabs.findIndex((t) => t.value === activeId);
+      const baseTo = tabs.findIndex((t) => t.value === overId);
+      const to = hoveredIndex ?? (baseTo === -1 ? from : baseTo);
+
+      if (from !== -1 && to !== -1 && from !== to) {
+        const newTabs = [...tabs];
+        const [moved] = newTabs.splice(from, 1);
+        if (moved === undefined) return;
+        newTabs.splice(to > from ? to - 1 : to, 0, moved);
+
+        setOrderedTabs(newTabs);
+
+        // Save order to storage
+        setSavedOrder(newTabs.map((t) => t.value)).catch(console.error);
+      }
+    },
+    [tabs, hoveredIndex, setSavedOrder],
+  );
+
+  const tabButtons = useMemo(
+    () =>
+      tabs.map((t, i) => {
+        if ('hidden' in t && t.hidden) {
+          return null;
+        }
+
+        const isActive = t.value === value;
+
+        return (
+          <TabButton
+            key={t.value}
+            tab={t}
+            isActive={isActive}
+            addBorders={addBorders}
+            layout={layout}
+            reorderable={reorderable}
+            isDragging={isDragging?.value === t.value}
+            onChangeValue={onChangeValue}
+            showDropMarker={hoveredIndex === i}
+          />
+        );
+      }),
+    [tabs, value, addBorders, layout, reorderable, isDragging, onChangeValue, hoveredIndex],
+  );
+
+  const tabList = (
+    <div
+      role="tablist"
+      aria-label={label}
+      className={classNames(
+        tabListClassName,
+        addBorders && layout === 'horizontal' && 'pl-3 -ml-1',
+        addBorders && layout === 'vertical' && 'ml-0 mb-2',
+        'flex items-center hide-scrollbars',
+        layout === 'horizontal' && 'h-full overflow-auto p-2',
+        layout === 'vertical' && 'overflow-x-auto overflow-y-visible ',
+        // Give space for button focus states within overflow boundary.
+        !addBorders && layout === 'vertical' && 'py-1 pl-3 -ml-5 pr-1',
+      )}
+    >
+      <div
+        className={classNames(
+          layout === 'horizontal' && 'flex flex-col w-full pb-3 mb-auto',
+          layout === 'vertical' && 'flex flex-row flex-shrink-0 gap-2 w-full',
+        )}
+      >
+        {tabButtons}
+        {hoveredIndex === tabs.length && <DropMarker />}
+      </div>
+    </div>
+  );
+
   return (
     <div
       ref={ref}
@@ -81,101 +260,158 @@ export function Tabs({
         layout === 'vertical' && 'grid-rows-[auto_minmax(0,1fr)] grid-cols-1',
       )}
     >
-      <div
-        role="tablist"
-        aria-label={label}
-        className={classNames(
-          tabListClassName,
-          addBorders && layout === 'horizontal' && 'pl-3 -ml-1',
-          addBorders && layout === 'vertical' && 'ml-0 mb-2',
-          'flex items-center hide-scrollbars',
-          layout === 'horizontal' && 'h-full overflow-auto p-2',
-          layout === 'vertical' && 'overflow-x-auto overflow-y-visible ',
-          // Give space for button focus states within overflow boundary.
-          !addBorders && layout === 'vertical' && 'py-1 pl-3 -ml-5 pr-1',
-        )}
-      >
-        <div
-          className={classNames(
-            layout === 'horizontal' && 'flex flex-col w-full pb-3 mb-auto',
-            layout === 'vertical' && 'flex flex-row flex-shrink-0 gap-2 w-full',
-          )}
+      {reorderable ? (
+        <DndContext
+          autoScroll
+          sensors={sensors}
+          onDragMove={onDragMove}
+          onDragEnd={onDragEnd}
+          onDragStart={onDragStart}
+          onDragCancel={onDragCancel}
+          collisionDetection={pointerWithin}
         >
-          {tabs.map((t) => {
-            if ('hidden' in t && t.hidden) {
-              return null;
-            }
-
-            const isActive = t.value === value;
-
-            const btnProps: Partial<ButtonProps> = {
-              color: 'custom',
-              justify: layout === 'horizontal' ? 'start' : 'center',
-              onClick: isActive ? undefined : () => onChangeValue(t.value),
-              className: classNames(
-                'flex items-center rounded whitespace-nowrap',
-                '!px-2 ml-[1px]',
-                'outline-none',
-                'ring-none',
-                'focus-visible-or-class:outline-2',
-                addBorders && 'border focus-visible:bg-surface-highlight',
-                isActive ? 'text-text' : 'text-text-subtle',
-                isActive && addBorders
-                  ? 'border-surface-active bg-surface-active'
-                  : layout === 'vertical'
-                    ? 'border-border-subtle'
-                    : 'border-transparent',
-                layout === 'horizontal' && 'min-w-[10rem]',
-              ),
-            };
-
-            if ('options' in t) {
-              const option = t.options.items.find(
-                (i) => 'value' in i && i.value === t.options?.value,
-              );
-              return (
-                <RadioDropdown
-                  key={t.value}
-                  items={t.options.items}
-                  itemsAfter={t.options.itemsAfter}
-                  itemsBefore={t.options.itemsBefore}
-                  value={t.options.value}
-                  onChange={t.options.onChange}
-                >
-                  <Button
-                    leftSlot={t.leftSlot}
-                    rightSlot={
-                      <div className="flex items-center">
-                        {t.rightSlot}
-                        <Icon
-                          size="sm"
-                          icon="chevron_down"
-                          className={classNames(
-                            'ml-1',
-                            isActive ? 'text-text-subtle' : 'text-text-subtlest',
-                          )}
-                        />
-                      </div>
-                    }
-                    {...btnProps}
-                  >
-                    {option && 'shortLabel' in option && option.shortLabel
-                      ? option.shortLabel
-                      : (option?.label ?? 'Unknown')}
-                  </Button>
-                </RadioDropdown>
-              );
-            }
-            return (
-              <Button key={t.value} leftSlot={t.leftSlot} rightSlot={t.rightSlot} {...btnProps}>
-                {t.label}
-              </Button>
-            );
-          })}
-        </div>
-      </div>
+          {tabList}
+          <DragOverlay dropAnimation={null}>
+            {isDragging && (
+              <TabButton
+                tab={isDragging}
+                isActive={isDragging.value === value}
+                addBorders={addBorders}
+                layout={layout}
+                reorderable={false}
+                isDragging={false}
+                onChangeValue={onChangeValue}
+                showDropMarker={false}
+                overlay
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        tabList
+      )}
       {children}
     </div>
+  );
+}
+
+interface TabButtonProps {
+  tab: TabItem;
+  isActive: boolean;
+  addBorders?: boolean;
+  layout: 'horizontal' | 'vertical';
+  reorderable: boolean;
+  isDragging: boolean;
+  onChangeValue: (value: string) => void;
+  showDropMarker: boolean;
+  overlay?: boolean;
+}
+
+function TabButton({
+  tab,
+  isActive,
+  addBorders,
+  layout,
+  reorderable,
+  isDragging,
+  onChangeValue,
+  showDropMarker,
+  overlay = false,
+}: TabButtonProps) {
+  const { attributes, listeners, setNodeRef: setDraggableRef } = useDraggable({
+    id: tab.value,
+    disabled: !reorderable,
+  });
+  const { setNodeRef: setDroppableRef } = useDroppable({
+    id: tab.value,
+    disabled: !reorderable,
+  });
+
+  const handleSetRef = useCallback(
+    (n: HTMLButtonElement | null) => {
+      if (reorderable) {
+        setDraggableRef(n);
+        setDroppableRef(n);
+      }
+    },
+    [reorderable, setDraggableRef, setDroppableRef],
+  );
+
+  const btnProps: Partial<ButtonProps> = {
+    color: 'custom',
+    justify: layout === 'horizontal' ? 'start' : 'center',
+    onClick: isActive ? undefined : () => onChangeValue(tab.value),
+    className: classNames(
+      'flex items-center rounded whitespace-nowrap',
+      '!px-2 ml-[1px]',
+      'outline-none',
+      'ring-none',
+      'focus-visible-or-class:outline-2',
+      addBorders && 'border focus-visible:bg-surface-highlight',
+      isActive ? 'text-text' : 'text-text-subtle',
+      isActive && addBorders
+        ? 'border-surface-active bg-surface-active'
+        : layout === 'vertical'
+          ? 'border-border-subtle'
+          : 'border-transparent',
+      layout === 'horizontal' && 'min-w-[10rem]',
+      isDragging && 'opacity-50',
+      overlay && 'opacity-80',
+    ),
+  };
+
+  // Merge drag listeners with button props if reorderable
+  const combinedProps = reorderable && !overlay ? { ...btnProps, ...attributes, ...listeners } : btnProps;
+
+  const buttonContent = (() => {
+    if ('options' in tab) {
+      const option = tab.options.items.find((i) => 'value' in i && i.value === tab.options?.value);
+      return (
+        <RadioDropdown
+          key={tab.value}
+          items={tab.options.items}
+          itemsAfter={tab.options.itemsAfter}
+          itemsBefore={tab.options.itemsBefore}
+          value={tab.options.value}
+          onChange={tab.options.onChange}
+        >
+          <Button
+            ref={handleSetRef}
+            leftSlot={tab.leftSlot}
+            rightSlot={
+              <div className="flex items-center">
+                {tab.rightSlot}
+                <Icon
+                  size="sm"
+                  icon="chevron_down"
+                  className={classNames(
+                    'ml-1',
+                    isActive ? 'text-text-subtle' : 'text-text-subtlest',
+                  )}
+                />
+              </div>
+            }
+            {...combinedProps}
+          >
+            {option && 'shortLabel' in option && option.shortLabel
+              ? option.shortLabel
+              : (option?.label ?? 'Unknown')}
+          </Button>
+        </RadioDropdown>
+      );
+    }
+    return (
+      <Button ref={handleSetRef} leftSlot={tab.leftSlot} rightSlot={tab.rightSlot} {...combinedProps}>
+        {'label' in tab ? tab.label : tab.value}
+      </Button>
+    );
+  })();
+
+  return (
+    <>
+      {showDropMarker && <DropMarker />}
+      {buttonContent}
+    </>
   );
 }
 
