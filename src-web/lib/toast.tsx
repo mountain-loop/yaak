@@ -61,7 +61,7 @@ export function showErrorToast<T>({
     message: (
       <div className="w-full">
         <h2 className="text-lg font-bold mb-2">{title}</h2>
-        <div className="whitespace-pre">{String(message)}</div>
+        <div className="whitespace-pre-wrap break-words">{String(message)}</div>
       </div>
     ),
   });
