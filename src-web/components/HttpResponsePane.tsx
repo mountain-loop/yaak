@@ -28,6 +28,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { HttpResponseTimeline } from './HttpResponseTimeline';
 import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
 import { RequestBodyViewer } from './RequestBodyViewer';
+import { ResponseCookies } from './ResponseCookies';
 import { ResponseHeaders } from './ResponseHeaders';
 import { AudioViewer } from './responseViewers/AudioViewer';
 import { CsvViewer } from './responseViewers/CsvViewer';
@@ -51,6 +52,7 @@ interface Props {
 const TAB_BODY = 'body';
 const TAB_REQUEST = 'request';
 const TAB_HEADERS = 'headers';
+const TAB_COOKIES = 'cookies';
 const TAB_TIMELINE = 'timeline';
 
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
@@ -64,6 +66,21 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const mimeType = contentType == null ? null : getMimeTypeFromContentType(contentType).essence;
 
   const responseEvents = useHttpResponseEvents(activeResponse);
+
+  const cookieCount = useMemo(() => {
+    if (!responseEvents.data) return 0;
+    let count = 0;
+    for (const event of responseEvents.data) {
+      const e = event.event;
+      if (
+        (e.type === 'header_up' && e.name.toLowerCase() === 'cookie') ||
+        (e.type === 'header_down' && e.name.toLowerCase() === 'set-cookie')
+      ) {
+        count++;
+      }
+    }
+    return count;
+  }, [responseEvents.data]);
 
   const tabs = useMemo<TabItem[]>(
     () => [
@@ -96,6 +113,11 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         ),
       },
       {
+        value: TAB_COOKIES,
+        label: 'Cookies',
+        rightSlot: cookieCount > 0 ? <CountBadge count={cookieCount} /> : null,
+      },
+      {
         value: TAB_TIMELINE,
         label: 'Timeline',
         rightSlot: <CountBadge count={responseEvents.data?.length ?? 0} />,
@@ -105,6 +127,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       activeResponse?.headers,
       activeResponse?.requestContentLength,
       activeResponse?.requestHeaders.length,
+      cookieCount,
       mimeType,
       responseEvents.data?.length,
       setViewMode,
@@ -242,6 +265,9 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
               </TabContent>
               <TabContent value={TAB_HEADERS}>
                 <ResponseHeaders response={activeResponse} />
+              </TabContent>
+              <TabContent value={TAB_COOKIES}>
+                <ResponseCookies response={activeResponse} />
               </TabContent>
               <TabContent value={TAB_TIMELINE}>
                 <HttpResponseTimeline response={activeResponse} />
