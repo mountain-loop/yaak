@@ -4,7 +4,6 @@ use crate::types::{SendableBody, SendableHttpRequest};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use reqwest::{Client, Method, Version};
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -153,10 +152,10 @@ pub struct HttpResponse {
     pub status: u16,
     /// HTTP status reason phrase (e.g., "OK", "Not Found")
     pub status_reason: Option<String>,
-    /// Response headers
-    pub headers: HashMap<String, String>,
-    /// Request headers
-    pub request_headers: HashMap<String, String>,
+    /// Response headers (Vec to support multiple headers with same name, e.g., Set-Cookie)
+    pub headers: Vec<(String, String)>,
+    /// Request headers (Vec to support multiple headers with same name)
+    pub request_headers: Vec<(String, String)>,
     /// Content-Length from headers (may differ from actual body size)
     pub content_length: Option<u64>,
     /// Final URL (after redirects)
@@ -194,8 +193,8 @@ impl HttpResponse {
     pub fn new(
         status: u16,
         status_reason: Option<String>,
-        headers: HashMap<String, String>,
-        request_headers: HashMap<String, String>,
+        headers: Vec<(String, String)>,
+        request_headers: Vec<(String, String)>,
         content_length: Option<u64>,
         url: String,
         remote_addr: Option<String>,
@@ -395,10 +394,10 @@ impl HttpSender for ReqwestSender {
             method: sendable_req.method().to_string(),
         });
 
-        let mut request_headers = HashMap::new();
+        let mut request_headers = Vec::new();
         for (name, value) in sendable_req.headers() {
             let v = value.to_str().unwrap_or_default().to_string();
-            request_headers.insert(name.to_string(), v.clone());
+            request_headers.push((name.to_string(), v.clone()));
             send_event(HttpResponseEvent::HeaderUp(name.to_string(), v));
         }
         send_event(HttpResponseEvent::Info("Sending request to server".to_string()));
@@ -426,12 +425,12 @@ impl HttpSender for ReqwestSender {
             status: response.status().to_string(),
         });
 
-        // Extract headers
-        let mut headers = HashMap::new();
+        // Extract headers (use Vec to preserve duplicates like Set-Cookie)
+        let mut headers = Vec::new();
         for (key, value) in response.headers() {
             if let Ok(v) = value.to_str() {
                 send_event(HttpResponseEvent::HeaderDown(key.to_string(), v.to_string()));
-                headers.insert(key.to_string(), v.to_string());
+                headers.push((key.to_string(), v.to_string()));
             }
         }
 
