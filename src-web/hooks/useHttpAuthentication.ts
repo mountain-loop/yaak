@@ -38,7 +38,11 @@ export function useSubscribeHttpAuthentication() {
         jotaiStore.set(httpAuthenticationSummariesAtom, result);
         return result;
       } catch (err) {
-        showErrorToast('http-authentication-error', err);
+        showErrorToast({
+          id: 'http-authentication-error',
+          title: 'HTTP Authentication Error',
+          message: err,
+        });
       }
     },
   });
