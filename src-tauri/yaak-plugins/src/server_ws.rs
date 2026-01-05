@@ -37,7 +37,7 @@ impl PluginRuntimeServerWebsocket {
     }
 
     async fn accept_connection(&self, stream: TcpStream) {
-        let (to_plugin_tx, mut to_plugin_rx) = mpsc::channel::<InternalEvent>(128);
+        let (to_plugin_tx, mut to_plugin_rx) = mpsc::channel::<InternalEvent>(2048);
         let mut app_to_plugin_events_tx = self.app_to_plugin_events_tx.lock().await;
         *app_to_plugin_events_tx = Some(to_plugin_tx);
 
