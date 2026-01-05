@@ -51,8 +51,17 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             let app_path = app_handle.path().app_data_dir().unwrap();
             create_dir_all(app_path.clone()).expect("Problem creating App directory!");
 
-            let db_file_path = app_path.join("db.sqlite");
-            let blob_db_file_path = app_path.join("blobs.sqlite");
+            // Support per-worktree databases via YAAK_DB_PATH_PREFIX env var
+            let db_dir = match std::env::var("YAAK_DB_PATH_PREFIX") {
+                Ok(prefix) if !prefix.is_empty() => {
+                    let dir = app_path.join(prefix);
+                    create_dir_all(&dir).expect("Problem creating DB directory!");
+                    dir
+                }
+                _ => app_path.clone(),
+            };
+            let db_file_path = db_dir.join("db.sqlite");
+            let blob_db_file_path = db_dir.join("blobs.sqlite");
 
             // Main database pool
             let manager = SqliteConnectionManager::file(db_file_path);
