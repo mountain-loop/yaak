@@ -66,7 +66,11 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
       handlePushResult(r);
       onDone();
     } catch (err) {
-      showErrorToast('git-commit-and-push-error', String(err));
+      showErrorToast({
+        id: 'git-commit-and-push-error',
+        title: 'Error committing and pushing',
+        message: String(err),
+      });
     } finally {
       setIsPushing(false);
     }

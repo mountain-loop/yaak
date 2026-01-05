@@ -1,4 +1,7 @@
-import type { CallWebsocketRequestActionArgs, WebsocketRequestAction } from '../bindings/gen_events';
+import type {
+  CallWebsocketRequestActionArgs,
+  WebsocketRequestAction,
+} from '../bindings/gen_events';
 import type { Context } from './Context';
 
 export type WebsocketRequestActionPlugin = WebsocketRequestAction & {

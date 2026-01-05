@@ -45,11 +45,24 @@ export function hideToast(toHide: ToastInstance) {
   });
 }
 
-export function showErrorToast<T>(id: string, message: T) {
+export function showErrorToast<T>({
+  id,
+  title,
+  message,
+}: {
+  id: string;
+  title: string;
+  message: T;
+}) {
   return showToast({
     id,
-    message: String(message),
-    timeout: 8000,
     color: 'danger',
+    timeout: null,
+    message: (
+      <div className="w-full">
+        <h2 className="text-lg font-bold mb-2">{title}</h2>
+        <div className="whitespace-pre-wrap break-words">{String(message)}</div>
+      </div>
+    ),
   });
 }

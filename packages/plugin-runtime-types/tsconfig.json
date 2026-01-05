@@ -2,19 +2,12 @@
   "compilerOptions": {
     "module": "node16",
     "target": "es6",
-    "lib": [
-      "es2021",
-      "dom"
-    ],
+    "lib": ["es2021", "dom"],
     "declaration": true,
     "declarationDir": "./lib",
     "outDir": "./lib",
     "strict": true,
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
-  "files": [
-    "src/index.ts"
-  ]
+  "files": ["src/index.ts"]
 }
