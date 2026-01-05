@@ -16,7 +16,7 @@ Review a GitHub pull request in a new git worktree.
 1. List all open pull requests and ask the user to select one
 2. Get PR information using `gh pr view <PR_NUMBER> --json number,headRefName`
 3. Extract the branch name from the PR
-4. Create a new worktree at `../yaak-worktrees/pr-<PR_NUMBER>` 
+4. Create a new worktree at `../yaak-worktrees/pr-<PR_NUMBER>` using `git worktree add` with a timeout of at least 300000ms (5 minutes) since the post-checkout hook runs a bootstrap script
 5. Checkout the PR branch in the new worktree using `gh pr checkout <PR_NUMBER>`
 6. The post-checkout hook will automatically:
    - Create `.env.local` with unique ports
