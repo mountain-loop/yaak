@@ -157,11 +157,11 @@ export function Tabs({
       const orientation = layout === 'vertical' ? 'horizontal' : 'vertical';
       const side = computeSideForDragMove(overTab.value, e, orientation);
 
-      // If computeSideForDragMove returns null (shouldn't happen but be safe), default to 'below'
+      // If computeSideForDragMove returns null (shouldn't happen but be safe), default to null
       if (side === null) return setHoveredIndex(null);
 
       const overIndex = tabs.findIndex((t) => t.value === overId);
-      const hoveredIndex = overIndex + (side === 'above' ? 0 : 1);
+      const hoveredIndex = overIndex + (side === 'before' ? 0 : 1);
 
       setHoveredIndex(hoveredIndex);
     },

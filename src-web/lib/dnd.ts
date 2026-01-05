@@ -4,7 +4,7 @@ export function computeSideForDragMove(
   id: string,
   e: DragMoveEvent,
   orientation: 'vertical' | 'horizontal' = 'vertical',
-): 'above' | 'below' | null {
+): 'before' | 'after' | null {
   if (e.over == null || e.over.id !== id) {
     return null;
   }
@@ -22,7 +22,7 @@ export function computeSideForDragMove(
     const hoverRight = overRect.right;
     const hoverMiddleX = hoverLeft + (hoverRight - hoverLeft) / 2;
 
-    return pointerX < hoverMiddleX ? 'above' : 'below'; // 'above' = left, 'below' = right
+    return pointerX < hoverMiddleX ? 'before' : 'after'; // 'before' = left, 'after' = right
   } else {
     // For vertical layouts, use top/bottom logic
     const activeTop =
@@ -34,6 +34,6 @@ export function computeSideForDragMove(
     const hoverMiddleY = (hoverBottom - hoverTop) / 2;
     const hoverClientY = pointerY - hoverTop;
 
-    return hoverClientY < hoverMiddleY ? 'above' : 'below';
+    return hoverClientY < hoverMiddleY ? 'before' : 'after';
   }
 }
