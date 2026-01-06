@@ -98,13 +98,21 @@ YAAK_DEV_PORT=${maxDevPort}
 
 # MCP Server port (main worktree uses 64343)
 YAAK_PLUGIN_MCP_SERVER_PORT=${maxMcpPort}
-
-# Database path prefix for worktree isolation
-YAAK_DB_PATH_PREFIX=worktrees/${worktreeName}
 `;
 
 fs.writeFileSync(envLocalPath, envContent, 'utf8');
 console.log(`Created .env.local with YAAK_DEV_PORT=${maxDevPort} and YAAK_PLUGIN_MCP_SERVER_PORT=${maxMcpPort}`);
+
+// Create tauri.worktree.conf.json with unique app identifier for complete isolation
+// This gives each worktree its own app data directory, avoiding the need for DB path prefixes
+const tauriWorktreeConfig = {
+  identifier: `app.yaak.desktop.dev.${worktreeName}`,
+  productName: `Daak (${worktreeName})`
+};
+
+const tauriConfigPath = path.join(process.cwd(), 'src-tauri', 'tauri.worktree.conf.json');
+fs.writeFileSync(tauriConfigPath, JSON.stringify(tauriWorktreeConfig, null, 2) + '\n', 'utf8');
+console.log(`Created tauri.worktree.conf.json with identifier: ${tauriWorktreeConfig.identifier}`);
 
 // Copy gitignored editor config folders from main worktree (.zed, .vscode, .claude, etc.)
 // This ensures your editor settings, tasks, and configurations are available in the new worktree
@@ -148,12 +156,4 @@ try {
   // Continue anyway
 }
 
-// Run npm run init to install dependencies and bootstrap
-console.log('\nRunning npm run init to install dependencies and bootstrap...');
-try {
-  execSync('npm run init', { stdio: 'inherit' });
-  console.log('\n✓ Worktree setup complete!');
-} catch (err) {
-  console.error('\n✗ Failed to run npm run init. You may need to run it manually.');
-  process.exit(1);
-}
+console.log('\n✓ Worktree setup complete! Run `npm run init` to install dependencies.');
