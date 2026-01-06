@@ -6,7 +6,36 @@ import type { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
 
 const _clients: Record<string, Client> = {};
 
-async function op(args: CallTemplateFunctionArgs): Promise<{ client?: Client; error?: unknown }> {
+// Cache for API responses to avoid rate limiting
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+const CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
+const _cache: Record<string, CacheEntry<unknown>> = {};
+
+function getCached<T>(key: string): T | undefined {
+  const entry = _cache[key];
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry.data as T;
+  }
+  // Clean up expired entry
+  if (entry) {
+    delete _cache[key];
+  }
+  return undefined;
+}
+
+function setCache<T>(key: string, data: T): T {
+  _cache[key] = {
+    data,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  };
+  return data;
+}
+
+async function op(args: CallTemplateFunctionArgs): Promise<{ client?: Client; clientHash?: string; error?: unknown }> {
   let authMethod: string | DesktopAuth | null = null;
   let hash: string | null = null;
   switch (args.values.authMethod) {
@@ -40,7 +69,7 @@ async function op(args: CallTemplateFunctionArgs): Promise<{ client?: Client; er
     return { error: e };
   }
 
-  return { client: _clients[hash] };
+  return { client: _clients[hash], clientHash: hash };
 }
 
 async function getValue(
@@ -49,22 +78,29 @@ async function getValue(
   itemId?: JsonPrimitive,
   fieldId?: JsonPrimitive,
 ): Promise<{ value?: string; error?: unknown }> {
-  const { client, error } = await op(args);
-  if (!client) return { error };
+  const { client, error, clientHash } = await op(args);
+  if (!client || !clientHash) return { error };
 
   if (vaultId && typeof vaultId === 'string') {
-    try {
-      await client.vaults.getOverview(vaultId);
-    } catch {
-      return { error: `Vault ${vaultId} not found` };
+    const vaultCacheKey = `${clientHash}:vault:${vaultId}`;
+    const cachedVault = getCached(vaultCacheKey);
+    if (!cachedVault) {
+      try {
+        const vault = await client.vaults.getOverview(vaultId);
+        setCache(vaultCacheKey, vault);
+      } catch {
+        return { error: `Vault ${vaultId} not found` };
+      }
     }
   } else {
     return { error: 'No vault specified' };
   }
 
   if (itemId && typeof itemId === 'string') {
+    const itemCacheKey = `${clientHash}:item:${vaultId}:${itemId}`;
     try {
-      const item = await client.items.get(vaultId, itemId);
+      const item = getCached<Awaited<ReturnType<typeof client.items.get>>>(itemCacheKey)
+        ?? setCache(itemCacheKey, await client.items.get(vaultId, itemId));
       if (fieldId && typeof fieldId === 'string') {
         const field = item.fields.find((f) => f.id === fieldId);
         if (field) {
@@ -142,10 +178,12 @@ export const plugin: PluginDefinition = {
           type: 'select',
           options: [],
           async dynamic(_ctx, args) {
-            const { client } = await op(args);
-            if (client == null) return { hidden: true };
-            // Fetches a secret.
-            const vaults = await client.vaults.list({ decryptDetails: true });
+            const { client, clientHash } = await op(args);
+            if (client == null || clientHash == null) return { hidden: true };
+
+            const cacheKey = `${clientHash}:vaults`;
+            const cachedVaults = getCached<Awaited<ReturnType<typeof client.vaults.list>>>(cacheKey);
+            const vaults = cachedVaults ?? setCache(cacheKey, await client.vaults.list({ decryptDetails: true }));
             return {
               options: vaults.map((vault) => ({
                 label: `${vault.title} (${vault.activeItemCount} Items)`,
@@ -160,13 +198,15 @@ export const plugin: PluginDefinition = {
           type: 'select',
           options: [],
           async dynamic(_ctx, args) {
-            const { client } = await op(args);
-            if (client == null) return { hidden: true };
+            const { client, clientHash } = await op(args);
+            if (client == null || clientHash == null) return { hidden: true };
             const vaultId = args.values.vault;
             if (typeof vaultId !== 'string') return { hidden: true };
 
             try {
-              const items = await client.items.list(vaultId);
+              const cacheKey = `${clientHash}:items:${vaultId}`;
+              const cachedItems = getCached<Awaited<ReturnType<typeof client.items.list>>>(cacheKey);
+              const items = cachedItems ?? setCache(cacheKey, await client.items.list(vaultId));
               return {
                 options: items.map((item) => ({
                   label: `${item.title} ${item.category}`,
@@ -185,8 +225,8 @@ export const plugin: PluginDefinition = {
           type: 'select',
           options: [],
           async dynamic(_ctx, args) {
-            const { client } = await op(args);
-            if (client == null) return { hidden: true };
+            const { client, clientHash } = await op(args);
+            if (client == null || clientHash == null) return { hidden: true };
             const vaultId = args.values.vault;
             const itemId = args.values.item;
             if (typeof vaultId !== 'string' || typeof itemId !== 'string') {
@@ -194,7 +234,9 @@ export const plugin: PluginDefinition = {
             }
 
             try {
-              const item = await client.items.get(vaultId, itemId);
+              const cacheKey = `${clientHash}:item:${vaultId}:${itemId}`;
+              const cachedItem = getCached<Awaited<ReturnType<typeof client.items.get>>>(cacheKey);
+              const item = cachedItem ?? setCache(cacheKey, await client.items.get(vaultId, itemId));
               return {
                 options: item.fields.map((field) => ({ label: field.title, value: field.id })),
               };
