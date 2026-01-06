@@ -15,27 +15,9 @@ interface CacheEntry<T> {
 const CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
 const _cache: Record<string, CacheEntry<unknown>> = {};
 
-function getCached<T>(key: string): T | undefined {
-  const entry = _cache[key];
-  if (entry && entry.expiresAt > Date.now()) {
-    return entry.data as T;
-  }
-  // Clean up expired entry
-  if (entry) {
-    delete _cache[key];
-  }
-  return undefined;
-}
-
-function setCache<T>(key: string, data: T): T {
-  _cache[key] = {
-    data,
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  };
-  return data;
-}
-
-async function op(args: CallTemplateFunctionArgs): Promise<{ client?: Client; clientHash?: string; error?: unknown }> {
+async function op(
+  args: CallTemplateFunctionArgs,
+): Promise<{ client?: Client; clientHash?: string; error?: unknown }> {
   let authMethod: string | DesktopAuth | null = null;
   let hash: string | null = null;
   switch (args.values.authMethod) {
@@ -99,8 +81,9 @@ async function getValue(
   if (itemId && typeof itemId === 'string') {
     const itemCacheKey = `${clientHash}:item:${vaultId}:${itemId}`;
     try {
-      const item = getCached<Awaited<ReturnType<typeof client.items.get>>>(itemCacheKey)
-        ?? setCache(itemCacheKey, await client.items.get(vaultId, itemId));
+      const item =
+        getCached<Awaited<ReturnType<typeof client.items.get>>>(itemCacheKey) ??
+        setCache(itemCacheKey, await client.items.get(vaultId, itemId));
       if (fieldId && typeof fieldId === 'string') {
         const field = item.fields.find((f) => f.id === fieldId);
         if (field) {
@@ -182,8 +165,11 @@ export const plugin: PluginDefinition = {
             if (client == null || clientHash == null) return { hidden: true };
 
             const cacheKey = `${clientHash}:vaults`;
-            const cachedVaults = getCached<Awaited<ReturnType<typeof client.vaults.list>>>(cacheKey);
-            const vaults = cachedVaults ?? setCache(cacheKey, await client.vaults.list({ decryptDetails: true }));
+            const cachedVaults =
+              getCached<Awaited<ReturnType<typeof client.vaults.list>>>(cacheKey);
+            const vaults =
+              cachedVaults ??
+              setCache(cacheKey, await client.vaults.list({ decryptDetails: true }));
             return {
               options: vaults.map((vault) => ({
                 label: `${vault.title} (${vault.activeItemCount} Items)`,
@@ -205,7 +191,8 @@ export const plugin: PluginDefinition = {
 
             try {
               const cacheKey = `${clientHash}:items:${vaultId}`;
-              const cachedItems = getCached<Awaited<ReturnType<typeof client.items.list>>>(cacheKey);
+              const cachedItems =
+                getCached<Awaited<ReturnType<typeof client.items.list>>>(cacheKey);
               const items = cachedItems ?? setCache(cacheKey, await client.items.list(vaultId));
               return {
                 options: items.map((item) => ({
@@ -236,7 +223,8 @@ export const plugin: PluginDefinition = {
             try {
               const cacheKey = `${clientHash}:item:${vaultId}:${itemId}`;
               const cachedItem = getCached<Awaited<ReturnType<typeof client.items.get>>>(cacheKey);
-              const item = cachedItem ?? setCache(cacheKey, await client.items.get(vaultId, itemId));
+              const item =
+                cachedItem ?? setCache(cacheKey, await client.items.get(vaultId, itemId));
               return {
                 options: item.fields.map((field) => ({ label: field.title, value: field.id })),
               };
@@ -261,3 +249,23 @@ export const plugin: PluginDefinition = {
     },
   ],
 };
+
+function getCached<T>(key: string): T | undefined {
+  const entry = _cache[key];
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry.data as T;
+  }
+  // Clean up expired entry
+  if (entry) {
+    delete _cache[key];
+  }
+  return undefined;
+}
+
+function setCache<T>(key: string, data: T): T {
+  _cache[key] = {
+    data,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  };
+  return data;
+}
