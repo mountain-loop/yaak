@@ -14,6 +14,7 @@ export type HotkeyAction =
   | 'app.zoom_out'
   | 'app.zoom_reset'
   | 'command_palette.toggle'
+  | 'editor.autocomplete'
   | 'environment_editor.toggle'
   | 'hotkeys.showHelp'
   | 'model.create'
@@ -41,6 +42,7 @@ const defaultHotkeysMac: Record<HotkeyAction, string[]> = {
   'app.zoom_out': ['Meta+Minus'],
   'app.zoom_reset': ['Meta+0'],
   'command_palette.toggle': ['Meta+k'],
+  'editor.autocomplete': ['Control+Space'],
   'environment_editor.toggle': ['Meta+Shift+e'],
   'request.rename': ['Control+Shift+r'],
   'request.send': ['Meta+Enter', 'Meta+r'],
@@ -69,6 +71,7 @@ const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
   'app.zoom_out': ['Control+Minus'],
   'app.zoom_reset': ['Control+0'],
   'command_palette.toggle': ['Control+k'],
+  'editor.autocomplete': ['Control+Space'],
   'environment_editor.toggle': ['Control+Shift+e'],
   'request.rename': ['F2'],
   'request.send': ['Control+Enter', 'Control+r'],
@@ -122,6 +125,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'app.zoom_out': 'Zoom Out',
   'app.zoom_reset': 'Zoom to Actual Size',
   'command_palette.toggle': 'Toggle Command Palette',
+  'editor.autocomplete': 'Trigger Autocomplete',
   'environment_editor.toggle': 'Edit Environments',
   'hotkeys.showHelp': 'Show Keyboard Shortcuts',
   'model.create': 'New Request',
@@ -144,7 +148,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'workspace_settings.show': 'Open Workspace Settings',
 };
 
-const layoutInsensitiveKeys = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote'];
+const layoutInsensitiveKeys = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote', 'Space'];
 
 export const hotkeyActions: HotkeyAction[] = (
   Object.keys(defaultHotkeys) as (keyof typeof defaultHotkeys)[]
@@ -336,12 +340,16 @@ export function formatHotkeyString(trigger: string): string[] {
         labelParts.push('+');
       } else if (p === 'Equal') {
         labelParts.push('=');
+      } else if (p === 'Space') {
+        labelParts.push('Space');
       } else {
         labelParts.push(capitalize(p));
       }
     } else {
       if (p === 'Control') {
         labelParts.push('Ctrl');
+      } else if (p === 'Space') {
+        labelParts.push('Space');
       } else {
         labelParts.push(capitalize(p));
       }
@@ -375,4 +383,31 @@ function compareKeys(keysA: string[], keysB: string[]) {
     .sort()
     .join('::');
   return sortedA === sortedB;
+}
+
+/** Check if a KeyboardEvent matches a hotkey action */
+export function eventMatchesHotkey(e: KeyboardEvent, action: HotkeyAction): boolean {
+  const hotkeys = getHotkeys();
+  const hkKeys = hotkeys[action];
+  if (!hkKeys || hkKeys.length === 0) return false;
+
+  // Build the current key combination from the event
+  const currentKeys: string[] = [];
+  if (e.altKey) currentKeys.push('Alt');
+  if (e.ctrlKey) currentKeys.push('Control');
+  if (e.metaKey) currentKeys.push('Meta');
+  if (e.shiftKey) currentKeys.push('Shift');
+
+  // Add the actual key (use code for layout-insensitive keys)
+  const keyToAdd = layoutInsensitiveKeys.includes(e.code) ? e.code : e.key;
+  currentKeys.push(keyToAdd);
+
+  // Check if any of the configured hotkeys match
+  for (const hkKey of hkKeys) {
+    const keys = hkKey.split('+');
+    if (compareKeys(keys, currentKeys)) {
+      return true;
+    }
+  }
+  return false;
 }
