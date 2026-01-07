@@ -82,6 +82,53 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       },
       { type: 'separator' },
       {
+        label: 'Submenu Test',
+        icon: 'home',
+        submenu: [
+          {
+            label: 'Submenu Item 1',
+            onSelect: () => console.log('Submenu Item 1 clicked'),
+          },
+          {
+            label: 'Submenu Item 2',
+            onSelect: () => console.log('Submenu Item 1 clicked'),
+          },
+          {
+            label: 'Submenu Item 3',
+            onSelect: () => console.log('Submenu Item 1 clicked'),
+          },
+          {
+            label: 'Submenu Item 2',
+            submenu: [
+              {
+                label: 'Nested Submenu Item 1',
+                onSelect: () => console.log('Nested Submenu Item 1 clicked'),
+              },
+              {
+                label: 'Nested Submenu Item 2',
+                onSelect: () => console.log('Nested Submenu Item 2 clicked'),
+              },
+              {
+                label: 'Nested Submenu Item 3',
+                onSelect: () => console.log('Nested Submenu Item 2 clicked'),
+              },
+              {
+                label: 'Nested Submenu Item 4',
+                onSelect: () => console.log('Nested Submenu Item 2 clicked'),
+              },
+              {
+                label: 'Nested Submenu Item 5',
+                onSelect: () => console.log('Nested Submenu Item 2 clicked'),
+              },
+            ],
+          },
+          {
+            label: 'Submenu Item 4',
+            onSelect: () => console.log('Submenu Item 1 clicked'),
+          },
+        ],
+      },
+      {
         label: 'New Workspace',
         leftSlot: <Icon icon="plus" />,
         onSelect: createWorkspace,

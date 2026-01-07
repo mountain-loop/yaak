@@ -631,6 +631,13 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     const menuRef = useRef<HTMLDivElement | null>(null);
     useClickOutside(menuRef, handleClose, triggerRef);
 
+    // Keep focus on menu container when filtering leaves no items
+    useEffect(() => {
+      if (filteredItems.length === 0 && filter && menuRef.current) {
+        menuRef.current.focus();
+      }
+    }, [filteredItems.length, filter]);
+
     const submenuTriggerShape = useMemo(() => {
       if (!activeSubmenu) return null;
       const rect = activeSubmenu.parent.getBoundingClientRect();
