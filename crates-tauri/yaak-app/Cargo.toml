@@ -1,0 +1,70 @@
+[package]
+name = "yaak-app"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+# Produce a library for mobile support
+[lib]
+name = "tauri_app_lib"
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[features]
+cargo-clippy = []
+default = []
+updater = []
+license = ["yaak-license"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.3", features = [] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu installation to work
+
+[dependencies]
+charset = "0.1.5"
+chrono = { workspace = true, features = ["serde"] }
+cookie = "0.18.1"
+eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.14.0" }
+http = { version = "1.2.0", default-features = false }
+log = { workspace = true }
+md5 = "0.8.0"
+mime_guess = "2.0.5"
+rand = "0.9.0"
+reqwest = { workspace = true, features = ["multipart", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider", "socks", "http2"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["raw_value"] }
+tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
+tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-deep-link = "2.4.5"
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-fs = "2.4.4"
+tauri-plugin-log = { version = "2.7.1", features = ["colored"] }
+tauri-plugin-opener = "2.5.2"
+tauri-plugin-os = "2.3.2"
+tauri-plugin-shell = { workspace = true }
+tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
+tauri-plugin-updater = "2.9.0"
+tauri-plugin-window-state = "2.4.1"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tokio-stream = "0.1.17"
+tokio-util = { version = "0.7", features = ["codec"] }
+ts-rs = { workspace = true }
+uuid = "1.12.1"
+yaak-common = { workspace = true }
+yaak-crypto = { workspace = true }
+yaak-fonts = { workspace = true }
+yaak-git = { workspace = true }
+yaak-grpc = { workspace = true }
+yaak-http = { workspace = true }
+yaak-license = { workspace = true, optional = true }
+yaak-mac-window = { workspace = true }
+yaak-models = { workspace = true }
+yaak-plugins = { workspace = true }
+yaak-sse = { workspace = true }
+yaak-sync = { workspace = true }
+yaak-templates = { workspace = true }
+yaak-tls = { workspace = true }
+yaak-ws = { workspace = true }

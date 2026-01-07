@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-delete-connection"
+description = "Enables the delete_connection command without any pre-configured scope."
+commands.allow = ["delete_connection"]
+
+[[permission]]
+identifier = "deny-delete-connection"
+description = "Denies the delete_connection command without any pre-configured scope."
+commands.deny = ["delete_connection"]

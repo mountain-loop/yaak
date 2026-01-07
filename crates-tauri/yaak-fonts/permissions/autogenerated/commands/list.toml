@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-list"
+description = "Enables the list command without any pre-configured scope."
+commands.allow = ["list"]
+
+[[permission]]
+identifier = "deny-list"
+description = "Denies the list command without any pre-configured scope."
+commands.deny = ["list"]

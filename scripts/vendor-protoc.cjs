@@ -41,7 +41,7 @@ const DST_BIN_MAP = {
   [WIN_ARM]: 'yaakprotoc-aarch64-pc-windows-msvc.exe',
 };
 
-const dstDir = path.join(__dirname, `..`, 'src-tauri', 'vendored', 'protoc');
+const dstDir = path.join(__dirname, `..`, 'crates-tauri', 'yaak-app', 'vendored', 'protoc');
 const key = `${process.platform}_${process.env.YAAK_TARGET_ARCH ?? process.arch}`;
 console.log(`Vendoring protoc ${VERSION} for ${key}`);
 

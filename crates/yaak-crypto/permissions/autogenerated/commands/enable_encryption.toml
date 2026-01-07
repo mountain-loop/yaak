@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-enable-encryption"
+description = "Enables the enable_encryption command without any pre-configured scope."
+commands.allow = ["enable_encryption"]
+
+[[permission]]
+identifier = "deny-enable-encryption"
+description = "Denies the enable_encryption command without any pre-configured scope."
+commands.deny = ["enable_encryption"]

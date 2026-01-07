@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-merge-branch"
+description = "Enables the merge_branch command without any pre-configured scope."
+commands.allow = ["merge_branch"]
+
+[[permission]]
+identifier = "deny-merge-branch"
+description = "Denies the merge_branch command without any pre-configured scope."
+commands.deny = ["merge_branch"]

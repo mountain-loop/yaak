@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-update-all"
+description = "Enables the update_all command without any pre-configured scope."
+commands.allow = ["update_all"]
+
+[[permission]]
+identifier = "deny-update-all"
+description = "Denies the update_all command without any pre-configured scope."
+commands.deny = ["update_all"]

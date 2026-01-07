@@ -38,8 +38,9 @@ const additionalArgs = process.argv.slice(2);
 
 const args = [
   'dev',
+  '--cwd', './crates-tauri/yaak-app',
   '--no-watch',
-  '--config', './src-tauri/tauri.development.conf.json',
+  '--config', './crates-tauri/yaak-app/tauri.development.conf.json',
   '--config', config,
   ...additionalArgs
 ];

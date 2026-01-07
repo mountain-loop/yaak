@@ -1,0 +1,63 @@
+[workspace]
+resolver = "2"
+members = [
+    # Shared crates (no Tauri dependency)
+    "crates/yaak-common",
+    "crates/yaak-crypto",
+    "crates/yaak-git",
+    "crates/yaak-grpc",
+    "crates/yaak-http",
+    "crates/yaak-models",
+    "crates/yaak-plugins",
+    "crates/yaak-sse",
+    "crates/yaak-sync",
+    "crates/yaak-templates",
+    "crates/yaak-tls",
+    "crates/yaak-ws",
+    # Tauri-specific crates
+    "crates-tauri/yaak-app",
+    "crates-tauri/yaak-fonts",
+    "crates-tauri/yaak-license",
+    "crates-tauri/yaak-mac-window",
+]
+
+[workspace.dependencies]
+chrono = "0.4.42"
+hex = "0.4.3"
+keyring = "3.6.3"
+log = "0.4.29"
+reqwest = "0.12.20"
+rustls = { version = "0.23.34", default-features = false }
+rustls-platform-verifier = "0.6.2"
+serde = "1.0.228"
+serde_json = "1.0.145"
+sha2 = "0.10.9"
+tauri = "2.9.5"
+tauri-plugin = "2.5.2"
+tauri-plugin-dialog = "2.4.2"
+tauri-plugin-shell = "2.3.3"
+thiserror = "2.0.17"
+tokio = "1.48.0"
+ts-rs = "11.1.0"
+
+# Internal crates - shared
+yaak-common = { path = "crates/yaak-common" }
+yaak-crypto = { path = "crates/yaak-crypto" }
+yaak-git = { path = "crates/yaak-git" }
+yaak-grpc = { path = "crates/yaak-grpc" }
+yaak-http = { path = "crates/yaak-http" }
+yaak-models = { path = "crates/yaak-models" }
+yaak-plugins = { path = "crates/yaak-plugins" }
+yaak-sse = { path = "crates/yaak-sse" }
+yaak-sync = { path = "crates/yaak-sync" }
+yaak-templates = { path = "crates/yaak-templates" }
+yaak-tls = { path = "crates/yaak-tls" }
+yaak-ws = { path = "crates/yaak-ws" }
+
+# Internal crates - Tauri-specific
+yaak-fonts = { path = "crates-tauri/yaak-fonts" }
+yaak-license = { path = "crates-tauri/yaak-license" }
+yaak-mac-window = { path = "crates-tauri/yaak-mac-window" }
+
+[profile.release]
+strip = false

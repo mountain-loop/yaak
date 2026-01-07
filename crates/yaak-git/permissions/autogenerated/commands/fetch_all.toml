@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-fetch-all"
+description = "Enables the fetch_all command without any pre-configured scope."
+commands.allow = ["fetch_all"]
+
+[[permission]]
+identifier = "deny-fetch-all"
+description = "Denies the fetch_all command without any pre-configured scope."
+commands.deny = ["fetch_all"]
