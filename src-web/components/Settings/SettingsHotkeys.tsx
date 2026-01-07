@@ -23,7 +23,7 @@ import { HStack, VStack } from '../core/Stacks';
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
 
 const HOLD_KEYS = ['Shift', 'Control', 'Alt', 'Meta'];
-const LAYOUT_INSENSITIVE_KEYS = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote'];
+const LAYOUT_INSENSITIVE_KEYS = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote', 'Space'];
 
 /** Convert a KeyboardEvent to a hotkey string like "Meta+Shift+k" or "Control+Shift+k" */
 function eventToHotkeyString(e: KeyboardEvent): string | null {
