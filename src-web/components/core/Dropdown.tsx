@@ -281,7 +281,7 @@ interface MenuProps {
 }
 
 const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'>, MenuProps>(
-  function Menu(
+  (
     {
       className,
       isOpen,
@@ -295,7 +295,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       isSubmenu,
     }: MenuProps,
     ref,
-  ) {
+  ) => {
     const [selectedIndex, setSelectedIndex] = useStateWithDeps<number | null>(
       defaultSelectedIndex ?? -1,
       [defaultSelectedIndex],
