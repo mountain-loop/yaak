@@ -35,7 +35,7 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import { Overlay } from '../Overlay';
 import { Button } from './Button';
 import { Hotkey } from './Hotkey';
-import { Icon } from './Icon';
+import { Icon, type IconProps } from './Icon';
 import { LoadingIcon } from './LoadingIcon';
 import { Separator } from './Separator';
 import { HStack, VStack } from './Stacks';
@@ -66,7 +66,7 @@ export type DropdownItemDefault = {
   keepOpenOnSelect?: boolean;
   onSelect?: () => void | Promise<void>;
   submenu?: DropdownItem[];
-  icon?: string;
+  icon?: IconProps['icon'];
 };
 
 export type DropdownItem = DropdownItemDefault | DropdownItemSeparator | DropdownItemContent;
@@ -528,7 +528,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           maxHeight: `${(upsideDown ? heightAbove : heightBelow) - 15}px`,
         },
       };
-    }, [fullWidth, items.length, triggerShape, triggerRef, isSubmenu]);
+    }, [fullWidth, items.length, triggerShape, isSubmenu]);
 
     const filteredItems = useMemo(
       () => items.filter((i) => getNodeText(i.label).toLowerCase().includes(filter.toLowerCase())),
@@ -744,6 +744,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           })}
         </VStack>
         {activeSubmenu && (
+          // biome-ignore lint/a11y/noStaticElementInteractions: Container div that cancels hover timeout
           <div
             ref={submenuRef}
             onMouseEnter={() => {
