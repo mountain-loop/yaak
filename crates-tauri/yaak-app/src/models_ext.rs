@@ -10,7 +10,7 @@ use std::fs::create_dir_all;
 use std::sync::mpsc;
 use std::time::Duration;
 use tauri::plugin::TauriPlugin;
-use tauri::{Emitter, Manager, Runtime, State, generate_handler};
+use tauri::{Emitter, Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use yaak_models::blob_manager::{BlobManager, migrate_blob_db};
 use yaak_models::db_context::DbContext;
@@ -259,20 +259,11 @@ fn escape_str_for_webview(input: &str) -> String {
         .collect()
 }
 
-/// Initialize the yaak-models Tauri plugin.
+/// Initialize database managers as a plugin (for initialization order).
+/// Commands are in the main invoke_handler.
+/// This must be registered before other plugins that depend on the database.
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    tauri::plugin::Builder::new("yaak-models")
-        .invoke_handler(generate_handler![
-            models_delete,
-            models_duplicate,
-            models_get_graphql_introspection,
-            models_get_settings,
-            models_grpc_events,
-            models_upsert,
-            models_upsert_graphql_introspection,
-            models_websocket_events,
-            models_workspace_models,
-        ])
+    tauri::plugin::Builder::new("yaak-models-db")
         .setup(|app_handle, _api| {
             let app_path = app_handle.path().app_data_dir().unwrap();
             create_dir_all(app_path.clone()).expect("Problem creating App directory!");

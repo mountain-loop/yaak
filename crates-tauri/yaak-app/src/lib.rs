@@ -1476,7 +1476,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(yaak_mac_window::init())
-        .plugin(models_ext::init())
+        .plugin(models_ext::init())  // Database setup only. Must be before yaak_plugins which depends on db
         .plugin(yaak_plugins::init())
         .plugin(yaak_crypto::init())
         .plugin(yaak_fonts::init())
@@ -1523,9 +1523,6 @@ pub fn run() {
                     });
                 });
             };
-
-            let app_data_dir = app.path().app_data_dir().unwrap();
-            create_dir_all(app_data_dir.clone()).expect("Problem creating App directory!");
 
             // Add updater
             let yaak_updater = YaakUpdater::new();
@@ -1600,6 +1597,17 @@ pub fn run() {
             crate::commands::cmd_get_themes,
             crate::commands::cmd_secure_template,
             crate::commands::cmd_show_workspace_key,
+            //
+            // Models commands
+            models_ext::models_delete,
+            models_ext::models_duplicate,
+            models_ext::models_get_graphql_introspection,
+            models_ext::models_get_settings,
+            models_ext::models_grpc_events,
+            models_ext::models_upsert,
+            models_ext::models_upsert_graphql_introspection,
+            models_ext::models_websocket_events,
+            models_ext::models_workspace_models,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

@@ -166,8 +166,9 @@ impl PluginManager {
     ) -> Result<Vec<Plugin>> {
         let plugins_dir = if is_dev() {
             // Use plugins directly for easy development
+            // Tauri runs from crates-tauri/yaak-app/, so go up two levels to reach project root
             env::current_dir()
-                .map(|cwd| cwd.join("../plugins").canonicalize().unwrap())
+                .map(|cwd| cwd.join("../../plugins").canonicalize().unwrap())
                 .unwrap_or_else(|_| self.vendored_plugin_dir.to_path_buf())
         } else {
             self.vendored_plugin_dir.to_path_buf()

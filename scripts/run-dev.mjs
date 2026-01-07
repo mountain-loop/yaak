@@ -11,9 +11,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.join(__dirname, '..');
 
 // Load .env.local if it exists
-const envLocalPath = path.join(__dirname, '..', '.env.local');
+const envLocalPath = path.join(rootDir, '.env.local');
 if (fs.existsSync(envLocalPath)) {
   const envContent = fs.readFileSync(envLocalPath, 'utf8');
   const envVars = envContent
@@ -38,9 +39,8 @@ const additionalArgs = process.argv.slice(2);
 
 const args = [
   'dev',
-  '--cwd', './crates-tauri/yaak-app',
   '--no-watch',
-  '--config', './crates-tauri/yaak-app/tauri.development.conf.json',
+  '--config', 'crates-tauri/yaak-app/tauri.development.conf.json',
   '--config', config,
   ...additionalArgs
 ];

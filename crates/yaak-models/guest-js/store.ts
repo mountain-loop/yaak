@@ -46,7 +46,7 @@ let _activeWorkspaceId: string | null = null;
 
 export async function changeModelStoreWorkspace(workspaceId: string | null) {
   console.log('Syncing models with new workspace', workspaceId);
-  const workspaceModelsStr = await invoke<string>('plugin:yaak-models|workspace_models', {
+  const workspaceModelsStr = await invoke<string>('models_workspace_models', {
     workspaceId, // NOTE: if no workspace id provided, it will just fetch global models
   });
   const workspaceModels = JSON.parse(workspaceModelsStr) as AnyModel[];
@@ -118,7 +118,7 @@ export async function patchModel<M extends AnyModel['model'], T extends ExtractM
 export async function updateModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
   model: T,
 ): Promise<string> {
-  return invoke<string>('plugin:yaak-models|upsert', { model });
+  return invoke<string>('models_upsert', { model });
 }
 
 export async function deleteModelById<
@@ -135,7 +135,7 @@ export async function deleteModel<M extends AnyModel['model'], T extends Extract
   if (model == null) {
     throw new Error('Failed to delete null model');
   }
-  await invoke<string>('plugin:yaak-models|delete', { model });
+  await invoke<string>('models_delete', { model });
 }
 
 export function duplicateModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
@@ -174,19 +174,19 @@ export function duplicateModel<M extends AnyModel['model'], T extends ExtractMod
     }
   }
 
-  return invoke<string>('plugin:yaak-models|duplicate', { model: { ...model, name } });
+  return invoke<string>('models_duplicate', { model: { ...model, name } });
 }
 
 export async function createGlobalModel<T extends Exclude<AnyModel, { workspaceId: string }>>(
   patch: Partial<T> & Pick<T, 'model'>,
 ): Promise<string> {
-  return invoke<string>('plugin:yaak-models|upsert', { model: patch });
+  return invoke<string>('models_upsert', { model: patch });
 }
 
 export async function createWorkspaceModel<T extends Extract<AnyModel, { workspaceId: string }>>(
   patch: Partial<T> & Pick<T, 'model' | 'workspaceId'>,
 ): Promise<string> {
-  return invoke<string>('plugin:yaak-models|upsert', { model: patch });
+  return invoke<string>('models_upsert', { model: patch });
 }
 
 export function replaceModelsInStore<

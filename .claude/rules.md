@@ -19,4 +19,4 @@
 - Get workspace ID from `workspaceCtx.yaak.workspace.list()` instead
 
 ## Rust Type Generation
-- Run `cd src-tauri && cargo test --package yaak-plugins` to regenerate TypeScript bindings after modifying Rust event types
+- Run `cargo test --package yaak-plugins` to regenerate TypeScript bindings after modifying Rust event types

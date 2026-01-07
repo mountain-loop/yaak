@@ -18,7 +18,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: 'src-tauri'
           shared-key: ci
           cache-on-failure: true
 
@@ -28,4 +27,3 @@ jobs:
         run: npm test
       - name: Run Rust Tests
         run: cargo test --all
-        working-directory: src-tauri
