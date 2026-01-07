@@ -9,7 +9,7 @@ use sha2::{Digest, Sha384};
 
 static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
-pub(crate) fn migrate_db(pool: &Pool<SqliteConnectionManager>) -> Result<()> {
+pub fn migrate_db(pool: &Pool<SqliteConnectionManager>) -> Result<()> {
     info!("Running database migrations");
 
     // Ensure the table exists

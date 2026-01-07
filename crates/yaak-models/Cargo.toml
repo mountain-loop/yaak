@@ -1,6 +1,5 @@
 [package]
 name = "yaak-models"
-links = "yaak-models"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -19,11 +18,6 @@ sea-query-rusqlite = { version = "0.7.0", features = ["with-chrono"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tauri = { workspace = true }
-tauri-plugin-dialog = { workspace = true }
 thiserror = { workspace = true }
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
-yaak-common = { workspace = true }
-
-[build-dependencies]
-tauri-plugin = { workspace = true, features = ["build"] }
+yaak-core = { workspace = true }

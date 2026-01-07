@@ -17,7 +17,7 @@ use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
     WebsocketEventType, WebsocketRequest,
 };
-use yaak_models::query_manager::QueryManagerExt;
+use crate::ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
@@ -33,7 +33,7 @@ pub(crate) async fn upsert_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(app_handle.db().upsert_websocket_request(&request, &UpdateSource::from_window(&window))?)
+    Ok(app_handle.db().upsert_websocket_request(&request, &UpdateSource::from_window_label(window.label()))?)
 }
 
 #[tauri::command]
@@ -44,7 +44,7 @@ pub(crate) async fn duplicate_request<R: Runtime>(
 ) -> Result<WebsocketRequest> {
     let db = app_handle.db();
     let request = db.get_websocket_request(request_id)?;
-    Ok(db.duplicate_websocket_request(&request, &UpdateSource::from_window(&window))?)
+    Ok(db.duplicate_websocket_request(&request, &UpdateSource::from_window_label(window.label()))?)
 }
 
 #[tauri::command]
@@ -55,7 +55,7 @@ pub(crate) async fn delete_request<R: Runtime>(
 ) -> Result<WebsocketRequest> {
     Ok(app_handle
         .db()
-        .delete_websocket_request_by_id(request_id, &UpdateSource::from_window(&window))?)
+        .delete_websocket_request_by_id(request_id, &UpdateSource::from_window_label(window.label()))?)
 }
 
 #[tauri::command]
@@ -66,7 +66,7 @@ pub(crate) async fn delete_connection<R: Runtime>(
 ) -> Result<WebsocketConnection> {
     Ok(app_handle
         .db()
-        .delete_websocket_connection_by_id(connection_id, &UpdateSource::from_window(&window))?)
+        .delete_websocket_connection_by_id(connection_id, &UpdateSource::from_window_label(window.label()))?)
 }
 
 #[tauri::command]
@@ -77,7 +77,7 @@ pub(crate) async fn delete_connections<R: Runtime>(
 ) -> Result<()> {
     Ok(app_handle.db().delete_all_websocket_connections_for_request(
         request_id,
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     )?)
 }
 
@@ -147,7 +147,7 @@ pub(crate) async fn send<R: Runtime>(
             message: request.message.into(),
             ..Default::default()
         },
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     )?;
 
     Ok(connection)
@@ -165,7 +165,7 @@ pub(crate) async fn close<R: Runtime>(
         let connection = db.get_websocket_connection(connection_id)?;
         db.upsert_websocket_connection(
             &WebsocketConnection { state: WebsocketConnectionState::Closing, ..connection },
-            &UpdateSource::from_window(&window),
+            &UpdateSource::from_window_label(window.label()),
         )?
     };
 
@@ -215,7 +215,7 @@ pub(crate) async fn connect<R: Runtime>(
             request_id: request_id.to_string(),
             ..Default::default()
         },
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     )?;
 
     let (mut url, url_parameters) = apply_path_placeholders(&request.url, &request.url_parameters);
@@ -233,7 +233,7 @@ pub(crate) async fn connect<R: Runtime>(
                     state: WebsocketConnectionState::Closed,
                     ..connection
                 },
-                &UpdateSource::from_window(&window),
+                &UpdateSource::from_window_label(window.label()),
             )?);
         }
     };
@@ -356,7 +356,7 @@ pub(crate) async fn connect<R: Runtime>(
                     state: WebsocketConnectionState::Closed,
                     ..connection
                 },
-                &UpdateSource::from_window(&window),
+                &UpdateSource::from_window_label(window.label()),
             )?);
         }
     };
@@ -370,7 +370,7 @@ pub(crate) async fn connect<R: Runtime>(
             message_type: WebsocketEventType::Open,
             ..Default::default()
         },
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     )?;
 
     let response_headers = response
@@ -390,7 +390,7 @@ pub(crate) async fn connect<R: Runtime>(
             url: request.url.clone(),
             ..connection
         },
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     )?;
 
     {
@@ -425,7 +425,7 @@ pub(crate) async fn connect<R: Runtime>(
                             message: message.into_data().into(),
                             ..Default::default()
                         },
-                        &UpdateSource::from_window(&window),
+                        &UpdateSource::from_window_label(window.label()),
                     )
                     .unwrap();
             }
@@ -442,7 +442,7 @@ pub(crate) async fn connect<R: Runtime>(
                             message_type: WebsocketEventType::Close,
                             ..Default::default()
                         },
-                        &UpdateSource::from_window(&window),
+                        &UpdateSource::from_window_label(window.label()),
                     )
                     .unwrap();
             }
@@ -455,7 +455,7 @@ pub(crate) async fn connect<R: Runtime>(
                         state: WebsocketConnectionState::Closed,
                         ..connection
                     },
-                    &UpdateSource::from_window(&window),
+                    &UpdateSource::from_window_label(window.label()),
                 )
                 .unwrap();
         });

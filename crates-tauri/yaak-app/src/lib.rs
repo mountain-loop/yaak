@@ -33,13 +33,12 @@ use yaak_common::window::WorkspaceWindowTrait;
 use yaak_grpc::manager::GrpcHandle;
 use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_mac_window::AppHandleMacWindowExt;
-use yaak_models::blob_manager::BlobManagerExt;
+use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
     GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState,
     Plugin, Workspace, WorkspaceMeta,
 };
-use yaak_models::query_manager::QueryManagerExt;
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
 use yaak_plugins::events::{
     CallFolderActionArgs, CallFolderActionRequest, CallGrpcRequestActionArgs,
@@ -67,6 +66,7 @@ mod grpc;
 mod history;
 mod http_request;
 mod import;
+mod models_ext;
 mod notifications;
 mod plugin_events;
 mod render;
@@ -261,7 +261,7 @@ async fn cmd_grpc_go<R: Runtime>(
             url: request.url.clone(),
             ..Default::default()
         },
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     )?;
 
     let conn_id = conn.id.clone();
@@ -313,7 +313,7 @@ async fn cmd_grpc_go<R: Runtime>(
                     state: GrpcConnectionState::Closed,
                     ..conn.clone()
                 },
-                &UpdateSource::from_window(&window),
+                &UpdateSource::from_window_label(window.label()),
             )?;
             return Ok(conn_id);
         }
@@ -383,7 +383,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     event_type: GrpcEventType::ClientMessage,
                                     ..base_msg.clone()
                                 },
-                                &UpdateSource::from_window(&window),
+                                &UpdateSource::from_window_label(window.label()),
                             )
                             .unwrap();
                     });
@@ -428,7 +428,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 metadata: metadata.clone(),
                 ..base_event.clone()
             },
-            &UpdateSource::from_window(&window),
+            &UpdateSource::from_window_label(window.label()),
         )?;
 
         async move {
@@ -477,7 +477,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             content: msg,
                             ..base_event.clone()
                         },
-                        &UpdateSource::from_window(&window),
+                        &UpdateSource::from_window_label(window.label()),
                     )
                     .unwrap();
             }
@@ -498,7 +498,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 event_type: GrpcEventType::Info,
                                 ..base_event.clone()
                             },
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                         .unwrap();
                     app_handle
@@ -509,7 +509,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 event_type: GrpcEventType::ServerMessage,
                                 ..base_event.clone()
                             },
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                         .unwrap();
                     app_handle
@@ -521,7 +521,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 status: Some(Code::Ok as i32),
                                 ..base_event.clone()
                             },
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                         .unwrap();
                 }
@@ -546,7 +546,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     ..base_event.clone()
                                 },
                             }),
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                         .unwrap();
                 }
@@ -561,7 +561,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 event_type: GrpcEventType::ConnectionEnd,
                                 ..base_event.clone()
                             },
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                         .unwrap();
                 }
@@ -586,7 +586,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 event_type: GrpcEventType::Info,
                                 ..base_event.clone()
                             },
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                         .unwrap();
                     stream.into_inner()
@@ -613,7 +613,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     ..base_event.clone()
                                 },
                             }),
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                         .unwrap();
                     return;
@@ -629,7 +629,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 event_type: GrpcEventType::ConnectionEnd,
                                 ..base_event.clone()
                             },
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                         .unwrap();
                     return;
@@ -649,7 +649,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     event_type: GrpcEventType::ServerMessage,
                                     ..base_event.clone()
                                 },
-                                &UpdateSource::from_window(&window),
+                                &UpdateSource::from_window_label(window.label()),
                             )
                             .unwrap();
                     }
@@ -666,7 +666,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
                                 },
-                                &UpdateSource::from_window(&window),
+                                &UpdateSource::from_window_label(window.label()),
                             )
                             .unwrap();
                         break;
@@ -682,7 +682,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
                                 },
-                                &UpdateSource::from_window(&window),
+                                &UpdateSource::from_window_label(window.label()),
                             )
                             .unwrap();
                     }
@@ -710,7 +710,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 state: GrpcConnectionState::Closed,
                                 ..c.get_grpc_connection( &conn_id).unwrap().clone()
                             },
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                     }).unwrap();
                 },
@@ -722,7 +722,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             status: Some(Code::Cancelled as i32),
                             ..base_msg.clone()
                         },
-                        &UpdateSource::from_window(&window),
+                        &UpdateSource::from_window_label(window.label()),
                     ).unwrap();
                     w.with_tx(|c| {
                         c.upsert_grpc_connection(
@@ -732,7 +732,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             state: GrpcConnectionState::Closed,
                                 ..c.get_grpc_connection( &conn_id).unwrap().clone()
                             },
-                            &UpdateSource::from_window(&window),
+                            &UpdateSource::from_window_label(window.label()),
                         )
                     }).unwrap();
                 },
@@ -1138,8 +1138,10 @@ async fn cmd_export_data<R: Runtime>(
     workspace_ids: Vec<&str>,
     include_private_environments: bool,
 ) -> YaakResult<()> {
+    let db = app_handle.db();
+    let version = app_handle.package_info().version.to_string();
     let export_data =
-        get_workspace_export_resources(&app_handle, workspace_ids, include_private_environments)?;
+        get_workspace_export_resources(&db, &version, workspace_ids, include_private_environments)?;
     let f = File::options()
         .create(true)
         .truncate(true)
@@ -1218,7 +1220,7 @@ async fn cmd_send_http_request<R: Runtime>(
             workspace_id: request.workspace_id.clone(),
             ..Default::default()
         },
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
         &blobs,
     )?;
 
@@ -1264,7 +1266,7 @@ async fn cmd_send_http_request<R: Runtime>(
                     error: Some(e.to_string()),
                     ..resp
                 },
-                &UpdateSource::from_window(&window),
+                &UpdateSource::from_window_label(window.label()),
                 &blobs,
             )?
         }
@@ -1283,7 +1285,7 @@ async fn cmd_install_plugin<R: Runtime>(
 ) -> YaakResult<Plugin> {
     let plugin = app_handle.db().upsert_plugin(
         &Plugin { directory: directory.into(), url, enabled: true, ..Default::default() },
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     )?;
 
     plugin_manager.add_plugin(&PluginContext::new(&window), &plugin).await?;
@@ -1308,7 +1310,7 @@ async fn cmd_create_grpc_request<R: Runtime>(
             sort_priority,
             ..Default::default()
         },
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     )?)
 }
 
@@ -1344,7 +1346,7 @@ async fn cmd_delete_all_grpc_connections<R: Runtime>(
 ) -> YaakResult<()> {
     Ok(app_handle
         .db()
-        .delete_all_grpc_connections_for_request(request_id, &UpdateSource::from_window(&window))?)
+        .delete_all_grpc_connections_for_request(request_id, &UpdateSource::from_window_label(window.label()))?)
 }
 
 #[tauri::command]
@@ -1354,7 +1356,7 @@ async fn cmd_delete_send_history<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> YaakResult<()> {
     Ok(app_handle.with_tx(|tx| {
-        let source = &UpdateSource::from_window(&window);
+        let source = &UpdateSource::from_window_label(window.label());
         tx.delete_all_http_responses_for_workspace(workspace_id, source)?;
         tx.delete_all_grpc_connections_for_workspace(workspace_id, source)?;
         tx.delete_all_websocket_connections_for_workspace(workspace_id, source)?;
@@ -1370,7 +1372,7 @@ async fn cmd_delete_all_http_responses<R: Runtime>(
 ) -> YaakResult<()> {
     Ok(app_handle
         .db()
-        .delete_all_http_responses_for_request(request_id, &UpdateSource::from_window(&window))?)
+        .delete_all_http_responses_for_request(request_id, &UpdateSource::from_window_label(window.label()))?)
 }
 
 #[tauri::command]
@@ -1474,7 +1476,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(yaak_mac_window::init())
-        .plugin(yaak_models::init())
+        .plugin(models_ext::init())
         .plugin(yaak_plugins::init())
         .plugin(yaak_crypto::init())
         .plugin(yaak_fonts::init())

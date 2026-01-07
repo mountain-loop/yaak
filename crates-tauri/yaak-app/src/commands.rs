@@ -1,7 +1,7 @@
 use crate::error::Result;
 use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow, command};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
-use yaak_crypto::manager::EncryptionManagerExt;
+use yaak_crypto::EncryptionManagerExt;
 use yaak_plugins::events::{GetThemesResponse, PluginContext};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::native_template_functions::{

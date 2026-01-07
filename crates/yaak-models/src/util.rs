@@ -1,17 +1,15 @@
+use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{
     AnyModel, Environment, Folder, GrpcRequest, HttpRequest, UpsertModelInfo, WebsocketRequest,
     Workspace, WorkspaceIden,
 };
-use crate::query_manager::QueryManagerExt;
 use chrono::{NaiveDateTime, Utc};
-use log::warn;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use tauri::{AppHandle, Listener, Runtime, WebviewWindow};
 use ts_rs::TS;
-use yaak_common::window::WorkspaceWindowTrait;
+use yaak_core::WorkspaceContext;
 
 pub fn generate_prefixed_id(prefix: &str) -> String {
     format!("{prefix}_{}", generate_id())
@@ -61,41 +59,9 @@ pub enum UpdateSource {
 }
 
 impl UpdateSource {
-    pub fn from_window<R: Runtime>(window: &WebviewWindow<R>) -> Self {
-        Self::Window { label: window.label().to_string() }
+    pub fn from_window_label(label: impl Into<String>) -> Self {
+        Self::Window { label: label.into() }
     }
-}
-
-pub fn listen_to_model_delete<F, R>(app_handle: &AppHandle<R>, handler: F)
-where
-    F: Fn(ModelPayload) + Send + 'static,
-    R: Runtime,
-{
-    app_handle.listen_any("deleted_model", move |e| {
-        match serde_json::from_str(e.payload()) {
-            Ok(payload) => handler(payload),
-            Err(e) => {
-                warn!("Failed to deserialize deleted model {}", e);
-                return;
-            }
-        };
-    });
-}
-
-pub fn listen_to_model_upsert<F, R>(app_handle: &AppHandle<R>, handler: F)
-where
-    F: Fn(ModelPayload) + Send + 'static,
-    R: Runtime,
-{
-    app_handle.listen_any("upserted_model", move |e| {
-        match serde_json::from_str(e.payload()) {
-            Ok(payload) => handler(payload),
-            Err(e) => {
-                warn!("Failed to deserialize upserted model {}", e);
-                return;
-            }
-        };
-    });
 }
 
 #[derive(Default, Debug, Deserialize, Serialize)]
@@ -119,13 +85,14 @@ pub struct BatchUpsertResult {
     pub websocket_requests: Vec<WebsocketRequest>,
 }
 
-pub fn get_workspace_export_resources<R: Runtime>(
-    app_handle: &AppHandle<R>,
+pub fn get_workspace_export_resources(
+    db: &DbContext,
+    yaak_version: &str,
     workspace_ids: Vec<&str>,
     include_private_environments: bool,
 ) -> Result<WorkspaceExport> {
     let mut data = WorkspaceExport {
-        yaak_version: app_handle.package_info().version.clone().to_string(),
+        yaak_version: yaak_version.to_string(),
         yaak_schema: 4,
         timestamp: Utc::now().naive_utc(),
         resources: BatchUpsertResult {
@@ -138,7 +105,6 @@ pub fn get_workspace_export_resources<R: Runtime>(
         },
     };
 
-    let db = app_handle.db();
     for workspace_id in workspace_ids {
         data.resources.workspaces.push(db.find_one(WorkspaceIden::Id, workspace_id)?);
         data.resources.environments.append(
@@ -157,13 +123,13 @@ pub fn get_workspace_export_resources<R: Runtime>(
     Ok(data)
 }
 
-pub fn maybe_gen_id<M: UpsertModelInfo, R: Runtime>(
-    window: &WebviewWindow<R>,
+pub fn maybe_gen_id<M: UpsertModelInfo>(
+    ctx: &WorkspaceContext,
     id: &str,
     ids: &mut BTreeMap<String, String>,
 ) -> String {
     if id == "CURRENT_WORKSPACE" {
-        if let Some(wid) = window.workspace_id() {
+        if let Some(wid) = &ctx.workspace_id {
             return wid.to_string();
         }
     }
@@ -182,13 +148,13 @@ pub fn maybe_gen_id<M: UpsertModelInfo, R: Runtime>(
     }
 }
 
-pub fn maybe_gen_id_opt<M: UpsertModelInfo, R: Runtime>(
-    window: &WebviewWindow<R>,
+pub fn maybe_gen_id_opt<M: UpsertModelInfo>(
+    ctx: &WorkspaceContext,
     id: Option<String>,
     ids: &mut BTreeMap<String, String>,
 ) -> Option<String> {
     match id {
-        Some(id) => Some(maybe_gen_id::<M, R>(window, id.as_str(), ids)),
+        Some(id) => Some(maybe_gen_id::<M>(ctx, id.as_str(), ids)),
         None => None,
     }
 }

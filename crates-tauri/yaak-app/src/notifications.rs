@@ -9,7 +9,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 use yaak_common::api_client::yaak_api_client;
 use yaak_common::platform::get_os_str;
-use yaak_models::query_manager::QueryManagerExt;
+use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 
 // Check for updates every hour
@@ -59,7 +59,7 @@ impl YaakNotifier {
             KV_NAMESPACE,
             KV_KEY,
             seen_json.as_str(),
-            &UpdateSource::from_window(window),
+            &UpdateSource::from_window_label(window.label()),
         );
         Ok(())
     }

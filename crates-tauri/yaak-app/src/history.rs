@@ -2,7 +2,7 @@ use chrono::{NaiveDateTime, Utc};
 use log::debug;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Runtime};
-use yaak_models::query_manager::QueryManagerExt;
+use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 
 const NAMESPACE: &str = "analytics";

@@ -4,7 +4,7 @@ use log::{error, info};
 use serde::Serialize;
 use tauri::{Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
-use yaak_models::query_manager::QueryManagerExt;
+use crate::ext::QueryManagerExt;
 
 use crate::api::check_plugin_updates;
 use crate::error::Result;

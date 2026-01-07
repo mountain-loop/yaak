@@ -7841,6 +7841,8 @@ dependencies = [
  "md5 0.8.0",
  "mime_guess",
  "openssl-sys",
+ "r2d2",
+ "r2d2_sqlite",
  "rand 0.9.1",
  "reqwest",
  "serde",
@@ -7865,6 +7867,7 @@ dependencies = [
  "ts-rs",
  "uuid",
  "yaak-common",
+ "yaak-core",
  "yaak-crypto",
  "yaak-fonts",
  "yaak-git",
@@ -7890,6 +7893,13 @@ dependencies = [
  "serde",
  "serde_json",
  "tauri",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "yaak-core"
+version = "0.0.0"
+dependencies = [
  "thiserror 2.0.17",
 ]
 
@@ -8044,12 +8054,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "tauri",
- "tauri-plugin",
- "tauri-plugin-dialog",
  "thiserror 2.0.17",
  "ts-rs",
- "yaak-common",
+ "yaak-core",
 ]
 
 [[package]]

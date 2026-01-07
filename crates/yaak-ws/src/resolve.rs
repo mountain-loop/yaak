@@ -1,7 +1,7 @@
 use crate::error::Result;
+use crate::ext::QueryManagerExt;
 use tauri::{Runtime, WebviewWindow};
 use yaak_models::models::WebsocketRequest;
-use yaak_models::query_manager::QueryManagerExt;
 
 pub(crate) fn resolve_websocket_request<R: Runtime>(
     window: &WebviewWindow<R>,

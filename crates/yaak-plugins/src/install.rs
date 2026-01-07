@@ -10,7 +10,7 @@ use std::fs::{create_dir_all, remove_dir_all};
 use std::io::Cursor;
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak_models::models::Plugin;
-use yaak_models::query_manager::QueryManagerExt;
+use crate::ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 
 pub async fn delete_and_uninstall<R: Runtime>(
@@ -18,7 +18,7 @@ pub async fn delete_and_uninstall<R: Runtime>(
     plugin_id: &str,
 ) -> Result<Plugin> {
     let plugin_manager = window.state::<PluginManager>();
-    let plugin = window.db().delete_plugin_by_id(plugin_id, &UpdateSource::from_window(&window))?;
+    let plugin = window.db().delete_plugin_by_id(plugin_id, &UpdateSource::from_window_label(window.label()))?;
     plugin_manager.uninstall(&PluginContext::new(&window), plugin.directory.as_str()).await?;
     Ok(plugin)
 }

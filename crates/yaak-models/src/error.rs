@@ -9,6 +9,12 @@ pub enum Error {
     #[error("SQL Pool error: {0}")]
     SqlPoolError(#[from] r2d2::Error),
 
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 

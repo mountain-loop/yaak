@@ -30,6 +30,8 @@ eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client
 http = { version = "1.2.0", default-features = false }
 log = { workspace = true }
 md5 = "0.8.0"
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.25.0"
 mime_guess = "2.0.5"
 rand = "0.9.0"
 reqwest = { workspace = true, features = ["multipart", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider", "socks", "http2"] }
@@ -54,6 +56,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 ts-rs = { workspace = true }
 uuid = "1.12.1"
 yaak-common = { workspace = true }
+yaak-core = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-fonts = { workspace = true }
 yaak-git = { workspace = true }

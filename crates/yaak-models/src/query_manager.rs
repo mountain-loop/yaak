@@ -1,51 +1,11 @@
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::db_context::DbContext;
 use crate::error::Error::GenericError;
-use crate::error::Result;
 use crate::util::ModelPayload;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::TransactionBehavior;
 use std::sync::{Arc, Mutex, mpsc};
-use tauri::{Manager, Runtime, State};
-
-pub trait QueryManagerExt<'a, R> {
-    fn db_manager(&'a self) -> State<'a, QueryManager>;
-    fn db(&'a self) -> DbContext<'a>;
-    fn with_db<F, T>(&'a self, func: F) -> T
-    where
-        F: FnOnce(&DbContext) -> T;
-    fn with_tx<F, T>(&'a self, func: F) -> Result<T>
-    where
-        F: FnOnce(&DbContext) -> Result<T>;
-}
-
-impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
-    fn db_manager(&'a self) -> State<'a, QueryManager> {
-        self.state::<QueryManager>()
-    }
-
-    fn db(&'a self) -> DbContext<'a> {
-        let qm = self.state::<QueryManager>();
-        qm.inner().connect()
-    }
-
-    fn with_db<F, T>(&'a self, func: F) -> T
-    where
-        F: FnOnce(&DbContext) -> T,
-    {
-        let qm = self.state::<QueryManager>();
-        qm.inner().with_conn(func)
-    }
-
-    fn with_tx<F, T>(&'a self, func: F) -> Result<T>
-    where
-        F: FnOnce(&DbContext) -> Result<T>,
-    {
-        let qm = self.state::<QueryManager>();
-        qm.inner().with_tx(func)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct QueryManager {
@@ -54,10 +14,7 @@ pub struct QueryManager {
 }
 
 impl QueryManager {
-    pub(crate) fn new(
-        pool: Pool<SqliteConnectionManager>,
-        events_tx: mpsc::Sender<ModelPayload>,
-    ) -> Self {
+    pub fn new(pool: Pool<SqliteConnectionManager>, events_tx: mpsc::Sender<ModelPayload>) -> Self {
         QueryManager { pool: Arc::new(Mutex::new(pool)), events_tx }
     }
 

@@ -8,7 +8,7 @@ use tauri::{
 };
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
-use yaak_models::query_manager::QueryManagerExt;
+use crate::models_ext::QueryManagerExt;
 
 const DEFAULT_WINDOW_WIDTH: f64 = 1100.0;
 const DEFAULT_WINDOW_HEIGHT: f64 = 600.0;

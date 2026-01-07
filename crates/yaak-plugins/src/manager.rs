@@ -38,7 +38,7 @@ use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Mutex, mpsc};
 use tokio::time::{Instant, timeout};
 use yaak_models::models::{Environment, Plugin};
-use yaak_models::query_manager::QueryManagerExt;
+use crate::ext::QueryManagerExt;
 use yaak_models::render::make_vars_hashmap;
 use yaak_models::util::{UpdateSource, generate_id};
 use yaak_templates::error::Error::RenderError;

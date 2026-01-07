@@ -1,6 +1,7 @@
 mod commands;
 mod connect;
 pub mod error;
+mod ext;
 mod manager;
 mod render;
 mod resolve;

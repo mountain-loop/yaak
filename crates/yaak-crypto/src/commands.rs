@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::manager::EncryptionManagerExt;
+use crate::EncryptionManagerExt;
 use tauri::{command, Runtime, WebviewWindow};
 
 #[command]

@@ -13,10 +13,10 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
 use yaak_common::window::WorkspaceWindowTrait;
-use yaak_models::blob_manager::BlobManagerExt;
+use crate::models_ext::BlobManagerExt;
 use yaak_models::models::{AnyModel, HttpResponse, Plugin};
 use yaak_models::queries::any_request::AnyRequest;
-use yaak_models::query_manager::QueryManagerExt;
+use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{

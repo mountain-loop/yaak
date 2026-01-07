@@ -13,6 +13,7 @@ mod checksum;
 mod commands;
 pub mod error;
 pub mod events;
+mod ext;
 pub mod install;
 pub mod manager;
 pub mod native_template_functions;

@@ -6,7 +6,6 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{OptionalExtension, params};
 use std::sync::{Arc, Mutex};
-use tauri::{Manager, Runtime, State};
 
 static BLOB_MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/blob_migrations");
 
@@ -22,23 +21,6 @@ pub struct BodyChunk {
 impl BodyChunk {
     pub fn new(body_id: impl Into<String>, chunk_index: i32, data: Vec<u8>) -> Self {
         Self { id: generate_prefixed_id("bc"), body_id: body_id.into(), chunk_index, data }
-    }
-}
-
-/// Extension trait for accessing the blob manager from app handle.
-pub trait BlobManagerExt<'a, R> {
-    fn blob_manager(&'a self) -> State<'a, BlobManager>;
-    fn blobs(&'a self) -> BlobContext;
-}
-
-impl<'a, R: Runtime, M: Manager<R>> BlobManagerExt<'a, R> for M {
-    fn blob_manager(&'a self) -> State<'a, BlobManager> {
-        self.state::<BlobManager>()
-    }
-
-    fn blobs(&'a self) -> BlobContext {
-        let manager = self.state::<BlobManager>();
-        manager.inner().connect()
     }
 }
 

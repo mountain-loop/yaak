@@ -11,7 +11,7 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 use tokio::task::block_in_place;
 use tokio::time::sleep;
 use ts_rs::TS;
-use yaak_models::query_manager::QueryManagerExt;
+use crate::models_ext::QueryManagerExt;
 use yaak_models::util::generate_id;
 use yaak_plugins::manager::PluginManager;
 

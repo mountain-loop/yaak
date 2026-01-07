@@ -5,7 +5,7 @@ use KeyAndValueRef::{Ascii, Binary};
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak_grpc::{KeyAndValueRef, MetadataMap};
 use yaak_models::models::GrpcRequest;
-use yaak_models::query_manager::QueryManagerExt;
+use crate::models_ext::QueryManagerExt;
 use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, PluginContext};
 use yaak_plugins::manager::PluginManager;
 

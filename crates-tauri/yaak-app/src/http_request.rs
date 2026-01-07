@@ -20,12 +20,13 @@ use yaak_http::transaction::HttpTransaction;
 use yaak_http::types::{
     SendableBody, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
 };
-use yaak_models::blob_manager::{BlobManagerExt, BodyChunk};
+use crate::models_ext::BlobManagerExt;
+use yaak_models::blob_manager::BodyChunk;
 use yaak_models::models::{
     CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use yaak_models::query_manager::QueryManagerExt;
+use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
@@ -114,7 +115,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
     plugin_context: &PluginContext,
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
-    let update_source = UpdateSource::from_window(window);
+    let update_source = UpdateSource::from_window_label(window.label());
     let mut response_ctx =
         ResponseContext::new(app_handle.clone(), og_response.clone(), update_source);
 

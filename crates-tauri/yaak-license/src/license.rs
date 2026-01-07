@@ -5,12 +5,26 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::ops::Add;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewWindow, is_dev};
 use ts_rs::TS;
 use yaak_common::api_client::yaak_api_client;
 use yaak_common::platform::get_os_str;
-use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::db_context::DbContext;
+use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
+
+/// Extension trait for accessing the QueryManager from Tauri Manager types.
+/// This is needed temporarily until all crates are refactored to not use Tauri.
+trait QueryManagerExt<'a, R> {
+    fn db(&'a self) -> DbContext<'a>;
+}
+
+impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
+    fn db(&'a self) -> DbContext<'a> {
+        let qm = self.state::<QueryManager>();
+        qm.inner().connect()
+    }
+}
 
 const KV_NAMESPACE: &str = "license";
 const KV_ACTIVATION_ID_KEY: &str = "activation_id";
@@ -126,7 +140,7 @@ pub async fn activate_license<R: Runtime>(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         body.activation_id.as_str(),
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     );
 
     if let Err(e) = window.emit("license-activated", true) {
@@ -161,7 +175,7 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
     app_handle.db().delete_key_value(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
-        &UpdateSource::from_window(&window),
+        &UpdateSource::from_window_label(window.label()),
     )?;
 
     if let Err(e) = app_handle.emit("license-deactivated", true) {

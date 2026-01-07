@@ -11,7 +11,7 @@ use log::{debug, info};
 use std::collections::HashMap;
 use tauri::{AppHandle, Runtime};
 use yaak_common::platform::{OperatingSystem, get_os};
-use yaak_crypto::manager::EncryptionManagerExt;
+use crate::ext::EncryptionManagerExt;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result;
 use yaak_templates::{FnArg, Parser, Token, Tokens, Val, transform_args};

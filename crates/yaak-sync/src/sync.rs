@@ -9,11 +9,36 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime, State};
 use ts_rs::TS;
+use yaak_models::db_context::DbContext;
 use yaak_models::models::{SyncState, WorkspaceMeta};
-use yaak_models::query_manager::QueryManagerExt;
+use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{UpdateSource, get_workspace_export_resources};
+
+/// Extension trait for accessing the QueryManager from Tauri Manager types.
+/// This is needed temporarily until all crates are refactored to not use Tauri.
+pub(crate) trait QueryManagerExt<'a, R> {
+    fn db(&'a self) -> DbContext<'a>;
+    fn with_tx<F, T>(&'a self, func: F) -> yaak_models::error::Result<T>
+    where
+        F: FnOnce(&DbContext) -> yaak_models::error::Result<T>;
+}
+
+impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
+    fn db(&'a self) -> DbContext<'a> {
+        let qm = self.state::<QueryManager>();
+        qm.inner().connect()
+    }
+
+    fn with_tx<F, T>(&'a self, func: F) -> yaak_models::error::Result<T>
+    where
+        F: FnOnce(&DbContext) -> yaak_models::error::Result<T>,
+    {
+        let qm = self.state::<QueryManager>();
+        qm.inner().with_tx(func)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -304,8 +329,11 @@ fn workspace_models<R: Runtime>(
     // We want to include private environments here so that we can take them into account during
     // the sync process. Otherwise, they would be treated as deleted.
     let include_private_environments = true;
+    let db = app_handle.db();
+    let version = app_handle.package_info().version.to_string();
     let resources = get_workspace_export_resources(
-        app_handle,
+        &db,
+        &version,
         vec![workspace_id],
         include_private_environments,
     )?

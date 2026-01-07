@@ -9,7 +9,7 @@ use std::str::FromStr;
 use tauri::{AppHandle, Runtime};
 use ts_rs::TS;
 use yaak_common::api_client::yaak_api_client;
-use yaak_models::query_manager::QueryManagerExt;
+use crate::ext::QueryManagerExt;
 
 pub async fn get_plugin<R: Runtime>(
     app_handle: &AppHandle<R>,

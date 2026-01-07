@@ -9,22 +9,11 @@ use base64::Engine;
 use log::{info, warn};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, Runtime, State};
 use yaak_models::models::{EncryptedKey, Workspace, WorkspaceMeta};
-use yaak_models::query_manager::{QueryManager, QueryManagerExt};
+use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{generate_id_of_length, UpdateSource};
 
 const KEY_USER: &str = "encryption-key";
-
-pub trait EncryptionManagerExt<'a, R> {
-    fn crypto(&'a self) -> State<'a, EncryptionManager>;
-}
-
-impl<'a, R: Runtime, M: Manager<R>> EncryptionManagerExt<'a, R> for M {
-    fn crypto(&'a self) -> State<'a, EncryptionManager> {
-        self.state::<EncryptionManager>()
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct EncryptionManager {
@@ -35,12 +24,12 @@ pub struct EncryptionManager {
 }
 
 impl EncryptionManager {
-    pub fn new<R: Runtime>(app_handle: &AppHandle<R>) -> Self {
+    pub fn new(query_manager: QueryManager, app_id: impl Into<String>) -> Self {
         Self {
             cached_master_key: Default::default(),
             cached_workspace_keys: Default::default(),
-            query_manager: app_handle.db_manager().inner().clone(),
-            app_id: app_handle.config().identifier.to_string(),
+            query_manager,
+            app_id: app_id.into(),
         }
     }
 
