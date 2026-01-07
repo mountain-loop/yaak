@@ -1,7 +1,8 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
+import { fuzzyMatch } from 'fuzzbunny';
 import { useAtomValue } from 'jotai';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   defaultHotkeys,
   formatHotkeyString,
@@ -19,11 +20,19 @@ import { Heading } from '../core/Heading';
 import { HotkeyRaw } from '../core/Hotkey';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';
+import { PlainInput } from '../core/PlainInput';
 import { HStack, VStack } from '../core/Stacks';
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
 
 const HOLD_KEYS = ['Shift', 'Control', 'Alt', 'Meta'];
-const LAYOUT_INSENSITIVE_KEYS = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote'];
+const LAYOUT_INSENSITIVE_KEYS = [
+  'Equal',
+  'Minus',
+  'BracketLeft',
+  'BracketRight',
+  'Backquote',
+  'Space',
+];
 
 /** Convert a KeyboardEvent to a hotkey string like "Meta+Shift+k" or "Control+Shift+k" */
 function eventToHotkeyString(e: KeyboardEvent): string | null {
@@ -58,6 +67,19 @@ function eventToHotkeyString(e: KeyboardEvent): string | null {
 export function SettingsHotkeys() {
   const settings = useAtomValue(settingsAtom);
   const hotkeys = useAtomValue(hotkeysAtom);
+  const [filter, setFilter] = useState('');
+
+  const filteredActions = useMemo(() => {
+    if (!filter.trim()) {
+      return hotkeyActions;
+    }
+    return hotkeyActions.filter((action) => {
+      const scope = getHotkeyScope(action).replace(/_/g, ' ');
+      const label = action.replace(/[_.]/g, ' ');
+      const searchText = `${scope} ${label}`;
+      return fuzzyMatch(searchText, filter) != null;
+    });
+  }, [filter]);
 
   if (settings == null) {
     return null;
@@ -71,6 +93,14 @@ export function SettingsHotkeys() {
           Click the menu button to add, remove, or reset keyboard shortcuts.
         </p>
       </div>
+      <PlainInput
+        label="Filter"
+        placeholder="Filter shortcuts..."
+        defaultValue={filter}
+        onChange={setFilter}
+        hideLabel
+        containerClassName="max-w-xs"
+      />
       <Table>
         <TableHead>
           <TableRow>
@@ -80,8 +110,9 @@ export function SettingsHotkeys() {
             <TableHeaderCell></TableHeaderCell>
           </TableRow>
         </TableHead>
-        <TableBody>
-          {hotkeyActions.map((action) => (
+        {/* key={filter} forces re-render on filter change to fix Safari table rendering bug */}
+        <TableBody key={filter}>
+          {filteredActions.map((action) => (
             <HotkeyRow
               key={action}
               action={action}
