@@ -304,6 +304,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     const [activeSubmenu, setActiveSubmenu] = useState<{
       item: DropdownItemDefault;
       parent: HTMLButtonElement;
+      viaKeyboard?: boolean;
     } | null>(null);
 
     const mousePosition = useRef({ x: 0, y: 0 });
@@ -323,8 +324,11 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       setActiveSubmenu(null);
     }, [onClose]);
 
-    // Close menu on space bar
+    // Handle type-ahead filtering (only for the deepest open menu)
     const handleMenuKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      // Skip if this menu has a submenu open - let the submenu handle typing
+      if (activeSubmenu) return;
+
       const isCharacter = e.key.length === 1;
       const isSpecial = e.ctrlKey || e.metaKey || e.altKey;
       if (isCharacter && !isSpecial) {
@@ -392,23 +396,40 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     useKey(
       'ArrowUp',
       (e) => {
-        if (!isOpen) return;
+        if (!isOpen || activeSubmenu) return;
         e.preventDefault();
         handlePrev();
       },
       {},
-      [isOpen],
+      [isOpen, activeSubmenu],
     );
 
     useKey(
       'ArrowDown',
       (e) => {
-        if (!isOpen) return;
+        if (!isOpen || activeSubmenu) return;
         e.preventDefault();
         handleNext();
       },
       {},
-      [isOpen],
+      [isOpen, activeSubmenu],
+    );
+
+    useKey(
+      'ArrowLeft',
+      (e) => {
+        if (!isOpen) return;
+        // Only handle if this menu doesn't have an open submenu
+        // (let the deepest submenu handle the key first)
+        if (activeSubmenu) return;
+        // If this is a submenu, ArrowLeft closes it and returns to parent
+        if (isSubmenu) {
+          e.preventDefault();
+          onClose();
+        }
+      },
+      {},
+      [isOpen, isSubmenu, activeSubmenu, onClose],
     );
 
     const handleSelect = useCallback(
@@ -520,6 +541,43 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
         setSelectedIndex(index);
       },
       [filteredItems, setSelectedIndex],
+    );
+
+    useKey(
+      'ArrowRight',
+      (e) => {
+        if (!isOpen || activeSubmenu) return;
+        const item = filteredItems[selectedIndex ?? -1];
+        if (item?.type !== 'separator' && item?.type !== 'content' && item?.submenu) {
+          e.preventDefault();
+          const parent = document.activeElement as HTMLButtonElement;
+          if (parent) {
+            setActiveSubmenu({ item, parent, viaKeyboard: true });
+          }
+        }
+      },
+      {},
+      [isOpen, activeSubmenu, filteredItems, selectedIndex],
+    );
+
+    useKey(
+      'Enter',
+      (e) => {
+        if (!isOpen || activeSubmenu) return;
+        const item = filteredItems[selectedIndex ?? -1];
+        if (!item || item.type === 'separator' || item.type === 'content') return;
+        e.preventDefault();
+        if (item.submenu) {
+          const parent = document.activeElement as HTMLButtonElement;
+          if (parent) {
+            setActiveSubmenu({ item, parent, viaKeyboard: true });
+          }
+        } else if (item.onSelect) {
+          handleSelect(item);
+        }
+      },
+      {},
+      [isOpen, activeSubmenu, filteredItems, selectedIndex, handleSelect],
     );
 
     const handleItemHover = useCallback(
@@ -691,7 +749,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
               isSubmenu
               isOpen
               items={activeSubmenu.item.submenu ?? []}
-              defaultSelectedIndex={null}
+              defaultSelectedIndex={activeSubmenu.viaKeyboard ? 0 : null}
               onClose={() => setActiveSubmenu(null)}
               triggerShape={submenuTriggerShape}
             />
