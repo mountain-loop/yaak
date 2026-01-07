@@ -148,7 +148,14 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'workspace_settings.show': 'Open Workspace Settings',
 };
 
-const layoutInsensitiveKeys = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote', 'Space'];
+const layoutInsensitiveKeys = [
+  'Equal',
+  'Minus',
+  'BracketLeft',
+  'BracketRight',
+  'Backquote',
+  'Space',
+];
 
 export const hotkeyActions: HotkeyAction[] = (
   Object.keys(defaultHotkeys) as (keyof typeof defaultHotkeys)[]
@@ -269,29 +276,20 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 
   const executed: string[] = [];
-  const hotkeys = getHotkeys();
-  outer: for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
-    for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
-      if (hkAction !== action) {
-        continue;
-      }
-      const enable = typeof options.enable === 'function' ? options.enable() : options.enable;
-      if (enable === false) {
-        continue;
-      }
+  for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
+    const enable = typeof options.enable === 'function' ? options.enable() : options.enable;
+    if (enable === false) {
+      continue;
+    }
 
-      for (const hkKey of hkKeys) {
-        const keys = hkKey.split('+');
-        if (compareKeys(keys, Array.from(currentKeysWithModifiers))) {
-          if (!options.allowDefault) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-          callback(e);
-          executed.push(`${action} ${options.priority ?? 0}`);
-          break outer;
-        }
+    if (keysMatchAction(Array.from(currentKeysWithModifiers), action)) {
+      if (!options.allowDefault) {
+        e.preventDefault();
+        e.stopPropagation();
       }
+      callback(e);
+      executed.push(`${action} ${options.priority ?? 0}`);
+      break;
     }
   }
 
@@ -385,29 +383,38 @@ function compareKeys(keysA: string[], keysB: string[]) {
   return sortedA === sortedB;
 }
 
-/** Check if a KeyboardEvent matches a hotkey action */
-export function eventMatchesHotkey(e: KeyboardEvent, action: HotkeyAction): boolean {
+/** Build the full key combination from a KeyboardEvent including modifiers */
+function getKeysFromEvent(e: KeyboardEvent): string[] {
+  const keys: string[] = [];
+  if (e.altKey) keys.push('Alt');
+  if (e.ctrlKey) keys.push('Control');
+  if (e.metaKey) keys.push('Meta');
+  if (e.shiftKey) keys.push('Shift');
+
+  // Add the actual key (use code for layout-insensitive keys)
+  const keyToAdd = layoutInsensitiveKeys.includes(e.code) ? e.code : e.key;
+  keys.push(keyToAdd);
+
+  return keys;
+}
+
+/** Check if a set of pressed keys matches any hotkey for the given action */
+function keysMatchAction(keys: string[], action: HotkeyAction): boolean {
   const hotkeys = getHotkeys();
   const hkKeys = hotkeys[action];
   if (!hkKeys || hkKeys.length === 0) return false;
 
-  // Build the current key combination from the event
-  const currentKeys: string[] = [];
-  if (e.altKey) currentKeys.push('Alt');
-  if (e.ctrlKey) currentKeys.push('Control');
-  if (e.metaKey) currentKeys.push('Meta');
-  if (e.shiftKey) currentKeys.push('Shift');
-
-  // Add the actual key (use code for layout-insensitive keys)
-  const keyToAdd = layoutInsensitiveKeys.includes(e.code) ? e.code : e.key;
-  currentKeys.push(keyToAdd);
-
-  // Check if any of the configured hotkeys match
   for (const hkKey of hkKeys) {
-    const keys = hkKey.split('+');
-    if (compareKeys(keys, currentKeys)) {
+    const hotkeyParts = hkKey.split('+');
+    if (compareKeys(hotkeyParts, keys)) {
       return true;
     }
   }
   return false;
+}
+
+/** Check if a KeyboardEvent matches a hotkey action */
+export function eventMatchesHotkey(e: KeyboardEvent, action: HotkeyAction): boolean {
+  const keys = getKeysFromEvent(e);
+  return keysMatchAction(keys, action);
 }
