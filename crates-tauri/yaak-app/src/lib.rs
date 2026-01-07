@@ -13,7 +13,7 @@ use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
-use std::fs::{File, create_dir_all};
+use std::fs::File;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;

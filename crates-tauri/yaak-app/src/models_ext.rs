@@ -3,24 +3,15 @@
 //! This module provides the Tauri plugin initialization and extension traits
 //! that allow accessing QueryManager and BlobManager from Tauri's Manager types.
 
-use log::error;
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
-use std::fs::create_dir_all;
-use std::sync::mpsc;
-use std::time::Duration;
 use tauri::plugin::TauriPlugin;
 use tauri::{Emitter, Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
-use yaak_models::blob_manager::{BlobManager, migrate_blob_db};
+use yaak_models::blob_manager::BlobManager;
 use yaak_models::db_context::DbContext;
 use yaak_models::error::Result;
 use yaak_models::models::{AnyModel, GraphQlIntrospection, GrpcEvent, Settings, WebsocketEvent};
 use yaak_models::query_manager::QueryManager;
-use yaak_models::util::{ModelPayload, UpdateSource};
-
-// Re-export for convenience
-pub use yaak_models::*;
+use yaak_models::util::UpdateSource;
 
 /// Extension trait for accessing the QueryManager from Tauri Manager types.
 pub trait QueryManagerExt<'a, R> {
@@ -266,59 +257,32 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     tauri::plugin::Builder::new("yaak-models-db")
         .setup(|app_handle, _api| {
             let app_path = app_handle.path().app_data_dir().unwrap();
-            create_dir_all(app_path.clone()).expect("Problem creating App directory!");
+            let db_path = app_path.join("db.sqlite");
+            let blob_path = app_path.join("blobs.sqlite");
 
-            let db_file_path = app_path.join("db.sqlite");
-            let blob_db_file_path = app_path.join("blobs.sqlite");
-
-            // Main database pool
-            let manager = SqliteConnectionManager::file(db_file_path);
-            let pool = Pool::builder()
-                .max_size(100)
-                .connection_timeout(Duration::from_secs(10))
-                .build(manager)
-                .unwrap();
-
-            if let Err(e) = yaak_models::migrate::migrate_db(&pool) {
-                error!("Failed to run database migration {e:?}");
-                app_handle
-                    .dialog()
-                    .message(e.to_string())
-                    .kind(MessageDialogKind::Error)
-                    .blocking_show();
-                return Err(Box::from(e.to_string()));
-            };
-
-            // Blob database pool
-            let blob_manager_sqlite = SqliteConnectionManager::file(blob_db_file_path);
-            let blob_pool = Pool::builder()
-                .max_size(50)
-                .connection_timeout(Duration::from_secs(10))
-                .build(blob_manager_sqlite)
-                .unwrap();
-
-            if let Err(e) = migrate_blob_db(&blob_pool) {
-                error!("Failed to run blob database migration {e:?}");
-                app_handle
-                    .dialog()
-                    .message(e.to_string())
-                    .kind(MessageDialogKind::Error)
-                    .blocking_show();
-                return Err(Box::from(e.to_string()));
-            };
-
-            app_handle.manage(BlobManager::new(blob_pool));
-
-            {
-                let (tx, rx) = mpsc::channel::<ModelPayload>();
-                app_handle.manage(QueryManager::new(pool, tx));
-                let app_handle = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    for p in rx {
-                        app_handle.emit("model_write", p).unwrap();
+            let (query_manager, blob_manager, rx) =
+                match yaak_models::init_standalone(&db_path, &blob_path) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        app_handle
+                            .dialog()
+                            .message(e.to_string())
+                            .kind(MessageDialogKind::Error)
+                            .blocking_show();
+                        return Err(Box::from(e.to_string()));
                     }
-                });
-            }
+                };
+
+            app_handle.manage(query_manager);
+            app_handle.manage(blob_manager);
+
+            // Forward model change events to the frontend
+            let app_handle = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                for payload in rx {
+                    app_handle.emit("model_write", payload).unwrap();
+                }
+            });
 
             Ok(())
         })
