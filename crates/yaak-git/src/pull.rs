@@ -11,13 +11,13 @@ use ts_rs::TS;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "gen_git.ts")]
-pub(crate) enum PullResult {
+pub enum PullResult {
     Success { message: String },
     UpToDate,
     NeedsCredentials { url: String, error: Option<String> },
 }
 
-pub(crate) fn git_pull(dir: &Path) -> Result<PullResult> {
+pub fn git_pull(dir: &Path) -> Result<PullResult> {
     let repo = open_repo(dir)?;
     let branch_name = get_current_branch_name(&repo)?;
     let remote = get_default_remote_in_repo(&repo)?;

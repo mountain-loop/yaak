@@ -9,41 +9,15 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager, Runtime, State};
 use ts_rs::TS;
 use yaak_models::db_context::DbContext;
 use yaak_models::models::{SyncState, WorkspaceMeta};
-use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{UpdateSource, get_workspace_export_resources};
-
-/// Extension trait for accessing the QueryManager from Tauri Manager types.
-/// This is needed temporarily until all crates are refactored to not use Tauri.
-pub(crate) trait QueryManagerExt<'a, R> {
-    fn db(&'a self) -> DbContext<'a>;
-    fn with_tx<F, T>(&'a self, func: F) -> yaak_models::error::Result<T>
-    where
-        F: FnOnce(&DbContext) -> yaak_models::error::Result<T>;
-}
-
-impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
-    fn db(&'a self) -> DbContext<'a> {
-        let qm = self.state::<QueryManager>();
-        qm.inner().connect()
-    }
-
-    fn with_tx<F, T>(&'a self, func: F) -> yaak_models::error::Result<T>
-    where
-        F: FnOnce(&DbContext) -> yaak_models::error::Result<T>,
-    {
-        let qm = self.state::<QueryManager>();
-        qm.inner().with_tx(func)
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
 #[ts(export, export_to = "gen_sync.ts")]
-pub(crate) enum SyncOp {
+pub enum SyncOp {
     FsCreate {
         model: SyncModel,
     },
@@ -104,7 +78,7 @@ impl Display for SyncOp {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum DbCandidate {
+pub enum DbCandidate {
     Added(SyncModel),
     Deleted(SyncState),
     Modified(SyncModel, SyncState),
@@ -125,21 +99,21 @@ impl DbCandidate {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
 #[ts(export, export_to = "gen_sync.ts")]
-pub(crate) struct FsCandidate {
-    pub(crate) model: SyncModel,
-    pub(crate) rel_path: PathBuf,
-    pub(crate) checksum: String,
+pub struct FsCandidate {
+    pub model: SyncModel,
+    pub rel_path: PathBuf,
+    pub checksum: String,
 }
 
-pub(crate) fn get_db_candidates<R: Runtime>(
-    app_handle: &AppHandle<R>,
+pub fn get_db_candidates(
+    db: &DbContext,
+    version: &str,
     workspace_id: &str,
     sync_dir: &Path,
 ) -> Result<Vec<DbCandidate>> {
     let models: HashMap<_, _> =
-        workspace_models(app_handle, workspace_id)?.into_iter().map(|m| (m.id(), m)).collect();
-    let sync_states: HashMap<_, _> = app_handle
-        .db()
+        workspace_models(db, version, workspace_id)?.into_iter().map(|m| (m.id(), m)).collect();
+    let sync_states: HashMap<_, _> = db
         .list_sync_states_for_workspace(workspace_id, sync_dir)?
         .into_iter()
         .map(|s| (s.model_id.clone(), s))
@@ -200,7 +174,7 @@ pub(crate) fn get_db_candidates<R: Runtime>(
     Ok(candidates)
 }
 
-pub(crate) fn get_fs_candidates(dir: &Path) -> Result<Vec<FsCandidate>> {
+pub fn get_fs_candidates(dir: &Path) -> Result<Vec<FsCandidate>> {
     // Ensure the root directory exists
     fs::create_dir_all(dir)?;
 
@@ -233,7 +207,7 @@ pub(crate) fn get_fs_candidates(dir: &Path) -> Result<Vec<FsCandidate>> {
     Ok(candidates)
 }
 
-pub(crate) fn compute_sync_ops(
+pub fn compute_sync_ops(
     db_candidates: Vec<DbCandidate>,
     fs_candidates: Vec<FsCandidate>,
 ) -> Vec<SyncOp> {
@@ -322,18 +296,17 @@ pub(crate) fn compute_sync_ops(
         .collect()
 }
 
-fn workspace_models<R: Runtime>(
-    app_handle: &AppHandle<R>,
+fn workspace_models(
+    db: &DbContext,
+    version: &str,
     workspace_id: &str,
 ) -> Result<Vec<SyncModel>> {
     // We want to include private environments here so that we can take them into account during
     // the sync process. Otherwise, they would be treated as deleted.
     let include_private_environments = true;
-    let db = app_handle.db();
-    let version = app_handle.package_info().version.to_string();
     let resources = get_workspace_export_resources(
-        &db,
-        &version,
+        db,
+        version,
         vec![workspace_id],
         include_private_environments,
     )?
@@ -366,8 +339,10 @@ fn workspace_models<R: Runtime>(
     Ok(sync_models)
 }
 
-pub(crate) fn apply_sync_ops<R: Runtime>(
-    app_handle: &AppHandle<R>,
+/// Apply sync operations to the filesystem and database.
+/// Returns a list of SyncStateOps that should be applied afterward.
+pub fn apply_sync_ops(
+    db: &DbContext,
     workspace_id: &str,
     sync_dir: &Path,
     sync_ops: Vec<SyncOp>,
@@ -464,59 +439,56 @@ pub(crate) fn apply_sync_ops<R: Runtime>(
                 }
             }
             SyncOp::DbDelete { model, state } => {
-                delete_model(app_handle, &model)?;
+                delete_model(db, &model)?;
                 SyncStateOp::Delete { state: state.to_owned() }
             }
             SyncOp::IgnorePrivate { .. } => SyncStateOp::NoOp,
         });
     }
 
-    app_handle.with_tx(|tx| {
-        let upserted_models = tx.batch_upsert(
-            workspaces_to_upsert,
-            environments_to_upsert,
-            folders_to_upsert,
-            http_requests_to_upsert,
-            grpc_requests_to_upsert,
-            websocket_requests_to_upsert,
-            &UpdateSource::Sync,
-        )?;
+    let upserted_models = db.batch_upsert(
+        workspaces_to_upsert,
+        environments_to_upsert,
+        folders_to_upsert,
+        http_requests_to_upsert,
+        grpc_requests_to_upsert,
+        websocket_requests_to_upsert,
+        &UpdateSource::Sync,
+    )?;
 
-        // Ensure we create WorkspaceMeta models for each new workspace, with the appropriate sync dir
-        let sync_dir_string = sync_dir.to_string_lossy().to_string();
-        for workspace in upserted_models.workspaces {
-            match tx.get_workspace_meta(&workspace.id) {
-                Some(m) => {
-                    if m.setting_sync_dir == Some(sync_dir_string.clone()) {
-                        // We don't need to update if unchanged
-                        continue;
-                    }
-                    tx.upsert_workspace_meta(
-                        &WorkspaceMeta {
-                            setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
-                            ..m
-                        },
-                        &UpdateSource::Sync,
-                    )
+    // Ensure we create WorkspaceMeta models for each new workspace, with the appropriate sync dir
+    let sync_dir_string = sync_dir.to_string_lossy().to_string();
+    for workspace in upserted_models.workspaces {
+        match db.get_workspace_meta(&workspace.id) {
+            Some(m) => {
+                if m.setting_sync_dir == Some(sync_dir_string.clone()) {
+                    // We don't need to update if unchanged
+                    continue;
                 }
-                None => tx.upsert_workspace_meta(
+                db.upsert_workspace_meta(
                     &WorkspaceMeta {
-                        workspace_id: workspace_id.to_string(),
                         setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
-                        ..Default::default()
+                        ..m
                     },
                     &UpdateSource::Sync,
-                ),
-            }?;
-        }
-        Ok(())
-    })?;
+                )
+            }
+            None => db.upsert_workspace_meta(
+                &WorkspaceMeta {
+                    workspace_id: workspace_id.to_string(),
+                    setting_sync_dir: Some(sync_dir.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                &UpdateSource::Sync,
+            ),
+        }?;
+    }
 
     Ok(sync_state_ops)
 }
 
 #[derive(Debug)]
-pub(crate) enum SyncStateOp {
+pub enum SyncStateOp {
     Create {
         model_id: String,
         checksum: String,
@@ -533,8 +505,8 @@ pub(crate) enum SyncStateOp {
     NoOp,
 }
 
-pub(crate) fn apply_sync_state_ops<R: Runtime>(
-    app_handle: &AppHandle<R>,
+pub fn apply_sync_state_ops(
+    db: &DbContext,
     workspace_id: &str,
     sync_dir: &Path,
     ops: Vec<SyncStateOp>,
@@ -551,7 +523,7 @@ pub(crate) fn apply_sync_state_ops<R: Runtime>(
                     flushed_at: Utc::now().naive_utc(),
                     ..Default::default()
                 };
-                app_handle.db().upsert_sync_state(&sync_state)?;
+                db.upsert_sync_state(&sync_state)?;
             }
             SyncStateOp::Update { state: sync_state, checksum, rel_path } => {
                 let sync_state = SyncState {
@@ -561,10 +533,10 @@ pub(crate) fn apply_sync_state_ops<R: Runtime>(
                     flushed_at: Utc::now().naive_utc(),
                     ..sync_state
                 };
-                app_handle.db().upsert_sync_state(&sync_state)?;
+                db.upsert_sync_state(&sync_state)?;
             }
             SyncStateOp::Delete { state } => {
-                app_handle.db().delete_sync_state(&state)?;
+                db.delete_sync_state(&state)?;
             }
             SyncStateOp::NoOp => {
                 // Nothing
@@ -579,8 +551,7 @@ fn derive_model_filename(m: &SyncModel) -> PathBuf {
     Path::new(&rel).to_path_buf()
 }
 
-fn delete_model<R: Runtime>(app_handle: &AppHandle<R>, model: &SyncModel) -> Result<()> {
-    let db = app_handle.db();
+fn delete_model(db: &DbContext, model: &SyncModel) -> Result<()> {
     match model {
         SyncModel::Workspace(m) => {
             db.delete_workspace(&m, &UpdateSource::Sync)?;

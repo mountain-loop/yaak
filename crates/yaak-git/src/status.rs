@@ -44,7 +44,7 @@ pub enum GitStatus {
     TypeChange,
 }
 
-pub(crate) fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
+pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
     let repo = open_repo(dir)?;
     let (head_tree, head_ref, head_ref_shorthand) = match repo.head() {
         Ok(head) => {

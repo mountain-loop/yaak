@@ -62,6 +62,7 @@ use yaak_tls::find_client_certificate;
 mod commands;
 mod encoding;
 mod error;
+mod git_ext;
 mod grpc;
 mod history;
 mod http_request;
@@ -70,6 +71,7 @@ mod models_ext;
 mod notifications;
 mod plugin_events;
 mod render;
+mod sync_ext;
 mod updates;
 mod uri_scheme;
 mod window;
@@ -1479,9 +1481,7 @@ pub fn run() {
         .plugin(models_ext::init())  // Database setup only. Must be before yaak_plugins which depends on db
         .plugin(yaak_plugins::init())
         .plugin(yaak_fonts::init())
-        .plugin(yaak_git::init())
-        .plugin(yaak_ws::init())
-        .plugin(yaak_sync::init());
+        .plugin(yaak_ws::init());
 
     #[cfg(feature = "license")]
     {
@@ -1629,6 +1629,31 @@ pub fn run() {
             models_ext::models_upsert_graphql_introspection,
             models_ext::models_websocket_events,
             models_ext::models_workspace_models,
+            //
+            // Sync commands
+            sync_ext::cmd_sync_calculate,
+            sync_ext::cmd_sync_calculate_fs,
+            sync_ext::cmd_sync_apply,
+            sync_ext::cmd_sync_watch,
+            //
+            // Git commands
+            git_ext::cmd_git_checkout,
+            git_ext::cmd_git_branch,
+            git_ext::cmd_git_delete_branch,
+            git_ext::cmd_git_merge_branch,
+            git_ext::cmd_git_status,
+            git_ext::cmd_git_log,
+            git_ext::cmd_git_initialize,
+            git_ext::cmd_git_commit,
+            git_ext::cmd_git_fetch_all,
+            git_ext::cmd_git_push,
+            git_ext::cmd_git_pull,
+            git_ext::cmd_git_add,
+            git_ext::cmd_git_unstage,
+            git_ext::cmd_git_add_credential,
+            git_ext::cmd_git_remotes,
+            git_ext::cmd_git_add_remote,
+            git_ext::cmd_git_rm_remote,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

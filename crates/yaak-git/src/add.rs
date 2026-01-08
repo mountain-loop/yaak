@@ -4,7 +4,7 @@ use git2::IndexAddOption;
 use log::info;
 use std::path::Path;
 
-pub(crate) fn git_add(dir: &Path, rela_path: &Path) -> Result<()> {
+pub fn git_add(dir: &Path, rela_path: &Path) -> Result<()> {
     let repo = open_repo(dir)?;
     let mut index = repo.index()?;
 

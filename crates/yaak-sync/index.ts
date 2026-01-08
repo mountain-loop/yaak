@@ -6,18 +6,18 @@ import { WatchEvent, WatchResult } from './bindings/gen_watch';
 export * from './bindings/gen_models';
 
 export async function calculateSync(workspaceId: string, syncDir: string) {
-  return invoke<SyncOp[]>('plugin:yaak-sync|calculate', {
+  return invoke<SyncOp[]>('cmd_sync_calculate', {
     workspaceId,
     syncDir,
   });
 }
 
 export async function calculateSyncFsOnly(dir: string) {
-  return invoke<SyncOp[]>('plugin:yaak-sync|calculate_fs', { dir });
+  return invoke<SyncOp[]>('cmd_sync_calculate_fs', { dir });
 }
 
 export async function applySync(workspaceId: string, syncDir: string, syncOps: SyncOp[]) {
-  return invoke<void>('plugin:yaak-sync|apply', {
+  return invoke<void>('cmd_sync_apply', {
     workspaceId,
     syncDir,
     syncOps: syncOps,
@@ -32,7 +32,7 @@ export function watchWorkspaceFiles(
   console.log('Watching workspace files', workspaceId, syncDir);
   const channel = new Channel<WatchEvent>();
   channel.onmessage = callback;
-  const unlistenPromise = invoke<WatchResult>('plugin:yaak-sync|watch', {
+  const unlistenPromise = invoke<WatchResult>('cmd_sync_watch', {
     workspaceId,
     syncDir,
     channel,

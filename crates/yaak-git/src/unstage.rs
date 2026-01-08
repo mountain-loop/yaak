@@ -2,7 +2,7 @@ use crate::repository::open_repo;
 use log::info;
 use std::path::Path;
 
-pub(crate) fn git_unstage(dir: &Path, rela_path: &Path) -> crate::error::Result<()> {
+pub fn git_unstage(dir: &Path, rela_path: &Path) -> crate::error::Result<()> {
     let repo = open_repo(dir)?;
 
     let head = match repo.head() {

@@ -3,7 +3,7 @@ use crate::error::Error::GenericError;
 use log::info;
 use std::path::Path;
 
-pub(crate) fn git_commit(dir: &Path, message: &str) -> crate::error::Result<()> {
+pub fn git_commit(dir: &Path, message: &str) -> crate::error::Result<()> {
     let out = new_binary_command(dir)?.args(["commit", "--message", message]).output()?;
 
     let stdout = String::from_utf8_lossy(&out.stdout);

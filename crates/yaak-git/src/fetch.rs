@@ -3,7 +3,7 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use std::path::Path;
 
-pub(crate) fn git_fetch_all(dir: &Path) -> Result<()> {
+pub fn git_fetch_all(dir: &Path) -> Result<()> {
     let out = new_binary_command(dir)?
         .args(["fetch", "--all", "--prune", "--tags"])
         .output()

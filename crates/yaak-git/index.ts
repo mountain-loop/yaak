@@ -31,12 +31,12 @@ export function useGit(dir: string, callbacks: GitCallbacks) {
       }),
       log: useQuery<GitCommit[], string>({
         queryKey: ['git', 'log', dir],
-        queryFn: () => invoke('plugin:yaak-git|log', { dir }),
+        queryFn: () => invoke('cmd_git_log', { dir }),
       }),
       status: useQuery<GitStatusSummary, string>({
         refetchOnMount: true,
         queryKey: ['git', 'status', dir],
-        queryFn: () => invoke('plugin:yaak-git|status', { dir }),
+        queryFn: () => invoke('cmd_git_status', { dir }),
       }),
     },
     mutations,
@@ -51,14 +51,14 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       if (remote == null) throw new Error('No remote found');
     }
 
-    const result = await invoke<PushResult>('plugin:yaak-git|push', { dir });
+    const result = await invoke<PushResult>('cmd_git_push', { dir });
     if (result.type !== 'needs_credentials') return result;
 
     // Needs credentials, prompt for them
     const creds = await callbacks.promptCredentials(result);
     if (creds == null) throw new Error('Canceled');
 
-    await invoke('plugin:yaak-git|add_credential', {
+    await invoke('cmd_git_add_credential', {
       dir,
       remoteUrl: result.url,
       username: creds.username,
@@ -66,66 +66,66 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     });
 
     // Push again
-    return invoke<PushResult>('plugin:yaak-git|push', { dir });
+    return invoke<PushResult>('cmd_git_push', { dir });
   };
 
   return {
     init: createFastMutation<void, string, void>({
       mutationKey: ['git', 'init'],
-      mutationFn: () => invoke('plugin:yaak-git|initialize', { dir }),
+      mutationFn: () => invoke('cmd_git_initialize', { dir }),
       onSuccess,
     }),
     add: createFastMutation<void, string, { relaPaths: string[] }>({
       mutationKey: ['git', 'add', dir],
-      mutationFn: (args) => invoke('plugin:yaak-git|add', { dir, ...args }),
+      mutationFn: (args) => invoke('cmd_git_add', { dir, ...args }),
       onSuccess,
     }),
     addRemote: createFastMutation<GitRemote, string, GitRemote>({
       mutationKey: ['git', 'add-remote'],
-      mutationFn: (args) => invoke('plugin:yaak-git|add_remote', { dir, ...args }),
+      mutationFn: (args) => invoke('cmd_git_add_remote', { dir, ...args }),
       onSuccess,
     }),
     rmRemote: createFastMutation<void, string, { name: string }>({
       mutationKey: ['git', 'rm-remote', dir],
-      mutationFn: (args) => invoke('plugin:yaak-git|rm_remote', { dir, ...args }),
+      mutationFn: (args) => invoke('cmd_git_rm_remote', { dir, ...args }),
       onSuccess,
     }),
     branch: createFastMutation<void, string, { branch: string }>({
       mutationKey: ['git', 'branch', dir],
-      mutationFn: (args) => invoke('plugin:yaak-git|branch', { dir, ...args }),
+      mutationFn: (args) => invoke('cmd_git_branch', { dir, ...args }),
       onSuccess,
     }),
     mergeBranch: createFastMutation<void, string, { branch: string; force: boolean }>({
       mutationKey: ['git', 'merge', dir],
-      mutationFn: (args) => invoke('plugin:yaak-git|merge_branch', { dir, ...args }),
+      mutationFn: (args) => invoke('cmd_git_merge_branch', { dir, ...args }),
       onSuccess,
     }),
     deleteBranch: createFastMutation<void, string, { branch: string }>({
       mutationKey: ['git', 'delete-branch', dir],
-      mutationFn: (args) => invoke('plugin:yaak-git|delete_branch', { dir, ...args }),
+      mutationFn: (args) => invoke('cmd_git_delete_branch', { dir, ...args }),
       onSuccess,
     }),
     checkout: createFastMutation<string, string, { branch: string; force: boolean }>({
       mutationKey: ['git', 'checkout', dir],
-      mutationFn: (args) => invoke('plugin:yaak-git|checkout', { dir, ...args }),
+      mutationFn: (args) => invoke('cmd_git_checkout', { dir, ...args }),
       onSuccess,
     }),
     commit: createFastMutation<void, string, { message: string }>({
       mutationKey: ['git', 'commit', dir],
-      mutationFn: (args) => invoke('plugin:yaak-git|commit', { dir, ...args }),
+      mutationFn: (args) => invoke('cmd_git_commit', { dir, ...args }),
       onSuccess,
     }),
     commitAndPush: createFastMutation<PushResult, string, { message: string }>({
       mutationKey: ['git', 'commit_push', dir],
       mutationFn: async (args) => {
-        await invoke('plugin:yaak-git|commit', { dir, ...args });
+        await invoke('cmd_git_commit', { dir, ...args });
         return push();
       },
       onSuccess,
     }),
     fetchAll: createFastMutation<string, string, void>({
       mutationKey: ['git', 'checkout', dir],
-      mutationFn: () => invoke('plugin:yaak-git|fetch_all', { dir }),
+      mutationFn: () => invoke('cmd_git_fetch_all', { dir }),
       onSuccess,
     }),
     push: createFastMutation<PushResult, string, void>({
@@ -136,14 +136,14 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     pull: createFastMutation<PullResult, string, void>({
       mutationKey: ['git', 'pull', dir],
       async mutationFn() {
-        const result = await invoke<PullResult>('plugin:yaak-git|pull', { dir });
+        const result = await invoke<PullResult>('cmd_git_pull', { dir });
         if (result.type !== 'needs_credentials') return result;
 
         // Needs credentials, prompt for them
         const creds = await callbacks.promptCredentials(result);
         if (creds == null) throw new Error('Canceled');
 
-        await invoke('plugin:yaak-git|add_credential', {
+        await invoke('cmd_git_add_credential', {
           dir,
           remoteUrl: result.url,
           username: creds.username,
@@ -151,18 +151,18 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
         });
 
         // Pull again
-        return invoke<PullResult>('plugin:yaak-git|pull', { dir });
+        return invoke<PullResult>('cmd_git_pull', { dir });
       },
       onSuccess,
     }),
     unstage: createFastMutation<void, string, { relaPaths: string[] }>({
       mutationKey: ['git', 'unstage', dir],
-      mutationFn: (args) => invoke('plugin:yaak-git|unstage', { dir, ...args }),
+      mutationFn: (args) => invoke('cmd_git_unstage', { dir, ...args }),
       onSuccess,
     }),
   } as const;
 };
 
 async function getRemotes(dir: string) {
-  return invoke<GitRemote[]>('plugin:yaak-git|remotes', { dir });
+  return invoke<GitRemote[]>('cmd_git_remotes', { dir });
 }

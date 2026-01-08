@@ -8,7 +8,7 @@ use git2::build::CheckoutBuilder;
 use log::info;
 use std::path::Path;
 
-pub(crate) fn git_checkout_branch(dir: &Path, branch_name: &str, force: bool) -> Result<String> {
+pub fn git_checkout_branch(dir: &Path, branch_name: &str, force: bool) -> Result<String> {
     if branch_name.starts_with("origin/") {
         return git_checkout_remote_branch(dir, branch_name, force);
     }
@@ -48,7 +48,7 @@ pub(crate) fn git_checkout_remote_branch(
     git_checkout_branch(dir, branch_name, force)
 }
 
-pub(crate) fn git_create_branch(dir: &Path, name: &str) -> Result<()> {
+pub fn git_create_branch(dir: &Path, name: &str) -> Result<()> {
     let repo = open_repo(dir)?;
     let head = match repo.head() {
         Ok(h) => h,
@@ -65,7 +65,7 @@ pub(crate) fn git_create_branch(dir: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn git_delete_branch(dir: &Path, name: &str) -> Result<()> {
+pub fn git_delete_branch(dir: &Path, name: &str) -> Result<()> {
     let repo = open_repo(dir)?;
     let mut branch = get_branch_by_name(&repo, name)?;
 
@@ -86,7 +86,7 @@ pub(crate) fn git_delete_branch(dir: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn git_merge_branch(dir: &Path, name: &str, _force: bool) -> Result<()> {
+pub fn git_merge_branch(dir: &Path, name: &str, _force: bool) -> Result<()> {
     let repo = open_repo(dir)?;
     let local_branch = get_current_branch(&repo)?.unwrap();
 

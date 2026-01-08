@@ -4,9 +4,9 @@ use crate::error::Result;
 use std::io::Write;
 use std::path::Path;
 use std::process::Stdio;
-use tauri::Url;
+use url::Url;
 
-pub(crate) async fn git_add_credential(
+pub async fn git_add_credential(
     dir: &Path,
     remote_url: &str,
     username: &str,

@@ -4,23 +4,29 @@ use notify::Watcher;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use tauri::ipc::Channel;
 use tokio::select;
 use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_watch.ts")]
-pub(crate) struct WatchEvent {
-    paths: Vec<PathBuf>,
-    kind: String,
+pub struct WatchEvent {
+    pub paths: Vec<PathBuf>,
+    pub kind: String,
 }
 
-pub(crate) async fn watch_directory(
+/// Watch a directory for changes and send events through a callback.
+///
+/// The callback is invoked for each watch event. The function returns when
+/// the cancel receiver receives a signal.
+pub async fn watch_directory<F>(
     dir: &Path,
-    channel: Channel<WatchEvent>,
+    callback: F,
     mut cancel_rx: tokio::sync::watch::Receiver<()>,
-) -> Result<()> {
+) -> Result<()>
+where
+    F: Fn(WatchEvent) + Send + 'static,
+{
     let dir = dir.to_owned();
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
     let mut watcher = notify::recommended_watcher(tx)?;
@@ -35,7 +41,7 @@ pub(crate) async fn watch_directory(
         }
     });
 
-    tauri::async_runtime::spawn(async move {
+    tokio::spawn(async move {
         watcher.watch(&dir, notify::RecursiveMode::Recursive).expect("Failed to watch directory");
         info!("Watching directory {:?}", dir);
 
@@ -55,12 +61,10 @@ pub(crate) async fn watch_directory(
                                 continue;
                             }
 
-                            channel
-                                .send(WatchEvent {
-                                    paths,
-                                    kind: format!("{:?}", event.kind),
-                                })
-                                .expect("Failed to send watch event");
+                            callback(WatchEvent {
+                                paths,
+                                kind: format!("{:?}", event.kind),
+                            });
                         }
                         Err(e) => error!("Directory watch error: {:?}", e),
                     }

@@ -7,12 +7,12 @@ use ts_rs::TS;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "gen_git.ts")]
-pub(crate) struct GitRemote {
+pub struct GitRemote {
     name: String,
     url: Option<String>,
 }
 
-pub(crate) fn git_remotes(dir: &Path) -> Result<Vec<GitRemote>> {
+pub fn git_remotes(dir: &Path) -> Result<Vec<GitRemote>> {
     let repo = open_repo(dir)?;
     let mut remotes = Vec::new();
 
@@ -34,13 +34,13 @@ pub(crate) fn git_remotes(dir: &Path) -> Result<Vec<GitRemote>> {
     Ok(remotes)
 }
 
-pub(crate) fn git_add_remote(dir: &Path, name: &str, url: &str) -> Result<GitRemote> {
+pub fn git_add_remote(dir: &Path, name: &str, url: &str) -> Result<GitRemote> {
     let repo = open_repo(dir)?;
     repo.remote(name, url)?;
     Ok(GitRemote { name: name.to_string(), url: Some(url.to_string()) })
 }
 
-pub(crate) fn git_rm_remote(dir: &Path, name: &str) -> Result<()> {
+pub fn git_rm_remote(dir: &Path, name: &str) -> Result<()> {
     let repo = open_repo(dir)?;
     repo.remote_delete(name)?;
     Ok(())
