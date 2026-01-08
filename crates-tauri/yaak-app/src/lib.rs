@@ -76,6 +76,7 @@ mod updates;
 mod uri_scheme;
 mod window;
 mod window_menu;
+mod ws_ext;
 
 #[derive(serde::Serialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -1480,8 +1481,7 @@ pub fn run() {
         .plugin(yaak_mac_window::init())
         .plugin(models_ext::init())  // Database setup only. Must be before yaak_plugins which depends on db
         .plugin(yaak_plugins::init())
-        .plugin(yaak_fonts::init())
-        .plugin(yaak_ws::init());
+        .plugin(yaak_fonts::init());
 
     #[cfg(feature = "license")]
     {
@@ -1553,6 +1553,10 @@ pub fn run() {
             let grpc_config = GrpcConfig { protoc_include_dir, protoc_bin_path };
             let grpc_handle = GrpcHandle::new(grpc_config);
             app.manage(Mutex::new(grpc_handle));
+
+            // Add WebSocket manager
+            let ws_manager = yaak_ws::WebsocketManager::new();
+            app.manage(Mutex::new(ws_manager));
 
             // Specific settings
             let settings = app.db().get_settings();
@@ -1654,6 +1658,19 @@ pub fn run() {
             git_ext::cmd_git_remotes,
             git_ext::cmd_git_add_remote,
             git_ext::cmd_git_rm_remote,
+            //
+            // WebSocket commands
+            ws_ext::cmd_ws_upsert_request,
+            ws_ext::cmd_ws_duplicate_request,
+            ws_ext::cmd_ws_delete_request,
+            ws_ext::cmd_ws_delete_connection,
+            ws_ext::cmd_ws_delete_connections,
+            ws_ext::cmd_ws_list_events,
+            ws_ext::cmd_ws_list_requests,
+            ws_ext::cmd_ws_list_connections,
+            ws_ext::cmd_ws_send,
+            ws_ext::cmd_ws_close,
+            ws_ext::cmd_ws_connect,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

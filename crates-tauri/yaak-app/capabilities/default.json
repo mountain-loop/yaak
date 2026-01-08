@@ -53,7 +53,6 @@
     "shell:allow-open",
     "yaak-fonts:default",
     "yaak-mac-window:default",
-    "yaak-plugins:default",
-    "yaak-ws:default"
+    "yaak-plugins:default"
   ]
 }

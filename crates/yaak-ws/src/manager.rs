@@ -10,7 +10,8 @@ use tokio::net::TcpStream;
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::handshake::client::Response;
-use tokio_tungstenite::tungstenite::http::{HeaderMap, HeaderValue};
+use http::HeaderMap;
+use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use yaak_tls::ClientCertificateConfig;
 

@@ -1,7 +1,7 @@
 use crate::error::Result;
+use http::HeaderMap;
 use log::info;
 use std::sync::Arc;
-use tauri::http::HeaderMap;
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::handshake::client::Response;
@@ -15,7 +15,7 @@ use yaak_tls::{ClientCertificateConfig, get_tls_config};
 // Enabling ALPN breaks websocket requests
 const WITH_ALPN: bool = false;
 
-pub(crate) async fn ws_connect(
+pub async fn ws_connect(
     url: &str,
     headers: HeaderMap<HeaderValue>,
     validate_certificates: bool,

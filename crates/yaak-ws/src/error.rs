@@ -11,9 +11,6 @@ pub enum Error {
     ModelError(#[from] yaak_models::error::Error),
 
     #[error(transparent)]
-    PluginError(#[from] yaak_plugins::error::Error),
-
-    #[error(transparent)]
     TemplateError(#[from] yaak_templates::error::Error),
 
     #[error(transparent)]

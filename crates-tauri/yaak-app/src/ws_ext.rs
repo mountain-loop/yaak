@@ -1,15 +1,15 @@
+//! WebSocket Tauri command wrappers
+//! These wrap the core yaak-ws functionality for Tauri IPC.
+
 use crate::error::Result;
-use crate::manager::WebsocketManager;
-use crate::render::render_websocket_request;
-use crate::resolve::resolve_websocket_request;
-use log::debug;
-use log::{info, warn};
+use crate::models_ext::QueryManagerExt;
+use http::HeaderMap;
+use log::{debug, info, warn};
 use std::str::FromStr;
-use tauri::http::{HeaderMap, HeaderName};
-use tauri::{AppHandle, Runtime, State, WebviewWindow};
+use tauri::http::HeaderValue;
+use tauri::{AppHandle, Runtime, State, WebviewWindow, command};
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::http::HeaderValue;
 use url::Url;
 use yaak_http::cookies::CookieStore;
 use yaak_http::path_placeholders::apply_path_placeholders;
@@ -17,7 +17,6 @@ use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
     WebsocketEventType, WebsocketRequest,
 };
-use crate::ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
@@ -26,18 +25,21 @@ use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
 use yaak_tls::find_client_certificate;
+use yaak_ws::{WebsocketManager, render_websocket_request};
 
-#[tauri::command]
-pub(crate) async fn upsert_request<R: Runtime>(
+#[command]
+pub async fn cmd_ws_upsert_request<R: Runtime>(
     request: WebsocketRequest,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(app_handle.db().upsert_websocket_request(&request, &UpdateSource::from_window_label(window.label()))?)
+    Ok(app_handle
+        .db()
+        .upsert_websocket_request(&request, &UpdateSource::from_window_label(window.label()))?)
 }
 
-#[tauri::command]
-pub(crate) async fn duplicate_request<R: Runtime>(
+#[command]
+pub async fn cmd_ws_duplicate_request<R: Runtime>(
     request_id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -47,8 +49,8 @@ pub(crate) async fn duplicate_request<R: Runtime>(
     Ok(db.duplicate_websocket_request(&request, &UpdateSource::from_window_label(window.label()))?)
 }
 
-#[tauri::command]
-pub(crate) async fn delete_request<R: Runtime>(
+#[command]
+pub async fn cmd_ws_delete_request<R: Runtime>(
     request_id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -58,19 +60,22 @@ pub(crate) async fn delete_request<R: Runtime>(
         .delete_websocket_request_by_id(request_id, &UpdateSource::from_window_label(window.label()))?)
 }
 
-#[tauri::command]
-pub(crate) async fn delete_connection<R: Runtime>(
+#[command]
+pub async fn cmd_ws_delete_connection<R: Runtime>(
     connection_id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketConnection> {
     Ok(app_handle
         .db()
-        .delete_websocket_connection_by_id(connection_id, &UpdateSource::from_window_label(window.label()))?)
+        .delete_websocket_connection_by_id(
+            connection_id,
+            &UpdateSource::from_window_label(window.label()),
+        )?)
 }
 
-#[tauri::command]
-pub(crate) async fn delete_connections<R: Runtime>(
+#[command]
+pub async fn cmd_ws_delete_connections<R: Runtime>(
     request_id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -81,32 +86,32 @@ pub(crate) async fn delete_connections<R: Runtime>(
     )?)
 }
 
-#[tauri::command]
-pub(crate) async fn list_events<R: Runtime>(
+#[command]
+pub async fn cmd_ws_list_events<R: Runtime>(
     connection_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketEvent>> {
     Ok(app_handle.db().list_websocket_events(connection_id)?)
 }
 
-#[tauri::command]
-pub(crate) async fn list_requests<R: Runtime>(
+#[command]
+pub async fn cmd_ws_list_requests<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketRequest>> {
     Ok(app_handle.db().list_websocket_requests(workspace_id)?)
 }
 
-#[tauri::command]
-pub(crate) async fn list_connections<R: Runtime>(
+#[command]
+pub async fn cmd_ws_list_connections<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
 ) -> Result<Vec<WebsocketConnection>> {
     Ok(app_handle.db().list_websocket_connections(workspace_id)?)
 }
 
-#[tauri::command]
-pub(crate) async fn send<R: Runtime>(
+#[command]
+pub async fn cmd_ws_send<R: Runtime>(
     connection_id: &str,
     environment_id: Option<&str>,
     app_handle: AppHandle<R>,
@@ -153,8 +158,8 @@ pub(crate) async fn send<R: Runtime>(
     Ok(connection)
 }
 
-#[tauri::command]
-pub(crate) async fn close<R: Runtime>(
+#[command]
+pub async fn cmd_ws_close<R: Runtime>(
     connection_id: &str,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -177,8 +182,8 @@ pub(crate) async fn close<R: Runtime>(
     Ok(connection)
 }
 
-#[tauri::command]
-pub(crate) async fn connect<R: Runtime>(
+#[command]
+pub async fn cmd_ws_connect<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
@@ -250,7 +255,7 @@ pub(crate) async fn connect<R: Runtime>(
         }
 
         headers.insert(
-            HeaderName::from_str(&h.name).unwrap(),
+            http::HeaderName::from_str(&h.name).unwrap(),
             HeaderValue::from_str(&h.value).unwrap(),
         );
     }
@@ -285,7 +290,8 @@ pub(crate) async fn connect<R: Runtime>(
                 )
                 .await?;
             for header in plugin_result.set_headers.unwrap_or_default() {
-                match (HeaderName::from_str(&header.name), HeaderValue::from_str(&header.value)) {
+                match (http::HeaderName::from_str(&header.name), HeaderValue::from_str(&header.value))
+                {
                     (Ok(name), Ok(value)) => {
                         headers.insert(name, value);
                     }
@@ -312,7 +318,7 @@ pub(crate) async fn connect<R: Runtime>(
         if let Some(cookie_header_value) = store.get_cookie_header(&http_url) {
             debug!("Inserting cookies into WS upgrade to {}: {}", url, cookie_header_value);
             headers.insert(
-                HeaderName::from_static("cookie"),
+                http::HeaderName::from_static("cookie"),
                 HeaderValue::from_str(&cookie_header_value).unwrap(),
             );
         }
@@ -398,6 +404,7 @@ pub(crate) async fn connect<R: Runtime>(
         let request_id = request.id.to_string();
         let workspace_id = request.workspace_id.clone();
         let connection = connection.clone();
+        let window_label = window.label().to_string();
         let mut has_written_close = false;
         tokio::spawn(async move {
             while let Some(message) = receive_rx.recv().await {
@@ -425,7 +432,7 @@ pub(crate) async fn connect<R: Runtime>(
                             message: message.into_data().into(),
                             ..Default::default()
                         },
-                        &UpdateSource::from_window_label(window.label()),
+                        &UpdateSource::from_window_label(&window_label),
                     )
                     .unwrap();
             }
@@ -442,7 +449,7 @@ pub(crate) async fn connect<R: Runtime>(
                             message_type: WebsocketEventType::Close,
                             ..Default::default()
                         },
-                        &UpdateSource::from_window_label(window.label()),
+                        &UpdateSource::from_window_label(&window_label),
                     )
                     .unwrap();
             }
@@ -455,13 +462,31 @@ pub(crate) async fn connect<R: Runtime>(
                         state: WebsocketConnectionState::Closed,
                         ..connection
                     },
-                    &UpdateSource::from_window_label(window.label()),
+                    &UpdateSource::from_window_label(&window_label),
                 )
                 .unwrap();
         });
     }
 
     Ok(connection)
+}
+
+/// Resolve inherited authentication and headers for a websocket request
+fn resolve_websocket_request<R: Runtime>(
+    window: &WebviewWindow<R>,
+    request: &WebsocketRequest,
+) -> Result<(WebsocketRequest, String)> {
+    let mut new_request = request.clone();
+
+    let (authentication_type, authentication, authentication_context_id) =
+        window.db().resolve_auth_for_websocket_request(request)?;
+    new_request.authentication_type = authentication_type;
+    new_request.authentication = authentication;
+
+    let headers = window.db().resolve_headers_for_websocket_request(request)?;
+    new_request.headers = headers;
+
+    Ok((new_request, authentication_context_id))
 }
 
 /// Convert WS URL to HTTP URL for cookie filtering
