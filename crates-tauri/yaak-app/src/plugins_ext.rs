@@ -5,20 +5,22 @@
 //! - Tauri commands for plugin search/install/uninstall
 //! - Plugin update checking
 
+use crate::PluginContextExt;
 use crate::error::Result;
 use crate::models_ext::QueryManagerExt;
-use crate::PluginContextExt;
 use log::{error, info, warn};
-use std::sync::atomic::{AtomicBool, Ordering};
+use serde::Serialize;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tauri::path::BaseDirectory;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{
-    command, AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent,
+    AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent, command,
     generate_handler, is_dev,
 };
 use tokio::sync::Mutex;
+use ts_rs::TS;
 use yaak_models::models::Plugin;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::api::{
@@ -30,8 +32,6 @@ use yaak_plugins::install::{delete_and_uninstall, download_and_install};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::get_plugin_meta;
 use yaak_tauri_utils::api_client::yaak_api_client;
-use serde::Serialize;
-use ts_rs::TS;
 
 static EXITING: AtomicBool = AtomicBool::new(false);
 
@@ -47,7 +47,7 @@ pub struct PluginUpdater {
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "plugins_ext.ts")]
+#[ts(export, export_to = "index.ts")]
 pub struct PluginUpdateNotification {
     pub update_count: usize,
     pub plugins: Vec<PluginUpdateInfo>,
@@ -55,7 +55,7 @@ pub struct PluginUpdateNotification {
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "plugins_ext.ts")]
+#[ts(export, export_to = "index.ts")]
 pub struct PluginUpdateInfo {
     pub name: String,
     pub current_version: String,

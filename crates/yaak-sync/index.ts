@@ -1,7 +1,8 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
+import type { WatchResult } from '@yaakapp-internal/tauri';
 import { SyncOp } from './bindings/gen_sync';
-import { WatchEvent, WatchResult } from './bindings/gen_watch';
+import { WatchEvent } from './bindings/gen_watch';
 
 export * from './bindings/gen_models';
 

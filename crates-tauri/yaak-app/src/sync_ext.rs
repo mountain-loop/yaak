@@ -62,7 +62,7 @@ pub(crate) async fn cmd_sync_apply<R: Runtime>(
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "gen_watch.ts")]
+#[ts(export, export_to = "index.ts")]
 pub(crate) struct WatchResult {
     unlisten_event: String,
 }
