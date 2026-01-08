@@ -17,9 +17,7 @@ prost-reflect = { version = "0.14.4", default-features = false, features = ["ser
 prost-types = "0.13.4"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tauri = { workspace = true }
-tauri-plugin-shell = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs", "process"] }
 tokio-stream = "0.1.14"
 tonic = { version = "0.12.3", default-features = false, features = ["transport"] }
 tonic-reflection = "0.12.3"

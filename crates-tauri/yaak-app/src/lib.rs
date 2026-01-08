@@ -30,7 +30,7 @@ use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
-use yaak_grpc::manager::GrpcHandle;
+use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
 use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_mac_window::AppHandleMacWindowExt;
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
@@ -1478,7 +1478,6 @@ pub fn run() {
         .plugin(yaak_mac_window::init())
         .plugin(models_ext::init())  // Database setup only. Must be before yaak_plugins which depends on db
         .plugin(yaak_plugins::init())
-        .plugin(yaak_crypto::init())
         .plugin(yaak_fonts::init())
         .plugin(yaak_git::init())
         .plugin(yaak_ws::init())
@@ -1498,6 +1497,11 @@ pub fn run() {
         .setup(|app| {
             // Initialize HTTP connection manager
             app.manage(yaak_http::manager::HttpConnectionManager::new());
+
+            // Initialize encryption manager
+            let query_manager = app.state::<yaak_models::query_manager::QueryManager>().inner().clone();
+            let app_id = app.config().identifier.to_string();
+            app.manage(yaak_crypto::manager::EncryptionManager::new(query_manager, app_id));
 
             {
                 let app_handle = app.app_handle().clone();
@@ -1535,7 +1539,19 @@ pub fn run() {
             app.manage(Mutex::new(yaak_notifier));
 
             // Add GRPC manager
-            let grpc_handle = GrpcHandle::new(&app.app_handle());
+            let protoc_include_dir = app
+                .path()
+                .resolve("vendored/protoc/include", BaseDirectory::Resource)
+                .expect("failed to resolve protoc include directory");
+            // Construct sidecar path - Tauri puts sidecars in the resource directory
+            let sidecar_name = if cfg!(windows) { "yaakprotoc.exe" } else { "yaakprotoc" };
+            let protoc_bin_path = app
+                .path()
+                .resource_dir()
+                .expect("failed to get resource directory")
+                .join(sidecar_name);
+            let grpc_config = GrpcConfig { protoc_include_dir, protoc_bin_path };
+            let grpc_handle = GrpcHandle::new(grpc_config);
             app.manage(Mutex::new(grpc_handle));
 
             // Specific settings
@@ -1596,8 +1612,11 @@ pub fn run() {
             //
             // Migrated commands
             crate::commands::cmd_decrypt_template,
+            crate::commands::cmd_enable_encryption,
             crate::commands::cmd_get_themes,
+            crate::commands::cmd_reveal_workspace_key,
             crate::commands::cmd_secure_template,
+            crate::commands::cmd_set_workspace_key,
             crate::commands::cmd_show_workspace_key,
             //
             // Models commands

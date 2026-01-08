@@ -8034,8 +8034,6 @@ dependencies = [
  "keyring",
  "log",
  "serde",
- "tauri",
- "tauri-plugin",
  "thiserror 2.0.17",
  "yaak-models",
 ]
@@ -8086,8 +8084,6 @@ dependencies = [
  "prost-types",
  "serde",
  "serde_json",
- "tauri",
- "tauri-plugin-shell",
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",

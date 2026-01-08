@@ -101,7 +101,7 @@ impl EncryptionManager {
         Ok(workspace_meta)
     }
 
-    pub(crate) fn ensure_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceMeta> {
+    pub fn ensure_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceMeta> {
         let workspace_meta =
             self.query_manager.connect().get_or_create_workspace_meta(workspace_id)?;
 

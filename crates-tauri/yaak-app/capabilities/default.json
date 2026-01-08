@@ -51,7 +51,6 @@
     "opener:allow-open-url",
     "opener:allow-reveal-item-in-dir",
     "shell:allow-open",
-    "yaak-crypto:default",
     "yaak-fonts:default",
     "yaak-git:default",
     "yaak-mac-window:default",

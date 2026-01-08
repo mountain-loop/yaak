@@ -20,7 +20,6 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use tauri::AppHandle;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -139,7 +138,7 @@ impl GrpcConnection {
                 let md = md.clone();
                 let use_reflection = use_reflection.clone();
                 let client_cert = client_cert.clone();
-                tauri::async_runtime::block_on(async move {
+                tokio::runtime::Handle::current().block_on(async move {
                     if use_reflection {
                         if let Err(e) =
                             reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
@@ -193,7 +192,7 @@ impl GrpcConnection {
                 let md = md.clone();
                 let use_reflection = use_reflection.clone();
                 let client_cert = client_cert.clone();
-                tauri::async_runtime::block_on(async move {
+                tokio::runtime::Handle::current().block_on(async move {
                     if use_reflection {
                         if let Err(e) =
                             reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
@@ -253,15 +252,24 @@ impl GrpcConnection {
     }
 }
 
+/// Configuration for GrpcHandle to compile proto files
+#[derive(Clone)]
+pub struct GrpcConfig {
+    /// Path to the protoc include directory (vendored/protoc/include)
+    pub protoc_include_dir: PathBuf,
+    /// Path to the yaakprotoc sidecar binary
+    pub protoc_bin_path: PathBuf,
+}
+
 pub struct GrpcHandle {
-    app_handle: AppHandle,
+    config: GrpcConfig,
     pools: BTreeMap<String, DescriptorPool>,
 }
 
 impl GrpcHandle {
-    pub fn new(app_handle: &AppHandle) -> Self {
+    pub fn new(config: GrpcConfig) -> Self {
         let pools = BTreeMap::new();
-        Self { pools, app_handle: app_handle.clone() }
+        Self { pools, config }
     }
 }
 
@@ -293,7 +301,7 @@ impl GrpcHandle {
             let full_uri = uri_from_str(uri)?;
             fill_pool_from_reflection(&full_uri, metadata, validate_certificates, client_cert).await
         } else {
-            fill_pool_from_files(&self.app_handle, proto_files).await
+            fill_pool_from_files(&self.config, proto_files).await
         }?;
 
         self.pools.insert(key, pool.clone());

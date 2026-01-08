@@ -2,6 +2,7 @@ use crate::any::collect_any_types;
 use crate::client::AutoReflectionClient;
 use crate::error::Error::GenericError;
 use crate::error::Result;
+use crate::manager::GrpcConfig;
 use anyhow::anyhow;
 use async_recursion::async_recursion;
 use log::{debug, info, warn};
@@ -14,10 +15,8 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Manager};
-use tauri_plugin_shell::ShellExt;
 use tokio::fs;
+use tokio::process::Command;
 use tokio::sync::RwLock;
 use tonic::codegen::http::uri::PathAndQuery;
 use tonic::transport::Uri;
@@ -26,20 +25,16 @@ use tonic_reflection::pb::v1::server_reflection_response::MessageResponse;
 use yaak_tls::ClientCertificateConfig;
 
 pub async fn fill_pool_from_files(
-    app_handle: &AppHandle,
+    config: &GrpcConfig,
     paths: &Vec<PathBuf>,
 ) -> Result<DescriptorPool> {
     let mut pool = DescriptorPool::new();
     let random_file_name = format!("{}.desc", uuid::Uuid::new_v4());
     let desc_path = temp_dir().join(random_file_name);
-    let global_import_dir = app_handle
-        .path()
-        .resolve("vendored/protoc/include", BaseDirectory::Resource)
-        .expect("failed to resolve protoc include directory");
 
     // HACK: Remove UNC prefix for Windows paths
     let global_import_dir =
-        dunce::simplified(global_import_dir.as_path()).to_string_lossy().to_string();
+        dunce::simplified(config.protoc_include_dir.as_path()).to_string_lossy().to_string();
     let desc_path = dunce::simplified(desc_path.as_path());
 
     let mut args = vec![
@@ -96,19 +91,16 @@ pub async fn fill_pool_from_files(
 
     info!("Invoking protoc with {}", args.join(" "));
 
-    let out = app_handle
-        .shell()
-        .sidecar("yaakprotoc")
-        .expect("yaakprotoc not found")
-        .args(args)
+    let out = Command::new(&config.protoc_bin_path)
+        .args(&args)
         .output()
         .await
-        .expect("yaakprotoc failed to run");
+        .map_err(|e| GenericError(format!("Failed to run protoc: {}", e)))?;
 
     if !out.status.success() {
         return Err(GenericError(format!(
             "protoc failed with status {}: {}",
-            out.status.code().unwrap(),
+            out.status.code().unwrap_or(-1),
             String::from_utf8_lossy(out.stderr.as_slice())
         )));
     }
