@@ -21,7 +21,6 @@ regex = "1.11.1"
 reqwest = { workspace = true, features = ["rustls-tls-manual-roots-no-provider", "socks", "http2", "stream"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tauri = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "fs", "io-util"] }
 tokio-util = { version = "0.7", features = ["codec", "io", "io-util"] }

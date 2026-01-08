@@ -1481,7 +1481,6 @@ pub fn run() {
         .plugin(yaak_crypto::init())
         .plugin(yaak_fonts::init())
         .plugin(yaak_git::init())
-        .plugin(yaak_http::init())
         .plugin(yaak_ws::init())
         .plugin(yaak_sync::init());
 
@@ -1497,6 +1496,9 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // Initialize HTTP connection manager
+            app.manage(yaak_http::manager::HttpConnectionManager::new());
+
             {
                 let app_handle = app.app_handle().clone();
                 app.deep_link().on_open_url(move |event| {

@@ -27,7 +27,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process"] }
 tokio-tungstenite = "0.26.1"
 ts-rs = { workspace = true }
-yaak-common = { workspace = true }
+yaak-common = { workspace = true, features = ["tauri"] }
 yaak-crypto = { workspace = true }
 yaak-models = { workspace = true }
 yaak-templates = { workspace = true }

@@ -55,7 +55,7 @@ tokio-stream = "0.1.17"
 tokio-util = { version = "0.7", features = ["codec"] }
 ts-rs = { workspace = true }
 uuid = "1.12.1"
-yaak-common = { workspace = true }
+yaak-common = { workspace = true, features = ["tauri"] }
 yaak-core = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-fonts = { workspace = true }
