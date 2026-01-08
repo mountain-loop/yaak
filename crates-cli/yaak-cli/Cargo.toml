@@ -11,4 +11,6 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+yaak-http = { workspace = true }
 yaak-models = { workspace = true }

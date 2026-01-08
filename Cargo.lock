@@ -8004,6 +8004,8 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dirs",
+ "tokio",
+ "yaak-http",
  "yaak-models",
 ]
 
