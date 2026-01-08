@@ -38,6 +38,14 @@
       "icons/release/128x128@2x.png",
       "icons/release/icon.icns",
       "icons/release/icon.ico"
+    ],
+    "resources": [
+      "static",
+      "vendored/protoc/include",
+      "vendored/plugins",
+      "vendored/plugin-runtime",
+      "vendored/node/yaaknode",
+      "vendored/protoc/yaakprotoc"
     ]
   }
 }

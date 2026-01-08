@@ -16,7 +16,7 @@ pub struct PluginMetadata {
     pub repository_url: Option<String>,
 }
 
-pub(crate) fn get_plugin_meta(plugin_dir: &Path) -> Result<PluginMetadata> {
+pub fn get_plugin_meta(plugin_dir: &Path) -> Result<PluginMetadata> {
     let package_json = fs::File::open(plugin_dir.join("package.json"))?;
     let package_json: PackageJson = serde_json::from_reader(package_json)?;
 

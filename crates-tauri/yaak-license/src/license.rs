@@ -5,7 +5,7 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::ops::Add;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewWindow, is_dev};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use ts_rs::TS;
 use yaak_common::platform::get_os_str;
 use yaak_tauri_utils::api_client::yaak_api_client;

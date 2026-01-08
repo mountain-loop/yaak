@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::{Runtime, WebviewWindow};
 use ts_rs::TS;
-use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_models::models::{
     AnyModel, Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest,
     Workspace,
@@ -48,10 +46,11 @@ impl PluginContext {
     pub fn new_empty() -> Self {
         Self { id: "default".to_string(), label: None, workspace_id: None }
     }
-    pub fn new<R: Runtime>(window: &WebviewWindow<R>) -> Self {
+
+    pub fn new(label: Option<String>, workspace_id: Option<String>) -> Self {
         Self {
-            label: Some(window.label().to_string()),
-            workspace_id: window.workspace_id(),
+            label,
+            workspace_id,
             id: generate_prefixed_id("pctx"),
         }
     }

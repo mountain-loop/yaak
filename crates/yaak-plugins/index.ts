@@ -6,21 +6,21 @@ export * from './bindings/gen_events';
 export * from './bindings/gen_search';
 
 export async function searchPlugins(query: string) {
-  return invoke<PluginSearchResponse>('plugin:yaak-plugins|search', { query });
+  return invoke<PluginSearchResponse>('cmd_plugins_search', { query });
 }
 
 export async function installPlugin(name: string, version: string | null) {
-  return invoke<string>('plugin:yaak-plugins|install', { name, version });
+  return invoke<void>('cmd_plugins_install', { name, version });
 }
 
 export async function uninstallPlugin(pluginId: string) {
-  return invoke<string>('plugin:yaak-plugins|uninstall', { pluginId });
+  return invoke<void>('cmd_plugins_uninstall', { pluginId });
 }
 
 export async function checkPluginUpdates() {
-  return invoke<PluginUpdatesResponse>('plugin:yaak-plugins|updates', {});
+  return invoke<PluginUpdatesResponse>('cmd_plugins_updates', {});
 }
 
 export async function updateAllPlugins() {
-  return invoke<PluginNameVersion[]>('plugin:yaak-plugins|update_all', {});
+  return invoke<PluginNameVersion[]>('cmd_plugins_update_all', {});
 }

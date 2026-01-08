@@ -37,17 +37,7 @@
     "active": true,
     "category": "DeveloperTool",
     "createUpdaterArtifacts": true,
-    "externalBin": [
-      "vendored/node/yaaknode",
-      "vendored/protoc/yaakprotoc"
-    ],
     "longDescription": "A cross-platform desktop app for interacting with REST, GraphQL, and gRPC",
-    "resources": [
-      "static",
-      "vendored/protoc/include",
-      "vendored/plugins",
-      "vendored/plugin-runtime"
-    ],
     "shortDescription": "Play with APIs, intuitively",
     "targets": [
       "app",

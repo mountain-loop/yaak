@@ -17,9 +17,6 @@ use yaak_models::util::UpdateSource;
 pub trait QueryManagerExt<'a, R> {
     fn db_manager(&'a self) -> State<'a, QueryManager>;
     fn db(&'a self) -> DbContext<'a>;
-    fn with_db<F, T>(&'a self, func: F) -> T
-    where
-        F: FnOnce(&DbContext) -> T;
     fn with_tx<F, T>(&'a self, func: F) -> Result<T>
     where
         F: FnOnce(&DbContext) -> Result<T>;
@@ -33,14 +30,6 @@ impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
     fn db(&'a self) -> DbContext<'a> {
         let qm = self.state::<QueryManager>();
         qm.inner().connect()
-    }
-
-    fn with_db<F, T>(&'a self, func: F) -> T
-    where
-        F: FnOnce(&DbContext) -> T,
-    {
-        let qm = self.state::<QueryManager>();
-        qm.inner().with_conn(func)
     }
 
     fn with_tx<F, T>(&'a self, func: F) -> Result<T>

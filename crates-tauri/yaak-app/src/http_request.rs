@@ -3,12 +3,14 @@ use crate::error::Result;
 use crate::render::render_http_request;
 use log::{debug, warn};
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::{File, create_dir_all};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::watch::Receiver;
 use tokio_util::bytes::Bytes;
+use yaak_crypto::manager::EncryptionManager;
 use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
@@ -28,6 +30,7 @@ use yaak_models::models::{
 };
 use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
+use crate::PluginContextExt;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
 };
@@ -100,7 +103,7 @@ pub async fn send_http_request<R: Runtime>(
         environment,
         cookie_jar,
         cancelled_rx,
-        &PluginContext::new(window),
+        &window.plugin_context(),
     )
     .await
 }
@@ -161,7 +164,8 @@ async fn send_http_request_inner<R: Runtime>(
     response_ctx: &mut ResponseContext<R>,
 ) -> Result<HttpResponse> {
     let app_handle = window.app_handle().clone();
-    let plugin_manager = app_handle.state::<PluginManager>();
+    let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+    let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let connection_manager = app_handle.state::<HttpConnectionManager>();
     let settings = window.db().get_settings();
     let workspace_id = &unrendered_request.workspace_id;
@@ -169,7 +173,7 @@ async fn send_http_request_inner<R: Runtime>(
     let environment_id = environment.map(|e| e.id);
     let workspace = window.db().get_workspace(workspace_id)?;
     let (resolved, auth_context_id) = resolve_http_request(window, unrendered_request)?;
-    let cb = PluginTemplateCallback::new(window.app_handle(), &plugin_context, RenderPurpose::Send);
+    let cb = PluginTemplateCallback::new(plugin_manager.clone(), encryption_manager.clone(), &plugin_context, RenderPurpose::Send);
     let env_chain =
         window.db().resolve_environments(&workspace.id, folder_id, environment_id.as_deref())?;
     let request = render_http_request(&resolved, env_chain, &cb, &RenderOptions::throw()).await?;
@@ -626,7 +630,7 @@ async fn write_stream_chunks_to_db<R: Runtime>(
 }
 
 async fn apply_authentication<R: Runtime>(
-    window: &WebviewWindow<R>,
+    _window: &WebviewWindow<R>,
     sendable_request: &mut SendableHttpRequest,
     request: &HttpRequest,
     auth_context_id: String,
@@ -656,7 +660,7 @@ async fn apply_authentication<R: Runtime>(
                     .collect(),
             };
             let plugin_result = plugin_manager
-                .call_http_authentication(&window, &authentication_type, req, plugin_context)
+                .call_http_authentication(plugin_context, &authentication_type, req)
                 .await?;
 
             for header in plugin_result.set_headers.unwrap_or_default() {

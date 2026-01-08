@@ -8,42 +8,35 @@ use crate::events::{
     CallHttpAuthenticationActionArgs, CallHttpAuthenticationActionRequest,
     CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
     CallTemplateFunctionArgs, CallTemplateFunctionRequest, CallTemplateFunctionResponse,
-    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, Color, EmptyPayload,
-    ErrorResponse, FilterRequest, FilterResponse, GetFolderActionsResponse,
-    GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigRequest,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionConfigRequest,
-    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesRequest,
-    GetThemesResponse, GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, Icon,
-    ImportRequest, ImportResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
-    PluginContext, RenderPurpose, ShowToastRequest,
+    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, EmptyPayload, ErrorResponse,
+    FilterRequest, FilterResponse, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
+    GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
+    GetTemplateFunctionConfigRequest, GetTemplateFunctionConfigResponse,
+    GetTemplateFunctionSummaryResponse, GetThemesRequest, GetThemesResponse,
+    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportRequest, ImportResponse,
+    InternalEvent, InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose,
+    ShowToastRequest,
 };
 use crate::native_template_functions::{template_function_keyring, template_function_secure};
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
 use crate::server_ws::PluginRuntimeServerWebsocket;
-use crate::template_callback::PluginTemplateCallback;
 use log::{error, info, warn};
-use serde_json::json;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use tokio::fs::read_dir;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Mutex, mpsc};
 use tokio::time::{Instant, timeout};
-use yaak_models::models::{Environment, Plugin};
-use crate::ext::QueryManagerExt;
-use yaak_models::render::make_vars_hashmap;
-use yaak_models::util::{UpdateSource, generate_id};
+use yaak_models::models::Plugin;
+use yaak_models::util::generate_id;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result as TemplateResult;
-use yaak_templates::{RenderErrorBehavior, RenderOptions, render_json_value_raw};
 
 #[derive(Clone)]
 pub struct PluginManager {
@@ -53,10 +46,28 @@ pub struct PluginManager {
     ws_service: Arc<PluginRuntimeServerWebsocket>,
     vendored_plugin_dir: PathBuf,
     pub(crate) installed_plugin_dir: PathBuf,
+    dev_mode: bool,
 }
 
+/// Callback for plugin initialization events (e.g., toast notifications)
+pub type PluginInitCallback = Box<dyn Fn(ShowToastRequest) + Send + Sync>;
+
 impl PluginManager {
-    pub fn new<R: Runtime>(app_handle: AppHandle<R>) -> PluginManager {
+    /// Create a new PluginManager with the given paths.
+    ///
+    /// # Arguments
+    /// * `vendored_plugin_dir` - Path to vendored plugins directory
+    /// * `installed_plugin_dir` - Path to installed plugins directory
+    /// * `node_bin_path` - Path to the yaaknode binary
+    /// * `plugin_runtime_main` - Path to the plugin runtime index.cjs
+    /// * `dev_mode` - Whether the app is in dev mode (affects plugin loading)
+    pub async fn new(
+        vendored_plugin_dir: PathBuf,
+        installed_plugin_dir: PathBuf,
+        node_bin_path: PathBuf,
+        plugin_runtime_main: PathBuf,
+        dev_mode: bool,
+    ) -> PluginManager {
         let (events_tx, mut events_rx) = mpsc::channel(2048);
         let (kill_server_tx, kill_server_rx) = tokio::sync::watch::channel(false);
 
@@ -65,17 +76,6 @@ impl PluginManager {
         let ws_service =
             PluginRuntimeServerWebsocket::new(events_tx, client_disconnect_tx, client_connect_tx);
 
-        let vendored_plugin_dir = app_handle
-            .path()
-            .resolve("vendored/plugins", BaseDirectory::Resource)
-            .expect("failed to resolve plugin directory resource");
-
-        let installed_plugin_dir = app_handle
-            .path()
-            .app_data_dir()
-            .expect("failed to get app data dir")
-            .join("installed-plugins");
-
         let plugin_manager = PluginManager {
             plugin_handles: Default::default(),
             subscribers: Default::default(),
@@ -83,11 +83,12 @@ impl PluginManager {
             kill_tx: kill_server_tx,
             vendored_plugin_dir,
             installed_plugin_dir,
+            dev_mode,
         };
 
         // Forward events to subscribers
         let subscribers = plugin_manager.subscribers.clone();
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             while let Some(event) = events_rx.recv().await {
                 for (tx_id, tx) in subscribers.lock().await.iter_mut() {
                     if let Err(e) = tx.try_send(event.clone()) {
@@ -105,7 +106,7 @@ impl PluginManager {
         });
 
         // Handle when client plugin runtime disconnects
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             while (client_disconnect_rx.recv().await).is_some() {
                 // Happens when the app is closed
                 info!("Plugin runtime client disconnected");
@@ -116,87 +117,58 @@ impl PluginManager {
             Some(port) => format!("127.0.0.1:{port}"),
             None => "127.0.0.1:0".to_string(),
         };
-        let listener = tauri::async_runtime::block_on(async move {
-            TcpListener::bind(listen_addr).await.expect("Failed to bind TCP listener")
-        });
+        let listener = TcpListener::bind(listen_addr).await.expect("Failed to bind TCP listener");
         let addr = listener.local_addr().expect("Failed to get local address");
 
-        // 1. Reload all plugins when the Node.js runtime connects
-        let init_plugins_task = {
-            let plugin_manager = plugin_manager.clone();
-            let app_handle = app_handle.clone();
-            tauri::async_runtime::spawn(async move {
-                match client_connect_rx.changed().await {
-                    Ok(_) => {
-                        info!("Plugin runtime client connected!");
-                        plugin_manager
-                            .initialize_all_plugins(&app_handle, &PluginContext::new_empty())
-                            .await
-                            .expect("Failed to reload plugins");
-                    }
-                    Err(e) => {
-                        warn!("Failed to receive from client connection rx {e:?}");
-                    }
+        // 1. Wait for Node.js runtime to connect
+        let init_plugins_task = tokio::spawn(async move {
+            match client_connect_rx.changed().await {
+                Ok(_) => {
+                    info!("Plugin runtime client connected!");
+                    // Note: initialize_all_plugins is now called separately by the app
+                    // after setting up the plugin list
                 }
-            })
-        };
+                Err(e) => {
+                    warn!("Failed to receive from client connection rx {e:?}");
+                }
+            }
+        });
 
         // 1. Spawn server in the background
         info!("Starting plugin server on {addr}");
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             ws_service.listen(listener).await;
         });
 
-        // 2. Start Node.js runtime and initialize plugins
-        tauri::async_runtime::block_on(async move {
-            start_nodejs_plugin_runtime(&app_handle, addr, &kill_server_rx).await.unwrap();
-            info!("Waiting for plugins to initialize");
-            init_plugins_task.await.unwrap();
-        });
-
-        // 3. Block waiting for plugins to initialize
-        tauri::async_runtime::block_on(async move {});
+        // 2. Start Node.js runtime
+        start_nodejs_plugin_runtime(&node_bin_path, &plugin_runtime_main, addr, &kill_server_rx)
+            .await
+            .unwrap();
+        info!("Waiting for plugins to initialize");
+        init_plugins_task.await.unwrap();
 
         plugin_manager
     }
 
-    async fn list_available_plugins<R: Runtime>(
-        &self,
-        app_handle: &AppHandle<R>,
-    ) -> Result<Vec<Plugin>> {
-        let plugins_dir = if is_dev() {
+    /// Get the vendored plugin directory path (resolves dev mode path if applicable)
+    pub fn get_plugins_dir(&self) -> PathBuf {
+        if self.dev_mode {
             // Use plugins directly for easy development
             // Tauri runs from crates-tauri/yaak-app/, so go up two levels to reach project root
             env::current_dir()
                 .map(|cwd| cwd.join("../../plugins").canonicalize().unwrap())
-                .unwrap_or_else(|_| self.vendored_plugin_dir.to_path_buf())
+                .unwrap_or_else(|_| self.vendored_plugin_dir.clone())
         } else {
-            self.vendored_plugin_dir.to_path_buf()
-        };
-
-        info!("Loading bundled plugins from {plugins_dir:?}");
-
-        // Read bundled plugin directories from disk
-        let bundled_plugin_dirs: Vec<String> = read_plugins_dir(&plugins_dir)
-            .await
-            .expect(&format!("Failed to read plugins dir: {:?}", plugins_dir));
-
-        // Ensure all bundled plugins make it into the database
-        for dir in &bundled_plugin_dirs {
-            if app_handle.db().get_plugin_by_directory(dir).is_none() {
-                app_handle.db().upsert_plugin(
-                    &Plugin {
-                        directory: dir.clone(),
-                        enabled: true,
-                        url: None,
-                        ..Default::default()
-                    },
-                    &UpdateSource::Background,
-                )?;
-            }
+            self.vendored_plugin_dir.clone()
         }
+    }
 
-        Ok(app_handle.db().list_plugins()?)
+    /// Read plugin directories from disk and return their paths.
+    /// This is useful for discovering bundled plugins.
+    pub async fn list_bundled_plugin_dirs(&self) -> Result<Vec<String>> {
+        let plugins_dir = self.get_plugins_dir();
+        info!("Loading bundled plugins from {plugins_dir:?}");
+        read_plugins_dir(&plugins_dir).await
     }
 
     pub async fn uninstall(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {
@@ -273,14 +245,18 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn initialize_all_plugins<R: Runtime>(
+    /// Initialize all plugins from the provided list.
+    /// Returns a list of (plugin_directory, error_message) for any plugins that failed to initialize.
+    pub async fn initialize_all_plugins(
         &self,
-        app_handle: &AppHandle<R>,
+        plugins: Vec<Plugin>,
         plugin_context: &PluginContext,
-    ) -> Result<()> {
+    ) -> Vec<(String, String)> {
         info!("Initializing all plugins");
         let start = Instant::now();
-        for plugin in self.list_available_plugins(app_handle).await?.clone() {
+        let mut errors = Vec::new();
+
+        for plugin in plugins {
             // First remove the plugin if it exists and is enabled
             if let Some(plugin_handle) = self.get_plugin_by_dir(&plugin.directory).await {
                 if let Err(e) = self.remove_plugin(plugin_context, &plugin_handle).await {
@@ -290,34 +266,20 @@ impl PluginManager {
             }
             if let Err(e) = self.add_plugin(plugin_context, &plugin).await {
                 warn!("Failed to add plugin {} {e:?}", plugin.directory);
-
-                // Extract a user-friendly plugin name from the directory path
-                let plugin_name = plugin.directory.split('/').last().unwrap_or(&plugin.directory);
-
-                // Show a toast for all plugin failures
-                let toast = ShowToastRequest {
-                    message: format!("Failed to start plugin '{}': {}", plugin_name, e),
-                    color: Some(Color::Danger),
-                    icon: Some(Icon::AlertTriangle),
-                    timeout: Some(10000),
-                };
-
-                if let Err(emit_err) = app_handle.emit("show_toast", toast) {
-                    error!("Failed to emit toast for plugin error: {emit_err:?}");
-                }
+                errors.push((plugin.directory.clone(), e.to_string()));
             }
         }
 
-        let plugins = self.plugin_handles.lock().await;
-        let names = plugins.iter().map(|p| p.dir.to_string()).collect::<Vec<String>>();
+        let plugin_handles = self.plugin_handles.lock().await;
+        let names = plugin_handles.iter().map(|p| p.dir.to_string()).collect::<Vec<String>>();
         info!(
             "Initialized {} plugins in {:?}:\n  - {}",
-            plugins.len(),
+            plugin_handles.len(),
             start.elapsed(),
             names.join("\n  - "),
         );
 
-        Ok(())
+        errors
     }
 
     pub async fn subscribe(&self, label: &str) -> (String, mpsc::Receiver<InternalEvent>) {
@@ -479,13 +441,13 @@ impl PluginManager {
         Ok(events)
     }
 
-    pub async fn get_themes<R: Runtime>(
+    pub async fn get_themes(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
     ) -> Result<Vec<GetThemesResponse>> {
         let reply_events = self
             .send_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &InternalEventPayload::GetThemesRequest(GetThemesRequest {}),
                 Duration::from_secs(5),
             )
@@ -501,13 +463,13 @@ impl PluginManager {
         Ok(themes)
     }
 
-    pub async fn get_grpc_request_actions<R: Runtime>(
+    pub async fn get_grpc_request_actions(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
     ) -> Result<Vec<GetGrpcRequestActionsResponse>> {
         let reply_events = self
             .send_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &InternalEventPayload::GetGrpcRequestActionsRequest(EmptyPayload {}),
                 Duration::from_secs(5),
             )
@@ -523,13 +485,13 @@ impl PluginManager {
         Ok(all_actions)
     }
 
-    pub async fn get_http_request_actions<R: Runtime>(
+    pub async fn get_http_request_actions(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
     ) -> Result<Vec<GetHttpRequestActionsResponse>> {
         let reply_events = self
             .send_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &InternalEventPayload::GetHttpRequestActionsRequest(EmptyPayload {}),
                 Duration::from_secs(5),
             )
@@ -545,13 +507,13 @@ impl PluginManager {
         Ok(all_actions)
     }
 
-    pub async fn get_websocket_request_actions<R: Runtime>(
+    pub async fn get_websocket_request_actions(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
     ) -> Result<Vec<GetWebsocketRequestActionsResponse>> {
         let reply_events = self
             .send_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &InternalEventPayload::GetWebsocketRequestActionsRequest(EmptyPayload {}),
                 Duration::from_secs(5),
             )
@@ -567,13 +529,13 @@ impl PluginManager {
         Ok(all_actions)
     }
 
-    pub async fn get_workspace_actions<R: Runtime>(
+    pub async fn get_workspace_actions(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
     ) -> Result<Vec<GetWorkspaceActionsResponse>> {
         let reply_events = self
             .send_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &InternalEventPayload::GetWorkspaceActionsRequest(EmptyPayload {}),
                 Duration::from_secs(5),
             )
@@ -589,13 +551,13 @@ impl PluginManager {
         Ok(all_actions)
     }
 
-    pub async fn get_folder_actions<R: Runtime>(
+    pub async fn get_folder_actions(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
     ) -> Result<Vec<GetFolderActionsResponse>> {
         let reply_events = self
             .send_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &InternalEventPayload::GetFolderActionsRequest(EmptyPayload {}),
                 Duration::from_secs(5),
             )
@@ -611,15 +573,16 @@ impl PluginManager {
         Ok(all_actions)
     }
 
-    pub async fn get_template_function_config<R: Runtime>(
+    /// Get template function config.
+    /// Note: Values should be pre-rendered by the caller if needed.
+    pub async fn get_template_function_config(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
         fn_name: &str,
-        environment_chain: Vec<Environment>,
-        values: HashMap<String, JsonPrimitive>,
+        rendered_values: HashMap<String, JsonPrimitive>,
         model_id: &str,
     ) -> Result<GetTemplateFunctionConfigResponse> {
-        let results = self.get_template_function_summaries(window).await?;
+        let results = self.get_template_function_summaries(plugin_context).await?;
         let r = results
             .iter()
             .find(|r| r.functions.iter().any(|f| f.name == fn_name))
@@ -641,25 +604,15 @@ impl PluginManager {
             Some(v) => v,
         };
 
-        let plugin_context = &PluginContext::new(&window);
-        let vars = &make_vars_hashmap(environment_chain);
-        let cb = PluginTemplateCallback::new(
-            window.app_handle(),
-            &plugin_context,
-            RenderPurpose::Preview,
-        );
-        // We don't want to fail for this op because the UI will not be able to list any auth types then
-        let render_opt = RenderOptions { error_behavior: RenderErrorBehavior::ReturnEmpty };
-        let rendered_values = render_json_value_raw(json!(values), vars, &cb, &render_opt).await?;
         let context_id = format!("{:x}", md5::compute(model_id));
 
         let event = self
             .send_to_plugin_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &plugin,
                 &InternalEventPayload::GetTemplateFunctionConfigRequest(
                     GetTemplateFunctionConfigRequest {
-                        values: serde_json::from_value(rendered_values)?,
+                        values: rendered_values,
                         name: fn_name.to_string(),
                         context_id,
                     },
@@ -677,16 +630,16 @@ impl PluginManager {
         }
     }
 
-    pub async fn call_http_request_action<R: Runtime>(
+    pub async fn call_http_request_action(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
         req: CallHttpRequestActionRequest,
     ) -> Result<()> {
         let ref_id = req.plugin_ref_id.clone();
         let plugin =
             self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
         let event = plugin.build_event_to_send(
-            &PluginContext::new(window),
+            plugin_context,
             &InternalEventPayload::CallHttpRequestActionRequest(req),
             None,
         );
@@ -694,16 +647,16 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn call_websocket_request_action<R: Runtime>(
+    pub async fn call_websocket_request_action(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
         req: CallWebsocketRequestActionRequest,
     ) -> Result<()> {
         let ref_id = req.plugin_ref_id.clone();
         let plugin =
             self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
         let event = plugin.build_event_to_send(
-            &PluginContext::new(window),
+            plugin_context,
             &InternalEventPayload::CallWebsocketRequestActionRequest(req),
             None,
         );
@@ -711,16 +664,16 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn call_workspace_action<R: Runtime>(
+    pub async fn call_workspace_action(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
         req: CallWorkspaceActionRequest,
     ) -> Result<()> {
         let ref_id = req.plugin_ref_id.clone();
         let plugin =
             self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
         let event = plugin.build_event_to_send(
-            &PluginContext::new(window),
+            plugin_context,
             &InternalEventPayload::CallWorkspaceActionRequest(req),
             None,
         );
@@ -728,16 +681,16 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn call_folder_action<R: Runtime>(
+    pub async fn call_folder_action(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
         req: CallFolderActionRequest,
     ) -> Result<()> {
         let ref_id = req.plugin_ref_id.clone();
         let plugin =
             self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
         let event = plugin.build_event_to_send(
-            &PluginContext::new(window),
+            plugin_context,
             &InternalEventPayload::CallFolderActionRequest(req),
             None,
         );
@@ -745,16 +698,16 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn call_grpc_request_action<R: Runtime>(
+    pub async fn call_grpc_request_action(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
         req: CallGrpcRequestActionRequest,
     ) -> Result<()> {
         let ref_id = req.plugin_ref_id.clone();
         let plugin =
             self.get_plugin_by_ref_id(ref_id.as_str()).await.ok_or(PluginNotFoundErr(ref_id))?;
         let event = plugin.build_event_to_send(
-            &PluginContext::new(window),
+            plugin_context,
             &InternalEventPayload::CallGrpcRequestActionRequest(req),
             None,
         );
@@ -762,14 +715,13 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn get_http_authentication_summaries<R: Runtime>(
+    pub async fn get_http_authentication_summaries(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
     ) -> Result<Vec<(PluginHandle, GetHttpAuthenticationSummaryResponse)>> {
-        let plugin_context = PluginContext::new(window);
         let reply_events = self
             .send_and_wait(
-                &plugin_context,
+                plugin_context,
                 &InternalEventPayload::GetHttpAuthenticationSummaryRequest(EmptyPayload {}),
                 Duration::from_secs(5),
             )
@@ -790,12 +742,13 @@ impl PluginManager {
         Ok(results)
     }
 
-    pub async fn get_http_authentication_config<R: Runtime>(
+    /// Get HTTP authentication config.
+    /// Note: Values should be pre-rendered by the caller if needed.
+    pub async fn get_http_authentication_config(
         &self,
-        window: &WebviewWindow<R>,
-        environment_chain: Vec<Environment>,
+        plugin_context: &PluginContext,
         auth_name: &str,
-        values: HashMap<String, JsonPrimitive>,
+        rendered_values: HashMap<String, JsonPrimitive>,
         model_id: &str,
     ) -> Result<GetHttpAuthenticationConfigResponse> {
         if auth_name == "none" {
@@ -806,31 +759,19 @@ impl PluginManager {
             });
         }
 
-        let results = self.get_http_authentication_summaries(window).await?;
+        let results = self.get_http_authentication_summaries(plugin_context).await?;
         let plugin = results
             .iter()
             .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
             .ok_or(PluginNotFoundErr(auth_name.into()))?;
 
-        let vars = &make_vars_hashmap(environment_chain);
-        let cb = PluginTemplateCallback::new(
-            window.app_handle(),
-            &PluginContext::new(&window),
-            RenderPurpose::Preview,
-        );
-        // We don't want to fail for this op because the UI will not be able to list any auth types then
-        let render_opt = RenderOptions { error_behavior: RenderErrorBehavior::ReturnEmpty };
-        let rendered_values = render_json_value_raw(json!(values), vars, &cb, &render_opt).await?;
         let context_id = format!("{:x}", md5::compute(model_id));
         let event = self
             .send_to_plugin_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &plugin,
                 &InternalEventPayload::GetHttpAuthenticationConfigRequest(
-                    GetHttpAuthenticationConfigRequest {
-                        values: serde_json::from_value(rendered_values)?,
-                        context_id,
-                    },
+                    GetHttpAuthenticationConfigRequest { values: rendered_values, context_id },
                 ),
                 Duration::from_secs(5),
             )
@@ -845,28 +786,17 @@ impl PluginManager {
         }
     }
 
-    pub async fn call_http_authentication_action<R: Runtime>(
+    /// Call HTTP authentication action.
+    /// Note: Values should be pre-rendered by the caller if needed.
+    pub async fn call_http_authentication_action(
         &self,
-        window: &WebviewWindow<R>,
-        environment_chain: Vec<Environment>,
+        plugin_context: &PluginContext,
         auth_name: &str,
         action_index: i32,
-        values: HashMap<String, JsonPrimitive>,
+        rendered_values: HashMap<String, JsonPrimitive>,
         model_id: &str,
     ) -> Result<()> {
-        let vars = &make_vars_hashmap(environment_chain);
-        let rendered_values = render_json_value_raw(
-            json!(values),
-            vars,
-            &PluginTemplateCallback::new(
-                window.app_handle(),
-                &PluginContext::new(&window),
-                RenderPurpose::Preview,
-            ),
-            &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
-        )
-        .await?;
-        let results = self.get_http_authentication_summaries(window).await?;
+        let results = self.get_http_authentication_summaries(plugin_context).await?;
         let plugin = results
             .iter()
             .find_map(|(p, r)| if r.name == auth_name { Some(p) } else { None })
@@ -874,16 +804,13 @@ impl PluginManager {
 
         let context_id = format!("{:x}", md5::compute(model_id));
         self.send_to_plugin_and_wait(
-            &PluginContext::new(window),
+            plugin_context,
             &plugin,
             &InternalEventPayload::CallHttpAuthenticationActionRequest(
                 CallHttpAuthenticationActionRequest {
                     index: action_index,
                     plugin_ref_id: plugin.clone().ref_id,
-                    args: CallHttpAuthenticationActionArgs {
-                        context_id,
-                        values: serde_json::from_value(rendered_values)?,
-                    },
+                    args: CallHttpAuthenticationActionArgs { context_id, values: rendered_values },
                 },
             ),
             Duration::from_secs(300), // 5 minutes for OAuth flows
@@ -892,12 +819,11 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn call_http_authentication<R: Runtime>(
+    pub async fn call_http_authentication(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
         auth_name: &str,
         req: CallHttpAuthenticationRequest,
-        plugin_context: &PluginContext,
     ) -> Result<CallHttpAuthenticationResponse> {
         let disabled = match req.values.get("disabled") {
             Some(JsonPrimitive::Boolean(v)) => *v,
@@ -913,7 +839,7 @@ impl PluginManager {
             });
         }
 
-        let handlers = self.get_http_authentication_summaries(window).await?;
+        let handlers = self.get_http_authentication_summaries(plugin_context).await?;
         let (plugin, _) = handlers
             .iter()
             .find(|(_, a)| a.name == auth_name)
@@ -937,14 +863,13 @@ impl PluginManager {
         }
     }
 
-    pub async fn get_template_function_summaries<R: Runtime>(
+    pub async fn get_template_function_summaries(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
     ) -> Result<Vec<GetTemplateFunctionSummaryResponse>> {
-        let plugin_context = PluginContext::new(window);
         let reply_events = self
             .send_and_wait(
-                &plugin_context,
+                plugin_context,
                 &InternalEventPayload::GetTemplateFunctionSummaryRequest(EmptyPayload {}),
                 Duration::from_secs(5),
             )
@@ -1009,14 +934,14 @@ impl PluginManager {
         }
     }
 
-    pub async fn import_data<R: Runtime>(
+    pub async fn import_data(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
         content: &str,
     ) -> Result<ImportResponse> {
         let reply_events = self
             .send_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &InternalEventPayload::ImportRequest(ImportRequest {
                     content: content.to_string(),
                 }),
@@ -1036,9 +961,9 @@ impl PluginManager {
         }
     }
 
-    pub async fn filter_data<R: Runtime>(
+    pub async fn filter_data(
         &self,
-        window: &WebviewWindow<R>,
+        plugin_context: &PluginContext,
         filter: &str,
         content: &str,
         content_type: &str,
@@ -1057,7 +982,7 @@ impl PluginManager {
 
         let event = self
             .send_to_plugin_and_wait(
-                &PluginContext::new(window),
+                plugin_context,
                 &plugin,
                 &InternalEventPayload::FilterRequest(FilterRequest {
                     filter: filter.to_string(),

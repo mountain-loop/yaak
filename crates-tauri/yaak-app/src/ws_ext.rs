@@ -3,14 +3,17 @@
 
 use crate::error::Result;
 use crate::models_ext::QueryManagerExt;
+use crate::PluginContextExt;
 use http::HeaderMap;
 use log::{debug, info, warn};
 use std::str::FromStr;
+use std::sync::Arc;
 use tauri::http::HeaderValue;
-use tauri::{AppHandle, Runtime, State, WebviewWindow, command};
+use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow, command};
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
+use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::CookieStore;
 use yaak_http::path_placeholders::apply_path_placeholders;
 use yaak_models::models::{
@@ -18,9 +21,7 @@ use yaak_models::models::{
     WebsocketEventType, WebsocketRequest,
 };
 use yaak_models::util::UpdateSource;
-use yaak_plugins::events::{
-    CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
-};
+use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, RenderPurpose};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
@@ -127,12 +128,15 @@ pub async fn cmd_ws_send<R: Runtime>(
     )?;
     let (resolved_request, _auth_context_id) =
         resolve_websocket_request(&window, &unrendered_request)?;
+    let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+    let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let request = render_websocket_request(
         &resolved_request,
         environment_chain,
         &PluginTemplateCallback::new(
-            &app_handle,
-            &PluginContext::new(&window),
+            plugin_manager,
+            encryption_manager,
+            &window.plugin_context(),
             RenderPurpose::Send,
         ),
         &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
@@ -189,7 +193,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
     cookie_jar_id: Option<&str>,
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
+    _plugin_manager: State<'_, PluginManager>,
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
     let unrendered_request = app_handle.db().get_websocket_request(request_id)?;
@@ -202,12 +206,15 @@ pub async fn cmd_ws_connect<R: Runtime>(
     let settings = app_handle.db().get_settings();
     let (resolved_request, auth_context_id) =
         resolve_websocket_request(&window, &unrendered_request)?;
+    let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+    let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let request = render_websocket_request(
         &resolved_request,
         environment_chain,
         &PluginTemplateCallback::new(
-            &app_handle,
-            &PluginContext::new(&window),
+            plugin_manager.clone(),
+            encryption_manager.clone(),
+            &window.plugin_context(),
             RenderPurpose::Send,
         ),
         &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
@@ -283,10 +290,9 @@ pub async fn cmd_ws_connect<R: Runtime>(
             };
             let plugin_result = plugin_manager
                 .call_http_authentication(
-                    &window,
+                    &window.plugin_context(),
                     &authentication_type,
                     plugin_req,
-                    &PluginContext::new(&window),
                 )
                 .await?;
             for header in plugin_result.set_headers.unwrap_or_default() {

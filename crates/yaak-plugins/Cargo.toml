@@ -1,6 +1,5 @@
 [package]
 name = "yaak-plugins"
-links = "yaak-plugins"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -21,18 +20,12 @@ reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tauri = { workspace = true }
-tauri-plugin-shell = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process", "fs"] }
 tokio-tungstenite = "0.26.1"
 ts-rs = { workspace = true }
 yaak-common = { workspace = true }
 yaak-crypto = { workspace = true }
-yaak-tauri-utils = { workspace = true }
 yaak-models = { workspace = true }
 yaak-templates = { workspace = true }
 zip-extract = "0.4.0"
-
-[build-dependencies]
-tauri-plugin = { workspace = true, features = ["build"] }

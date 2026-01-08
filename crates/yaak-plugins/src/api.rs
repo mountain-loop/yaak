@@ -2,17 +2,16 @@ use crate::error::Error::ApiErr;
 use crate::error::Result;
 use crate::plugin_meta::get_plugin_meta;
 use log::{info, warn};
-use reqwest::{Response, Url};
+use reqwest::{Client, Response, Url};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::str::FromStr;
-use tauri::{AppHandle, Runtime};
 use ts_rs::TS;
-use yaak_tauri_utils::api_client::yaak_api_client;
-use crate::ext::QueryManagerExt;
+use yaak_models::models::Plugin;
 
-pub async fn get_plugin<R: Runtime>(
-    app_handle: &AppHandle<R>,
+/// Get plugin info from the registry.
+pub async fn get_plugin(
+    http_client: &Client,
     name: &str,
     version: Option<String>,
 ) -> Result<PluginVersion> {
@@ -22,15 +21,16 @@ pub async fn get_plugin<R: Runtime>(
         let mut query_pairs = url.query_pairs_mut();
         query_pairs.append_pair("version", &version);
     };
-    let resp = yaak_api_client(app_handle)?.get(url.clone()).send().await?;
+    let resp = http_client.get(url.clone()).send().await?;
     if !resp.status().is_success() {
         return Err(ApiErr(format!("{} response to {}", resp.status(), url.to_string())));
     }
     Ok(resp.json().await?)
 }
 
-pub async fn download_plugin_archive<R: Runtime>(
-    app_handle: &AppHandle<R>,
+/// Download the plugin archive from the registry.
+pub async fn download_plugin_archive(
+    http_client: &Client,
     plugin_version: &PluginVersion,
 ) -> Result<Response> {
     let name = plugin_version.name.clone();
@@ -41,7 +41,7 @@ pub async fn download_plugin_archive<R: Runtime>(
         let mut query_pairs = url.query_pairs_mut();
         query_pairs.append_pair("version", &version);
     };
-    let resp = yaak_api_client(app_handle)?.get(url.clone()).send().await?;
+    let resp = http_client.get(url.clone()).send().await?;
     if !resp.status().is_success() {
         warn!("Failed to download plugin: {name} {version}");
         return Err(ApiErr(format!("{} response to {}", resp.status(), url.to_string())));
@@ -50,12 +50,13 @@ pub async fn download_plugin_archive<R: Runtime>(
     Ok(resp)
 }
 
-pub async fn check_plugin_updates<R: Runtime>(
-    app_handle: &AppHandle<R>,
+/// Check for plugin updates.
+/// Takes a list of plugins to check against the registry.
+pub async fn check_plugin_updates(
+    http_client: &Client,
+    plugins: Vec<Plugin>,
 ) -> Result<PluginUpdatesResponse> {
-    let name_versions: Vec<PluginNameVersion> = app_handle
-        .db()
-        .list_plugins()?
+    let name_versions: Vec<PluginNameVersion> = plugins
         .into_iter()
         .filter(|p| p.url.is_some()) // Only check plugins with URLs (from registry)
         .filter_map(|p| match get_plugin_meta(&Path::new(&p.directory)) {
@@ -69,7 +70,7 @@ pub async fn check_plugin_updates<R: Runtime>(
 
     let url = build_url("/updates");
     let body = serde_json::to_vec(&PluginUpdatesResponse { plugins: name_versions })?;
-    let resp = yaak_api_client(app_handle)?.post(url.clone()).body(body).send().await?;
+    let resp = http_client.post(url.clone()).body(body).send().await?;
     if !resp.status().is_success() {
         return Err(ApiErr(format!("{} response to {}", resp.status(), url.to_string())));
     }
@@ -78,8 +79,9 @@ pub async fn check_plugin_updates<R: Runtime>(
     Ok(results)
 }
 
-pub async fn search_plugins<R: Runtime>(
-    app_handle: &AppHandle<R>,
+/// Search for plugins in the registry.
+pub async fn search_plugins(
+    http_client: &Client,
     query: &str,
 ) -> Result<PluginSearchResponse> {
     let mut url = build_url("/search");
@@ -87,7 +89,7 @@ pub async fn search_plugins<R: Runtime>(
         let mut query_pairs = url.query_pairs_mut();
         query_pairs.append_pair("query", query);
     };
-    let resp = yaak_api_client(app_handle)?.get(url).send().await?;
+    let resp = http_client.get(url).send().await?;
     Ok(resp.json().await?)
 }
 

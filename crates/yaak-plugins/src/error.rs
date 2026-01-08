@@ -18,12 +18,6 @@ pub enum Error {
     #[error("IO error: {0}")]
     IoErr(#[from] io::Error),
 
-    #[error("Tauri error: {0}")]
-    TauriErr(#[from] tauri::Error),
-
-    #[error("Tauri shell error: {0}")]
-    TauriShellErr(#[from] tauri_plugin_shell::Error),
-
     #[error("Grpc send error: {0}")]
     GrpcSendErr(#[from] SendError<InternalEvent>),
 
@@ -35,9 +29,6 @@ pub enum Error {
 
     #[error("API Error: {0}")]
     ApiErr(String),
-
-    #[error(transparent)]
-    TauriUtilsError(#[from] yaak_tauri_utils::error::Error),
 
     #[error("Timeout elapsed: {0}")]
     TimeoutElapsed(#[from] tokio::time::error::Elapsed),

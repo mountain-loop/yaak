@@ -52,7 +52,6 @@
     "opener:allow-reveal-item-in-dir",
     "shell:allow-open",
     "yaak-fonts:default",
-    "yaak-mac-window:default",
-    "yaak-plugins:default"
+    "yaak-mac-window:default"
   ]
 }

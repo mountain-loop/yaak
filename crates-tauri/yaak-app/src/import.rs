@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::models_ext::QueryManagerExt;
+use crate::PluginContextExt;
 use log::info;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
@@ -20,7 +21,7 @@ pub(crate) async fn import_data<R: Runtime>(
     let file =
         read_to_string(file_path).unwrap_or_else(|_| panic!("Unable to read file {}", file_path));
     let file_contents = file.as_str();
-    let import_result = plugin_manager.import_data(window, file_contents).await?;
+    let import_result = plugin_manager.import_data(&window.plugin_context(), file_contents).await?;
 
     let mut id_map: BTreeMap<String, String> = BTreeMap::new();
 

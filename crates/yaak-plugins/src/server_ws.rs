@@ -54,7 +54,7 @@ impl PluginRuntimeServerWebsocket {
 
         let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             client_connect_tx.send(true).expect("Failed to send client ready event");
 
             info!("New plugin runtime websocket connection: {}", addr);

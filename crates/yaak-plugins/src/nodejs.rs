@@ -1,57 +1,75 @@
 use crate::error::Result;
 use log::{info, warn};
 use std::net::SocketAddr;
-use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Manager, Runtime};
-use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandEvent;
+use std::path::Path;
+use std::process::Stdio;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 use tokio::sync::watch::Receiver;
 
-pub async fn start_nodejs_plugin_runtime<R: Runtime>(
-    app: &AppHandle<R>,
+/// Start the Node.js plugin runtime process.
+///
+/// # Arguments
+/// * `node_bin_path` - Path to the yaaknode binary
+/// * `plugin_runtime_main` - Path to the plugin runtime index.cjs
+/// * `addr` - Socket address for the plugin runtime to connect to
+/// * `kill_rx` - Channel to signal shutdown
+pub async fn start_nodejs_plugin_runtime(
+    node_bin_path: &Path,
+    plugin_runtime_main: &Path,
     addr: SocketAddr,
     kill_rx: &Receiver<bool>,
 ) -> Result<()> {
-    let plugin_runtime_main =
-        app.path().resolve("vendored/plugin-runtime", BaseDirectory::Resource)?.join("index.cjs");
-
     // HACK: Remove UNC prefix for Windows paths to pass to sidecar
-    let plugin_runtime_main =
-        dunce::simplified(plugin_runtime_main.as_path()).to_string_lossy().to_string();
+    let plugin_runtime_main_str =
+        dunce::simplified(plugin_runtime_main).to_string_lossy().to_string();
 
-    info!("Starting plugin runtime main={}", plugin_runtime_main);
+    info!(
+        "Starting plugin runtime node={} main={}",
+        node_bin_path.display(),
+        plugin_runtime_main_str
+    );
 
-    let cmd = app
-        .shell()
-        .sidecar("yaaknode")?
+    let mut child = Command::new(node_bin_path)
         .env("HOST", addr.ip().to_string())
         .env("PORT", addr.port().to_string())
-        .args(&[&plugin_runtime_main]);
+        .arg(&plugin_runtime_main_str)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
 
-    let (mut child_rx, child) = cmd.spawn()?;
     info!("Spawned plugin runtime");
 
-    let mut kill_rx = kill_rx.clone();
-
-    tokio::spawn(async move {
-        while let Some(event) = child_rx.recv().await {
-            match event {
-                CommandEvent::Stderr(line) => {
-                    warn!("{}", String::from_utf8_lossy(&line).trim_end_matches(&['\n', '\r'][..]));
-                }
-                CommandEvent::Stdout(line) => {
-                    info!("{}", String::from_utf8_lossy(&line).trim_end_matches(&['\n', '\r'][..]));
-                }
-                _ => {}
+    // Stream stdout
+    if let Some(stdout) = child.stdout.take() {
+        tokio::spawn(async move {
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                info!("{}", line);
             }
-        }
-    });
+        });
+    }
 
-    // Check on child
+    // Stream stderr
+    if let Some(stderr) = child.stderr.take() {
+        tokio::spawn(async move {
+            let reader = BufReader::new(stderr);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                warn!("{}", line);
+            }
+        });
+    }
+
+    // Handle kill signal
+    let mut kill_rx = kill_rx.clone();
     tokio::spawn(async move {
         kill_rx.wait_for(|b| *b == true).await.expect("Kill channel errored");
         info!("Killing plugin runtime");
-        child.kill().expect("Failed to kill plugin runtime");
+        if let Err(e) = child.kill().await {
+            warn!("Failed to kill plugin runtime: {e}");
+        }
         info!("Killed plugin runtime");
     });
 

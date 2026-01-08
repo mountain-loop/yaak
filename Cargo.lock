@@ -1575,6 +1575,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_logger"
+version = "0.11.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13c863f0904021b108aa8b2f55046443e6b1ebde8fd4a15c399893aae4fa069f"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "jiff",
+ "log",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2822,6 +2835,30 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "jiff"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e67e8da4c49d6d9909fe03361f9b620f58898859f5c7aded68351e85e71ecf50"
+dependencies = [
+ "jiff-static",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde_core",
+]
+
+[[package]]
+name = "jiff-static"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0c84ee7f197eca9a86c6fd6cb771e55eb991632f15f2bc3ca6ec838929e6e78"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
 ]
 
 [[package]]
@@ -4206,6 +4243,21 @@ dependencies = [
  "cpufeatures",
  "opaque-debug",
  "universal-hash",
+]
+
+[[package]]
+name = "portable-atomic"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f89776e4d69bb58bc6993e99ffa1d11f228b839984854c7daeb5d37f87cbe950"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
+dependencies = [
+ "portable-atomic",
 ]
 
 [[package]]
@@ -8007,9 +8059,15 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dirs",
+ "env_logger",
+ "log",
+ "serde_json",
  "tokio",
+ "yaak-crypto",
  "yaak-http",
  "yaak-models",
+ "yaak-plugins",
+ "yaak-templates",
 ]
 
 [[package]]
@@ -8196,9 +8254,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "tauri",
- "tauri-plugin",
- "tauri-plugin-shell",
  "thiserror 2.0.17",
  "tokio",
  "tokio-tungstenite",
@@ -8206,7 +8261,6 @@ dependencies = [
  "yaak-common",
  "yaak-crypto",
  "yaak-models",
- "yaak-tauri-utils",
  "yaak-templates",
  "zip-extract",
 ]

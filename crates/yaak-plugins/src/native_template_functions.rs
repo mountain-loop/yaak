@@ -1,17 +1,24 @@
+//! Native template functions implemented in Rust.
+//!
+//! These are built-in template functions that don't require plugins:
+//! - `secure()` - encrypts/decrypts values using the EncryptionManager
+//! - `keychain()` / `keyring()` - accesses system keychain
+
 use crate::events::{
     Color, FormInput, FormInputBanner, FormInputBase, FormInputMarkdown, FormInputText,
     PluginContext, RenderPurpose, TemplateFunction, TemplateFunctionArg,
     TemplateFunctionPreviewType,
 };
+use crate::manager::PluginManager;
 use crate::template_callback::PluginTemplateCallback;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use keyring::Error::NoEntry;
 use log::{debug, info};
 use std::collections::HashMap;
-use tauri::{AppHandle, Runtime};
+use std::sync::Arc;
 use yaak_common::platform::{OperatingSystem, get_os};
-use crate::ext::EncryptionManagerExt;
+use yaak_crypto::manager::EncryptionManager;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result;
 use yaak_templates::{FnArg, Parser, Token, Tokens, Val, transform_args};
@@ -101,8 +108,8 @@ pub(crate) fn template_function_keyring() -> TemplateFunction {
     }
 }
 
-pub fn template_function_secure_run<R: Runtime>(
-    app_handle: &AppHandle<R>,
+pub fn template_function_secure_run(
+    encryption_manager: &EncryptionManager,
     args: HashMap<String, serde_json::Value>,
     plugin_context: &PluginContext,
 ) -> Result<String> {
@@ -126,7 +133,7 @@ pub fn template_function_secure_run<R: Runtime>(
             };
 
             let value = BASE64_STANDARD.decode(&value).unwrap();
-            let r = match app_handle.crypto().decrypt(&wid, value.as_slice()) {
+            let r = match encryption_manager.decrypt(&wid, value.as_slice()) {
                 Ok(r) => Ok(r),
                 Err(e) => Err(RenderError(e.to_string())),
             }?;
@@ -137,8 +144,8 @@ pub fn template_function_secure_run<R: Runtime>(
     }
 }
 
-pub fn template_function_secure_transform_arg<R: Runtime>(
-    app_handle: &AppHandle<R>,
+pub fn template_function_secure_transform_arg(
+    encryption_manager: &EncryptionManager,
     plugin_context: &PluginContext,
     arg_name: &str,
     arg_value: &str,
@@ -158,8 +165,7 @@ pub fn template_function_secure_transform_arg<R: Runtime>(
                 return Ok(arg_value.to_string());
             }
 
-            let r = app_handle
-                .crypto()
+            let r = encryption_manager
                 .encrypt(&wid, arg_value.as_bytes())
                 .map_err(|e| RenderError(e.to_string()))?;
             let r = BASE64_STANDARD.encode(r);
@@ -169,8 +175,8 @@ pub fn template_function_secure_transform_arg<R: Runtime>(
     }
 }
 
-pub fn decrypt_secure_template_function<R: Runtime>(
-    app_handle: &AppHandle<R>,
+pub fn decrypt_secure_template_function(
+    encryption_manager: &EncryptionManager,
     plugin_context: &PluginContext,
     template: &str,
 ) -> Result<String> {
@@ -190,7 +196,7 @@ pub fn decrypt_secure_template_function<R: Runtime>(
                     }
                 }
                 new_tokens.push(Token::Raw {
-                    text: template_function_secure_run(app_handle, args_map, plugin_context)?,
+                    text: template_function_secure_run(encryption_manager, args_map, plugin_context)?,
                 });
             }
             t => {
@@ -204,12 +210,13 @@ pub fn decrypt_secure_template_function<R: Runtime>(
     Ok(parsed.to_string())
 }
 
-pub fn encrypt_secure_template_function<R: Runtime>(
-    app_handle: &AppHandle<R>,
+pub fn encrypt_secure_template_function(
+    plugin_manager: Arc<PluginManager>,
+    encryption_manager: Arc<EncryptionManager>,
     plugin_context: &PluginContext,
     template: &str,
 ) -> Result<String> {
-    let decrypted = decrypt_secure_template_function(&app_handle, plugin_context, template)?;
+    let decrypted = decrypt_secure_template_function(&encryption_manager, plugin_context, template)?;
     let tokens = Tokens {
         tokens: vec![Token::Tag {
             val: Val::Fn {
@@ -224,7 +231,7 @@ pub fn encrypt_secure_template_function<R: Runtime>(
 
     Ok(transform_args(
         tokens,
-        &PluginTemplateCallback::new(app_handle, plugin_context, RenderPurpose::Preview),
+        &PluginTemplateCallback::new(plugin_manager, encryption_manager, plugin_context, RenderPurpose::Preview),
     )?
     .to_string())
 }

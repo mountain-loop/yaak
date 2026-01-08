@@ -8,30 +8,43 @@ use chrono::Utc;
 use log::info;
 use std::fs::{create_dir_all, remove_dir_all};
 use std::io::Cursor;
-use tauri::{Manager, Runtime, WebviewWindow};
+use std::sync::Arc;
 use yaak_models::models::Plugin;
-use crate::ext::QueryManagerExt;
+use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 
-pub async fn delete_and_uninstall<R: Runtime>(
-    window: &WebviewWindow<R>,
+/// Delete a plugin from the database and uninstall it.
+pub async fn delete_and_uninstall(
+    plugin_manager: Arc<PluginManager>,
+    query_manager: &QueryManager,
+    plugin_context: &PluginContext,
     plugin_id: &str,
 ) -> Result<Plugin> {
-    let plugin_manager = window.state::<PluginManager>();
-    let plugin = window.db().delete_plugin_by_id(plugin_id, &UpdateSource::from_window_label(window.label()))?;
-    plugin_manager.uninstall(&PluginContext::new(&window), plugin.directory.as_str()).await?;
+    let update_source = match plugin_context.label.clone() {
+        Some(label) => UpdateSource::from_window_label(label),
+        None => UpdateSource::Background,
+    };
+    // Scope the db connection so it doesn't live across await
+    let plugin = {
+        let db = query_manager.connect();
+        db.delete_plugin_by_id(plugin_id, &update_source)?
+    };
+    plugin_manager.uninstall(plugin_context, plugin.directory.as_str()).await?;
     Ok(plugin)
 }
 
-pub async fn download_and_install<R: Runtime>(
-    window: &WebviewWindow<R>,
+/// Download and install a plugin.
+pub async fn download_and_install(
+    plugin_manager: Arc<PluginManager>,
+    query_manager: &QueryManager,
+    http_client: &reqwest::Client,
+    plugin_context: &PluginContext,
     name: &str,
     version: Option<String>,
 ) -> Result<PluginVersion> {
     info!("Installing plugin {} {}", name, version.clone().unwrap_or_default());
-    let plugin_manager = window.state::<PluginManager>();
-    let plugin_version = get_plugin(window.app_handle(), name, version).await?;
-    let resp = download_plugin_archive(window.app_handle(), &plugin_version).await?;
+    let plugin_version = get_plugin(http_client, name, version).await?;
+    let resp = download_plugin_archive(http_client, &plugin_version).await?;
     let bytes = resp.bytes().await?;
 
     let checksum = compute_checksum(&bytes);
@@ -55,19 +68,23 @@ pub async fn download_and_install<R: Runtime>(
     zip_extract::extract(Cursor::new(&bytes), &plugin_dir, true)?;
     info!("Extracted plugin {} to {}", plugin_version.id, plugin_dir_str);
 
-    let plugin = window.db().upsert_plugin(
-        &Plugin {
-            id: plugin_version.id.clone(),
-            checked_at: Some(Utc::now().naive_utc()),
-            directory: plugin_dir_str.clone(),
-            enabled: true,
-            url: Some(plugin_version.url.clone()),
-            ..Default::default()
-        },
-        &UpdateSource::Background,
-    )?;
+    // Scope the db connection so it doesn't live across await
+    let plugin = {
+        let db = query_manager.connect();
+        db.upsert_plugin(
+            &Plugin {
+                id: plugin_version.id.clone(),
+                checked_at: Some(Utc::now().naive_utc()),
+                directory: plugin_dir_str.clone(),
+                enabled: true,
+                url: Some(plugin_version.url.clone()),
+                ..Default::default()
+            },
+            &UpdateSource::Background,
+        )?
+    };
 
-    plugin_manager.add_plugin(&PluginContext::new(&window), &plugin).await?;
+    plugin_manager.add_plugin(plugin_context, &plugin).await?;
 
     info!("Installed plugin {} to {}", plugin_version.id, plugin_dir_str);
 

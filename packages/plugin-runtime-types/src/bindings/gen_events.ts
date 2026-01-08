@@ -437,7 +437,7 @@ export type ListWorkspacesResponse = { workspaces: Array<WorkspaceInfo>, };
 
 export type OpenExternalUrlRequest = { url: string, };
 
-export type OpenWindowRequest = { url: string,
+export type OpenWindowRequest = { url: string, 
 /**
  * Label for the window. If not provided, a random one will be generated.
  */
