@@ -1,0 +1,14 @@
+[package]
+name = "yaak-cli"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "yaak"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+yaak-models = { workspace = true }

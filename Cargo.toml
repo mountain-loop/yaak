@@ -15,6 +15,8 @@ members = [
     "crates/yaak-templates",
     "crates/yaak-tls",
     "crates/yaak-ws",
+    # CLI crates
+    "crates-cli/yaak-cli",
     # Tauri-specific crates
     "crates-tauri/yaak-app",
     "crates-tauri/yaak-fonts",
