@@ -12,7 +12,7 @@ use log::error;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
-use yaak_common::window::WorkspaceWindowTrait;
+use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use crate::models_ext::BlobManagerExt;
 use yaak_models::models::{AnyModel, HttpResponse, Plugin};
 use yaak_models::queries::any_request::AnyRequest;

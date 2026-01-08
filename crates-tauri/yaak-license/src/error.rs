@@ -16,7 +16,7 @@ pub enum Error {
     ModelError(#[from] yaak_models::error::Error),
 
     #[error(transparent)]
-    CommonError(#[from] yaak_common::error::Error),
+    TauriUtilsError(#[from] yaak_tauri_utils::error::Error),
 
     #[error("Internal server error")]
     ServerError,

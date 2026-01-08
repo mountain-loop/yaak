@@ -8,7 +8,7 @@ use std::path::Path;
 use std::str::FromStr;
 use tauri::{AppHandle, Runtime};
 use ts_rs::TS;
-use yaak_common::api_client::yaak_api_client;
+use yaak_tauri_utils::api_client::yaak_api_client;
 use crate::ext::QueryManagerExt;
 
 pub async fn get_plugin<R: Runtime>(

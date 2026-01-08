@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::{Runtime, WebviewWindow};
 use ts_rs::TS;
-use yaak_common::window::WorkspaceWindowTrait;
+use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_models::models::{
     AnyModel, Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest,
     Workspace,

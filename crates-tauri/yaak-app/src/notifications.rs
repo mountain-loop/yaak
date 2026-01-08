@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
-use yaak_common::api_client::yaak_api_client;
 use yaak_common::platform::get_os_str;
+use yaak_tauri_utils::api_client::yaak_api_client;
 use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 

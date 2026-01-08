@@ -7993,6 +7993,7 @@ dependencies = [
  "yaak-plugins",
  "yaak-sse",
  "yaak-sync",
+ "yaak-tauri-utils",
  "yaak-templates",
  "yaak-tls",
  "yaak-ws",
@@ -8013,12 +8014,7 @@ dependencies = [
 name = "yaak-common"
 version = "0.1.0"
 dependencies = [
- "regex",
- "reqwest",
- "serde",
  "serde_json",
- "tauri",
- "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -8146,6 +8142,7 @@ dependencies = [
  "ts-rs",
  "yaak-common",
  "yaak-models",
+ "yaak-tauri-utils",
 ]
 
 [[package]]
@@ -8212,6 +8209,7 @@ dependencies = [
  "yaak-common",
  "yaak-crypto",
  "yaak-models",
+ "yaak-tauri-utils",
  "yaak-templates",
  "zip-extract",
 ]
@@ -8243,6 +8241,18 @@ dependencies = [
  "tokio",
  "ts-rs",
  "yaak-models",
+]
+
+[[package]]
+name = "yaak-tauri-utils"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "reqwest",
+ "serde",
+ "tauri",
+ "thiserror 2.0.17",
+ "yaak-common",
 ]
 
 [[package]]

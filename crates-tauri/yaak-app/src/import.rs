@@ -4,7 +4,7 @@ use log::info;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
 use tauri::{Manager, Runtime, WebviewWindow};
-use yaak_common::window::WorkspaceWindowTrait;
+use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_core::WorkspaceContext;
 use yaak_models::models::{
     Environment, Folder, GrpcRequest, HttpRequest, WebsocketRequest, Workspace,

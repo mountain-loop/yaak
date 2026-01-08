@@ -1,9 +1,9 @@
 use crate::error::Result;
-use crate::platform::{get_ua_arch, get_ua_platform};
 use reqwest::Client;
 use std::time::Duration;
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Runtime};
+use yaak_common::platform::{get_ua_arch, get_ua_platform};
 
 pub fn yaak_api_client<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Client> {
     let platform = get_ua_platform();

@@ -37,7 +37,7 @@ pub enum Error {
     ApiErr(String),
 
     #[error(transparent)]
-    CommonError(#[from] yaak_common::error::Error),
+    TauriUtilsError(#[from] yaak_tauri_utils::error::Error),
 
     #[error("Timeout elapsed: {0}")]
     TimeoutElapsed(#[from] tokio::time::error::Elapsed),

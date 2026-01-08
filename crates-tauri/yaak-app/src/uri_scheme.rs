@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Url};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-use yaak_common::api_client::yaak_api_client;
+use yaak_tauri_utils::api_client::yaak_api_client;
 use yaak_models::util::generate_id;
 use yaak_plugins::events::{Color, ShowToastRequest};
 use yaak_plugins::install::download_and_install;
