@@ -31,7 +31,6 @@ interface Props {
 }
 
 export function WebsocketResponsePane({ activeRequest }: Props) {
-  const [activeEventIndex, setActiveEventIndex] = useState<number | null>(null);
   const [showLarge, setShowLarge] = useStateWithDeps<boolean>(false, [activeRequest.id]);
   const [showingLarge, setShowingLarge] = useState<boolean>(false);
   const [hexDumps, setHexDumps] = useState<Record<number, boolean>>({});
@@ -39,26 +38,6 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
   const activeConnection = useAtomValue(activeWebsocketConnectionAtom);
   const connections = useAtomValue(activeWebsocketConnectionsAtom);
   const events = useWebsocketEvents(activeConnection?.id ?? null);
-
-  const activeEvent = useMemo(
-    () => (activeEventIndex != null ? events[activeEventIndex] : null),
-    [activeEventIndex, events],
-  );
-
-  const hexDump =
-    hexDumps[activeEventIndex ?? -1] ?? activeEvent?.messageType === 'binary';
-
-  const message = useMemo(() => {
-    if (hexDump) {
-      return activeEvent?.message ? hexy(activeEvent?.message) : '';
-    }
-    return activeEvent?.message
-      ? new TextDecoder('utf-8').decode(Uint8Array.from(activeEvent.message))
-      : '';
-  }, [activeEvent?.message, hexDump]);
-
-  const language = languageFromContentType(null, message);
-  const formattedMessage = useFormatText({ language, text: message, pretty: true });
 
   if (activeConnection == null) {
     return (
@@ -101,12 +80,8 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
         renderDetail={({ event, index }) => (
           <WebsocketEventDetail
             event={event}
-            index={index}
-            hexDump={hexDump}
+            hexDump={hexDumps[index] ?? event.messageType === 'binary'}
             setHexDump={(v) => setHexDumps({ ...hexDumps, [index]: v })}
-            message={message}
-            formattedMessage={formattedMessage}
-            language={language}
             showLarge={showLarge}
             showingLarge={showingLarge}
             setShowLarge={setShowLarge}
@@ -133,11 +108,7 @@ function WebsocketEventRow({
     : '';
 
   const iconColor =
-    messageType === 'close' || messageType === 'open'
-      ? 'secondary'
-      : isServer
-        ? 'info'
-        : 'primary';
+    messageType === 'close' || messageType === 'open' ? 'secondary' : isServer ? 'info' : 'primary';
 
   const icon =
     messageType === 'close' || messageType === 'open'
@@ -170,29 +141,31 @@ function WebsocketEventRow({
 
 function WebsocketEventDetail({
   event,
-  index,
   hexDump,
   setHexDump,
-  message,
-  formattedMessage,
-  language,
   showLarge,
   showingLarge,
   setShowLarge,
   setShowingLarge,
 }: {
   event: WebsocketEvent;
-  index: number;
   hexDump: boolean;
   setHexDump: (v: boolean) => void;
-  message: string;
-  formattedMessage: string | null;
-  language: string;
   showLarge: boolean;
   showingLarge: boolean;
   setShowLarge: (v: boolean) => void;
   setShowingLarge: (v: boolean) => void;
 }) {
+  const message = useMemo(() => {
+    if (hexDump) {
+      return event.message ? hexy(event.message) : '';
+    }
+    return event.message ? new TextDecoder('utf-8').decode(Uint8Array.from(event.message)) : '';
+  }, [event.message, hexDump]);
+
+  const language = languageFromContentType(null, message);
+  const formattedMessage = useFormatText({ language, text: message, pretty: true });
+
   const title =
     event.messageType === 'close'
       ? 'Connection Closed'

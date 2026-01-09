@@ -48,6 +48,9 @@ interface EventViewerProps<T> {
 
   /** Message to show when no events */
   emptyMessage?: string;
+
+  /** Callback when active index changes (for controlled state in parent) */
+  onActiveIndexChange?: (index: number | null) => void;
 }
 
 export function EventViewer<T>({
@@ -63,8 +66,22 @@ export function EventViewer<T>({
   isLoading = false,
   loadingMessage = 'Loading events...',
   emptyMessage = 'No events recorded',
+  onActiveIndexChange,
 }: EventViewerProps<T>) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [activeIndex, setActiveIndexInternal] = useState<number | null>(null);
+
+  // Wrap setActiveIndex to notify parent
+  const setActiveIndex = useCallback(
+    (indexOrUpdater: number | null | ((prev: number | null) => number | null)) => {
+      setActiveIndexInternal((prev) => {
+        const newIndex =
+          typeof indexOrUpdater === 'function' ? indexOrUpdater(prev) : indexOrUpdater;
+        onActiveIndexChange?.(newIndex);
+        return newIndex;
+      });
+    },
+    [onActiveIndexChange],
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
 
@@ -101,7 +118,7 @@ export function EventViewer<T>({
     (index: number) => {
       setActiveIndex((prev) => (prev === index ? null : index));
     },
-    [],
+    [setActiveIndex],
   );
 
   if (isLoading) {
@@ -154,7 +171,7 @@ export function EventViewer<T>({
                     <Separator />
                   </div>
                   <div className="mx-2 overflow-y-auto">
-                    {renderDetail({ event: activeEvent, index: activeIndex! })}
+                    {renderDetail({ event: activeEvent, index: activeIndex ?? 0 })}
                   </div>
                 </div>
               )

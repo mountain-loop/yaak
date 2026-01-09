@@ -1,4 +1,4 @@
-import { type Virtualizer, useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
 import type { ReactElement, ReactNode, UIEvent } from 'react';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from './IconButton';

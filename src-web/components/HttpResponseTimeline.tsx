@@ -81,13 +81,13 @@ function EventDetails({
     const rawText = formatEventRaw(event.event);
     return (
       <div className="flex flex-col gap-2 h-full">
-        <DetailHeader title={label} timestamp={timestamp} showRaw={showRaw} setShowRaw={setShowRaw} />
-        <Editor
-          language="text"
-          defaultValue={rawText}
-          readOnly
-          stateKey={null}
+        <DetailHeader
+          title={label}
+          timestamp={timestamp}
+          showRaw={showRaw}
+          setShowRaw={setShowRaw}
         />
+        <Editor language="text" defaultValue={rawText} readOnly stateKey={null} />
       </div>
     );
   }
@@ -114,7 +114,12 @@ function EventDetails({
   if (e.type === 'send_url') {
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader title="Request" timestamp={timestamp} showRaw={showRaw} setShowRaw={setShowRaw} />
+        <DetailHeader
+          title="Request"
+          timestamp={timestamp}
+          showRaw={showRaw}
+          setShowRaw={setShowRaw}
+        />
         <KeyValueRows>
           <KeyValueRow label="Method">
             <HttpMethodTagRaw forceColor method={e.method} />
@@ -129,7 +134,12 @@ function EventDetails({
   if (e.type === 'receive_url') {
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader title="Response" timestamp={timestamp} showRaw={showRaw} setShowRaw={setShowRaw} />
+        <DetailHeader
+          title="Response"
+          timestamp={timestamp}
+          showRaw={showRaw}
+          setShowRaw={setShowRaw}
+        />
         <KeyValueRows>
           <KeyValueRow label="HTTP Version">{e.version}</KeyValueRow>
           <KeyValueRow label="Status">
@@ -144,7 +154,12 @@ function EventDetails({
   if (e.type === 'redirect') {
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader title="Redirect" timestamp={timestamp} showRaw={showRaw} setShowRaw={setShowRaw} />
+        <DetailHeader
+          title="Redirect"
+          timestamp={timestamp}
+          showRaw={showRaw}
+          setShowRaw={setShowRaw}
+        />
         <KeyValueRows>
           <KeyValueRow label="Status">
             <HttpStatusTagRaw status={e.status} />
@@ -162,7 +177,12 @@ function EventDetails({
   if (e.type === 'setting') {
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader title="Apply Setting" timestamp={timestamp} showRaw={showRaw} setShowRaw={setShowRaw} />
+        <DetailHeader
+          title="Apply Setting"
+          timestamp={timestamp}
+          showRaw={showRaw}
+          setShowRaw={setShowRaw}
+        />
         <KeyValueRows>
           <KeyValueRow label="Setting">{e.name}</KeyValueRow>
           <KeyValueRow label="Value">{e.value}</KeyValueRow>
@@ -176,7 +196,12 @@ function EventDetails({
     const direction = e.type === 'chunk_sent' ? 'Sent' : 'Received';
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader title={`Data ${direction}`} timestamp={timestamp} showRaw={showRaw} setShowRaw={setShowRaw} />
+        <DetailHeader
+          title={`Data ${direction}`}
+          timestamp={timestamp}
+          showRaw={showRaw}
+          setShowRaw={setShowRaw}
+        />
         <div className="font-mono text-editor">{formatBytes(e.bytes)}</div>
       </div>
     );
