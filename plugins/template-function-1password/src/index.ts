@@ -43,19 +43,19 @@ async function op(
       return { error: 'Invalid authentication method' };
   }
 
-  let client: Client;
-  try {
-    client = await createClient({
-      auth: authMethod,
-      integrationName: 'Yaak 1Password Plugin',
-      integrationVersion: 'v1.0.0',
-    });
-    _clients[hash] = client;
-  } catch (e) {
-    return { error: e };
+  if (!_clients[hash]) {
+    try {
+      _clients[hash] = await createClient({
+        auth: authMethod,
+        integrationName: 'Yaak 1Password Plugin',
+        integrationVersion: 'v1.0.0',
+      });
+    } catch (e) {
+      return { error: e };
+    }
   }
 
-  return { client, clientHash: hash };
+  return { client: _clients[hash], clientHash: hash };
 }
 
 async function getValue(
