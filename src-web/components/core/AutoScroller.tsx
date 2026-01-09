@@ -1,4 +1,4 @@
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { type Virtualizer, useVirtualizer } from '@tanstack/react-virtual';
 import type { ReactElement, ReactNode, UIEvent } from 'react';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from './IconButton';
@@ -7,9 +7,19 @@ interface Props<T> {
   data: T[];
   render: (item: T, index: number) => ReactElement<HTMLElement>;
   header?: ReactNode;
+  /** Make container focusable for keyboard navigation */
+  focusable?: boolean;
+  /** Callback to expose the virtualizer for keyboard navigation */
+  onVirtualizerReady?: (virtualizer: Virtualizer<HTMLDivElement, Element>) => void;
 }
 
-export function AutoScroller<T>({ data, render, header }: Props<T>) {
+export function AutoScroller<T>({
+  data,
+  render,
+  header,
+  focusable = false,
+  onVirtualizerReady,
+}: Props<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
 
@@ -19,6 +29,11 @@ export function AutoScroller<T>({ data, render, header }: Props<T>) {
     getScrollElement: () => containerRef.current,
     estimateSize: () => 27, // react-virtual requires a height, so we'll give it one
   });
+
+  // Expose virtualizer to parent for keyboard navigation
+  useLayoutEffect(() => {
+    onVirtualizerReady?.(rowVirtualizer);
+  }, [rowVirtualizer, onVirtualizerReady]);
 
   // Scroll to new items
   const handleScroll = useCallback(
@@ -63,7 +78,12 @@ export function AutoScroller<T>({ data, render, header }: Props<T>) {
         </div>
       )}
       {header ?? <span aria-hidden />}
-      <div ref={containerRef} className="h-full w-full overflow-y-auto" onScroll={handleScroll}>
+      <div
+        ref={containerRef}
+        className="h-full w-full overflow-y-auto"
+        onScroll={handleScroll}
+        tabIndex={focusable ? 0 : undefined}
+      >
         <div
           style={{
             height: `${rowVirtualizer.getTotalSize()}px`,
