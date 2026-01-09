@@ -3,6 +3,7 @@ use crate::error::{Error, Result};
 use crate::migrate::migrate_db;
 use crate::query_manager::QueryManager;
 use crate::util::ModelPayload;
+use log::info;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::fs::create_dir_all;
@@ -41,6 +42,7 @@ pub fn init_standalone(
     }
 
     // Main database pool
+    info!("Initializing app database {db_path:?}");
     let manager = SqliteConnectionManager::file(db_path);
     let pool = Pool::builder()
         .max_size(100)
@@ -49,6 +51,8 @@ pub fn init_standalone(
         .map_err(|e| Error::Database(e.to_string()))?;
 
     migrate_db(&pool)?;
+
+    info!("Initializing blobs database {blob_path:?}");
 
     // Blob database pool
     let blob_manager = SqliteConnectionManager::file(blob_path);
