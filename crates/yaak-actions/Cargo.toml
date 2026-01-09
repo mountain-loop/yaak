@@ -1,0 +1,15 @@
+[package]
+name = "yaak-actions"
+version = "0.1.0"
+edition = "2021"
+description = "Centralized action system for Yaak"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+ts-rs = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

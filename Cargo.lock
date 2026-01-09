@@ -7995,6 +7995,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak-actions"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "ts-rs",
+]
+
+[[package]]
 name = "yaak-app"
 version = "0.0.0"
 dependencies = [
