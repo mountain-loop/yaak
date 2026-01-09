@@ -1,9 +1,8 @@
-import type { EditorView } from '@codemirror/view';
 import type { HttpRequest } from '@yaakapp-internal/models';
 
 import { formatSdl } from 'format-graphql';
 import { useAtom } from 'jotai';
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useLocalStorage } from 'react-use';
 import { useIntrospectGraphQL } from '../../hooks/useIntrospectGraphQL';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
@@ -13,7 +12,7 @@ import { Button } from '../core/Button';
 import type { DropdownItem } from '../core/Dropdown';
 import { Dropdown } from '../core/Dropdown';
 import type { EditorProps } from '../core/Editor/Editor';
-import { Editor } from '../core/Editor/Editor';
+import { Editor } from '../core/Editor/LazyEditor';
 import { FormattedError } from '../core/FormattedError';
 import { Icon } from '../core/Icon';
 import { Separator } from '../core/Separator';
@@ -25,8 +24,13 @@ type Props = Pick<EditorProps, 'heightMode' | 'className' | 'forceUpdateKey'> & 
   request: HttpRequest;
 };
 
-export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorProps }: Props) {
-  const editorViewRef = useRef<EditorView>(null);
+export function GraphQLEditor(props: Props) {
+  // There's some weirdness with stale onChange being called when switching requests, so we'll
+  // key on the request ID as a workaround for now.
+  return <GraphQLEditorInner key={props.request.id} {...props} />;
+}
+
+function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProps }: Props) {
   const [autoIntrospectDisabled, setAutoIntrospectDisabled] = useLocalStorage<
     Record<string, boolean>
   >('graphQLAutoIntrospectDisabled', {});
@@ -47,20 +51,31 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
 
     return { query: request.body.query ?? '', variables: request.body.variables ?? '' };
   }, [extraEditorProps.forceUpdateKey]);
+
   const [isDocOpenRecord, setGraphqlDocStateAtomValue] = useAtom(showGraphQLDocExplorerAtom);
   const isDocOpen = isDocOpenRecord[request.id] !== undefined;
 
-  const handleChangeQuery = (query: string) => {
-    const newBody = { query, variables: currentBody.variables || undefined };
-    setCurrentBody(newBody);
-    onChange(newBody);
-  };
+  const handleChangeQuery = useCallback(
+    (query: string) => {
+      setCurrentBody(({ variables }) => {
+        const newBody = { query, variables };
+        onChange(newBody);
+        return newBody;
+      });
+    },
+    [onChange, setCurrentBody],
+  );
 
-  const handleChangeVariables = (variables: string) => {
-    const newBody = { query: currentBody.query, variables: variables || undefined };
-    setCurrentBody(newBody);
-    onChange(newBody);
-  };
+  const handleChangeVariables = useCallback(
+    (variables: string) => {
+      setCurrentBody(({ query }) => {
+        const newBody = { query, variables: variables || undefined };
+        onChange(newBody);
+        return newBody;
+      });
+    },
+    [onChange, setCurrentBody],
+  );
 
   const actions = useMemo<EditorProps['actions']>(
     () => [
@@ -199,9 +214,8 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
         defaultValue={currentBody.query}
         onChange={handleChangeQuery}
         placeholder="..."
-        ref={editorViewRef}
         actions={actions}
-        stateKey={'graphql_body.' + request.id}
+        stateKey={`graphql_body.${request.id}`}
         {...extraEditorProps}
       />
       <div className="grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 min-h-[5rem]">
@@ -214,7 +228,7 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
           defaultValue={currentBody.variables}
           onChange={handleChangeVariables}
           placeholder="{}"
-          stateKey={'graphql_vars.' + request.id}
+          stateKey={`graphql_vars.${request.id}`}
           autocompleteFunctions
           autocompleteVariables
           {...extraEditorProps}
@@ -227,8 +241,7 @@ export function GraphQLEditor({ request, onChange, baseRequest, ...extraEditorPr
 function tryParseJson(text: string, fallback: unknown) {
   try {
     return JSON.parse(text);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (err) {
+  } catch {
     return fallback;
   }
 }

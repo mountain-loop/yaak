@@ -1,21 +1,21 @@
-import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import React, { memo } from 'react';
+import { useAtom, useAtomValue } from 'jotai';
+import { memo } from 'react';
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
+import { workspaceLayoutAtom } from '../lib/atoms';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
-import { BadgeButton } from './core/BadgeButton';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
+import { PillButton } from './core/PillButton';
 import { HStack } from './core/Stacks';
 import { EnvironmentActionsDropdown } from './EnvironmentActionsDropdown';
 import { ImportCurlButton } from './ImportCurlButton';
 import { LicenseBadge } from './LicenseBadge';
 import { RecentRequestsDropdown } from './RecentRequestsDropdown';
 import { SettingsDropdown } from './SettingsDropdown';
-import { SidebarActions } from './sidebar/SidebarActions';
+import { SidebarActions } from './SidebarActions';
 import { WorkspaceActionsDropdown } from './WorkspaceActionsDropdown';
 
 interface Props {
@@ -24,10 +24,14 @@ interface Props {
 
 export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Props) {
   const togglePalette = useToggleCommandPalette();
+  const [workspaceLayout, setWorkspaceLayout] = useAtom(workspaceLayoutAtom);
   const workspace = useAtomValue(activeWorkspaceAtom);
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const showEncryptionSetup =
-    workspace?.encryptionKeyChallenge != null && workspaceMeta?.encryptionKey == null;
+    workspace != null &&
+    workspaceMeta != null &&
+    workspace.encryptionKeyChallenge != null &&
+    workspaceMeta.encryptionKey == null;
 
   return (
     <div
@@ -36,7 +40,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full h-full',
       )}
     >
-      <HStack space={0.5} className="flex-1 pointer-events-none">
+      <HStack space={0.5} className={classNames('flex-1 pointer-events-none')}>
         <SidebarActions />
         <CookieDropdown />
         <HStack className="min-w-0">
@@ -51,16 +55,32 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
       <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-1">
         <ImportCurlButton />
         {showEncryptionSetup ? (
-          <BadgeButton color="danger" onClick={setupOrConfigureEncryption}>
+          <PillButton color="danger" onClick={setupOrConfigureEncryption}>
             Enter Encryption Key
-          </BadgeButton>
+          </PillButton>
         ) : (
           <LicenseBadge />
         )}
         <IconButton
-          icon={type() == 'macos' ? 'command' : 'square_terminal'}
+          icon={
+            workspaceLayout === 'responsive'
+              ? 'magic_wand'
+              : workspaceLayout === 'horizontal'
+                ? 'columns_2'
+                : 'rows_2'
+          }
+          title={`Change to ${workspaceLayout === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
+          size="sm"
+          iconColor="secondary"
+          onClick={() =>
+            setWorkspaceLayout((prev) => (prev === 'horizontal' ? 'vertical' : 'horizontal'))
+          }
+        />
+        <IconButton
+          icon="search"
           title="Search or execute a command"
           size="sm"
+          hotkeyAction="command_palette.toggle"
           iconColor="secondary"
           onClick={togglePalette}
         />

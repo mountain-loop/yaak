@@ -9,6 +9,7 @@ export function Label({
   visuallyHidden,
   tags = [],
   required,
+  rightSlot,
   help,
   ...props
 }: HTMLAttributes<HTMLLabelElement> & {
@@ -16,6 +17,7 @@ export function Label({
   required?: boolean;
   tags?: string[];
   visuallyHidden?: boolean;
+  rightSlot?: ReactNode;
   children: ReactNode;
   help?: ReactNode;
 }) {
@@ -35,11 +37,13 @@ export function Label({
         {required === true && <span className="text-text-subtlest">*</span>}
       </span>
       {tags.map((tag, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: none
         <span key={i} className="text-xs text-text-subtlest">
           ({tag})
         </span>
       ))}
       {help && <IconTooltip tabIndex={-1} content={help} />}
+      {rightSlot && <div className="ml-auto">{rightSlot}</div>}
     </label>
   );
 }

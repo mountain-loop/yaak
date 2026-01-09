@@ -36,11 +36,31 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
   if (urlParams.length > 0) {
     // Build url
     const [base, hash] = finalUrl.split('#');
-    const separator = base!.includes('?') ? '&' : '?';
+    const separator = base?.includes('?') ? '&' : '?';
     const queryString = urlParams
       .map((p) => `${encodeURIComponent(p.name)}=${encodeURIComponent(p.value)}`)
       .join('&');
     finalUrl = base + separator + queryString + (hash ? `#${hash}` : '');
+  }
+
+  // Add API key authentication
+  if (request.authenticationType === 'apikey') {
+    if (request.authentication?.location === 'query') {
+      const sep = finalUrl.includes('?') ? '&' : '?';
+      finalUrl = [
+        finalUrl,
+        sep,
+        encodeURIComponent(request.authentication?.key ?? 'token'),
+        '=',
+        encodeURIComponent(request.authentication?.value ?? ''),
+      ].join('');
+    } else {
+      request.headers = request.headers ?? [];
+      request.headers.push({
+        name: request.authentication?.key ?? 'X-Api-Key',
+        value: request.authentication?.value ?? '',
+      });
+    }
   }
 
   xs.push(quote(finalUrl));
@@ -82,19 +102,49 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
   }
 
   // Add basic/digest authentication
-  if (request.authenticationType === 'basic' || request.authenticationType === 'digest') {
-    if (request.authenticationType === 'digest') xs.push('--digest');
-    xs.push(
-      '--user',
-      quote(`${request.authentication?.username ?? ''}:${request.authentication?.password ?? ''}`),
-    );
-    xs.push(NEWLINE);
-  }
+  if (request.authentication?.disabled !== true) {
+    if (request.authenticationType === 'basic' || request.authenticationType === 'digest') {
+      if (request.authenticationType === 'digest') xs.push('--digest');
+      xs.push(
+        '--user',
+        quote(
+          `${request.authentication?.username ?? ''}:${request.authentication?.password ?? ''}`,
+        ),
+      );
+      xs.push(NEWLINE);
+    }
 
-  // Add bearer authentication
-  if (request.authenticationType === 'bearer') {
-    xs.push('--header', quote(`Authorization: Bearer ${request.authentication?.token ?? ''}`));
-    xs.push(NEWLINE);
+    // Add bearer authentication
+    if (request.authenticationType === 'bearer') {
+      const value =
+        `${request.authentication?.prefix ?? 'Bearer'} ${request.authentication?.token ?? ''}`.trim();
+      xs.push('--header', quote(`Authorization: ${value}`));
+      xs.push(NEWLINE);
+    }
+
+    if (request.authenticationType === 'auth-aws-sig-v4') {
+      xs.push(
+        '--aws-sigv4',
+        [
+          'aws',
+          'amz',
+          request.authentication?.region ?? '',
+          request.authentication?.service ?? '',
+        ].join(':'),
+      );
+      xs.push(NEWLINE);
+      xs.push(
+        '--user',
+        quote(
+          `${request.authentication?.accessKeyId ?? ''}:${request.authentication?.secretAccessKey ?? ''}`,
+        ),
+      );
+      if (request.authentication?.sessionToken) {
+        xs.push(NEWLINE);
+        xs.push('--header', quote(`X-Amz-Security-Token: ${request.authentication.sessionToken}`));
+      }
+      xs.push(NEWLINE);
+    }
   }
 
   // Remove trailing newline

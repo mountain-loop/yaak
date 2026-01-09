@@ -1,6 +1,7 @@
-import type { TemplateFunctionArg } from '@yaakapp-internal/plugins';
 import type { PluginDefinition } from '@yaakapp/api';
+import type { TemplateFunctionArg } from '@yaakapp-internal/plugins';
 
+import type { ContextFn } from 'date-fns';
 import {
   addDays,
   addHours,
@@ -24,7 +25,8 @@ const dateArg: TemplateFunctionArg = {
   name: 'date',
   label: 'Timestamp',
   optional: true,
-  description: 'Can be a timestamp in milliseconds, ISO string, or anything parseable by JS `new Date()`',
+  description:
+    'Can be a timestamp in milliseconds, ISO string, or anything parseable by JS `new Date()`',
   placeholder: new Date().toISOString(),
 };
 
@@ -50,32 +52,43 @@ export const plugin: PluginDefinition = {
   templateFunctions: [
     {
       name: 'timestamp.unix',
-      description: 'Get the current timestamp in seconds',
-      args: [],
-      onRender: async () => String(Math.floor(Date.now() / 1000)),
+      description: 'Get the timestamp in seconds',
+      args: [dateArg],
+      onRender: async (_ctx, args) => {
+        const d = parseDateString(String(args.values.date ?? ''));
+        return String(Math.floor(d.getTime() / 1000));
+      },
     },
     {
       name: 'timestamp.unixMillis',
-      description: 'Get the current timestamp in milliseconds',
-      args: [],
-      onRender: async () => String(Date.now()),
+      description: 'Get the timestamp in milliseconds',
+      args: [dateArg],
+      onRender: async (_ctx, args) => {
+        const d = parseDateString(String(args.values.date ?? ''));
+        return String(d.getTime());
+      },
     },
     {
       name: 'timestamp.iso8601',
-      description: 'Get the current date in ISO8601 format',
-      args: [],
-      onRender: async () => new Date().toISOString(),
+      description: 'Get the date in ISO8601 format',
+      args: [dateArg],
+      onRender: async (_ctx, args) => {
+        const d = parseDateString(String(args.values.date ?? ''));
+        return d.toISOString();
+      },
     },
     {
       name: 'timestamp.format',
       description: 'Format a date using a dayjs-compatible format string',
       args: [dateArg, formatArg],
+      previewArgs: [formatArg.name],
       onRender: async (_ctx, args) => formatDatetime(args.values),
     },
     {
       name: 'timestamp.offset',
       description: 'Get the offset of a date based on an expression',
       args: [dateArg, expressionArg],
+      previewArgs: [expressionArg.name],
       onRender: async (_ctx, args) => calculateDatetime(args.values),
     },
   ],
@@ -148,8 +161,12 @@ export function calculateDatetime(args: { date?: string; expression?: string }):
   return jsDate.toISOString();
 }
 
-export function formatDatetime(args: { date?: string; format?: string }): string {
-  const { date, format = 'yyyy-MM-dd HH:mm:ss' } = args;
+export function formatDatetime(args: {
+  date?: string;
+  format?: string;
+  in?: ContextFn<Date>;
+}): string {
+  const { date, format } = args;
   const d = parseDateString(date ?? '');
-  return formatDate(d, String(format));
+  return formatDate(d, String(format || 'yyyy-MM-dd HH:mm:ss'), { in: args.in });
 }

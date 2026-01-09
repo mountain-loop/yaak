@@ -1,9 +1,13 @@
 import { syntaxTree } from '@codemirror/language';
 import type { Range } from '@codemirror/state';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, ViewPlugin, WidgetType, EditorView } from '@codemirror/view';
+import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view';
 import type { SyntaxNodeRef } from '@lezer/common';
+import { applyFormInputDefaults, validateTemplateFunctionArgs } from '@yaakapp-internal/lib';
+import type { FormInput, JsonPrimitive, TemplateFunction } from '@yaakapp-internal/plugins';
+import { parseTemplate } from '@yaakapp-internal/templates';
 import type { TwigCompletionOption } from './completion';
+import { collectArgumentValues } from './util';
 
 class TemplateTagWidget extends WidgetType {
   readonly #clickListenerCallback: () => void;
@@ -40,10 +44,8 @@ class TemplateTagWidget extends WidgetType {
     }`;
     elt.title = this.option.invalid ? 'Not Found' : (this.option.value ?? '');
     elt.setAttribute('data-tag-type', this.option.type);
-    elt.textContent =
-      this.option.type === 'function'
-        ? `${this.option.name}(${this.option.args.length ? '…' : ''})`
-        : this.option.name;
+    if (typeof this.option.label === 'string') elt.textContent = this.option.label;
+    else elt.appendChild(this.option.label);
     elt.addEventListener('click', this.#clickListenerCallback);
     return elt;
   }
@@ -93,15 +95,28 @@ function templateTags(
           let option = options.find(
             (o) => o.name === name || (o.type === 'function' && o.aliases?.includes(name)),
           );
+
           if (option == null) {
+            const from = node.from; // Cache here so the reference doesn't change
             option = {
-              invalid: true,
               type: 'variable',
+              invalid: true,
               name: inner,
               value: null,
               label: inner,
-              onClick: () => onClickMissingVariable(name, rawTag, node.from),
+              onClick: () => {
+                onClickMissingVariable(name, rawTag, from);
+              },
             };
+          }
+
+          if (option.type === 'function') {
+            const tokens = parseTemplate(rawTag);
+            const rawValues = collectArgumentValues(tokens, option);
+            const values = applyFormInputDefaults(option.args, rawValues);
+            const label = makeFunctionLabel(option, values);
+            const validationErr = validateTemplateFunctionArgs(option.name, option.args, values);
+            option = { ...option, label, invalid: !!validationErr }; // Clone so we don't mutate the original
           }
 
           const widget = new TemplateTagWidget(option, rawTag, node.from);
@@ -152,4 +167,58 @@ function isSelectionInsideNode(view: EditorView, node: SyntaxNodeRef) {
     if (r.from > node.from && r.to < node.to) return true;
   }
   return false;
+}
+
+function makeFunctionLabel(
+  fn: TemplateFunction,
+  values: { [p: string]: JsonPrimitive | undefined },
+): HTMLElement | string {
+  if (fn.args.length === 0) return fn.name;
+
+  const $outer = document.createElement('span');
+  $outer.className = 'fn';
+  const $bOpen = document.createElement('span');
+  $bOpen.className = 'fn-bracket';
+  $bOpen.textContent = '(';
+  $outer.appendChild(document.createTextNode(fn.name));
+  $outer.appendChild($bOpen);
+
+  const $inner = document.createElement('span');
+  $inner.className = 'fn-inner';
+  $inner.title = '';
+  fn.previewArgs?.forEach((name: string, i: number, all: string[]) => {
+    const v = String(values[name] || '');
+    if (!v) return;
+    if (all.length > 1) {
+      const $c = document.createElement('span');
+      $c.className = 'fn-arg-name';
+      $c.textContent = i > 0 ? `, ${name}=` : `${name}=`;
+      $inner.appendChild($c);
+    }
+
+    const $v = document.createElement('span');
+    $v.className = 'fn-arg-value';
+    $v.textContent = v.includes(' ') ? `'${v}'` : v;
+    $inner.appendChild($v);
+  });
+  fn.args.forEach((a: FormInput, i: number) => {
+    if (!('name' in a)) return;
+    const v = values[a.name];
+    if (v == null) return;
+    if (i > 0) $inner.title += '\n';
+    $inner.title += `${a.name} = ${JSON.stringify(v)}`;
+  });
+
+  if ($inner.childNodes.length === 0) {
+    $inner.appendChild(document.createTextNode('…'));
+  }
+
+  $outer.appendChild($inner);
+
+  const $bClose = document.createElement('span');
+  $bClose.className = 'fn-bracket';
+  $bClose.textContent = ')';
+  $outer.appendChild($bClose);
+
+  return $outer;
 }

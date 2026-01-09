@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
 import type { GraphQlIntrospection, HttpRequest } from '@yaakapp-internal/models';
-import type { GraphQLSchema } from 'graphql';
+import type { GraphQLSchema, IntrospectionQuery } from 'graphql';
 import { buildClientSchema, getIntrospectionQuery } from 'graphql';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
@@ -33,7 +33,7 @@ export function useIntrospectGraphQL(
   const upsertIntrospection = useCallback(
     async (content: string | null) => {
       const v = await invoke<GraphQlIntrospection>(
-        'plugin:yaak-models|upsert_graphql_introspection',
+        'models_upsert_graphql_introspection',
         {
           requestId: baseRequest.id,
           workspaceId: baseRequest.workspaceId,
@@ -66,7 +66,7 @@ export function useIntrospectGraphQL(
         return setError(response.error);
       }
 
-      const bodyText = await getResponseBodyText(response);
+      const bodyText = await getResponseBodyText({ response, filter: null });
       if (response.status < 200 || response.status >= 300) {
         return setError(
           `Request failed with status ${response.status}.\nThe response text is:\n\n${bodyText}`,
@@ -86,6 +86,7 @@ export function useIntrospectGraphQL(
     }
   }, [activeEnvironment?.id, baseRequest, upsertIntrospection]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     // Skip introspection if automatic is disabled and we already have one
     if (options.disabled) {
@@ -93,8 +94,6 @@ export function useIntrospectGraphQL(
     }
 
     refetch().catch(console.error);
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseRequest.id, debouncedRequest.url, debouncedRequest.method, activeEnvironment?.id]);
 
   const clear = useCallback(async () => {
@@ -123,7 +122,7 @@ function useIntrospectionResult(request: HttpRequest) {
   return useQuery({
     queryKey: ['introspection', request.id],
     queryFn: async () =>
-      invoke<GraphQlIntrospection | null>('plugin:yaak-models|get_graphql_introspection', {
+      invoke<GraphQlIntrospection | null>('models_get_graphql_introspection', {
         requestId: request.id,
       }),
   });
@@ -142,17 +141,17 @@ export function useCurrentGraphQLSchema(request: HttpRequest) {
 function tryParseIntrospectionToSchema(
   content: string,
 ): { schema: GraphQLSchema } | { error: string } {
-  let parsedResponse;
+  let parsedResponse: IntrospectionQuery;
   try {
     parsedResponse = JSON.parse(content).data;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: none
   } catch (e: any) {
     return { error: String('message' in e ? e.message : e) };
   }
 
   try {
     return { schema: buildClientSchema(parsedResponse, {}) };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: none
   } catch (e: any) {
     return { error: String('message' in e ? e.message : e) };
   }

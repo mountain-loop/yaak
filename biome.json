@@ -1,0 +1,53 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "a11y": {
+        "useKeyWithClickEvents": "off"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "bracketSpacing": true
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    },
+    "linter": {
+      "enabled": false
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/build",
+      "!target",
+      "!scripts",
+      "!crates",
+      "!crates-tauri",
+      "!src-web/tailwind.config.cjs",
+      "!src-web/postcss.config.cjs",
+      "!src-web/vite.config.ts",
+      "!src-web/routeTree.gen.ts",
+      "!packages/plugin-runtime-types/lib",
+      "!**/bindings"
+    ]
+  }
+}

@@ -1,22 +1,36 @@
+import type { EditorView } from '@codemirror/view';
+import type {
+  Folder,
+  GrpcRequest,
+  HttpRequest,
+  WebsocketRequest,
+  Workspace,
+} from '@yaakapp-internal/models';
 import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
+import { parseTemplate } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
+import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
+import { useTemplateFunctionConfig } from '../hooks/useTemplateFunctionConfig';
 import {
   templateTokensToString,
   useTemplateTokensToString,
 } from '../hooks/useTemplateTokensToString';
 import { useToggle } from '../hooks/useToggle';
+import { showDialog } from '../lib/dialog';
 import { convertTemplateToInsecure } from '../lib/encryption';
+import { jotaiStore } from '../lib/jotai';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { Button } from './core/Button';
+import { collectArgumentValues } from './core/Editor/twig/util';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import { LoadingIcon } from './core/LoadingIcon';
 import { PlainInput } from './core/PlainInput';
-import { HStack, VStack } from './core/Stacks';
+import { HStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 
 interface Props {
@@ -24,6 +38,7 @@ interface Props {
   initialTokens: Tokens;
   hide: () => void;
   onChange: (insert: string) => void;
+  model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace;
 }
 
 export function TemplateFunctionDialog({ initialTokens, templateFunction, ...props }: Props) {
@@ -35,25 +50,8 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
       return;
     }
 
-    (async function () {
-      const initial: Record<string, string> = {};
-      const initialArgs =
-        initialTokens.tokens[0]?.type === 'tag' && initialTokens.tokens[0]?.val.type === 'fn'
-          ? initialTokens.tokens[0]?.val.args
-          : [];
-      for (const arg of templateFunction.args) {
-        if (!('name' in arg)) {
-          // Skip visual-only args
-          continue;
-        }
-        const initialArg = initialArgs.find((a) => a.name === arg.name);
-        const initialArgValue =
-          initialArg?.value.type === 'str'
-            ? initialArg?.value.text
-            : // TODO: Implement variable-based args
-              undefined;
-        initial[arg.name] = initialArgValue ?? arg.defaultValue ?? DYNAMIC_FORM_NULL_ARG;
-      }
+    (async () => {
+      const initial = collectArgumentValues(initialTokens, templateFunction);
 
       // HACK: Replace the secure() function's encrypted `value` arg with the decrypted version so
       //  we can display it in the editor input.
@@ -68,6 +66,7 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
     initialArgValues,
     initialTokens,
     initialTokens.tokens,
+    templateFunction,
     templateFunction.args,
     templateFunction.name,
   ]);
@@ -84,14 +83,15 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
 }
 
 function InitializedTemplateFunctionDialog({
-  templateFunction,
-  hide,
+  templateFunction: { name, previewType: ogPreviewType },
   initialArgValues,
+  hide,
   onChange,
+  model,
 }: Omit<Props, 'initialTokens'> & {
   initialArgValues: Record<string, string | boolean>;
 }) {
-  const enablePreview = templateFunction.name !== 'secure';
+  const previewType = ogPreviewType == null ? 'live' : ogPreviewType;
   const [showSecretsInPreview, toggleShowSecretsInPreview] = useToggle(false);
   const [argValues, setArgValues] = useState<Record<string, string | boolean>>(initialArgValues);
 
@@ -112,15 +112,16 @@ function InitializedTemplateFunctionDialog({
           type: 'tag',
           val: {
             type: 'fn',
-            name: templateFunction.name,
+            name,
             args: argTokens,
           },
         },
       ],
     };
-  }, [argValues, templateFunction.name]);
+  }, [argValues, name]);
 
   const tagText = useTemplateTokensToString(tokens);
+  const templateFunction = useTemplateFunctionConfig(name, argValues, model);
 
   const handleDone = () => {
     if (tagText.data) {
@@ -130,100 +131,169 @@ function InitializedTemplateFunctionDialog({
   };
 
   const debouncedTagText = useDebouncedValue(tagText.data ?? '', 400);
-  const rendered = useRenderTemplate(debouncedTagText);
+  const [renderKey, setRenderKey] = useState<string | null>(null);
+  const rendered = useRenderTemplate({
+    template: debouncedTagText,
+    enabled: previewType !== 'none',
+    purpose: previewType === 'click' ? 'send' : 'preview',
+    refreshKey: previewType === 'live' ? renderKey + debouncedTagText : renderKey,
+    ignoreError: false,
+  });
+
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only update this on rendered data change to keep secrets hidden on input change
   const dataContainsSecrets = useMemo(() => {
     for (const [name, value] of Object.entries(argValues)) {
-      const arg = templateFunction.args.find((a) => 'name' in a && a.name === name);
+      const arg = templateFunction.data?.args.find((a) => 'name' in a && a.name === name);
       const isTextPassword = arg?.type === 'text' && arg.password;
       if (isTextPassword && typeof value === 'string' && value && rendered.data?.includes(value)) {
         return true;
       }
     }
     return false;
-    // Only update this on rendered data change to keep secrets hidden on input change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendered.data]);
 
+  if (templateFunction.data == null || templateFunction.isPending) {
+    return (
+      <div className="h-full w-full flex items-center justify-center">
+        <LoadingIcon size="xl" className="text-text-subtlest" />
+      </div>
+    );
+  }
+
   return (
-    <VStack
-      as="form"
-      className="pb-3"
-      space={4}
+    <form
+      className="grid grid-rows-[minmax(0,1fr)_auto_auto] h-full max-h-[90vh]"
       onSubmit={(e) => {
         e.preventDefault();
         handleDone();
       }}
     >
-      {templateFunction.name === 'secure' ? (
-        <PlainInput
-          required
-          label="Value"
-          name="value"
-          type="password"
-          placeholder="••••••••••••"
-          defaultValue={String(argValues['value'] ?? '')}
-          onChange={(value) => setArgValues({ ...argValues, value })}
-        />
-      ) : (
-        <DynamicForm
-          autocompleteVariables
-          autocompleteFunctions
-          inputs={templateFunction.args}
-          data={argValues}
-          onChange={setArgValues}
-          stateKey={`template_function.${templateFunction.name}`}
-        />
-      )}
-      {enablePreview && (
-        <VStack className="w-full" space={1}>
-          <HStack space={0.5}>
-            <HStack className="text-sm text-text-subtle" space={1.5}>
-              Rendered Preview
-              {rendered.isPending && <LoadingIcon size="xs" />}
-            </HStack>
-            <IconButton
-              size="xs"
-              iconSize="sm"
-              icon={showSecretsInPreview ? 'lock' : 'lock_open'}
-              title={showSecretsInPreview ? 'Show preview' : 'Hide preview'}
-              onClick={toggleShowSecretsInPreview}
-              className={classNames(
-                'ml-auto text-text-subtlest',
-                !dataContainsSecrets && 'invisible',
-              )}
-            />
-          </HStack>
-          <InlineCode
-            className={classNames(
-              'whitespace-pre-wrap select-text cursor-text max-h-[10rem] overflow-y-auto hide-scrollbars',
-              tooLarge && 'italic text-danger',
-            )}
-          >
-            {rendered.error || tagText.error ? (
-              <em className="text-danger">
-                {`${rendered.error || tagText.error}`.replace(/^Render Error: /, '')}
-              </em>
-            ) : dataContainsSecrets && !showSecretsInPreview ? (
-              <span className="italic text-text-subtle">------ sensitive values hidden ------</span>
-            ) : tooLarge ? (
-              'too large to preview'
-            ) : (
-              rendered.data || <>&nbsp;</>
-            )}
-          </InlineCode>
-        </VStack>
-      )}
-      <div className="flex justify-stretch w-full flex-grow gap-2 [&>*]:flex-1">
-        {templateFunction.name === 'secure' && (
-          <Button variant="border" color="secondary" onClick={setupOrConfigureEncryption}>
-            Reveal Encryption Key
-          </Button>
+      <div className="overflow-y-auto h-full px-6">
+        {name === 'secure' ? (
+          <PlainInput
+            required
+            label="Value"
+            name="value"
+            type="password"
+            placeholder="••••••••••••"
+            defaultValue={String(argValues.value ?? '')}
+            onChange={(value) => setArgValues({ ...argValues, value })}
+          />
+        ) : (
+          <DynamicForm
+            autocompleteVariables
+            autocompleteFunctions
+            inputs={templateFunction.data.args}
+            data={argValues}
+            onChange={setArgValues}
+            stateKey={`template_function.${templateFunction.data.name}`}
+          />
         )}
-        <Button type="submit" color="primary">
-          Save
-        </Button>
       </div>
-    </VStack>
+      <div className="px-6 border-t border-t-border pt-3 pb-6 bg-surface-highlight w-full flex flex-col gap-4">
+        {previewType !== 'none' ? (
+          <div className="w-full grid grid-cols-1 grid-rows-[auto_auto]">
+            <HStack space={0.5}>
+              <HStack className="text-sm text-text-subtle" space={1.5}>
+                Rendered Preview
+                {rendered.isLoading && <LoadingIcon size="xs" />}
+              </HStack>
+              <IconButton
+                size="xs"
+                iconSize="sm"
+                icon={showSecretsInPreview ? 'lock' : 'lock_open'}
+                title={showSecretsInPreview ? 'Show preview' : 'Hide preview'}
+                onClick={toggleShowSecretsInPreview}
+                className={classNames(
+                  'ml-auto text-text-subtlest',
+                  !dataContainsSecrets && 'invisible',
+                )}
+              />
+            </HStack>
+            <div className="relative w-full max-h-[10rem]">
+              <InlineCode
+                className={classNames(
+                  'block whitespace-pre-wrap !select-text cursor-text max-h-[10rem] overflow-auto hide-scrollbars !border-text-subtlest',
+                  tooLarge && 'italic text-danger',
+                )}
+              >
+                {rendered.error || tagText.error ? (
+                  <em className="text-danger">
+                    {`${rendered.error || tagText.error}`.replace(/^Render Error: /, '')}
+                  </em>
+                ) : dataContainsSecrets && !showSecretsInPreview ? (
+                  <span className="italic text-text-subtle">
+                    ------ sensitive values hidden ------
+                  </span>
+                ) : tooLarge ? (
+                  'too large to preview'
+                ) : (
+                  rendered.data || <>&nbsp;</>
+                )}
+              </InlineCode>
+              <div className="absolute right-0.5 top-0 bottom-0 flex items-center">
+                <IconButton
+                  size="xs"
+                  icon="refresh"
+                  className="text-text-subtle"
+                  title="Refresh preview"
+                  spin={rendered.isPending}
+                  onClick={() => {
+                    setRenderKey(new Date().toISOString());
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <span />
+        )}
+        <div className="flex justify-stretch w-full flex-grow gap-2 [&>*]:flex-1">
+          {templateFunction.data.name === 'secure' && (
+            <Button variant="border" color="secondary" onClick={setupOrConfigureEncryption}>
+              Reveal Encryption Key
+            </Button>
+          )}
+          <Button type="submit" color="primary">
+            Save
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 }
+
+TemplateFunctionDialog.show = (
+  fn: TemplateFunction,
+  tagValue: string,
+  startPos: number,
+  view: EditorView,
+) => {
+  const initialTokens = parseTemplate(tagValue);
+  showDialog({
+    id: `template-function-${Math.random()}`, // Allow multiple at once
+    size: 'md',
+    className: 'h-[60rem]',
+    noPadding: true,
+    title: <InlineCode>{fn.name}(…)</InlineCode>,
+    description: fn.description,
+    render: ({ hide }) => {
+      const model = jotaiStore.get(activeWorkspaceAtom);
+      if (model == null) return null;
+      return (
+        <TemplateFunctionDialog
+          templateFunction={fn}
+          model={model}
+          hide={hide}
+          initialTokens={initialTokens}
+          onChange={(insert) => {
+            view.dispatch({
+              changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
+            });
+          }}
+        />
+      );
+    },
+  });
+};

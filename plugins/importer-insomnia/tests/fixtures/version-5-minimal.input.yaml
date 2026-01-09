@@ -38,6 +38,8 @@ collection:
         name: foo
         value: bar
         disabled: false
+    environment:
+      folder_env_var: testing
   - name: New Request
     meta:
       id: req_e3f8cdbd58784a539dd4c1e127d73451

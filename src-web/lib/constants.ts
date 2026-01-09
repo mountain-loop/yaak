@@ -1,4 +1,3 @@
-
 export const HEADER_SIZE_MD = '27px';
 export const HEADER_SIZE_LG = '40px';
 

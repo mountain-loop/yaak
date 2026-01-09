@@ -34,10 +34,7 @@ const debouncedSync = debounce(async () => {
  * simply add long-lived subscribers for the lifetime of the app.
  */
 function initModelListeners() {
-  listenToTauriEvent<ModelPayload>('upserted_model', (p) => {
-    if (isModelRelevant(p.payload.model)) debouncedSync();
-  });
-  listenToTauriEvent<ModelPayload>('deleted_model', (p) => {
+  listenToTauriEvent<ModelPayload>('model_write', (p) => {
     if (isModelRelevant(p.payload.model)) debouncedSync();
   });
 }
@@ -74,9 +71,9 @@ function isModelRelevant(m: AnyModel) {
     m.model !== 'websocket_request'
   ) {
     return false;
-  } else if (m.model === 'workspace') {
-    return m.id === workspaceId;
-  } else {
-    return m.workspaceId === workspaceId;
   }
+  if (m.model === 'workspace') {
+    return m.id === workspaceId;
+  }
+  return m.workspaceId === workspaceId;
 }

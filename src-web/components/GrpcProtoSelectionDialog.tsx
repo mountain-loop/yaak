@@ -6,11 +6,11 @@ import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
 import { pluralizeCount } from '../lib/pluralize';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
+import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import { Link } from './core/Link';
 import { HStack, VStack } from './core/Stacks';
-import { Icon } from './core/Icon';
 
 interface Props {
   onDone: () => void;
@@ -20,7 +20,7 @@ export function GrpcProtoSelectionDialog(props: Props) {
   const request = useActiveRequest();
   if (request?.model !== 'grpc_request') return null;
 
-  return GrpcProtoSelectionDialogWithRequest({ ...props, request });
+  return <GrpcProtoSelectionDialogWithRequest request={request} {...props} />;
 }
 
 function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: GrpcRequest }) {
@@ -60,7 +60,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             await grpc.reflect.refetch();
           }}
         >
-          Add Files
+          Add Proto Files
         </Button>
         <Button
           variant="border"
@@ -76,7 +76,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             await grpc.reflect.refetch();
           }}
         >
-          Add Directories
+          Add Import Folders
         </Button>
         <Button
           isLoading={grpc.reflect.isFetching}
@@ -103,7 +103,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               Found services{' '}
               {services?.slice(0, 5).map((s, i) => {
                 return (
-                  <span key={i}>
+                  <span key={s.name + s.methods.join(',')}>
                     <InlineCode>{s.name}</InlineCode>
                     {i === services.length - 1 ? '' : i === services.length - 2 ? ' and ' : ', '}
                   </span>
@@ -119,7 +119,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               Server reflection found services
               {services?.map((s, i) => {
                 return (
-                  <span key={i}>
+                  <span key={s.name + s.methods.join(',')}>
                     <InlineCode>{s.name}</InlineCode>
                     {i === services.length - 1 ? '' : i === services.length - 2 ? ' and ' : ', '}
                   </span>
@@ -135,13 +135,16 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           <table className="w-full divide-y divide-surface-highlight">
             <thead>
               <tr>
-                <th className="text-text-subtlest" colSpan={3}>Added File Paths</th>
+                <th className="text-text-subtlest" colSpan={3}>
+                  Added File Paths
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-highlight">
               {protoFiles.map((f, i) => {
                 const parts = f.split('/');
                 return (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: none
                   <tr key={f + i} className="group">
                     <td>
                       <Icon icon={f.endsWith('.proto') ? 'file_code' : 'folder_code'} />

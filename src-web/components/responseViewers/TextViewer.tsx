@@ -3,40 +3,47 @@ import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { createGlobalState } from 'react-use';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { useFilterResponse } from '../../hooks/useFilterResponse';
 import { useFormatText } from '../../hooks/useFormatText';
 import type { EditorProps } from '../core/Editor/Editor';
-import { Editor } from '../core/Editor/Editor';
 import { hyperlink } from '../core/Editor/hyperlink/extension';
+import { Editor } from '../core/Editor/LazyEditor';
 import { IconButton } from '../core/IconButton';
 import { Input } from '../core/Input';
 
 const extraExtensions = [hyperlink];
 
 interface Props {
-  pretty: boolean;
-  className?: string;
   text: string;
   language: EditorProps['language'];
-  responseId: string;
-  requestId: string;
+  stateKey: string | null;
+  pretty?: boolean;
+  className?: string;
+  onFilter?: (filter: string) => {
+    data: string | null | undefined;
+    isPending: boolean;
+    error: boolean;
+  };
 }
 
 const useFilterText = createGlobalState<Record<string, string | null>>({});
 
-export function TextViewer({ language, text, responseId, requestId, pretty, className }: Props) {
+export function TextViewer({ language, text, stateKey, pretty, className, onFilter }: Props) {
   const [filterTextMap, setFilterTextMap] = useFilterText();
-  const filterText = filterTextMap[requestId] ?? null;
+  const filterText = stateKey ? (filterTextMap[stateKey] ?? null) : null;
   const debouncedFilterText = useDebouncedValue(filterText);
   const setFilterText = useCallback(
     (v: string | null) => {
-      setFilterTextMap((m) => ({ ...m, [requestId]: v }));
+      if (!stateKey) return;
+      setFilterTextMap((m) => ({ ...m, [stateKey]: v }));
     },
-    [setFilterTextMap, requestId],
+    [setFilterTextMap, stateKey],
   );
 
   const isSearching = filterText != null;
-  const filteredResponse = useFilterResponse({ filter: debouncedFilterText ?? '', responseId });
+  const filteredResponse =
+    onFilter && debouncedFilterText
+      ? onFilter(debouncedFilterText)
+      : { data: null, isPending: false, error: false };
 
   const toggleSearch = useCallback(() => {
     if (isSearching) {
@@ -46,7 +53,7 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
     }
   }, [isSearching, setFilterText]);
 
-  const canFilter = language === 'json' || language === 'xml' || language === 'html';
+  const canFilter = onFilter && (language === 'json' || language === 'xml' || language === 'html');
 
   const actions = useMemo<ReactNode[]>(() => {
     const nodes: ReactNode[] = [];
@@ -57,8 +64,8 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
       nodes.push(
         <div key="input" className="w-full !opacity-100">
           <Input
-            key={requestId}
-            validate={!(filteredResponse.error || filteredResponse.data?.error)}
+            key={stateKey ?? 'filter'}
+            validate={!filteredResponse.error}
             hideLabel
             autoFocus
             containerClassName="bg-surface"
@@ -69,7 +76,7 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
             defaultValue={filterText}
             onKeyDown={(e) => e.key === 'Escape' && toggleSearch()}
             onChange={setFilterText}
-            stateKey={`filter.${responseId}`}
+            stateKey={stateKey ? `filter.${stateKey}` : null}
           />
         </div>,
       );
@@ -91,28 +98,26 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
   }, [
     canFilter,
     filterText,
-    filteredResponse.data?.error,
     filteredResponse.error,
     filteredResponse.isPending,
     isSearching,
     language,
-    requestId,
-    responseId,
+    stateKey,
     setFilterText,
     toggleSearch,
   ]);
 
-  const formattedBody = useFormatText({ text, language, pretty });
+  const formattedBody = useFormatText({ text, language, pretty: pretty ?? false });
   if (formattedBody == null) {
     return null;
   }
 
-  let body;
+  let body: string;
   if (isSearching && filterText?.length > 0) {
     if (filteredResponse.error) {
       body = '';
     } else {
-      body = filteredResponse.data?.content != null ? filteredResponse.data.content : '';
+      body = filteredResponse.data != null ? filteredResponse.data : '';
     }
   } else {
     body = formattedBody;
@@ -132,7 +137,7 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
       language={language}
       actions={actions}
       extraExtensions={extraExtensions}
-      stateKey={null}
+      stateKey={stateKey}
     />
   );
 }
@@ -140,7 +145,7 @@ export function TextViewer({ language, text, responseId, requestId, pretty, clas
 /** Convert \uXXXX to actual Unicode characters */
 function decodeUnicodeLiterals(text: string): string {
   return text.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => {
-    const charCode = parseInt(hex, 16);
+    const charCode = Number.parseInt(hex, 16);
     return String.fromCharCode(charCode);
   });
 }

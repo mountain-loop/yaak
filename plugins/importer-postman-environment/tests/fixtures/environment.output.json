@@ -1,0 +1,35 @@
+{
+  "resources": {
+    "workspaces": [],
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "My Environment",
+        "variables": [
+          {
+            "enabled": true,
+            "description": null,
+            "name": "baseUrl",
+            "value": "https://api.example.com"
+          },
+          {
+            "enabled": true,
+            "description": "Access token for the API.",
+            "name": "token",
+            "value": "${[access_token]}"
+          },
+          {
+            "enabled": false,
+            "description": null,
+            "name": "disabled",
+            "value": "hello"
+          }
+        ],
+        "workspaceId": "CURRENT_WORKSPACE",
+        "parentId": null,
+        "parentModel": "environment"
+      }
+    ]
+  }
+}

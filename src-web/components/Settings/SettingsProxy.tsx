@@ -1,7 +1,8 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React from 'react';
+
 import { Checkbox } from '../core/Checkbox';
+import { Heading } from '../core/Heading';
 import { InlineCode } from '../core/InlineCode';
 import { PlainInput } from '../core/PlainInput';
 import { Select } from '../core/Select';
@@ -13,6 +14,13 @@ export function SettingsProxy() {
 
   return (
     <VStack space={1.5} className="mb-4">
+      <div className="mb-3">
+        <Heading>Proxy</Heading>
+        <p className="text-text-subtle">
+          Configure a proxy server for HTTP requests. Useful for corporate firewalls, debugging
+          traffic, or routing through specific infrastructure.
+        </p>
+      </div>
       <Select
         name="proxy"
         label="Proxy"
@@ -38,9 +46,9 @@ export function SettingsProxy() {
           }
         }}
         options={[
-          { label: 'Automatic Proxy Detection', value: 'automatic' },
-          { label: 'Custom Proxy Configuration', value: 'enabled' },
-          { label: 'No Proxy', value: 'disabled' },
+          { label: 'Automatic proxy detection', value: 'automatic' },
+          { label: 'Custom proxy configuration', value: 'enabled' },
+          { label: 'No proxy', value: 'disabled' },
         ]}
       />
       {settings.proxy?.type === 'enabled' && (

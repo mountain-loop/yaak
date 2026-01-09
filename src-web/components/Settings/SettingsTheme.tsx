@@ -1,17 +1,20 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React from 'react';
+import { lazy, Suspense } from 'react';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useResolvedAppearance } from '../../hooks/useResolvedAppearance';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import type { ButtonProps } from '../core/Button';
-import { Editor } from '../core/Editor/Editor';
+import { Heading } from '../core/Heading';
 import type { IconProps } from '../core/Icon';
 import { Icon } from '../core/Icon';
 import { IconButton } from '../core/IconButton';
+import { Link } from '../core/Link';
 import type { SelectProps } from '../core/Select';
 import { Select } from '../core/Select';
 import { HStack, VStack } from '../core/Stacks';
+
+const Editor = lazy(() => import('../core/Editor/Editor').then((m) => ({ default: m.Editor })));
 
 const buttonColors: ButtonProps['color'][] = [
   'primary',
@@ -68,6 +71,15 @@ export function SettingsTheme() {
 
   return (
     <VStack space={3} className="mb-4">
+      <div className="mb-3">
+        <Heading>Theme</Heading>
+        <p className="text-text-subtle">
+          Make Yaak your own by selecting a theme, or{' '}
+          <Link href="https://feedback.yaak.app/help/articles/6911763-plugins-quick-start">
+            Create Your Own
+          </Link>
+        </p>
+      </div>
       <Select
         name="appearance"
         label="Appearance"
@@ -126,7 +138,7 @@ export function SettingsTheme() {
               color={c}
               size="2xs"
               iconSize="xs"
-              icon={icons[i % icons.length]!}
+              icon={icons[i % icons.length] ?? 'info'}
               iconClassName="text"
               title={`${c}`}
             />
@@ -138,23 +150,25 @@ export function SettingsTheme() {
               variant="border"
               size="2xs"
               iconSize="xs"
-              icon={icons[i % icons.length]!}
+              icon={icons[i % icons.length] ?? 'info'}
               iconClassName="text"
               title={`${c}`}
             />
           ))}
         </HStack>
-        <Editor
-          defaultValue={[
-            'let foo = { // Demo code editor',
-            '  foo: ("bar" || "baz" ?? \'qux\'),',
-            '  baz: [1, 10.2, null, false, true],',
-            '};',
-          ].join('\n')}
-          heightMode="auto"
-          language="javascript"
-          stateKey={null}
-        />
+        <Suspense>
+          <Editor
+            defaultValue={[
+              'let foo = { // Demo code editor',
+              '  foo: ("bar" || "baz" ?? \'qux\'),',
+              '  baz: [1, 10.2, null, false, true],',
+              '};',
+            ].join('\n')}
+            heightMode="auto"
+            language="javascript"
+            stateKey={null}
+          />
+        </Suspense>
       </VStack>
     </VStack>
   );

@@ -4,10 +4,11 @@
   "description": "Template functions for working with JSON data",
   "private": true,
   "version": "0.1.0",
+  "main": "build/index.js",
+  "types": "src/index.ts",
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev",
-    "lint": "eslint . --ext .ts,.tsx"
+    "dev": "yaakcli dev"
   },
   "dependencies": {
     "jsonpath-plus": "^10.3.0"

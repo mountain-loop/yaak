@@ -43,7 +43,6 @@ export function Dialog({
 
   return (
     <Overlay open={open} onClose={disableBackdropClose ? undefined : onClose} portalName="dialog">
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         role="dialog"
         className={classNames(
@@ -89,15 +88,15 @@ export function Dialog({
               {title}
             </Heading>
           ) : (
-            <span aria-hidden />
+            <span />
           )}
 
           {description ? (
-            <div className="px-6 text-text-subtle mb-3" id={descriptionId}>
+            <div className="min-h-0 px-6 text-text-subtle mb-3" id={descriptionId}>
               {description}
             </div>
           ) : (
-            <span aria-hidden />
+            <span />
           )}
 
           <div

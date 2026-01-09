@@ -79,7 +79,7 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
     >
       <IconButton
         title="Show response history"
-        icon={activeResponse?.id === latestResponseId ? 'chevron_down' : 'pin'}
+        icon={activeResponse?.id === latestResponseId ? 'history' : 'pin'}
         className="m-0.5 text-text-subtle"
         size="sm"
         iconSize="md"

@@ -1,5 +1,5 @@
-import { useFastMutation } from './useFastMutation';
 import { invokeCmd } from '../lib/tauri';
+import { useFastMutation } from './useFastMutation';
 
 export function useInstallPlugin() {
   return useFastMutation<void, unknown, string>({

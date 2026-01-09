@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Dev App",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Build App",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Bootstrap",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "bootstrap"]
+    }
+  ]
+}

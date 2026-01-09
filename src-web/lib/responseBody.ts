@@ -1,23 +1,26 @@
 import { readFile } from '@tauri-apps/plugin-fs';
 import type { HttpResponse } from '@yaakapp-internal/models';
+import type { FilterResponse } from '@yaakapp-internal/plugins';
 import type { ServerSentEvent } from '@yaakapp-internal/sse';
-import { getCharsetFromContentType } from './model_util';
 import { invokeCmd } from './tauri';
 
-export async function getResponseBodyText(response: HttpResponse): Promise<string | null> {
-  if (!response.bodyPath) {
-    return null;
+export async function getResponseBodyText({
+  response,
+  filter,
+}: {
+  response: HttpResponse;
+  filter: string | null;
+}): Promise<string | null> {
+  const result = await invokeCmd<FilterResponse>('cmd_http_response_body', {
+    response,
+    filter,
+  });
+
+  if (result.error) {
+    throw new Error(result.error);
   }
 
-  const bytes = await readFile(response.bodyPath);
-  const charset = getCharsetFromContentType(response.headers);
-
-  return new TextDecoder(charset ?? 'utf-8', { fatal: false }).decode(bytes);
-}
-
-export async function getResponseBodyBlob(response: HttpResponse): Promise<Uint8Array | null> {
-  if (!response.bodyPath) return null;
-  return readFile(response.bodyPath);
+  return result.content;
 }
 
 export async function getResponseBodyEventSource(
@@ -27,4 +30,11 @@ export async function getResponseBodyEventSource(
   return invokeCmd<ServerSentEvent[]>('cmd_get_sse_events', {
     filePath: response.bodyPath,
   });
+}
+
+export async function getResponseBodyBytes(
+  response: HttpResponse,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!response.bodyPath) return null;
+  return readFile(response.bodyPath);
 }

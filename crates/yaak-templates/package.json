@@ -1,0 +1,15 @@
+{
+  "name": "@yaakapp-internal/templates",
+  "private": true,
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "bootstrap": "npm run build",
+    "build": "run-s build:*",
+    "build:pack": "wasm-pack build --target bundler",
+    "build:clean": "rimraf ./pkg/.gitignore"
+  },
+  "devDependencies": {
+    "rimraf": "^6.1.2"
+  }
+}

@@ -2,13 +2,14 @@ import { patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
 import { activeGrpcConnectionAtom, useGrpcEvents } from '../hooks/usePinnedGrpcConnection';
+import { workspaceLayoutAtom } from '../lib/atoms';
 import { Banner } from './core/Banner';
-import { HotKeyList } from './core/HotKeyList';
+import { HotkeyList } from './core/HotkeyList';
 import { SplitLayout } from './core/SplitLayout';
 import { GrpcRequestPane } from './GrpcRequestPane';
 import { GrpcResponsePane } from './GrpcResponsePane';
@@ -20,6 +21,7 @@ interface Props {
 const emptyArray: string[] = [];
 
 export function GrpcConnectionLayout({ style }: Props) {
+  const workspaceLayout = useAtomValue(workspaceLayoutAtom);
   const activeRequest = useActiveRequest('grpc_request');
   const activeConnection = useAtomValue(activeGrpcConnectionAtom);
   const grpcEvents = useGrpcEvents(activeConnection?.id ?? null);
@@ -80,6 +82,7 @@ export function GrpcConnectionLayout({ style }: Props) {
       name="grpc_layout"
       className="p-3 gap-1.5"
       style={style}
+      layout={workspaceLayout}
       firstSlot={({ style }) => (
         <GrpcRequestPane
           style={style}
@@ -114,7 +117,7 @@ export function GrpcConnectionLayout({ style }: Props) {
             ) : grpcEvents.length >= 0 ? (
               <GrpcResponsePane activeRequest={activeRequest} methodType={methodType} />
             ) : (
-              <HotKeyList hotkeys={['grpc_request.send', 'sidebar.focus', 'url_bar.focus']} />
+              <HotkeyList hotkeys={['request.send', 'sidebar.focus', 'url_bar.focus']} />
             )}
           </div>
         )

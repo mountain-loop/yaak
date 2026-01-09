@@ -1,24 +1,40 @@
-import {
+import type {
   CallHttpAuthenticationActionArgs,
   CallHttpAuthenticationRequest,
   CallHttpAuthenticationResponse,
   FormInput,
-  GetHttpAuthenticationConfigRequest,
   GetHttpAuthenticationSummaryResponse,
   HttpAuthenticationAction,
 } from '../bindings/gen_events';
-import { MaybePromise } from '../helpers';
-import { Context } from './Context';
+import type { MaybePromise } from '../helpers';
+import type { Context } from './Context';
 
-type DynamicFormInput = FormInput & {
-  dynamic(
+type AddDynamicMethod<T> = {
+  dynamic?: (
     ctx: Context,
-    args: GetHttpAuthenticationConfigRequest,
-  ): MaybePromise<Partial<FormInput> | undefined | null>;
+    args: CallHttpAuthenticationActionArgs,
+  ) => MaybePromise<Partial<T> | null | undefined>;
 };
 
+// biome-ignore lint/suspicious/noExplicitAny: distributive conditional type pattern
+type AddDynamic<T> = T extends any
+  ? T extends { inputs?: FormInput[] }
+    ? Omit<T, 'inputs'> & {
+        inputs: Array<AddDynamic<FormInput>>;
+        dynamic?: (
+          ctx: Context,
+          args: CallHttpAuthenticationActionArgs,
+        ) => MaybePromise<
+          Partial<Omit<T, 'inputs'> & { inputs: Array<AddDynamic<FormInput>> }> | null | undefined
+        >;
+      }
+    : T & AddDynamicMethod<T>
+  : never;
+
+export type DynamicAuthenticationArg = AddDynamic<FormInput>;
+
 export type AuthenticationPlugin = GetHttpAuthenticationSummaryResponse & {
-  args: (FormInput | DynamicFormInput)[];
+  args: DynamicAuthenticationArg[];
   onApply(
     ctx: Context,
     args: CallHttpAuthenticationRequest,

@@ -1,4 +1,4 @@
-import type { AnyModel} from '@yaakapp-internal/models';
+import type { AnyModel } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import { InlineCode } from '../components/core/InlineCode';
 import { showPrompt } from './prompt';
@@ -11,6 +11,7 @@ export async function renameModelWithPrompt(model: Extract<AnyModel, { name: str
   const name = await showPrompt({
     id: 'rename-request',
     title: 'Rename Request',
+    required: false,
     description:
       model.name === '' ? (
         'Enter a new name'

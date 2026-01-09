@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render() {
     if (this.state.hasError) {
       return (
-        <Banner color="danger" className="flex items-center gap-2">
+        <Banner color="danger" className="flex items-center gap-2 overflow-auto">
           <div>
             Error rendering <InlineCode>{this.props.name}</InlineCode> component
           </div>

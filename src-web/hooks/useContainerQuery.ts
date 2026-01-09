@@ -1,18 +1,18 @@
-import type { MutableRefObject } from 'react';
+import type { RefObject } from 'react';
 import { useLayoutEffect, useState } from 'react';
 
-export function useContainerSize(ref: MutableRefObject<HTMLElement | null>) {
+export function useContainerSize(ref: RefObject<HTMLElement | null>) {
   const [size, setSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (el) {
       const observer = new ResizeObserver((entries) => {
-        entries.forEach((entry) => {
+        for (const entry of entries) {
           if (entry.target === el) {
             setSize({ width: entry.contentRect.width, height: entry.contentRect.height });
           }
-        });
+        }
       });
 
       observer.observe(el);

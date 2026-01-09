@@ -57,15 +57,18 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
 
   const rawDescription = info.description;
   const description =
-    typeof rawDescription === 'object' && rawDescription !== null && 'content' in rawDescription
+    typeof rawDescription === 'object' && rawDescription != null && 'content' in rawDescription
       ? String(rawDescription.content)
-      : String(rawDescription);
+      : rawDescription == null
+        ? undefined
+        : String(rawDescription);
 
   const workspace: ExportResources['workspaces'][0] = {
     model: 'workspace',
     id: generateId('workspace'),
     name: info.name ? String(info.name) : 'Postman Import',
     description,
+    ...globalAuth,
   };
   exportResources.workspaces.push(workspace);
 
@@ -75,6 +78,8 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
     id: generateId('environment'),
     name: 'Global Variables',
     workspaceId: workspace.id,
+    parentModel: 'workspace',
+    parentId: null,
     variables:
       toArray<{ key: string; value: string }>(root.variable).map((v) => ({
         name: v.key,
@@ -101,8 +106,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
     } else if (typeof v.name === 'string' && 'request' in v) {
       const r = toRecord(v.request);
       const bodyPatch = importBody(r.body);
-      const requestAuthPath = importAuth(r.auth);
-      const authPatch = requestAuthPath.authenticationType == null ? globalAuth : requestAuthPath;
+      const requestAuth = importAuth(r.auth);
 
       const headers: HttpRequestHeader[] = toArray<{
         key: string;
@@ -141,10 +145,9 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
         urlParameters,
         body: bodyPatch.body,
         bodyType: bodyPatch.bodyType,
-        authentication: authPatch.authentication,
-        authenticationType: authPatch.authenticationType,
         sortPriority: sortPriorityIndex++,
         headers,
+        ...requestAuth,
       };
       exportResources.httpRequests.push(request);
     } else {
@@ -202,7 +205,7 @@ function convertUrl(rawUrl: string | unknown): Pick<HttpRequest, 'url' | 'urlPar
   if ('variable' in url && Array.isArray(url.variable) && url.variable.length > 0) {
     for (const v of url.variable) {
       params.push({
-        name: ':' + (v.key ?? ''),
+        name: `:${v.key ?? ''}`,
         value: v.value ?? '',
         enabled: !v.disabled,
       });
@@ -219,25 +222,159 @@ function convertUrl(rawUrl: string | unknown): Pick<HttpRequest, 'url' | 'urlPar
 }
 
 function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'authenticationType'> {
-  const auth = toRecord<{ username?: string; password?: string; token?: string }>(rawAuth);
-  if ('basic' in auth) {
+  const auth = toRecord<Record<string, string>>(rawAuth);
+
+  // Helper: Postman stores auth params as an array of { key, value, ... }
+  const pmArrayToObj = (v: unknown): Record<string, unknown> => {
+    if (!Array.isArray(v)) return toRecord(v);
+    const o: Record<string, unknown> = {};
+    for (const i of v) {
+      const ii = toRecord(i);
+      if (typeof ii.key === 'string') {
+        o[ii.key] = ii.value;
+      }
+    }
+    return o;
+  };
+
+  const authType: string | undefined = auth.type ? String(auth.type) : undefined;
+
+  if (authType === 'noauth') {
+    return {
+      authenticationType: 'none',
+      authentication: {},
+    };
+  }
+
+  if ('basic' in auth && authType === 'basic') {
+    const b = pmArrayToObj(auth.basic);
     return {
       authenticationType: 'basic',
       authentication: {
-        username: auth.basic.username || '',
-        password: auth.basic.password || '',
+        username: String(b.username ?? ''),
+        password: String(b.password ?? ''),
       },
     };
-  } else if ('bearer' in auth) {
+  }
+
+  if ('bearer' in auth && authType === 'bearer') {
+    const b = pmArrayToObj(auth.bearer);
+    // Postman uses key "token"
     return {
       authenticationType: 'bearer',
       authentication: {
-        token: auth.bearer.token || '',
+        token: String(b.token ?? ''),
       },
     };
-  } else {
-    return { authenticationType: null, authentication: {} };
   }
+
+  if ('awsv4' in auth && authType === 'awsv4') {
+    const a = pmArrayToObj(auth.awsv4);
+    return {
+      authenticationType: 'awsv4',
+      authentication: {
+        accessKeyId: a.accessKey != null ? String(a.accessKey) : undefined,
+        secretAccessKey: a.secretKey != null ? String(a.secretKey) : undefined,
+        sessionToken: a.sessionToken != null ? String(a.sessionToken) : undefined,
+        region: a.region != null ? String(a.region) : undefined,
+        service: a.service != null ? String(a.service) : undefined,
+      },
+    };
+  }
+
+  if ('apikey' in auth && authType === 'apikey') {
+    const a = pmArrayToObj(auth.apikey);
+    return {
+      authenticationType: 'apikey',
+      authentication: {
+        location: a.in === 'query' ? 'query' : 'header',
+        key: a.value != null ? String(a.value) : undefined,
+        value: a.key != null ? String(a.key) : undefined,
+      },
+    };
+  }
+
+  if ('jwt' in auth && authType === 'jwt') {
+    const a = pmArrayToObj(auth.jwt);
+    return {
+      authenticationType: 'jwt',
+      authentication: {
+        algorithm: a.algorithm != null ? String(a.algorithm).toUpperCase() : undefined,
+        secret: a.secret != null ? String(a.secret) : undefined,
+        secretBase64: !!a.isSecretBase64Encoded,
+        payload: a.payload != null ? String(a.payload) : undefined,
+        headerPrefix: a.headerPrefix != null ? String(a.headerPrefix) : undefined,
+        location: a.addTokenTo === 'header' ? 'header' : 'query',
+      },
+    };
+  }
+
+  if ('oauth2' in auth && authType === 'oauth2') {
+    const o = pmArrayToObj(auth.oauth2);
+
+    let grantType = o.grant_type ? String(o.grant_type) : 'authorization_code';
+    let pkcePatch: Record<string, unknown> = {};
+
+    if (grantType === 'authorization_code_with_pkce') {
+      grantType = 'authorization_code';
+      pkcePatch =
+        o.grant_type === 'authorization_code_with_pkce'
+          ? {
+              usePkce: true,
+              pkceChallengeMethod: o.challengeAlgorithm ?? undefined,
+              pkceCodeVerifier: o.code_verifier != null ? String(o.code_verifier) : undefined,
+            }
+          : {};
+    } else if (grantType === 'password_credentials') {
+      grantType = 'password';
+    }
+
+    const accessTokenUrl = o.accessTokenUrl != null ? String(o.accessTokenUrl) : undefined;
+    const audience = o.audience != null ? String(o.audience) : undefined;
+    const authorizationUrl = o.authUrl != null ? String(o.authUrl) : undefined;
+    const clientId = o.clientId != null ? String(o.clientId) : undefined;
+    const clientSecret = o.clientSecret != null ? String(o.clientSecret) : undefined;
+    const credentials = o.client_authentication === 'body' ? 'body' : undefined;
+    const headerPrefix = o.headerPrefix ?? 'Bearer';
+    const password = o.password != null ? String(o.password) : undefined;
+    const redirectUri = o.redirect_uri != null ? String(o.redirect_uri) : undefined;
+    const scope = o.scope != null ? String(o.scope) : undefined;
+    const state = o.state != null ? String(o.state) : undefined;
+    const username = o.username != null ? String(o.username) : undefined;
+
+    let grantPatch: Record<string, unknown> = {};
+    if (grantType === 'authorization_code') {
+      grantPatch = {
+        clientSecret,
+        authorizationUrl,
+        accessTokenUrl,
+        redirectUri,
+        state,
+        ...pkcePatch,
+      };
+    } else if (grantType === 'implicit') {
+      grantPatch = { authorizationUrl, redirectUri, state };
+    } else if (grantType === 'password') {
+      grantPatch = { clientSecret, accessTokenUrl, username, password };
+    } else if (grantType === 'client_credentials') {
+      grantPatch = { clientSecret, accessTokenUrl };
+    }
+
+    const authentication = {
+      name: 'oauth2',
+      grantType,
+      audience,
+      clientId,
+      credentials,
+      headerPrefix,
+      scope,
+      ...grantPatch,
+    } as Record<string, unknown>;
+
+    return { authenticationType: 'oauth2', authentication };
+  }
+
+  return { authenticationType: null, authentication: {} };
 }
 
 function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | 'headers'> {
@@ -277,7 +414,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         ),
       },
     };
-  } else if (body.mode === 'urlencoded') {
+  }
+  if (body.mode === 'urlencoded') {
     return {
       headers: [
         {
@@ -295,7 +433,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         })),
       },
     };
-  } else if (body.mode === 'formdata') {
+  }
+  if (body.mode === 'formdata') {
     return {
       headers: [
         {
@@ -322,7 +461,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         ),
       },
     };
-  } else if (body.mode === 'raw') {
+  }
+  if (body.mode === 'raw') {
     return {
       headers: [
         {
@@ -336,7 +476,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         text: body.raw ?? '',
       },
     };
-  } else if (body.mode === 'file') {
+  }
+  if (body.mode === 'file') {
     return {
       headers: [],
       bodyType: 'binary',
@@ -344,9 +485,8 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
         filePath: body.file?.src,
       },
     };
-  } else {
-    return { headers: [], bodyType: null, body: {} };
   }
+  return { headers: [], bodyType: null, body: {} };
 }
 
 function parseJSONToRecord<T>(jsonStr: string): Record<string, T> | null {
@@ -366,36 +506,40 @@ function toRecord<T>(value: Record<string, T> | unknown): Record<string, T> {
 
 function toArray<T>(value: unknown): T[] {
   if (Object.prototype.toString.call(value) === '[object Array]') return value as T[];
-  else return [];
+  return [];
 }
 
 /** Recursively render all nested object properties */
 function convertTemplateSyntax<T>(obj: T): T {
   if (typeof obj === 'string') {
-    return obj.replace(/{{\s*(_\.)?([^}]+)\s*}}/g, '${[$2]}') as T;
-  } else if (Array.isArray(obj) && obj != null) {
+    return obj.replace(
+      /{{\s*(_\.)?([^}]*)\s*}}/g,
+      (_m, _dot, expr) => `\${[${expr.trim().replace(/^vault:/, '')}]}`,
+    ) as T;
+  }
+  if (Array.isArray(obj) && obj != null) {
     return obj.map(convertTemplateSyntax) as T;
-  } else if (typeof obj === 'object' && obj != null) {
+  }
+  if (typeof obj === 'object' && obj != null) {
     return Object.fromEntries(
       Object.entries(obj).map(([k, v]) => [k, convertTemplateSyntax(v)]),
     ) as T;
-  } else {
-    return obj;
   }
+  return obj;
 }
 
 function deleteUndefinedAttrs<T>(obj: T): T {
   if (Array.isArray(obj) && obj != null) {
     return obj.map(deleteUndefinedAttrs) as T;
-  } else if (typeof obj === 'object' && obj != null) {
+  }
+  if (typeof obj === 'object' && obj != null) {
     return Object.fromEntries(
       Object.entries(obj)
         .filter(([, v]) => v !== undefined)
         .map(([k, v]) => [k, deleteUndefinedAttrs(v)]),
     ) as T;
-  } else {
-    return obj;
   }
+  return obj;
 }
 
 const idCount: Partial<Record<string, number>> = {};

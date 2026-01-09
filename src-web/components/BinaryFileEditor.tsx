@@ -1,6 +1,6 @@
+import type { HttpRequest } from '@yaakapp-internal/models';
 import mime from 'mime';
 import { useKeyValue } from '../hooks/useKeyValue';
-import type { HttpRequest } from '@yaakapp-internal/models';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';

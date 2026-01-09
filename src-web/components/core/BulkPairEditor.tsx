@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { generateId } from '../../lib/generateId';
-import { Editor } from './Editor/Editor';
+import { Editor } from './Editor/LazyEditor';
 import type { Pair, PairEditorProps, PairWithId } from './PairEditor';
 
 type Props = PairEditorProps;

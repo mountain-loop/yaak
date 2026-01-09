@@ -1,7 +1,7 @@
 import { type GrpcRequest, type HttpRequestHeader, patchModel } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
-import React, { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
@@ -183,7 +183,7 @@ export function GrpcRequestPane({
           onUrlChange={handleChangeUrl}
           onCancel={onCancel}
           isLoading={isStreaming}
-          stateKey={'grpc_url.' + activeRequest.id}
+          stateKey={`grpc_url.${activeRequest.id}`}
         />
         <HStack space={1.5}>
           <RadioDropdown
@@ -240,7 +240,7 @@ export function GrpcRequestPane({
                 size="sm"
                 variant="border"
                 title={isStreaming ? 'Connect' : 'Send'}
-                hotkeyAction="grpc_request.send"
+                hotkeyAction="request.send"
                 onClick={isStreaming ? handleSend : handleConnect}
                 icon={isStreaming ? 'send_horizontal' : 'arrow_up_down'}
               />
@@ -250,7 +250,7 @@ export function GrpcRequestPane({
               size="sm"
               variant="border"
               title={methodType === 'unary' ? 'Send' : 'Connect'}
-              hotkeyAction="grpc_request.send"
+              hotkeyAction="request.send"
               onClick={isStreaming ? onCancel : handleConnect}
               disabled={methodType === 'no-schema' || methodType === 'no-method'}
               icon={
@@ -270,6 +270,7 @@ export function GrpcRequestPane({
         onChangeValue={setActiveTab}
         tabs={tabs}
         tabListClassName="mt-1 !mb-1.5"
+        storageKey="grpc_request_tabs_order"
       >
         <TabContent value="message">
           <GrpcEditor

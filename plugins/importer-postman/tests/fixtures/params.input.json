@@ -14,7 +14,7 @@
           "bearer": [
             {
               "key": "token",
-              "value": "baeare",
+              "value": "my-token",
               "type": "string"
             }
           ]
@@ -47,14 +47,8 @@
         },
         "url": {
           "raw": "example.com/:foo/:bar?q=qqq&",
-          "host": [
-            "example",
-            "com"
-          ],
-          "path": [
-            ":foo",
-            ":bar"
-          ],
+          "host": ["example", "com"],
+          "path": [":foo", ":bar"],
           "query": [
             {
               "key": "disabled",
@@ -110,9 +104,7 @@
       "script": {
         "type": "text/javascript",
         "packages": {},
-        "exec": [
-          ""
-        ]
+        "exec": [""]
       }
     },
     {
@@ -120,9 +112,7 @@
       "script": {
         "type": "text/javascript",
         "packages": {},
-        "exec": [
-          ""
-        ]
+        "exec": [""]
       }
     }
   ],

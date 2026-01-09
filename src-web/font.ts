@@ -11,7 +11,8 @@ function setFonts(settings: Settings) {
   );
 }
 
-listen<ModelPayload>('upserted_model', async (event) => {
+listen<ModelPayload>('model_write', async (event) => {
+  if (event.payload.change.type !== 'upsert') return;
   if (event.payload.model.model !== 'settings') return;
   setFonts(event.payload.model);
 }).catch(console.error);

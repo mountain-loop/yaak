@@ -11,8 +11,7 @@
   "version": "0.1.0",
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev",
-    "lint": "eslint . --ext .ts,.tsx"
+    "dev": "yaakcli dev"
   },
   "dependencies": {
     "jsonwebtoken": "^9.0.2"

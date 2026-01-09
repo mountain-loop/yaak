@@ -1,18 +1,39 @@
 import classNames from 'classnames';
-import type { FocusEvent, HTMLAttributes } from 'react';
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
+import type { FocusEvent, HTMLAttributes, ReactNode } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { useRandomKey } from '../../hooks/useRandomKey';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
+import { generateId } from '../../lib/generateId';
 import { IconButton } from './IconButton';
 import type { InputProps } from './Input';
 import { Label } from './Label';
 import { HStack } from './Stacks';
 
-export type PlainInputProps = Omit<InputProps, 'wrapLines' | 'onKeyDown' | 'type' | 'stateKey'> &
+export type PlainInputProps = Omit<
+  InputProps,
+  | 'wrapLines'
+  | 'onKeyDown'
+  | 'type'
+  | 'stateKey'
+  | 'autocompleteVariables'
+  | 'autocompleteFunctions'
+  | 'autocomplete'
+  | 'extraExtensions'
+  | 'forcedEnvironmentId'
+> &
   Pick<HTMLAttributes<HTMLInputElement>, 'onKeyDownCapture'> & {
     onFocusRaw?: HTMLAttributes<HTMLInputElement>['onFocus'];
     type?: 'text' | 'password' | 'number';
     step?: number;
     hideObscureToggle?: boolean;
+    labelRightSlot?: ReactNode;
   };
 
 export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(function PlainInput(
@@ -22,13 +43,14 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     className,
     containerClassName,
     defaultValue,
-    forceUpdateKey,
+    forceUpdateKey: forceUpdateKeyFromAbove,
     help,
     hideLabel,
     hideObscureToggle,
     label,
     labelClassName,
     labelPosition = 'top',
+    labelRightSlot,
     leftSlot,
     name,
     onBlur,
@@ -47,15 +69,21 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
   },
   ref,
 ) {
+  // Track a local key for updates. If the default value is changed when the input is not in focus,
+  // regenerate this to force the field to update.
+  const [focusedUpdateKey, regenerateFocusedUpdateKey] = useRandomKey();
+  const forceUpdateKey = `${forceUpdateKeyFromAbove}::${focusedUpdateKey}`;
+
   const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
   const [focused, setFocused] = useState(false);
   const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [forceUpdateKey]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
   useImperativeHandle<{ focus: () => void } | null, { focus: () => void } | null>(
     ref,
     () => inputRef.current,
   );
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleFocus = useCallback(
     (e: FocusEvent<HTMLInputElement>) => {
@@ -75,7 +103,15 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     onBlur?.();
   }, [onBlur]);
 
-  const id = `input-${name}`;
+  // Force input to update when receiving change and not in focus
+  useLayoutEffect(() => {
+    const isFocused = document.activeElement === inputRef.current;
+    if (defaultValue != null && !isFocused) {
+      regenerateFocusedUpdateKey();
+    }
+  }, [regenerateFocusedUpdateKey, defaultValue]);
+
+  const id = useRef(`input-${generateId()}`);
   const commonClassName = classNames(
     className,
     '!bg-transparent min-w-0 w-full focus:outline-none placeholder:text-placeholder',
@@ -110,11 +146,12 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
       )}
     >
       <Label
-        htmlFor={id}
+        htmlFor={id.current}
         className={labelClassName}
         visuallyHidden={hideLabel}
         required={required}
         help={help}
+        rightSlot={labelRightSlot}
       >
         {label}
       </Label>
@@ -125,6 +162,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
           'x-theme-input',
           'relative w-full rounded-md text',
           'border',
+          'overflow-hidden',
           focused ? 'border-border-focus' : 'border-border-subtle',
           hasChanged && 'has-[:invalid]:border-danger', // For built-in HTML validation
           size === 'md' && 'min-h-md',
@@ -152,10 +190,13 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
           )}
         >
           <input
+            id={id.current}
             ref={inputRef}
             key={forceUpdateKey}
-            id={id}
             type={type === 'password' && !obscured ? 'text' : type}
+            name={name}
+            // biome-ignore lint/a11y/noAutofocus: Who cares
+            autoFocus={autoFocus}
             defaultValue={defaultValue ?? undefined}
             autoComplete="off"
             autoCapitalize="off"
@@ -166,7 +207,6 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
             onFocus={handleFocus}
             onBlur={handleBlur}
             required={required}
-            autoFocus={autoFocus}
             placeholder={placeholder}
             onKeyDownCapture={onKeyDownCapture}
           />

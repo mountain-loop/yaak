@@ -1,5 +1,5 @@
 import classNames from 'classnames';
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Icon } from './Icon';
 import { IconTooltip } from './IconTooltip';
 import { HStack } from './Stacks';
@@ -40,7 +40,7 @@ export function Checkbox({
           className={classNames(
             'appearance-none w-4 h-4 flex-shrink-0 border border-border',
             'rounded outline-none ring-0',
-            !disabled && 'hocus:border-border-focus hocus:bg-focus/[5%] ',
+            !disabled && 'hocus:border-border-focus hocus:bg-focus/[5%]',
             disabled && 'border-dotted',
           )}
           type="checkbox"
@@ -58,7 +58,9 @@ export function Checkbox({
         </div>
       </div>
       {!hideLabel && (
-        <div className={classNames(fullWidth && 'w-full', disabled && 'opacity-disabled')}>
+        <div
+          className={classNames('text-sm', fullWidth && 'w-full', disabled && 'opacity-disabled')}
+        >
           {title}
         </div>
       )}

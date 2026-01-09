@@ -6,8 +6,8 @@ import type {
   PluginDefinition,
 } from '@yaakapp/api';
 import {
-  genPkceCodeVerifier,
   DEFAULT_PKCE_METHOD,
+  genPkceCodeVerifier,
   getAuthorizationCode,
   PKCE_PLAIN,
   PKCE_SHA256,
@@ -27,7 +27,7 @@ const grantTypes: FormInputSelectOption[] = [
   { label: 'Client Credentials', value: 'client_credentials' },
 ];
 
-const defaultGrantType = grantTypes[0]!.value;
+const defaultGrantType = grantTypes[0]?.value;
 
 function hiddenIfNot(
   grantTypes: GrantType[],
@@ -125,24 +125,12 @@ export const plugin: PluginDefinition = {
           await resetDataDirKey(ctx, contextId);
         },
       },
-      {
-        label: 'Toggle Debug Logs',
-        async onSelect(ctx) {
-          const enableLogs = !(await ctx.store.get('enable_logs'));
-          await ctx.store.set('enable_logs', enableLogs);
-          await ctx.toast.show({
-            message: `Debug logs ${enableLogs ? 'enabled' : 'disabled'}`,
-            color: 'info',
-          });
-        },
-      },
     ],
     args: [
       {
         type: 'select',
         name: 'grantType',
         label: 'Grant Type',
-        hideLabel: true,
         defaultValue: defaultGrantType,
         options: grantTypes,
       },
@@ -273,6 +261,12 @@ export const plugin: PluginDefinition = {
           { type: 'text', name: 'scope', label: 'Scope', optional: true },
           {
             type: 'text',
+            name: 'headerName',
+            label: 'Header Name',
+            defaultValue: 'Authorization',
+          },
+          {
+            type: 'text',
             name: 'headerPrefix',
             label: 'Header Prefix',
             optional: true,
@@ -293,6 +287,7 @@ export const plugin: PluginDefinition = {
       {
         type: 'accordion',
         label: 'Access Token Response',
+        inputs: [],
         async dynamic(ctx, { contextId, values }) {
           const tokenArgs: TokenStoreArgs = {
             contextId,
@@ -309,6 +304,7 @@ export const plugin: PluginDefinition = {
             inputs: [
               {
                 type: 'editor',
+                name: 'response',
                 defaultValue: JSON.stringify(token.response, null, 2),
                 hideLabel: true,
                 readOnly: true,
@@ -394,18 +390,12 @@ export const plugin: PluginDefinition = {
           credentialsInBody,
         });
       } else {
-        throw new Error('Invalid grant type ' + grantType);
+        throw new Error(`Invalid grant type ${grantType}`);
       }
 
+      const headerName = stringArg(values, 'headerName') || 'Authorization';
       const headerValue = `${headerPrefix} ${token.response[tokenName]}`.trim();
-      return {
-        setHeaders: [
-          {
-            name: 'Authorization',
-            value: headerValue,
-          },
-        ],
-      };
+      return { setHeaders: [{ name: headerName, value: headerValue }] };
     },
   },
 };
@@ -415,7 +405,7 @@ function stringArgOrNull(
   name: string,
 ): string | null {
   const arg = values[name];
-  if (arg == null || arg == '') return null;
+  if (arg == null || arg === '') return null;
   return `${arg}`;
 }
 

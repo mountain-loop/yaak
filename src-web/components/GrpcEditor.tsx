@@ -10,14 +10,14 @@ import {
   stateExtensions,
   updateSchema,
 } from 'codemirror-json-schema';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { showAlert } from '../lib/alert';
 import { showDialog } from '../lib/dialog';
 import { pluralizeCount } from '../lib/pluralize';
 import { Button } from './core/Button';
 import type { EditorProps } from './core/Editor/Editor';
-import { Editor } from './core/Editor/Editor';
+import { Editor } from './core/Editor/LazyEditor';
 import { FormattedError } from './core/FormattedError';
 import { InlineCode } from './core/InlineCode';
 import { VStack } from './core/Stacks';
@@ -40,6 +40,9 @@ export function GrpcEditor({
   ...extraEditorProps
 }: Props) {
   const editorViewRef = useRef<EditorView>(null);
+  const handleInitEditorViewRef = useCallback((h: EditorView | null) => {
+    editorViewRef.current = h;
+  }, []);
 
   // Find the schema for the selected service and method and update the editor
   useEffect(() => {
@@ -167,14 +170,13 @@ export function GrpcEditor({
   return (
     <div className="h-full w-full grid grid-cols-1 grid-rows-[minmax(0,100%)_auto_auto_minmax(0,auto)]">
       <Editor
+        setRef={handleInitEditorViewRef}
         language="json"
         autocompleteFunctions
         autocompleteVariables
-        forceUpdateKey={request.id}
         defaultValue={request.message}
         heightMode="auto"
         placeholder="..."
-        ref={editorViewRef}
         extraExtensions={extraExtensions}
         actions={actions}
         stateKey={`grpc_message.${request.id}`}

@@ -15,8 +15,8 @@ import { copyToClipboard } from '../lib/copy';
 import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { Editor } from './core/Editor/Editor';
-import { HotKeyList } from './core/HotKeyList';
+import { Editor } from './core/Editor/LazyEditor';
+import { HotkeyList } from './core/HotkeyList';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
@@ -55,13 +55,13 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
     [activeEventId, events],
   );
 
-  // Set active message to the first message received if unary
+  // Set the active message to the first message received if unary
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     if (events.length === 0 || activeEvent != null || methodType !== 'unary') {
       return;
     }
     setActiveEventId(events.find((m) => m.eventType === 'server_message')?.id ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events.length]);
 
   return (
@@ -73,8 +73,8 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
       minHeightPx={20}
       firstSlot={() =>
         activeConnection == null ? (
-          <HotKeyList
-            hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'url_bar.focus']}
+          <HotkeyList
+            hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']}
           />
         ) : (
           <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 items-center">
@@ -226,6 +226,7 @@ function EventRow({
   return (
     <div className="px-1" ref={ref}>
       <button
+        type="button"
         onClick={onClick}
         className={classNames(
           'w-full grid grid-cols-[auto_minmax(0,3fr)_auto] gap-2 items-center text-left',
@@ -274,7 +275,7 @@ function EventRow({
           {error && <span className="text-warning"> ({error})</span>}
         </div>
         <div className={classNames('opacity-50 text-xs')}>
-          {format(createdAt + 'Z', 'HH:mm:ss.SSS')}
+          {format(`${createdAt}Z`, 'HH:mm:ss.SSS')}
         </div>
       </button>
     </div>

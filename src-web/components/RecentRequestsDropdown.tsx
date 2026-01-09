@@ -2,10 +2,10 @@ import classNames from 'classnames';
 import { useMemo, useRef } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
+import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useHotKey } from '../hooks/useHotKey';
 import { useKeyboardEvent } from '../hooks/useKeyboardEvent';
 import { useRecentRequests } from '../hooks/useRecentRequests';
-import { allRequestsAtom } from '../hooks/useAllRequests';
 import { jotaiStore } from '../lib/jotai';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
@@ -32,7 +32,7 @@ export function RecentRequestsDropdown({ className }: Props) {
     }
   });
 
-  useHotKey('request_switcher.prev', () => {
+  useHotKey('switcher.prev', () => {
     if (!dropdownRef.current?.isOpen) {
       // Select the second because the first is the current request
       dropdownRef.current?.open(1);
@@ -41,7 +41,7 @@ export function RecentRequestsDropdown({ className }: Props) {
     }
   });
 
-  useHotKey('request_switcher.next', () => {
+  useHotKey('switcher.next', () => {
     if (!dropdownRef.current?.isOpen) dropdownRef.current?.open();
     dropdownRef.current?.prev?.();
   });
@@ -87,7 +87,7 @@ export function RecentRequestsDropdown({ className }: Props) {
     <Dropdown ref={dropdownRef} items={items}>
       <Button
         size="sm"
-        hotkeyAction="request_switcher.toggle"
+        hotkeyAction="switcher.toggle"
         className={classNames(
           className,
           'truncate pointer-events-auto',

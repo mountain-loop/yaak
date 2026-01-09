@@ -12,6 +12,6 @@
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "lint": "eslint . --ext .ts,.tsx"
+    "test": "vitest --run tests"
   }
 }

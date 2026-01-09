@@ -1,3 +1,4 @@
+import { type } from '@tauri-apps/plugin-os';
 import classNames from 'classnames';
 import type { CSSProperties, ReactNode } from 'react';
 import { useState } from 'react';
@@ -7,7 +8,6 @@ import { Label } from './Label';
 import type { RadioDropdownItem } from './RadioDropdown';
 import { RadioDropdown } from './RadioDropdown';
 import { HStack } from './Stacks';
-import { type } from '@tauri-apps/plugin-os';
 
 export interface SelectProps<T extends string> {
   name: string;
@@ -24,6 +24,7 @@ export interface SelectProps<T extends string> {
   size?: ButtonProps['size'];
   className?: string;
   disabled?: boolean;
+  filterable?: boolean;
 }
 
 export function Select<T extends string>({
@@ -40,6 +41,7 @@ export function Select<T extends string>({
   onChange,
   className,
   defaultValue,
+  filterable,
   size = 'md',
 }: SelectProps<T>) {
   const [focused, setFocused] = useState<boolean>(false);
@@ -64,7 +66,7 @@ export function Select<T extends string>({
       <Label htmlFor={id} visuallyHidden={hideLabel} className={labelClassName} help={help}>
         {label}
       </Label>
-      {type() === 'macos' ? (
+      {type() === 'macos' && !filterable ? (
         <HStack
           space={2}
           className={classNames(
@@ -86,10 +88,11 @@ export function Select<T extends string>({
             onChange={(e) => handleChange(e.target.value as T)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
+            disabled={disabled}
             className={classNames(
               'pr-7 w-full outline-none bg-transparent disabled:opacity-disabled',
+              'leading-[1] rounded-none', // Center the text better vertically
             )}
-            disabled={disabled}
           >
             {isInvalidSelection && <option value={'__NONE__'}>-- Select an Option --</option>}
             {options.map((o) => {

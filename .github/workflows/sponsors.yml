@@ -1,0 +1,44 @@
+name: Generate Sponsors README
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: 30 15 * * 0-6
+permissions:
+  contents: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v2
+
+      - name: Generate Sponsors
+        uses: JamesIves/github-sponsors-readme-action@v1
+        with:
+          token: ${{ secrets.SPONSORS_PAT }}
+          file: 'README.md'
+          maximum: 1999
+          template: '<a href="https://github.com/{{{ login }}}"><img src="{{{ avatarUrl }}}" width="50px" alt="User avatar: {{{ login }}}" /></a>&nbsp;&nbsp;'
+          active-only: false
+          include-private: true
+          marker: 'sponsors-base'
+
+      - name: Generate Sponsors
+        uses: JamesIves/github-sponsors-readme-action@v1
+        with:
+          token: ${{ secrets.SPONSORS_PAT }}
+          file: 'README.md'
+          minimum: 2000
+          template: '<a href="https://github.com/{{{ login }}}"><img src="{{{ avatarUrl }}}" width="80px" alt="User avatar: {{{ login }}}" /></a>&nbsp;&nbsp;'
+          active-only: false
+          include-private: true
+          marker: 'sponsors-premium'
+
+      # ⚠️ Note: You can use any deployment step here to automatically push the README
+      # changes back to your branch.
+      - name: Commit Changes
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: main
+          force: false
+          folder: '.'

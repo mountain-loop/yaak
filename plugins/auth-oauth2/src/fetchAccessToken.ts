@@ -1,5 +1,5 @@
-import type { Context, HttpRequest, HttpUrlParameter } from '@yaakapp/api';
 import { readFileSync } from 'node:fs';
+import type { Context, HttpRequest, HttpUrlParameter } from '@yaakapp/api';
 import type { AccessTokenRawResponse } from './store';
 
 export async function fetchAccessToken(
@@ -39,15 +39,15 @@ export async function fetchAccessToken(
     ],
   };
 
-  if (scope) httpRequest.body!.form.push({ name: 'scope', value: scope });
-  if (audience) httpRequest.body!.form.push({ name: 'audience', value: audience });
+  if (scope) httpRequest.body?.form.push({ name: 'scope', value: scope });
+  if (audience) httpRequest.body?.form.push({ name: 'audience', value: audience });
 
   if (credentialsInBody) {
-    httpRequest.body!.form.push({ name: 'client_id', value: clientId });
-    httpRequest.body!.form.push({ name: 'client_secret', value: clientSecret });
+    httpRequest.body?.form.push({ name: 'client_id', value: clientId });
+    httpRequest.body?.form.push({ name: 'client_secret', value: clientSecret });
   } else {
-    const value = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    httpRequest.headers!.push({ name: 'Authorization', value });
+    const value = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+    httpRequest.headers?.push({ name: 'Authorization', value });
   }
 
   httpRequest.authenticationType = 'none'; // Don't inherit workspace auth
@@ -58,12 +58,11 @@ export async function fetchAccessToken(
   const body = resp.bodyPath ? readFileSync(resp.bodyPath, 'utf8') : '';
 
   if (resp.status < 200 || resp.status >= 300) {
-    throw new Error(
-      'Failed to fetch access token with status=' + resp.status + ' and body=' + body,
-    );
+    throw new Error(`Failed to fetch access token with status=${resp.status} and body=${body}`);
   }
 
-  let response;
+  // biome-ignore lint/suspicious/noExplicitAny: none
+  let response: any;
   try {
     response = JSON.parse(body);
   } catch {
@@ -71,7 +70,7 @@ export async function fetchAccessToken(
   }
 
   if (response.error) {
-    throw new Error('Failed to fetch access token with ' + response.error);
+    throw new Error(`Failed to fetch access token with ${response.error}`);
   }
 
   return response;

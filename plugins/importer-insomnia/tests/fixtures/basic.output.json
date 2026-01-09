@@ -5,7 +5,8 @@
         "createdAt": "2025-01-13T15:15:43.767",
         "updatedAt": "2025-01-13T15:15:55.209",
         "sortPriority": 1736781343767,
-        "base": true,
+        "parentId": null,
+        "parentModel": "workspace",
         "id": "GENERATE_ID::env_16c0dec5b77c414ae0e419b8f10c3701300c5900",
         "model": "environment",
         "name": "Base Environment",
@@ -22,7 +23,8 @@
         "createdAt": "2025-01-13T15:15:58.515",
         "updatedAt": "2025-01-13T15:16:34.705",
         "sortPriority": 1736781358515,
-        "base": false,
+        "parentId": null,
+        "parentModel": "environment",
         "id": "GENERATE_ID::env_799ae3d723ef44af91b4817e5d057e6d",
         "model": "environment",
         "name": "Production",
@@ -39,7 +41,8 @@
         "createdAt": "2025-01-13T15:16:14.707",
         "updatedAt": "2025-01-13T15:16:31.078",
         "sortPriority": 1736781358565,
-        "base": false,
+        "parentId": null,
+        "parentModel": "environment",
         "id": "GENERATE_ID::env_030fbfdbb274426ebd78e2e6518f8553",
         "model": "environment",
         "name": "Staging",
@@ -110,6 +113,13 @@
         "model": "http_request",
         "name": "New Request",
         "url": "${[BASE_URL ]}/foo/:id",
+        "urlParameters": [
+          {
+            "name": "query",
+            "value": "qqq",
+            "enabled": true
+          }
+        ],
         "workspaceId": "GENERATE_ID::wrk_d4d92f7c0ee947b89159243506687019"
       }
     ],

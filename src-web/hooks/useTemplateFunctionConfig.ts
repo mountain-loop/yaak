@@ -1,0 +1,76 @@
+import { useQuery } from '@tanstack/react-query';
+import {
+  environmentsAtom,
+  type Folder,
+  type GrpcRequest,
+  type HttpRequest,
+  httpResponsesAtom,
+  pluginsAtom,
+  type WebsocketRequest,
+  type Workspace,
+} from '@yaakapp-internal/models';
+import type { GetTemplateFunctionConfigResponse, JsonPrimitive } from '@yaakapp-internal/plugins';
+import { useAtomValue } from 'jotai';
+import { md5 } from 'js-md5';
+import { invokeCmd } from '../lib/tauri';
+import { activeEnvironmentIdAtom } from './useActiveEnvironment';
+import { activeWorkspaceIdAtom } from './useActiveWorkspace';
+
+export function useTemplateFunctionConfig(
+  functionName: string | null,
+  values: Record<string, JsonPrimitive>,
+  model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
+) {
+  const pluginsKey = useAtomValue(pluginsAtom);
+  const workspaceId = useAtomValue(activeWorkspaceIdAtom);
+  const environmentId = useAtomValue(activeEnvironmentIdAtom);
+  const responses = useAtomValue(httpResponsesAtom);
+  const environments = useAtomValue(environmentsAtom);
+  const environmentsKey = environments.map((e) => e.id + e.updatedAt).join(':');
+
+  // Some auth handlers like OAuth 2.0 show the current token after a successful request. To
+  // handle that, we'll force the auth to re-fetch after each new response closes
+  const responseKey = md5(
+    responses
+      .filter((r) => r.state === 'closed')
+      .map((r) => r.id)
+      .join(':'),
+  );
+
+  return useQuery({
+    queryKey: [
+      'template_function_config',
+      model,
+      functionName,
+      values,
+      workspaceId, // Refresh when the active workspace changes
+      environmentId, // Refresh when the active environment changes
+      environmentsKey, // Refresh when environments change
+      responseKey, // Refresh when responses change
+      pluginsKey, // Refresh when plugins reload
+    ],
+    placeholderData: (prev) => prev, // Keep previous data on refetch
+    queryFn: async () => {
+      if (functionName == null) return null;
+      return getTemplateFunctionConfig(functionName, values, model, environmentId);
+    },
+  });
+}
+
+export async function getTemplateFunctionConfig(
+  functionName: string,
+  values: Record<string, JsonPrimitive>,
+  model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
+  environmentId: string | undefined,
+) {
+  const config = await invokeCmd<GetTemplateFunctionConfigResponse>(
+    'cmd_template_function_config',
+    {
+      functionName,
+      values,
+      model,
+      environmentId,
+    },
+  );
+  return config.function;
+}

@@ -1,8 +1,8 @@
 import classNames from 'classnames';
-import FocusTrap from 'focus-trap-react';
+import { FocusTrap } from 'focus-trap-react';
 import * as m from 'motion/react-m';
 import type { ReactNode } from 'react';
-import React from 'react';
+import { useRef } from 'react';
 import { Portal } from './Portal';
 
 interface Props {
@@ -32,6 +32,8 @@ export function Overlay({
   noBackdrop,
   children,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   if (noBackdrop) {
     return (
       <Portal name={portalName}>
@@ -44,11 +46,23 @@ export function Overlay({
       </Portal>
     );
   }
+
   return (
     <Portal name={portalName}>
       {open && (
-        <FocusTrap>
+        <FocusTrap
+          focusTrapOptions={{
+            // Allow outside click so we can click things like toasts
+            allowOutsideClick: true,
+            delayInitialFocus: true,
+            checkCanFocusTrap: async () => {
+              // Not sure why delayInitialFocus: true doesn't help, but having this no-op promise
+              // seems to be required to make things work.
+            },
+          }}
+        >
           <m.div
+            ref={containerRef}
             className={classNames('fixed inset-0', zIndexes[zIndex])}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

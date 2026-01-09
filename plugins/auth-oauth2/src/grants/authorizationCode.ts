@@ -1,9 +1,10 @@
-import type { Context } from '@yaakapp/api';
 import { createHash, randomBytes } from 'node:crypto';
+import type { Context } from '@yaakapp/api';
 import { fetchAccessToken } from '../fetchAccessToken';
 import { getOrRefreshAccessToken } from '../getOrRefreshAccessToken';
 import type { AccessToken, TokenStoreArgs } from '../store';
 import { getDataDirKey, storeToken } from '../store';
+import { extractCode } from '../util';
 
 export const PKCE_SHA256 = 'S256';
 export const PKCE_PLAIN = 'plain';
@@ -79,36 +80,34 @@ export async function getAuthorizationCode(
     authorizationUrl.searchParams.set('code_challenge_method', pkce.challengeMethod);
   }
 
-  const logsEnabled = (await ctx.store.get('enable_logs')) ?? false;
   const dataDirKey = await getDataDirKey(ctx, contextId);
   const authorizationUrlStr = authorizationUrl.toString();
   console.log('[oauth2] Authorizing', authorizationUrlStr);
 
-  // eslint-disable-next-line no-async-promise-executor
+  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: none
   const code = await new Promise<string>(async (resolve, reject) => {
     let foundCode = false;
     const { close } = await ctx.window.openUrl({
+      dataDirKey,
       url: authorizationUrlStr,
       label: 'oauth-authorization-url',
-      dataDirKey,
       async onClose() {
         if (!foundCode) {
           reject(new Error('Authorization window closed'));
         }
       },
       async onNavigate({ url: urlStr }) {
-        const url = new URL(urlStr);
-        if (logsEnabled) console.log('[oauth2] Navigated to', urlStr);
-
-        if (url.searchParams.has('error')) {
+        let code: string | null;
+        try {
+          code = extractCode(urlStr, redirectUri);
+        } catch (err) {
+          reject(err);
           close();
-          return reject(new Error(`Failed to authorize: ${url.searchParams.get('error')}`));
+          return;
         }
 
-        const code = url.searchParams.get('code');
         if (!code) {
-          console.log('[oauth2] Code not found');
-          return; // Could be one of many redirects in a chain, so skip it
+          return;
         }
 
         // Close the window here, because we don't need it anymore!

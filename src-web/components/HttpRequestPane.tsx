@@ -4,7 +4,7 @@ import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import React, { useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useAuthTab } from '../hooks/useAuthTab';
@@ -37,13 +37,13 @@ import { showToast } from '../lib/toast';
 import { BinaryFileEditor } from './BinaryFileEditor';
 import { ConfirmLargeRequestBody } from './ConfirmLargeRequestBody';
 import { CountBadge } from './core/CountBadge';
-import { Editor } from './core/Editor/Editor';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
+import { Editor } from './core/Editor/LazyEditor';
 import { InlineCode } from './core/InlineCode';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
 import type { TabItem } from './core/Tabs/Tabs';
+import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { FormMultipartEditor } from './FormMultipartEditor';
 import { FormUrlencodedEditor } from './FormUrlencodedEditor';
@@ -53,7 +53,10 @@ import { MarkdownEditor } from './MarkdownEditor';
 import { RequestMethodDropdown } from './RequestMethodDropdown';
 import { UrlBar } from './UrlBar';
 import { UrlParametersEditor } from './UrlParameterEditor';
-import { GraphQLEditor } from './graphql/GraphQLEditor';
+
+const GraphQLEditor = lazy(() =>
+  import('./graphql/GraphQLEditor').then((m) => ({ default: m.GraphQLEditor })),
+);
 
 interface Props {
   style: CSSProperties;
@@ -125,9 +128,9 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
     const items: Pair[] = [...nonEmptyParameters];
     for (const name of placeholderNames) {
-      const index = items.findIndex((p) => p.name === name);
-      if (index >= 0) {
-        items[index]!.readOnlyName = true;
+      const item = items.find((p) => p.name === name);
+      if (item) {
+        item.readOnlyName = true;
       } else {
         items.push({ name, value: '', enabled: true, readOnlyName: true, id: generateId() });
       }
@@ -160,7 +163,11 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             { label: 'GraphQL', value: BODY_TYPE_GRAPHQL },
             { label: 'JSON', value: BODY_TYPE_JSON },
             { label: 'XML', value: BODY_TYPE_XML },
-            { label: 'Other', value: BODY_TYPE_OTHER },
+            {
+              label: 'Other',
+              value: BODY_TYPE_OTHER,
+              shortLabel: nameOfContentTypeOr(contentType, 'Other'),
+            },
             { type: 'separator', label: 'Other' },
             { label: 'Binary File', value: BODY_TYPE_BINARY },
             { label: 'No Body', shortLabel: 'Body', value: BODY_TYPE_NONE },
@@ -200,7 +207,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 showMethodToast(patch.method);
               }
               newContentType = bodyType === BODY_TYPE_OTHER ? 'text/plain' : bodyType;
-            } else if (bodyType == BODY_TYPE_GRAPHQL) {
+            } else if (bodyType === BODY_TYPE_GRAPHQL) {
               patch.method = 'POST';
               newContentType = 'application/json';
               showMethodToast(patch.method);
@@ -229,6 +236,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     [
       activeRequest,
       authTab,
+      contentType,
       handleContentTypeChange,
       headersTab,
       numParams,
@@ -346,12 +354,12 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             isLoading={activeResponse != null && activeResponse.state !== 'closed'}
           />
           <Tabs
-            key={activeRequest.id} // Freshen tabs on request change
             value={activeTab}
             label="Request"
             onChangeValue={setActiveTab}
             tabs={tabs}
-            tabListClassName="mt-1 !mb-1.5"
+            tabListClassName="mt-1 mb-1.5"
+            storageKey="http_request_tabs_order"
           >
             <TabContent value={TAB_AUTH}>
               <HttpAuthenticationEditor model={activeRequest} />
@@ -400,12 +408,14 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                     stateKey={`xml.${activeRequest.id}`}
                   />
                 ) : activeRequest.bodyType === BODY_TYPE_GRAPHQL ? (
-                  <GraphQLEditor
-                    forceUpdateKey={forceUpdateKey}
-                    baseRequest={activeRequest}
-                    request={activeRequest}
-                    onChange={handleBodyChange}
-                  />
+                  <Suspense>
+                    <GraphQLEditor
+                      forceUpdateKey={forceUpdateKey}
+                      baseRequest={activeRequest}
+                      request={activeRequest}
+                      onChange={handleBodyChange}
+                    />
+                  </Suspense>
                 ) : activeRequest.bodyType === BODY_TYPE_FORM_URLENCODED ? (
                   <FormUrlencodedEditor
                     forceUpdateKey={forceUpdateKey}
@@ -470,4 +480,12 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
       )}
     </div>
   );
+}
+
+function nameOfContentTypeOr(contentType: string | null, fallback: string) {
+  const language = languageFromContentType(contentType);
+  if (language === 'markdown') {
+    return 'Markdown';
+  }
+  return fallback;
 }

@@ -63,20 +63,20 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
 
   return (
     <Tabs
-      layout="horizontal"
       value={activeTab}
       onChangeValue={setActiveTab}
       label="Folder Settings"
-      className="pt-2 pb-2 pl-3 pr-1"
+      className="pt-4 pb-2 px-3"
+      tabListClassName="pl-4"
       addBorders
       tabs={[
-        { value: TAB_GENERAL, label: 'General' },
+        { value: TAB_GENERAL, label: 'Workspace' },
         {
           value: TAB_DATA,
-          label: 'Directory Sync',
+          label: 'Storage',
         },
-        ...authTab,
         ...headersTab,
+        ...authTab,
       ]}
     >
       <TabContent value={TAB_AUTH} className="overflow-y-auto h-full px-4">
@@ -92,7 +92,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
         />
       </TabContent>
       <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-4">
-        <VStack space={4} alignItems="start" className="pb-3 h-full">
+        <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] gap-4 pb-3 h-full">
           <PlainInput
             required
             hideLabel
@@ -141,7 +141,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
               />
             </InlineCode>
           </HStack>
-        </VStack>
+        </div>
       </TabContent>
       <TabContent value={TAB_DATA} className="overflow-y-auto h-full px-4">
         <VStack space={4} alignItems="start" className="pb-3 h-full">

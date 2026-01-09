@@ -18,7 +18,7 @@ import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 export function useHttpAuthenticationConfig(
   authName: string | null,
   values: Record<string, JsonPrimitive>,
-  requestId: string,
+  model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
 ) {
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const environmentId = useAtomValue(activeEnvironmentIdAtom);
@@ -37,7 +37,7 @@ export function useHttpAuthenticationConfig(
   return useQuery({
     queryKey: [
       'http_authentication_config',
-      requestId,
+      model,
       authName,
       values,
       responseKey,
@@ -47,14 +47,13 @@ export function useHttpAuthenticationConfig(
     ],
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {
-      if (authName == null) return null;
+      if (authName == null || authName === 'inherit') return null;
       const config = await invokeCmd<GetHttpAuthenticationConfigResponse>(
         'cmd_get_http_authentication_config',
         {
           authName,
           values,
-          requestId,
-          workspaceId,
+          model,
           environmentId,
         },
       );
@@ -63,17 +62,16 @@ export function useHttpAuthenticationConfig(
         ...config,
         actions: config.actions?.map((a, i) => ({
           ...a,
-          call: async ({
-            id: modelId,
-          }: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace) => {
+          call: async (
+            model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
+          ) => {
             await invokeCmd('cmd_call_http_authentication_action', {
               pluginRefId: config.pluginRefId,
               actionIndex: i,
               authName,
               values,
-              modelId,
+              model,
               environmentId,
-              workspaceId,
             });
 
             // Ensure the config is refreshed after the action is done

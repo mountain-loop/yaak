@@ -1,5 +1,5 @@
 import { useAtomValue } from 'jotai';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useLocalStorage } from 'react-use';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
 
@@ -10,5 +10,5 @@ export function useSidebarWidth() {
     250,
   );
   const resetWidth = useCallback(() => setWidth(250), [setWidth]);
-  return useMemo(() => ({ width, setWidth, resetWidth }), [width, setWidth, resetWidth]);
+  return [width ?? null, setWidth, resetWidth] as const;
 }

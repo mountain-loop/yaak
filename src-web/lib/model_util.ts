@@ -1,4 +1,4 @@
-import type { AnyModel, Cookie, HttpResponseHeader } from '@yaakapp-internal/models';
+import type { AnyModel, Cookie, Environment, HttpResponseHeader } from '@yaakapp-internal/models';
 import { getMimeTypeFromContentType } from './contentType';
 
 export const BODY_TYPE_NONE = null;
@@ -24,7 +24,7 @@ export function cookieDomain(cookie: Cookie): string {
 }
 
 export function modelsEq(a: AnyModel, b: AnyModel) {
-  if (a.model != b.model) {
+  if (a.model !== b.model) {
     return false;
   }
   if (a.model === 'key_value' && b.model === 'key_value') {
@@ -46,4 +46,16 @@ export function getCharsetFromContentType(headers: HttpResponseHeader[]): string
 
   const mimeType = getMimeTypeFromContentType(contentType);
   return mimeType.parameters.get('charset') ?? null;
+}
+
+export function isBaseEnvironment(environment: Environment): boolean {
+  return environment.parentModel === 'workspace';
+}
+
+export function isSubEnvironment(environment: Environment): boolean {
+  return environment.parentModel === 'environment';
+}
+
+export function isFolderEnvironment(environment: Environment): boolean {
+  return environment.parentModel === 'folder';
 }

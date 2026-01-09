@@ -17,7 +17,7 @@ const pinnedWebsocketConnectionIdAtom = atomWithKVStorage<Record<string, string 
 );
 
 function recordKey(activeRequestId: string | null, latestConnection: WebsocketConnection | null) {
-  return activeRequestId + '-' + (latestConnection?.id ?? 'none');
+  return `${activeRequestId}-${latestConnection?.id ?? 'none'}`;
 }
 
 export const activeWebsocketConnectionsAtom = atom<WebsocketConnection[]>((get) => {
@@ -54,7 +54,7 @@ export function useWebsocketEvents(connectionId: string | null) {
       return;
     }
 
-    invoke<WebsocketEvent[]>('plugin:yaak-models|websocket_events', { connectionId }).then(
+    invoke<WebsocketEvent[]>('models_websocket_events', { connectionId }).then(
       (events) => replaceModelsInStore('websocket_event', events),
     );
   }, [connectionId]);

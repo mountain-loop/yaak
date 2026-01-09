@@ -1,5 +1,5 @@
-import type { Context, HttpRequest } from '@yaakapp/api';
 import { readFileSync } from 'node:fs';
+import type { Context, HttpRequest } from '@yaakapp/api';
 import type { AccessToken, AccessTokenRawResponse, TokenStoreArgs } from './store';
 import { deleteToken, getToken, storeToken } from './store';
 import { isTokenExpired } from './util';
@@ -58,23 +58,23 @@ export async function getOrRefreshAccessToken(
     ],
   };
 
-  if (scope) httpRequest.body!.form.push({ name: 'scope', value: scope });
+  if (scope) httpRequest.body?.form.push({ name: 'scope', value: scope });
 
   if (credentialsInBody) {
-    httpRequest.body!.form.push({ name: 'client_id', value: clientId });
-    httpRequest.body!.form.push({ name: 'client_secret', value: clientSecret });
+    httpRequest.body?.form.push({ name: 'client_id', value: clientId });
+    httpRequest.body?.form.push({ name: 'client_secret', value: clientSecret });
   } else {
-    const value = 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    httpRequest.headers!.push({ name: 'Authorization', value });
+    const value = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+    httpRequest.headers?.push({ name: 'Authorization', value });
   }
 
   httpRequest.authenticationType = 'none'; // Don't inherit workspace auth
   const resp = await ctx.httpRequest.send({ httpRequest });
 
-  if (resp.status === 401) {
-    // Bad refresh token, so we'll force it to fetch a fresh access token by deleting
-    // and returning null;
-    console.log('[oauth2] Unauthorized refresh_token request');
+  if (resp.status >= 400 && resp.status < 500) {
+    // Client errors (4xx) indicate the refresh token is invalid, expired, or revoked
+    // Delete the token and return null to trigger a fresh authorization flow
+    console.log('[oauth2] Refresh token request failed with client error, deleting token');
     await deleteToken(ctx, tokenArgs);
     return null;
   }
@@ -84,12 +84,11 @@ export async function getOrRefreshAccessToken(
   console.log('[oauth2] Got refresh token response', resp.status);
 
   if (resp.status < 200 || resp.status >= 300) {
-    throw new Error(
-      'Failed to refresh access token with status=' + resp.status + ' and body=' + body,
-    );
+    throw new Error(`Failed to refresh access token with status=${resp.status} and body=${body}`);
   }
 
-  let response;
+  // biome-ignore lint/suspicious/noExplicitAny: none
+  let response: any;
   try {
     response = JSON.parse(body);
   } catch {

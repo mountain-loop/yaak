@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { ColorIndicator } from './ColorIndicator';
+import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { ColorPicker } from './core/ColorPicker';
+import { ColorPickerWithThemeColors } from './core/ColorPicker';
 
 export function EnvironmentColorPicker({
   color: defaultColor,
@@ -12,21 +14,20 @@ export function EnvironmentColorPicker({
   const [color, setColor] = useState<string | null>(defaultColor);
   return (
     <form
-      className="flex flex-col items-stretch gap-3 pb-2 w-full"
+      className="flex flex-col items-stretch gap-5 pb-2 w-full"
       onSubmit={(e) => {
         e.preventDefault();
         onChange(color);
       }}
     >
-      <ColorPicker color={color} onChange={setColor} />
-      <div className="grid grid-cols-[1fr_1fr] gap-1.5">
-        <Button variant="border" color="secondary" onClick={() => onChange(null)}>
-          Clear
-        </Button>
-        <Button type="submit" color="primary">
-          Save
-        </Button>
-      </div>
+      <Banner color="secondary">
+        This color will be used to color the interface when this environment is active
+      </Banner>
+      <ColorPickerWithThemeColors color={color} onChange={setColor} />
+      <Button type="submit" color="secondary">
+        {color != null && <ColorIndicator color={color} />}
+        Save
+      </Button>
     </form>
   );
 }

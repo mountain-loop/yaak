@@ -17,6 +17,7 @@ export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props
         name: p.name,
         value: p.file ?? p.value,
         contentType: p.contentType,
+        filename: p.filename,
         isFile: !!p.file,
         id: p.id,
       })),
@@ -30,6 +31,7 @@ export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props
           enabled: p.enabled,
           name: p.name,
           contentType: p.contentType,
+          filename: p.filename,
           file: p.isFile ? p.value : undefined,
           value: p.isFile ? undefined : p.value,
           id: p.id,
@@ -49,7 +51,7 @@ export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props
       pairs={pairs}
       onChange={handleChange}
       forceUpdateKey={forceUpdateKey}
-      stateKey={'multipart.' + request.id}
+      stateKey={`multipart.${request.id}`}
     />
   );
 }

@@ -6,7 +6,9 @@ import { resolveAppearance } from './appearance';
 export async function getThemes() {
   const themes = (await invokeCmd<GetThemesResponse[]>('cmd_get_themes')).flatMap((t) => t.themes);
   themes.sort((a, b) => a.label.localeCompare(b.label));
-  return { themes: [yaakDark, yaakLight, ...themes] };
+  // Remove duplicates, in case multiple plugins provide the same theme
+  const uniqueThemes = Array.from(new Map(themes.map((t) => [t.id, t])).values());
+  return { themes: [yaakDark, yaakLight, ...uniqueThemes] };
 }
 
 export async function getResolvedTheme(
@@ -36,7 +38,7 @@ const yaakDark = {
   base: {
     surface: 'hsl(244,23%,14%)',
     surfaceHighlight: 'hsl(244,23%,20%)',
-    text: 'hsl(245,23%,84%)',
+    text: 'hsl(245,23%,85%)',
     textSubtle: 'hsl(245,18%,58%)',
     textSubtlest: 'hsl(245,18%,45%)',
     border: 'hsl(244,23%,25%)',
@@ -67,11 +69,11 @@ const yaakDark = {
     },
     responsePane: {
       surface: 'hsl(243,23%,16%)',
-      border: 'hsl(246,23%,22.72%)',
+      border: 'hsl(246,23%,23%)',
     },
     appHeader: {
       surface: 'hsl(244,23%,12%)',
-      border: 'hsl(244,23%,20.8%)',
+      border: 'hsl(244,23%,21%)',
     },
   },
 };
@@ -83,22 +85,22 @@ const yaakLight = {
   base: {
     surface: 'hsl(0,0%,100%)',
     surfaceHighlight: 'hsl(218,24%,87%)',
-    text: 'hsl(217,24%,15%)',
+    text: 'hsl(217,24%,10%)',
     textSubtle: 'hsl(217,24%,40%)',
     textSubtlest: 'hsl(217,24%,58%)',
-    border: 'hsl(217,22%,93%)',
-    primary: 'hsl(266,100%,70%)',
-    secondary: 'hsl(220,24%,59%)',
-    info: 'hsl(206,100%,48%)',
-    success: 'hsl(155,95%,33%)',
-    notice: 'hsl(45,100%,41%)',
-    warning: 'hsl(30,100%,43%)',
-    danger: 'hsl(335,75%,57%)',
+    border: 'hsl(217,22%,90%)',
+    primary: 'hsl(266,100%,60%)',
+    secondary: 'hsl(220,24%,50%)',
+    info: 'hsl(206,100%,40%)',
+    success: 'hsl(139,66%,34%)',
+    notice: 'hsl(45,100%,34%)',
+    warning: 'hsl(30,100%,36%)',
+    danger: 'hsl(335,75%,48%)',
   },
   components: {
     sidebar: {
-      surface: 'hsl(220,20%,97%)',
-      border: 'hsl(217,22%,93%)',
+      surface: 'hsl(220,20%,98%)',
+      border: 'hsl(217,22%,88%)',
       surfaceHighlight: 'hsl(217,25%,90%)',
     },
   },

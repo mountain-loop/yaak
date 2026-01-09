@@ -7,9 +7,14 @@ import { memo, useCallback, useMemo } from 'react';
 import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
 import { switchWorkspace } from '../commands/switchWorkspace';
-import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
+import {
+  activeWorkspaceAtom,
+  activeWorkspaceIdAtom,
+  activeWorkspaceMetaAtom,
+} from '../hooks/useActiveWorkspace';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
+import { useWorkspaceActions } from '../hooks/useWorkspaceActions';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { revealInFinderText } from '../lib/reveal';
@@ -32,6 +37,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   const createWorkspace = useCreateWorkspace();
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const { mutate: deleteSendHistory } = useDeleteSendHistory();
+  const workspaceActions = useWorkspaceActions();
 
   const { workspaceItems, itemsAfter } = useMemo<{
     workspaceItems: RadioDropdownItem[];
@@ -45,6 +51,14 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     }));
 
     const itemsAfter: DropdownItem[] = [
+      ...workspaceActions.map((a) => ({
+        label: a.label,
+        leftSlot: <Icon icon={a.icon ?? 'empty'} />,
+        onSelect: async () => {
+          if (workspace != null) await a.call(workspace);
+        },
+      })),
+      ...(workspaceActions.length > 0 ? [{ type: 'separator' as const }] : []),
       {
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
@@ -89,12 +103,27 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     ];
 
     return { workspaceItems, itemsAfter };
-  }, [workspaces, workspaceMeta, deleteSendHistory, createWorkspace, workspace?.id]);
+  }, [
+    workspaces,
+    workspaceMeta,
+    deleteSendHistory,
+    createWorkspace,
+    workspace?.id,
+    workspace,
+    workspaceActions.map,
+    workspaceActions.length,
+  ]);
 
   const handleSwitchWorkspace = useCallback(async (workspaceId: string | null) => {
     if (workspaceId == null) return;
 
     const settings = jotaiStore.get(settingsAtom);
+    const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+    if (workspaceId === activeWorkspaceId) {
+      // Always open a new window if the selected one is already active
+      switchWorkspace.mutate({ workspaceId, inNewWindow: true });
+      return;
+    }
     if (typeof settings.openWorkspaceNewWindow === 'boolean') {
       switchWorkspace.mutate({ workspaceId, inNewWindow: settings.openWorkspaceNewWindow });
       return;

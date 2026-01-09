@@ -21,6 +21,8 @@ export type ButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, 'color' | 'onC
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
   hotkeyAction?: HotkeyAction;
+  hotkeyLabelOnly?: boolean;
+  hotkeyPriority?: number;
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -39,6 +41,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     rightSlot,
     disabled,
     hotkeyAction,
+    hotkeyPriority,
+    hotkeyLabelOnly,
     title,
     onClick,
     ...props
@@ -57,13 +61,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     'x-theme-button',
     `x-theme-button--${variant}`,
     `x-theme-button--${variant}--${color}`,
-    'text-text',
     'border', // They all have borders to ensure the same width
     'max-w-full min-w-0', // Help with truncation
     'hocus:opacity-100', // Force opacity for certain hover effects
     'whitespace-nowrap outline-none',
     'flex-shrink-0 flex items-center',
-    'focus-visible-or-class:ring',
+    'outline-0',
     disabled ? 'pointer-events-none opacity-disabled' : 'pointer-events-auto',
     justify === 'start' && 'justify-start',
     justify === 'center' && 'justify-center',
@@ -74,10 +77,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 
     // Solids
     variant === 'solid' && 'border-transparent',
-    variant === 'solid' && color === 'custom' && 'ring-border-focus',
+    variant === 'solid' && color === 'custom' && 'focus-visible:outline-2 outline-border-focus',
     variant === 'solid' &&
       color !== 'custom' &&
-      'enabled:hocus:text-text enabled:hocus:bg-surface-highlight ring-border-subtle',
+      'text-text enabled:hocus:text-text enabled:hocus:bg-surface-highlight outline-border-subtle',
     variant === 'solid' && color !== 'custom' && color !== 'default' && 'bg-surface',
 
     // Borders
@@ -85,7 +88,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     variant === 'border' &&
       color !== 'custom' &&
       'border-border-subtle text-text-subtle enabled:hocus:border-border ' +
-        'enabled:hocus:bg-surface-highlight enabled:hocus:text-text ring-border-subtler',
+        'enabled:hocus:bg-surface-highlight enabled:hocus:text-text outline-border-subtler',
   );
 
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -94,9 +97,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     () => buttonRef.current,
   );
 
-  useHotKey(hotkeyAction ?? null, () => {
-    buttonRef.current?.click();
-  });
+  useHotKey(
+    hotkeyAction ?? null,
+    () => {
+      buttonRef.current?.click();
+    },
+    { priority: hotkeyPriority, enable: !hotkeyLabelOnly },
+  );
 
   return (
     <button

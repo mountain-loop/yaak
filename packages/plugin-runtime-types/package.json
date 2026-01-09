@@ -1,6 +1,6 @@
 {
   "name": "@yaakapp/api",
-  "version": "0.6.6",
+  "version": "0.7.1",
   "keywords": [
     "api-client",
     "insomnia-alternative",
@@ -25,8 +25,8 @@
     "build": "run-s build:copy-types build:tsc",
     "build:tsc": "tsc",
     "build:copy-types": "run-p build:copy-types:*",
-    "build:copy-types:root": "cpy --flat ../../src-tauri/yaak-plugins/bindings/*.ts ./src/bindings",
-    "build:copy-types:next": "cpy --flat ../../src-tauri/yaak-plugins/bindings/serde_json/*.ts ./src/bindings/serde_json",
+    "build:copy-types:root": "cpy --flat ../../crates/yaak-plugins/bindings/*.ts ./src/bindings",
+    "build:copy-types:next": "cpy --flat ../../crates/yaak-plugins/bindings/serde_json/*.ts ./src/bindings/serde_json",
     "publish": "npm publish",
     "prepublishOnly": "npm run build"
   },

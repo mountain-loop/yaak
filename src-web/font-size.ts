@@ -7,11 +7,10 @@ function setFontSizeOnDocument(fontSize: number) {
   document.documentElement.style.fontSize = `${fontSize}px`;
 }
 
-listen<ModelPayload>('upserted_model', async (event) => {
+listen<ModelPayload>('model_write', async (event) => {
+  if (event.payload.change.type !== 'upsert') return;
   if (event.payload.model.model !== 'settings') return;
   setFontSizeOnDocument(event.payload.model.interfaceFontSize);
 }).catch(console.error);
 
-getSettings().then((settings) =>
-  setFontSizeOnDocument(settings.interfaceFontSize),
-);
+getSettings().then((settings) => setFontSizeOnDocument(settings.interfaceFontSize));

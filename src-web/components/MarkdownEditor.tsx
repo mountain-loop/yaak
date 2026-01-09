@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import { useRef, useState } from 'react';
 import type { EditorProps } from './core/Editor/Editor';
-import { Editor } from './core/Editor/Editor';
+import { Editor } from './core/Editor/LazyEditor';
 import { SegmentedControl } from './core/SegmentedControl';
 import { Markdown } from './Markdown';
 
@@ -67,8 +67,11 @@ export function MarkdownEditor({
       <div className="absolute top-0 right-0 pt-1.5 pr-1.5">
         <SegmentedControl
           name={name}
+          label="View mode"
+          hideLabel
           onChange={setViewMode}
           value={viewMode}
+          className="opacity-0 group-focus-within/markdown:opacity-100 group-hover/markdown:opacity-100"
           options={[
             { icon: 'eye', label: 'Preview mode', value: 'preview' },
             { icon: 'pencil', label: 'Edit mode', value: 'edit' },

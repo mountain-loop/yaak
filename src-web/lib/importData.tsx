@@ -67,7 +67,9 @@ async function performImport(filePath: string): Promise<boolean> {
       return (
         <VStack space={3} className="pb-4">
           <ul className="list-disc pl-6">
-            <li>{pluralizeCount('Workspace', imported.workspaces.length)}</li>
+            {imported.workspaces.length > 0 && (
+              <li>{pluralizeCount('Workspace', imported.workspaces.length)}</li>
+            )}
             {imported.environments.length > 0 && (
               <li>{pluralizeCount('Environment', imported.environments.length)}</li>
             )}

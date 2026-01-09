@@ -1,11 +1,11 @@
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import React from 'react';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
-import { appInfo } from '../../lib/appInfo';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
+import { appInfo } from '../../lib/appInfo';
 import { revealInFinderText } from '../../lib/reveal';
+import { CargoFeature } from '../CargoFeature';
 import { Checkbox } from '../core/Checkbox';
 import { Heading } from '../core/Heading';
 import { IconButton } from '../core/IconButton';
@@ -26,68 +26,73 @@ export function SettingsGeneral() {
 
   return (
     <VStack space={1.5} className="mb-4">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1">
+      <div className="mb-4">
+        <Heading>General</Heading>
+        <p className="text-text-subtle">Configure general settings for update behavior and more.</p>
+      </div>
+      <CargoFeature feature="updater">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1">
+          <Select
+            name="updateChannel"
+            label="Update Channel"
+            labelPosition="left"
+            labelClassName="w-[14rem]"
+            size="sm"
+            value={settings.updateChannel}
+            onChange={(updateChannel) => patchModel(settings, { updateChannel })}
+            options={[
+              { label: 'Stable', value: 'stable' },
+              { label: 'Beta (more frequent)', value: 'beta' },
+            ]}
+          />
+          <IconButton
+            variant="border"
+            size="sm"
+            title="Check for updates"
+            icon="refresh"
+            spin={checkForUpdates.isPending}
+            onClick={() => checkForUpdates.mutateAsync()}
+          />
+        </div>
+
         <Select
-          name="updateChannel"
-          label="Update Channel"
+          name="autoupdate"
+          value={settings.autoupdate ? 'auto' : 'manual'}
+          label="Update Behavior"
           labelPosition="left"
-          labelClassName="w-[14rem]"
           size="sm"
-          value={settings.updateChannel}
-          onChange={(updateChannel) => patchModel(settings, { updateChannel })}
+          labelClassName="w-[14rem]"
+          onChange={(v) => patchModel(settings, { autoupdate: v === 'auto' })}
           options={[
-            { label: 'Stable', value: 'stable' },
-            { label: 'Beta (more frequent)', value: 'beta' },
+            { label: 'Automatic', value: 'auto' },
+            { label: 'Manual', value: 'manual' },
           ]}
         />
-        <IconButton
-          variant="border"
-          size="sm"
-          title="Check for updates"
-          icon="refresh"
-          spin={checkForUpdates.isPending}
-          onClick={() => checkForUpdates.mutateAsync()}
+        <Checkbox
+          className="pl-2 mt-1 ml-[14rem]"
+          checked={settings.autoDownloadUpdates}
+          disabled={!settings.autoupdate}
+          help="Automatically download Yaak updates (!50MB) in the background, so they will be immediately ready to install."
+          title="Automatically download updates"
+          onChange={(autoDownloadUpdates) => patchModel(settings, { autoDownloadUpdates })}
         />
-      </div>
 
-      <Select
-        name="autoupdate"
-        value={settings.autoupdate ? 'auto' : 'manual'}
-        label="Update Behavior"
-        labelPosition="left"
-        size="sm"
-        labelClassName="w-[14rem]"
-        onChange={(v) => patchModel(settings, { autoupdate: v === 'auto' })}
-        options={[
-          { label: 'Automatic', value: 'auto' },
-          { label: 'Manual', value: 'manual' },
-        ]}
-      />
-
-      <Select
-        name="switchWorkspaceBehavior"
-        label="Workspace Window Behavior"
-        labelPosition="left"
-        labelClassName="w-[14rem]"
-        size="sm"
-        value={
-          settings.openWorkspaceNewWindow === true
-            ? 'new'
-            : settings.openWorkspaceNewWindow === false
-              ? 'current'
-              : 'ask'
-        }
-        onChange={async (v) => {
-          if (v === 'current') await patchModel(settings, { openWorkspaceNewWindow: false });
-          else if (v === 'new') await patchModel(settings, { openWorkspaceNewWindow: true });
-          else await patchModel(settings, { openWorkspaceNewWindow: null });
-        }}
-        options={[
-          { label: 'Always ask', value: 'ask' },
-          { label: 'Open in current window', value: 'current' },
-          { label: 'Open in new window', value: 'new' },
-        ]}
-      />
+        <Checkbox
+          className="pl-2 mt-1 ml-[14rem]"
+          checked={settings.checkNotifications}
+          title="Check for notifications"
+          help="Periodically ping Yaak servers to check for relevant notifications."
+          onChange={(checkNotifications) => patchModel(settings, { checkNotifications })}
+        />
+        <Checkbox
+          disabled
+          className="pl-2 mt-1 ml-[14rem]"
+          checked={false}
+          title="Send anonymous usage statistics"
+          help="Yaak is local-first and does not collect analytics or usage data 🔐"
+          onChange={(checkNotifications) => patchModel(settings, { checkNotifications })}
+        />
+      </CargoFeature>
 
       <Separator className="my-4" />
 
@@ -107,15 +112,17 @@ export function SettingsGeneral() {
           placeholder="0"
           labelPosition="left"
           defaultValue={`${workspace.settingRequestTimeout}`}
-          validate={(value) => parseInt(value) >= 0}
-          onChange={(v) => patchModel(workspace, { settingRequestTimeout: parseInt(v) || 0 })}
+          validate={(value) => Number.parseInt(value, 10) >= 0}
+          onChange={(v) =>
+            patchModel(workspace, { settingRequestTimeout: Number.parseInt(v, 10) || 0 })
+          }
           type="number"
         />
 
         <Checkbox
           checked={workspace.settingValidateCertificates}
-          help="When disabled, skip validatation of server certificates, useful when interacting with self-signed certs."
-          title="Validate TLS Certificates"
+          help="When disabled, skip validation of server certificates, useful when interacting with self-signed certs."
+          title="Validate TLS certificates"
           onChange={(settingValidateCertificates) =>
             patchModel(workspace, { settingValidateCertificates })
           }
@@ -123,7 +130,7 @@ export function SettingsGeneral() {
 
         <Checkbox
           checked={workspace.settingFollowRedirects}
-          title="Follow Redirects"
+          title="Follow redirects"
           onChange={(settingFollowRedirects) =>
             patchModel(workspace, {
               settingFollowRedirects,

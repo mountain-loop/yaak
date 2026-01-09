@@ -1,0 +1,6 @@
+{
+  "name": "@yaakapp-internal/tauri",
+  "private": true,
+  "version": "1.0.0",
+  "main": "bindings/index.ts"
+}

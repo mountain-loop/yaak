@@ -1,7 +1,9 @@
 import { setWindowTitle } from '@yaakapp-internal/mac-window';
+import { settingsAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { useEffect } from 'react';
 import { appInfo } from '../lib/appInfo';
+import { jotaiStore } from '../lib/jotai';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { useActiveEnvironment } from './useActiveEnvironment';
 import { activeRequestAtom } from './useActiveRequest';
@@ -13,11 +15,13 @@ export function useSyncWorkspaceRequestTitle() {
   const activeRequest = useAtomValue(activeRequestAtom);
 
   useEffect(() => {
+    const settings = jotaiStore.get(settingsAtom);
     let newTitle = activeWorkspace ? activeWorkspace.name : 'Yaak';
     if (activeEnvironment) {
-      newTitle += ` [${activeEnvironment.name}]`;
+      newTitle += ` (${activeEnvironment.name})`;
     }
-    if (activeRequest) {
+
+    if (!settings.useNativeTitlebar && activeRequest) {
       newTitle += ` › ${resolvedModelName(activeRequest)}`;
     }
 

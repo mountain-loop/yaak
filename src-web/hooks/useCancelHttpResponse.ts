@@ -1,5 +1,5 @@
-import { useFastMutation } from './useFastMutation';
 import { event } from '@tauri-apps/api';
+import { useFastMutation } from './useFastMutation';
 
 export function useCancelHttpResponse(id: string | null) {
   return useFastMutation<void>({

@@ -10,7 +10,8 @@ import { DetailsBanner } from './core/DetailsBanner';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import type { InputProps } from './core/Input';
 import type { Pair, PairEditorProps } from './core/PairEditor';
-import { ensurePairId, PairEditorRow } from './core/PairEditor';
+import { PairEditorRow } from './core/PairEditor';
+import { ensurePairId } from './core/PairEditor.util';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
 import { HStack } from './core/Stacks';
 
@@ -33,11 +34,11 @@ export function HeadersEditor({
   const validInheritedHeaders =
     inheritedHeaders?.filter((pair) => pair.enabled && (pair.name || pair.value)) ?? [];
   return (
-    <div className="@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)]">
+    <div className="@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)] gap-y-1.5">
       {validInheritedHeaders.length > 0 ? (
         <DetailsBanner
           color="secondary"
-          className="text-sm mb-1.5"
+          className="text-sm"
           summary={
             <HStack>
               Inherited <CountBadge count={validInheritedHeaders.length} />
@@ -47,14 +48,11 @@ export function HeadersEditor({
           <div className="pb-2">
             {validInheritedHeaders?.map((pair, i) => (
               <PairEditorRow
-                key={pair.id + '.' + i}
+                key={`${pair.id}.${i}`}
                 index={i}
                 disabled
                 disableDrag
                 className="py-1"
-                onChange={() => {}}
-                onEnd={() => {}}
-                onMove={() => {}}
                 pair={ensurePairId(pair)}
                 stateKey={null}
                 nameAutocompleteFunctions
@@ -111,9 +109,8 @@ const valueType = (pair: Pair): InputProps['type'] => {
     name === 'set-cookie'
   ) {
     return 'password';
-  } else {
-    return 'text';
   }
+  return 'text';
 };
 
 const valueAutocomplete = (headerName: string): GenericCompletionConfig | undefined => {

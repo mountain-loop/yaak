@@ -1,7 +1,7 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
 import type { ServerSentEvent } from '@yaakapp-internal/sse';
 import classNames from 'classnames';
-import React, { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useFormatText } from '../../hooks/useFormatText';
 import { useResponseBodyEventSource } from '../../hooks/useResponseBodyEventSource';
 import { isJSON } from '../../lib/contentType';
@@ -9,7 +9,7 @@ import { AutoScroller } from '../core/AutoScroller';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import type { EditorProps } from '../core/Editor/Editor';
-import { Editor } from '../core/Editor/Editor';
+import { Editor } from '../core/Editor/LazyEditor';
 import { Icon } from '../core/Icon';
 import { InlineCode } from '../core/InlineCode';
 import { Separator } from '../core/Separator';
@@ -81,7 +81,7 @@ function ActualEventStreamViewer({ response }: Props) {
                 <div className="pb-3 px-2">
                   <Separator />
                 </div>
-                <div className="pl-2 overflow-y-auto">
+                <div className="flex flex-col pl-2">
                   <HStack space={1.5} className="mb-2 font-semibold">
                     <EventLabels
                       className="text-sm"
@@ -144,6 +144,7 @@ function EventRow({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={classNames(
         className,

@@ -1,16 +1,16 @@
-import { describe, expect, it } from 'vitest';
 import type { Context } from '@yaakapp/api';
+import { describe, expect, it } from 'vitest';
 import { plugin } from '../src';
 
 describe('regex.match', () => {
-  const matchFunction = plugin.templateFunctions!.find(f => f.name === 'regex.match');
+  const matchFunction = plugin.templateFunctions?.find((f) => f.name === 'regex.match');
 
   it('should exist', () => {
     expect(matchFunction).toBeDefined();
   });
 
   it('should extract first capture group', async () => {
-    const result = await matchFunction!.onRender({} as Context, {
+    const result = await matchFunction?.onRender({} as Context, {
       values: {
         regex: 'Hello (\\w+)',
         input: 'Hello World',
@@ -21,7 +21,7 @@ describe('regex.match', () => {
   });
 
   it('should extract named capture group', async () => {
-    const result = await matchFunction!.onRender({} as Context, {
+    const result = await matchFunction?.onRender({} as Context, {
       values: {
         regex: 'Hello (?<name>\\w+)',
         input: 'Hello World',
@@ -32,10 +32,10 @@ describe('regex.match', () => {
   });
 
   it('should return full match when no capture groups', async () => {
-    const result = await matchFunction!.onRender({} as Context, {
+    const result = await matchFunction?.onRender({} as Context, {
       values: {
         regex: 'Hello \\w+',
-        input: 'Hello World'
+        input: 'Hello World',
       },
       purpose: 'send',
     });
@@ -43,10 +43,10 @@ describe('regex.match', () => {
   });
 
   it('should return empty string when no match', async () => {
-    const result = await matchFunction!.onRender({} as Context, {
+    const result = await matchFunction?.onRender({} as Context, {
       values: {
         regex: 'Goodbye',
-        input: 'Hello World'
+        input: 'Hello World',
       },
       purpose: 'send',
     });
@@ -54,10 +54,10 @@ describe('regex.match', () => {
   });
 
   it('should return empty string when regex is empty', async () => {
-    const result = await matchFunction!.onRender({} as Context, {
+    const result = await matchFunction?.onRender({} as Context, {
       values: {
         regex: '',
-        input: 'Hello World'
+        input: 'Hello World',
       },
       purpose: 'send',
     });
@@ -65,10 +65,10 @@ describe('regex.match', () => {
   });
 
   it('should return empty string when input is empty', async () => {
-    const result = await matchFunction!.onRender({} as Context, {
+    const result = await matchFunction?.onRender({} as Context, {
       values: {
         regex: 'Hello',
-        input: ''
+        input: '',
       },
       purpose: 'send',
     });
@@ -77,18 +77,18 @@ describe('regex.match', () => {
 });
 
 describe('regex.replace', () => {
-  const replaceFunction = plugin.templateFunctions!.find(f => f.name === 'regex.replace');
+  const replaceFunction = plugin.templateFunctions?.find((f) => f.name === 'regex.replace');
 
   it('should exist', () => {
     expect(replaceFunction).toBeDefined();
   });
 
   it('should replace one occurrence by default', async () => {
-    const result = await replaceFunction!.onRender({} as Context, {
+    const result = await replaceFunction?.onRender({} as Context, {
       values: {
         regex: 'o',
         input: 'Hello World',
-        replacement: 'a'
+        replacement: 'a',
       },
       purpose: 'send',
     });
@@ -96,11 +96,11 @@ describe('regex.replace', () => {
   });
 
   it('should replace with capture groups', async () => {
-    const result = await replaceFunction!.onRender({} as Context, {
+    const result = await replaceFunction?.onRender({} as Context, {
       values: {
         regex: '(\\w+) (\\w+)',
         input: 'Hello World',
-        replacement: '$2 $1'
+        replacement: '$2 $1',
       },
       purpose: 'send',
     });
@@ -108,11 +108,11 @@ describe('regex.replace', () => {
   });
 
   it('should replace with full match reference', async () => {
-    const result = await replaceFunction!.onRender({} as Context, {
+    const result = await replaceFunction?.onRender({} as Context, {
       values: {
         regex: 'World',
         input: 'Hello World',
-        replacement: '[$&]'
+        replacement: '[$&]',
       },
       purpose: 'send',
     });
@@ -120,12 +120,12 @@ describe('regex.replace', () => {
   });
 
   it('should respect flags parameter', async () => {
-    const result = await replaceFunction!.onRender({} as Context, {
+    const result = await replaceFunction?.onRender({} as Context, {
       values: {
         regex: 'hello',
         input: 'Hello World',
         replacement: 'Hi',
-        flags: 'i'
+        flags: 'i',
       },
       purpose: 'send',
     });
@@ -133,11 +133,11 @@ describe('regex.replace', () => {
   });
 
   it('should handle empty replacement', async () => {
-    const result = await replaceFunction!.onRender({} as Context, {
+    const result = await replaceFunction?.onRender({} as Context, {
       values: {
         regex: 'World',
         input: 'Hello World',
-        replacement: ''
+        replacement: '',
       },
       purpose: 'send',
     });
@@ -145,11 +145,11 @@ describe('regex.replace', () => {
   });
 
   it('should return original input when no match', async () => {
-    const result = await replaceFunction!.onRender({} as Context, {
+    const result = await replaceFunction?.onRender({} as Context, {
       values: {
         regex: 'Goodbye',
         input: 'Hello World',
-        replacement: 'Hi'
+        replacement: 'Hi',
       },
       purpose: 'send',
     });
@@ -157,11 +157,11 @@ describe('regex.replace', () => {
   });
 
   it('should return empty string when regex is empty', async () => {
-    const result = await replaceFunction!.onRender({} as Context, {
+    const result = await replaceFunction?.onRender({} as Context, {
       values: {
         regex: '',
         input: 'Hello World',
-        replacement: 'Hi'
+        replacement: 'Hi',
       },
       purpose: 'send',
     });
@@ -169,11 +169,11 @@ describe('regex.replace', () => {
   });
 
   it('should return empty string when input is empty', async () => {
-    const result = await replaceFunction!.onRender({} as Context, {
+    const result = await replaceFunction?.onRender({} as Context, {
       values: {
         regex: 'Hello',
         input: '',
-        replacement: 'Hi'
+        replacement: 'Hi',
       },
       purpose: 'send',
     });
@@ -181,14 +181,16 @@ describe('regex.replace', () => {
   });
 
   it('should throw on invalid regex', async () => {
-    const fn = replaceFunction!.onRender({} as Context, {
+    const fn = replaceFunction?.onRender({} as Context, {
       values: {
         regex: '[',
         input: 'Hello World',
-        replacement: 'Hi'
+        replacement: 'Hi',
       },
       purpose: 'send',
     });
-    await expect(fn).rejects.toThrow('Invalid regular expression: /[/: Unterminated character class');
+    await expect(fn).rejects.toThrow(
+      'Invalid regular expression: /[/: Unterminated character class',
+    );
   });
 });

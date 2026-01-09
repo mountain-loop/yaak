@@ -374,7 +374,7 @@ describe('importer-curl', () => {
         httpRequests: [
           baseRequest({
             url: 'https://yaak.app',
-            method: "POST",
+            method: 'POST',
             bodyType: 'application/x-www-form-urlencoded',
             body: {
               form: [{ name: 'foo', value: 'bar=baz', enabled: true }],
@@ -386,6 +386,122 @@ describe('importer-curl', () => {
                 value: 'application/x-www-form-urlencoded',
               },
             ],
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Imports data with Unicode escape sequences', () => {
+    expect(
+      convertCurl(
+        `curl 'https://yaak.app' -H 'Content-Type: application/json' --data-raw $'{"query":"SearchQueryInput\\u0021"}' -X POST`,
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            headers: [{ name: 'Content-Type', value: 'application/json', enabled: true }],
+            bodyType: 'application/json',
+            body: { text: '{"query":"SearchQueryInput!"}' },
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Imports data with multiple escape sequences', () => {
+    expect(
+      convertCurl(
+        `curl 'https://yaak.app' --data-raw $'Line1\\nLine2\\tTab\\u0021Exclamation' -X POST`,
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            bodyType: 'application/x-www-form-urlencoded',
+            body: {
+              form: [{ name: 'Line1\nLine2\tTab!Exclamation', value: '', enabled: true }],
+            },
+            headers: [
+              {
+                enabled: true,
+                name: 'Content-Type',
+                value: 'application/x-www-form-urlencoded',
+              },
+            ],
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Imports multipart form data from --data-raw (Chrome DevTools format)', () => {
+    // This is the format Chrome DevTools uses when copying a multipart form submission as cURL
+    const curlCommand = `curl 'http://localhost:8080/system' \
+  -H 'Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryHwsXKi4rKA6P5VBd' \
+  --data-raw $'------WebKitFormBoundaryHwsXKi4rKA6P5VBd\r\nContent-Disposition: form-data; name="username"\r\n\r\njsgj\r\n------WebKitFormBoundaryHwsXKi4rKA6P5VBd\r\nContent-Disposition: form-data; name="password"\r\n\r\n654321\r\n------WebKitFormBoundaryHwsXKi4rKA6P5VBd\r\nContent-Disposition: form-data; name="captcha"; filename="test.xlsx"\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n\r\n------WebKitFormBoundaryHwsXKi4rKA6P5VBd--\r\n'`;
+
+    expect(convertCurl(curlCommand)).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'http://localhost:8080/system',
+            method: 'POST',
+            headers: [
+              {
+                name: 'Content-Type',
+                value: 'multipart/form-data; boundary=----WebKitFormBoundaryHwsXKi4rKA6P5VBd',
+                enabled: true,
+              },
+            ],
+            bodyType: 'multipart/form-data',
+            body: {
+              form: [
+                { name: 'username', value: 'jsgj', enabled: true },
+                { name: 'password', value: '654321', enabled: true },
+                { name: 'captcha', file: 'test.xlsx', enabled: true },
+              ],
+            },
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Imports multipart form data with text-only fields from --data-raw', () => {
+    const curlCommand = `curl 'http://example.com/api' \
+  -H 'Content-Type: multipart/form-data; boundary=----FormBoundary123' \
+  --data-raw $'------FormBoundary123\r\nContent-Disposition: form-data; name="field1"\r\n\r\nvalue1\r\n------FormBoundary123\r\nContent-Disposition: form-data; name="field2"\r\n\r\nvalue2\r\n------FormBoundary123--\r\n'`;
+
+    expect(convertCurl(curlCommand)).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'http://example.com/api',
+            method: 'POST',
+            headers: [
+              {
+                name: 'Content-Type',
+                value: 'multipart/form-data; boundary=----FormBoundary123',
+                enabled: true,
+              },
+            ],
+            bodyType: 'multipart/form-data',
+            body: {
+              form: [
+                { name: 'field1', value: 'value1', enabled: true },
+                { name: 'field2', value: 'value2', enabled: true },
+              ],
+            },
           }),
         ],
       },

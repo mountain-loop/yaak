@@ -1,7 +1,23 @@
+import type { DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
+import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useKeyValue } from '../../../hooks/useKeyValue';
+import { computeSideForDragMove } from '../../../lib/dnd';
+import { DropMarker } from '../../DropMarker';
 import { ErrorBoundary } from '../../ErrorBoundary';
+import type { ButtonProps } from '../Button';
+import { Button } from '../Button';
 import { Icon } from '../Icon';
 import type { RadioDropdownProps } from '../RadioDropdown';
 import { RadioDropdown } from '../RadioDropdown';
@@ -10,11 +26,14 @@ export type TabItem =
   | {
       value: string;
       label: string;
+      hidden?: boolean;
+      leftSlot?: ReactNode;
       rightSlot?: ReactNode;
     }
   | {
       value: string;
       options: Omit<RadioDropdownProps, 'children'>;
+      leftSlot?: ReactNode;
       rightSlot?: ReactNode;
     };
 
@@ -28,6 +47,7 @@ interface Props {
   children: ReactNode;
   addBorders?: boolean;
   layout?: 'horizontal' | 'vertical';
+  storageKey?: string | string[];
 }
 
 export function Tabs({
@@ -35,26 +55,74 @@ export function Tabs({
   onChangeValue,
   label,
   children,
-  tabs,
+  tabs: originalTabs,
   className,
   tabListClassName,
   addBorders,
   layout = 'vertical',
+  storageKey,
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const reorderable = !!storageKey;
+
+  // Use key-value storage for persistence if storageKey is provided
+  const { value: savedOrder, set: setSavedOrder } = useKeyValue<string[]>({
+    namespace: 'global',
+    key: storageKey ?? ['tabs_order', 'default'],
+    fallback: [],
+  });
+
+  // State for ordered tabs
+  const [orderedTabs, setOrderedTabs] = useState<TabItem[]>(originalTabs);
+  const [isDragging, setIsDragging] = useState<TabItem | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  // Reorder tabs based on saved order when tabs or savedOrder changes
+  useEffect(() => {
+    if (!storageKey || savedOrder == null || savedOrder.length === 0) {
+      setOrderedTabs(originalTabs);
+      return;
+    }
+
+    // Create a map of tab values to tab items
+    const tabMap = new Map(originalTabs.map((tab) => [tab.value, tab]));
+
+    // Reorder based on saved order, adding any new tabs at the end
+    const reordered: TabItem[] = [];
+    const seenValues = new Set<string>();
+
+    // Add tabs in saved order
+    for (const value of savedOrder) {
+      const tab = tabMap.get(value);
+      if (tab) {
+        reordered.push(tab);
+        seenValues.add(value);
+      }
+    }
+
+    // Add any new tabs that weren't in the saved order
+    for (const tab of originalTabs) {
+      if (!seenValues.has(tab.value)) {
+        reordered.push(tab);
+      }
+    }
+
+    setOrderedTabs(reordered);
+  }, [originalTabs, savedOrder, storageKey]);
+
+  const tabs = storageKey ? orderedTabs : originalTabs;
 
   value = value ?? tabs[0]?.value;
 
   // Update tabs when value changes
   useEffect(() => {
-    const tabs = ref.current?.querySelectorAll<HTMLDivElement>(`[data-tab]`);
+    const tabs = ref.current?.querySelectorAll<HTMLDivElement>('[data-tab]');
     for (const tab of tabs ?? []) {
       const v = tab.getAttribute('data-tab');
       const parent = tab.closest('.tabs-container');
       if (parent !== ref.current) {
         // Tab is part of a nested tab container, so ignore it
       } else if (v === value) {
-        tab.setAttribute('tabindex', '-1');
         tab.setAttribute('data-state', 'active');
         tab.setAttribute('aria-hidden', 'false');
         tab.style.display = 'block';
@@ -66,97 +134,318 @@ export function Tabs({
     }
   }, [value]);
 
+  // Drag and drop handlers
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const onDragStart = useCallback(
+    (e: DragStartEvent) => {
+      const tab = tabs.find((t) => t.value === e.active.id);
+      setIsDragging(tab ?? null);
+    },
+    [tabs],
+  );
+
+  const onDragMove = useCallback(
+    (e: DragMoveEvent) => {
+      const overId = e.over?.id as string | undefined;
+      if (!overId) return setHoveredIndex(null);
+
+      const overTab = tabs.find((t) => t.value === overId);
+      if (overTab == null) return setHoveredIndex(null);
+
+      // For vertical layout, tabs are arranged horizontally (side-by-side)
+      const orientation = layout === 'vertical' ? 'horizontal' : 'vertical';
+      const side = computeSideForDragMove(overTab.value, e, orientation);
+
+      // If computeSideForDragMove returns null (shouldn't happen but be safe), default to null
+      if (side === null) return setHoveredIndex(null);
+
+      const overIndex = tabs.findIndex((t) => t.value === overId);
+      const hoveredIndex = overIndex + (side === 'before' ? 0 : 1);
+
+      setHoveredIndex(hoveredIndex);
+    },
+    [tabs, layout],
+  );
+
+  const onDragCancel = useCallback(() => {
+    setIsDragging(null);
+    setHoveredIndex(null);
+  }, []);
+
+  const onDragEnd = useCallback(
+    (e: DragEndEvent) => {
+      setIsDragging(null);
+      setHoveredIndex(null);
+
+      const activeId = e.active.id as string | undefined;
+      const overId = e.over?.id as string | undefined;
+      if (!activeId || !overId || activeId === overId) return;
+
+      const from = tabs.findIndex((t) => t.value === activeId);
+      const baseTo = tabs.findIndex((t) => t.value === overId);
+      const to = hoveredIndex ?? (baseTo === -1 ? from : baseTo);
+
+      if (from !== -1 && to !== -1 && from !== to) {
+        const newTabs = [...tabs];
+        const [moved] = newTabs.splice(from, 1);
+        if (moved === undefined) return;
+        newTabs.splice(to > from ? to - 1 : to, 0, moved);
+
+        setOrderedTabs(newTabs);
+
+        // Save order to storage
+        setSavedOrder(newTabs.map((t) => t.value)).catch(console.error);
+      }
+    },
+    [tabs, hoveredIndex, setSavedOrder],
+  );
+
+  const tabButtons = useMemo(() => {
+    const items: ReactNode[] = [];
+    tabs.forEach((t, i) => {
+      if ('hidden' in t && t.hidden) {
+        return;
+      }
+
+      const isActive = t.value === value;
+      const showDropMarkerBefore = hoveredIndex === i;
+
+      if (showDropMarkerBefore) {
+        items.push(
+          <div
+            key={`marker-${t.value}`}
+            className={classNames(
+              'relative',
+              layout === 'vertical' ? 'w-0' : 'h-0',
+            )}
+          >
+            <DropMarker orientation={layout === 'vertical' ? 'vertical' : 'horizontal'} />
+          </div>
+        );
+      }
+
+      items.push(
+        <TabButton
+          key={t.value}
+          tab={t}
+          isActive={isActive}
+          addBorders={addBorders}
+          layout={layout}
+          reorderable={reorderable}
+          isDragging={isDragging?.value === t.value}
+          onChangeValue={onChangeValue}
+        />
+      );
+    });
+    return items;
+  }, [tabs, value, addBorders, layout, reorderable, isDragging, onChangeValue, hoveredIndex]);
+
+  const tabList = (
+    <div
+      role="tablist"
+      aria-label={label}
+      className={classNames(
+        tabListClassName,
+        addBorders && layout === 'horizontal' && 'pl-3 -ml-1',
+        addBorders && layout === 'vertical' && 'ml-0 mb-2',
+        'flex items-center hide-scrollbars',
+        layout === 'horizontal' && 'h-full overflow-auto p-2',
+        layout === 'vertical' && 'overflow-x-auto overflow-y-visible ',
+        // Give space for button focus states within overflow boundary.
+        !addBorders && layout === 'vertical' && 'py-1 pl-3 -ml-5 pr-1',
+      )}
+    >
+      <div
+        className={classNames(
+          layout === 'horizontal' && 'flex flex-col w-full pb-3 mb-auto',
+          layout === 'vertical' && 'flex flex-row flex-shrink-0 w-full',
+        )}
+      >
+        {tabButtons}
+        {hoveredIndex === tabs.length && (
+          <div
+            className={classNames(
+              'relative',
+              layout === 'vertical' ? 'w-0' : 'h-0',
+            )}
+          >
+            <DropMarker orientation={layout === 'vertical' ? 'vertical' : 'horizontal'} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div
       ref={ref}
       className={classNames(
         className,
         'tabs-container',
-        'transform-gpu',
         'h-full grid',
         layout === 'horizontal' && 'grid-rows-1 grid-cols-[auto_minmax(0,1fr)]',
         layout === 'vertical' && 'grid-rows-[auto_minmax(0,1fr)] grid-cols-1',
       )}
     >
-      <div
-        aria-label={label}
-        className={classNames(
-          tabListClassName,
-          addBorders && '!-ml-1',
-          'flex items-center hide-scrollbars mb-2',
-          layout === 'horizontal' && 'h-full overflow-auto p-2 -mr-2',
-          layout === 'vertical' && 'overflow-x-auto overflow-y-visible ',
-          // Give space for button focus states within overflow boundary.
-          layout === 'vertical' && 'py-1 -ml-5 pl-3 pr-1',
-        )}
-      >
-        <div
-          className={classNames(
-            layout === 'horizontal' && 'flex flex-col gap-1 w-full pb-3 mb-auto',
-            layout === 'vertical' && 'flex flex-row flex-shrink-0 gap-2 w-full',
-          )}
+      {reorderable ? (
+        <DndContext
+          autoScroll
+          sensors={sensors}
+          onDragMove={onDragMove}
+          onDragEnd={onDragEnd}
+          onDragStart={onDragStart}
+          onDragCancel={onDragCancel}
+          collisionDetection={closestCenter}
         >
-          {tabs.map((t) => {
-            const isActive = t.value === value;
-            const btnClassName = classNames(
-              'h-sm flex items-center rounded whitespace-nowrap',
-              '!px-2 ml-[1px] hocus:text-text',
-              addBorders && 'border hocus:bg-surface-highlight',
-              isActive ? 'text-text' : 'text-text-subtle',
-              isActive && addBorders
-                ? 'border-surface-active bg-surface-active'
-                : layout === 'vertical'
-                  ? 'border-border-subtle'
-                  : 'border-transparent',
-              layout === 'horizontal' && 'flex justify-between min-w-[10rem]',
-            );
-
-            if ('options' in t) {
-              const option = t.options.items.find(
-                (i) => 'value' in i && i.value === t.options?.value,
-              );
-              return (
-                <RadioDropdown
-                  key={t.value}
-                  items={t.options.items}
-                  value={t.options.value}
-                  onChange={t.options.onChange}
-                >
-                  <button
-                    onClick={isActive ? undefined : () => onChangeValue(t.value)}
-                    className={classNames(btnClassName)}
-                  >
-                    {option && 'shortLabel' in option && option.shortLabel
-                      ? option.shortLabel
-                      : (option?.label ?? 'Unknown')}
-                    {t.rightSlot}
-                    <Icon
-                      size="sm"
-                      icon="chevron_down"
-                      className={classNames(
-                        'ml-1',
-                        isActive ? 'text-text-subtle' : 'text-text-subtlest',
-                      )}
-                    />
-                  </button>
-                </RadioDropdown>
-              );
-            } else {
-              return (
-                <button
-                  key={t.value}
-                  onClick={isActive ? undefined : () => onChangeValue(t.value)}
-                  className={btnClassName}
-                >
-                  {t.label}
-                  {t.rightSlot}
-                </button>
-              );
-            }
-          })}
-        </div>
-      </div>
+          {tabList}
+          <DragOverlay dropAnimation={null}>
+            {isDragging && (
+              <TabButton
+                tab={isDragging}
+                isActive={isDragging.value === value}
+                addBorders={addBorders}
+                layout={layout}
+                reorderable={false}
+                isDragging={false}
+                onChangeValue={onChangeValue}
+                overlay
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        tabList
+      )}
       {children}
+    </div>
+  );
+}
+
+interface TabButtonProps {
+  tab: TabItem;
+  isActive: boolean;
+  addBorders?: boolean;
+  layout: 'horizontal' | 'vertical';
+  reorderable: boolean;
+  isDragging: boolean;
+  onChangeValue: (value: string) => void;
+  overlay?: boolean;
+}
+
+function TabButton({
+  tab,
+  isActive,
+  addBorders,
+  layout,
+  reorderable,
+  isDragging,
+  onChangeValue,
+  overlay = false,
+}: TabButtonProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableRef,
+  } = useDraggable({
+    id: tab.value,
+    disabled: !reorderable,
+  });
+  const { setNodeRef: setDroppableRef } = useDroppable({
+    id: tab.value,
+    disabled: !reorderable,
+  });
+
+  const handleSetWrapperRef = useCallback(
+    (n: HTMLDivElement | null) => {
+      if (reorderable) {
+        setDraggableRef(n);
+        setDroppableRef(n);
+      }
+    },
+    [reorderable, setDraggableRef, setDroppableRef],
+  );
+
+  const btnProps: Partial<ButtonProps> = {
+    color: 'custom',
+    justify: layout === 'horizontal' ? 'start' : 'center',
+    onClick: isActive ? undefined : () => onChangeValue(tab.value),
+    className: classNames(
+      'flex items-center rounded whitespace-nowrap',
+      '!px-2 ml-[1px]',
+      'outline-none',
+      'ring-none',
+      'focus-visible-or-class:outline-2',
+      addBorders && 'border focus-visible:bg-surface-highlight',
+      isActive ? 'text-text' : 'text-text-subtle',
+      isActive && addBorders
+        ? 'border-surface-active bg-surface-active'
+        : layout === 'vertical'
+          ? 'border-border-subtle'
+          : 'border-transparent',
+      layout === 'horizontal' && 'min-w-[10rem]',
+      isDragging && 'opacity-50',
+      overlay && 'opacity-80',
+    ),
+  };
+
+  const buttonContent = (() => {
+    if ('options' in tab) {
+      const option = tab.options.items.find((i) => 'value' in i && i.value === tab.options.value);
+      return (
+        <RadioDropdown
+          key={tab.value}
+          items={tab.options.items}
+          itemsAfter={tab.options.itemsAfter}
+          itemsBefore={tab.options.itemsBefore}
+          value={tab.options.value}
+          onChange={tab.options.onChange}
+        >
+          <Button
+            leftSlot={tab.leftSlot}
+            rightSlot={
+              <div className="flex items-center">
+                {tab.rightSlot}
+                <Icon
+                  size="sm"
+                  icon="chevron_down"
+                  className={classNames(
+                    'ml-1',
+                    isActive ? 'text-text-subtle' : 'text-text-subtlest',
+                  )}
+                />
+              </div>
+            }
+            {...btnProps}
+          >
+            {option && 'shortLabel' in option && option.shortLabel
+              ? option.shortLabel
+              : (option?.label ?? 'Unknown')}
+          </Button>
+        </RadioDropdown>
+      );
+    }
+    return (
+      <Button
+        leftSlot={tab.leftSlot}
+        rightSlot={tab.rightSlot}
+        {...btnProps}
+      >
+        {'label' in tab && tab.label ? tab.label : tab.value}
+      </Button>
+    );
+  })();
+
+  // Apply drag handlers to wrapper, not button
+  const wrapperProps = reorderable && !overlay ? { ...attributes, ...listeners } : {};
+
+  return (
+    <div
+      ref={handleSetWrapperRef}
+      className={classNames('relative', layout === 'vertical' && 'mr-2')}
+      {...wrapperProps}
+    >
+      {buttonContent}
     </div>
   );
 }

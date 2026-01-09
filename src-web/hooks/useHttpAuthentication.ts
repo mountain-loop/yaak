@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { GetHttpAuthenticationSummaryResponse } from '@yaakapp-internal/plugins';
-import { useAtomValue , atom } from 'jotai';
+import { atom, useAtomValue } from 'jotai';
 import { useState } from 'react';
 import { jotaiStore } from '../lib/jotai';
 import { invokeCmd } from '../lib/tauri';
@@ -26,7 +26,7 @@ export function useSubscribeHttpAuthentication() {
     // NOTE: visibilitychange (refetchOnWindowFocus) does not work on Windows, so we'll rely on this logic
     //  to refetch things until that's working again
     // TODO: Update plugin system to wait for plugins to initialize before sending the first event to them
-    refetchInterval: numResults > 0 ? Infinity : 1000,
+    refetchInterval: numResults > 0 ? Number.POSITIVE_INFINITY : 1000,
     refetchOnMount: true,
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {
@@ -38,7 +38,11 @@ export function useSubscribeHttpAuthentication() {
         jotaiStore.set(httpAuthenticationSummariesAtom, result);
         return result;
       } catch (err) {
-        showErrorToast('http-authentication-error', err);
+        showErrorToast({
+          id: 'http-authentication-error',
+          title: 'HTTP Authentication Error',
+          message: err,
+        });
       }
     },
   });

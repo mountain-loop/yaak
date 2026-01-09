@@ -26,6 +26,7 @@ interface Props {
 
 export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEncryption }: Props) {
   const [justEnabledEncryption, setJustEnabledEncryption] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const workspace = useAtomValue(activeWorkspaceAtom);
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
@@ -49,7 +50,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         setKey({ key: null, error: `${err}` });
       },
     );
-  }, [setKey, workspaceMeta, workspaceMeta?.encryptionKey]);
+  }, [workspaceMeta, workspaceMeta?.encryptionKey]);
 
   if (key == null || workspace == null || workspaceMeta == null) {
     return null;
@@ -111,12 +112,22 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         color={expanded ? 'info' : 'secondary'}
         size={size}
         onClick={async () => {
-          setJustEnabledEncryption(true);
-          await enableEncryption(workspaceMeta.workspaceId);
+          setError(null);
+          try {
+            await enableEncryption(workspaceMeta.workspaceId);
+            setJustEnabledEncryption(true);
+          } catch (err) {
+            setError(`Failed to enable encryption: ${err}`);
+          }
         }}
       >
         Enable Encryption
       </Button>
+      {error && (
+        <Banner color="danger" className="mb-2">
+          {error}
+        </Banner>
+      )}
       {expanded ? (
         <Banner color="info" className="mb-6">
           <EncryptionHelp />
@@ -206,7 +217,7 @@ function KeyRevealer({
       <VStack space={0.5}>
         {!disableLabel && (
           <span className="text-sm text-primary flex items-center gap-1">
-            workspace encryption key{' '}
+            Workspace encryption key{' '}
             <IconTooltip iconSize="sm" size="lg" content={helpAfterEncryption} />
           </span>
         )}
@@ -231,10 +242,11 @@ function HighlightedKey({ keyText, show }: { keyText: string; show: boolean }) {
         keyText.split('').map((c, i) => {
           return (
             <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: it's fine
               key={i}
               className={classNames(
                 c.match(/[0-9]/) && 'text-info',
-                c == '-' && 'text-text-subtle',
+                c === '-' && 'text-text-subtle',
               )}
             >
               {c}

@@ -13,9 +13,12 @@ describe('importer-yaak', () => {
       continue;
     }
 
-    test('Imports ' + fixture, () => {
+    test(`Imports ${fixture}`, () => {
       const contents = fs.readFileSync(path.join(p, fixture), 'utf-8');
-      const expected = fs.readFileSync(path.join(p, fixture.replace(/.input\..*/, '.output.json')), 'utf-8');
+      const expected = fs.readFileSync(
+        path.join(p, fixture.replace(/.input\..*/, '.output.json')),
+        'utf-8',
+      );
       const result = convertInsomnia(contents);
       // console.log(JSON.stringify(result, null, 2))
       expect(result).toEqual(parseJsonOrYaml(expected));

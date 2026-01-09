@@ -1,14 +1,15 @@
 import classNames from 'classnames';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { generateId } from '../../lib/generateId';
 import { Portal } from '../Portal';
 
 export interface TooltipProps {
   children: ReactNode;
   content: ReactNode;
-  tabIndex?: number,
+  tabIndex?: number;
   size?: 'md' | 'lg';
+  className?: string;
 }
 
 const hiddenStyles: CSSProperties = {
@@ -19,7 +20,7 @@ const hiddenStyles: CSSProperties = {
   opacity: 0,
 };
 
-export function Tooltip({ children, content, tabIndex, size = 'md' }: TooltipProps) {
+export function Tooltip({ children, className, content, tabIndex, size = 'md' }: TooltipProps) {
   const [isOpen, setIsOpen] = useState<CSSProperties>();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -90,12 +91,13 @@ export function Tooltip({ children, content, tabIndex, size = 'md' }: TooltipPro
           <Triangle className="text-border mb-2" />
         </div>
       </Portal>
+      {/** biome-ignore lint/a11y/useSemanticElements: Needs to be usable in other buttons */}
       <span
         ref={triggerRef}
         role="button"
         aria-describedby={isOpen ? id.current : undefined}
-        tabIndex={tabIndex ?? 0}
-        className="flex-grow-0 flex items-center"
+        tabIndex={tabIndex ?? -1}
+        className={classNames(className, 'flex-grow-0 flex items-center')}
         onClick={handleToggleImmediate}
         onMouseEnter={handleOpen}
         onMouseLeave={handleClose}
@@ -123,6 +125,7 @@ function Triangle({ className }: { className?: string }) {
         'h-[0.5rem] w-[0.8rem]',
       )}
     >
+      <title>Triangle</title>
       <polygon className="fill-surface-highlight" points="0,0 30,0 15,10" />
       <path
         d="M0 0 L15 9 L30 0"

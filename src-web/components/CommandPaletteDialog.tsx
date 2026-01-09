@@ -2,10 +2,17 @@ import { workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { fuzzyFilter } from 'fuzzbunny';
 import { useAtomValue } from 'jotai';
-import type { KeyboardEvent, ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  type KeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createFolder } from '../commands/commands';
-import { createEnvironmentAndActivate } from '../commands/createEnvironment';
+import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
 import { openSettings } from '../commands/openSettings';
 import { switchWorkspace } from '../commands/switchWorkspace';
 import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
@@ -16,8 +23,8 @@ import { useAllRequests } from '../hooks/useAllRequests';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDebouncedState } from '../hooks/useDebouncedState';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
+import { useGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import type { HotkeyAction } from '../hooks/useHotKey';
-import { useHotKey } from '../hooks/useHotKey';
 import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
 import { useRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { useRecentRequests } from '../hooks/useRecentRequests';
@@ -27,20 +34,22 @@ import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { createRequestAndNavigate } from '../lib/createRequestAndNavigate';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { showDialog, toggleDialog } from '../lib/dialog';
+import { showDialog } from '../lib/dialog';
+import { editEnvironment } from '../lib/editEnvironment';
 import { renameModelWithPrompt } from '../lib/renameModelWithPrompt';
-import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
+import {
+  resolvedModelNameWithFolders,
+  resolvedModelNameWithFoldersArray,
+} from '../lib/resolvedModelName';
 import { router } from '../lib/router';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import { CookieDialog } from './CookieDialog';
 import { Button } from './core/Button';
 import { Heading } from './core/Heading';
-import { HotKey } from './core/HotKey';
+import { Hotkey } from './core/Hotkey';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { Icon } from './core/Icon';
 import { PlainInput } from './core/PlainInput';
-import { HStack } from './core/Stacks';
-import { EnvironmentEditDialog } from './EnvironmentEditDialog';
 
 interface CommandPaletteGroup {
   key: string;
@@ -61,6 +70,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const activeEnvironment = useActiveEnvironment();
   const httpRequestActions = useHttpRequestActions();
+  const grpcRequestActions = useGrpcRequestActions();
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const workspaces = useAtomValue(workspacesAtom);
   const { baseEnvironment, subEnvironments } = useEnvironmentsBreakdown();
@@ -73,6 +83,11 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const [recentRequests] = useRecentRequests();
   const [, setSidebarHidden] = useSidebarHidden();
   const { mutate: sendRequest } = useSendAnyHttpRequest();
+
+  const handleSetCommand = (command: string) => {
+    setCommand(command);
+    setSelectedItemKey(null);
+  };
 
   const workspaceCommands = useMemo<CommandPaletteItem[]>(() => {
     if (workspaceId == null) return [];
@@ -90,7 +105,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         onSelect: createWorkspace,
       },
       {
-        key: 'http_request.create',
+        key: 'model.create',
         label: 'Create HTTP Request',
         onSelect: () => createRequestAndNavigate({ model: 'http_request', workspaceId }),
       },
@@ -124,21 +139,13 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       {
         key: 'environment.edit',
         label: 'Edit Environment',
-        action: 'environmentEditor.toggle',
-        onSelect: () => {
-          toggleDialog({
-            id: 'environment-editor',
-            noPadding: true,
-            size: 'lg',
-            className: 'h-[80vh]',
-            render: () => <EnvironmentEditDialog initialEnvironment={activeEnvironment} />,
-          });
-        },
+        action: 'environment_editor.toggle',
+        onSelect: () => editEnvironment(activeEnvironment),
       },
       {
         key: 'environment.create',
         label: 'Create Environment',
-        onSelect: () => createEnvironmentAndActivate.mutate(baseEnvironment),
+        onSelect: () => createSubEnvironmentAndActivate.mutate(baseEnvironment),
       },
       {
         key: 'sidebar.toggle',
@@ -150,19 +157,28 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     if (activeRequest?.model === 'http_request') {
       commands.push({
-        key: 'http_request.send',
-        action: 'http_request.send',
+        key: 'request.send',
+        action: 'request.send',
         label: 'Send Request',
         onSelect: () => sendRequest(activeRequest.id),
       });
-      for (let i = 0; i < httpRequestActions.length; i++) {
-        const a = httpRequestActions[i]!;
+      httpRequestActions.forEach((a, i) => {
         commands.push({
           key: `http_request_action.${i}`,
           label: a.label,
           onSelect: () => a.call(activeRequest),
         });
-      }
+      });
+    }
+
+    if (activeRequest?.model === 'grpc_request') {
+      grpcRequestActions.forEach((a, i) => {
+        commands.push({
+          key: `grpc_request_action.${i}`,
+          label: a.label,
+          onSelect: () => a.call(activeRequest),
+        });
+      });
     }
 
     if (activeRequest != null) {
@@ -173,7 +189,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       });
 
       commands.push({
-        key: 'sidebar.delete_selected_item',
+        key: 'sidebar.selected.delete',
         label: 'Delete Request',
         onSelect: () => deleteModelWithConfirm(activeRequest),
       });
@@ -190,6 +206,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     activeRequest,
     baseEnvironment,
     createWorkspace,
+    grpcRequestActions,
     httpRequestActions,
     sendRequest,
     setSidebarHidden,
@@ -203,13 +220,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
       if (aRecentIndex >= 0 && bRecentIndex >= 0) {
         return aRecentIndex - bRecentIndex;
-      } else if (aRecentIndex >= 0 && bRecentIndex === -1) {
-        return -1;
-      } else if (aRecentIndex === -1 && bRecentIndex >= 0) {
-        return 1;
-      } else {
-        return a.createdAt.localeCompare(b.createdAt);
       }
+      if (aRecentIndex >= 0 && bRecentIndex === -1) {
+        return -1;
+      }
+      if (aRecentIndex === -1 && bRecentIndex >= 0) {
+        return 1;
+      }
+      return a.createdAt.localeCompare(b.createdAt);
     });
   }, [recentRequests, requests]);
 
@@ -220,13 +238,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
       if (aRecentIndex >= 0 && bRecentIndex >= 0) {
         return aRecentIndex - bRecentIndex;
-      } else if (aRecentIndex >= 0 && bRecentIndex === -1) {
-        return -1;
-      } else if (aRecentIndex === -1 && bRecentIndex >= 0) {
-        return 1;
-      } else {
-        return a.createdAt.localeCompare(b.createdAt);
       }
+      if (aRecentIndex >= 0 && bRecentIndex === -1) {
+        return -1;
+      }
+      if (aRecentIndex === -1 && bRecentIndex >= 0) {
+        return 1;
+      }
+      return a.createdAt.localeCompare(b.createdAt);
     });
   }, [subEnvironments, recentEnvironments]);
 
@@ -242,13 +261,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
       if (aRecentIndex >= 0 && bRecentIndex >= 0) {
         return aRecentIndex - bRecentIndex;
-      } else if (aRecentIndex >= 0 && bRecentIndex === -1) {
-        return -1;
-      } else if (aRecentIndex === -1 && bRecentIndex >= 0) {
-        return 1;
-      } else {
-        return a.createdAt.localeCompare(b.createdAt);
       }
+      if (aRecentIndex >= 0 && bRecentIndex === -1) {
+        return -1;
+      }
+      if (aRecentIndex === -1 && bRecentIndex >= 0) {
+        return 1;
+      }
+      return a.createdAt.localeCompare(b.createdAt);
     });
   }, [recentWorkspaces, workspaces]);
 
@@ -270,10 +290,15 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         key: `switch-request-${r.id}`,
         searchText: resolvedModelNameWithFolders(r),
         label: (
-          <HStack space={2}>
-            <HttpMethodTag short className="text-xs" request={r} />
-            <div className="truncate">{resolvedModelNameWithFolders(r)}</div>
-          </HStack>
+          <div className="flex items-center gap-x-0.5">
+            <HttpMethodTag short className="text-xs mr-2" request={r} />
+            {resolvedModelNameWithFoldersArray(r).map((name, i, all) => (
+              <Fragment key={name}>
+                {i !== 0 && <Icon icon="chevron_right" className="opacity-80" />}
+                <div className={classNames(i < all.length - 1 && 'truncate')}>{name}</div>
+              </Fragment>
+            ))}
+          </div>
         ),
         onSelect: async () => {
           await router.navigate({
@@ -327,10 +352,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
   const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
-  useEffect(() => {
-    setSelectedItemKey(null);
-  }, [command]);
-
   const { filteredGroups, filteredAllItems } = useMemo(() => {
     const result = command
       ? fuzzyFilter(
@@ -377,7 +398,6 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       const index = filteredAllItems.findIndex((v) => v.key === selectedItem?.key);
-
       if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) {
         const next = filteredAllItems[index + 1] ?? filteredAllItems[0];
         setSelectedItemKey(next?.key ?? null);
@@ -396,9 +416,10 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <div className="h-full w-[400px] grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden py-2">
+    <div className="h-full w-[min(700px,80vw)] grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden py-2">
       <div className="px-2 w-full">
         <PlainInput
+          autoFocus
           hideLabel
           leftSlot={
             <div className="h-md w-10 flex justify-center items-center">
@@ -410,7 +431,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
           placeholder="Search or type a command"
           className="font-sans !text-base"
           defaultValue={command}
-          onChange={setCommand}
+          onChange={handleSetCommand}
           onKeyDownCapture={handleKeyDown}
         />
       </div>
@@ -425,9 +446,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
                 active={v.key === selectedItem?.key}
                 key={v.key}
                 onClick={() => handleSelectAndClose(v.onSelect)}
-                rightSlot={
-                  v.action && <CommandPaletteAction action={v.action} onAction={v.onSelect} />
-                }
+                rightSlot={v.action && <CommandPaletteAction action={v.action} />}
               >
                 {v.label}
               </CommandPaletteItem>
@@ -473,13 +492,6 @@ function CommandPaletteItem({
   );
 }
 
-function CommandPaletteAction({
-  action,
-  onAction,
-}: {
-  action: HotkeyAction;
-  onAction: () => void;
-}) {
-  useHotKey(action, onAction);
-  return <HotKey className="ml-auto" action={action} />;
+function CommandPaletteAction({ action }: { action: HotkeyAction }) {
+  return <Hotkey className="ml-auto" action={action} />;
 }

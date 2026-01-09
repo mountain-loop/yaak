@@ -19,8 +19,15 @@
       @apply text-surface !important;
     }
 
+    /* Matching bracket */
+
+    .cm-matchingBracket {
+      @apply bg-transparent border-b border-b-text-subtle;
+    }
+
     &:not(.cm-focused) {
-      .cm-cursor, .cm-fat-cursor {
+      .cm-cursor,
+      .cm-fat-cursor {
         @apply hidden;
       }
     }
@@ -73,14 +80,54 @@
       }
     }
 
+    .cm-gutter-lint {
+      @apply w-auto !important;
+
+      .cm-gutterElement {
+        @apply px-0;
+      }
+
+      .cm-lint-marker {
+        @apply cursor-default opacity-80 hover:opacity-100 transition-opacity;
+        @apply rounded-full w-[0.9em] h-[0.9em];
+
+        content: "";
+
+        &.cm-lint-marker-error {
+          @apply bg-danger;
+        }
+      }
+    }
+
     .template-tag {
       /* Colors */
-      @apply bg-surface text-text-subtle border-border-subtle whitespace-nowrap;
+      @apply bg-surface text-text border-border-subtle whitespace-nowrap;
       @apply hover:border-border-subtle hover:text-text hover:bg-surface-highlight;
 
-      @apply inline border px-1 mx-[0.5px] rounded cursor-default dark:shadow;
+      @apply inline border px-1 mx-[0.5px] rounded dark:shadow;
 
       -webkit-text-security: none;
+
+      * {
+        @apply cursor-default;
+      }
+
+      .fn {
+        @apply inline-block;
+        .fn-inner {
+          @apply text-text-subtle max-w-[40em] italic inline-flex items-end whitespace-pre text-[0.9em];
+        }
+        .fn-arg-name {
+          /* Nothing yet */
+          @apply opacity-60;
+        }
+        .fn-arg-value {
+          @apply inline-block truncate;
+        }
+        .fn-bracket {
+          @apply text-text-subtle opacity-30;
+        }
+      }
     }
 
     .hyperlink-widget {
@@ -105,6 +152,7 @@
       @apply font-mono text-xs;
 
       /* Hide scrollbars */
+
       &::-webkit-scrollbar-corner,
       &::-webkit-scrollbar {
         @apply hidden !important;
@@ -141,7 +189,8 @@
     @apply outline-text;
     @apply bg-text !important;
 
-    &, * {
+    &,
+    * {
       @apply text-surface font-semibold !important;
     }
   }
@@ -172,8 +221,7 @@
 }
 
 .cm-editor .fold-gutter-icon::after {
-  @apply block w-1.5 h-1.5 p-0.5 border-transparent
-  border-l border-b border-l-[currentColor] border-b-[currentColor] content-[''];
+  @apply block w-1.5 h-1.5 p-0.5 border-transparent border-l border-b border-l-[currentColor] border-b-[currentColor] content-[''];
 }
 
 /* Rotate the fold gutter chevron when open */
@@ -197,21 +245,11 @@
 }
 
 .cm-editor .cm-activeLineGutter {
-  @apply bg-transparent;
-}
-
-.cm-wrapper:not(.cm-readonly) .cm-editor {
-  &.cm-focused .cm-activeLineGutter {
-    @apply text-text-subtle;
-  }
+  @apply bg-transparent text-text-subtle;
 }
 
 /* Cursor and mouse cursor for readonly mode */
 .cm-wrapper.cm-readonly {
-  .cm-editor .cm-cursor {
-    @apply hidden !important;
-  }
-
   &.cm-singleline * {
     @apply cursor-default;
   }
@@ -231,20 +269,39 @@
   }
 }
 
+.cm-tooltip-lint {
+  @apply font-mono text-editor rounded overflow-hidden bg-surface-highlight border border-border shadow !important;
+
+  .cm-diagnostic-error {
+    @apply border-l-danger px-4 py-2;
+  }
+}
+
+.cm-lintPoint {
+  &.cm-lintPoint-error {
+    &::after {
+      @apply border-b-danger;
+    }
+  }
+}
+
 .cm-tooltip.cm-tooltip-hover {
   @apply shadow-lg bg-surface rounded text-text-subtle border border-border-subtle z-50 pointer-events-auto text-sm;
-  @apply px-2 py-1;
+  @apply p-1.5;
+
+  /* Style the tooltip for popping up "open in browser" and other stuff */
+
+  a,
+  button {
+    @apply text-text hover:bg-surface-highlight w-full h-sm flex items-center px-2 rounded;
+  }
 
   a {
-    @apply text-text;
-
-    &:hover {
-      @apply underline;
-    }
+    @apply cursor-default !important;
 
     &::after {
       @apply text-text bg-text h-3 w-3 ml-1;
-      content: '';
+      content: "";
       -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' fill='black' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z'/%3E%3Cpath fill-rule='evenodd' d='M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z'/%3E%3C/svg%3E");
       -webkit-mask-size: contain;
       display: inline-block;
@@ -265,59 +322,59 @@
     @apply opacity-80 italic;
 
     &::after {
-      content: 'a' !important; /* Default (eg. for GraphQL) */
+      content: "a" !important; /* Default (eg. for GraphQL) */
     }
 
     &.cm-completionIcon-function::after {
-      content: 'f' !important;
+      content: "f" !important;
       @apply text-info;
     }
 
     &.cm-completionIcon-variable::after {
-      content: 'x' !important;
+      content: "x" !important;
       @apply text-primary;
     }
 
     &.cm-completionIcon-namespace::after {
-      content: 'n' !important;
+      content: "n" !important;
       @apply text-warning;
     }
 
     &.cm-completionIcon-constant::after {
-      content: 'c' !important;
+      content: "c" !important;
       @apply text-notice;
     }
 
     &.cm-completionIcon-class::after {
-      content: 'o' !important;
+      content: "o" !important;
     }
 
     &.cm-completionIcon-enum::after {
-      content: 'e' !important;
+      content: "e" !important;
     }
 
     &.cm-completionIcon-interface::after {
-      content: 'i' !important;
+      content: "i" !important;
     }
 
     &.cm-completionIcon-keyword::after {
-      content: 'k' !important;
+      content: "k" !important;
     }
 
     &.cm-completionIcon-method::after {
-      content: 'm' !important;
+      content: "m" !important;
     }
 
     &.cm-completionIcon-property::after {
-      content: 'a' !important;
+      content: "a" !important;
     }
 
     &.cm-completionIcon-text::after {
-      content: 't' !important;
+      content: "t" !important;
     }
 
     &.cm-completionIcon-type::after {
-      content: 't' !important;
+      content: "t" !important;
     }
   }
 
@@ -371,7 +428,7 @@
     @apply appearance-none bg-none cursor-default;
   }
 
-  button[name='close'] {
+  button[name="close"] {
     @apply text-text-subtle hocus:text-text px-2 -mr-1.5 !important;
   }
 
@@ -386,7 +443,7 @@
 
   /* Hide the "All" button */
 
-  button[name='select'] {
+  button[name="select"] {
     @apply hidden;
   }
 }

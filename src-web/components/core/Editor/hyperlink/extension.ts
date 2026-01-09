@@ -1,5 +1,9 @@
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
 import { Decoration, EditorView, hoverTooltip, MatchDecorator, ViewPlugin } from '@codemirror/view';
+import { activeWorkspaceIdAtom } from '../../../../hooks/useActiveWorkspace';
+import { copyToClipboard } from '../../../../lib/copy';
+import { createRequestAndNavigate } from '../../../../lib/createRequestAndNavigate';
+import { jotaiStore } from '../../../../lib/jotai';
 
 const REGEX =
   /(https?:\/\/([-a-zA-Z0-9@:%._+*~#=]{1,256})+(\.[a-zA-Z0-9()]{1,6})?\b([-a-zA-Z0-9()@:%_+*.~#?&/={}[\]]*))/g;
@@ -7,9 +11,10 @@ const REGEX =
 const tooltip = hoverTooltip(
   (view, pos, side) => {
     const { from, text } = view.state.doc.lineAt(pos);
-    let match;
+    let match: RegExpExecArray | null;
     let found: { start: number; end: number } | null = null;
 
+    // biome-ignore lint/suspicious/noAssignInExpressions: none
     while ((match = REGEX.exec(text))) {
       const start = from + match.index;
       const end = start + match[0].length;
@@ -24,7 +29,7 @@ const tooltip = hoverTooltip(
       return null;
     }
 
-    if ((found.start == pos && side < 0) || (found.end == pos && side > 0)) {
+    if ((found.start === pos && side < 0) || (found.end === pos && side > 0)) {
       return null;
     }
 
@@ -32,11 +37,38 @@ const tooltip = hoverTooltip(
       pos: found.start,
       end: found.end,
       create() {
-        const dom = document.createElement('a');
-        dom.textContent = 'Open in browser';
-        dom.href = text.substring(found!.start - from, found!.end - from);
-        dom.target = '_blank';
-        dom.rel = 'noopener noreferrer';
+        const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
+        const link = text.substring(found?.start - from, found?.end - from);
+        const dom = document.createElement('div');
+
+        const $open = document.createElement('a');
+        $open.textContent = 'Open in browser';
+        $open.href = link;
+        $open.target = '_blank';
+        $open.rel = 'noopener noreferrer';
+
+        const $copy = document.createElement('button');
+        $copy.textContent = 'Copy to clipboard';
+        $copy.addEventListener('click', () => {
+          copyToClipboard(link);
+        });
+
+        const $create = document.createElement('button');
+        $create.textContent = 'Create new request';
+        $create.addEventListener('click', async () => {
+          await createRequestAndNavigate({
+            model: 'http_request',
+            workspaceId: workspaceId ?? 'n/a',
+            url: link,
+          });
+        });
+
+        dom.appendChild($open);
+        dom.appendChild($copy);
+        if (workspaceId != null) {
+          dom.appendChild($create);
+        }
+
         return { dom };
       },
     };
@@ -46,7 +78,7 @@ const tooltip = hoverTooltip(
   },
 );
 
-const decorator = function () {
+const decorator = () => {
   const placeholderMatcher = new MatchDecorator({
     regexp: REGEX,
     decoration(match, view, matchStartPos) {

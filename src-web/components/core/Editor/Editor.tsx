@@ -1,3 +1,4 @@
+import { startCompletion } from '@codemirror/autocomplete';
 import { defaultKeymap, historyField, indentWithTab } from '@codemirror/commands';
 import { foldState, forceParsing } from '@codemirror/language';
 import type { EditorStateConfig, Extension } from '@codemirror/state';
@@ -7,10 +8,9 @@ import { emacs } from '@replit/codemirror-emacs';
 import { vim } from '@replit/codemirror-vim';
 
 import { vscodeKeymap } from '@replit/codemirror-vscode-keymap';
-import type { EditorKeymap, EnvironmentVariable } from '@yaakapp-internal/models';
+import type { EditorKeymap } from '@yaakapp-internal/models';
 import { settingsAtom } from '@yaakapp-internal/models';
 import type { EditorLanguage, TemplateFunction } from '@yaakapp-internal/plugins';
-import { parseTemplate } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import type { GraphQLSchema } from 'graphql';
 import { useAtomValue } from 'jotai';
@@ -19,25 +19,25 @@ import type { ReactNode, RefObject } from 'react';
 import {
   Children,
   cloneElement,
-  forwardRef,
   isValidElement,
   useCallback,
   useEffect,
-  useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
 } from 'react';
-import { activeEnvironmentIdAtom } from '../../../hooks/useActiveEnvironment';
+import { activeEnvironmentAtom } from '../../../hooks/useActiveEnvironment';
+import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
 import { useEnvironmentVariables } from '../../../hooks/useEnvironmentVariables';
+import { eventMatchesHotkey } from '../../../hooks/useHotKey';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
-import { showDialog } from '../../../lib/dialog';
+import { editEnvironment } from '../../../lib/editEnvironment';
 import { tryFormatJson, tryFormatXml } from '../../../lib/formatters';
+import { jotaiStore } from '../../../lib/jotai';
 import { withEncryptionEnabled } from '../../../lib/setupOrConfigureEncryption';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
-import { TemplateVariableDialog } from '../../TemplateVariableDialog';
 import { IconButton } from '../IconButton';
-import { InlineCode } from '../InlineCode';
 import { HStack } from '../Stacks';
 import './Editor.css';
 import {
@@ -65,19 +65,19 @@ export interface EditorProps {
   autoSelect?: boolean;
   autocomplete?: GenericCompletionConfig;
   autocompleteFunctions?: boolean;
-  autocompleteVariables?: boolean;
+  autocompleteVariables?: boolean | ((v: WrappedEnvironmentVariable) => boolean);
   className?: string;
   defaultValue?: string | null;
   disableTabIndent?: boolean;
   disabled?: boolean;
-  extraExtensions?: Extension[];
+  extraExtensions?: Extension[] | Extension;
   forcedEnvironmentId?: string;
   forceUpdateKey?: string | number;
   format?: (v: string) => Promise<string>;
   heightMode?: 'auto' | 'full';
   hideGutter?: boolean;
   id?: string;
-  language?: EditorLanguage | 'pairs' | 'url';
+  language?: EditorLanguage | 'pairs' | 'url' | null;
   graphQLSchema?: GraphQLSchema | null;
   onBlur?: () => void;
   onChange?: (value: string) => void;
@@ -88,59 +88,67 @@ export interface EditorProps {
   placeholder?: string;
   readOnly?: boolean;
   singleLine?: boolean;
+  containerOnly?: boolean;
   stateKey: string | null;
   tooltipContainer?: HTMLElement;
   type?: 'text' | 'password';
   wrapLines?: boolean;
+  setRef?: (view: EditorView | null) => void;
 }
 
 const stateFields = { history: historyField, folds: foldState };
 
-const emptyVariables: EnvironmentVariable[] = [];
+const emptyVariables: WrappedEnvironmentVariable[] = [];
 const emptyExtension: Extension = [];
 
-export const Editor = forwardRef<EditorView | undefined, EditorProps>(function Editor(
-  {
-    actions,
-    autoFocus,
-    autoSelect,
-    autocomplete,
-    autocompleteFunctions,
-    autocompleteVariables,
-    className,
-    defaultValue,
-    disableTabIndent,
-    disabled,
-    extraExtensions,
-    forcedEnvironmentId,
-    forceUpdateKey,
-    format,
-    heightMode,
-    hideGutter,
-    graphQLSchema,
-    language,
-    onBlur,
-    onChange,
-    onFocus,
-    onKeyDown,
-    onPaste,
-    onPasteOverwrite,
-    placeholder,
-    readOnly,
-    singleLine,
-    stateKey,
-    type,
-    wrapLines,
-  }: EditorProps,
-  ref,
-) {
+export function Editor(props: EditorProps) {
+  return <EditorInner key={props.stateKey} {...props} />;
+}
+
+function EditorInner({
+  actions,
+  autoFocus,
+  autoSelect,
+  autocomplete,
+  autocompleteFunctions,
+  autocompleteVariables,
+  className,
+  defaultValue,
+  disableTabIndent,
+  disabled,
+  extraExtensions,
+  forcedEnvironmentId,
+  forceUpdateKey,
+  format,
+  heightMode,
+  hideGutter,
+  graphQLSchema,
+  language,
+  onBlur,
+  onChange,
+  onFocus,
+  onKeyDown,
+  onPaste,
+  onPasteOverwrite,
+  placeholder,
+  readOnly,
+  singleLine,
+  containerOnly,
+  stateKey,
+  type,
+  wrapLines,
+  setRef,
+}: EditorProps) {
   const settings = useAtomValue(settingsAtom);
 
-  const activeEnvironmentId = useAtomValue(activeEnvironmentIdAtom);
-  const environmentId = forcedEnvironmentId ?? activeEnvironmentId ?? null;
-  const allEnvironmentVariables = useEnvironmentVariables(environmentId);
-  const environmentVariables = autocompleteVariables ? allEnvironmentVariables : emptyVariables;
+  const allEnvironmentVariables = useEnvironmentVariables(forcedEnvironmentId ?? null);
   const useTemplating = !!(autocompleteFunctions || autocompleteVariables || autocomplete);
+  const environmentVariables = useMemo(() => {
+    if (!autocompleteVariables) return emptyVariables;
+    return typeof autocompleteVariables === 'function'
+      ? allEnvironmentVariables.filter(autocompleteVariables)
+      : allEnvironmentVariables;
+  }, [allEnvironmentVariables, autocompleteVariables]);
 
   if (settings && wrapLines === undefined) {
     wrapLines = settings.editorSoftWrap;
@@ -170,7 +178,6 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   }
 
   const cm = useRef<{ view: EditorView; languageCompartment: Compartment } | null>(null);
-  useImperativeHandle(ref, () => cm.current?.view, []);
 
   // Use ref so we can update the handler without re-initializing the editor
   const handleChange = useRef<EditorProps['onChange']>(onChange);
@@ -217,7 +224,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       const effects = placeholderCompartment.current.reconfigure(ext);
       cm.current?.view.dispatch({ effects });
     },
-    [placeholder, type],
+    [placeholder],
   );
 
   // Update vim
@@ -227,12 +234,12 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       if (cm.current === null) return;
       const current = keymapCompartment.current.get(cm.current.view.state) ?? [];
       // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
-      if (settings.editorKeymap === 'default' && current === keymapExtensions['default']) return; // Nothing to do
-      if (settings.editorKeymap === 'vim' && current === keymapExtensions['vim']) return; // Nothing to do
-      if (settings.editorKeymap === 'vscode' && current === keymapExtensions['vscode']) return; // Nothing to do
-      if (settings.editorKeymap === 'emacs' && current === keymapExtensions['emacs']) return; // Nothing to do
+      if (settings.editorKeymap === 'default' && current === keymapExtensions.default) return; // Nothing to do
+      if (settings.editorKeymap === 'vim' && current === keymapExtensions.vim) return; // Nothing to do
+      if (settings.editorKeymap === 'vscode' && current === keymapExtensions.vscode) return; // Nothing to do
+      if (settings.editorKeymap === 'emacs' && current === keymapExtensions.emacs) return; // Nothing to do
 
-      const ext = keymapExtensions[settings.editorKeymap] ?? keymapExtensions['default'];
+      const ext = keymapExtensions[settings.editorKeymap] ?? keymapExtensions.default;
       const effects = keymapCompartment.current.reconfigure(ext);
       cm.current.view.dispatch({ effects });
     },
@@ -275,26 +282,10 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
 
   const onClickFunction = useCallback(
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
-      const initialTokens = parseTemplate(tagValue);
-      const show = () =>
-        showDialog({
-          id: 'template-function-' + Math.random(), // Allow multiple at once
-          size: 'md',
-          title: <InlineCode>{fn.name}(…)</InlineCode>,
-          description: fn.description,
-          render: ({ hide }) => (
-            <TemplateFunctionDialog
-              templateFunction={fn}
-              hide={hide}
-              initialTokens={initialTokens}
-              onChange={(insert) => {
-                cm.current?.view.dispatch({
-                  changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
-                });
-              }}
-            />
-          ),
-        });
+      const show = () => {
+        if (cm.current === null) return;
+        TemplateFunctionDialog.show(fn, tagValue, startPos, cm.current.view);
+      };
 
       if (fn.name === 'secure') {
         withEncryptionEnabled(show);
@@ -306,50 +297,19 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   );
 
   const onClickVariable = useCallback(
-    async (_v: EnvironmentVariable, tagValue: string, startPos: number) => {
-      const initialTokens = parseTemplate(tagValue);
-      showDialog({
-        size: 'dynamic',
-        id: 'template-variable',
-        title: 'Change Variable',
-        render: ({ hide }) => (
-          <TemplateVariableDialog
-            hide={hide}
-            initialTokens={initialTokens}
-            onChange={(insert) => {
-              cm.current?.view.dispatch({
-                changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
-              });
-            }}
-          />
-        ),
-      });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async (v: WrappedEnvironmentVariable, _tagValue: string, _startPos: number) => {
+      await editEnvironment(v.environment, { addOrFocusVariable: v.variable });
     },
     [],
   );
 
-  const onClickMissingVariable = useCallback(
-    async (_name: string, tagValue: string, startPos: number) => {
-      const initialTokens = parseTemplate(tagValue);
-      showDialog({
-        size: 'dynamic',
-        id: 'template-variable',
-        title: 'Configure Variable',
-        render: ({ hide }) => (
-          <TemplateVariableDialog
-            hide={hide}
-            initialTokens={initialTokens}
-            onChange={(insert) => {
-              cm.current?.view.dispatch({
-                changes: [{ from: startPos, to: startPos + tagValue.length, insert }],
-              });
-            }}
-          />
-        ),
-      });
-    },
-    [],
-  );
+  const onClickMissingVariable = useCallback(async (name: string) => {
+    const activeEnvironment = jotaiStore.get(activeEnvironmentAtom);
+    await editEnvironment(activeEnvironment, {
+      addOrFocusVariable: { name, value: '', enabled: true },
+    });
+  }, []);
 
   const [, { focusParamValue }] = useRequestEditor();
   const onClickPathParameter = useCallback(
@@ -365,12 +325,14 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
   );
 
   // Update the language extension when the language changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
     if (cm.current === null) return;
     const { view, languageCompartment } = cm.current;
     const ext = getLanguageExtension({
       useTemplating,
       language,
+      hideGutter,
       environmentVariables,
       autocomplete,
       completionOptions,
@@ -391,9 +353,11 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     completionOptions,
     useTemplating,
     graphQLSchema,
+    hideGutter,
   ]);
 
   // Initialize the editor when ref mounts
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only reinitialize when necessary
   const initEditorRef = useCallback(
     function initEditorRef(container: HTMLDivElement | null) {
       if (container === null) {
@@ -423,7 +387,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
             !disableTabIndent ? keymap.of([indentWithTab]) : emptyExtension,
           ),
           keymapCompartment.current.of(
-            keymapExtensions[settings.editorKeymap] ?? keymapExtensions['default'],
+            keymapExtensions[settings.editorKeymap] ?? keymapExtensions.default,
           ),
           ...getExtensions({
             container,
@@ -438,7 +402,11 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
             onBlur: handleBlur,
             onKeyDown: handleKeyDown,
           }),
-          ...(extraExtensions ?? []),
+          ...(Array.isArray(extraExtensions)
+            ? extraExtensions
+            : extraExtensions
+              ? [extraExtensions]
+              : []),
         ];
 
         const cachedJsonState = getCachedEditorState(defaultValue ?? '', stateKey);
@@ -464,42 +432,33 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
         if (autoSelect) {
           view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
         }
+        setRef?.(view);
       } catch (e) {
         console.log('Failed to initialize Codemirror', e);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [forceUpdateKey],
   );
 
   // For read-only mode, update content when `defaultValue` changes
   useEffect(
     function updateReadOnlyEditor() {
-      if (!readOnly || cm.current?.view == null || defaultValue == null) return;
-
-      // Replace codemirror contents
-      const currentDoc = cm.current.view.state.doc.toString();
-      if (defaultValue.startsWith(currentDoc)) {
-        // If we're just appending, append only the changes. This preserves
-        // things like scroll position.
-        cm.current.view.dispatch({
-          changes: cm.current.view.state.changes({
-            from: currentDoc.length,
-            insert: defaultValue.slice(currentDoc.length),
-          }),
-        });
-      } else {
-        // If we're replacing everything, reset the entire content
-        cm.current.view.dispatch({
-          changes: cm.current.view.state.changes({
-            from: 0,
-            to: currentDoc.length,
-            insert: defaultValue,
-          }),
-        });
+      if (readOnly && cm.current?.view != null) {
+        updateContents(cm.current.view, defaultValue || '');
       }
     },
     [defaultValue, readOnly],
+  );
+
+  // Force input to update when receiving change and not in focus
+  useLayoutEffect(
+    function updateNonFocusedEditor() {
+      const notFocused = !cm.current?.view.hasFocus;
+      if (notFocused && cm.current != null) {
+        updateContents(cm.current.view, defaultValue || '');
+      }
+    },
+    [defaultValue],
   );
 
   // Add bg classes to actions, so they appear over the text
@@ -563,7 +522,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
     />
   );
 
-  if (singleLine) {
+  if (singleLine || containerOnly) {
     return cmContainer;
   }
 
@@ -584,7 +543,7 @@ export const Editor = forwardRef<EditorView | undefined, EditorProps>(function E
       )}
     </div>
   );
-});
+}
 
 function getExtensions({
   stateKey,
@@ -623,7 +582,13 @@ function getExtensions({
       blur: () => {
         onBlur.current?.();
       },
-      keydown: (e) => {
+      keydown: (e, view) => {
+        // Check if the hotkey matches the editor.autocomplete action
+        if (eventMatchesHotkey(e, 'editor.autocomplete')) {
+          e.preventDefault();
+          startCompletion(view);
+          return true;
+        }
         onKeyDown.current?.(e);
       },
       paste: (e, v) => {
@@ -644,15 +609,13 @@ function getExtensions({
     // Things that must be last //
     // ------------------------ //
 
-    // Fire onChange event
     EditorView.updateListener.of((update) => {
+      if (update.startState === update.state) return;
+
       if (onChange && update.docChanged) {
         onChange.current?.(update.state.doc.toString());
       }
-    }),
 
-    // Cache editor state
-    EditorView.updateListener.of((update) => {
       saveCachedEditorState(stateKey, update.state);
     }),
   ];
@@ -673,7 +636,7 @@ function saveCachedEditorState(stateKey: string | null, state: EditorState | nul
   // Save state in sessionStorage by removing doc and saving the hash of it instead.
   // This will be checked on restore and put back in if it matches.
   stateObj.docHash = md5(stateObj.doc);
-  delete stateObj.doc;
+  stateObj.doc = undefined;
 
   try {
     sessionStorage.setItem(computeFullStateKey(stateKey), JSON.stringify(stateObj));
@@ -707,4 +670,33 @@ function getCachedEditorState(doc: string, stateKey: string | null) {
 
 function computeFullStateKey(stateKey: string): string {
   return `editor.${stateKey}`;
+}
+
+function updateContents(view: EditorView, text: string) {
+  // Replace codemirror contents
+  const currentDoc = view.state.doc.toString();
+
+  if (currentDoc === text) {
+    return;
+  }
+
+  if (text.startsWith(currentDoc)) {
+    // If we're just appending, append only the changes. This preserves
+    // things like scroll position.
+    view.dispatch({
+      changes: view.state.changes({
+        from: currentDoc.length,
+        insert: text.slice(currentDoc.length),
+      }),
+    });
+  } else {
+    // If we're replacing everything, reset the entire content
+    view.dispatch({
+      changes: view.state.changes({
+        from: 0,
+        to: currentDoc.length,
+        insert: text,
+      }),
+    });
+  }
 }

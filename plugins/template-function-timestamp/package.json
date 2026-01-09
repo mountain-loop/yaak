@@ -5,9 +5,10 @@
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "lint": "eslint . --ext .ts,.tsx"
+    "test": "vitest --run tests"
   },
   "dependencies": {
+    "@date-fns/tz": "^1.4.1",
     "date-fns": "^4.1.0"
   }
 }

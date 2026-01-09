@@ -16,25 +16,31 @@ interface Props {
 
 export function HistoryDialog({ log }: Props) {
   return (
-    <Table>
-      <TableHead>
-        <TableRow>
-          <TableHeaderCell>Message</TableHeaderCell>
-          <TableHeaderCell>Author</TableHeaderCell>
-          <TableHeaderCell>When</TableHeaderCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {log.map((l, i) => (
-          <TableRow key={i}>
-            <TruncatedWideTableCell>{l.message || <em className="text-text-subtle">No message</em>}</TruncatedWideTableCell>
-            <TableCell><span title={`Email: ${l.author.email}`}>{l.author.name || 'Unknown'}</span></TableCell>
-            <TableCell className="text-text-subtle">
-              <span title={l.when}>{formatDistanceToNowStrict(l.when)} ago</span>
-            </TableCell>
+    <div className="pl-5 pr-1 pb-1">
+      <Table scrollable className="px-1">
+        <TableHead>
+          <TableRow>
+            <TableHeaderCell>Message</TableHeaderCell>
+            <TableHeaderCell>Author</TableHeaderCell>
+            <TableHeaderCell>When</TableHeaderCell>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHead>
+        <TableBody>
+          {log.map((l) => (
+            <TableRow key={l.author + (l.message ?? 'n/a') + l.when}>
+              <TruncatedWideTableCell>
+                {l.message || <em className="text-text-subtle">No message</em>}
+              </TruncatedWideTableCell>
+              <TableCell>
+                <span title={`Email: ${l.author.email}`}>{l.author.name || 'Unknown'}</span>
+              </TableCell>
+              <TableCell className="text-text-subtle">
+                <span title={l.when}>{formatDistanceToNowStrict(l.when)} ago</span>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

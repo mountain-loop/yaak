@@ -11,6 +11,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { xml } from '@codemirror/lang-xml';
 import type { LanguageSupport } from '@codemirror/language';
 import {
+  bracketMatching,
   codeFolding,
   foldGutter,
   foldKeymap,
@@ -18,7 +19,7 @@ import {
   indentOnInput,
   syntaxHighlighting,
 } from '@codemirror/language';
-import { lintKeymap } from '@codemirror/lint';
+import { linter, lintGutter, lintKeymap } from '@codemirror/lint';
 
 import { search, searchKeymap } from '@codemirror/search';
 import type { Extension } from '@codemirror/state';
@@ -35,15 +36,16 @@ import {
   rectangularSelection,
 } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
-import type { EnvironmentVariable } from '@yaakapp-internal/models';
 import { graphql } from 'cm6-graphql';
 import type { GraphQLSchema } from 'graphql';
 import { activeRequestIdAtom } from '../../../hooks/useActiveRequestId';
+import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
 import { jotaiStore } from '../../../lib/jotai';
 import { renderMarkdown } from '../../../lib/markdown';
 import { pluralizeCount } from '../../../lib/pluralize';
 import { showGraphQLDocExplorerAtom } from '../../graphql/graphqlAtoms';
 import type { EditorProps } from './Editor';
+import { jsonParseLinter } from './json-lint';
 import { pairs } from './pairs/extension';
 import { text } from './text/extension';
 import type { TwigCompletionOption } from './twig/completion';
@@ -61,7 +63,7 @@ export const syntaxHighlightStyle = HighlightStyle.define([
     textDecoration: 'underline',
   },
   {
-    tag: [t.paren, t.bracket, t.squareBracket, t.brace, t.separator],
+    tag: [t.angleBracket, t.paren, t.bracket, t.squareBracket, t.brace, t.separator, t.punctuation],
     color: 'var(--textSubtle)',
   },
   {
@@ -103,6 +105,7 @@ export function getLanguageExtension({
   language = 'text',
   environmentVariables,
   autocomplete,
+  hideGutter,
   onClickVariable,
   onClickMissingVariable,
   onClickPathParameter,
@@ -110,13 +113,13 @@ export function getLanguageExtension({
   graphQLSchema,
 }: {
   useTemplating: boolean;
-  environmentVariables: EnvironmentVariable[];
-  onClickVariable: (option: EnvironmentVariable, tagValue: string, startPos: number) => void;
+  environmentVariables: WrappedEnvironmentVariable[];
+  onClickVariable: (option: WrappedEnvironmentVariable, tagValue: string, startPos: number) => void;
   onClickMissingVariable: (name: string, tagValue: string, startPos: number) => void;
   onClickPathParameter: (name: string) => void;
   completionOptions: TwigCompletionOption[];
   graphQLSchema: GraphQLSchema | null;
-} & Pick<EditorProps, 'language' | 'autocomplete'>) {
+} & Pick<EditorProps, 'language' | 'autocomplete' | 'hideGutter'>) {
   const extraExtensions: Extension[] = [];
 
   if (language === 'url') {
@@ -152,8 +155,18 @@ export function getLanguageExtension({
     ];
   }
 
-  const base_ = syntaxExtensions[language ?? 'text'] ?? text();
-  const base = typeof base_ === 'function' ? base_() : text();
+  if (language === 'json') {
+    extraExtensions.push(linter(jsonParseLinter()));
+    if (!hideGutter) {
+      extraExtensions.push(lintGutter());
+    }
+  }
+
+  const maybeBase = language ? syntaxExtensions[language] : null;
+  const base = typeof maybeBase === 'function' ? maybeBase() : null;
+  if (base == null) {
+    return [];
+  }
 
   if (!useTemplating) {
     return [base, extraExtensions];
@@ -171,6 +184,16 @@ export function getLanguageExtension({
   });
 }
 
+// Filter out autocomplete start triggers from completionKeymap since we handle it via configurable hotkeys.
+// Keep navigation keys (ArrowUp/Down, Enter, Escape, etc.) but remove startCompletion bindings.
+const filteredCompletionKeymap = completionKeymap.filter((binding) => {
+  const key = binding.key?.toLowerCase() ?? '';
+  const mac = (binding as { mac?: string }).mac?.toLowerCase() ?? '';
+  // Filter out Ctrl-Space and Mac-specific autocomplete triggers (Alt-`, Alt-i)
+  const isStartTrigger = key.includes('space') || mac.includes('alt-') || mac.includes('`');
+  return !isStartTrigger;
+});
+
 export const baseExtensions = [
   highlightSpecialChars(),
   history(),
@@ -179,6 +202,7 @@ export const baseExtensions = [
   autocompletion({
     tooltipClass: () => 'x-theme-menu',
     closeOnBlur: true, // Set to `false` for debugging in devtools without closing it
+    defaultKeymap: false, // We handle the trigger via configurable hotkeys
     compareCompletions: (a, b) => {
       // Don't sort completions at all, only on boost
       return (a.boost ?? 0) - (b.boost ?? 0);
@@ -186,7 +210,7 @@ export const baseExtensions = [
   }),
   syntaxHighlighting(syntaxHighlightStyle),
   syntaxTheme,
-  keymap.of([...historyKeymap, ...completionKeymap]),
+  keymap.of([...historyKeymap, ...filteredCompletionKeymap]),
 ];
 
 export const readonlyExtensions = [
@@ -258,6 +282,7 @@ export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) =>
   indentOnInput(),
   rectangularSelection(),
   crosshairCursor(),
+  bracketMatching(),
   highlightActiveLineGutter(),
   keymap.of([...searchKeymap, ...foldKeymap, ...lintKeymap]),
 ];

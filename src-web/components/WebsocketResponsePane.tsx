@@ -17,8 +17,8 @@ import { copyToClipboard } from '../lib/copy';
 import { AutoScroller } from './core/AutoScroller';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { Editor } from './core/Editor/Editor';
-import { HotKeyList } from './core/HotKeyList';
+import { Editor } from './core/Editor/LazyEditor';
+import { HotkeyList } from './core/HotkeyList';
 import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { LoadingIcon } from './core/LoadingIcon';
@@ -71,8 +71,8 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
       minHeightPx={20}
       firstSlot={() =>
         activeConnection == null ? (
-          <HotKeyList
-            hotkeys={['http_request.send', 'http_request.create', 'sidebar.focus', 'url_bar.focus']}
+          <HotkeyList
+            hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']}
           />
         ) : (
           <div className="w-full grid grid-rows-[auto_minmax(0,1fr)] items-center">
@@ -135,7 +135,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
                           ? 'Connection open'
                           : `Message ${activeEvent.isServer ? 'Received' : 'Sent'}`}
                     </div>
-                    {message != '' && (
+                    {message !== '' && (
                       <HStack space={1}>
                         <Button
                           variant="border"
@@ -215,6 +215,7 @@ function EventRow({
   return (
     <div className="px-1" ref={ref}>
       <button
+        type="button"
         onClick={onClick}
         className={classNames(
           'w-full grid grid-cols-[auto_minmax(0,3fr)_auto] gap-2 items-center text-left',
@@ -252,7 +253,7 @@ function EventRow({
           {/*{error && <span className="text-warning"> ({error})</span>}*/}
         </div>
         <div className={classNames('opacity-50 text-xs')}>
-          {format(createdAt + 'Z', 'HH:mm:ss.SSS')}
+          {format(`${createdAt}Z`, 'HH:mm:ss.SSS')}
         </div>
       </button>
     </div>

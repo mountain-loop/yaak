@@ -1,5 +1,5 @@
-import type { TemplateFunctionArg } from '@yaakapp-internal/plugins';
 import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
+import type { TemplateFunctionArg } from '@yaakapp-internal/plugins';
 
 const inputArg: TemplateFunctionArg = {
   type: 'text',
@@ -24,6 +24,7 @@ export const plugin: PluginDefinition = {
       name: 'regex.match',
       description: 'Extract text using a regular expression',
       args: [inputArg, regexArg],
+      previewArgs: [regexArg.name],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         const input = String(args.values.input ?? '');
         const regex = new RegExp(String(args.values.regex ?? ''));
@@ -37,6 +38,7 @@ export const plugin: PluginDefinition = {
     {
       name: 'regex.replace',
       description: 'Replace text using a regular expression',
+      previewArgs: [regexArg.name],
       args: [
         inputArg,
         regexArg,

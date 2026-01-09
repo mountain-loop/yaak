@@ -20,7 +20,7 @@ interface HStackProps extends BaseStackProps {
 
 export const HStack = forwardRef(function HStack(
   { className, space, children, alignItems = 'center', ...props }: HStackProps,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: none
   ref: ForwardedRef<any>,
 ) {
   return (
@@ -41,7 +41,7 @@ export type VStackProps = BaseStackProps & {
 
 export const VStack = forwardRef(function VStack(
   { className, space, children, ...props }: VStackProps,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: none
   ref: ForwardedRef<any>,
 ) {
   return (
@@ -65,7 +65,7 @@ type BaseStackProps = HTMLAttributes<HTMLElement> & {
 
 const BaseStack = forwardRef(function BaseStack(
   { className, alignItems, justifyContent, wrap, children, as, ...props }: BaseStackProps,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: none
   ref: ForwardedRef<any>,
 ) {
   const Component = as ?? 'div';

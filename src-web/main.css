@@ -11,8 +11,8 @@
 
   :root {
     /* Must default these variables or the default will break */
-    --font-family-interface: '';
-    --font-family-editor: '';
+    --font-family-interface: "";
+    --font-family-editor: "";
   }
 
   /* Never show ligatures */
@@ -46,10 +46,6 @@
     &::placeholder {
       @apply text-placeholder;
     }
-  }
-
-  .select-all * {
-    /*@apply select-all;*/
   }
 
   a,

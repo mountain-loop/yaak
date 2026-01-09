@@ -1,3 +1,4 @@
+import { tz } from '@date-fns/tz';
 import { describe, expect, it } from 'vitest';
 import { calculateDatetime, formatDatetime } from '../src';
 
@@ -13,12 +14,12 @@ describe('formatDatetime', () => {
   });
 
   it('returns formatted specific timestamp', () => {
-    const result = formatDatetime({ date: '1752435296000' });
+    const result = formatDatetime({ date: '1752435296000', in: tz('America/Vancouver') });
     expect(result).toBe('2025-07-13 12:34:56');
   });
 
   it('returns formatted specific timestamp with decimals', () => {
-    const result = formatDatetime({ date: '1752435296000.19' });
+    const result = formatDatetime({ date: '1752435296000.19', in: tz('America/Vancouver') });
     expect(result).toBe('2025-07-13 12:34:56');
   });
 

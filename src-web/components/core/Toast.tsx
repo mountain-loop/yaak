@@ -2,7 +2,7 @@ import type { ShowToastRequest } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import * as m from 'motion/react-m';
 import type { ReactNode } from 'react';
-import React from 'react';
+
 import { useKey } from 'react-use';
 import type { IconProps } from './Icon';
 import { Icon } from './Icon';
@@ -16,7 +16,7 @@ export interface ToastProps {
   className?: string;
   timeout: number | null;
   action?: (args: { hide: () => void }) => ReactNode;
-  icon?: ShowToastRequest['icon'];
+  icon?: ShowToastRequest['icon'] | null;
   color?: ShowToastRequest['color'];
 }
 
@@ -42,7 +42,7 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
     [open],
   );
 
-  const toastIcon = icon ?? (color && color in ICONS && ICONS[color]);
+  const toastIcon = icon === null ? null : (icon ?? (color && color in ICONS && ICONS[color]));
 
   return (
     <m.div
@@ -58,13 +58,12 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
           'pointer-events-auto overflow-hidden',
           'relative pointer-events-auto bg-surface text-text rounded-lg',
           'border border-border shadow-lg w-[25rem]',
-          'grid grid-cols-[1fr_auto]',
         )}
       >
-        <div className="px-3 py-3 flex items-start gap-2 w-full">
-          {toastIcon && <Icon icon={toastIcon} color={color} className="mt-1" />}
-          <VStack space={2} className="w-full">
-            <div>{children}</div>
+        <div className="pl-3 py-3 pr-10 flex items-start gap-2 w-full max-h-[11rem] overflow-auto">
+          {toastIcon && <Icon icon={toastIcon} color={color} className="mt-1 flex-shrink-0" />}
+          <VStack space={2} className="w-full min-w-0">
+            <div className="select-auto">{children}</div>
             {action?.({ hide: onClose })}
           </VStack>
         </div>
@@ -72,7 +71,7 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
         <IconButton
           color={color}
           variant="border"
-          className="opacity-60 border-0"
+          className="opacity-60 border-0 !absolute top-2 right-2"
           title="Dismiss"
           icon="x"
           onClick={onClose}

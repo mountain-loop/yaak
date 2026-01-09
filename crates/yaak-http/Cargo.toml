@@ -1,0 +1,31 @@
+[package]
+name = "yaak-http"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate", "brotli", "zstd"] }
+async-trait = "0.1"
+brotli = "7"
+bytes = "1.5.0"
+cookie = "0.18.1"
+flate2 = "1"
+futures-util = "0.3"
+url = "2"
+zstd = "0.13"
+hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
+log = { workspace = true }
+mime_guess = "2.0.5"
+regex = "1.11.1"
+reqwest = { workspace = true, features = ["rustls-tls-manual-roots-no-provider", "socks", "http2", "stream"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "fs", "io-util"] }
+tokio-util = { version = "0.7", features = ["codec", "io", "io-util"] }
+tower-service = "0.3.3"
+urlencoding = "2.1.3"
+yaak-common = { workspace = true }
+yaak-models = { workspace = true }
+yaak-tls = { workspace = true }

@@ -1,0 +1,27 @@
+{
+  "id": "123",
+  "name": "My Environment",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.example.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "token",
+      "value": "{{ access_token }}",
+      "type": "default",
+      "description": "Access token for the API.",
+      "enabled": true
+    },
+    {
+      "key": "disabled",
+      "type": "secret",
+      "value": "hello",
+      "enabled": false
+    }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_using": "PostmanRuntime/1.0.0"
+}

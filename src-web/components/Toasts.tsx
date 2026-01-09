@@ -1,10 +1,10 @@
-import { AnimatePresence } from 'motion/react';
 import { useAtomValue } from 'jotai';
-import React, { type ReactNode } from 'react';
+import { AnimatePresence } from 'motion/react';
+import type { ReactNode } from 'react';
 import { hideToast, toastsAtom } from '../lib/toast';
 import { Toast, type ToastProps } from './core/Toast';
-import { Portal } from './Portal';
 import { ErrorBoundary } from './ErrorBoundary';
+import { Portal } from './Portal';
 
 export type ToastInstance = {
   id: string;

@@ -1,12 +1,11 @@
-import type { EditorView } from '@codemirror/view';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { FormEvent, ReactNode } from 'react';
-import { memo, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useHotKey } from '../hooks/useHotKey';
 import type { IconProps } from './core/Icon';
 import { IconButton } from './core/IconButton';
-import type { InputProps } from './core/Input';
+import type { InputHandle, InputProps } from './core/Input';
 import { Input } from './core/Input';
 import { HStack } from './core/Stacks';
 
@@ -44,15 +43,15 @@ export const UrlBar = memo(function UrlBar({
   isLoading,
   stateKey,
 }: Props) {
-  const inputRef = useRef<EditorView>(null);
+  const inputRef = useRef<InputHandle>(null);
   const [isFocused, setIsFocused] = useState<boolean>(false);
 
+  const handleInitInputRef = useCallback((h: InputHandle | null) => {
+    inputRef.current = h;
+  }, []);
+
   useHotKey('url_bar.focus', () => {
-    const head = inputRef.current?.state.doc.length ?? 0;
-    inputRef.current?.dispatch({
-      selection: { anchor: 0, head },
-    });
-    inputRef.current?.focus();
+    inputRef.current?.selectAll();
   });
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -64,7 +63,7 @@ export const UrlBar = memo(function UrlBar({
   return (
     <form onSubmit={handleSubmit} className={classNames('x-theme-urlBar', className)}>
       <Input
-        ref={inputRef}
+        setRef={handleInitInputRef}
         autocompleteFunctions
         autocompleteVariables
         stateKey={stateKey}
@@ -98,7 +97,7 @@ export const UrlBar = memo(function UrlBar({
                   className="w-8 mr-0.5 !h-full"
                   iconColor="secondary"
                   icon={isLoading ? 'x' : submitIcon}
-                  hotkeyAction="http_request.send"
+                  hotkeyAction="request.send"
                   onMouseDown={(e) => {
                     // Prevent the button from taking focus
                     e.preventDefault();

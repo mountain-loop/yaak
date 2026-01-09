@@ -2,7 +2,7 @@ import { workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
+import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   useEnsureActiveCookieJar,
@@ -12,6 +12,8 @@ import {
   activeEnvironmentAtom,
   useSubscribeActiveEnvironmentId,
 } from '../hooks/useActiveEnvironment';
+import { activeFolderAtom } from '../hooks/useActiveFolder';
+import { useSubscribeActiveFolderId } from '../hooks/useActiveFolderId';
 import { activeRequestAtom } from '../hooks/useActiveRequest';
 import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
@@ -25,24 +27,25 @@ import { useShouldFloatSidebar } from '../hooks/useShouldFloatSidebar';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
-import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
-import { duplicateRequestAndNavigate } from '../lib/duplicateRequestAndNavigate';
+import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFolderAndNavigate';
 import { importData } from '../lib/importData';
 import { jotaiStore } from '../lib/jotai';
+import { CreateDropdown } from './CreateDropdown';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { HotKeyList } from './core/HotKeyList';
+import { HotkeyList } from './core/HotkeyList';
 import { FeedbackLink } from './core/Link';
 import { HStack } from './core/Stacks';
-import { CreateDropdown } from './CreateDropdown';
 import { ErrorBoundary } from './ErrorBoundary';
+import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
 import { HeaderSize } from './HeaderSize';
 import { HttpRequestLayout } from './HttpRequestLayout';
 import { Overlay } from './Overlay';
+import type { ResizeHandleEvent } from './ResizeHandle';
 import { ResizeHandle } from './ResizeHandle';
-import { Sidebar } from './sidebar/Sidebar';
-import { SidebarActions } from './sidebar/SidebarActions';
+import Sidebar from './Sidebar';
+import { SidebarActions } from './SidebarActions';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
 
@@ -56,54 +59,39 @@ export function Workspace() {
   useGlobalWorkspaceHooks();
 
   const workspaces = useAtomValue(workspacesAtom);
-  const { setWidth, width, resetWidth } = useSidebarWidth();
+  const [width, setWidth, resetWidth] = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
   const activeEnvironment = useAtomValue(activeEnvironmentAtom);
   const floating = useShouldFloatSidebar();
   const [isResizing, setIsResizing] = useState<boolean>(false);
-  const moveState = useRef<{ move: (e: MouseEvent) => void; up: (e: MouseEvent) => void } | null>(
-    null,
-  );
+  const startWidth = useRef<number | null>(null);
 
-  const unsub = () => {
-    if (moveState.current !== null) {
-      document.documentElement.removeEventListener('mousemove', moveState.current.move);
-      document.documentElement.removeEventListener('mouseup', moveState.current.up);
-    }
-  };
+  const handleResizeMove = useCallback(
+    async ({ x, xStart }: ResizeHandleEvent) => {
+      if (width == null || startWidth.current == null) return;
 
-  const handleResizeStart = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
-      if (width === undefined) return;
-
-      unsub();
-      const mouseStartX = e.clientX;
-      const startWidth = width;
-      moveState.current = {
-        move: async (e: MouseEvent) => {
-          e.preventDefault(); // Prevent text selection and things
-          const newWidth = startWidth + (e.clientX - mouseStartX);
-          if (newWidth < 50) {
-            await setSidebarHidden(true);
-            resetWidth();
-          } else {
-            await setSidebarHidden(false);
-            setWidth(newWidth);
-          }
-        },
-        up: (e: MouseEvent) => {
-          e.preventDefault();
-          unsub();
-          setIsResizing(false);
-        },
-      };
-      document.documentElement.addEventListener('mousemove', moveState.current.move);
-      document.documentElement.addEventListener('mouseup', moveState.current.up);
-      setIsResizing(true);
+      const newWidth = startWidth.current + (x - xStart);
+      if (newWidth < 50) {
+        if (!sidebarHidden) await setSidebarHidden(true);
+        resetWidth();
+      } else {
+        if (sidebarHidden) await setSidebarHidden(false);
+        setWidth(newWidth);
+      }
     },
-    [width, setSidebarHidden, resetWidth, setWidth],
+    [width, sidebarHidden, setSidebarHidden, resetWidth, setWidth],
   );
+
+  const handleResizeStart = useCallback(() => {
+    startWidth.current = width ?? null;
+    setIsResizing(true);
+  }, [width]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+    startWidth.current = null;
+  }, []);
 
   const sideWidth = sidebarHidden ? 0 : width;
   const styles = useMemo<CSSProperties>(
@@ -153,11 +141,11 @@ export function Workspace() {
             animate={{ opacity: 1, x: 0 }}
             className={classNames(
               'x-theme-sidebar',
-              'absolute top-0 left-0 bottom-0 bg-surface border-r border-border-subtle w-[14rem]',
+              'absolute top-0 left-0 bottom-0 bg-surface border-r border-border-subtle w-[20rem]',
               'grid grid-rows-[auto_1fr]',
             )}
           >
-            <HeaderSize size="lg" className="border-transparent">
+            <HeaderSize hideControls size="lg" className="border-transparent flex items-center">
               <SidebarActions />
             </HeaderSize>
             <ErrorBoundary name="Sidebar (Floating)">
@@ -173,11 +161,13 @@ export function Workspace() {
             </ErrorBoundary>
           </div>
           <ResizeHandle
-            className="-translate-x-[50%]"
+            style={drag}
+            className="-translate-x-[1px]"
             justify="end"
             side="right"
-            isResizing={isResizing}
             onResizeStart={handleResizeStart}
+            onResizeEnd={handleResizeEnd}
+            onResizeMove={handleResizeMove}
             onReset={resetWidth}
           />
         </>
@@ -191,11 +181,11 @@ export function Workspace() {
         <div className="absolute inset-0 pointer-events-none">
           <div // Add subtle background
             style={environmentBgStyle}
-            className="absolute inset-0 opacity-5"
+            className="absolute inset-0 opacity-[0.07]"
           />
-          <div // Add subtle border bottom
+          <div // Add a subtle border bottom
             style={environmentBgStyle}
-            className="absolute left-0 right-0 bottom-0 h-[0.5px] opacity-20"
+            className="absolute left-0 right-0 -bottom-[1px] h-[1px] opacity-20"
           />
         </div>
         <WorkspaceHeader className="pointer-events-none" />
@@ -209,6 +199,7 @@ export function Workspace() {
 
 function WorkspaceBody() {
   const activeRequest = useAtomValue(activeRequestAtom);
+  const activeFolder = useAtomValue(activeFolderAtom);
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
 
   if (activeWorkspace == null) {
@@ -228,39 +219,43 @@ function WorkspaceBody() {
     );
   }
 
-  if (activeRequest == null) {
-    return (
-      <HotKeyList
-        hotkeys={['http_request.create', 'sidebar.focus', 'settings.show']}
-        bottomSlot={
-          <HStack space={1} justifyContent="center" className="mt-3">
-            <Button variant="border" size="sm" onClick={() => importData.mutate()}>
-              Import
-            </Button>
-            <CreateDropdown hideFolder>
-              <Button variant="border" forDropdown size="sm">
-                New Request
-              </Button>
-            </CreateDropdown>
-          </HStack>
-        }
-      />
-    );
-  }
-
-  if (activeRequest.model === 'grpc_request') {
+  if (activeRequest?.model === 'grpc_request') {
     return <GrpcConnectionLayout style={body} />;
-  } else if (activeRequest.model === 'websocket_request') {
+  }
+  if (activeRequest?.model === 'websocket_request') {
     return <WebsocketRequestLayout style={body} activeRequest={activeRequest} />;
-  } else {
+  }
+  if (activeRequest?.model === 'http_request') {
     return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
   }
+  if (activeFolder != null) {
+    return <FolderLayout folder={activeFolder} style={body} />;
+  }
+
+  return (
+    <HotkeyList
+      hotkeys={['model.create', 'sidebar.focus', 'settings.show']}
+      bottomSlot={
+        <HStack space={1} justifyContent="center" className="mt-3">
+          <Button variant="border" size="sm" onClick={() => importData.mutate()}>
+            Import
+          </Button>
+          <CreateDropdown hideFolder>
+            <Button variant="border" forDropdown size="sm">
+              New Request
+            </Button>
+          </CreateDropdown>
+        </HStack>
+      }
+    />
+  );
 }
 
 function useGlobalWorkspaceHooks() {
   useEnsureActiveCookieJar();
 
   useSubscribeActiveRequestId();
+  useSubscribeActiveFolderId();
   useSubscribeActiveEnvironmentId();
   useSubscribeActiveCookieJarId();
 
@@ -271,10 +266,7 @@ function useGlobalWorkspaceHooks() {
 
   useSyncWorkspaceRequestTitle();
 
-  const toggleCommandPalette = useToggleCommandPalette();
-  useHotKey('command_palette.toggle', toggleCommandPalette);
-
-  useHotKey('http_request.duplicate', () =>
-    duplicateRequestAndNavigate(jotaiStore.get(activeRequestAtom)),
+  useHotKey('model.duplicate', () =>
+    duplicateRequestOrFolderAndNavigate(jotaiStore.get(activeRequestAtom)),
   );
 }

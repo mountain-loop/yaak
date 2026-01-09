@@ -7,10 +7,15 @@ export interface AppInfo {
   name: string;
   appDataDir: string;
   appLogDir: string;
+  vendoredPluginDir: string;
   identifier: string;
+  featureLicense: boolean;
+  featureUpdater: boolean;
 }
 
 export const appInfo = {
   ...(await invokeCmd('cmd_metadata')),
   identifier: await getIdentifier(),
 } as AppInfo;
+
+console.log('App info', appInfo);

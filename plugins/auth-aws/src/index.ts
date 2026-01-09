@@ -1,0 +1,88 @@
+import { URL } from 'node:url';
+import type { PluginDefinition } from '@yaakapp/api';
+import type { CallHttpAuthenticationResponse } from '@yaakapp-internal/plugins';
+import type { Request } from 'aws4';
+import aws4 from 'aws4';
+
+export const plugin: PluginDefinition = {
+  authentication: {
+    name: 'awsv4',
+    label: 'AWS Signature',
+    shortLabel: 'AWS v4',
+    args: [
+      { name: 'accessKeyId', label: 'Access Key ID', type: 'text', password: true },
+      {
+        name: 'secretAccessKey',
+        label: 'Secret Access Key',
+        type: 'text',
+        password: true,
+      },
+      {
+        name: 'service',
+        label: 'Service Name',
+        type: 'text',
+        defaultValue: 'sts',
+        placeholder: 'sts',
+        description: 'The service that is receiving the request (sts, s3, sqs, ...)',
+      },
+      {
+        name: 'region',
+        label: 'Region',
+        type: 'text',
+        placeholder: 'us-east-1',
+        description: 'The region that is receiving the request (defaults to us-east-1)',
+        optional: true,
+      },
+      {
+        name: 'sessionToken',
+        label: 'Session Token',
+        type: 'text',
+        password: true,
+        optional: true,
+        description: 'Only required if you are using temporary credentials',
+      },
+    ],
+    onApply(_ctx, { values, ...args }): CallHttpAuthenticationResponse {
+      const accessKeyId = String(values.accessKeyId || '');
+      const secretAccessKey = String(values.secretAccessKey || '');
+      const sessionToken = String(values.sessionToken || '') || undefined;
+
+      const url = new URL(args.url);
+
+      const headers: NonNullable<Request['headers']> = {};
+      for (const headerName of ['content-type', 'host', 'x-amz-date', 'x-amz-security-token']) {
+        const v = args.headers.find((h) => h.name.toLowerCase() === headerName);
+        if (v != null) {
+          headers[headerName] = v.value;
+        }
+      }
+
+      const signature = aws4.sign(
+        {
+          host: url.host,
+          method: args.method,
+          path: url.pathname + (url.search || ''),
+          service: String(values.service || 'sts'),
+          region: values.region ? String(values.region) : undefined,
+          headers,
+          doNotEncodePath: true,
+        },
+        {
+          accessKeyId,
+          secretAccessKey,
+          sessionToken,
+        },
+      );
+
+      if (signature.headers == null) {
+        return {};
+      }
+
+      return {
+        setHeaders: Object.entries(signature.headers)
+          .filter(([name]) => name !== 'content-type') // Don't add this because we already have it
+          .map(([name, value]) => ({ name, value: String(value || '') })),
+      };
+    },
+  },
+};

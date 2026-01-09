@@ -55,6 +55,7 @@ function ExportDataDialogContent({
 
   const handleToggleAll = () => {
     setSelectedWorkspaces(
+      // biome-ignore lint/performance/noAccumulatingSpread: none
       allSelected ? {} : workspaces.reduce((acc, w) => ({ ...acc, [w.id]: true }), {}),
     );
   };
@@ -127,7 +128,7 @@ function ExportDataDialogContent({
             ))}
           </tbody>
         </table>
-        <DetailsBanner color="secondary" open summary="Extra Settings">
+        <DetailsBanner color="secondary" defaultOpen summary="Extra Settings">
           <Checkbox
             checked={includePrivateEnvironments}
             onChange={setIncludePrivateEnvironments}
