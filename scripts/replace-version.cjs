@@ -6,7 +6,7 @@ if (!version) {
   throw new Error('YAAK_VERSION environment variable not set')
 }
 
-const tauriConfigPath = path.join(__dirname, '../src-tauri/tauri.conf.json');
+const tauriConfigPath = path.join(__dirname, '../crates-tauri/yaak-app/tauri.conf.json');
 const tauriConfig = JSON.parse(fs.readFileSync(tauriConfigPath, 'utf8'));
 
 tauriConfig.version = version;

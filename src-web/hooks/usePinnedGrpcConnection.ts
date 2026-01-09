@@ -67,7 +67,7 @@ export function useGrpcEvents(connectionId: string | null) {
       return;
     }
 
-    invoke<GrpcEvent[]>('plugin:yaak-models|grpc_events', { connectionId }).then((events) => {
+    invoke<GrpcEvent[]>('models_grpc_events', { connectionId }).then((events) => {
       replaceModelsInStore('grpc_event', events);
     });
   }, [connectionId]);

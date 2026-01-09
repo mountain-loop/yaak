@@ -1,0 +1,22 @@
+[package]
+name = "yaak-cli"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "yaakcli"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+env_logger = "0.11"
+log = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+yaak-crypto = { workspace = true }
+yaak-http = { workspace = true }
+yaak-models = { workspace = true }
+yaak-plugins = { workspace = true }
+yaak-templates = { workspace = true }

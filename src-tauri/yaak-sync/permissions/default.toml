@@ -1,8 +1,0 @@
-[default]
-description = "Default permissions for the plugin"
-permissions = [
-    "allow-calculate",
-    "allow-calculate-fs",
-    "allow-apply",
-    "allow-watch",
-]

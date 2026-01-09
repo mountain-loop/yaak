@@ -3,7 +3,7 @@
   "scripts": {
     "bootstrap": "npm run build",
     "build": "run-p build:*",
-    "build:main": "esbuild src/index.ts --bundle --platform=node --outfile=../../src-tauri/vendored/plugin-runtime/index.cjs"
+    "build:main": "esbuild src/index.ts --bundle --platform=node --outfile=../../crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs"
   },
   "dependencies": {
     "ws": "^8.18.0"

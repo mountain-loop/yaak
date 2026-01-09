@@ -18,14 +18,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: 'src-tauri'
           shared-key: ci
           cache-on-failure: true
 
       - run: npm ci
+      - run: npm run bootstrap
       - run: npm run lint
       - name: Run JS Tests
         run: npm test
       - name: Run Rust Tests
         run: cargo test --all
-        working-directory: src-tauri
