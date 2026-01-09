@@ -1,0 +1,15 @@
+[package]
+name = "yaak-crypto"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+base32 = "0.5.1" # For encoding human-readable key
+base64 = "0.22.1" # For encoding in the database
+chacha20poly1305 = "0.10.1"
+keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
+log = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+yaak-models = { workspace = true }
