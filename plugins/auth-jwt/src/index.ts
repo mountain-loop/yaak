@@ -111,15 +111,16 @@ export const plugin: PluginDefinition = {
     async onApply(_ctx, { values }) {
       const { algorithm, secret: _secret, secretBase64, payload, headers } = values;
       const secret = secretBase64 ? Buffer.from(`${_secret}`, 'base64') : `${_secret}`;
+
+      const parsedHeaders = headers ? JSON.parse(`${headers}`) : undefined;
       const token = jwt.sign(`${payload}`, secret, {
         algorithm: algorithm as (typeof algorithms)[number],
-        header: JSON.parse(`${headers}`),
+        header: parsedHeaders,
       });
 
       if (values.location === 'query') {
         const paramName = String(values.name || 'token');
-        const paramValue = String(values.value || '');
-        return { setQueryParameters: [{ name: paramName, value: paramValue }] };
+        return { setQueryParameters: [{ name: paramName, value: token }] };
       }
       const headerPrefix = values.headerPrefix != null ? values.headerPrefix : 'Bearer';
       const headerName = String(values.name || 'Authorization');
