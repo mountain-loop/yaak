@@ -110,7 +110,7 @@ const tauriWorktreeConfig = {
   productName: `Daak (${worktreeName})`
 };
 
-const tauriConfigPath = path.join(process.cwd(), 'src-tauri', 'tauri.worktree.conf.json');
+const tauriConfigPath = path.join(process.cwd(), 'crates-tauri', 'yaak-app', 'tauri.worktree.conf.json');
 fs.writeFileSync(tauriConfigPath, JSON.stringify(tauriWorktreeConfig, null, 2) + '\n', 'utf8');
 console.log(`Created tauri.worktree.conf.json with identifier: ${tauriWorktreeConfig.identifier}`);
 

@@ -54,7 +54,7 @@ export function useWebsocketEvents(connectionId: string | null) {
       return;
     }
 
-    invoke<WebsocketEvent[]>('plugin:yaak-models|websocket_events', { connectionId }).then(
+    invoke<WebsocketEvent[]>('models_websocket_events', { connectionId }).then(
       (events) => replaceModelsInStore('websocket_event', events),
     );
   }, [connectionId]);

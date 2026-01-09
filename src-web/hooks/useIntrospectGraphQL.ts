@@ -33,7 +33,7 @@ export function useIntrospectGraphQL(
   const upsertIntrospection = useCallback(
     async (content: string | null) => {
       const v = await invoke<GraphQlIntrospection>(
-        'plugin:yaak-models|upsert_graphql_introspection',
+        'models_upsert_graphql_introspection',
         {
           requestId: baseRequest.id,
           workspaceId: baseRequest.workspaceId,
@@ -122,7 +122,7 @@ function useIntrospectionResult(request: HttpRequest) {
   return useQuery({
     queryKey: ['introspection', request.id],
     queryFn: async () =>
-      invoke<GraphQlIntrospection | null>('plugin:yaak-models|get_graphql_introspection', {
+      invoke<GraphQlIntrospection | null>('models_get_graphql_introspection', {
         requestId: request.id,
       }),
   });

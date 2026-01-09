@@ -27,7 +27,7 @@ async function createMigration() {
 
     const timestamp = generateTimestamp();
     const fileName = `${timestamp}_${slugify(String(migrationName), { lower: true })}.sql`;
-    const migrationsDir = path.join(__dirname, '../src-tauri/yaak-models/migrations');
+    const migrationsDir = path.join(__dirname, '../crates/yaak-models/migrations');
     const filePath = path.join(migrationsDir, fileName);
 
     if (!fs.existsSync(migrationsDir)) {
