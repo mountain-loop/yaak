@@ -21,6 +21,7 @@ import { stringToColor } from './color';
 import { generateId } from './generateId';
 import { jotaiStore } from './jotai';
 import { showPrompt } from './prompt';
+import { showPromptForm } from './prompt-form';
 import { invokeCmd } from './tauri';
 import { showToast } from './toast';
 
@@ -44,6 +45,27 @@ export function initGlobalListeners() {
         payload: {
           type: 'prompt_text_response',
           value,
+        },
+      };
+      await emit(event.id, result);
+    } else if (event.payload.type === 'prompt_form_request') {
+      const values = await showPromptForm({
+        id: event.payload.id,
+        title: event.payload.title,
+        description: event.payload.description,
+        inputs: event.payload.inputs,
+        confirmText: event.payload.confirmText,
+        cancelText: event.payload.cancelText,
+      });
+      const result: InternalEvent = {
+        id: generateId(),
+        replyId: event.id,
+        pluginName: event.pluginName,
+        pluginRefId: event.pluginRefId,
+        context: event.context,
+        payload: {
+          type: 'prompt_form_response',
+          values,
         },
       };
       await emit(event.id, result);

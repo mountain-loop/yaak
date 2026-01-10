@@ -11,6 +11,8 @@ import type {
   ListHttpRequestsRequest,
   ListHttpRequestsResponse,
   OpenWindowRequest,
+  PromptFormRequest,
+  PromptFormResponse,
   PromptTextRequest,
   PromptTextResponse,
   RenderGrpcRequestRequest,
@@ -37,6 +39,7 @@ export interface Context {
   };
   prompt: {
     text(args: PromptTextRequest): Promise<PromptTextResponse['value']>;
+    form(args: PromptFormRequest): Promise<PromptFormResponse['values']>;
   };
   store: {
     set<T>(key: string, value: T): Promise<void>;

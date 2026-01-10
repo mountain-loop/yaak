@@ -28,6 +28,7 @@ import type {
   ListHttpRequestsResponse,
   ListWorkspacesResponse,
   PluginContext,
+  PromptFormResponse,
   PromptTextResponse,
   RenderGrpcRequestResponse,
   RenderHttpRequestResponse,
@@ -660,6 +661,13 @@ export class PluginInstance {
             ...args,
           });
           return reply.value;
+        },
+        form: async (args) => {
+          const reply: PromptFormResponse = await this.#sendForReply(context, {
+            type: 'prompt_form_request',
+            ...args,
+          });
+          return reply.values;
         },
       },
       httpResponse: {
