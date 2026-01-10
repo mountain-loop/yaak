@@ -22,7 +22,6 @@ impl<'a> DbContext<'a> {
                     name: "Yaak".to_string(),
                     setting_follow_redirects: true,
                     setting_validate_certificates: true,
-                    headers: HttpRequestHeader::default_workspace_headers(),
                     ..Default::default()
                 },
                 &UpdateSource::Background,
