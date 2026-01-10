@@ -94,8 +94,11 @@ export const plugin: PluginDefinition = {
         label: 'Additional Headers',
         inputs: [
           {
-            type: 'key_value',
+            type: 'editor',
             name: 'headers',
+            language: 'json',
+            defaultValue: '{}',
+            placeholder: '{ }',
             hideLabel: true,
             optional: true,
           },
@@ -114,21 +117,7 @@ export const plugin: PluginDefinition = {
       const { algorithm, secret: _secret, secretBase64, payload, headers } = values;
       const secret = secretBase64 ? Buffer.from(`${_secret}`, 'base64') : `${_secret}`;
 
-      // Convert key-value pairs array to object for jwt header
-      type KeyValuePair = { enabled?: boolean; name: string; value: string };
-      const headerPairs: KeyValuePair[] = headers ? JSON.parse(`${headers}`) : [];
-      const parsedHeaders =
-        headerPairs.length > 0
-          ? headerPairs.reduce(
-              (acc, pair) => {
-                if (pair.enabled !== false && pair.name) {
-                  acc[pair.name] = pair.value;
-                }
-                return acc;
-              },
-              {} as Record<string, string>,
-            )
-          : undefined;
+      const parsedHeaders = headers ? JSON.parse(`${headers}`) : undefined;
 
       const token = jwt.sign(`${payload}`, secret, {
         algorithm: algorithm as (typeof algorithms)[number],
