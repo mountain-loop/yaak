@@ -136,8 +136,8 @@ export function EventViewer<T>({
         name={splitLayoutName}
         defaultRatio={defaultRatio}
         minHeightPx={10}
-        firstSlot={() => (
-          <>
+        firstSlot={({ style }) => (
+          <div style={style} className="w-full grid grid-rows-[auto_minmax(0,1fr)]">
             {header}
             <AutoScroller
               data={events}
@@ -161,12 +161,12 @@ export function EventViewer<T>({
                 </div>
               )}
             />
-          </>
+          </div>
         )}
         secondSlot={
           activeEvent != null && renderDetail
-            ? () => (
-                <div className="grid grid-rows-[auto_minmax(0,1fr)]">
+            ? ({ style }) => (
+                <div style={style} className="grid grid-rows-[auto_minmax(0,1fr)]">
                   <div className="pb-3 px-2">
                     <Separator />
                   </div>
