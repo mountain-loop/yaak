@@ -48,11 +48,7 @@ impl PluginContext {
     }
 
     pub fn new(label: Option<String>, workspace_id: Option<String>) -> Self {
-        Self {
-            label,
-            workspace_id,
-            id: generate_prefixed_id("pctx"),
-        }
+        Self { label, workspace_id, id: generate_prefixed_id("pctx") }
     }
 }
 
@@ -842,6 +838,7 @@ pub enum FormInput {
     HStack(FormInputHStack),
     Banner(FormInputBanner),
     Markdown(FormInputMarkdown),
+    KeyValue(FormInputKeyValue),
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -1093,6 +1090,14 @@ pub struct FormInputMarkdown {
 
     #[ts(optional)]
     pub hidden: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct FormInputKeyValue {
+    #[serde(flatten)]
+    pub base: FormInputBase,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

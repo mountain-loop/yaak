@@ -557,7 +557,7 @@ export function PairEditorRow({
       ref={handleSetRef}
       className={classNames(
         className,
-        'group grid grid-cols-[auto_auto_minmax(0,1fr)_auto]',
+        'group/pair-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto]',
         'grid-rows-1 items-center',
         !pair.enabled && 'opacity-60',
       )}
@@ -576,7 +576,7 @@ export function PairEditorRow({
           {...listeners}
           className={classNames(
             'py-2 h-7 w-4 flex items-center',
-            'justify-center opacity-0 group-hover:opacity-70',
+            'justify-center opacity-0 group-hover/pair-row:opacity-70',
           )}
         >
           <Icon size="sm" icon="grip_vertical" className="pointer-events-none" />

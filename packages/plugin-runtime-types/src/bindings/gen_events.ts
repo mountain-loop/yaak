@@ -92,7 +92,7 @@ export type FindHttpResponsesResponse = { httpResponses: Array<HttpResponse>, };
 
 export type FolderAction = { label: string, icon?: Icon, };
 
-export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "h_stack" } & FormInputHStack | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown;
+export type FormInput = { "type": "text" } & FormInputText | { "type": "editor" } & FormInputEditor | { "type": "select" } & FormInputSelect | { "type": "checkbox" } & FormInputCheckbox | { "type": "file" } & FormInputFile | { "type": "http_request" } & FormInputHttpRequest | { "type": "accordion" } & FormInputAccordion | { "type": "h_stack" } & FormInputHStack | { "type": "banner" } & FormInputBanner | { "type": "markdown" } & FormInputMarkdown | { "type": "key_value" } & FormInputKeyValue;
 
 export type FormInputAccordion = { label: string, inputs?: Array<FormInput>, hidden?: boolean, };
 
@@ -245,6 +245,37 @@ description?: string, };
 export type FormInputHStack = { inputs?: Array<FormInput>, hidden?: boolean, };
 
 export type FormInputHttpRequest = { 
+/**
+ * The name of the input. The value will be stored at this object attribute in the resulting data
+ */
+name: string, 
+/**
+ * Whether this input is visible for the given configuration. Use this to
+ * make branching forms.
+ */
+hidden?: boolean, 
+/**
+ * Whether the user must fill in the argument
+ */
+optional?: boolean, 
+/**
+ * The label of the input
+ */
+label?: string, 
+/**
+ * Visually hide the label of the input
+ */
+hideLabel?: boolean, 
+/**
+ * The default value
+ */
+defaultValue?: string, disabled?: boolean, 
+/**
+ * Longer description of the input, likely shown in a tooltip
+ */
+description?: string, };
+
+export type FormInputKeyValue = { 
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */

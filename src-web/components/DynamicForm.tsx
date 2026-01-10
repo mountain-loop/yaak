@@ -6,13 +6,14 @@ import type {
   FormInputEditor,
   FormInputFile,
   FormInputHttpRequest,
+  FormInputKeyValue,
   FormInputSelect,
   FormInputText,
   JsonPrimitive,
 } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useRandomKey } from '../hooks/useRandomKey';
 import { capitalize } from '../lib/capitalize';
@@ -26,6 +27,8 @@ import { IconButton } from './core/IconButton';
 import type { InputProps } from './core/Input';
 import { Input } from './core/Input';
 import { Label } from './core/Label';
+import type { Pair } from './core/PairEditor';
+import { PairEditor } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
 import { Select } from './core/Select';
 import { VStack } from './core/Stacks';
@@ -80,7 +83,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
 function FormInputsStack<T extends Record<string, JsonPrimitive>>({
   className,
   ...props
-}: FormInputsProps<T> & { className?: string }) {
+}: FormInputsProps<T> & { className?: string}) {
   return (
     <VStack
       space={3}
@@ -201,7 +204,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                   summary={input.label}
                   className={classNames('!mb-auto', disabled && 'opacity-disabled')}
                 >
-                  <div className="my-3">
+                  <div className="mt-3">
                     <FormInputsStack
                       data={data}
                       disabled={disabled}
@@ -249,6 +252,18 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
             );
           case 'markdown':
             return <Markdown key={i + stateKey}>{input.content}</Markdown>;
+          case 'key_value':
+            return (
+              <KeyValueArg
+                key={i + stateKey}
+                arg={input}
+                stateKey={stateKey}
+                onChange={(v) => setDataAttr(input.name, v)}
+                value={
+                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '[]')
+                }
+              />
+            );
           default:
             // @ts-expect-error
             throw new Error(`Invalid input type: ${input.type}`);
@@ -537,5 +552,54 @@ function CheckboxArg({
       title={arg.label ?? arg.name}
       hideLabel={arg.label == null}
     />
+  );
+}
+
+function KeyValueArg({
+  arg,
+  onChange,
+  value,
+  stateKey,
+}: {
+  arg: FormInputKeyValue;
+  value: string;
+  onChange: (v: string) => void;
+  stateKey: string;
+}) {
+  const pairs: Pair[] = useMemo(() => {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [value]);
+
+  const handleChange = useCallback(
+    (newPairs: Pair[]) => {
+      onChange(JSON.stringify(newPairs));
+    },
+    [onChange],
+  );
+
+  return (
+    <div className="w-full grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+      <Label
+        htmlFor={`input-${arg.name}`}
+        required={!arg.optional}
+        visuallyHidden={arg.hideLabel}
+        help={arg.description}
+      >
+        {arg.label ?? arg.name}
+      </Label>
+      <PairEditor
+        pairs={pairs}
+        onChange={handleChange}
+        stateKey={stateKey}
+        namePlaceholder="name"
+        valuePlaceholder="value"
+        noScroll
+      />
+    </div>
   );
 }
