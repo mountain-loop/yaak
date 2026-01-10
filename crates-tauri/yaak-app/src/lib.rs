@@ -392,7 +392,7 @@ async fn cmd_grpc_go<R: Runtime>(
                     let encryption_manager = encryption_manager.clone();
                     let msg = block_in_place(|| {
                         tauri::async_runtime::block_on(async {
-                            render_template(
+                            let result = render_template(
                                 msg.as_str(),
                                 environment_chain,
                                 &PluginTemplateCallback::new(
@@ -406,8 +406,8 @@ async fn cmd_grpc_go<R: Runtime>(
                                 ),
                                 &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
                             )
-                            .await
-                            .expect("Failed to render template")
+                            .await;
+                            result.expect("Failed to render template")
                         })
                     });
                     in_msg_tx.try_send(msg.clone()).unwrap();

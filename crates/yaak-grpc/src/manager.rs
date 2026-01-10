@@ -131,31 +131,33 @@ impl GrpcConnection {
             let md = metadata.clone();
             let use_reflection = self.use_reflection.clone();
             let client_cert = client_cert.clone();
-            stream.filter_map(move |json| {
-                let pool = pool.clone();
-                let uri = uri.clone();
-                let input_message = input_message.clone();
-                let md = md.clone();
-                let use_reflection = use_reflection.clone();
-                let client_cert = client_cert.clone();
-                tokio::runtime::Handle::current().block_on(async move {
-                    if use_reflection {
-                        if let Err(e) =
-                            reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
-                        {
-                            warn!("Failed to resolve Any types: {e}");
+            stream
+                .then(move |json| {
+                    let pool = pool.clone();
+                    let uri = uri.clone();
+                    let input_message = input_message.clone();
+                    let md = md.clone();
+                    let use_reflection = use_reflection.clone();
+                    let client_cert = client_cert.clone();
+                    async move {
+                        if use_reflection {
+                            if let Err(e) =
+                                reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
+                            {
+                                warn!("Failed to resolve Any types: {e}");
+                            }
                         }
-                    }
-                    let mut de = Deserializer::from_str(&json);
-                    match DynamicMessage::deserialize(input_message, &mut de) {
-                        Ok(m) => Some(m),
-                        Err(e) => {
-                            warn!("Failed to deserialize message: {e}");
-                            None
+                        let mut de = Deserializer::from_str(&json);
+                        match DynamicMessage::deserialize(input_message, &mut de) {
+                            Ok(m) => Some(m),
+                            Err(e) => {
+                                warn!("Failed to deserialize message: {e}");
+                                None
+                            }
                         }
                     }
                 })
-            })
+                .filter_map(|x| x)
         };
 
         let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
@@ -185,31 +187,33 @@ impl GrpcConnection {
             let md = metadata.clone();
             let use_reflection = self.use_reflection.clone();
             let client_cert = client_cert.clone();
-            stream.filter_map(move |json| {
-                let pool = pool.clone();
-                let uri = uri.clone();
-                let input_message = input_message.clone();
-                let md = md.clone();
-                let use_reflection = use_reflection.clone();
-                let client_cert = client_cert.clone();
-                tokio::runtime::Handle::current().block_on(async move {
-                    if use_reflection {
-                        if let Err(e) =
-                            reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
-                        {
-                            warn!("Failed to resolve Any types: {e}");
+            stream
+                .then(move |json| {
+                    let pool = pool.clone();
+                    let uri = uri.clone();
+                    let input_message = input_message.clone();
+                    let md = md.clone();
+                    let use_reflection = use_reflection.clone();
+                    let client_cert = client_cert.clone();
+                    async move {
+                        if use_reflection {
+                            if let Err(e) =
+                                reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
+                            {
+                                warn!("Failed to resolve Any types: {e}");
+                            }
                         }
-                    }
-                    let mut de = Deserializer::from_str(&json);
-                    match DynamicMessage::deserialize(input_message, &mut de) {
-                        Ok(m) => Some(m),
-                        Err(e) => {
-                            warn!("Failed to deserialize message: {e}");
-                            None
+                        let mut de = Deserializer::from_str(&json);
+                        match DynamicMessage::deserialize(input_message, &mut de) {
+                            Ok(m) => Some(m),
+                            Err(e) => {
+                                warn!("Failed to deserialize message: {e}");
+                                None
+                            }
                         }
                     }
                 })
-            })
+                .filter_map(|x| x)
         };
 
         let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
