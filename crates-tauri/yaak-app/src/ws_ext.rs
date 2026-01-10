@@ -355,7 +355,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
             url.as_str(),
             headers,
             receive_tx,
-            workspace.setting_validate_certificates,
+            workspace.setting_validate_certificates.unwrap_or(true),
             client_cert,
         )
         .await
