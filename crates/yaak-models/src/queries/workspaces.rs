@@ -70,7 +70,20 @@ impl<'a> DbContext<'a> {
         // Add default headers only for NEW workspaces (empty ID means insert, not update)
         // This prevents re-adding headers if a user intentionally removes all headers
         if workspace.id.is_empty() && workspace.headers.is_empty() {
-            workspace.headers = HttpRequestHeader::default_workspace_headers();
+            workspace.headers = vec![
+                HttpRequestHeader {
+                    enabled: true,
+                    name: "User-Agent".to_string(),
+                    value: "yaak".to_string(),
+                    id: None,
+                },
+                HttpRequestHeader {
+                    enabled: true,
+                    name: "Accept".to_string(),
+                    value: "*/*".to_string(),
+                    id: None,
+                },
+            ];
         }
 
         self.upsert(&workspace, source)

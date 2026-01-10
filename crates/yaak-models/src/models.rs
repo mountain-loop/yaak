@@ -817,27 +817,6 @@ pub struct HttpRequestHeader {
     pub id: Option<String>,
 }
 
-impl HttpRequestHeader {
-    /// Create default workspace headers (User-Agent and Accept)
-    /// These match the headers added in migration 20251219074602_default-workspace-headers.sql
-    pub fn default_workspace_headers() -> Vec<Self> {
-        vec![
-            HttpRequestHeader {
-                enabled: true,
-                name: "User-Agent".to_string(),
-                value: "yaak".to_string(),
-                id: None,
-            },
-            HttpRequestHeader {
-                enabled: true,
-                name: "Accept".to_string(),
-                value: "*/*".to_string(),
-                id: None,
-            },
-        ]
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
