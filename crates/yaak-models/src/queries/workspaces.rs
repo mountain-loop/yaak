@@ -22,6 +22,7 @@ impl<'a> DbContext<'a> {
                     name: "Yaak".to_string(),
                     setting_follow_redirects: true,
                     setting_validate_certificates: true,
+                    headers: HttpRequestHeader::default_workspace_headers(),
                     ..Default::default()
                 },
                 &UpdateSource::Background,
@@ -65,7 +66,15 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn upsert_workspace(&self, w: &Workspace, source: &UpdateSource) -> Result<Workspace> {
-        self.upsert(w, source)
+        let mut workspace = w.clone();
+
+        // Add default headers only for NEW workspaces (empty ID means insert, not update)
+        // This prevents re-adding headers if a user intentionally removes all headers
+        if workspace.id.is_empty() && workspace.headers.is_empty() {
+            workspace.headers = HttpRequestHeader::default_workspace_headers();
+        }
+
+        self.upsert(&workspace, source)
     }
 
     pub fn resolve_auth_for_workspace(
