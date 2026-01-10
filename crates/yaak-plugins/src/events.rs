@@ -157,6 +157,9 @@ pub enum InternalEventPayload {
     PromptTextRequest(PromptTextRequest),
     PromptTextResponse(PromptTextResponse),
 
+    PromptFormRequest(PromptFormRequest),
+    PromptFormResponse(PromptFormResponse),
+
     WindowInfoRequest(WindowInfoRequest),
     WindowInfoResponse(WindowInfoResponse),
 
@@ -569,6 +572,28 @@ pub struct PromptTextRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct PromptTextResponse {
     pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct PromptFormRequest {
+    pub id: String,
+    pub title: String,
+    #[ts(optional)]
+    pub description: Option<String>,
+    pub inputs: Vec<FormInput>,
+    #[ts(optional)]
+    pub confirm_text: Option<String>,
+    #[ts(optional)]
+    pub cancel_text: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct PromptFormResponse {
+    pub values: Option<HashMap<String, JsonPrimitive>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
