@@ -57,6 +57,10 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
             Ok(call_frontend(&window, event).await)
         }
+        InternalEventPayload::PromptFormRequest(_) => {
+            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
+            Ok(call_frontend(&window, event).await)
+        }
         InternalEventPayload::FindHttpResponsesRequest(req) => {
             let http_responses = app_handle
                 .db()
