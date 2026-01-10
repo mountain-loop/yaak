@@ -10,7 +10,7 @@ import {
   stateExtensions,
   updateSchema,
 } from 'codemirror-json-schema';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { showAlert } from '../lib/alert';
 import { showDialog } from '../lib/dialog';
@@ -39,15 +39,15 @@ export function GrpcEditor({
   protoFiles,
   ...extraEditorProps
 }: Props) {
-  const editorViewRef = useRef<EditorView>(null);
+  const [editorView, setEditorView] = useState<EditorView | null>(null);
   const handleInitEditorViewRef = useCallback((h: EditorView | null) => {
-    editorViewRef.current = h;
+    setEditorView(h);
   }, []);
 
   // Find the schema for the selected service and method and update the editor
   useEffect(() => {
     if (
-      editorViewRef.current == null ||
+      editorView == null ||
       services === null ||
       request.service === null ||
       request.method === null
@@ -91,7 +91,7 @@ export function GrpcEditor({
     }
 
     try {
-      updateSchema(editorViewRef.current, JSON.parse(schema));
+      updateSchema(editorView, JSON.parse(schema));
     } catch (err) {
       showAlert({
         id: 'grpc-parse-schema-error',
@@ -107,7 +107,7 @@ export function GrpcEditor({
         ),
       });
     }
-  }, [services, request.method, request.service]);
+  }, [editorView, services, request.method, request.service]);
 
   const extraExtensions = useMemo(
     () => [
@@ -118,7 +118,7 @@ export function GrpcEditor({
       jsonLanguage.data.of({
         autocomplete: jsonCompletion(),
       }),
-      stateExtensions(/** Init with empty schema **/),
+      stateExtensions({}),
     ],
     [],
   );
