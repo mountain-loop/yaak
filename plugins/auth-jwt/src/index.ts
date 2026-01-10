@@ -47,70 +47,80 @@ export const plugin: PluginDefinition = {
         label: 'Secret is base64 encoded',
       },
       {
-        type: 'select',
-        name: 'location',
-        label: 'Behavior',
-        defaultValue: 'header',
-        options: [
-          { label: 'Insert Header', value: 'header' },
-          { label: 'Append Query Parameter', value: 'query' },
-        ],
-      },
-      {
-        type: 'text',
-        name: 'name',
-        label: 'Header Name',
-        defaultValue: 'Authorization',
-        optional: true,
-        dynamic(_ctx, args) {
-          if (args.values.location === 'query') {
-            return {
-              label: 'Parameter Name',
-              description: 'The name of the query parameter to add to the request',
-            };
-          }
-          return {
-            label: 'Header Name',
-            description: 'The name of the header to add to the request',
-          };
-        },
-      },
-      {
-        type: 'text',
-        name: 'headerPrefix',
-        label: 'Header Prefix',
-        optional: true,
-        defaultValue: 'Bearer',
-        dynamic(_ctx, args) {
-          if (args.values.location === 'query') {
-            return {
-              hidden: true,
-            };
-          }
-        },
+        type: 'editor',
+        name: 'payload',
+        label: 'JWT Payload',
+        language: 'json',
+        defaultValue: '{\n  "foo": "bar"\n}',
+        placeholder: '{ }',
       },
       {
         type: 'accordion',
-        label: 'Additional Headers',
+        label: 'Advanced',
         inputs: [
           {
             type: 'editor',
             name: 'headers',
+            label: 'JWT Header',
+            description: 'Merged with auto-generated header fields like alg (e.g., kid)',
             language: 'json',
             defaultValue: '{}',
             placeholder: '{ }',
-            hideLabel: true,
             optional: true,
           },
+          {
+            type: 'select',
+            name: 'location',
+            label: 'Behavior',
+            defaultValue: 'header',
+            options: [
+              { label: 'Insert Header', value: 'header' },
+              { label: 'Append Query Parameter', value: 'query' },
+            ],
+          },
+          {
+            type: 'h_stack',
+            inputs: [
+              {
+                type: 'text',
+                name: 'name',
+                label: 'Header Name',
+                defaultValue: 'Authorization',
+                optional: true,
+                description: 'The name of the header to add to the request',
+              },
+              {
+                type: 'text',
+                name: 'headerPrefix',
+                label: 'Header Prefix',
+                optional: true,
+                defaultValue: 'Bearer',
+              },
+            ],
+            dynamic(_ctx, args) {
+              if (args.values.location === 'query') {
+                return {
+                  hidden: true,
+                };
+              }
+            },
+          },
+          {
+            type: 'text',
+            name: 'name',
+            label: 'Parameter Name',
+            description: 'The name of the query parameter to add to the request',
+            defaultValue: 'token',
+            optional: true,
+            dynamic(_ctx, args) {
+              if (args.values.location !== 'query') {
+                return {
+                  hidden: true,
+                };
+              }
+            },
+          },
         ],
-      },
-      {
-        type: 'editor',
-        name: 'payload',
-        label: 'Payload',
-        language: 'json',
-        defaultValue: '{\n  "foo": "bar"\n}',
-        placeholder: '{ }',
       },
     ],
     async onApply(_ctx, { values }) {
