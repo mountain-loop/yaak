@@ -115,14 +115,18 @@ impl GrpcConnection {
         Ok(client.unary(req, path, codec).await?)
     }
 
-    pub async fn streaming(
+    pub async fn streaming<F>(
         &self,
         service: &str,
         method: &str,
         stream: ReceiverStream<String>,
         metadata: &BTreeMap<String, String>,
         client_cert: Option<ClientCertificateConfig>,
-    ) -> Result<Response<Streaming<DynamicMessage>>> {
+        on_message: F,
+    ) -> Result<Response<Streaming<DynamicMessage>>>
+    where
+        F: Fn(std::result::Result<String, String>) + Send + Sync + Clone + 'static,
+    {
         let method = &self.method(&service, &method).await?;
         let mapped_stream = {
             let input_message = method.input();
@@ -139,6 +143,8 @@ impl GrpcConnection {
                     let md = md.clone();
                     let use_reflection = use_reflection.clone();
                     let client_cert = client_cert.clone();
+                    let on_message = on_message.clone();
+                    let json_clone = json.clone();
                     async move {
                         if use_reflection {
                             if let Err(e) =
@@ -149,9 +155,13 @@ impl GrpcConnection {
                         }
                         let mut de = Deserializer::from_str(&json);
                         match DynamicMessage::deserialize(input_message, &mut de) {
-                            Ok(m) => Some(m),
+                            Ok(m) => {
+                                on_message(Ok(json_clone));
+                                Some(m)
+                            }
                             Err(e) => {
                                 warn!("Failed to deserialize message: {e}");
+                                on_message(Err(e.to_string()));
                                 None
                             }
                         }
@@ -171,14 +181,18 @@ impl GrpcConnection {
         Ok(client.streaming(req, path, codec).await?)
     }
 
-    pub async fn client_streaming(
+    pub async fn client_streaming<F>(
         &self,
         service: &str,
         method: &str,
         stream: ReceiverStream<String>,
         metadata: &BTreeMap<String, String>,
         client_cert: Option<ClientCertificateConfig>,
-    ) -> Result<Response<DynamicMessage>> {
+        on_message: F,
+    ) -> Result<Response<DynamicMessage>>
+    where
+        F: Fn(std::result::Result<String, String>) + Send + Sync + Clone + 'static,
+    {
         let method = &self.method(&service, &method).await?;
         let mapped_stream = {
             let input_message = method.input();
@@ -195,6 +209,8 @@ impl GrpcConnection {
                     let md = md.clone();
                     let use_reflection = use_reflection.clone();
                     let client_cert = client_cert.clone();
+                    let on_message = on_message.clone();
+                    let json_clone = json.clone();
                     async move {
                         if use_reflection {
                             if let Err(e) =
@@ -205,9 +221,13 @@ impl GrpcConnection {
                         }
                         let mut de = Deserializer::from_str(&json);
                         match DynamicMessage::deserialize(input_message, &mut de) {
-                            Ok(m) => Some(m),
+                            Ok(m) => {
+                                on_message(Ok(json_clone));
+                                Some(m)
+                            }
                             Err(e) => {
                                 warn!("Failed to deserialize message: {e}");
+                                on_message(Err(e.to_string()));
                                 None
                             }
                         }

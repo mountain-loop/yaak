@@ -360,10 +360,8 @@ async fn cmd_grpc_go<R: Runtime>(
 
     let cb = {
         let cancelled_rx = cancelled_rx.clone();
-        let app_handle = app_handle.clone();
         let environment_chain = environment_chain.clone();
         let window = window.clone();
-        let base_msg = base_msg.clone();
         let plugin_manager = plugin_manager.clone();
         let encryption_manager = encryption_manager.clone();
 
@@ -385,8 +383,6 @@ async fn cmd_grpc_go<R: Runtime>(
             match serde_json::from_str::<IncomingMsg>(ev.payload()) {
                 Ok(IncomingMsg::Message(msg)) => {
                     let window = window.clone();
-                    let app_handle = app_handle.clone();
-                    let base_msg = base_msg.clone();
                     let environment_chain = environment_chain.clone();
                     let plugin_manager = plugin_manager.clone();
                     let encryption_manager = encryption_manager.clone();
@@ -411,19 +407,6 @@ async fn cmd_grpc_go<R: Runtime>(
                         })
                     });
                     in_msg_tx.try_send(msg.clone()).unwrap();
-                    tauri::async_runtime::spawn(async move {
-                        app_handle
-                            .db()
-                            .upsert_grpc_event(
-                                &GrpcEvent {
-                                    content: msg,
-                                    event_type: GrpcEventType::ClientMessage,
-                                    ..base_msg.clone()
-                                },
-                                &UpdateSource::from_window_label(window.label()),
-                            )
-                            .unwrap();
-                    });
                 }
                 Ok(IncomingMsg::Commit) => {
                     maybe_in_msg_tx.take();
@@ -470,12 +453,48 @@ async fn cmd_grpc_go<R: Runtime>(
         )?;
 
         async move {
+            // Create callback for streaming methods that handles both success and error
+            let on_message = {
+                let app_handle = app_handle.clone();
+                let base_event = base_event.clone();
+                let window_label = window.label().to_string();
+                move |result: std::result::Result<String, String>| match result {
+                    Ok(msg) => {
+                        let _ = app_handle.db().upsert_grpc_event(
+                            &GrpcEvent {
+                                content: msg,
+                                event_type: GrpcEventType::ClientMessage,
+                                ..base_event.clone()
+                            },
+                            &UpdateSource::from_window_label(&window_label),
+                        );
+                    }
+                    Err(error) => {
+                        let _ = app_handle.db().upsert_grpc_event(
+                            &GrpcEvent {
+                                content: format!("Failed to send message: {}", error),
+                                event_type: GrpcEventType::Error,
+                                ..base_event.clone()
+                            },
+                            &UpdateSource::from_window_label(&window_label),
+                        );
+                    }
+                }
+            };
+
             let (maybe_stream, maybe_msg) =
                 match (method_desc.is_client_streaming(), method_desc.is_server_streaming()) {
                     (true, true) => (
                         Some(
                             connection
-                                .streaming(&service, &method, in_msg_stream, &metadata, client_cert)
+                                .streaming(
+                                    &service,
+                                    &method,
+                                    in_msg_stream,
+                                    &metadata,
+                                    client_cert,
+                                    on_message.clone(),
+                                )
                                 .await,
                         ),
                         None,
@@ -490,6 +509,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     in_msg_stream,
                                     &metadata,
                                     client_cert,
+                                    on_message.clone(),
                                 )
                                 .await,
                         ),
