@@ -90,14 +90,16 @@ export const plugin: PluginDefinition = {
         },
       },
       {
-        type: 'editor',
-        name: 'headers',
-        label: 'JWT Headers',
-        language: 'json',
-        defaultValue: '{}',
-        placeholder: '{ }',
-        optional: true,
-        description: 'Additional JWT header fields',
+        type: 'accordion',
+        label: 'Additional Headers',
+        inputs: [
+          {
+            type: 'key_value',
+            name: 'headers',
+            hideLabel: true,
+            optional: true,
+          },
+        ],
       },
       {
         type: 'editor',
@@ -112,10 +114,26 @@ export const plugin: PluginDefinition = {
       const { algorithm, secret: _secret, secretBase64, payload, headers } = values;
       const secret = secretBase64 ? Buffer.from(`${_secret}`, 'base64') : `${_secret}`;
 
-      const parsedHeaders = headers ? JSON.parse(`${headers}`) : undefined;
+      // Convert key-value pairs array to object for jwt header
+      type KeyValuePair = { enabled?: boolean; name: string; value: string };
+      const headerPairs: KeyValuePair[] = headers ? JSON.parse(`${headers}`) : [];
+      const parsedHeaders =
+        headerPairs.length > 0
+          ? headerPairs.reduce(
+              (acc, pair) => {
+                if (pair.enabled !== false && pair.name) {
+                  acc[pair.name] = pair.value;
+                }
+                return acc;
+              },
+              {} as Record<string, string>,
+            )
+          : undefined;
+
       const token = jwt.sign(`${payload}`, secret, {
         algorithm: algorithm as (typeof algorithms)[number],
-        header: parsedHeaders,
+        // Extra header fields are merged with the auto-generated header (which includes alg)
+        header: parsedHeaders as jwt.JwtHeader | undefined,
       });
 
       if (values.location === 'query') {
