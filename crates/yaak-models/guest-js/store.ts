@@ -206,6 +206,22 @@ export function replaceModelsInStore<
   });
 }
 
+export function mergeModelsInStore<
+  M extends AnyModel['model'],
+  T extends Extract<AnyModel, { model: M }>,
+>(model: M, models: T[]) {
+  mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
+    const existingModels = { ...prev[model] } as Record<string, T>;
+    for (const m of models) {
+      existingModels[m.id] = m;
+    }
+    return {
+      ...prev,
+      [model]: existingModels,
+    };
+  });
+}
+
 function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
   // Never ignore updates from non-user sources
   if (updateSource.type !== 'window') {

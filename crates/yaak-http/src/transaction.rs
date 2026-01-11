@@ -342,7 +342,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_single_redirect() {
-        let redirect_headers = vec![("Location".to_string(), "https://example.com/new".to_string())];
+        let redirect_headers =
+            vec![("Location".to_string(), "https://example.com/new".to_string())];
 
         let responses = vec![
             MockResponse { status: 302, headers: redirect_headers, body: vec![] },
@@ -373,7 +374,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_max_redirects_exceeded() {
-        let redirect_headers = vec![("Location".to_string(), "https://example.com/loop".to_string())];
+        let redirect_headers =
+            vec![("Location".to_string(), "https://example.com/loop".to_string())];
 
         // Create more redirects than allowed
         let responses: Vec<MockResponse> = (0..12)
@@ -525,7 +527,8 @@ mod tests {
                 _request: SendableHttpRequest,
                 _event_tx: mpsc::Sender<HttpResponseEvent>,
             ) -> Result<HttpResponse> {
-                let headers = vec![("set-cookie".to_string(), "session=xyz789; Path=/".to_string())];
+                let headers =
+                    vec![("set-cookie".to_string(), "session=xyz789; Path=/".to_string())];
 
                 let body_stream: Pin<Box<dyn AsyncRead + Send>> =
                     Box::pin(std::io::Cursor::new(vec![]));
@@ -584,7 +587,10 @@ mod tests {
                 let headers = vec![
                     ("set-cookie".to_string(), "session=abc123; Path=/".to_string()),
                     ("set-cookie".to_string(), "user_id=42; Path=/".to_string()),
-                    ("set-cookie".to_string(), "preferences=dark; Path=/; Max-Age=86400".to_string()),
+                    (
+                        "set-cookie".to_string(),
+                        "preferences=dark; Path=/; Max-Age=86400".to_string(),
+                    ),
                 ];
 
                 let body_stream: Pin<Box<dyn AsyncRead + Send>> =

@@ -11,7 +11,9 @@ function makeEvent(
     id: 'test',
     model: 'http_response_event',
     responseId: 'resp',
-    createdAt: Date.now(),
+    workspaceId: 'ws',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     event: { type, name, value } as HttpResponseEvent['event'],
   };
 }
