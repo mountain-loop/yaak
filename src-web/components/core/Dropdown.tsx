@@ -766,8 +766,24 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       </m.div>
     );
 
+    // Hotkeys must be rendered even when menu is closed (so they work globally)
+    const hotKeyElements = items.map(
+      (item, i) =>
+        item.type !== 'separator' &&
+        item.type !== 'content' &&
+        !item.hotKeyLabelOnly &&
+        item.hotKeyAction && (
+          <MenuItemHotKey
+            key={`${item.hotKeyAction}::${i}`}
+            onSelect={handleSelect}
+            item={item}
+            action={item.hotKeyAction}
+          />
+        ),
+    );
+
     if (!isOpen) {
-      return null;
+      return <>{hotKeyElements}</>;
     }
 
     if (isSubmenu) {
@@ -776,20 +792,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
 
     return (
       <>
-        {items.map(
-          (item, i) =>
-            item.type !== 'separator' &&
-            item.type !== 'content' &&
-            !item.hotKeyLabelOnly &&
-            item.hotKeyAction && (
-              <MenuItemHotKey
-                key={`${item.hotKeyAction}::${i}`}
-                onSelect={handleSelect}
-                item={item}
-                action={item.hotKeyAction}
-              />
-            ),
-        )}
+        {hotKeyElements}
         <Overlay noBackdrop open={isOpen} portalName="dropdown-menu">
           {menuContent}
         </Overlay>
