@@ -121,7 +121,8 @@ jobs:
 
           # Sign vendored binaries with hardened runtime
           codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/protoc/yaakprotoc || true
-          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/node/yaaknode || true
+          # Node.js needs entitlements for JIT and loading plugins with different Team IDs
+          codesign --force --options runtime --entitlements crates-tauri/yaak-app/macos/entitlements.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/node/yaaknode || true
 
       - uses: tauri-apps/tauri-action@v0
         env:
