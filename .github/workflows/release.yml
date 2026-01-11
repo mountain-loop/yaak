@@ -119,10 +119,9 @@ jobs:
           security import certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-          # Sign vendored binaries with hardened runtime
-          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/protoc/yaakprotoc || true
-          # Node.js needs entitlements for JIT and loading plugins with different Team IDs
-          codesign --force --options runtime --entitlements crates-tauri/yaak-app/macos/entitlements.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/node/yaaknode || true
+          # Sign vendored binaries with hardened runtime and their specific entitlements
+          codesign --force --options runtime --entitlements crates-tauri/yaak-app/macos/entitlements.yaakprotoc.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/protoc/yaakprotoc || true
+          codesign --force --options runtime --entitlements crates-tauri/yaak-app/macos/entitlements.yaaknode.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/node/yaaknode || true
 
       - uses: tauri-apps/tauri-action@v0
         env:
