@@ -4,8 +4,8 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::watch::Receiver;
+use yaak_common::command::new_xplatform_command;
 
 /// Start the Node.js plugin runtime process.
 ///
@@ -30,13 +30,14 @@ pub async fn start_nodejs_plugin_runtime(
         plugin_runtime_main_str
     );
 
-    let mut child = Command::new(node_bin_path)
-        .env("HOST", addr.ip().to_string())
+    let mut cmd = new_xplatform_command(node_bin_path);
+    cmd.env("HOST", addr.ip().to_string())
         .env("PORT", addr.port().to_string())
         .arg(&plugin_runtime_main_str)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+        .stderr(Stdio::piped());
+
+    let mut child = cmd.spawn()?;
 
     info!("Spawned plugin runtime");
 

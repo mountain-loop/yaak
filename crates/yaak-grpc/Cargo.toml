@@ -22,5 +22,6 @@ tokio-stream = "0.1.14"
 tonic = { version = "0.12.3", default-features = false, features = ["transport"] }
 tonic-reflection = "0.12.3"
 uuid = { version = "1.7.0", features = ["v4"] }
+yaak-common = { workspace = true }
 yaak-tls = { workspace = true }
 thiserror = "2.0.17"

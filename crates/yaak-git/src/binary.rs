@@ -1,38 +1,24 @@
+use crate::error::Error::GitNotFound;
 use crate::error::Result;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+use tokio::process::Command;
+use yaak_common::command::new_xplatform_command;
 
-use crate::error::Error::GitNotFound;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-pub(crate) fn new_binary_command(dir: &Path) -> Result<Command> {
+pub(crate) async fn new_binary_command(dir: &Path) -> Result<Command> {
     // 1. Probe that `git` exists and is runnable
-    let mut probe = Command::new("git");
+    let mut probe = new_xplatform_command("git");
     probe.arg("--version").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
 
-    #[cfg(target_os = "windows")]
-    {
-        probe.creation_flags(CREATE_NO_WINDOW);
-    }
-
-    let status = probe.status().map_err(|_| GitNotFound)?;
+    let status = probe.status().await.map_err(|_| GitNotFound)?;
 
     if !status.success() {
         return Err(GitNotFound);
     }
 
     // 2. Build the reusable git command
-    let mut cmd = Command::new("git");
+    let mut cmd = new_xplatform_command("git");
     cmd.arg("-C").arg(dir);
-
-    #[cfg(target_os = "windows")]
-    {
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
 
     Ok(cmd)
 }

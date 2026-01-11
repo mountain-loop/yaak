@@ -16,12 +16,12 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::fs;
-use tokio::process::Command;
 use tokio::sync::RwLock;
 use tonic::codegen::http::uri::PathAndQuery;
 use tonic::transport::Uri;
 use tonic_reflection::pb::v1::server_reflection_request::MessageRequest;
 use tonic_reflection::pb::v1::server_reflection_response::MessageResponse;
+use yaak_common::command::new_xplatform_command;
 use yaak_tls::ClientCertificateConfig;
 
 pub async fn fill_pool_from_files(
@@ -91,11 +91,11 @@ pub async fn fill_pool_from_files(
 
     info!("Invoking protoc with {}", args.join(" "));
 
-    let out = Command::new(&config.protoc_bin_path)
-        .args(&args)
-        .output()
-        .await
-        .map_err(|e| GenericError(format!("Failed to run protoc: {}", e)))?;
+    let mut cmd = new_xplatform_command(&config.protoc_bin_path);
+    cmd.args(&args);
+
+    let out =
+        cmd.output().await.map_err(|e| GenericError(format!("Failed to run protoc: {}", e)))?;
 
     if !out.status.success() {
         return Err(GenericError(format!(

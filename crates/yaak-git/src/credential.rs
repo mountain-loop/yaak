@@ -1,9 +1,9 @@
 use crate::binary::new_binary_command;
 use crate::error::Error::GenericError;
 use crate::error::Result;
-use std::io::Write;
 use std::path::Path;
 use std::process::Stdio;
+use tokio::io::AsyncWriteExt;
 use url::Url;
 
 pub async fn git_add_credential(
@@ -18,7 +18,8 @@ pub async fn git_add_credential(
     let host = url.host_str().unwrap();
     let path = Some(url.path());
 
-    let mut child = new_binary_command(dir)?
+    let mut child = new_binary_command(dir)
+        .await?
         .args(["credential", "approve"])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
@@ -26,19 +27,21 @@ pub async fn git_add_credential(
 
     {
         let stdin = child.stdin.as_mut().unwrap();
-        writeln!(stdin, "protocol={}", protocol)?;
-        writeln!(stdin, "host={}", host)?;
+        stdin.write_all(format!("protocol={}\n", protocol).as_bytes()).await?;
+        stdin.write_all(format!("host={}\n", host).as_bytes()).await?;
         if let Some(path) = path {
             if !path.is_empty() {
-                writeln!(stdin, "path={}", path.trim_start_matches('/'))?;
+                stdin
+                    .write_all(format!("path={}\n", path.trim_start_matches('/')).as_bytes())
+                    .await?;
             }
         }
-        writeln!(stdin, "username={}", username)?;
-        writeln!(stdin, "password={}", password)?;
-        writeln!(stdin)?; // blank line terminator
+        stdin.write_all(format!("username={}\n", username).as_bytes()).await?;
+        stdin.write_all(format!("password={}\n", password).as_bytes()).await?;
+        stdin.write_all(b"\n").await?; // blank line terminator
     }
 
-    let status = child.wait()?;
+    let status = child.wait().await?;
     if !status.success() {
         return Err(GenericError("Failed to approve git credential".to_string()));
     }
