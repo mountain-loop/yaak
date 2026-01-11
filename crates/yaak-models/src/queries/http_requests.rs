@@ -1,6 +1,6 @@
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{Folder, FolderIden, HttpRequest, HttpRequestHeader, HttpRequestIden};
+use crate::models::{Folder, FolderIden, HttpRequest, HttpRequestHeader, HttpRequestIden, ResolvedHttpRequestSettings};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -102,5 +102,80 @@ impl<'a> DbContext<'a> {
             children.push(m);
         }
         Ok(children)
+    }
+
+    /// Resolve settings for an HTTP request by walking the inheritance chain:
+    /// Workspace → Folder(s) → Request
+    /// Last non-None value wins, then defaults are applied.
+    pub fn resolve_settings_for_http_request(
+        &self,
+        http_request: &HttpRequest,
+    ) -> Result<ResolvedHttpRequestSettings> {
+        let workspace = self.get_workspace(&http_request.workspace_id)?;
+
+        // Start with None for all settings
+        let mut validate_certs: Option<bool> = None;
+        let mut follow_redirects: Option<bool> = None;
+        let mut timeout: Option<i32> = None;
+
+        // Apply workspace settings
+        if workspace.setting_validate_certificates.is_some() {
+            validate_certs = workspace.setting_validate_certificates;
+        }
+        if workspace.setting_follow_redirects.is_some() {
+            follow_redirects = workspace.setting_follow_redirects;
+        }
+        if workspace.setting_request_timeout.is_some() {
+            timeout = workspace.setting_request_timeout;
+        }
+
+        // Apply folder chain settings (root first, immediate parent last)
+        if let Some(folder_id) = &http_request.folder_id {
+            let folders = self.get_folder_ancestors(folder_id)?;
+            for folder in folders {
+                if folder.setting_validate_certificates.is_some() {
+                    validate_certs = folder.setting_validate_certificates;
+                }
+                if folder.setting_follow_redirects.is_some() {
+                    follow_redirects = folder.setting_follow_redirects;
+                }
+                if folder.setting_request_timeout.is_some() {
+                    timeout = folder.setting_request_timeout;
+                }
+            }
+        }
+
+        // Apply request-level settings (highest priority)
+        if http_request.setting_validate_certificates.is_some() {
+            validate_certs = http_request.setting_validate_certificates;
+        }
+        if http_request.setting_follow_redirects.is_some() {
+            follow_redirects = http_request.setting_follow_redirects;
+        }
+        if http_request.setting_request_timeout.is_some() {
+            timeout = http_request.setting_request_timeout;
+        }
+
+        // Apply defaults for anything still None
+        Ok(ResolvedHttpRequestSettings {
+            validate_certificates: validate_certs.unwrap_or(true),
+            follow_redirects: follow_redirects.unwrap_or(true),
+            request_timeout: timeout.unwrap_or(0),
+        })
+    }
+
+    /// Get folder ancestors in order from root to immediate parent
+    fn get_folder_ancestors(&self, folder_id: &str) -> Result<Vec<Folder>> {
+        let mut ancestors = Vec::new();
+        let mut current_id = Some(folder_id.to_string());
+
+        while let Some(id) = current_id {
+            let folder = self.get_folder(&id)?;
+            current_id = folder.folder_id.clone();
+            ancestors.push(folder);
+        }
+
+        ancestors.reverse(); // Root first, immediate parent last
+        Ok(ancestors)
     }
 }

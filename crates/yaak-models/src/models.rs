@@ -1,8 +1,4 @@
 use crate::error::Result;
-use crate::models::HttpRequestIden::{
-    Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
-    Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
-};
 use crate::util::{UpdateSource, generate_prefixed_id};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
@@ -112,6 +108,36 @@ impl Display for EditorKeymap {
 impl Default for EditorKeymap {
     fn default() -> Self {
         Self::Default
+    }
+}
+
+/// Settings that can be inherited at workspace → folder → request level.
+/// All fields optional - None means "inherit from parent" (or use default if at root).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct HttpRequestSettingsOverride {
+    pub setting_validate_certificates: Option<bool>,
+    pub setting_follow_redirects: Option<bool>,
+    pub setting_request_timeout: Option<i32>,
+}
+
+/// Resolved settings with concrete values (after inheritance + defaults applied)
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedHttpRequestSettings {
+    pub validate_certificates: bool,
+    pub follow_redirects: bool,
+    pub request_timeout: i32,
+}
+
+impl ResolvedHttpRequestSettings {
+    /// Default values when nothing is set in the inheritance chain
+    pub fn defaults() -> Self {
+        Self {
+            validate_certificates: true,
+            follow_redirects: true,
+            request_timeout: 0,
+        }
     }
 }
 
@@ -297,12 +323,10 @@ pub struct Workspace {
     pub name: String,
     pub encryption_key_challenge: Option<String>,
 
-    // Settings
-    #[serde(default = "default_true")]
-    pub setting_validate_certificates: bool,
-    #[serde(default = "default_true")]
-    pub setting_follow_redirects: bool,
-    pub setting_request_timeout: i32,
+    // Inheritable settings (Option = can be null, defaults applied at resolution time)
+    pub setting_validate_certificates: Option<bool>,
+    pub setting_follow_redirects: Option<bool>,
+    pub setting_request_timeout: Option<i32>,
 }
 
 impl UpsertModelInfo for Workspace {
@@ -726,6 +750,11 @@ pub struct Folder {
     pub headers: Vec<HttpRequestHeader>,
     pub name: String,
     pub sort_priority: f64,
+
+    // Inheritable settings (Option = null means inherit from parent)
+    pub setting_validate_certificates: Option<bool>,
+    pub setting_follow_redirects: Option<bool>,
+    pub setting_request_timeout: Option<i32>,
 }
 
 impl UpsertModelInfo for Folder {
@@ -765,6 +794,9 @@ impl UpsertModelInfo for Folder {
             (Description, self.description.into()),
             (Name, self.name.trim().into()),
             (SortPriority, self.sort_priority.into()),
+            (SettingValidateCertificates, self.setting_validate_certificates.into()),
+            (SettingFollowRedirects, self.setting_follow_redirects.into()),
+            (SettingRequestTimeout, self.setting_request_timeout.into()),
         ])
     }
 
@@ -778,6 +810,9 @@ impl UpsertModelInfo for Folder {
             FolderIden::Description,
             FolderIden::FolderId,
             FolderIden::SortPriority,
+            FolderIden::SettingValidateCertificates,
+            FolderIden::SettingFollowRedirects,
+            FolderIden::SettingRequestTimeout,
         ]
     }
 
@@ -800,6 +835,9 @@ impl UpsertModelInfo for Folder {
             headers: serde_json::from_str(&headers).unwrap_or_default(),
             authentication_type: row.get("authentication_type")?,
             authentication: serde_json::from_str(&authentication).unwrap_or_default(),
+            setting_validate_certificates: row.get("setting_validate_certificates")?,
+            setting_follow_redirects: row.get("setting_follow_redirects")?,
+            setting_request_timeout: row.get("setting_request_timeout")?,
         })
     }
 }
@@ -857,6 +895,11 @@ pub struct HttpRequest {
     pub sort_priority: f64,
     pub url: String,
     pub url_parameters: Vec<HttpUrlParameter>,
+
+    // Inheritable settings (Option = null means inherit from parent)
+    pub setting_validate_certificates: Option<bool>,
+    pub setting_follow_redirects: Option<bool>,
+    pub setting_request_timeout: Option<i32>,
 }
 
 impl UpsertModelInfo for HttpRequest {
@@ -884,6 +927,7 @@ impl UpsertModelInfo for HttpRequest {
         self,
         source: &UpdateSource,
     ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use HttpRequestIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
@@ -900,10 +944,14 @@ impl UpsertModelInfo for HttpRequest {
             (AuthenticationType, self.authentication_type.into()),
             (Headers, serde_json::to_string(&self.headers)?.into()),
             (SortPriority, self.sort_priority.into()),
+            (SettingValidateCertificates, self.setting_validate_certificates.into()),
+            (SettingFollowRedirects, self.setting_follow_redirects.into()),
+            (SettingRequestTimeout, self.setting_request_timeout.into()),
         ])
     }
 
     fn update_columns() -> Vec<impl IntoIden> {
+        use HttpRequestIden::*;
         vec![
             UpdatedAt,
             WorkspaceId,
@@ -919,6 +967,9 @@ impl UpsertModelInfo for HttpRequest {
             Url,
             UrlParameters,
             SortPriority,
+            SettingValidateCertificates,
+            SettingFollowRedirects,
+            SettingRequestTimeout,
         ]
     }
 
@@ -945,6 +996,9 @@ impl UpsertModelInfo for HttpRequest {
             sort_priority: row.get("sort_priority")?,
             url: row.get("url")?,
             url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
+            setting_validate_certificates: row.get("setting_validate_certificates")?,
+            setting_follow_redirects: row.get("setting_follow_redirects")?,
+            setting_request_timeout: row.get("setting_request_timeout")?,
         })
     }
 }
