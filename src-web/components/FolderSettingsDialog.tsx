@@ -1,12 +1,19 @@
-import { createWorkspaceModel, foldersAtom, patchModel } from '@yaakapp-internal/models';
+import {
+  createWorkspaceModel,
+  foldersAtom,
+  patchModel,
+  workspacesAtom,
+} from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
+import { useParentFolders } from '../hooks/useParentFolders';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
+import { Icon } from './core/Icon';
 import { Input } from './core/Input';
 import { Link } from './core/Link';
 import { VStack } from './core/Stacks';
@@ -36,7 +43,9 @@ export type FolderSettingsTab =
 
 export function FolderSettingsDialog({ folderId, tab }: Props) {
   const folders = useAtomValue(foldersAtom);
+  const workspaces = useAtomValue(workspacesAtom);
   const folder = folders.find((f) => f.id === folderId) ?? null;
+  const parentFolders = useParentFolders(folder);
   const [activeTab, setActiveTab] = useState<string>(tab ?? TAB_GENERAL);
   const authTab = useAuthTab(TAB_AUTH, folder);
   const headersTab = useHeadersTab(TAB_HEADERS, folder);
@@ -46,6 +55,20 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
     (e) => e.parentModel === 'folder' && e.parentId === folderId,
   );
   const numVars = (folderEnvironment?.variables ?? []).filter((v) => v.name).length;
+
+  const breadcrumbs = useMemo(() => {
+    if (!folder) return [];
+
+    const workspace = workspaces.find((w) => w.id === folder.workspaceId);
+
+    const items = [];
+    if (workspace) {
+      items.push({ id: workspace.id, name: workspace.name });
+    }
+    items.push(...parentFolders.reverse().map((f) => ({ id: f.id, name: f.name })));
+
+    return items;
+  }, [folder, parentFolders, workspaces]);
 
   const tabs = useMemo<TabItem[]>(() => {
     if (folder == null) return [];
@@ -82,6 +105,23 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
       </TabContent>
       <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-4">
         <VStack space={3} className="pb-3 h-full">
+          {breadcrumbs.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <div className="text-xs font-medium text-text-subtle uppercase tracking-wide">
+                Location
+              </div>
+              <div className="flex items-center gap-1.5 text-sm text-text-subtlest px-2 py-1.5 bg-surface rounded border border-border">
+                {breadcrumbs.map((item, index) => (
+                  <Fragment key={item.id}>
+                    {index > 0 && <Icon icon="chevron_right" size="sm" className="opacity-50" />}
+                    <span className={index === breadcrumbs.length - 1 ? 'text-text-subtle' : ''}>
+                      {item.name}
+                    </span>
+                  </Fragment>
+                ))}
+              </div>
+            </div>
+          )}
           <Input
             label="Folder Name"
             defaultValue={folder.name}
