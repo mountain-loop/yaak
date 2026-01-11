@@ -1,7 +1,7 @@
 name: Generate Artifacts
 on:
   push:
-    tags: [ v* ]
+    tags: [v*]
 
 jobs:
   build-artifacts:
@@ -13,37 +13,37 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # for Arm-based Macs (M1 and above).
-            args: '--target aarch64-apple-darwin'
-            yaak_arch: 'arm64'
-            os: 'macos'
-            targets: 'aarch64-apple-darwin'
-          - platform: 'macos-latest' # for Intel-based Macs.
-            args: '--target x86_64-apple-darwin'
-            yaak_arch: 'x64'
-            os: 'macos'
-            targets: 'x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04'
-            args: ''
-            yaak_arch: 'x64'
-            os: 'ubuntu'
-            targets: ''
-          - platform: 'ubuntu-22.04-arm'
-            args: ''
-            yaak_arch: 'arm64'
-            os: 'ubuntu'
-            targets: ''
-          - platform: 'windows-latest'
-            args: ''
-            yaak_arch: 'x64'
-            os: 'windows'
-            targets: ''
+          - platform: "macos-latest" # for Arm-based Macs (M1 and above).
+            args: "--target aarch64-apple-darwin"
+            yaak_arch: "arm64"
+            os: "macos"
+            targets: "aarch64-apple-darwin"
+          - platform: "macos-latest" # for Intel-based Macs.
+            args: "--target x86_64-apple-darwin"
+            yaak_arch: "x64"
+            os: "macos"
+            targets: "x86_64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+            yaak_arch: "x64"
+            os: "ubuntu"
+            targets: ""
+          - platform: "ubuntu-22.04-arm"
+            args: ""
+            yaak_arch: "arm64"
+            os: "ubuntu"
+            targets: ""
+          - platform: "windows-latest"
+            args: ""
+            yaak_arch: "x64"
+            os: "windows"
+            targets: ""
           # Windows ARM64
-          - platform: 'windows-latest'
-            args: '--target aarch64-pc-windows-msvc'
-            yaak_arch: 'arm64'
-            os: 'windows'
-            targets: 'aarch64-pc-windows-msvc'
+          - platform: "windows-latest"
+            args: "--target aarch64-pc-windows-msvc"
+            yaak_arch: "arm64"
+            os: "windows"
+            targets: "aarch64-pc-windows-msvc"
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 40
     steps:
@@ -88,6 +88,7 @@ jobs:
           & $exe --version
 
       - run: npm ci
+      - run: npm run bootstrap
       - run: npm run lint
       - name: Run JS Tests
         run: npm test
@@ -121,9 +122,9 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ matrix.os == 'windows' && secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ matrix.os == 'windows' && secrets.AZURE_TENANT_ID }}
         with:
-          tagName: 'v__VERSION__'
-          releaseName: 'Release __VERSION__'
-          releaseBody: '[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)'
+          tagName: "v__VERSION__"
+          releaseName: "Release __VERSION__"
+          releaseBody: "[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)"
           releaseDraft: true
           prerelease: true
-          args: '${{ matrix.args }} --config ./crates-tauri/yaak-app/tauri.release.conf.json'
+          args: "${{ matrix.args }} --config ./crates-tauri/yaak-app/tauri.release.conf.json"
