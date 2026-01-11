@@ -100,6 +100,29 @@ jobs:
         env:
           YAAK_VERSION: ${{ github.ref_name }}
 
+      - name: Sign vendored binaries (macOS only)
+        if: matrix.os == 'macos'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Create keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security import certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Sign vendored binaries with hardened runtime
+          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/protoc/yaakprotoc || true
+          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/node/yaaknode || true
+
       - uses: tauri-apps/tauri-action@v0
         env:
           YAAK_TARGET_ARCH: ${{ matrix.yaak_arch }}
