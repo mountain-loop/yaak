@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { WebsocketConnection, WebsocketEvent } from '@yaakapp-internal/models';
 import {
+  mergeModelsInStore,
   replaceModelsInStore,
   websocketConnectionsAtom,
   websocketEventsAtom,
@@ -54,8 +55,10 @@ export function useWebsocketEvents(connectionId: string | null) {
       return;
     }
 
+    // Use merge instead of replace to preserve events that came in via model_write
+    // while we were fetching from the database
     invoke<WebsocketEvent[]>('models_websocket_events', { connectionId }).then(
-      (events) => replaceModelsInStore('websocket_event', events),
+      (events) => mergeModelsInStore('websocket_event', events),
     );
   }, [connectionId]);
 

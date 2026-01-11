@@ -3,6 +3,7 @@ import type { GrpcConnection, GrpcEvent } from '@yaakapp-internal/models';
 import {
   grpcConnectionsAtom,
   grpcEventsAtom,
+  mergeModelsInStore,
   replaceModelsInStore,
 } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
@@ -67,8 +68,10 @@ export function useGrpcEvents(connectionId: string | null) {
       return;
     }
 
+    // Use merge instead of replace to preserve events that came in via model_write
+    // while we were fetching from the database
     invoke<GrpcEvent[]>('models_grpc_events', { connectionId }).then((events) => {
-      replaceModelsInStore('grpc_event', events);
+      mergeModelsInStore('grpc_event', events);
     });
   }, [connectionId]);
 
