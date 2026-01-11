@@ -8,7 +8,7 @@ import { isJSON } from '../../lib/contentType';
 import { Button } from '../core/Button';
 import type { EditorProps } from '../core/Editor/Editor';
 import { Editor } from '../core/Editor/LazyEditor';
-import { EventViewer } from '../core/EventViewer';
+import { EventDetailHeader, EventViewer } from '../core/EventViewer';
 import { EventViewerRow } from '../core/EventViewerRow';
 import { Icon } from '../core/Icon';
 import { InlineCode } from '../core/InlineCode';
@@ -54,10 +54,9 @@ function ActualEventStreamViewer({ response }: Props) {
           timestamp={new Date().toISOString().slice(0, -1)} // SSE events don't have timestamps
         />
       )}
-      renderDetail={({ event, index }) => (
+      renderDetail={({ event }) => (
         <EventDetail
           event={event}
-          index={index}
           showLarge={showLarge}
           showingLarge={showingLarge}
           setShowLarge={setShowLarge}
@@ -70,14 +69,12 @@ function ActualEventStreamViewer({ response }: Props) {
 
 function EventDetail({
   event,
-  index,
   showLarge,
   showingLarge,
   setShowLarge,
   setShowingLarge,
 }: {
   event: ServerSentEvent;
-  index: number;
   showLarge: boolean;
   showingLarge: boolean;
   setShowLarge: (v: boolean) => void;
@@ -90,10 +87,7 @@ function EventDetail({
 
   return (
     <div className="flex flex-col h-full">
-      <HStack space={1.5} className="mb-2 font-semibold">
-        <EventLabels className="text-sm" event={event} index={index} />
-        Message Received
-      </HStack>
+      <EventDetailHeader title="Message Received" />
       {!showLarge && event.data.length > 1000 * 1000 ? (
         <VStack space={2} className="italic text-text-subtlest">
           Message previews larger than 1MB are hidden

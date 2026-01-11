@@ -11,14 +11,12 @@ import {
 } from '../hooks/usePinnedWebsocketConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { languageFromContentType } from '../lib/contentType';
-import { copyToClipboard } from '../lib/copy';
 import { Button } from './core/Button';
 import { Editor } from './core/Editor/LazyEditor';
-import { EventViewer } from './core/EventViewer';
+import { EventDetailHeader, EventViewer, type EventDetailAction } from './core/EventViewer';
 import { EventViewerRow } from './core/EventViewerRow';
 import { HotkeyList } from './core/HotkeyList';
 import { Icon } from './core/Icon';
-import { IconButton } from './core/IconButton';
 import { LoadingIcon } from './core/LoadingIcon';
 import { HStack, VStack } from './core/Stacks';
 import { WebsocketStatusTag } from './core/WebsocketStatusTag';
@@ -173,24 +171,25 @@ function WebsocketEventDetail({
         ? 'Connection Open'
         : `Message ${event.isServer ? 'Received' : 'Sent'}`;
 
+  const actions: EventDetailAction[] =
+    message !== ''
+      ? [
+          {
+            key: 'toggle-hexdump',
+            label: hexDump ? 'Show Message' : 'Show Hexdump',
+            onClick: () => setHexDump(!hexDump),
+          },
+        ]
+      : [];
+
   return (
     <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
-      <div className="h-xs mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center">
-        <div className="font-semibold">{title}</div>
-        {message !== '' && (
-          <HStack space={1}>
-            <Button variant="border" size="xs" onClick={() => setHexDump(!hexDump)}>
-              {hexDump ? 'Show Message' : 'Show Hexdump'}
-            </Button>
-            <IconButton
-              title="Copy message"
-              icon="copy"
-              size="xs"
-              onClick={() => copyToClipboard(formattedMessage ?? '')}
-            />
-          </HStack>
-        )}
-      </div>
+      <EventDetailHeader
+          title={title}
+          timestamp={event.createdAt}
+          actions={actions}
+          copyText={formattedMessage || undefined}
+        />
       {!showLarge && event.message.length > 1000 * 1000 ? (
         <VStack space={2} className="italic text-text-subtlest">
           Message previews larger than 1MB are hidden
