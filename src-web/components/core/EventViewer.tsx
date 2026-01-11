@@ -1,11 +1,15 @@
 import type { Virtualizer } from '@tanstack/react-virtual';
+import { format } from 'date-fns';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useEventViewerKeyboard } from '../../hooks/useEventViewerKeyboard';
+import { CopyIconButton } from '../CopyIconButton';
 import { AutoScroller } from './AutoScroller';
 import { Banner } from './Banner';
+import { Button } from './Button';
 import { Separator } from './Separator';
 import { SplitLayout } from './SplitLayout';
+import { HStack } from './Stacks';
 
 interface EventViewerProps<T> {
   /** Array of events to display */
@@ -137,8 +141,8 @@ export function EventViewer<T>({
         defaultRatio={defaultRatio}
         minHeightPx={10}
         firstSlot={({ style }) => (
-          <div style={style} className="w-full grid grid-rows-[auto_minmax(0,1fr)]">
-            {header}
+          <div style={style} className="w-full h-full grid grid-rows-[auto_minmax(0,1fr)]">
+            {header ?? <span aria-hidden />}
             <AutoScroller
               data={events}
               focusable={enableKeyboardNav}
@@ -166,7 +170,7 @@ export function EventViewer<T>({
         secondSlot={
           activeEvent != null && renderDetail
             ? ({ style }) => (
-                <div style={style} className="grid grid-rows-[auto_minmax(0,1fr)]">
+                <div style={style} className="grid grid-rows-[auto_minmax(0,1fr)] bg-surface">
                   <div className="pb-3 px-2">
                     <Separator />
                   </div>
@@ -178,6 +182,58 @@ export function EventViewer<T>({
             : null
         }
       />
+    </div>
+  );
+}
+
+export interface EventDetailAction {
+  /** Unique key for React */
+  key: string;
+  /** Button label */
+  label: string;
+  /** Optional icon */
+  icon?: ReactNode;
+  /** Click handler */
+  onClick: () => void;
+}
+
+interface EventDetailHeaderProps {
+  /** Title/label for the event */
+  title: string;
+  /** Timestamp string (ISO format) - will be formatted as HH:mm:ss.SSS */
+  timestamp?: string;
+  /** Optional action buttons to show before timestamp */
+  actions?: EventDetailAction[];
+  /** Text to copy when copy button is clicked - renders a copy icon button after actions */
+  copyText?: string;
+}
+
+/** Standardized header for event detail panes */
+export function EventDetailHeader({
+  title,
+  timestamp,
+  actions,
+  copyText,
+}: EventDetailHeaderProps) {
+  const formattedTime = timestamp ? format(new Date(`${timestamp}Z`), 'HH:mm:ss.SSS') : null;
+
+  return (
+    <div className="flex items-center justify-between gap-2 mb-2 h-xs">
+      <h3 className="font-semibold select-auto cursor-auto">{title}</h3>
+      <HStack space={2} className="items-center">
+        {actions?.map((action) => (
+          <Button key={action.key} variant="border" size="xs" onClick={action.onClick}>
+            {action.icon}
+            {action.label}
+          </Button>
+        ))}
+        {copyText != null && (
+          <CopyIconButton text={copyText} size="xs" title="Copy" variant="border" iconSize="sm" />
+        )}
+        {formattedTime && (
+          <span className="text-text-subtlest font-mono text-editor">{formattedTime}</span>
+        )}
+      </HStack>
     </div>
   );
 }

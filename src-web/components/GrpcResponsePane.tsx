@@ -9,14 +9,12 @@ import {
   useGrpcEvents,
 } from '../hooks/usePinnedGrpcConnection';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
-import { copyToClipboard } from '../lib/copy';
 import { Button } from './core/Button';
 import { Editor } from './core/Editor/LazyEditor';
-import { EventViewer } from './core/EventViewer';
+import { EventDetailHeader, EventViewer } from './core/EventViewer';
 import { EventViewerRow } from './core/EventViewerRow';
 import { HotkeyList } from './core/HotkeyList';
 import { Icon, type IconProps } from './core/Icon';
-import { IconButton } from './core/IconButton';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
 import { LoadingIcon } from './core/LoadingIcon';
 import { HStack, VStack } from './core/Stacks';
@@ -157,19 +155,11 @@ function GrpcEventDetail({
   setShowingLarge: (v: boolean) => void;
 }) {
   if (event.eventType === 'client_message' || event.eventType === 'server_message') {
+    const title = `Message ${event.eventType === 'client_message' ? 'Sent' : 'Received'}`;
+
     return (
       <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
-        <div className="mb-2 select-text cursor-text grid grid-cols-[minmax(0,1fr)_auto] items-center">
-          <div className="font-semibold">
-            Message {event.eventType === 'client_message' ? 'Sent' : 'Received'}
-          </div>
-          <IconButton
-            title="Copy message"
-            icon="copy"
-            size="xs"
-            onClick={() => copyToClipboard(event.content)}
-          />
-        </div>
+        <EventDetailHeader title={title} timestamp={event.createdAt} copyText={event.content} />
         {!showLarge && event.content.length > 1000 * 1000 ? (
           <VStack space={2} className="italic text-text-subtlest">
             Message previews larger than 1MB are hidden
@@ -207,14 +197,12 @@ function GrpcEventDetail({
   // Error or connection_end - show metadata/trailers
   return (
     <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
-      <div>
-        <div className="select-text cursor-text font-semibold">{event.content}</div>
-        {event.error && (
-          <div className="select-text cursor-text text-sm font-mono py-1 text-warning">
-            {event.error}
-          </div>
-        )}
-      </div>
+      <EventDetailHeader title={event.content} timestamp={event.createdAt} />
+      {event.error && (
+        <div className="select-text cursor-text text-sm font-mono py-1 text-warning">
+          {event.error}
+        </div>
+      )}
       <div className="py-2 h-full">
         {Object.keys(event.metadata).length === 0 ? (
           <EmptyStateText>

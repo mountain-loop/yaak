@@ -3,18 +3,15 @@ import type {
   HttpResponseEvent,
   HttpResponseEventData,
 } from '@yaakapp-internal/models';
-import { format } from 'date-fns';
 import { type ReactNode, useState } from 'react';
 import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
-import { Button } from './core/Button';
 import { Editor } from './core/Editor/LazyEditor';
-import { EventViewer } from './core/EventViewer';
+import { EventDetailHeader, EventViewer, type EventDetailAction } from './core/EventViewer';
 import { EventViewerRow } from './core/EventViewerRow';
 import { HttpMethodTagRaw } from './core/HttpMethodTag';
 import { HttpStatusTagRaw } from './core/HttpStatusTag';
 import { Icon, type IconProps } from './core/Icon';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
-import { HStack } from './core/Stacks';
 
 interface Props {
   response: HttpResponse;
@@ -73,20 +70,30 @@ function EventDetails({
   setShowRaw: (v: boolean) => void;
 }) {
   const { label } = getEventDisplay(event.event);
-  const timestamp = format(new Date(`${event.createdAt}Z`), 'HH:mm:ss.SSS');
   const e = event.event;
+
+  const actions: EventDetailAction[] = [
+    {
+      key: 'toggle-raw',
+      label: showRaw ? 'Formatted' : 'Text',
+      onClick: () => setShowRaw(!showRaw),
+    },
+  ];
+
+  // Determine the title based on event type
+  const title =
+    e.type === 'header_up'
+      ? 'Header Sent'
+      : e.type === 'header_down'
+        ? 'Header Received'
+        : label;
 
   // Raw view - show plaintext representation
   if (showRaw) {
     const rawText = formatEventRaw(event.event);
     return (
       <div className="flex flex-col gap-2 h-full">
-        <DetailHeader
-          title={label}
-          timestamp={timestamp}
-          showRaw={showRaw}
-          setShowRaw={setShowRaw}
-        />
+        <EventDetailHeader title={title} timestamp={event.createdAt} actions={actions} />
         <Editor language="text" defaultValue={rawText} readOnly stateKey={null} />
       </div>
     );
@@ -96,12 +103,7 @@ function EventDetails({
   if (e.type === 'header_up' || e.type === 'header_down') {
     return (
       <div className="flex flex-col gap-2 h-full">
-        <DetailHeader
-          title={e.type === 'header_down' ? 'Header Received' : 'Header Sent'}
-          timestamp={timestamp}
-          showRaw={showRaw}
-          setShowRaw={setShowRaw}
-        />
+        <EventDetailHeader title={title} timestamp={event.createdAt} actions={actions} />
         <KeyValueRows>
           <KeyValueRow label="Header">{e.name}</KeyValueRow>
           <KeyValueRow label="Value">{e.value}</KeyValueRow>
@@ -114,12 +116,7 @@ function EventDetails({
   if (e.type === 'send_url') {
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader
-          title="Request"
-          timestamp={timestamp}
-          showRaw={showRaw}
-          setShowRaw={setShowRaw}
-        />
+        <EventDetailHeader title="Request" timestamp={event.createdAt} actions={actions} />
         <KeyValueRows>
           <KeyValueRow label="Method">
             <HttpMethodTagRaw forceColor method={e.method} />
@@ -134,12 +131,7 @@ function EventDetails({
   if (e.type === 'receive_url') {
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader
-          title="Response"
-          timestamp={timestamp}
-          showRaw={showRaw}
-          setShowRaw={setShowRaw}
-        />
+        <EventDetailHeader title="Response" timestamp={event.createdAt} actions={actions} />
         <KeyValueRows>
           <KeyValueRow label="HTTP Version">{e.version}</KeyValueRow>
           <KeyValueRow label="Status">
@@ -154,12 +146,7 @@ function EventDetails({
   if (e.type === 'redirect') {
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader
-          title="Redirect"
-          timestamp={timestamp}
-          showRaw={showRaw}
-          setShowRaw={setShowRaw}
-        />
+        <EventDetailHeader title="Redirect" timestamp={event.createdAt} actions={actions} />
         <KeyValueRows>
           <KeyValueRow label="Status">
             <HttpStatusTagRaw status={e.status} />
@@ -177,12 +164,7 @@ function EventDetails({
   if (e.type === 'setting') {
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader
-          title="Apply Setting"
-          timestamp={timestamp}
-          showRaw={showRaw}
-          setShowRaw={setShowRaw}
-        />
+        <EventDetailHeader title="Apply Setting" timestamp={event.createdAt} actions={actions} />
         <KeyValueRows>
           <KeyValueRow label="Setting">{e.name}</KeyValueRow>
           <KeyValueRow label="Value">{e.value}</KeyValueRow>
@@ -196,11 +178,10 @@ function EventDetails({
     const direction = e.type === 'chunk_sent' ? 'Sent' : 'Received';
     return (
       <div className="flex flex-col gap-2">
-        <DetailHeader
+        <EventDetailHeader
           title={`Data ${direction}`}
-          timestamp={timestamp}
-          showRaw={showRaw}
-          setShowRaw={setShowRaw}
+          timestamp={event.createdAt}
+          actions={actions}
         />
         <div className="font-mono text-editor">{formatBytes(e.bytes)}</div>
       </div>
@@ -211,32 +192,8 @@ function EventDetails({
   const { summary } = getEventDisplay(event.event);
   return (
     <div className="flex flex-col gap-1">
-      <DetailHeader title={label} timestamp={timestamp} showRaw={showRaw} setShowRaw={setShowRaw} />
+      <EventDetailHeader title={label} timestamp={event.createdAt} actions={actions} />
       <div className="font-mono text-editor">{summary}</div>
-    </div>
-  );
-}
-
-function DetailHeader({
-  title,
-  timestamp,
-  showRaw,
-  setShowRaw,
-}: {
-  title: string;
-  timestamp: string;
-  showRaw: boolean;
-  setShowRaw: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <HStack space={2} className="items-center">
-        <h3 className="font-semibold select-auto cursor-auto">{title}</h3>
-        <Button variant="border" size="xs" onClick={() => setShowRaw(!showRaw)}>
-          {showRaw ? 'Formatted' : 'Raw'}
-        </Button>
-      </HStack>
-      <span className="text-text-subtlest font-mono text-editor">{timestamp}</span>
     </div>
   );
 }
@@ -245,23 +202,23 @@ function DetailHeader({
 function formatEventRaw(event: HttpResponseEventData): string {
   switch (event.type) {
     case 'send_url':
-      return `> ${event.method} ${event.path}`;
+      return `${event.method} ${event.path}`;
     case 'receive_url':
-      return `< ${event.version} ${event.status}`;
+      return `${event.version} ${event.status}`;
     case 'header_up':
-      return `> ${event.name}: ${event.value}`;
+      return `${event.name}: ${event.value}`;
     case 'header_down':
-      return `< ${event.name}: ${event.value}`;
+      return `${event.name}: ${event.value}`;
     case 'redirect':
-      return `< ${event.status} Redirect: ${event.url}`;
+      return `${event.status} Redirect: ${event.url}`;
     case 'setting':
-      return `[setting] ${event.name} = ${event.value}`;
+      return `${event.name} = ${event.value}`;
     case 'info':
-      return `[info] ${event.message}`;
+      return `${event.message}`;
     case 'chunk_sent':
-      return `> [${formatBytes(event.bytes)} sent]`;
+      return `[${formatBytes(event.bytes)} sent]`;
     case 'chunk_received':
-      return `< [${formatBytes(event.bytes)} received]`;
+      return `[${formatBytes(event.bytes)} received]`;
     default:
       return '[unknown event]';
   }
