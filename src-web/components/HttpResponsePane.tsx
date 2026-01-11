@@ -9,7 +9,7 @@ import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useResponseBodyBytes, useResponseBodyText } from '../hooks/useResponseBodyText';
 import { useResponseViewMode } from '../hooks/useResponseViewMode';
 import { getMimeTypeFromContentType } from '../lib/contentType';
-import { getContentTypeFromHeaders } from '../lib/model_util';
+import { getCookieCounts, getContentTypeFromHeaders } from '../lib/model_util';
 import { ConfirmLargeResponse } from './ConfirmLargeResponse';
 import { ConfirmLargeResponseRequest } from './ConfirmLargeResponseRequest';
 import { Banner } from './core/Banner';
@@ -67,20 +67,10 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
 
   const responseEvents = useHttpResponseEvents(activeResponse);
 
-  const cookieCount = useMemo(() => {
-    if (!responseEvents.data) return 0;
-    let count = 0;
-    for (const event of responseEvents.data) {
-      const e = event.event;
-      if (
-        (e.type === 'header_up' && e.name.toLowerCase() === 'cookie') ||
-        (e.type === 'header_down' && e.name.toLowerCase() === 'set-cookie')
-      ) {
-        count++;
-      }
-    }
-    return count;
-  }, [responseEvents.data]);
+  const cookieCounts = useMemo(
+    () => getCookieCounts(responseEvents.data),
+    [responseEvents.data],
+  );
 
   const tabs = useMemo<TabItem[]>(
     () => [
@@ -107,15 +97,19 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         label: 'Headers',
         rightSlot: (
           <CountBadge
-            count2={activeResponse?.headers.length ?? 0}
             count={activeResponse?.requestHeaders.length ?? 0}
+            count2={activeResponse?.headers.length ?? 0}
+            showZero
           />
         ),
       },
       {
         value: TAB_COOKIES,
         label: 'Cookies',
-        rightSlot: cookieCount > 0 ? <CountBadge count={cookieCount} /> : null,
+        rightSlot:
+          cookieCounts.sent > 0 || cookieCounts.received > 0 ? (
+            <CountBadge count={cookieCounts.sent} count2={cookieCounts.received} showZero />
+          ) : null,
       },
       {
         value: TAB_TIMELINE,
@@ -127,7 +121,8 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       activeResponse?.headers,
       activeResponse?.requestContentLength,
       activeResponse?.requestHeaders.length,
-      cookieCount,
+      cookieCounts.sent,
+      cookieCounts.received,
       mimeType,
       responseEvents.data?.length,
       setViewMode,
