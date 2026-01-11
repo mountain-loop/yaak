@@ -17,17 +17,25 @@ pub enum PushResult {
     NeedsCredentials { url: String, error: Option<String> },
 }
 
-pub fn git_push(dir: &Path) -> Result<PushResult> {
-    let repo = open_repo(dir)?;
-    let branch_name = get_current_branch_name(&repo)?;
-    let remote = get_default_remote_for_push_in_repo(&repo)?;
-    let remote_name = remote.name().ok_or(GenericError("Failed to get remote name".to_string()))?;
-    let remote_url = remote.url().ok_or(GenericError("Failed to get remote url".to_string()))?;
+pub async fn git_push(dir: &Path) -> Result<PushResult> {
+    // Extract all git2 data before any await points (git2 types are not Send)
+    let (branch_name, remote_name, remote_url) = {
+        let repo = open_repo(dir)?;
+        let branch_name = get_current_branch_name(&repo)?;
+        let remote = get_default_remote_for_push_in_repo(&repo)?;
+        let remote_name =
+            remote.name().ok_or(GenericError("Failed to get remote name".to_string()))?.to_string();
+        let remote_url =
+            remote.url().ok_or(GenericError("Failed to get remote url".to_string()))?.to_string();
+        (branch_name, remote_name, remote_url)
+    };
 
-    let out = new_binary_command(dir)?
+    let out = new_binary_command(dir)
+        .await?
         .args(["push", &remote_name, &branch_name])
         .env("GIT_TERMINAL_PROMPT", "0")
         .output()
+        .await
         .map_err(|e| GenericError(format!("failed to run git push: {e}")))?;
 
     let stdout = String::from_utf8_lossy(&out.stdout);

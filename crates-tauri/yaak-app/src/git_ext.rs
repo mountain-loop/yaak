@@ -6,11 +6,10 @@ use crate::error::Result;
 use std::path::{Path, PathBuf};
 use tauri::command;
 use yaak_git::{
-    GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult,
-    git_add, git_add_credential, git_add_remote, git_checkout_branch, git_commit,
-    git_create_branch, git_delete_branch, git_fetch_all, git_init, git_log,
-    git_merge_branch, git_pull, git_push, git_remotes, git_rm_remote, git_status,
-    git_unstage,
+    GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult, git_add, git_add_credential,
+    git_add_remote, git_checkout_branch, git_commit, git_create_branch, git_delete_branch,
+    git_fetch_all, git_init, git_log, git_merge_branch, git_pull, git_push, git_remotes,
+    git_rm_remote, git_status, git_unstage,
 };
 
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
@@ -52,22 +51,22 @@ pub async fn cmd_git_initialize(dir: &Path) -> Result<()> {
 
 #[command]
 pub async fn cmd_git_commit(dir: &Path, message: &str) -> Result<()> {
-    Ok(git_commit(dir, message)?)
+    Ok(git_commit(dir, message).await?)
 }
 
 #[command]
 pub async fn cmd_git_fetch_all(dir: &Path) -> Result<()> {
-    Ok(git_fetch_all(dir)?)
+    Ok(git_fetch_all(dir).await?)
 }
 
 #[command]
 pub async fn cmd_git_push(dir: &Path) -> Result<PushResult> {
-    Ok(git_push(dir)?)
+    Ok(git_push(dir).await?)
 }
 
 #[command]
 pub async fn cmd_git_pull(dir: &Path) -> Result<PullResult> {
-    Ok(git_pull(dir)?)
+    Ok(git_pull(dir).await?)
 }
 
 #[command]

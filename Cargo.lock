@@ -8075,6 +8075,7 @@ name = "yaak-common"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -8121,8 +8122,10 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "thiserror 2.0.17",
+ "tokio",
  "ts-rs",
  "url",
+ "yaak-common",
  "yaak-models",
  "yaak-sync",
 ]
@@ -8149,6 +8152,7 @@ dependencies = [
  "tonic",
  "tonic-reflection",
  "uuid",
+ "yaak-common",
  "yaak-tls",
 ]
 
