@@ -1,4 +1,10 @@
-import type { AnyModel, Cookie, Environment, HttpResponseHeader } from '@yaakapp-internal/models';
+import type {
+  AnyModel,
+  Cookie,
+  Environment,
+  HttpResponseEvent,
+  HttpResponseHeader,
+} from '@yaakapp-internal/models';
 import { getMimeTypeFromContentType } from './contentType';
 
 export const BODY_TYPE_NONE = null;
@@ -58,4 +64,31 @@ export function isSubEnvironment(environment: Environment): boolean {
 
 export function isFolderEnvironment(environment: Environment): boolean {
   return environment.parentModel === 'folder';
+}
+
+export function getCookieCounts(
+  events: HttpResponseEvent[] | undefined,
+): { sent: number; received: number } {
+  if (!events) return { sent: 0, received: 0 };
+
+  // Use Sets to deduplicate by cookie name
+  const sentNames = new Set<string>();
+  const receivedNames = new Set<string>();
+
+  for (const event of events) {
+    const e = event.event;
+    if (e.type === 'header_up' && e.name.toLowerCase() === 'cookie') {
+      // Parse "Cookie: name=value; name2=value2" format
+      for (const pair of e.value.split(';')) {
+        const name = pair.split('=')[0]?.trim();
+        if (name) sentNames.add(name);
+      }
+    } else if (e.type === 'header_down' && e.name.toLowerCase() === 'set-cookie') {
+      // Parse "Set-Cookie: name=value; ..." - first part before ; is name=value
+      const name = e.value.split(';')[0]?.split('=')[0]?.trim();
+      if (name) receivedNames.add(name);
+    }
+  }
+
+  return { sent: sentNames.size, received: receivedNames.size };
 }
