@@ -17,7 +17,7 @@ use tauri::path::BaseDirectory;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{
     AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent, command,
-    generate_handler, is_dev,
+    is_dev,
 };
 use tokio::sync::Mutex;
 use ts_rs::TS;
@@ -132,7 +132,7 @@ impl PluginUpdater {
 // ============================================================================
 
 #[command]
-pub(crate) async fn cmd_plugins_search<R: Runtime>(
+pub async fn cmd_plugins_search<R: Runtime>(
     app_handle: AppHandle<R>,
     query: &str,
 ) -> Result<PluginSearchResponse> {
@@ -141,7 +141,7 @@ pub(crate) async fn cmd_plugins_search<R: Runtime>(
 }
 
 #[command]
-pub(crate) async fn cmd_plugins_install<R: Runtime>(
+pub async fn cmd_plugins_install<R: Runtime>(
     window: WebviewWindow<R>,
     name: &str,
     version: Option<String>,
@@ -163,7 +163,7 @@ pub(crate) async fn cmd_plugins_install<R: Runtime>(
 }
 
 #[command]
-pub(crate) async fn cmd_plugins_uninstall<R: Runtime>(
+pub async fn cmd_plugins_uninstall<R: Runtime>(
     plugin_id: &str,
     window: WebviewWindow<R>,
 ) -> Result<Plugin> {
@@ -174,7 +174,7 @@ pub(crate) async fn cmd_plugins_uninstall<R: Runtime>(
 }
 
 #[command]
-pub(crate) async fn cmd_plugins_updates<R: Runtime>(
+pub async fn cmd_plugins_updates<R: Runtime>(
     app_handle: AppHandle<R>,
 ) -> Result<PluginUpdatesResponse> {
     let http_client = yaak_api_client(&app_handle)?;
@@ -183,7 +183,7 @@ pub(crate) async fn cmd_plugins_updates<R: Runtime>(
 }
 
 #[command]
-pub(crate) async fn cmd_plugins_update_all<R: Runtime>(
+pub async fn cmd_plugins_update_all<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> Result<Vec<PluginNameVersion>> {
     let http_client = yaak_api_client(window.app_handle())?;
@@ -233,13 +233,6 @@ pub(crate) async fn cmd_plugins_update_all<R: Runtime>(
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-plugins")
-        .invoke_handler(generate_handler![
-            cmd_plugins_search,
-            cmd_plugins_install,
-            cmd_plugins_uninstall,
-            cmd_plugins_updates,
-            cmd_plugins_update_all
-        ])
         .setup(|app_handle, _| {
             // Resolve paths for plugin manager
             let vendored_plugin_dir = app_handle
