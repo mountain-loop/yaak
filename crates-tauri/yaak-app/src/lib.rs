@@ -1684,6 +1684,13 @@ pub fn run() {
             git_ext::cmd_git_add_remote,
             git_ext::cmd_git_rm_remote,
             //
+            // Plugin commands
+            plugins_ext::cmd_plugins_search,
+            plugins_ext::cmd_plugins_install,
+            plugins_ext::cmd_plugins_uninstall,
+            plugins_ext::cmd_plugins_updates,
+            plugins_ext::cmd_plugins_update_all,
+            //
             // WebSocket commands
             ws_ext::cmd_ws_upsert_request,
             ws_ext::cmd_ws_duplicate_request,
