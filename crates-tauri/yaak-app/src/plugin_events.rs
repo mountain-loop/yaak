@@ -21,14 +21,7 @@ use yaak_models::queries::any_request::AnyRequest;
 use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::error::Error::PluginErr;
-use yaak_plugins::events::{
-    Color, DeleteKeyValueResponse, EmptyPayload, ErrorResponse, FindHttpResponsesResponse,
-    GetCookieValueResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent,
-    InternalEventPayload, ListCookieNamesResponse, ListHttpRequestsResponse,
-    ListWorkspacesResponse, RenderGrpcRequestResponse, RenderHttpRequestResponse,
-    SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse,
-    WindowInfoResponse, WindowNavigateEvent, WorkspaceInfo,
-};
+use yaak_plugins::events::{Color, DeleteKeyValueResponse, EmptyPayload, ErrorResponse, FindHttpResponsesResponse, GetCookieValueResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, GetWorkspaceMetaResponse, Icon, InternalEvent, InternalEventPayload, ListCookieNamesResponse, ListHttpRequestsResponse, ListWorkspacesResponse, RenderGrpcRequestResponse, RenderHttpRequestResponse, SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse, WindowInfoResponse, WindowNavigateEvent, WorkspaceInfo};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -471,6 +464,17 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
 
             Ok(Some(InternalEventPayload::ListWorkspacesResponse(ListWorkspacesResponse {
                 workspaces,
+            })))
+        }
+
+        InternalEventPayload::GetWorkspaceMetaRequest(_) => {
+            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
+            let workspace = workspace_from_window(&window)
+                .ok_or(PluginErr("Failed to get workspace from window".into()))?;
+            let workspace_meta = app_handle.db().get_or_create_workspace_meta(&workspace.id)?;
+            Ok(Some(InternalEventPayload::GetWorkspaceMetaResponse(GetWorkspaceMetaResponse {
+                id: workspace_meta.id,
+                setting_sync_dir: workspace_meta.setting_sync_dir,
             })))
         }
 

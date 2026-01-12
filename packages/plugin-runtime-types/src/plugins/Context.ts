@@ -27,6 +27,7 @@ import type {
 } from '../bindings/gen_events.ts';
 import type { HttpRequest } from '../bindings/gen_models.ts';
 import type { JsonValue } from '../bindings/serde_json/JsonValue';
+import type {GetWorkspaceMetaResponse} from "@yaakapp-internal/plugins";
 
 export type WorkspaceHandle = Pick<WorkspaceInfo, 'id' | 'name'>;
 
@@ -95,5 +96,6 @@ export interface Context {
   workspace: {
     list(): Promise<WorkspaceHandle[]>;
     withContext(handle: WorkspaceHandle): Context;
+    getMeta(): Promise<GetWorkspaceMetaResponse>;
   };
 }
