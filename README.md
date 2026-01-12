@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/JamesIves/github-sponsors-readme-action">
-    <img width="200px" src="https://github.com/mountain-loop/yaak/raw/main/src-tauri/icons/icon.png">
+    <img width="200px" src="https://github.com/mountain-loop/yaak/raw/main/crates-tauri/yaak-app/icons/icon.png">
   </a>
 </p>
 
