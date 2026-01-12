@@ -188,6 +188,25 @@ function EventDetails({
     );
   }
 
+  // DNS Resolution - show hostname, addresses, and timing
+  if (e.type === 'dns_resolved') {
+    return (
+      <div className="flex flex-col gap-2">
+        <EventDetailHeader
+          title={e.overridden ? 'DNS Override' : 'DNS Resolution'}
+          timestamp={event.createdAt}
+          actions={actions}
+        />
+        <KeyValueRows>
+          <KeyValueRow label="Hostname">{e.hostname}</KeyValueRow>
+          <KeyValueRow label="Addresses">{e.addresses.join(', ')}</KeyValueRow>
+          {!e.overridden && <KeyValueRow label="Duration">{String(e.duration)}ms</KeyValueRow>}
+          {e.overridden && <KeyValueRow label="Source">Workspace Override</KeyValueRow>}
+        </KeyValueRows>
+      </div>
+    );
+  }
+
   // Default - use summary
   const { summary } = getEventDisplay(event.event);
   return (
@@ -219,6 +238,11 @@ function formatEventRaw(event: HttpResponseEventData): string {
       return `[${formatBytes(event.bytes)} sent]`;
     case 'chunk_received':
       return `[${formatBytes(event.bytes)} received]`;
+    case 'dns_resolved':
+      if (event.overridden) {
+        return `DNS override ${event.hostname} → ${event.addresses.join(', ')}`;
+      }
+      return `DNS resolved ${event.hostname} → ${event.addresses.join(', ')} (${event.duration}ms)`;
     default:
       return '[unknown event]';
   }
@@ -296,6 +320,15 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
         color: 'secondary',
         label: 'Chunk',
         summary: `${formatBytes(event.bytes)} chunk received`,
+      };
+    case 'dns_resolved':
+      return {
+        icon: 'search',
+        color: event.overridden ? 'warning' : 'info',
+        label: event.overridden ? 'DNS Override' : 'DNS Resolution',
+        summary: event.overridden
+          ? `${event.hostname} → ${event.addresses.join(', ')} (overridden)`
+          : `${event.hostname} → ${event.addresses.join(', ')} (${event.duration}ms)`,
       };
     default:
       return {

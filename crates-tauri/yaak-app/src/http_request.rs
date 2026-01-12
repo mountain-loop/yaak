@@ -15,7 +15,7 @@ use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::cookies::CookieStore;
-use yaak_http::manager::HttpConnectionManager;
+use yaak_http::manager::{CachedClient, HttpConnectionManager};
 use yaak_http::sender::ReqwestSender;
 use yaak_http::tee_reader::TeeReader;
 use yaak_http::transaction::HttpTransaction;
@@ -228,7 +228,7 @@ async fn send_http_request_inner<R: Runtime>(
         None => None,
     };
 
-    let client = connection_manager
+    let cached_client = connection_manager
         .get_client(&HttpConnectionOptions {
             id: plugin_context.id.clone(),
             validate_certificates: workspace.setting_validate_certificates,
@@ -250,7 +250,7 @@ async fn send_http_request_inner<R: Runtime>(
 
     let cookie_store = maybe_cookie_store.as_ref().map(|(cs, _)| cs.clone());
     let result = execute_transaction(
-        client,
+        cached_client,
         sendable_request,
         response_ctx,
         cancelled_rx.clone(),
@@ -310,7 +310,7 @@ pub fn resolve_http_request<R: Runtime>(
 }
 
 async fn execute_transaction<R: Runtime>(
-    client: reqwest::Client,
+    cached_client: CachedClient,
     mut sendable_request: SendableHttpRequest,
     response_ctx: &mut ResponseContext<R>,
     mut cancelled_rx: Receiver<bool>,
@@ -321,7 +321,10 @@ async fn execute_transaction<R: Runtime>(
     let workspace_id = response_ctx.response().workspace_id.clone();
     let is_persisted = response_ctx.is_persisted();
 
-    let sender = ReqwestSender::with_client(client);
+    // Keep a reference to the resolver for DNS timing events
+    let resolver = cached_client.resolver.clone();
+
+    let sender = ReqwestSender::with_client(cached_client.client);
     let transaction = match cookie_store {
         Some(cs) => HttpTransaction::with_cookie_store(sender, cs),
         None => HttpTransaction::new(sender),
@@ -345,6 +348,9 @@ async fn execute_transaction<R: Runtime>(
     // Buffer size of 100 events provides back pressure if DB writes are slow
     let (event_tx, mut event_rx) =
         tokio::sync::mpsc::channel::<yaak_http::sender::HttpResponseEvent>(100);
+
+    // Set the event sender on the DNS resolver so it can emit DNS timing events
+    resolver.set_event_sender(Some(event_tx.clone())).await;
 
     // Write events to DB in a task (only for persisted responses)
     if is_persisted {
@@ -531,6 +537,9 @@ async fn execute_transaction<R: Runtime>(
         r.content_length = Some(written_bytes as i32);
         r.state = HttpResponseState::Closed;
     })?;
+
+    // Clear the event sender from the resolver since this request is done
+    resolver.set_event_sender(None).await;
 
     Ok((response_ctx.response().clone(), maybe_blob_write_handle))
 }
