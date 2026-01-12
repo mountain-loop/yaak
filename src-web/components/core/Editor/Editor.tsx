@@ -1,5 +1,5 @@
 import { startCompletion } from '@codemirror/autocomplete';
-import { defaultKeymap, historyField, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, historyField, indentWithTab, toggleComment } from '@codemirror/commands';
 import { foldState, forceParsing } from '@codemirror/language';
 import type { EditorStateConfig, Extension } from '@codemirror/state';
 import { Compartment, EditorState } from '@codemirror/state';
@@ -40,6 +40,7 @@ import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { IconButton } from '../IconButton';
 import { HStack } from '../Stacks';
 import './Editor.css';
+import { commentHighlightPlugin } from './commentHighlight';
 import {
   baseExtensions,
   getLanguageExtension,
@@ -55,8 +56,8 @@ const vsCodeWithoutTab = vscodeKeymap.filter((k) => k.key !== 'Tab');
 const keymapExtensions: Record<EditorKeymap, Extension> = {
   vim: vim(),
   emacs: emacs(),
-  vscode: keymap.of(vsCodeWithoutTab),
-  default: [],
+  vscode: keymap.of([...vsCodeWithoutTab, { key: 'Mod-/', run: toggleComment }]),
+  default: keymap.of([{ key: 'Mod-/', run: toggleComment }]),
 };
 
 export interface EditorProps {
@@ -389,6 +390,8 @@ function EditorInner({
           keymapCompartment.current.of(
             keymapExtensions[settings.editorKeymap] ?? keymapExtensions.default,
           ),
+          EditorState.languageData.of(() => [{ commentTokens: { line: '//' } }]),
+          commentHighlightPlugin(),
           ...getExtensions({
             container,
             readOnly,
