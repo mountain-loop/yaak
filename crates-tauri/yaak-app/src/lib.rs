@@ -233,7 +233,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &uri,
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
             &metadata,
-            workspace.setting_validate_certificates,
+            workspace.setting_validate_certificates.unwrap_or(true),
             client_certificate,
             skip_cache.unwrap_or(false),
         )
@@ -327,7 +327,7 @@ async fn cmd_grpc_go<R: Runtime>(
             uri.as_str(),
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
             &metadata,
-            workspace.setting_validate_certificates,
+            workspace.setting_validate_certificates.unwrap_or(true),
             client_cert.clone(),
         )
         .await;

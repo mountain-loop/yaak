@@ -178,11 +178,14 @@ async fn send_http_request_inner<R: Runtime>(
         window.db().resolve_environments(&workspace.id, folder_id, environment_id.as_deref())?;
     let request = render_http_request(&resolved, env_chain, &cb, &RenderOptions::throw()).await?;
 
+    // Resolve inherited settings for this request
+    let resolved_settings = window.db().resolve_settings_for_http_request(&resolved)?;
+
     // Build the sendable request using the new SendableHttpRequest type
     let options = SendableHttpRequestOptions {
-        follow_redirects: workspace.setting_follow_redirects,
-        timeout: if workspace.setting_request_timeout > 0 {
-            Some(Duration::from_millis(workspace.setting_request_timeout.unsigned_abs() as u64))
+        follow_redirects: resolved_settings.follow_redirects,
+        timeout: if resolved_settings.request_timeout > 0 {
+            Some(Duration::from_millis(resolved_settings.request_timeout.unsigned_abs() as u64))
         } else {
             None
         },
@@ -231,7 +234,7 @@ async fn send_http_request_inner<R: Runtime>(
     let client = connection_manager
         .get_client(&HttpConnectionOptions {
             id: plugin_context.id.clone(),
-            validate_certificates: workspace.setting_validate_certificates,
+            validate_certificates: resolved_settings.validate_certificates,
             proxy: proxy_setting,
             client_certificate,
         })

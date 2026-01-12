@@ -20,8 +20,8 @@ impl<'a> DbContext<'a> {
             workspaces.push(self.upsert_workspace(
                 &Workspace {
                     name: "Yaak".to_string(),
-                    setting_follow_redirects: true,
-                    setting_validate_certificates: true,
+                    setting_follow_redirects: Some(true),
+                    setting_validate_certificates: Some(true),
                     ..Default::default()
                 },
                 &UpdateSource::Background,
