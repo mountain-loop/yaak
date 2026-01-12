@@ -7,6 +7,7 @@ use crate::render::render_http_request;
 use log::{debug, warn};
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::{File, create_dir_all};
@@ -239,6 +240,7 @@ async fn send_http_request_inner<R: Runtime>(
             validate_certificates: workspace.setting_validate_certificates,
             proxy: proxy_setting,
             client_certificate,
+            dns_overrides: workspace.setting_dns_overrides.clone(),
         })
         .await?;
 
@@ -357,21 +359,36 @@ async fn execute_transaction<R: Runtime>(
     // Set the event sender on the DNS resolver so it can emit DNS timing events
     resolver.set_event_sender(Some(event_tx.clone())).await;
 
+    // Shared state to capture DNS timing from the event processing task
+    let dns_elapsed = Arc::new(AtomicI32::new(0));
+
     // Write events to DB in a task (only for persisted responses)
     if is_persisted {
         let response_id = response_id.clone();
         let app_handle = app_handle.clone();
         let update_source = response_ctx.update_source.clone();
         let workspace_id = workspace_id.clone();
+        let dns_elapsed = dns_elapsed.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
+                // Capture DNS timing when we see a DNS event
+                if let yaak_http::sender::HttpResponseEvent::DnsResolved { duration, .. } = &event {
+                    dns_elapsed.store(*duration as i32, Ordering::SeqCst);
+                }
                 let db_event = HttpResponseEvent::new(&response_id, &workspace_id, event.into());
                 let _ = app_handle.db().upsert_http_response_event(&db_event, &update_source);
             }
         });
     } else {
-        // For ephemeral responses, just drain the events
-        tokio::spawn(async move { while event_rx.recv().await.is_some() {} });
+        // For ephemeral responses, just drain the events but still capture DNS timing
+        let dns_elapsed = dns_elapsed.clone();
+        tokio::spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                if let yaak_http::sender::HttpResponseEvent::DnsResolved { duration, .. } = &event {
+                    dns_elapsed.store(*duration as i32, Ordering::SeqCst);
+                }
+            }
+        });
     };
 
     // Capture request body as it's sent (only for persisted responses)
@@ -539,6 +556,7 @@ async fn execute_transaction<R: Runtime>(
     // Final update with closed state and accurate byte count
     response_ctx.update(|r| {
         r.elapsed = start.elapsed().as_millis() as i32;
+        r.elapsed_dns = dns_elapsed.load(Ordering::SeqCst);
         r.content_length = Some(written_bytes as i32);
         r.state = HttpResponseState::Closed;
     })?;

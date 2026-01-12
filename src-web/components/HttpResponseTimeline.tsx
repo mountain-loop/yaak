@@ -200,12 +200,19 @@ function EventDetails({
         <KeyValueRows>
           <KeyValueRow label="Hostname">{e.hostname}</KeyValueRow>
           <KeyValueRow label="Addresses">{e.addresses.join(', ')}</KeyValueRow>
-          {e.overridden ? (
-            <KeyValueRow label="Source">Workspace Override</KeyValueRow>
-          ) : (
-            <KeyValueRow label="Duration">{String(e.duration)}ms</KeyValueRow>
-          )}
+          <KeyValueRow label="Duration">
+            {e.overridden ? (
+              <span className="text-text-subtlest">--</span>
+            ) : (
+              `${String(e.duration)}ms`
+            )}
+          </KeyValueRow>
         </KeyValueRows>
+        {e.overridden && (
+          <KeyValueRows>
+            <KeyValueRow label="Source">Workspace Override</KeyValueRow>
+          </KeyValueRows>
+        )}
       </div>
     );
   }
@@ -326,9 +333,9 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
       };
     case 'dns_resolved':
       return {
-        icon: 'search',
-        color: event.overridden ? 'warning' : 'info',
-        label: event.overridden ? 'DNS Override' : 'DNS Resolution',
+        icon: 'globe',
+        color: event.overridden ? 'success' : 'secondary',
+        label: event.overridden ? 'DNS Override' : 'DNS',
         summary: event.overridden
           ? `${event.hostname} → ${event.addresses.join(', ')} (overridden)`
           : `${event.hostname} → ${event.addresses.join(', ')} (${event.duration}ms)`,

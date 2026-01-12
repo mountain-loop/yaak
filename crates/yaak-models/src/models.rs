@@ -73,6 +73,20 @@ pub struct ClientCertificate {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct DnsOverride {
+    pub hostname: String,
+    #[serde(default)]
+    pub ipv4: Vec<String>,
+    #[serde(default)]
+    pub ipv6: Vec<String>,
+    #[serde(default = "default_true")]
+    #[ts(optional, as = "Option<bool>")]
+    pub enabled: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_models.ts")]
@@ -303,6 +317,8 @@ pub struct Workspace {
     #[serde(default = "default_true")]
     pub setting_follow_redirects: bool,
     pub setting_request_timeout: i32,
+    #[serde(default)]
+    pub setting_dns_overrides: Vec<DnsOverride>,
 }
 
 impl UpsertModelInfo for Workspace {
@@ -343,6 +359,7 @@ impl UpsertModelInfo for Workspace {
             (SettingFollowRedirects, self.setting_follow_redirects.into()),
             (SettingRequestTimeout, self.setting_request_timeout.into()),
             (SettingValidateCertificates, self.setting_validate_certificates.into()),
+            (SettingDnsOverrides, serde_json::to_string(&self.setting_dns_overrides)?.into()),
         ])
     }
 
@@ -359,6 +376,7 @@ impl UpsertModelInfo for Workspace {
             WorkspaceIden::SettingFollowRedirects,
             WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingValidateCertificates,
+            WorkspaceIden::SettingDnsOverrides,
         ]
     }
 
@@ -368,6 +386,7 @@ impl UpsertModelInfo for Workspace {
     {
         let headers: String = row.get("headers")?;
         let authentication: String = row.get("authentication")?;
+        let setting_dns_overrides: String = row.get("setting_dns_overrides")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -382,6 +401,7 @@ impl UpsertModelInfo for Workspace {
             setting_follow_redirects: row.get("setting_follow_redirects")?,
             setting_request_timeout: row.get("setting_request_timeout")?,
             setting_validate_certificates: row.get("setting_validate_certificates")?,
+            setting_dns_overrides: serde_json::from_str(&setting_dns_overrides).unwrap_or_default(),
         })
     }
 }

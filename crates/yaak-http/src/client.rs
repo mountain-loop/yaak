@@ -3,6 +3,7 @@ use crate::error::Result;
 use log::{debug, info, warn};
 use reqwest::{Client, Proxy, redirect};
 use std::sync::Arc;
+use yaak_models::models::DnsOverride;
 use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 #[derive(Clone)]
@@ -29,6 +30,7 @@ pub struct HttpConnectionOptions {
     pub validate_certificates: bool,
     pub proxy: HttpConnectionProxySetting,
     pub client_certificate: Option<ClientCertificateConfig>,
+    pub dns_overrides: Vec<DnsOverride>,
 }
 
 impl HttpConnectionOptions {
@@ -44,7 +46,10 @@ impl HttpConnectionOptions {
             .no_brotli()
             .no_deflate()
             .referer(false)
-            .tls_info(true);
+            .tls_info(true)
+            // Disable connection pooling to ensure DNS resolution happens on each request
+            // This is needed so we can emit DNS timing events for each request
+            .pool_max_idle_per_host(0);
 
         // Configure TLS with optional client certificate
         let config =
@@ -52,7 +57,7 @@ impl HttpConnectionOptions {
         client = client.use_preconfigured_tls(config);
 
         // Configure DNS resolver - keep a reference to configure per-request
-        let resolver = LocalhostResolver::new();
+        let resolver = LocalhostResolver::new(self.dns_overrides.clone());
         client = client.dns_resolver(resolver.clone());
 
         // Configure proxy
