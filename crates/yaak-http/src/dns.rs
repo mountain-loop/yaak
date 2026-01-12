@@ -19,10 +19,7 @@ pub struct LocalhostResolver {
 impl LocalhostResolver {
     pub fn new() -> Arc<Self> {
         let resolver = HyperGaiResolver::new();
-        Arc::new(Self {
-            fallback: resolver,
-            event_tx: Arc::new(RwLock::new(None)),
-        })
+        Arc::new(Self { fallback: resolver, event_tx: Arc::new(RwLock::new(None)) })
     }
 
     /// Set the event sender for the current request.

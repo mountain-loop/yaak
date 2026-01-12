@@ -1,5 +1,8 @@
+use crate::PluginContextExt;
 use crate::error::Error::GenericError;
 use crate::error::Result;
+use crate::models_ext::BlobManagerExt;
+use crate::models_ext::QueryManagerExt;
 use crate::render::render_http_request;
 use log::{debug, warn};
 use std::pin::Pin;
@@ -22,15 +25,12 @@ use yaak_http::transaction::HttpTransaction;
 use yaak_http::types::{
     SendableBody, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
 };
-use crate::models_ext::BlobManagerExt;
 use yaak_models::blob_manager::BodyChunk;
 use yaak_models::models::{
     CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
-use crate::PluginContextExt;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
 };
@@ -173,7 +173,12 @@ async fn send_http_request_inner<R: Runtime>(
     let environment_id = environment.map(|e| e.id);
     let workspace = window.db().get_workspace(workspace_id)?;
     let (resolved, auth_context_id) = resolve_http_request(window, unrendered_request)?;
-    let cb = PluginTemplateCallback::new(plugin_manager.clone(), encryption_manager.clone(), &plugin_context, RenderPurpose::Send);
+    let cb = PluginTemplateCallback::new(
+        plugin_manager.clone(),
+        encryption_manager.clone(),
+        &plugin_context,
+        RenderPurpose::Send,
+    );
     let env_chain =
         window.db().resolve_environments(&workspace.id, folder_id, environment_id.as_deref())?;
     let request = render_http_request(&resolved, env_chain, &cb, &RenderOptions::throw()).await?;

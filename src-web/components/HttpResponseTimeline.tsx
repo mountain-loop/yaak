@@ -200,8 +200,11 @@ function EventDetails({
         <KeyValueRows>
           <KeyValueRow label="Hostname">{e.hostname}</KeyValueRow>
           <KeyValueRow label="Addresses">{e.addresses.join(', ')}</KeyValueRow>
-          {!e.overridden && <KeyValueRow label="Duration">{String(e.duration)}ms</KeyValueRow>}
-          {e.overridden && <KeyValueRow label="Source">Workspace Override</KeyValueRow>}
+          {e.overridden ? (
+            <KeyValueRow label="Source">Workspace Override</KeyValueRow>
+          ) : (
+            <KeyValueRow label="Duration">{String(e.duration)}ms</KeyValueRow>
+          )}
         </KeyValueRows>
       </div>
     );

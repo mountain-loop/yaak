@@ -77,7 +77,13 @@ impl Display for HttpResponseEvent {
                 if *overridden {
                     write!(f, "* DNS override {} -> {}", hostname, addresses.join(", "))
                 } else {
-                    write!(f, "* DNS resolved {} to {} ({}ms)", hostname, addresses.join(", "), duration)
+                    write!(
+                        f,
+                        "* DNS resolved {} to {} ({}ms)",
+                        hostname,
+                        addresses.join(", "),
+                        duration
+                    )
                 }
             }
         }

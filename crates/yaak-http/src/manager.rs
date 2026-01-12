@@ -45,10 +45,7 @@ impl HttpConnectionManager {
         }
 
         let (client, resolver) = opt.build_client()?;
-        let cached = CachedClient {
-            client: client.clone(),
-            resolver: resolver.clone(),
-        };
+        let cached = CachedClient { client: client.clone(), resolver: resolver.clone() };
         connections.insert(id.into(), (cached, Instant::now()));
 
         Ok(CachedClient { client, resolver })
