@@ -15,17 +15,30 @@ function getCommentDecorations(view: EditorView): DecorationSet {
   for (let i = 1; i <= view.state.doc.lines; i++) {
     const line = view.state.doc.line(i);
     const text = line.text;
-    const trimmed = text.trimStart();
 
-    if (trimmed.startsWith('//')) {
-      const commentStart = line.from + text.indexOf('//');
-      decorations.push(commentMark.range(commentStart, line.to));
+    const commentIndex = text.indexOf('//');
+
+    if (commentIndex !== -1) {
+      // Check if it's at the start or after some code
+      const beforeComment = text.substring(0, commentIndex).trim();
+
+      // Highlight if: line starts with // OR there's code before it (like after a comma)
+      if (
+        beforeComment === '' ||
+        beforeComment.endsWith(',') ||
+        beforeComment.endsWith('{') ||
+        beforeComment.endsWith('[')
+      ) {
+        const commentStart = line.from + commentIndex;
+        decorations.push(commentMark.range(commentStart, line.to));
+      }
     }
   }
 
   // Handle multi-line comments
   const multiLineRegex = /\/\*[\s\S]*?\*\//g;
   let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: Standard pattern for regex matching
   while ((match = multiLineRegex.exec(doc)) !== null) {
     decorations.push(commentMark.range(match.index, match.index + match[0].length));
   }
