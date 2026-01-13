@@ -369,7 +369,12 @@ function TabButton({
   const btnProps: Partial<ButtonProps> = {
     color: 'custom',
     justify: layout === 'horizontal' ? 'start' : 'center',
-    onClick: isActive ? undefined : () => onChangeValue(tab.value),
+    onClick: isActive
+      ? undefined
+      : (e: React.MouseEvent) => {
+          e.preventDefault(); // Prevent dropdown from opening on first click
+          onChangeValue(tab.value);
+        },
     className: classNames(
       'flex items-center rounded whitespace-nowrap',
       '!px-2 ml-[1px]',
