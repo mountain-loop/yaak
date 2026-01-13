@@ -80,10 +80,7 @@ pub async fn check_plugin_updates(
 }
 
 /// Search for plugins in the registry.
-pub async fn search_plugins(
-    http_client: &Client,
-    query: &str,
-) -> Result<PluginSearchResponse> {
+pub async fn search_plugins(http_client: &Client, query: &str) -> Result<PluginSearchResponse> {
     let mut url = build_url("/search");
     {
         let mut query_pairs = url.query_pairs_mut();
