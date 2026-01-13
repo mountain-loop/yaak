@@ -15,7 +15,7 @@ use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{PluginContext, RenderPurpose};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
-use yaak_templates::{parse_and_render, render_json_value_raw, RenderOptions};
+use yaak_templates::{RenderOptions, parse_and_render, render_json_value_raw};
 
 #[derive(Parser)]
 #[command(name = "yaakcli")]
@@ -149,14 +149,7 @@ async fn render_http_request(
     // Apply path placeholders (e.g., /users/:id -> /users/123)
     let (url, url_parameters) = apply_path_placeholders(&url, &url_parameters);
 
-    Ok(HttpRequest {
-        url,
-        url_parameters,
-        headers,
-        body,
-        authentication,
-        ..r.to_owned()
-    })
+    Ok(HttpRequest { url, url_parameters, headers, body, authentication, ..r.to_owned() })
 }
 
 #[tokio::main]
@@ -169,16 +162,10 @@ async fn main() {
     }
 
     // Use the same app_id for both data directory and keyring
-    let app_id = if cfg!(debug_assertions) {
-        "app.yaak.desktop.dev"
-    } else {
-        "app.yaak.desktop"
-    };
+    let app_id = if cfg!(debug_assertions) { "app.yaak.desktop.dev" } else { "app.yaak.desktop" };
 
     let data_dir = cli.data_dir.unwrap_or_else(|| {
-        dirs::data_dir()
-            .expect("Could not determine data directory")
-            .join(app_id)
+        dirs::data_dir().expect("Could not determine data directory").join(app_id)
     });
 
     let db_path = data_dir.join("db.sqlite");
@@ -191,9 +178,7 @@ async fn main() {
 
     // Initialize encryption manager for secure() template function
     // Use the same app_id as the Tauri app for keyring access
-    let encryption_manager = Arc::new(
-        EncryptionManager::new(query_manager.clone(), app_id),
-    );
+    let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 
     // Initialize plugin manager for template functions
     let vendored_plugin_dir = data_dir.join("vendored-plugins");
@@ -203,9 +188,8 @@ async fn main() {
     let node_bin_path = PathBuf::from("node");
 
     // Find the plugin runtime - check YAAK_PLUGIN_RUNTIME env var, then fallback to development path
-    let plugin_runtime_main = std::env::var("YAAK_PLUGIN_RUNTIME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
+    let plugin_runtime_main =
+        std::env::var("YAAK_PLUGIN_RUNTIME").map(PathBuf::from).unwrap_or_else(|_| {
             // Development fallback: look relative to crate root
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../../crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs")
@@ -226,14 +210,10 @@ async fn main() {
     // Initialize plugins from database
     let plugins = db.list_plugins().unwrap_or_default();
     if !plugins.is_empty() {
-        let errors = plugin_manager
-            .initialize_all_plugins(plugins, &PluginContext::new_empty())
-            .await;
+        let errors =
+            plugin_manager.initialize_all_plugins(plugins, &PluginContext::new_empty()).await;
         for (plugin_dir, error_msg) in errors {
-            eprintln!(
-                "Warning: Failed to initialize plugin '{}': {}",
-                plugin_dir, error_msg
-            );
+            eprintln!("Warning: Failed to initialize plugin '{}': {}", plugin_dir, error_msg);
         }
     }
 
@@ -249,9 +229,7 @@ async fn main() {
             }
         }
         Commands::Requests { workspace_id } => {
-            let requests = db
-                .list_http_requests(&workspace_id)
-                .expect("Failed to list requests");
+            let requests = db.list_http_requests(&workspace_id).expect("Failed to list requests");
             if requests.is_empty() {
                 println!("No requests found in workspace {}", workspace_id);
             } else {
@@ -261,9 +239,7 @@ async fn main() {
             }
         }
         Commands::Send { request_id } => {
-            let request = db
-                .get_http_request(&request_id)
-                .expect("Failed to get request");
+            let request = db.get_http_request(&request_id).expect("Failed to get request");
 
             // Resolve environment chain for variable substitution
             let environment_chain = db
@@ -318,18 +294,13 @@ async fn main() {
                 }))
             } else {
                 // Drain events silently
-                tokio::spawn(async move {
-                    while event_rx.recv().await.is_some() {}
-                });
+                tokio::spawn(async move { while event_rx.recv().await.is_some() {} });
                 None
             };
 
             // Send the request
             let sender = ReqwestSender::new().expect("Failed to create HTTP client");
-            let response = sender
-                .send(sendable, event_tx)
-                .await
-                .expect("Failed to send request");
+            let response = sender.send(sendable, event_tx).await.expect("Failed to send request");
 
             // Wait for event handler to finish
             if let Some(handle) = verbose_handle {
@@ -383,18 +354,13 @@ async fn main() {
                     }
                 }))
             } else {
-                tokio::spawn(async move {
-                    while event_rx.recv().await.is_some() {}
-                });
+                tokio::spawn(async move { while event_rx.recv().await.is_some() {} });
                 None
             };
 
             // Send the request
             let sender = ReqwestSender::new().expect("Failed to create HTTP client");
-            let response = sender
-                .send(sendable, event_tx)
-                .await
-                .expect("Failed to send request");
+            let response = sender.send(sendable, event_tx).await.expect("Failed to send request");
 
             if let Some(handle) = verbose_handle {
                 let _ = handle.await;
@@ -421,12 +387,7 @@ async fn main() {
             let (body, _stats) = response.text().await.expect("Failed to read response body");
             println!("{}", body);
         }
-        Commands::Create {
-            workspace_id,
-            name,
-            method,
-            url,
-        } => {
+        Commands::Create { workspace_id, name, method, url } => {
             let request = HttpRequest {
                 workspace_id,
                 name,

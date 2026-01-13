@@ -13,6 +13,7 @@ import { InlineCode } from './core/InlineCode';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
+import { DnsOverridesEditor } from './DnsOverridesEditor';
 import { HeadersEditor } from './HeadersEditor';
 import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -27,11 +28,13 @@ interface Props {
 
 const TAB_AUTH = 'auth';
 const TAB_DATA = 'data';
+const TAB_DNS = 'dns';
 const TAB_HEADERS = 'headers';
 const TAB_GENERAL = 'general';
 
 export type WorkspaceSettingsTab =
   | typeof TAB_AUTH
+  | typeof TAB_DNS
   | typeof TAB_HEADERS
   | typeof TAB_GENERAL
   | typeof TAB_DATA;
@@ -75,6 +78,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
           value: TAB_DATA,
           label: 'Storage',
         },
+        { value: TAB_DNS, label: 'DNS' },
         ...headersTab,
         ...authTab,
       ]}
@@ -152,6 +156,9 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
           />
           <WorkspaceEncryptionSetting size="xs" />
         </VStack>
+      </TabContent>
+      <TabContent value={TAB_DNS} className="overflow-y-auto h-full px-4">
+        <DnsOverridesEditor workspace={workspace} />
       </TabContent>
     </Tabs>
   );

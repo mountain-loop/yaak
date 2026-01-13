@@ -196,7 +196,11 @@ pub fn decrypt_secure_template_function(
                     }
                 }
                 new_tokens.push(Token::Raw {
-                    text: template_function_secure_run(encryption_manager, args_map, plugin_context)?,
+                    text: template_function_secure_run(
+                        encryption_manager,
+                        args_map,
+                        plugin_context,
+                    )?,
                 });
             }
             t => {
@@ -216,7 +220,8 @@ pub fn encrypt_secure_template_function(
     plugin_context: &PluginContext,
     template: &str,
 ) -> Result<String> {
-    let decrypted = decrypt_secure_template_function(&encryption_manager, plugin_context, template)?;
+    let decrypted =
+        decrypt_secure_template_function(&encryption_manager, plugin_context, template)?;
     let tokens = Tokens {
         tokens: vec![Token::Tag {
             val: Val::Fn {
@@ -231,7 +236,12 @@ pub fn encrypt_secure_template_function(
 
     Ok(transform_args(
         tokens,
-        &PluginTemplateCallback::new(plugin_manager, encryption_manager, plugin_context, RenderPurpose::Preview),
+        &PluginTemplateCallback::new(
+            plugin_manager,
+            encryption_manager,
+            plugin_context,
+            RenderPurpose::Preview,
+        ),
     )?
     .to_string())
 }

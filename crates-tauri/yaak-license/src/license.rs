@@ -8,10 +8,10 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use ts_rs::TS;
 use yaak_common::platform::get_os_str;
-use yaak_tauri_utils::api_client::yaak_api_client;
 use yaak_models::db_context::DbContext;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
+use yaak_tauri_utils::api_client::yaak_api_client;
 
 /// Extension trait for accessing the QueryManager from Tauri Manager types.
 /// This is needed temporarily until all crates are refactored to not use Tauri.

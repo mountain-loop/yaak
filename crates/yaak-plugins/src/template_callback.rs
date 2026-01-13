@@ -46,7 +46,11 @@ impl TemplateCallback for PluginTemplateCallback {
         let fn_name = if fn_name == "Response" { "response" } else { fn_name };
 
         if fn_name == "secure" {
-            return template_function_secure_run(&self.encryption_manager, args, &self.plugin_context);
+            return template_function_secure_run(
+                &self.encryption_manager,
+                args,
+                &self.plugin_context,
+            );
         } else if fn_name == "keychain" || fn_name == "keyring" {
             return template_function_keychain_run(args);
         }
@@ -56,7 +60,8 @@ impl TemplateCallback for PluginTemplateCallback {
             primitive_args.insert(key, JsonPrimitive::from(value));
         }
 
-        let resp = self.plugin_manager
+        let resp = self
+            .plugin_manager
             .call_template_function(
                 &self.plugin_context,
                 fn_name,

@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
-use crate::error::Result;
 use crate::PluginContextExt;
+use crate::error::Result;
+use crate::models_ext::QueryManagerExt;
 use KeyAndValueRef::{Ascii, Binary};
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak_grpc::{KeyAndValueRef, MetadataMap};
 use yaak_models::models::GrpcRequest;
-use crate::models_ext::QueryManagerExt;
 use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader};
 use yaak_plugins::manager::PluginManager;
 

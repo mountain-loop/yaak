@@ -19,7 +19,8 @@ export function HttpResponseDurationTag({ response }: Props) {
     return () => clearInterval(timeout.current);
   }, [response.createdAt, response.state]);
 
-  const title = `HEADER: ${formatMillis(response.elapsedHeaders)}\nTOTAL: ${formatMillis(response.elapsed)}`;
+  const dnsValue = response.elapsedDns > 0 ? formatMillis(response.elapsedDns) : '--';
+  const title = `DNS: ${dnsValue}\nHEADER: ${formatMillis(response.elapsedHeaders)}\nTOTAL: ${formatMillis(response.elapsed)}`;
 
   const elapsed = response.state === 'closed' ? response.elapsed : fallbackElapsed;
 

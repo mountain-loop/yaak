@@ -1,9 +1,9 @@
 //! WebSocket Tauri command wrappers
 //! These wrap the core yaak-ws functionality for Tauri IPC.
 
+use crate::PluginContextExt;
 use crate::error::Result;
 use crate::models_ext::QueryManagerExt;
-use crate::PluginContextExt;
 use http::HeaderMap;
 use log::{debug, info, warn};
 use std::str::FromStr;
@@ -56,9 +56,10 @@ pub async fn cmd_ws_delete_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketRequest> {
-    Ok(app_handle
-        .db()
-        .delete_websocket_request_by_id(request_id, &UpdateSource::from_window_label(window.label()))?)
+    Ok(app_handle.db().delete_websocket_request_by_id(
+        request_id,
+        &UpdateSource::from_window_label(window.label()),
+    )?)
 }
 
 #[command]
@@ -67,12 +68,10 @@ pub async fn cmd_ws_delete_connection<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> Result<WebsocketConnection> {
-    Ok(app_handle
-        .db()
-        .delete_websocket_connection_by_id(
-            connection_id,
-            &UpdateSource::from_window_label(window.label()),
-        )?)
+    Ok(app_handle.db().delete_websocket_connection_by_id(
+        connection_id,
+        &UpdateSource::from_window_label(window.label()),
+    )?)
 }
 
 #[command]
@@ -296,8 +295,10 @@ pub async fn cmd_ws_connect<R: Runtime>(
                 )
                 .await?;
             for header in plugin_result.set_headers.unwrap_or_default() {
-                match (http::HeaderName::from_str(&header.name), HeaderValue::from_str(&header.value))
-                {
+                match (
+                    http::HeaderName::from_str(&header.name),
+                    HeaderValue::from_str(&header.value),
+                ) {
                     (Ok(name), Ok(value)) => {
                         headers.insert(name, value);
                     }

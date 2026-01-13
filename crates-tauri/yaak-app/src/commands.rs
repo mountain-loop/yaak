@@ -1,5 +1,5 @@
-use crate::error::Result;
 use crate::PluginContextExt;
+use crate::error::Result;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow, command};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -54,7 +54,12 @@ pub(crate) async fn cmd_secure_template<R: Runtime>(
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let plugin_context = window.plugin_context();
-    Ok(encrypt_secure_template_function(plugin_manager, encryption_manager, &plugin_context, template)?)
+    Ok(encrypt_secure_template_function(
+        plugin_manager,
+        encryption_manager,
+        &plugin_context,
+        template,
+    )?)
 }
 
 #[command]

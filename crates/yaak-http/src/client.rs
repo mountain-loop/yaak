@@ -2,6 +2,8 @@ use crate::dns::LocalhostResolver;
 use crate::error::Result;
 use log::{debug, info, warn};
 use reqwest::{Client, Proxy, redirect};
+use std::sync::Arc;
+use yaak_models::models::DnsOverride;
 use yaak_tls::{ClientCertificateConfig, get_tls_config};
 
 #[derive(Clone)]
@@ -28,10 +30,14 @@ pub struct HttpConnectionOptions {
     pub validate_certificates: bool,
     pub proxy: HttpConnectionProxySetting,
     pub client_certificate: Option<ClientCertificateConfig>,
+    pub dns_overrides: Vec<DnsOverride>,
 }
 
 impl HttpConnectionOptions {
-    pub(crate) fn build_client(&self) -> Result<Client> {
+    /// Build a reqwest Client and return it along with the DNS resolver.
+    /// The resolver is returned separately so it can be configured per-request
+    /// to emit DNS timing events to the appropriate channel.
+    pub(crate) fn build_client(&self) -> Result<(Client, Arc<LocalhostResolver>)> {
         let mut client = Client::builder()
             .connection_verbose(true)
             .redirect(redirect::Policy::none())
@@ -40,15 +46,19 @@ impl HttpConnectionOptions {
             .no_brotli()
             .no_deflate()
             .referer(false)
-            .tls_info(true);
+            .tls_info(true)
+            // Disable connection pooling to ensure DNS resolution happens on each request
+            // This is needed so we can emit DNS timing events for each request
+            .pool_max_idle_per_host(0);
 
         // Configure TLS with optional client certificate
         let config =
             get_tls_config(self.validate_certificates, true, self.client_certificate.clone())?;
         client = client.use_preconfigured_tls(config);
 
-        // Configure DNS resolver
-        client = client.dns_resolver(LocalhostResolver::new());
+        // Configure DNS resolver - keep a reference to configure per-request
+        let resolver = LocalhostResolver::new(self.dns_overrides.clone());
+        client = client.dns_resolver(resolver.clone());
 
         // Configure proxy
         match self.proxy.clone() {
@@ -69,7 +79,7 @@ impl HttpConnectionOptions {
             self.client_certificate.is_some()
         );
 
-        Ok(client.build()?)
+        Ok((client.build()?, resolver))
     }
 }
 

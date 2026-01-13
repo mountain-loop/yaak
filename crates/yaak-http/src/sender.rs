@@ -45,6 +45,12 @@ pub enum HttpResponseEvent {
     ChunkReceived {
         bytes: usize,
     },
+    DnsResolved {
+        hostname: String,
+        addresses: Vec<String>,
+        duration: u64,
+        overridden: bool,
+    },
 }
 
 impl Display for HttpResponseEvent {
@@ -67,6 +73,19 @@ impl Display for HttpResponseEvent {
             HttpResponseEvent::HeaderDown(name, value) => write!(f, "< {}: {}", name, value),
             HttpResponseEvent::ChunkSent { bytes } => write!(f, "> [{} bytes sent]", bytes),
             HttpResponseEvent::ChunkReceived { bytes } => write!(f, "< [{} bytes received]", bytes),
+            HttpResponseEvent::DnsResolved { hostname, addresses, duration, overridden } => {
+                if *overridden {
+                    write!(f, "* DNS override {} -> {}", hostname, addresses.join(", "))
+                } else {
+                    write!(
+                        f,
+                        "* DNS resolved {} to {} ({}ms)",
+                        hostname,
+                        addresses.join(", "),
+                        duration
+                    )
+                }
+            }
         }
     }
 }
@@ -93,6 +112,9 @@ impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
             HttpResponseEvent::HeaderDown(name, value) => D::HeaderDown { name, value },
             HttpResponseEvent::ChunkSent { bytes } => D::ChunkSent { bytes },
             HttpResponseEvent::ChunkReceived { bytes } => D::ChunkReceived { bytes },
+            HttpResponseEvent::DnsResolved { hostname, addresses, duration, overridden } => {
+                D::DnsResolved { hostname, addresses, duration, overridden }
+            }
         }
     }
 }
