@@ -4,15 +4,15 @@ import type { HTMLAttributes, ReactElement, ReactNode } from 'react';
 interface Props {
   children:
     | ReactElement<HTMLAttributes<HTMLTableColElement>>
-    | ReactElement<HTMLAttributes<HTMLTableColElement>>[];
+    | (ReactElement<HTMLAttributes<HTMLTableColElement>> | null)[];
 }
 
 export function KeyValueRows({ children }: Props) {
-  children = Array.isArray(children) ? children : [children];
+  const childArray = Array.isArray(children) ? children.filter(Boolean) : [children];
   return (
     <table className="text-editor font-mono min-w-0 w-full mb-auto">
       <tbody className="divide-y divide-surface-highlight">
-        {children.map((child, i) => (
+        {childArray.map((child, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: none
           <tr key={i}>{child}</tr>
         ))}
