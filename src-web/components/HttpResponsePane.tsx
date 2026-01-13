@@ -205,7 +205,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
               tabs={tabs}
               label="Response"
               className="ml-3 mr-3 mb-3 min-h-0 flex-1"
-              tabListClassName="mt-0.5"
+              tabListClassName="mt-0.5 -mb-1.5"
               storageKey="http_response_tabs_order"
             >
               <TabContent value={TAB_BODY}>
