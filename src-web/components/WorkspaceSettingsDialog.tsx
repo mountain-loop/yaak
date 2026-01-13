@@ -9,6 +9,7 @@ import { router } from '../lib/router';
 import { CopyIconButton } from './CopyIconButton';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
+import { CountBadge } from './core/CountBadge';
 import { InlineCode } from './core/InlineCode';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
@@ -78,10 +79,18 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
           value: TAB_DATA,
           label: 'Storage',
         },
-        { value: TAB_DNS, label: 'DNS' },
         ...headersTab,
         ...authTab,
+        {
+          value: TAB_DNS,
+          label: 'DNS',
+          rightSlot:
+            workspace.settingDnsOverrides.length > 0 ? (
+              <CountBadge count={workspace.settingDnsOverrides.length} />
+            ) : null,
+        },
       ]}
+      storageKey="workspace_settings_tabs_order"
     >
       <TabContent value={TAB_AUTH} className="overflow-y-auto h-full px-4">
         <HttpAuthenticationEditor model={workspace} />
