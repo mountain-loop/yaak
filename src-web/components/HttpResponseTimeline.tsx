@@ -193,7 +193,7 @@ function EventDetails({
               `${String(e.duration)}ms`
             )}
           </KeyValueRow>
-          {e.overridden && <KeyValueRow label="Source">Workspace Override</KeyValueRow>}
+          {e.overridden ? <KeyValueRow label="Source">Workspace Override</KeyValueRow> : null}
         </KeyValueRows>
       );
     }
