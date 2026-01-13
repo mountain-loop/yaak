@@ -378,7 +378,8 @@ impl PluginManager {
         plugins: Vec<PluginHandle>,
         timeout_duration: Duration,
     ) -> Result<Vec<InternalEvent>> {
-        let label = format!("wait[{}.{}]", plugins.len(), payload.type_name());
+        let event_type = payload.type_name();
+        let label = format!("wait[{}.{}]", plugins.len(), event_type);
         let (rx_id, mut rx) = self.subscribe(label.as_str()).await;
 
         // 1. Build the events with IDs and everything
@@ -412,10 +413,21 @@ impl PluginManager {
 
                 // Timeout to prevent hanging forever if plugin doesn't respond
                 if timeout(timeout_duration, collect_events).await.is_err() {
+                    let responded_ids: Vec<&String> =
+                        found_events.iter().filter_map(|e| e.reply_id.as_ref()).collect();
+                    let non_responding: Vec<&str> = events_to_send
+                        .iter()
+                        .filter(|e| !responded_ids.contains(&&e.id))
+                        .map(|e| e.plugin_name.as_str())
+                        .collect();
                     warn!(
-                        "Timeout waiting for plugin responses. Got {}/{} responses",
+                        "Timeout ({:?}) waiting for {} responses. Got {}/{} responses. \
+                        Non-responding plugins: [{}]",
+                        timeout_duration,
+                        event_type,
                         found_events.len(),
-                        events_to_send.len()
+                        events_to_send.len(),
+                        non_responding.join(", ")
                     );
                 }
 
