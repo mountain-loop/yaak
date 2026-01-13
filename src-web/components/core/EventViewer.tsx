@@ -10,6 +10,8 @@ import { Button } from './Button';
 import { Separator } from './Separator';
 import { SplitLayout } from './SplitLayout';
 import { HStack } from './Stacks';
+import { IconButton } from './IconButton';
+import classNames from 'classnames';
 
 interface EventViewerProps<T> {
   /** Array of events to display */
@@ -27,7 +29,7 @@ interface EventViewerProps<T> {
   }) => ReactNode;
 
   /** Render the detail pane for the selected event */
-  renderDetail?: (props: { event: T; index: number }) => ReactNode;
+  renderDetail?: (props: { event: T; index: number; onClose: () => void }) => ReactNode;
 
   /** Optional header above the event list (e.g., connection status) */
   header?: ReactNode;
@@ -73,6 +75,7 @@ export function EventViewer<T>({
   onActiveIndexChange,
 }: EventViewerProps<T>) {
   const [activeIndex, setActiveIndexInternal] = useState<number | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   // Wrap setActiveIndex to notify parent
   const setActiveIndex = useCallback(
@@ -107,6 +110,8 @@ export function EventViewer<T>({
     virtualizer: virtualizerRef.current,
     isContainerFocused,
     enabled: enableKeyboardNav,
+    closePanel: () => setIsPanelOpen(false),
+    openPanel: () => setIsPanelOpen(true),
   });
 
   // Handle virtualizer ready callback
@@ -117,13 +122,22 @@ export function EventViewer<T>({
     [],
   );
 
-  // Toggle selection on click
+  // Handle row click - select and open panel, scroll into view
   const handleRowClick = useCallback(
     (index: number) => {
-      setActiveIndex((prev) => (prev === index ? null : index));
+      setActiveIndex(index);
+      setIsPanelOpen(true);
+      // Scroll to ensure selected item is visible after panel opens
+      requestAnimationFrame(() => {
+        virtualizerRef.current?.scrollToIndex(index, { align: 'auto' });
+      });
     },
     [setActiveIndex],
   );
+
+  const handleClose = useCallback(() => {
+    setIsPanelOpen(false);
+  }, []);
 
   if (isLoading) {
     return <div className="p-3 text-text-subtlest italic">{loadingMessage}</div>;
@@ -168,14 +182,14 @@ export function EventViewer<T>({
           </div>
         )}
         secondSlot={
-          activeEvent != null && renderDetail
+          activeEvent != null && renderDetail && isPanelOpen
             ? ({ style }) => (
                 <div style={style} className="grid grid-rows-[auto_minmax(0,1fr)] bg-surface">
                   <div className="pb-3 px-2">
                     <Separator />
                   </div>
                   <div className="mx-2 overflow-y-auto">
-                    {renderDetail({ event: activeEvent, index: activeIndex ?? 0 })}
+                    {renderDetail({ event: activeEvent, index: activeIndex ?? 0, onClose: handleClose })}
                   </div>
                 </div>
               )
@@ -198,28 +212,30 @@ export interface EventDetailAction {
 }
 
 interface EventDetailHeaderProps {
-  /** Title/label for the event */
   title: string;
-  /** Timestamp string (ISO format) - will be formatted as HH:mm:ss.SSS */
+  prefix?: ReactNode;
   timestamp?: string;
-  /** Optional action buttons to show before timestamp */
   actions?: EventDetailAction[];
-  /** Text to copy when copy button is clicked - renders a copy icon button after actions */
   copyText?: string;
+  onClose?: () => void;
 }
 
-/** Standardized header for event detail panes */
 export function EventDetailHeader({
   title,
+  prefix,
   timestamp,
   actions,
   copyText,
+  onClose,
 }: EventDetailHeaderProps) {
   const formattedTime = timestamp ? format(new Date(`${timestamp}Z`), 'HH:mm:ss.SSS') : null;
 
   return (
     <div className="flex items-center justify-between gap-2 mb-2 h-xs">
-      <h3 className="font-semibold select-auto cursor-auto">{title}</h3>
+      <HStack space={2} className="items-center min-w-0">
+        {prefix}
+        <h3 className="font-semibold select-auto cursor-auto truncate">{title}</h3>
+      </HStack>
       <HStack space={2} className="items-center">
         {actions?.map((action) => (
           <Button key={action.key} variant="border" size="xs" onClick={action.onClick}>
@@ -231,8 +247,11 @@ export function EventDetailHeader({
           <CopyIconButton text={copyText} size="xs" title="Copy" variant="border" iconSize="sm" />
         )}
         {formattedTime && (
-          <span className="text-text-subtlest font-mono text-editor">{formattedTime}</span>
+          <span className="text-text-subtlest font-mono text-editor ml-2">{formattedTime}</span>
         )}
+        <div className={classNames(copyText != null || formattedTime || (actions ?? []).length > 0 && "border-l border-l-surface-highlight ml-2 pl-3")}>
+        <IconButton color="custom" className="text-text-subtle -mr-3" size="xs" icon="x" title="Close event panel" onClick={onClose} />
+        </div>
       </HStack>
     </div>
   );
