@@ -33,9 +33,16 @@ export function HeadersEditor({
 }: Props) {
   const validInheritedHeaders =
     inheritedHeaders?.filter((pair) => pair.enabled && (pair.name || pair.value)) ?? [];
+  const hasInheritedHeaders = validInheritedHeaders.length > 0;
   return (
-    <div className="@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)] gap-y-1.5">
-      {validInheritedHeaders.length > 0 ? (
+    <div
+      className={
+        hasInheritedHeaders
+          ? '@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)] gap-y-1.5'
+          : '@container w-full h-full'
+      }
+    >
+      {hasInheritedHeaders && (
         <DetailsBanner
           color="secondary"
           className="text-sm"
@@ -63,8 +70,6 @@ export function HeadersEditor({
             ))}
           </div>
         </DetailsBanner>
-      ) : (
-        <span />
       )}
       <PairOrBulkEditor
         forceUpdateKey={forceUpdateKey}
