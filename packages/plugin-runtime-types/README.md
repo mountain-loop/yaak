@@ -17,7 +17,7 @@ npx @yaakapp/cli generate
 ```
 
 For more details on creating plugins, check out
-the [Quick Start Guide](https://feedback.yaak.app/help/articles/6911763-plugins-quick-start)
+the [Quick Start Guide](https://yaak.app/docs/plugin-development/plugins-quick-start)
 
 ## Installation
 
