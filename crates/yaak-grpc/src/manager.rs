@@ -340,10 +340,9 @@ impl GrpcHandle {
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
         client_cert: Option<ClientCertificateConfig>,
-        skip_cache: bool,
     ) -> Result<Vec<ServiceDefinition>> {
         // Ensure we have a pool; reflect only if missing
-        if skip_cache || self.get_pool(id, uri, proto_files).is_none() {
+        if self.get_pool(id, uri, proto_files).is_none() {
             info!("Reflecting gRPC services for {} at {}", id, uri);
             self.reflect(id, uri, proto_files, metadata, validate_certificates, client_cert)
                 .await?;

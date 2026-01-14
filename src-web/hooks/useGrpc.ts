@@ -54,7 +54,7 @@ export function useGrpc(
     queryFn: () => {
       const environmentId = jotaiStore.get(activeEnvironmentIdAtom);
       return minPromiseMillis<ReflectResponseService[]>(
-        invokeCmd('cmd_grpc_reflect', { requestId, protoFiles, environmentId, skipCache: true }),
+        invokeCmd('cmd_grpc_reflect', { requestId, protoFiles, environmentId }),
         300,
       );
     },
