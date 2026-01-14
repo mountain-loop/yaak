@@ -7,7 +7,7 @@ interface EventViewerRowProps {
   onClick: () => void;
   icon: ReactNode;
   content: ReactNode;
-  timestamp: string;
+  timestamp?: string;
 }
 
 export function EventViewerRow({
@@ -25,13 +25,13 @@ export function EventViewerRow({
         className={classNames(
           'w-full grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 items-center text-left',
           'px-1.5 h-xs font-mono text-editor cursor-default group focus:outline-none focus:text-text rounded',
-          isActive && '!bg-surface-active !text-text',
+          isActive && 'bg-surface-active !text-text',
           'text-text-subtle hover:text',
         )}
       >
         {icon}
         <div className="w-full truncate">{content}</div>
-        <div className="opacity-50">{format(`${timestamp}Z`, 'HH:mm:ss.SSS')}</div>
+        {timestamp && <div className="opacity-50">{format(`${timestamp}Z`, 'HH:mm:ss.SSS')}</div>}
       </button>
     </div>
   );

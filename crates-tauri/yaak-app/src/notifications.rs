@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::history::get_or_upsert_launch_info;
+use crate::models_ext::QueryManagerExt;
 use chrono::{DateTime, Utc};
 use log::{debug, info};
 use reqwest::Method;
@@ -8,9 +9,8 @@ use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 use yaak_common::platform::get_os_str;
-use yaak_tauri_utils::api_client::yaak_api_client;
-use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
+use yaak_tauri_utils::api_client::yaak_api_client;
 
 // Check for updates every hour
 const MAX_UPDATE_CHECK_SECONDS: u64 = 60 * 60;

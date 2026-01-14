@@ -1,5 +1,7 @@
 use crate::error::Result;
 use crate::http_request::send_http_request_with_context;
+use crate::models_ext::BlobManagerExt;
+use crate::models_ext::QueryManagerExt;
 use crate::render::{render_grpc_request, render_http_request, render_json_value};
 use crate::window::{CreateWindowConfig, create_window};
 use crate::{
@@ -14,11 +16,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
 use yaak_crypto::manager::EncryptionManager;
-use yaak_tauri_utils::window::WorkspaceWindowTrait;
-use crate::models_ext::BlobManagerExt;
 use yaak_models::models::{AnyModel, HttpResponse, Plugin};
 use yaak_models::queries::any_request::AnyRequest;
-use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{
@@ -32,6 +31,7 @@ use yaak_plugins::events::{
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
+use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
 
 pub(crate) async fn handle_plugin_event<R: Runtime>(
@@ -170,7 +170,12 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             )?;
             let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
             let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
-            let cb = PluginTemplateCallback::new(plugin_manager, encryption_manager, &plugin_context, req.purpose);
+            let cb = PluginTemplateCallback::new(
+                plugin_manager,
+                encryption_manager,
+                &plugin_context,
+                req.purpose,
+            );
             let opt = RenderOptions { error_behavior: RenderErrorBehavior::Throw };
             let grpc_request =
                 render_grpc_request(&req.grpc_request, environment_chain, &cb, &opt).await?;
@@ -191,7 +196,12 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             )?;
             let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
             let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
-            let cb = PluginTemplateCallback::new(plugin_manager, encryption_manager, &plugin_context, req.purpose);
+            let cb = PluginTemplateCallback::new(
+                plugin_manager,
+                encryption_manager,
+                &plugin_context,
+                req.purpose,
+            );
             let opt = &RenderOptions { error_behavior: RenderErrorBehavior::Throw };
             let http_request =
                 render_http_request(&req.http_request, environment_chain, &cb, &opt).await?;
@@ -222,7 +232,12 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             )?;
             let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
             let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
-            let cb = PluginTemplateCallback::new(plugin_manager, encryption_manager, &plugin_context, req.purpose);
+            let cb = PluginTemplateCallback::new(
+                plugin_manager,
+                encryption_manager,
+                &plugin_context,
+                req.purpose,
+            );
             let opt = RenderOptions { error_behavior: RenderErrorBehavior::Throw };
             let data = render_json_value(req.data, environment_chain, &cb, &opt).await?;
             Ok(Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data })))

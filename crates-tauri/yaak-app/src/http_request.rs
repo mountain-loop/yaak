@@ -1,9 +1,13 @@
+use crate::PluginContextExt;
 use crate::error::Error::GenericError;
 use crate::error::Result;
+use crate::models_ext::BlobManagerExt;
+use crate::models_ext::QueryManagerExt;
 use crate::render::render_http_request;
 use log::{debug, warn};
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::fs::{File, create_dir_all};
@@ -15,22 +19,19 @@ use yaak_http::client::{
     HttpConnectionOptions, HttpConnectionProxySetting, HttpConnectionProxySettingAuth,
 };
 use yaak_http::cookies::CookieStore;
-use yaak_http::manager::HttpConnectionManager;
+use yaak_http::manager::{CachedClient, HttpConnectionManager};
 use yaak_http::sender::ReqwestSender;
 use yaak_http::tee_reader::TeeReader;
 use yaak_http::transaction::HttpTransaction;
 use yaak_http::types::{
     SendableBody, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
 };
-use crate::models_ext::BlobManagerExt;
 use yaak_models::blob_manager::BodyChunk;
 use yaak_models::models::{
     CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseHeader,
     HttpResponseState, ProxySetting, ProxySettingAuth,
 };
-use crate::models_ext::QueryManagerExt;
 use yaak_models::util::UpdateSource;
-use crate::PluginContextExt;
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
 };
@@ -173,7 +174,12 @@ async fn send_http_request_inner<R: Runtime>(
     let environment_id = environment.map(|e| e.id);
     let workspace = window.db().get_workspace(workspace_id)?;
     let (resolved, auth_context_id) = resolve_http_request(window, unrendered_request)?;
-    let cb = PluginTemplateCallback::new(plugin_manager.clone(), encryption_manager.clone(), &plugin_context, RenderPurpose::Send);
+    let cb = PluginTemplateCallback::new(
+        plugin_manager.clone(),
+        encryption_manager.clone(),
+        &plugin_context,
+        RenderPurpose::Send,
+    );
     let env_chain =
         window.db().resolve_environments(&workspace.id, folder_id, environment_id.as_deref())?;
     let request = render_http_request(&resolved, env_chain, &cb, &RenderOptions::throw()).await?;
@@ -228,12 +234,13 @@ async fn send_http_request_inner<R: Runtime>(
         None => None,
     };
 
-    let client = connection_manager
+    let cached_client = connection_manager
         .get_client(&HttpConnectionOptions {
             id: plugin_context.id.clone(),
             validate_certificates: workspace.setting_validate_certificates,
             proxy: proxy_setting,
             client_certificate,
+            dns_overrides: workspace.setting_dns_overrides.clone(),
         })
         .await?;
 
@@ -250,7 +257,7 @@ async fn send_http_request_inner<R: Runtime>(
 
     let cookie_store = maybe_cookie_store.as_ref().map(|(cs, _)| cs.clone());
     let result = execute_transaction(
-        client,
+        cached_client,
         sendable_request,
         response_ctx,
         cancelled_rx.clone(),
@@ -310,7 +317,7 @@ pub fn resolve_http_request<R: Runtime>(
 }
 
 async fn execute_transaction<R: Runtime>(
-    client: reqwest::Client,
+    cached_client: CachedClient,
     mut sendable_request: SendableHttpRequest,
     response_ctx: &mut ResponseContext<R>,
     mut cancelled_rx: Receiver<bool>,
@@ -321,7 +328,10 @@ async fn execute_transaction<R: Runtime>(
     let workspace_id = response_ctx.response().workspace_id.clone();
     let is_persisted = response_ctx.is_persisted();
 
-    let sender = ReqwestSender::with_client(client);
+    // Keep a reference to the resolver for DNS timing events
+    let resolver = cached_client.resolver.clone();
+
+    let sender = ReqwestSender::with_client(cached_client.client);
     let transaction = match cookie_store {
         Some(cs) => HttpTransaction::with_cookie_store(sender, cs),
         None => HttpTransaction::new(sender),
@@ -346,21 +356,39 @@ async fn execute_transaction<R: Runtime>(
     let (event_tx, mut event_rx) =
         tokio::sync::mpsc::channel::<yaak_http::sender::HttpResponseEvent>(100);
 
+    // Set the event sender on the DNS resolver so it can emit DNS timing events
+    resolver.set_event_sender(Some(event_tx.clone())).await;
+
+    // Shared state to capture DNS timing from the event processing task
+    let dns_elapsed = Arc::new(AtomicI32::new(0));
+
     // Write events to DB in a task (only for persisted responses)
     if is_persisted {
         let response_id = response_id.clone();
         let app_handle = app_handle.clone();
         let update_source = response_ctx.update_source.clone();
         let workspace_id = workspace_id.clone();
+        let dns_elapsed = dns_elapsed.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
+                // Capture DNS timing when we see a DNS event
+                if let yaak_http::sender::HttpResponseEvent::DnsResolved { duration, .. } = &event {
+                    dns_elapsed.store(*duration as i32, Ordering::SeqCst);
+                }
                 let db_event = HttpResponseEvent::new(&response_id, &workspace_id, event.into());
                 let _ = app_handle.db().upsert_http_response_event(&db_event, &update_source);
             }
         });
     } else {
-        // For ephemeral responses, just drain the events
-        tokio::spawn(async move { while event_rx.recv().await.is_some() {} });
+        // For ephemeral responses, just drain the events but still capture DNS timing
+        let dns_elapsed = dns_elapsed.clone();
+        tokio::spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                if let yaak_http::sender::HttpResponseEvent::DnsResolved { duration, .. } = &event {
+                    dns_elapsed.store(*duration as i32, Ordering::SeqCst);
+                }
+            }
+        });
     };
 
     // Capture request body as it's sent (only for persisted responses)
@@ -528,9 +556,13 @@ async fn execute_transaction<R: Runtime>(
     // Final update with closed state and accurate byte count
     response_ctx.update(|r| {
         r.elapsed = start.elapsed().as_millis() as i32;
+        r.elapsed_dns = dns_elapsed.load(Ordering::SeqCst);
         r.content_length = Some(written_bytes as i32);
         r.state = HttpResponseState::Closed;
     })?;
+
+    // Clear the event sender from the resolver since this request is done
+    resolver.set_event_sender(None).await;
 
     Ok((response_ctx.response().clone(), maybe_blob_write_handle))
 }

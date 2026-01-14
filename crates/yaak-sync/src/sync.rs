@@ -296,11 +296,7 @@ pub fn compute_sync_ops(
         .collect()
 }
 
-fn workspace_models(
-    db: &DbContext,
-    version: &str,
-    workspace_id: &str,
-) -> Result<Vec<SyncModel>> {
+fn workspace_models(db: &DbContext, version: &str, workspace_id: &str) -> Result<Vec<SyncModel>> {
     // We want to include private environments here so that we can take them into account during
     // the sync process. Otherwise, they would be treated as deleted.
     let include_private_environments = true;
