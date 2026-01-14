@@ -1,18 +1,18 @@
+use crate::PluginContextExt;
 use crate::error::Result;
 use crate::import::import_data;
 use crate::models_ext::QueryManagerExt;
-use crate::PluginContextExt;
 use log::{info, warn};
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Url};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-use yaak_tauri_utils::api_client::yaak_api_client;
 use yaak_models::util::generate_id;
 use yaak_plugins::events::{Color, ShowToastRequest};
 use yaak_plugins::install::download_and_install;
 use yaak_plugins::manager::PluginManager;
+use yaak_tauri_utils::api_client::yaak_api_client;
 
 pub(crate) async fn handle_deep_link<R: Runtime>(
     app_handle: &AppHandle<R>,
@@ -55,7 +55,8 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                 &plugin_context,
                 name,
                 version,
-            ).await?;
+            )
+            .await?;
             app_handle.emit(
                 "show_toast",
                 ShowToastRequest {

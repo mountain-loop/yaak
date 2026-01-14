@@ -47,8 +47,8 @@ function Inner({ response }: Props) {
           />
         );
       }}
-      renderDetail={({ event }) => (
-        <EventDetails event={event} showRaw={showRaw} setShowRaw={setShowRaw} />
+      renderDetail={({ event, onClose }) => (
+        <EventDetails event={event} showRaw={showRaw} setShowRaw={setShowRaw} onClose={onClose} />
       )}
     />
   );
@@ -64,10 +64,12 @@ function EventDetails({
   event,
   showRaw,
   setShowRaw,
+  onClose,
 }: {
   event: HttpResponseEvent;
   showRaw: boolean;
   setShowRaw: (v: boolean) => void;
+  onClose: () => void;
 }) {
   const { label } = getEventDisplay(event.event);
   const e = event.event;
@@ -81,72 +83,76 @@ function EventDetails({
   ];
 
   // Determine the title based on event type
-  const title =
-    e.type === 'header_up'
-      ? 'Header Sent'
-      : e.type === 'header_down'
-        ? 'Header Received'
-        : label;
+  const title = (() => {
+    switch (e.type) {
+      case 'header_up':
+        return 'Header Sent';
+      case 'header_down':
+        return 'Header Received';
+      case 'send_url':
+        return 'Request';
+      case 'receive_url':
+        return 'Response';
+      case 'redirect':
+        return 'Redirect';
+      case 'setting':
+        return 'Apply Setting';
+      case 'chunk_sent':
+        return 'Data Sent';
+      case 'chunk_received':
+        return 'Data Received';
+      case 'dns_resolved':
+        return e.overridden ? 'DNS Override' : 'DNS Resolution';
+      default:
+        return label;
+    }
+  })();
 
-  // Raw view - show plaintext representation
-  if (showRaw) {
-    const rawText = formatEventRaw(event.event);
-    return (
-      <div className="flex flex-col gap-2 h-full">
-        <EventDetailHeader title={title} timestamp={event.createdAt} actions={actions} />
-        <Editor language="text" defaultValue={rawText} readOnly stateKey={null} />
-      </div>
-    );
-  }
+  // Render content based on view mode and event type
+  const renderContent = () => {
+    // Raw view - show plaintext representation
+    if (showRaw) {
+      const rawText = formatEventRaw(event.event);
+      return <Editor language="text" defaultValue={rawText} readOnly stateKey={null} />;
+    }
 
-  // Headers - show name and value with Editor for JSON
-  if (e.type === 'header_up' || e.type === 'header_down') {
-    return (
-      <div className="flex flex-col gap-2 h-full">
-        <EventDetailHeader title={title} timestamp={event.createdAt} actions={actions} />
+    // Headers - show name and value
+    if (e.type === 'header_up' || e.type === 'header_down') {
+      return (
         <KeyValueRows>
           <KeyValueRow label="Header">{e.name}</KeyValueRow>
           <KeyValueRow label="Value">{e.value}</KeyValueRow>
         </KeyValueRows>
-      </div>
-    );
-  }
+      );
+    }
 
-  // Request URL - show method and path separately
-  if (e.type === 'send_url') {
-    return (
-      <div className="flex flex-col gap-2">
-        <EventDetailHeader title="Request" timestamp={event.createdAt} actions={actions} />
+    // Request URL - show method and path separately
+    if (e.type === 'send_url') {
+      return (
         <KeyValueRows>
           <KeyValueRow label="Method">
             <HttpMethodTagRaw forceColor method={e.method} />
           </KeyValueRow>
           <KeyValueRow label="Path">{e.path}</KeyValueRow>
         </KeyValueRows>
-      </div>
-    );
-  }
+      );
+    }
 
-  // Response status - show version and status separately
-  if (e.type === 'receive_url') {
-    return (
-      <div className="flex flex-col gap-2">
-        <EventDetailHeader title="Response" timestamp={event.createdAt} actions={actions} />
+    // Response status - show version and status separately
+    if (e.type === 'receive_url') {
+      return (
         <KeyValueRows>
           <KeyValueRow label="HTTP Version">{e.version}</KeyValueRow>
           <KeyValueRow label="Status">
             <HttpStatusTagRaw status={e.status} />
           </KeyValueRow>
         </KeyValueRows>
-      </div>
-    );
-  }
+      );
+    }
 
-  // Redirect - show status, URL, and behavior
-  if (e.type === 'redirect') {
-    return (
-      <div className="flex flex-col gap-2">
-        <EventDetailHeader title="Redirect" timestamp={event.createdAt} actions={actions} />
+    // Redirect - show status, URL, and behavior
+    if (e.type === 'redirect') {
+      return (
         <KeyValueRows>
           <KeyValueRow label="Status">
             <HttpStatusTagRaw status={e.status} />
@@ -156,44 +162,50 @@ function EventDetails({
             {e.behavior === 'drop_body' ? 'Drop body, change to GET' : 'Preserve method and body'}
           </KeyValueRow>
         </KeyValueRows>
-      </div>
-    );
-  }
+      );
+    }
 
-  // Settings - show as key/value
-  if (e.type === 'setting') {
-    return (
-      <div className="flex flex-col gap-2">
-        <EventDetailHeader title="Apply Setting" timestamp={event.createdAt} actions={actions} />
+    // Settings - show as key/value
+    if (e.type === 'setting') {
+      return (
         <KeyValueRows>
           <KeyValueRow label="Setting">{e.name}</KeyValueRow>
           <KeyValueRow label="Value">{e.value}</KeyValueRow>
         </KeyValueRows>
-      </div>
-    );
-  }
+      );
+    }
 
-  // Chunks - show formatted bytes
-  if (e.type === 'chunk_sent' || e.type === 'chunk_received') {
-    const direction = e.type === 'chunk_sent' ? 'Sent' : 'Received';
-    return (
-      <div className="flex flex-col gap-2">
-        <EventDetailHeader
-          title={`Data ${direction}`}
-          timestamp={event.createdAt}
-          actions={actions}
-        />
-        <div className="font-mono text-editor">{formatBytes(e.bytes)}</div>
-      </div>
-    );
-  }
+    // Chunks - show formatted bytes
+    if (e.type === 'chunk_sent' || e.type === 'chunk_received') {
+      return <div className="font-mono text-editor">{formatBytes(e.bytes)}</div>;
+    }
 
-  // Default - use summary
-  const { summary } = getEventDisplay(event.event);
+    // DNS Resolution - show hostname, addresses, and timing
+    if (e.type === 'dns_resolved') {
+      return (
+        <KeyValueRows>
+          <KeyValueRow label="Hostname">{e.hostname}</KeyValueRow>
+          <KeyValueRow label="Addresses">{e.addresses.join(', ')}</KeyValueRow>
+          <KeyValueRow label="Duration">
+            {e.overridden ? (
+              <span className="text-text-subtlest">--</span>
+            ) : (
+              `${String(e.duration)}ms`
+            )}
+          </KeyValueRow>
+          {e.overridden ? <KeyValueRow label="Source">Workspace Override</KeyValueRow> : null}
+        </KeyValueRows>
+      );
+    }
+
+    // Default - use summary
+    const { summary } = getEventDisplay(event.event);
+    return <div className="font-mono text-editor">{summary}</div>;
+  };
   return (
-    <div className="flex flex-col gap-1">
-      <EventDetailHeader title={label} timestamp={event.createdAt} actions={actions} />
-      <div className="font-mono text-editor">{summary}</div>
+    <div className="flex flex-col gap-2 h-full">
+      <EventDetailHeader title={title} timestamp={event.createdAt} actions={actions} onClose={onClose} />
+      {renderContent()}
     </div>
   );
 }
@@ -219,6 +231,11 @@ function formatEventRaw(event: HttpResponseEventData): string {
       return `[${formatBytes(event.bytes)} sent]`;
     case 'chunk_received':
       return `[${formatBytes(event.bytes)} received]`;
+    case 'dns_resolved':
+      if (event.overridden) {
+        return `DNS override ${event.hostname} → ${event.addresses.join(', ')}`;
+      }
+      return `DNS resolved ${event.hostname} → ${event.addresses.join(', ')} (${event.duration}ms)`;
     default:
       return '[unknown event]';
   }
@@ -250,7 +267,7 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
     case 'redirect':
       return {
         icon: 'arrow_big_right_dash',
-        color: 'warning',
+        color: 'success',
         label: 'Redirect',
         summary: `Redirecting ${event.status} ${event.url}${event.behavior === 'drop_body' ? ' (drop body)' : ''}`,
       };
@@ -296,6 +313,15 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
         color: 'secondary',
         label: 'Chunk',
         summary: `${formatBytes(event.bytes)} chunk received`,
+      };
+    case 'dns_resolved':
+      return {
+        icon: 'globe',
+        color: event.overridden ? 'success' : 'secondary',
+        label: event.overridden ? 'DNS Override' : 'DNS',
+        summary: event.overridden
+          ? `${event.hostname} → ${event.addresses.join(', ')} (overridden)`
+          : `${event.hostname} → ${event.addresses.join(', ')} (${event.duration}ms)`,
       };
     default:
       return {

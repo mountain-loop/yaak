@@ -80,7 +80,7 @@ export function AutoScroller<T>({
       {header ?? <span aria-hidden />}
       <div
         ref={containerRef}
-        className="h-full w-full overflow-y-auto"
+        className="h-full w-full overflow-y-auto focus:outline-none"
         onScroll={handleScroll}
         tabIndex={focusable ? 0 : undefined}
       >

@@ -9,6 +9,8 @@ interface UseEventViewerKeyboardProps {
   virtualizer?: Virtualizer<HTMLDivElement, Element> | null;
   isContainerFocused: () => boolean;
   enabled?: boolean;
+  closePanel?: () => void;
+  openPanel?: () => void;
 }
 
 export function useEventViewerKeyboard({
@@ -18,6 +20,8 @@ export function useEventViewerKeyboard({
   virtualizer,
   isContainerFocused,
   enabled = true,
+  closePanel,
+  openPanel,
 }: UseEventViewerKeyboardProps) {
   const selectPrev = useCallback(() => {
     if (totalCount === 0) return;
@@ -62,9 +66,20 @@ export function useEventViewerKeyboard({
     (e) => {
       if (!enabled || !isContainerFocused()) return;
       e.preventDefault();
-      setActiveIndex(null);
+      closePanel?.();
     },
     undefined,
-    [enabled, isContainerFocused, setActiveIndex],
+    [enabled, isContainerFocused, closePanel],
+  );
+
+  useKey(
+    (e) => e.key === 'Enter' || e.key === ' ',
+    (e) => {
+      if (!enabled || !isContainerFocused() || activeIndex == null) return;
+      e.preventDefault();
+      openPanel?.();
+    },
+    undefined,
+    [enabled, isContainerFocused, activeIndex, openPanel],
   );
 }

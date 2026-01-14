@@ -12,6 +12,8 @@ export type CookieExpires = { "AtUtc": string } | "SessionEnd";
 
 export type CookieJar = { model: "cookie_jar", id: string, createdAt: string, updatedAt: string, workspaceId: string, cookies: Array<Cookie>, name: string, };
 
+export type DnsOverride = { hostname: string, ipv4: Array<string>, ipv6: Array<string>, enabled?: boolean, };
+
 export type EditorKeymap = "default" | "vim" | "vscode" | "emacs";
 
 export type EncryptedKey = { encryptedKey: string, };
@@ -38,7 +40,7 @@ export type HttpRequest = { model: "http_request", id: string, createdAt: string
 
 export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, id?: string, };
 
-export type HttpResponse = { model: "http_response", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, bodyPath: string | null, contentLength: number | null, contentLengthCompressed: number | null, elapsed: number, elapsedHeaders: number, error: string | null, headers: Array<HttpResponseHeader>, remoteAddr: string | null, requestContentLength: number | null, requestHeaders: Array<HttpResponseHeader>, status: number, statusReason: string | null, state: HttpResponseState, url: string, version: string | null, };
+export type HttpResponse = { model: "http_response", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, bodyPath: string | null, contentLength: number | null, contentLengthCompressed: number | null, elapsed: number, elapsedHeaders: number, elapsedDns: number, error: string | null, headers: Array<HttpResponseHeader>, remoteAddr: string | null, requestContentLength: number | null, requestHeaders: Array<HttpResponseHeader>, status: number, statusReason: string | null, state: HttpResponseState, url: string, version: string | null, };
 
 export type HttpResponseEvent = { model: "http_response_event", id: string, createdAt: string, updatedAt: string, workspaceId: string, responseId: string, event: HttpResponseEventData, };
 
@@ -47,7 +49,7 @@ export type HttpResponseEvent = { model: "http_response_event", id: string, crea
  * This mirrors `yaak_http::sender::HttpResponseEvent` but with serde support.
  * The `From` impl is in yaak-http to avoid circular dependencies.
  */
-export type HttpResponseEventData = { "type": "setting", name: string, value: string, } | { "type": "info", message: string, } | { "type": "redirect", url: string, status: number, behavior: string, } | { "type": "send_url", method: string, path: string, } | { "type": "receive_url", version: string, status: string, } | { "type": "header_up", name: string, value: string, } | { "type": "header_down", name: string, value: string, } | { "type": "chunk_sent", bytes: number, } | { "type": "chunk_received", bytes: number, };
+export type HttpResponseEventData = { "type": "setting", name: string, value: string, } | { "type": "info", message: string, } | { "type": "redirect", url: string, status: number, behavior: string, } | { "type": "send_url", method: string, path: string, } | { "type": "receive_url", version: string, status: string, } | { "type": "header_up", name: string, value: string, } | { "type": "header_down", name: string, value: string, } | { "type": "chunk_sent", bytes: number, } | { "type": "chunk_received", bytes: number, } | { "type": "dns_resolved", hostname: string, addresses: Array<string>, duration: bigint, overridden: boolean, };
 
 export type HttpResponseHeader = { name: string, value: string, };
 
@@ -77,6 +79,6 @@ export type WebsocketEventType = "binary" | "close" | "frame" | "open" | "ping" 
 
 export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
-export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
+export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, settingDnsOverrides: Array<DnsOverride>, };
 
 export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, encryptionKey: EncryptedKey | null, settingSyncDir: string | null, };
