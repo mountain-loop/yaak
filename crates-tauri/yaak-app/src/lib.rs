@@ -189,7 +189,6 @@ async fn cmd_grpc_reflect<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
     proto_files: Vec<String>,
-    skip_cache: Option<bool>,
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
@@ -224,18 +223,21 @@ async fn cmd_grpc_reflect<R: Runtime>(
     let settings = window.db().get_settings();
     let client_certificate =
         find_client_certificate(req.url.as_str(), &settings.client_certificates);
+    let proto_files: Vec<PathBuf> =
+        proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect();
 
-    Ok(grpc_handle
-        .lock()
-        .await
+    // Always invalidate cached pool when this command is called, to force re-reflection
+    let mut handle = grpc_handle.lock().await;
+    handle.invalidate_pool(&req.id, &uri, &proto_files);
+
+    Ok(handle
         .services(
             &req.id,
             &uri,
-            &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
+            &proto_files,
             &metadata,
             workspace.setting_validate_certificates,
             client_certificate,
-            skip_cache.unwrap_or(false),
         )
         .await
         .map_err(|e| GenericError(e.to_string()))?)
