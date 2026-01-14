@@ -376,6 +376,9 @@ impl HttpSender for ReqwestSender {
 
         // Add headers
         for header in request.headers {
+            if header.0.is_empty() {
+                continue;
+            }
             req_builder = req_builder.header(&header.0, &header.1);
         }
 
