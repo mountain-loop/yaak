@@ -291,6 +291,7 @@ function Sidebar({ className }: { className?: string }) {
         },
       },
       'request.send': {
+        priority: -1,
         enable,
         cb: async (items: SidebarModel[]) => {
           await Promise.all(
