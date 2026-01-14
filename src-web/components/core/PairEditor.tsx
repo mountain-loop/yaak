@@ -136,8 +136,8 @@ export function PairEditor({
       rowsRef.current[id] = n;
       const validHandles = Object.values(rowsRef.current).filter((v) => v != null);
 
-      // NOTE: Ignore the last placeholder pair
-      const ready = validHandles.length === pairs.length - 1;
+      // Use >= because more might be added if an ID of one changes (eg. editing placeholder in URL regenerates fresh pairs every keystroke)
+      const ready = validHandles.length >= pairs.length - 1;
       if (ready) {
         setRef?.(handle);
       }
