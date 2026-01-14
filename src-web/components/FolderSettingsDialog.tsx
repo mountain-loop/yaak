@@ -113,7 +113,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
             <VStack alignItems="center" space={1.5}>
               <p>
                 Override{' '}
-                <Link href="https://feedback.yaak.app/help/articles/3284139-environments-and-variables">
+                <Link href="https://yaak.app/docs/using-yaak/environments-and-variables">
                   Variables
                 </Link>{' '}
                 for requests within this folder.

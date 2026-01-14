@@ -117,7 +117,7 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
                   icon="help"
                   title="View documentation"
                   onClick={() =>
-                    openUrl('https://feedback.yaak.app/help/articles/6911763-quick-start')
+                    openUrl('https://yaak.app/docs/plugin-development/plugins-quick-start')
                   }
                 />
               </HStack>

@@ -64,7 +64,7 @@ visit [`DEVELOPMENT.md`](DEVELOPMENT.md) for tips on setting up your environment
 ## Useful Resources
 
 - [Feedback and Bug Reports](https://feedback.yaak.app)
-- [Documentation](https://feedback.yaak.app/help)
+- [Documentation](https://yaak.app/docs)
 - [Yaak vs Postman](https://yaak.app/alternatives/postman)
 - [Yaak vs Bruno](https://yaak.app/alternatives/bruno)
 - [Yaak vs Insomnia](https://yaak.app/alternatives/insomnia)
