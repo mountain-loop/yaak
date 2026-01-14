@@ -7,7 +7,7 @@ import {
   replaceModelsInStore,
 } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { activeRequestIdAtom } from './useActiveRequestId';
 
@@ -60,7 +60,7 @@ export const activeGrpcConnectionAtom = atom<GrpcConnection | null>((get) => {
 });
 
 export function useGrpcEvents(connectionId: string | null) {
-  const events = useAtomValue(grpcEventsAtom);
+  const allEvents = useAtomValue(grpcEventsAtom);
 
   useEffect(() => {
     if (connectionId == null) {
@@ -68,12 +68,14 @@ export function useGrpcEvents(connectionId: string | null) {
       return;
     }
 
-    // Use merge instead of replace to preserve events that came in via model_write
-    // while we were fetching from the database
-    invoke<GrpcEvent[]>('models_grpc_events', { connectionId }).then((events) => {
-      mergeModelsInStore('grpc_event', events);
-    });
+    // Fetch events from database, filtering out events from other connections and merging atomically
+    invoke<GrpcEvent[]>('models_grpc_events', { connectionId }).then((events) =>
+      mergeModelsInStore('grpc_event', events, (e) => e.connectionId === connectionId),
+    );
   }, [connectionId]);
 
-  return events;
+  return useMemo(
+    () => allEvents.filter((e) => e.connectionId === connectionId),
+    [allEvents, connectionId],
+  );
 }

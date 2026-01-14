@@ -6,7 +6,7 @@ import {
   replaceModelsInStore,
 } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 
 export function useHttpResponseEvents(response: HttpResponse | null) {
   const allEvents = useAtomValue(httpResponseEventsAtom);
@@ -17,18 +17,13 @@ export function useHttpResponseEvents(response: HttpResponse | null) {
       return;
     }
 
-    // Use merge instead of replace to preserve events that came in via model_write
-    // while we were fetching from the database
+    // Fetch events from database, filtering out events from other responses and merging atomically
     invoke<HttpResponseEvent[]>('cmd_get_http_response_events', { responseId: response.id }).then(
-      (events) => mergeModelsInStore('http_response_event', events),
+      (events) =>
+        mergeModelsInStore('http_response_event', events, (e) => e.responseId === response.id),
     );
   }, [response?.id]);
 
-  // Filter events for the current response
-  const events = useMemo(
-    () => allEvents.filter((e) => e.responseId === response?.id),
-    [allEvents, response?.id],
-  );
-
+  const events = allEvents.filter((e) => e.responseId === response?.id);
   return { data: events, error: null, isLoading: false };
 }

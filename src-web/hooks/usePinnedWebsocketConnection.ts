@@ -7,7 +7,7 @@ import {
   websocketEventsAtom,
 } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { jotaiStore } from '../lib/jotai';
 import { activeRequestIdAtom } from './useActiveRequestId';
@@ -47,7 +47,7 @@ export function setPinnedWebsocketConnectionId(id: string | null) {
 }
 
 export function useWebsocketEvents(connectionId: string | null) {
-  const events = useAtomValue(websocketEventsAtom);
+  const allEvents = useAtomValue(websocketEventsAtom);
 
   useEffect(() => {
     if (connectionId == null) {
@@ -55,12 +55,14 @@ export function useWebsocketEvents(connectionId: string | null) {
       return;
     }
 
-    // Use merge instead of replace to preserve events that came in via model_write
-    // while we were fetching from the database
-    invoke<WebsocketEvent[]>('models_websocket_events', { connectionId }).then(
-      (events) => mergeModelsInStore('websocket_event', events),
+    // Fetch events from database, filtering out events from other connections and merging atomically
+    invoke<WebsocketEvent[]>('models_websocket_events', { connectionId }).then((events) =>
+      mergeModelsInStore('websocket_event', events, (e) => e.connectionId === connectionId),
     );
   }, [connectionId]);
 
-  return events;
+  return useMemo(
+    () => allEvents.filter((e) => e.connectionId === connectionId),
+    [allEvents, connectionId],
+  );
 }
