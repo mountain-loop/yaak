@@ -5,7 +5,7 @@ import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-intern
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { getActiveCookieJar } from '../hooks/useActiveCookieJar';
 import { getActiveEnvironment } from '../hooks/useActiveEnvironment';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
@@ -14,7 +14,6 @@ import { useAuthTab } from '../hooks/useAuthTab';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
-import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { activeWebsocketConnectionAtom } from '../hooks/usePinnedWebsocketConnection';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
@@ -30,8 +29,8 @@ import { Editor } from './core/Editor/LazyEditor';
 import { IconButton } from './core/IconButton';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
-import type { TabItem } from './core/Tabs/Tabs';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
+import type { TabItem, TabsRef } from './core/Tabs/Tabs';
+import { setActiveTab, TabContent, Tabs } from './core/Tabs/Tabs';
 import { HeadersEditor } from './HeadersEditor';
 import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -50,6 +49,7 @@ const TAB_PARAMS = 'params';
 const TAB_HEADERS = 'headers';
 const TAB_AUTH = 'auth';
 const TAB_DESCRIPTION = 'description';
+const TABS_STORAGE_KEY = 'websocket_request_tabs';
 
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
@@ -63,16 +63,17 @@ const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
 
 export function WebsocketRequestPane({ style, fullHeight, className, activeRequest }: Props) {
   const activeRequestId = activeRequest.id;
-  const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
-    namespace: 'no_sync',
-    key: 'websocketRequestActiveTabs',
-    fallback: {},
-  });
+  const tabsRef = useRef<TabsRef>(null);
   const forceUpdateKey = useRequestUpdateKey(activeRequest.id);
-  const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
+  const [{ urlKey }, { forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const authTab = useAuthTab(TAB_AUTH, activeRequest);
   const headersTab = useHeadersTab(TAB_HEADERS, activeRequest);
   const inheritedHeaders = useInheritedHeaders(activeRequest);
+
+  // Listen for event to focus the params tab (e.g., when clicking a :param in the URL)
+  useRequestEditorEvent('request_pane.focus_tab', () => {
+    tabsRef.current?.setActiveTab(TAB_PARAMS);
+  }, []);
 
   const { urlParameterPairs, urlParametersKey } = useMemo(() => {
     const placeholderNames = Array.from(activeRequest.url.matchAll(/\/(:[^/]+)/g)).map(
@@ -114,18 +115,6 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
   const connection = useAtomValue(activeWebsocketConnectionAtom);
-
-  const activeTab = activeTabs?.[activeRequestId];
-  const setActiveTab = useCallback(
-    async (tab: string) => {
-      await setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
-    },
-    [activeRequest.id, setActiveTabs],
-  );
-
-  useRequestEditorEvent('request_pane.focus_tab', async () => {
-    await setActiveTab(TAB_PARAMS);
-  });
 
   const autocompleteUrls = useAtomValue(memoNotActiveRequestUrlsAtom);
 
@@ -176,7 +165,11 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
         e.preventDefault(); // Prevent input onChange
 
         await patchModel(activeRequest, patch);
-        focusParamsTab();
+        await setActiveTab({
+          storageKey: TABS_STORAGE_KEY,
+          activeTabKey: activeRequestId,
+          value: TAB_PARAMS,
+        });
 
         // Wait for request to update, then refresh the UI
         // TODO: Somehow make this deterministic
@@ -186,7 +179,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
         }, 100);
       }
     },
-    [activeRequest, focusParamsTab, forceParamsRefresh, forceUrlRefresh],
+    [activeRequest, activeRequestId, forceParamsRefresh, forceUrlRefresh],
   );
 
   const messageLanguage = languageFromContentType(null, activeRequest.message);
@@ -229,12 +222,12 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             />
           </div>
           <Tabs
-            value={activeTab}
+            ref={tabsRef}
             label="Request"
-            onChangeValue={setActiveTab}
             tabs={tabs}
             tabListClassName="mt-1 !mb-1.5"
-            storageKey="websocket_request_tabs_order"
+            storageKey={TABS_STORAGE_KEY}
+            activeTabKey={activeRequestId}
           >
             <TabContent value={TAB_AUTH}>
               <HttpAuthenticationEditor model={activeRequest} />

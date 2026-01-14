@@ -34,7 +34,7 @@ export function useRequestEditor() {
   const focusParamValue = useCallback(
     (name: string) => {
       focusParamsTab();
-      setTimeout(() => emitter.emit('request_params.focus_value', name), 50);
+      requestAnimationFrame(() => emitter.emit('request_params.focus_value', name));
     },
     [focusParamsTab],
   );

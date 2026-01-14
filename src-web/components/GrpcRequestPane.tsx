@@ -7,7 +7,6 @@ import { useContainerSize } from '../hooks/useContainerQuery';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
-import { useKeyValue } from '../hooks/useKeyValue';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { Button } from './core/Button';
@@ -69,11 +68,6 @@ export function GrpcRequestPane({
   const authTab = useAuthTab(TAB_AUTH, activeRequest);
   const metadataTab = useHeadersTab(TAB_METADATA, activeRequest, 'Metadata');
   const inheritedHeaders = useInheritedHeaders(activeRequest);
-  const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
-    namespace: 'no_sync',
-    key: 'grpcRequestActiveTabs',
-    fallback: {},
-  });
   const forceUpdateKey = useRequestUpdateKey(activeRequest.id ?? null);
 
   const urlContainerEl = useRef<HTMLDivElement>(null);
@@ -143,14 +137,6 @@ export function GrpcRequestPane({
       },
     ],
     [activeRequest.description, authTab, metadataTab],
-  );
-
-  const activeTab = activeTabs?.[activeRequest.id];
-  const setActiveTab = useCallback(
-    async (tab: string) => {
-      await setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
-    },
-    [activeRequest.id, setActiveTabs],
   );
 
   const handleMetadataChange = useCallback(
@@ -265,12 +251,11 @@ export function GrpcRequestPane({
         </HStack>
       </div>
       <Tabs
-        value={activeTab}
         label="Request"
-        onChangeValue={setActiveTab}
         tabs={tabs}
         tabListClassName="mt-1 !mb-1.5"
-        storageKey="grpc_request_tabs_order"
+        storageKey="grpc_request_tabs"
+        activeTabKey={activeRequest.id}
       >
         <TabContent value="message">
           <GrpcEditor

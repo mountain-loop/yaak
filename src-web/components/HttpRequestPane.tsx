@@ -4,7 +4,7 @@ import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
 import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useAuthTab } from '../hooks/useAuthTab';
@@ -12,7 +12,6 @@ import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useImportCurl } from '../hooks/useImportCurl';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
-import { useKeyValue } from '../hooks/useKeyValue';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
 import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
@@ -42,8 +41,8 @@ import { Editor } from './core/Editor/LazyEditor';
 import { InlineCode } from './core/InlineCode';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
-import type { TabItem } from './core/Tabs/Tabs';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
+import type { TabItem, TabsRef } from './core/Tabs/Tabs';
+import { setActiveTab, TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
 import { FormMultipartEditor } from './FormMultipartEditor';
 import { FormUrlencodedEditor } from './FormUrlencodedEditor';
@@ -70,6 +69,7 @@ const TAB_PARAMS = 'params';
 const TAB_HEADERS = 'headers';
 const TAB_AUTH = 'auth';
 const TAB_DESCRIPTION = 'description';
+const TABS_STORAGE_KEY = 'http_request_tabs';
 
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
@@ -83,18 +83,19 @@ const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
 
 export function HttpRequestPane({ style, fullHeight, className, activeRequest }: Props) {
   const activeRequestId = activeRequest.id;
-  const { value: activeTabs, set: setActiveTabs } = useKeyValue<Record<string, string>>({
-    namespace: 'no_sync',
-    key: 'httpRequestActiveTabs',
-    fallback: {},
-  });
+  const tabsRef = useRef<TabsRef>(null);
   const [forceUpdateHeaderEditorKey, setForceUpdateHeaderEditorKey] = useState<number>(0);
   const forceUpdateKey = useRequestUpdateKey(activeRequest.id ?? null);
-  const [{ urlKey }, { focusParamsTab, forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
+  const [{ urlKey }, { forceUrlRefresh, forceParamsRefresh }] = useRequestEditor();
   const contentType = getContentTypeFromHeaders(activeRequest.headers);
   const authTab = useAuthTab(TAB_AUTH, activeRequest);
   const headersTab = useHeadersTab(TAB_HEADERS, activeRequest);
   const inheritedHeaders = useInheritedHeaders(activeRequest);
+
+  // Listen for event to focus the params tab (e.g., when clicking a :param in the URL)
+  useRequestEditorEvent('request_pane.focus_tab', () => {
+    tabsRef.current?.setActiveTab(TAB_PARAMS);
+  }, []);
 
   const handleContentTypeChange = useCallback(
     async (contentType: string | null, patch: Partial<Omit<HttpRequest, 'headers'>> = {}) => {
@@ -260,18 +261,6 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     [activeRequest],
   );
 
-  const activeTab = activeTabs?.[activeRequestId];
-  const setActiveTab = useCallback(
-    async (tab: string) => {
-      await setActiveTabs((r) => ({ ...r, [activeRequest.id]: tab }));
-    },
-    [activeRequest.id, setActiveTabs],
-  );
-
-  useRequestEditorEvent('request_pane.focus_tab', async () => {
-    await setActiveTab(TAB_PARAMS);
-  });
-
   const autocompleteUrls = useAtomValue(memoNotActiveRequestUrlsAtom);
 
   const autocomplete: GenericCompletionConfig = useMemo(
@@ -298,7 +287,11 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
           e.preventDefault(); // Prevent input onChange
 
           await patchModel(activeRequest, patch);
-          focusParamsTab();
+          await setActiveTab({
+            storageKey: TABS_STORAGE_KEY,
+            activeTabKey: activeRequestId,
+            value: TAB_PARAMS,
+          });
 
           // Wait for request to update, then refresh the UI
           // TODO: Somehow make this deterministic
@@ -309,14 +302,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
         }
       }
     },
-    [
-      activeRequest,
-      activeRequestId,
-      focusParamsTab,
-      forceParamsRefresh,
-      forceUrlRefresh,
-      importCurl,
-    ],
+    [activeRequest, activeRequestId, forceParamsRefresh, forceUrlRefresh, importCurl],
   );
   const handleSend = useCallback(
     () => sendRequest(activeRequest.id ?? null),
@@ -354,12 +340,12 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             isLoading={activeResponse != null && activeResponse.state !== 'closed'}
           />
           <Tabs
-            value={activeTab}
+            ref={tabsRef}
             label="Request"
-            onChangeValue={setActiveTab}
             tabs={tabs}
             tabListClassName="mt-1 -mb-1.5"
-            storageKey="http_request_tabs_order"
+            storageKey={TABS_STORAGE_KEY}
+            activeTabKey={activeRequestId}
           >
             <TabContent value={TAB_AUTH}>
               <HttpAuthenticationEditor model={activeRequest} />

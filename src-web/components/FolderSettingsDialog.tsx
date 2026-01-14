@@ -1,6 +1,6 @@
 import { createWorkspaceModel, foldersAtom, patchModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useHeadersTab } from '../hooks/useHeadersTab';
@@ -37,7 +37,6 @@ export type FolderSettingsTab =
 export function FolderSettingsDialog({ folderId, tab }: Props) {
   const folders = useAtomValue(foldersAtom);
   const folder = folders.find((f) => f.id === folderId) ?? null;
-  const [activeTab, setActiveTab] = useState<string>(tab ?? TAB_GENERAL);
   const authTab = useAuthTab(TAB_AUTH, folder);
   const headersTab = useHeadersTab(TAB_HEADERS, folder);
   const inheritedHeaders = useInheritedHeaders(folder);
@@ -69,8 +68,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
 
   return (
     <Tabs
-      value={activeTab}
-      onChangeValue={setActiveTab}
+      defaultValue={tab ?? TAB_GENERAL}
       label="Folder Settings"
       className="pt-2 pb-2 pl-3 pr-1"
       layout="horizontal"

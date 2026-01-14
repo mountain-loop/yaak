@@ -1,8 +1,7 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { ComponentType, CSSProperties } from 'react';
-import { lazy, Suspense, useCallback, useMemo } from 'react';
-import { useLocalStorage } from 'react-use';
+import { lazy, Suspense, useMemo } from 'react';
 import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
 import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
 import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
@@ -58,10 +57,6 @@ const TAB_TIMELINE = 'timeline';
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
   const [viewMode, setViewMode] = useResponseViewMode(activeResponse?.requestId);
-  const [activeTabs, setActiveTabs] = useLocalStorage<Record<string, string>>(
-    'responsePaneActiveTabs',
-    {},
-  );
   const contentType = getContentTypeFromHeaders(activeResponse?.headers ?? null);
   const mimeType = contentType == null ? null : getMimeTypeFromContentType(contentType).essence;
 
@@ -129,13 +124,6 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       viewMode,
     ],
   );
-  const activeTab = activeTabs?.[activeRequestId];
-  const setActiveTab = useCallback(
-    (tab: string) => {
-      setActiveTabs((r) => ({ ...r, [activeRequestId]: tab }));
-    },
-    [activeRequestId, setActiveTabs],
-  );
 
   const cancel = useCancelHttpResponse(activeResponse?.id ?? null);
 
@@ -199,14 +187,12 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
             )}
             {/* Show tabs if we have any data (headers, body, etc.) even if there's an error */}
             <Tabs
-              key={activeRequestId} // Freshen tabs on request change
-              value={activeTab}
-              onChangeValue={setActiveTab}
               tabs={tabs}
               label="Response"
               className="ml-3 mr-3 mb-3 min-h-0 flex-1"
               tabListClassName="mt-0.5 -mb-1.5"
-              storageKey="http_response_tabs_order"
+              storageKey="http_response_tabs"
+              activeTabKey={activeRequestId}
             >
               <TabContent value={TAB_BODY}>
                 <ErrorBoundary name="Http Response Viewer">

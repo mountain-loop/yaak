@@ -54,13 +54,11 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
   const installedPlugins = plugins.filter((p) => !isPluginBundled(p, appInfo.vendoredPluginDir));
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
-  const [tab, setTab] = useState<string | undefined>(defaultSubtab);
   return (
     <div className="h-full">
       <Tabs
-        value={tab}
+        defaultValue={defaultSubtab}
         label="Plugins"
-        onChangeValue={setTab}
         addBorders
         tabs={[
           { label: 'Discover', value: 'search' },
