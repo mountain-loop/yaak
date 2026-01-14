@@ -1,5 +1,5 @@
 import { type MultipartPart, parseMultipart } from '@mjackson/multipart-parser';
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { languageFromContentType } from '../../lib/contentType';
 import { Banner } from '../core/Banner';
 import { Icon } from '../core/Icon';
@@ -22,8 +22,6 @@ interface Props {
 }
 
 export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Props) {
-  const [tab, setTab] = useState<string>();
-
   const parseResult = useMemo(() => {
     try {
       const maxFileSize = 1024 * 1024 * 10; // 10MB
@@ -55,12 +53,10 @@ export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Prop
 
   return (
     <Tabs
-      value={tab}
       addBorders
       label="Multipart"
       layout="horizontal"
       tabListClassName="border-r border-r-border"
-      onChangeValue={setTab}
       tabs={parts.map((part) => ({
         label: part.name ?? '',
         value: part.name ?? '',

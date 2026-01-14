@@ -10,8 +10,8 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import classNames from 'classnames';
-import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode, Ref } from 'react';
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useKeyValue } from '../../../hooks/useKeyValue';
 import { computeSideForDragMove } from '../../../lib/dnd';
 import { DropMarker } from '../../DropMarker';
@@ -37,22 +37,37 @@ export type TabItem =
       rightSlot?: ReactNode;
     };
 
+interface TabsStorage {
+  order: string[];
+  activeTabs: Record<string, string>;
+}
+
+export interface TabsRef {
+  /** Programmatically set the active tab */
+  setActiveTab: (value: string) => void;
+}
+
 interface Props {
   label: string;
-  value?: string;
-  onChangeValue: (value: string) => void;
+  /** Default tab value. If not provided, defaults to first tab. */
+  defaultValue?: string;
+  /** Called when active tab changes */
+  onChangeValue?: (value: string) => void;
   tabs: TabItem[];
   tabListClassName?: string;
   className?: string;
   children: ReactNode;
   addBorders?: boolean;
   layout?: 'horizontal' | 'vertical';
+  /** Storage key for persisting tab order and active tab. When provided, enables drag-to-reorder and active tab persistence. */
   storageKey?: string | string[];
+  /** Key to identify which context this tab belongs to (e.g., request ID). Used for per-context active tab persistence. */
+  activeTabKey?: string;
 }
 
-export function Tabs({
-  value,
-  onChangeValue,
+export const Tabs = forwardRef<TabsRef, Props>(function Tabs({
+  defaultValue,
+  onChangeValue: onChangeValueProp,
   label,
   children,
   tabs: originalTabs,
@@ -61,16 +76,73 @@ export function Tabs({
   addBorders,
   layout = 'vertical',
   storageKey,
-}: Props) {
+  activeTabKey,
+}: Props, forwardedRef: Ref<TabsRef>) {
   const ref = useRef<HTMLDivElement | null>(null);
   const reorderable = !!storageKey;
 
   // Use key-value storage for persistence if storageKey is provided
-  const { value: savedOrder, set: setSavedOrder } = useKeyValue<string[]>({
-    namespace: 'global',
-    key: storageKey ?? ['tabs_order', 'default'],
-    fallback: [],
+  // Handle migration from old format (string[]) to new format (TabsStorage)
+  const { value: rawStorage, set: setStorage } = useKeyValue<TabsStorage | string[]>({
+    namespace: 'no_sync',
+    key: storageKey ?? ['tabs', 'default'],
+    fallback: { order: [], activeTabs: {} },
   });
+
+  // Migrate old format (string[]) to new format (TabsStorage)
+  const storage: TabsStorage = Array.isArray(rawStorage)
+    ? { order: rawStorage, activeTabs: {} }
+    : rawStorage ?? { order: [], activeTabs: {} };
+
+  const savedOrder = storage.order;
+
+  // Get the active tab value - prefer storage (if activeTabKey), then defaultValue, then first tab
+  const storedActiveTab = activeTabKey ? storage?.activeTabs?.[activeTabKey] : undefined;
+  const [internalValue, setInternalValue] = useState<string | undefined>(undefined);
+  const value = storedActiveTab ?? internalValue ?? defaultValue ?? originalTabs[0]?.value;
+
+  // Helper to normalize storage (handle migration from old format)
+  const normalizeStorage = useCallback(
+    (s: TabsStorage | string[]): TabsStorage =>
+      Array.isArray(s) ? { order: s, activeTabs: {} } : s,
+    [],
+  );
+
+  // Handle tab change - update internal state, storage if we have a key, and call prop callback
+  const onChangeValue = useCallback(
+    async (newValue: string) => {
+      setInternalValue(newValue);
+      if (storageKey && activeTabKey) {
+        await setStorage((s) => {
+          const normalized = normalizeStorage(s);
+          return {
+            ...normalized,
+            activeTabs: { ...normalized.activeTabs, [activeTabKey]: newValue },
+          };
+        });
+      }
+      onChangeValueProp?.(newValue);
+    },
+    [storageKey, activeTabKey, setStorage, onChangeValueProp, normalizeStorage],
+  );
+
+  // Expose imperative methods via ref
+  useImperativeHandle(forwardedRef, () => ({
+    setActiveTab: (value: string) => {
+      onChangeValue(value);
+    },
+  }), [onChangeValue]);
+
+  // Helper to save order
+  const setSavedOrder = useCallback(
+    async (order: string[]) => {
+      await setStorage((s) => {
+        const normalized = normalizeStorage(s);
+        return { ...normalized, order };
+      });
+    },
+    [setStorage, normalizeStorage],
+  );
 
   // State for ordered tabs
   const [orderedTabs, setOrderedTabs] = useState<TabItem[]>(originalTabs);
@@ -111,8 +183,6 @@ export function Tabs({
   }, [originalTabs, savedOrder, storageKey]);
 
   const tabs = storageKey ? orderedTabs : originalTabs;
-
-  value = value ?? tabs[0]?.value;
 
   // Update tabs when value changes
   useEffect(() => {
@@ -320,7 +390,7 @@ export function Tabs({
       {children}
     </div>
   );
-}
+});
 
 interface TabButtonProps {
   tab: TabItem;
@@ -329,7 +399,7 @@ interface TabButtonProps {
   layout: 'horizontal' | 'vertical';
   reorderable: boolean;
   isDragging: boolean;
-  onChangeValue: (value: string) => void;
+  onChangeValue?: (value: string) => void;
   overlay?: boolean;
 }
 
@@ -373,7 +443,7 @@ function TabButton({
       ? undefined
       : (e: React.MouseEvent) => {
           e.preventDefault(); // Prevent dropdown from opening on first click
-          onChangeValue(tab.value);
+          onChangeValue?.(tab.value);
         },
     className: classNames(
       'flex items-center rounded whitespace-nowrap',
@@ -478,3 +548,32 @@ export const TabContent = memo(function TabContent({
     </ErrorBoundary>
   );
 });
+
+/**
+ * Programmatically set the active tab for a Tabs component that uses storageKey + activeTabKey.
+ * This is useful when you need to change the tab from outside the component (e.g., in response to an event).
+ */
+export async function setActiveTab({
+  storageKey,
+  activeTabKey,
+  value,
+}: {
+  storageKey: string;
+  activeTabKey: string;
+  value: string;
+}): Promise<void> {
+  const { getKeyValue, setKeyValue } = await import('../../../lib/keyValueStore');
+  const current = getKeyValue<TabsStorage>({
+    namespace: 'no_sync',
+    key: storageKey,
+    fallback: { order: [], activeTabs: {} },
+  });
+  await setKeyValue({
+    namespace: 'no_sync',
+    key: storageKey,
+    value: {
+      ...current,
+      activeTabs: { ...current.activeTabs, [activeTabKey]: value },
+    },
+  });
+}
