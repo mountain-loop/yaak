@@ -12,6 +12,8 @@ export type CookieExpires = { "AtUtc": string } | "SessionEnd";
 
 export type CookieJar = { model: "cookie_jar", id: string, createdAt: string, updatedAt: string, workspaceId: string, cookies: Array<Cookie>, name: string, };
 
+export type DnsOverride = { hostname: string, ipv4: Array<string>, ipv6: Array<string>, enabled?: boolean, };
+
 export type EditorKeymap = "default" | "vim" | "vscode" | "emacs";
 
 export type EncryptedKey = { encryptedKey: string, };
@@ -77,6 +79,6 @@ export type WebsocketEventType = "binary" | "close" | "frame" | "open" | "ping" 
 
 export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
-export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
+export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, settingDnsOverrides: Array<DnsOverride>, };
 
 export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, encryptionKey: EncryptedKey | null, settingSyncDir: string | null, };
