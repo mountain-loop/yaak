@@ -37,3 +37,11 @@ The skill generates markdown-formatted release notes following this structure:
 
 **IMPORTANT**: Always add a blank lines around the markdown code fence and output the markdown code block last
 **IMPORTANT**: PRs by `@gschier` should not mention the @username
+
+## After Generating Release Notes
+
+After outputting the release notes, ask the user if they would like to create a draft GitHub release with these notes. If they confirm, create the release using:
+
+```bash
+gh release create <tag> --draft --prerelease --title "<tag>" --notes '<release notes>'
+```
