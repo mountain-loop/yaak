@@ -11,7 +11,16 @@ import {
 } from '@dnd-kit/core';
 import classNames from 'classnames';
 import type { ReactNode, Ref } from 'react';
-import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useKeyValue } from '../../../hooks/useKeyValue';
 import { computeSideForDragMove } from '../../../lib/dnd';
 import { DropMarker } from '../../DropMarker';
@@ -65,19 +74,22 @@ interface Props {
   activeTabKey?: string;
 }
 
-export const Tabs = forwardRef<TabsRef, Props>(function Tabs({
-  defaultValue,
-  onChangeValue: onChangeValueProp,
-  label,
-  children,
-  tabs: originalTabs,
-  className,
-  tabListClassName,
-  addBorders,
-  layout = 'vertical',
-  storageKey,
-  activeTabKey,
-}: Props, forwardedRef: Ref<TabsRef>) {
+export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
+  {
+    defaultValue,
+    onChangeValue: onChangeValueProp,
+    label,
+    children,
+    tabs: originalTabs,
+    className,
+    tabListClassName,
+    addBorders,
+    layout = 'vertical',
+    storageKey,
+    activeTabKey,
+  }: Props,
+  forwardedRef: Ref<TabsRef>,
+) {
   const ref = useRef<HTMLDivElement | null>(null);
   const reorderable = !!storageKey;
 
@@ -92,7 +104,7 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs({
   // Migrate old format (string[]) to new format (TabsStorage)
   const storage: TabsStorage = Array.isArray(rawStorage)
     ? { order: rawStorage, activeTabs: {} }
-    : rawStorage ?? { order: [], activeTabs: {} };
+    : (rawStorage ?? { order: [], activeTabs: {} });
 
   const savedOrder = storage.order;
 
@@ -127,11 +139,15 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs({
   );
 
   // Expose imperative methods via ref
-  useImperativeHandle(forwardedRef, () => ({
-    setActiveTab: (value: string) => {
-      onChangeValue(value);
-    },
-  }), [onChangeValue]);
+  useImperativeHandle(
+    forwardedRef,
+    () => ({
+      setActiveTab: (value: string) => {
+        onChangeValue(value);
+      },
+    }),
+    [onChangeValue],
+  );
 
   // Helper to save order
   const setSavedOrder = useCallback(
@@ -285,13 +301,10 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs({
         items.push(
           <div
             key={`marker-${t.value}`}
-            className={classNames(
-              'relative',
-              layout === 'vertical' ? 'w-0' : 'h-0',
-            )}
+            className={classNames('relative', layout === 'vertical' ? 'w-0' : 'h-0')}
           >
             <DropMarker orientation={layout === 'vertical' ? 'vertical' : 'horizontal'} />
-          </div>
+          </div>,
         );
       }
 
@@ -305,7 +318,7 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs({
           reorderable={reorderable}
           isDragging={isDragging?.value === t.value}
           onChangeValue={onChangeValue}
-        />
+        />,
       );
     });
     return items;
@@ -334,12 +347,7 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs({
       >
         {tabButtons}
         {hoveredIndex === tabs.length && (
-          <div
-            className={classNames(
-              'relative',
-              layout === 'vertical' ? 'w-0' : 'h-0',
-            )}
-          >
+          <div className={classNames('relative', layout === 'vertical' ? 'w-0' : 'h-0')}>
             <DropMarker orientation={layout === 'vertical' ? 'vertical' : 'horizontal'} />
           </div>
         )}
@@ -420,6 +428,8 @@ function TabButton({
   } = useDraggable({
     id: tab.value,
     disabled: !reorderable,
+    // The button inside handles focus
+    attributes: { tabIndex: -1 },
   });
   const { setNodeRef: setDroppableRef } = useDroppable({
     id: tab.value,
@@ -501,11 +511,7 @@ function TabButton({
       );
     }
     return (
-      <Button
-        leftSlot={tab.leftSlot}
-        rightSlot={tab.rightSlot}
-        {...btnProps}
-      >
+      <Button leftSlot={tab.leftSlot} rightSlot={tab.rightSlot} {...btnProps}>
         {'label' in tab && tab.label ? tab.label : tab.value}
       </Button>
     );
