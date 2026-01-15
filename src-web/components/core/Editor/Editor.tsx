@@ -77,7 +77,7 @@ export interface EditorProps {
   heightMode?: 'auto' | 'full';
   hideGutter?: boolean;
   id?: string;
-  language?: EditorLanguage | 'pairs' | 'url' | null;
+  language?: EditorLanguage | 'pairs' | 'url' | 'timeline' | null;
   graphQLSchema?: GraphQLSchema | null;
   onBlur?: () => void;
   onChange?: (value: string) => void;

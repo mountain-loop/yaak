@@ -3,27 +3,50 @@ import type {
   HttpResponseEvent,
   HttpResponseEventData,
 } from '@yaakapp-internal/models';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
 import { Editor } from './core/Editor/LazyEditor';
-import { EventDetailHeader, EventViewer, type EventDetailAction } from './core/EventViewer';
+import { type EventDetailAction, EventDetailHeader, EventViewer } from './core/EventViewer';
 import { EventViewerRow } from './core/EventViewerRow';
 import { HttpMethodTagRaw } from './core/HttpMethodTag';
 import { HttpStatusTagRaw } from './core/HttpStatusTag';
 import { Icon, type IconProps } from './core/Icon';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
+import type { TimelineViewMode } from './HttpResponsePane';
 
 interface Props {
   response: HttpResponse;
+  viewMode: TimelineViewMode;
 }
 
-export function HttpResponseTimeline({ response }: Props) {
-  return <Inner key={response.id} response={response} />;
+export function HttpResponseTimeline({ response, viewMode }: Props) {
+  return <Inner key={response.id} response={response} viewMode={viewMode} />;
 }
 
-function Inner({ response }: Props) {
+function Inner({ response, viewMode }: Props) {
   const [showRaw, setShowRaw] = useState(false);
   const { data: events, error, isLoading } = useHttpResponseEvents(response);
+
+  // Generate plain text representation of all events (with prefixes for timeline view)
+  const plainText = useMemo(() => {
+    if (!events || events.length === 0) return '';
+    return events.map((event) => formatEventText(event.event, true)).join('\n');
+  }, [events]);
+
+  // Plain text view - show all events as text in an editor
+  if (viewMode === 'text') {
+    if (isLoading) {
+      return <div className="p-4 text-text-subtlest">Loading events...</div>;
+    } else if (error) {
+      return <div className="p-4 text-danger">{String(error)}</div>;
+    } else if (!events || events.length === 0) {
+      return <div className="p-4 text-text-subtlest">No events recorded</div>;
+    } else {
+      return (
+        <Editor language="timeline" defaultValue={plainText} readOnly stateKey={null} hideGutter />
+      );
+    }
+  }
 
   return (
     <EventViewer
@@ -110,10 +133,10 @@ function EventDetails({
 
   // Render content based on view mode and event type
   const renderContent = () => {
-    // Raw view - show plaintext representation
+    // Raw view - show plaintext representation (without prefix)
     if (showRaw) {
-      const rawText = formatEventRaw(event.event);
-      return <Editor language="text" defaultValue={rawText} readOnly stateKey={null} />;
+      const rawText = formatEventText(event.event, false);
+      return <Editor language="text" defaultValue={rawText} readOnly stateKey={null} hideGutter />;
     }
 
     // Headers - show name and value
@@ -204,41 +227,56 @@ function EventDetails({
   };
   return (
     <div className="flex flex-col gap-2 h-full">
-      <EventDetailHeader title={title} timestamp={event.createdAt} actions={actions} onClose={onClose} />
+      <EventDetailHeader
+        title={title}
+        timestamp={event.createdAt}
+        actions={actions}
+        onClose={onClose}
+      />
       {renderContent()}
     </div>
   );
 }
 
-/** Format event as raw plaintext for debugging */
-function formatEventRaw(event: HttpResponseEventData): string {
+type EventTextParts = { prefix: '>' | '<' | '*'; text: string };
+
+/** Get the prefix and text for an event */
+function getEventTextParts(event: HttpResponseEventData): EventTextParts {
   switch (event.type) {
     case 'send_url':
-      return `${event.method} ${event.path}`;
+      return { prefix: '>', text: `${event.method} ${event.path}` };
     case 'receive_url':
-      return `${event.version} ${event.status}`;
+      return { prefix: '<', text: `${event.version} ${event.status}` };
     case 'header_up':
-      return `${event.name}: ${event.value}`;
+      return { prefix: '>', text: `${event.name}: ${event.value}` };
     case 'header_down':
-      return `${event.name}: ${event.value}`;
-    case 'redirect':
-      return `${event.status} Redirect: ${event.url}`;
+      return { prefix: '<', text: `${event.name}: ${event.value}` };
+    case 'redirect': {
+      const behavior = event.behavior === 'drop_body' ? 'drop body' : 'preserve';
+      return { prefix: '*', text: `Redirect ${event.status} -> ${event.url} (${behavior})` };
+    }
     case 'setting':
-      return `${event.name} = ${event.value}`;
+      return { prefix: '*', text: `Setting ${event.name}=${event.value}` };
     case 'info':
-      return `${event.message}`;
+      return { prefix: '*', text: event.message };
     case 'chunk_sent':
-      return `[${formatBytes(event.bytes)} sent]`;
+      return { prefix: '*', text: `[${formatBytes(event.bytes)} sent]` };
     case 'chunk_received':
-      return `[${formatBytes(event.bytes)} received]`;
+      return { prefix: '*', text: `[${formatBytes(event.bytes)} received]` };
     case 'dns_resolved':
       if (event.overridden) {
-        return `DNS override ${event.hostname} → ${event.addresses.join(', ')}`;
+        return { prefix: '*', text: `DNS override ${event.hostname} -> ${event.addresses.join(', ')}` };
       }
-      return `DNS resolved ${event.hostname} → ${event.addresses.join(', ')} (${event.duration}ms)`;
+      return { prefix: '*', text: `DNS resolved ${event.hostname} to ${event.addresses.join(', ')} (${event.duration}ms)` };
     default:
-      return '[unknown event]';
+      return { prefix: '*', text: '[unknown event]' };
   }
+}
+
+/** Format event as plaintext, optionally with curl-style prefix (> outgoing, < incoming, * info) */
+function formatEventText(event: HttpResponseEventData, includePrefix: boolean): string {
+  const { prefix, text } = getEventTextParts(event);
+  return includePrefix ? `${prefix} ${text}` : text;
 }
 
 type EventDisplay = {
