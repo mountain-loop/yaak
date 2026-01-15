@@ -48,6 +48,7 @@ import type { EditorProps } from './Editor';
 import { jsonParseLinter } from './json-lint';
 import { pairs } from './pairs/extension';
 import { text } from './text/extension';
+import { timeline } from './timeline/extension';
 import type { TwigCompletionOption } from './twig/completion';
 import { twig } from './twig/extension';
 import { pathParametersPlugin } from './twig/pathParameters';
@@ -95,6 +96,7 @@ const syntaxExtensions: Record<
   url: url,
   pairs: pairs,
   text: text,
+  timeline: timeline,
   markdown: markdown,
 };
 
