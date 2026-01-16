@@ -209,12 +209,24 @@ export function replaceModelsInStore<
 export function mergeModelsInStore<
   M extends AnyModel['model'],
   T extends Extract<AnyModel, { model: M }>,
->(model: M, models: T[]) {
+>(model: M, models: T[], filter?: (model: T) => boolean) {
   mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
     const existingModels = { ...prev[model] } as Record<string, T>;
+
+    // Merge in new models first
     for (const m of models) {
       existingModels[m.id] = m;
     }
+
+    // Then filter out unwanted models
+    if (filter) {
+      for (const [id, m] of Object.entries(existingModels)) {
+        if (!filter(m)) {
+          delete existingModels[id];
+        }
+      }
+    }
+
     return {
       ...prev,
       [model]: existingModels,

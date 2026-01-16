@@ -1,0 +1,21 @@
+@top Timeline { line* }
+
+line { OutgoingLine | IncomingLine | InfoLine | PlainLine }
+
+@skip {} {
+  OutgoingLine { OutgoingText Newline }
+  IncomingLine { IncomingText Newline }
+  InfoLine { InfoText Newline }
+  PlainLine { PlainText Newline }
+}
+
+@tokens {
+  OutgoingText { "> " ![\n]* }
+  IncomingText { "< " ![\n]* }
+  InfoText { "* " ![\n]* }
+  PlainText { ![\n]+ }
+  Newline { "\n" }
+  @precedence { OutgoingText, IncomingText, InfoText, PlainText }
+}
+
+@external propSource highlight from "./highlight"

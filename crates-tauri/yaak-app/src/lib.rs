@@ -7,7 +7,7 @@ use crate::http_request::{resolve_http_request, send_http_request};
 use crate::import::import_data;
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use crate::notifications::YaakNotifier;
-use crate::render::{render_grpc_request, render_template};
+use crate::render::{render_grpc_request, render_json_value, render_template};
 use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
 use crate::uri_scheme::handle_deep_link;
 use error::Result as YaakResult;
@@ -189,7 +189,6 @@ async fn cmd_grpc_reflect<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
     proto_files: Vec<String>,
-    skip_cache: Option<bool>,
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
@@ -224,18 +223,21 @@ async fn cmd_grpc_reflect<R: Runtime>(
     let settings = window.db().get_settings();
     let client_certificate =
         find_client_certificate(req.url.as_str(), &settings.client_certificates);
+    let proto_files: Vec<PathBuf> =
+        proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect();
 
-    Ok(grpc_handle
-        .lock()
-        .await
+    // Always invalidate cached pool when this command is called, to force re-reflection
+    let mut handle = grpc_handle.lock().await;
+    handle.invalidate_pool(&req.id, &uri, &proto_files);
+
+    Ok(handle
         .services(
             &req.id,
             &uri,
-            &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
+            &proto_files,
             &metadata,
             workspace.setting_validate_certificates,
             client_certificate,
-            skip_cache.unwrap_or(false),
         )
         .await
         .map_err(|e| GenericError(e.to_string()))?)
@@ -1055,14 +1057,54 @@ async fn cmd_get_http_authentication_summaries<R: Runtime>(
 #[tauri::command]
 async fn cmd_get_http_authentication_config<R: Runtime>(
     window: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
     plugin_manager: State<'_, PluginManager>,
+    encryption_manager: State<'_, EncryptionManager>,
     auth_name: &str,
     values: HashMap<String, JsonPrimitive>,
     model: AnyModel,
-    _environment_id: Option<&str>,
+    environment_id: Option<&str>,
 ) -> YaakResult<GetHttpAuthenticationConfigResponse> {
+    // Extract workspace_id and folder_id from the model to resolve the environment chain
+    let (workspace_id, folder_id) = match &model {
+        AnyModel::HttpRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
+        AnyModel::GrpcRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
+        AnyModel::WebsocketRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
+        AnyModel::Folder(f) => (f.workspace_id.clone(), f.folder_id.clone()),
+        AnyModel::Workspace(w) => (w.id.clone(), None),
+        _ => return Err(GenericError("Unsupported model type for authentication config".into())),
+    };
+
+    // Resolve environment chain and render the values for token lookup
+    let environment_chain = app_handle.db().resolve_environments(
+        &workspace_id,
+        folder_id.as_deref(),
+        environment_id,
+    )?;
+    let plugin_manager_arc = Arc::new((*plugin_manager).clone());
+    let encryption_manager_arc = Arc::new((*encryption_manager).clone());
+    let cb = PluginTemplateCallback::new(
+        plugin_manager_arc,
+        encryption_manager_arc,
+        &window.plugin_context(),
+        RenderPurpose::Preview,
+    );
+
+    // Convert HashMap<String, JsonPrimitive> to serde_json::Value for rendering
+    let values_json: serde_json::Value = serde_json::to_value(&values)?;
+    let rendered_json =
+        render_json_value(values_json, environment_chain, &cb, &RenderOptions::throw()).await?;
+
+    // Convert back to HashMap<String, JsonPrimitive>
+    let rendered_values: HashMap<String, JsonPrimitive> = serde_json::from_value(rendered_json)?;
+
     Ok(plugin_manager
-        .get_http_authentication_config(&window.plugin_context(), auth_name, values, model.id())
+        .get_http_authentication_config(
+            &window.plugin_context(),
+            auth_name,
+            rendered_values,
+            model.id(),
+        )
         .await?)
 }
 
@@ -1109,19 +1151,54 @@ async fn cmd_call_grpc_request_action<R: Runtime>(
 #[tauri::command]
 async fn cmd_call_http_authentication_action<R: Runtime>(
     window: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
     plugin_manager: State<'_, PluginManager>,
+    encryption_manager: State<'_, EncryptionManager>,
     auth_name: &str,
     action_index: i32,
     values: HashMap<String, JsonPrimitive>,
     model: AnyModel,
-    _environment_id: Option<&str>,
+    environment_id: Option<&str>,
 ) -> YaakResult<()> {
+    // Extract workspace_id and folder_id from the model to resolve the environment chain
+    let (workspace_id, folder_id) = match &model {
+        AnyModel::HttpRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
+        AnyModel::GrpcRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
+        AnyModel::WebsocketRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
+        AnyModel::Folder(f) => (f.workspace_id.clone(), f.folder_id.clone()),
+        AnyModel::Workspace(w) => (w.id.clone(), None),
+        _ => return Err(GenericError("Unsupported model type for authentication action".into())),
+    };
+
+    // Resolve environment chain and render the values
+    let environment_chain = app_handle.db().resolve_environments(
+        &workspace_id,
+        folder_id.as_deref(),
+        environment_id,
+    )?;
+    let plugin_manager_arc = Arc::new((*plugin_manager).clone());
+    let encryption_manager_arc = Arc::new((*encryption_manager).clone());
+    let cb = PluginTemplateCallback::new(
+        plugin_manager_arc,
+        encryption_manager_arc,
+        &window.plugin_context(),
+        RenderPurpose::Send,
+    );
+
+    // Convert HashMap<String, JsonPrimitive> to serde_json::Value for rendering
+    let values_json: serde_json::Value = serde_json::to_value(&values)?;
+    let rendered_json =
+        render_json_value(values_json, environment_chain, &cb, &RenderOptions::throw()).await?;
+
+    // Convert back to HashMap<String, JsonPrimitive>
+    let rendered_values: HashMap<String, JsonPrimitive> = serde_json::from_value(rendered_json)?;
+
     Ok(plugin_manager
         .call_http_authentication_action(
             &window.plugin_context(),
             auth_name,
             action_index,
-            values,
+            rendered_values,
             &model.id(),
         )
         .await?)

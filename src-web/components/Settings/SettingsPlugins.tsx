@@ -54,13 +54,11 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
   const installedPlugins = plugins.filter((p) => !isPluginBundled(p, appInfo.vendoredPluginDir));
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
-  const [tab, setTab] = useState<string | undefined>(defaultSubtab);
   return (
     <div className="h-full">
       <Tabs
-        value={tab}
+        defaultValue={defaultSubtab}
         label="Plugins"
-        onChangeValue={setTab}
         addBorders
         tabs={[
           { label: 'Discover', value: 'search' },
@@ -117,7 +115,7 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
                   icon="help"
                   title="View documentation"
                   onClick={() =>
-                    openUrl('https://feedback.yaak.app/help/articles/6911763-quick-start')
+                    openUrl('https://yaak.app/docs/plugin-development/plugins-quick-start')
                   }
                 />
               </HStack>
