@@ -49,6 +49,16 @@
       @apply pl-[1px];
     }
 
+    /* Comment styling */
+    .cm-comment,
+    .cm-comment * {
+      color: #6b7280 !important;
+    }
+
+    .cm-comment {
+      @apply opacity-70;
+    }
+
     .cm-placeholder {
       @apply text-placeholder;
     }
