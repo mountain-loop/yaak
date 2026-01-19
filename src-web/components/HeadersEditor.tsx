@@ -19,6 +19,7 @@ type Props = {
   forceUpdateKey: string;
   headers: HttpRequestHeader[];
   inheritedHeaders?: HttpRequestHeader[];
+  inheritedHeadersLabel?: string;
   stateKey: string;
   onChange: (headers: HttpRequestHeader[]) => void;
   label?: string;
@@ -28,6 +29,7 @@ export function HeadersEditor({
   stateKey,
   headers,
   inheritedHeaders,
+  inheritedHeadersLabel = 'Inherited',
   onChange,
   forceUpdateKey,
 }: Props) {
@@ -48,7 +50,7 @@ export function HeadersEditor({
           className="text-sm"
           summary={
             <HStack>
-              Inherited <CountBadge count={validInheritedHeaders.length} />
+              {inheritedHeadersLabel} <CountBadge count={validInheritedHeaders.length} />
             </HStack>
           }
         >

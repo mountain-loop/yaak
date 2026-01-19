@@ -19,6 +19,6 @@ mod websocket_connections;
 mod websocket_events;
 mod websocket_requests;
 mod workspace_metas;
-mod workspaces;
+pub mod workspaces;
 
 const MAX_HISTORY_ITEMS: usize = 20;
