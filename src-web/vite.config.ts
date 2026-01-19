@@ -39,6 +39,7 @@ export default defineConfig(async () => {
     }),
   ],
   build: {
+    sourcemap: true,
     outDir: '../dist',
     emptyOutDir: true,
     rollupOptions: {
