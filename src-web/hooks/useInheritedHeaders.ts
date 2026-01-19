@@ -8,6 +8,7 @@ import type {
 } from '@yaakapp-internal/models';
 import { foldersAtom, workspacesAtom } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
+import { defaultHeaders } from '../lib/defaultHeaders';
 
 const ancestorsAtom = atom((get) => [...get(foldersAtom), ...get(workspacesAtom)]);
 
@@ -17,12 +18,12 @@ export function useInheritedHeaders(baseModel: HeaderModel | null) {
   const parents = useAtomValue(ancestorsAtom);
 
   if (baseModel == null) return [];
-  if (baseModel.model === 'workspace') return [];
+  if (baseModel.model === 'workspace') return defaultHeaders;
 
   const next = (child: HeaderModel): HttpRequestHeader[] => {
-    // Short-circuit
+    // Short-circuit at workspace level - return global defaults + workspace headers
     if (child.model === 'workspace') {
-      return [];
+      return [...defaultHeaders, ...child.headers];
     }
 
     // Recurse up the tree
@@ -40,5 +41,13 @@ export function useInheritedHeaders(baseModel: HeaderModel | null) {
     return [...headers, ...parent.headers];
   };
 
-  return next(baseModel);
+  const allHeaders = next(baseModel);
+
+  // Deduplicate by header name (case-insensitive), keeping the latest (most specific) value
+  const headersByName = new Map<string, HttpRequestHeader>();
+  for (const header of allHeaders) {
+    headersByName.set(header.name.toLowerCase(), header);
+  }
+
+  return Array.from(headersByName.values());
 }

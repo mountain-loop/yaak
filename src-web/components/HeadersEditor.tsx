@@ -19,6 +19,7 @@ type Props = {
   forceUpdateKey: string;
   headers: HttpRequestHeader[];
   inheritedHeaders?: HttpRequestHeader[];
+  inheritedHeadersLabel?: string;
   stateKey: string;
   onChange: (headers: HttpRequestHeader[]) => void;
   label?: string;
@@ -28,11 +29,20 @@ export function HeadersEditor({
   stateKey,
   headers,
   inheritedHeaders,
+  inheritedHeadersLabel = 'Inherited',
   onChange,
   forceUpdateKey,
 }: Props) {
+  // Get header names defined at current level (case-insensitive)
+  const currentHeaderNames = new Set(
+    headers.filter((h) => h.name).map((h) => h.name.toLowerCase()),
+  );
+  // Filter inherited headers: must be enabled, have content, and not be overridden by current level
   const validInheritedHeaders =
-    inheritedHeaders?.filter((pair) => pair.enabled && (pair.name || pair.value)) ?? [];
+    inheritedHeaders?.filter(
+      (pair) =>
+        pair.enabled && (pair.name || pair.value) && !currentHeaderNames.has(pair.name.toLowerCase()),
+    ) ?? [];
   const hasInheritedHeaders = validInheritedHeaders.length > 0;
   return (
     <div
@@ -48,7 +58,7 @@ export function HeadersEditor({
           className="text-sm"
           summary={
             <HStack>
-              Inherited <CountBadge count={validInheritedHeaders.length} />
+              {inheritedHeadersLabel} <CountBadge count={validInheritedHeaders.length} />
             </HStack>
           }
         >

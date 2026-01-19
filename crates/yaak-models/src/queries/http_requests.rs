@@ -1,3 +1,4 @@
+use super::dedupe_headers;
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{Folder, FolderIden, HttpRequest, HttpRequestHeader, HttpRequestIden};
@@ -87,7 +88,7 @@ impl<'a> DbContext<'a> {
 
         headers.append(&mut http_request.headers.clone());
 
-        Ok(headers)
+        Ok(dedupe_headers(headers))
     }
 
     pub fn list_http_requests_for_folder_recursive(

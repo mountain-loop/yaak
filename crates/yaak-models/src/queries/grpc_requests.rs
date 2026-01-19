@@ -1,3 +1,4 @@
+use super::dedupe_headers;
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{GrpcRequest, GrpcRequestIden, HttpRequestHeader};
@@ -87,6 +88,6 @@ impl<'a> DbContext<'a> {
 
         metadata.append(&mut grpc_request.metadata.clone());
 
-        Ok(metadata)
+        Ok(dedupe_headers(metadata))
     }
 }

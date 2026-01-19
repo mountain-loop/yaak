@@ -1,3 +1,4 @@
+use super::dedupe_headers;
 use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{HttpRequestHeader, WebsocketRequest, WebsocketRequestIden};
@@ -95,6 +96,6 @@ impl<'a> DbContext<'a> {
 
         headers.append(&mut websocket_request.headers.clone());
 
-        Ok(headers)
+        Ok(dedupe_headers(headers))
     }
 }

@@ -65,28 +65,7 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn upsert_workspace(&self, w: &Workspace, source: &UpdateSource) -> Result<Workspace> {
-        let mut workspace = w.clone();
-
-        // Add default headers only for NEW workspaces (empty ID means insert, not update)
-        // This prevents re-adding headers if a user intentionally removes all headers
-        if workspace.id.is_empty() && workspace.headers.is_empty() {
-            workspace.headers = vec![
-                HttpRequestHeader {
-                    enabled: true,
-                    name: "User-Agent".to_string(),
-                    value: "yaak".to_string(),
-                    id: None,
-                },
-                HttpRequestHeader {
-                    enabled: true,
-                    name: "Accept".to_string(),
-                    value: "*/*".to_string(),
-                    id: None,
-                },
-            ];
-        }
-
-        self.upsert(&workspace, source)
+        self.upsert(w, source)
     }
 
     pub fn resolve_auth_for_workspace(
@@ -101,6 +80,28 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn resolve_headers_for_workspace(&self, workspace: &Workspace) -> Vec<HttpRequestHeader> {
-        workspace.headers.clone()
+        let mut headers = default_headers();
+        headers.extend(workspace.headers.clone());
+        headers
     }
+}
+
+/// Global default headers that are always sent with requests unless overridden.
+/// These are prepended to the inheritance chain so workspace/folder/request headers
+/// can override or disable them.
+pub fn default_headers() -> Vec<HttpRequestHeader> {
+    vec![
+        HttpRequestHeader {
+            enabled: true,
+            name: "User-Agent".to_string(),
+            value: "yaak".to_string(),
+            id: None,
+        },
+        HttpRequestHeader {
+            enabled: true,
+            name: "Accept".to_string(),
+            value: "*/*".to_string(),
+            id: None,
+        },
+    ]
 }

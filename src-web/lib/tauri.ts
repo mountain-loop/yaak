@@ -12,6 +12,7 @@ type TauriCmd =
   | 'cmd_create_grpc_request'
   | 'cmd_curl_to_request'
   | 'cmd_decrypt_template'
+  | 'cmd_default_headers'
   | 'cmd_delete_all_grpc_connections'
   | 'cmd_delete_all_http_responses'
   | 'cmd_delete_send_history'

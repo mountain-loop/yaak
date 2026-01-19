@@ -4,6 +4,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow, command};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use yaak_crypto::manager::EncryptionManager;
+use yaak_models::models::HttpRequestHeader;
+use yaak_models::queries::workspaces::default_headers;
 use yaak_plugins::events::GetThemesResponse;
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::native_template_functions::{
@@ -96,4 +98,9 @@ pub(crate) async fn cmd_set_workspace_key<R: Runtime>(
 ) -> Result<()> {
     window.crypto().set_human_key(workspace_id, key)?;
     Ok(())
+}
+
+#[command]
+pub(crate) fn cmd_default_headers() -> Vec<HttpRequestHeader> {
+    default_headers()
 }
