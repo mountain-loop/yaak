@@ -33,8 +33,16 @@ export function HeadersEditor({
   onChange,
   forceUpdateKey,
 }: Props) {
+  // Get header names defined at current level (case-insensitive)
+  const currentHeaderNames = new Set(
+    headers.filter((h) => h.name).map((h) => h.name.toLowerCase()),
+  );
+  // Filter inherited headers: must be enabled, have content, and not be overridden by current level
   const validInheritedHeaders =
-    inheritedHeaders?.filter((pair) => pair.enabled && (pair.name || pair.value)) ?? [];
+    inheritedHeaders?.filter(
+      (pair) =>
+        pair.enabled && (pair.name || pair.value) && !currentHeaderNames.has(pair.name.toLowerCase()),
+    ) ?? [];
   const hasInheritedHeaders = validInheritedHeaders.length > 0;
   return (
     <div

@@ -41,5 +41,13 @@ export function useInheritedHeaders(baseModel: HeaderModel | null) {
     return [...headers, ...parent.headers];
   };
 
-  return next(baseModel);
+  const allHeaders = next(baseModel);
+
+  // Deduplicate by header name (case-insensitive), keeping the latest (most specific) value
+  const headersByName = new Map<string, HttpRequestHeader>();
+  for (const header of allHeaders) {
+    headersByName.set(header.name.toLowerCase(), header);
+  }
+
+  return Array.from(headersByName.values());
 }
