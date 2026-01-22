@@ -71,7 +71,7 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
       onChange={handleChange}
     >
       <Button size="xs" className={classNames(className, 'text-text-subtle hover:text')}>
-        <HttpMethodTag request={request} />
+        <HttpMethodTag request={request} noAlias />
       </Button>
     </RadioDropdown>
   );
