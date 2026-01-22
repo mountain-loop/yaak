@@ -171,7 +171,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
               onCancel={hide}
               onSelect={async (branch) => {
                 await mergeBranch.mutateAsync(
-                  { branch, force: false },
+                  { branch },
                   {
                     disableToastError: true,
                     onSettled: hide,

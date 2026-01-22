@@ -7,7 +7,7 @@ pub mod error;
 mod fetch;
 mod init;
 mod log;
-mod merge;
+
 mod pull;
 mod push;
 mod remotes;

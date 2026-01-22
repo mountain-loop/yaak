@@ -16,22 +16,22 @@ use yaak_git::{
 
 #[command]
 pub async fn cmd_git_checkout(dir: &Path, branch: &str, force: bool) -> Result<String> {
-    Ok(git_checkout_branch(dir, branch, force)?)
+    Ok(git_checkout_branch(dir, branch, force).await?)
 }
 
 #[command]
 pub async fn cmd_git_branch(dir: &Path, branch: &str) -> Result<()> {
-    Ok(git_create_branch(dir, branch)?)
+    Ok(git_create_branch(dir, branch).await?)
 }
 
 #[command]
 pub async fn cmd_git_delete_branch(dir: &Path, branch: &str) -> Result<()> {
-    Ok(git_delete_branch(dir, branch)?)
+    Ok(git_delete_branch(dir, branch).await?)
 }
 
 #[command]
-pub async fn cmd_git_merge_branch(dir: &Path, branch: &str, force: bool) -> Result<()> {
-    Ok(git_merge_branch(dir, branch, force)?)
+pub async fn cmd_git_merge_branch(dir: &Path, branch: &str) -> Result<()> {
+    Ok(git_merge_branch(dir, branch).await?)
 }
 
 #[command]

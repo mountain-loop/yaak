@@ -95,7 +95,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationFn: (args) => invoke('cmd_git_branch', { dir, ...args }),
       onSuccess,
     }),
-    mergeBranch: createFastMutation<void, string, { branch: string; force: boolean }>({
+    mergeBranch: createFastMutation<void, string, { branch: string }>({
       mutationKey: ['git', 'merge', dir],
       mutationFn: (args) => invoke('cmd_git_merge_branch', { dir, ...args }),
       onSuccess,

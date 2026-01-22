@@ -1,99 +1,123 @@
+use crate::binary::new_binary_command;
 use crate::error::Error::GenericError;
 use crate::error::Result;
-use crate::merge::do_merge;
-use crate::repository::open_repo;
-use crate::util::{bytes_to_string, get_branch_by_name, get_current_branch};
-use git2::BranchType;
-use git2::build::CheckoutBuilder;
-use log::info;
 use std::path::Path;
 
-pub fn git_checkout_branch(dir: &Path, branch_name: &str, force: bool) -> Result<String> {
-    if branch_name.starts_with("origin/") {
-        return git_checkout_remote_branch(dir, branch_name, force);
-    }
+pub async fn git_checkout_branch(dir: &Path, branch_name: &str, force: bool) -> Result<String> {
+    let branch_name = branch_name.trim_start_matches("origin/");
 
-    let repo = open_repo(dir)?;
-    let branch = get_branch_by_name(&repo, branch_name)?;
-    let branch_ref = branch.into_reference();
-    let branch_tree = branch_ref.peel_to_tree()?;
-
-    let mut options = CheckoutBuilder::default();
+    let mut args = vec!["checkout"];
     if force {
-        options.force();
+        args.push("--force");
     }
+    args.push(branch_name);
 
-    repo.checkout_tree(branch_tree.as_object(), Some(&mut options))?;
-    repo.set_head(branch_ref.name().unwrap())?;
+    let out = new_binary_command(dir)
+        .await?
+        .args(&args)
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to run git checkout: {e}")))?;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    if !out.status.success() {
+        return Err(GenericError(format!("Failed to checkout: {}", combined.trim())));
+    }
 
     Ok(branch_name.to_string())
 }
 
-pub(crate) fn git_checkout_remote_branch(
-    dir: &Path,
-    branch_name: &str,
-    force: bool,
-) -> Result<String> {
-    let branch_name = branch_name.trim_start_matches("origin/");
-    let repo = open_repo(dir)?;
+pub async fn git_create_branch(dir: &Path, name: &str) -> Result<()> {
+    let out = new_binary_command(dir)
+        .await?
+        .args(["branch", name])
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to run git branch: {e}")))?;
 
-    let refname = format!("refs/remotes/origin/{}", branch_name);
-    let remote_ref = repo.find_reference(&refname)?;
-    let commit = remote_ref.peel_to_commit()?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = format!("{}{}", stdout, stderr);
 
-    let mut new_branch = repo.branch(branch_name, &commit, false)?;
-    let upstream_name = format!("origin/{}", branch_name);
-    new_branch.set_upstream(Some(&upstream_name))?;
-
-    git_checkout_branch(dir, branch_name, force)
-}
-
-pub fn git_create_branch(dir: &Path, name: &str) -> Result<()> {
-    let repo = open_repo(dir)?;
-    let head = match repo.head() {
-        Ok(h) => h,
-        Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
-            let msg = "Cannot create branch when there are no commits";
-            return Err(GenericError(msg.into()));
-        }
-        Err(e) => return Err(e.into()),
-    };
-    let head = head.peel_to_commit()?;
-
-    repo.branch(name, &head, false)?;
-
-    Ok(())
-}
-
-pub fn git_delete_branch(dir: &Path, name: &str) -> Result<()> {
-    let repo = open_repo(dir)?;
-    let mut branch = get_branch_by_name(&repo, name)?;
-
-    if branch.is_head() {
-        info!("Deleting head branch");
-        let branches = repo.branches(Some(BranchType::Local))?;
-        let other_branch = branches.into_iter().filter_map(|b| b.ok()).find(|b| !b.0.is_head());
-        let other_branch = match other_branch {
-            None => return Err(GenericError("Cannot delete only branch".into())),
-            Some(b) => bytes_to_string(b.0.name_bytes()?)?,
-        };
-
-        git_checkout_branch(dir, &other_branch, true)?;
+    if !out.status.success() {
+        return Err(GenericError(format!("Failed to create branch: {}", combined.trim())));
     }
 
-    branch.delete()?;
+    Ok(())
+}
+
+pub async fn git_delete_branch(dir: &Path, name: &str) -> Result<()> {
+    // Get current branch name
+    let head_out = new_binary_command(dir)
+        .await?
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to get current branch: {e}")))?;
+
+    let current_branch = String::from_utf8_lossy(&head_out.stdout).trim().to_string();
+
+    // If trying to delete the current branch, switch to another one first
+    if current_branch == name {
+        // Get list of local branches
+        let branches_out = new_binary_command(dir)
+            .await?
+            .args(["branch", "--format=%(refname:short)"])
+            .output()
+            .await
+            .map_err(|e| GenericError(format!("failed to list branches: {e}")))?;
+
+        let branches_str = String::from_utf8_lossy(&branches_out.stdout);
+        let other_branch = branches_str
+            .lines()
+            .find(|b| *b != name)
+            .ok_or_else(|| GenericError("Cannot delete the only branch".to_string()))?;
+
+        git_checkout_branch(dir, other_branch, true).await?;
+    }
+
+    let out = new_binary_command(dir)
+        .await?
+        .args(["branch", "-d", name])
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to run git branch -d: {e}")))?;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    if !out.status.success() {
+        return Err(GenericError(format!("Failed to delete branch: {}", combined.trim())));
+    }
 
     Ok(())
 }
 
-pub fn git_merge_branch(dir: &Path, name: &str, _force: bool) -> Result<()> {
-    let repo = open_repo(dir)?;
-    let local_branch = get_current_branch(&repo)?.unwrap();
+pub async fn git_merge_branch(dir: &Path, name: &str) -> Result<()> {
+    let out = new_binary_command(dir)
+        .await?
+        .args(["merge", name])
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to run git merge: {e}")))?;
 
-    let commit_to_merge = get_branch_by_name(&repo, name)?.into_reference();
-    let commit_to_merge = repo.reference_to_annotated_commit(&commit_to_merge)?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = format!("{}{}", stdout, stderr);
 
-    do_merge(&repo, &local_branch, &commit_to_merge)?;
+    if !out.status.success() {
+        // Check for merge conflicts
+        if combined.to_lowercase().contains("conflict") {
+            return Err(GenericError(
+                "Merge conflicts detected. Please resolve them manually.".to_string(),
+            ));
+        }
+        return Err(GenericError(format!("Failed to merge: {}", combined.trim())));
+    }
 
     Ok(())
 }
