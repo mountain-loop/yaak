@@ -2,6 +2,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { McpServerContext } from '../types.js';
 import { getWorkspaceContext } from './helpers.js';
+import {
+  authenticationSchema,
+  authenticationTypeSchema,
+  headersSchema,
+  workspaceIdSchema,
+} from './schemas.js';
 
 export function registerFolderTools(server: McpServer, ctx: McpServerContext) {
   server.registerTool(
@@ -10,10 +16,7 @@ export function registerFolderTools(server: McpServer, ctx: McpServerContext) {
       title: 'List Folders',
       description: 'List all folders in a workspace',
       inputSchema: {
-        workspaceId: z
-          .string()
-          .optional()
-          .describe('Workspace ID (required if multiple workspaces are open)'),
+        workspaceId: workspaceIdSchema,
       },
     },
     async ({ workspaceId }) => {
@@ -38,10 +41,7 @@ export function registerFolderTools(server: McpServer, ctx: McpServerContext) {
       description: 'Get details of a specific folder by ID',
       inputSchema: {
         id: z.string().describe('The folder ID'),
-        workspaceId: z
-          .string()
-          .optional()
-          .describe('Workspace ID (required if multiple workspaces are open)'),
+        workspaceId: workspaceIdSchema,
       },
     },
     async ({ id, workspaceId }) => {
@@ -65,43 +65,14 @@ export function registerFolderTools(server: McpServer, ctx: McpServerContext) {
       title: 'Create Folder',
       description: 'Create a new folder in a workspace',
       inputSchema: {
-        workspaceId: z
-          .string()
-          .optional()
-          .describe('Workspace ID (required if multiple workspaces are open)'),
+        workspaceId: workspaceIdSchema,
         name: z.string().describe('Folder name'),
         folderId: z.string().optional().describe('Parent folder ID (for nested folders)'),
         description: z.string().optional().describe('Folder description'),
         sortPriority: z.number().optional().describe('Sort priority for ordering'),
-        headers: z
-          .array(
-            z.object({
-              name: z.string(),
-              value: z.string(),
-              enabled: z.boolean().default(true),
-            }),
-          )
-          .optional()
-          .describe('Default headers to apply to requests in this folder'),
-        authenticationType: z
-          .string()
-          .optional()
-          .describe(
-            'Authentication type. Common values: "basic", "bearer", "oauth2", "apikey", "jwt", "awsv4", "oauth1", "ntlm", "none". Use null to inherit from parent.',
-          ),
-        authentication: z
-          .record(z.string(), z.any())
-          .optional()
-          .describe(
-            'Authentication configuration object. Structure varies by authenticationType:\n' +
-              '- "basic": { username: "user", password: "pass" }\n' +
-              '- "bearer": { token: "abc123", prefix: "Bearer" }\n' +
-              '- "oauth2": { clientId: "...", clientSecret: "...", grantType: "authorization_code", authorizationUrl: "...", accessTokenUrl: "...", scope: "...", ... }\n' +
-              '- "apikey": { location: "header" | "query", key: "X-API-Key", value: "..." }\n' +
-              '- "jwt": { algorithm: "HS256", secret: "...", payload: "{ ... }" }\n' +
-              '- "awsv4": { accessKeyId: "...", secretAccessKey: "...", service: "sts", region: "us-east-1", sessionToken: "..." }\n' +
-              '- "none": {}',
-          ),
+        headers: headersSchema.describe('Default headers to apply to requests in this folder'),
+        authenticationType: authenticationTypeSchema,
+        authentication: authenticationSchema,
       },
     },
     async ({ workspaceId: ogWorkspaceId, ...args }) => {
@@ -129,43 +100,14 @@ export function registerFolderTools(server: McpServer, ctx: McpServerContext) {
       description: 'Update an existing folder',
       inputSchema: {
         id: z.string().describe('Folder ID to update'),
-        workspaceId: z
-          .string()
-          .optional()
-          .describe('Workspace ID (required if multiple workspaces are open)'),
+        workspaceId: workspaceIdSchema,
         name: z.string().optional().describe('Folder name'),
         folderId: z.string().optional().describe('Parent folder ID (for nested folders)'),
         description: z.string().optional().describe('Folder description'),
         sortPriority: z.number().optional().describe('Sort priority for ordering'),
-        headers: z
-          .array(
-            z.object({
-              name: z.string(),
-              value: z.string(),
-              enabled: z.boolean().default(true),
-            }),
-          )
-          .optional()
-          .describe('Default headers to apply to requests in this folder'),
-        authenticationType: z
-          .string()
-          .optional()
-          .describe(
-            'Authentication type. Common values: "basic", "bearer", "oauth2", "apikey", "jwt", "awsv4", "oauth1", "ntlm", "none". Use null to inherit from parent.',
-          ),
-        authentication: z
-          .record(z.string(), z.any())
-          .optional()
-          .describe(
-            'Authentication configuration object. Structure varies by authenticationType:\n' +
-              '- "basic": { username: "user", password: "pass" }\n' +
-              '- "bearer": { token: "abc123", prefix: "Bearer" }\n' +
-              '- "oauth2": { clientId: "...", clientSecret: "...", grantType: "authorization_code", authorizationUrl: "...", accessTokenUrl: "...", scope: "...", ... }\n' +
-              '- "apikey": { location: "header" | "query", key: "X-API-Key", value: "..." }\n' +
-              '- "jwt": { algorithm: "HS256", secret: "...", payload: "{ ... }" }\n' +
-              '- "awsv4": { accessKeyId: "...", secretAccessKey: "...", service: "sts", region: "us-east-1", sessionToken: "..." }\n' +
-              '- "none": {}',
-          ),
+        headers: headersSchema.describe('Default headers to apply to requests in this folder'),
+        authenticationType: authenticationTypeSchema,
+        authentication: authenticationSchema,
       },
     },
     async ({ id, workspaceId, ...updates }) => {
