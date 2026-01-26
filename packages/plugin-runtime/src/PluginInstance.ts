@@ -11,6 +11,7 @@ import type {
   DeleteKeyValueResponse,
   DeleteModelResponse,
   FindHttpResponsesResponse,
+  Folder,
   GetCookieValueRequest,
   GetCookieValueResponse,
   GetHttpRequestByIdResponse,
@@ -781,6 +782,44 @@ export class PluginInstance {
           const payload = { type: 'list_folders_request' } as const;
           const { folders } = await this.#sendForReply<ListFoldersResponse>(context, payload);
           return folders;
+        },
+        getById: async (args: { id: string }) => {
+          const payload = { type: 'list_folders_request' } as const;
+          const { folders } = await this.#sendForReply<ListFoldersResponse>(context, payload);
+          return folders.find((f) => f.id === args.id) ?? null;
+        },
+        create: async (args) => {
+          const payload = {
+            type: 'upsert_model_request',
+            model: {
+              name: '',
+              ...args,
+              id: '',
+              model: 'folder',
+            },
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
+          return response.model as Folder;
+        },
+        update: async (args) => {
+          const payload = {
+            type: 'upsert_model_request',
+            model: {
+              model: 'folder',
+              ...args,
+            },
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
+          return response.model as Folder;
+        },
+        delete: async (args: { id: string }) => {
+          const payload = {
+            type: 'delete_model_request',
+            model: 'folder',
+            id: args.id,
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<DeleteModelResponse>(context, payload);
+          return response.model as Folder;
         },
       },
       cookies: {
