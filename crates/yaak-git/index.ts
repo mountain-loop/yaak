@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { createFastMutation } from '@yaakapp/app/hooks/useFastMutation';
 import { queryClient } from '@yaakapp/app/lib/queryClient';
 import { useMemo } from 'react';
-import { BranchDeleteResult, GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
+import { BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
 
 export * from './bindings/gen_git';
 
@@ -173,4 +173,29 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
 
 async function getRemotes(dir: string) {
   return invoke<GitRemote[]>('cmd_git_remotes', { dir });
+}
+
+/**
+ * Clone a git repository, prompting for credentials if needed.
+ */
+export async function gitClone(
+  url: string,
+  dir: string,
+  promptCredentials: (args: { url: string; error: string | null }) => Promise<GitCredentials | null>,
+): Promise<CloneResult> {
+  const result = await invoke<CloneResult>('cmd_git_clone', { url, dir });
+  if (result.type !== 'needs_credentials') return result;
+
+  // Prompt for credentials
+  const creds = await promptCredentials({ url: result.url, error: result.error });
+  if (creds == null) return {type: 'cancelled'};
+
+  // Store credentials and retry
+  await invoke('cmd_git_add_credential', {
+    remoteUrl: result.url,
+    username: creds.username,
+    password: creds.password,
+  });
+
+  return invoke<CloneResult>('cmd_git_clone', { url, dir });
 }

@@ -12,6 +12,7 @@ use ts_rs::TS;
 #[ts(export, export_to = "gen_git.ts")]
 pub enum CloneResult {
     Success,
+    Cancelled,
     NeedsCredentials { url: String, error: Option<String> },
 }
 

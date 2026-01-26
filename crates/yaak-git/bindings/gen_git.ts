@@ -3,7 +3,7 @@ import type { SyncModel } from "./gen_models";
 
 export type BranchDeleteResult = { "type": "success", message: string, } | { "type": "not_fully_merged" };
 
-export type CloneResult = { "type": "success" } | { "type": "needs_credentials", url: string, error: string | null, };
+export type CloneResult = { "type": "success" } | { "type": "cancelled" } | { "type": "needs_credentials", url: string, error: string | null, };
 
 export type GitAuthor = { name: string | null, email: string | null, };
 

@@ -1,12 +1,12 @@
 import { open } from '@tauri-apps/plugin-dialog';
-import type { CloneResult } from '@yaakapp-internal/git';
+import { gitClone } from '@yaakapp-internal/git';
 import { useState } from 'react';
 import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
 import { appInfo } from '../lib/appInfo';
-import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
+import { Checkbox } from './core/Checkbox';
 import { IconButton } from './core/IconButton';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
@@ -25,6 +25,8 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
   const [url, setUrl] = useState<string>('');
   const [baseDirectory, setBaseDirectory] = useState<string>(appInfo.defaultProjectDir);
   const [directoryOverride, setDirectoryOverride] = useState<string | null>(null);
+  const [hasSubdirectory, setHasSubdirectory] = useState(false);
+  const [subdirectory, setSubdirectory] = useState<string>('');
   const [isCloning, setIsCloning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +34,8 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
   const sep = getPathSeparator(baseDirectory);
   const computedDirectory = repoName ? `${baseDirectory}${sep}${repoName}` : baseDirectory;
   const directory = directoryOverride ?? computedDirectory;
+  const workspaceDirectory =
+    hasSubdirectory && subdirectory ? `${directory}${sep}${subdirectory}` : directory;
 
   const handleSelectDirectory = async () => {
     const dir = await open({
@@ -45,24 +49,6 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
     }
   };
 
-  const doClone = async (): Promise<CloneResult> => {
-    const result = await invokeCmd<CloneResult>('cmd_git_clone', { url, dir: directory });
-    if (result.type !== 'needs_credentials') return result;
-
-    // Prompt for credentials
-    const creds = await promptCredentials({ url: result.url, error: result.error });
-    if (creds == null) throw new Error('Cancelled');
-
-    // Store credentials and retry
-    await invokeCmd('cmd_git_add_credential', {
-      remoteUrl: result.url,
-      username: creds.username,
-      password: creds.password,
-    });
-
-    return invokeCmd<CloneResult>('cmd_git_clone', { url, dir: directory });
-  };
-
   const handleClone = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url || !directory) return;
@@ -71,7 +57,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
     setError(null);
 
     try {
-      const result = await doClone();
+      const result = await gitClone(url, directory, promptCredentials);
 
       if (result.type === 'needs_credentials') {
         setError(
@@ -80,8 +66,8 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
         return;
       }
 
-      // Open the workspace from the cloned directory
-      await openWorkspaceFromSyncDir.mutateAsync(directory);
+      // Open the workspace from the cloned directory (or subdirectory)
+      await openWorkspaceFromSyncDir.mutateAsync(workspaceDirectory);
 
       hide();
     } catch (err) {
@@ -127,6 +113,22 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
           />
         }
       />
+
+      <Checkbox
+        checked={hasSubdirectory}
+        onChange={setHasSubdirectory}
+        title="Workspace is in a subdirectory"
+        help="Enable if the Yaak workspace files are not at the root of the repository"
+      />
+
+      {hasSubdirectory && (
+        <PlainInput
+          label="Subdirectory"
+          placeholder="path/to/workspace"
+          defaultValue={subdirectory}
+          onChange={setSubdirectory}
+        />
+      )}
 
       <Button
         type="submit"
