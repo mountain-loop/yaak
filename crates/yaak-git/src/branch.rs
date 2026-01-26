@@ -108,3 +108,22 @@ pub async fn git_merge_branch(dir: &Path, name: &str) -> Result<()> {
 
     Ok(())
 }
+
+pub async fn git_rename_branch(dir: &Path, old_name: &str, new_name: &str) -> Result<()> {
+    let out = new_binary_command(dir)
+        .await?
+        .args(["branch", "-m", old_name, new_name])
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to run git branch -m: {e}")))?;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    if !out.status.success() {
+        return Err(GenericError(format!("Failed to rename branch: {}", combined.trim())));
+    }
+
+    Ok(())
+}

@@ -105,6 +105,11 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationFn: (args) => invoke('cmd_git_delete_branch', { dir, ...args }),
       onSuccess,
     }),
+    renameBranch: createFastMutation<void, string, { oldName: string, newName: string }>({
+      mutationKey: ['git', 'rename-branch', dir],
+      mutationFn: (args) => invoke('cmd_git_rename_branch', { dir, ...args }),
+      onSuccess,
+    }),
     checkout: createFastMutation<string, string, { branch: string; force: boolean }>({
       mutationKey: ['git', 'checkout', dir],
       mutationFn: (args) => invoke('cmd_git_checkout', { dir, ...args }),

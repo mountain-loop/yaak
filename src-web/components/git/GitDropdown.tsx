@@ -39,7 +39,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const workspace = useAtomValue(activeWorkspaceAtom);
   const [
     { status, log },
-    { branch, deleteBranch, fetchAll, mergeBranch, push, pull, checkout, init },
+    { branch, deleteBranch, renameBranch, fetchAll, mergeBranch, push, pull, checkout, init },
   ] = useGit(syncDir, gitCallbacks(syncDir));
 
   const localBranches = status.data?.localBranches ?? [];
@@ -215,6 +215,44 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             label: 'Checkout',
             hidden: isCurrent,
             onSelect: () => tryCheckout(branch, false),
+          },
+          {
+            label: 'Rename',
+            async onSelect() {
+              const newName = await showPrompt({
+                id: 'git-rename-branch',
+                title: 'Rename Branch',
+                label: 'New Branch Name',
+                defaultValue: branch,
+              });
+              if (!newName || newName === branch) return;
+
+              await renameBranch.mutateAsync(
+                { oldName: branch, newName },
+                {
+                  disableToastError: true,
+                  onSuccess() {
+                    showToast({
+                      id: 'git-rename-branch-success',
+                      message: (
+                        <>
+                          Renamed <InlineCode>{branch}</InlineCode> to{' '}
+                          <InlineCode>{newName}</InlineCode>
+                        </>
+                      ),
+                      color: 'success',
+                    });
+                  },
+                  onError(err) {
+                    showErrorToast({
+                      id: 'git-rename-branch-error',
+                      title: 'Error renaming branch',
+                      message: String(err),
+                    });
+                  },
+                },
+              );
+            },
           },
           {
             label: <>Merge into <InlineCode>{currentBranch}</InlineCode></>,
