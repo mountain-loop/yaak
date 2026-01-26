@@ -304,6 +304,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       defaultSelectedIndex ?? -1,
       [defaultSelectedIndex],
     );
+
     const [filter, setFilter] = useState<string>('');
 
     // Clear filter when menu opens
@@ -412,6 +413,14 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       },
       [items, setSelectedIndex],
     );
+
+    // Ensure selection is on a valid item (not hidden/separator/content)
+    useEffect(() => {
+      const item = items[selectedIndex ?? -1];
+      if (item?.hidden || item?.type === 'separator' || item?.type === 'content') {
+        handleNext();
+      }
+    }, [selectedIndex, items, handleNext]);
 
     useKey(
       'ArrowUp',
