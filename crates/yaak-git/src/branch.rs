@@ -75,7 +75,7 @@ pub async fn git_delete_branch(dir: &Path, name: &str, force: bool) -> Result<Br
     let stderr = String::from_utf8_lossy(&out.stderr);
     let combined = format!("{}{}", stdout, stderr);
 
-    if combined.contains("not fully merged") {
+    if !out.status.success() && stderr.to_lowercase().contains("not fully merged") {
         return Ok(BranchDeleteResult::NotFullyMerged);
     }
 

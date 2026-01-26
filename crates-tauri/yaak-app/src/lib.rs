@@ -101,6 +101,7 @@ struct AppMetaData {
     app_data_dir: String,
     app_log_dir: String,
     vendored_plugin_dir: String,
+    default_project_dir: String,
     feature_updater: bool,
     feature_license: bool,
 }
@@ -111,6 +112,7 @@ async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
     let app_log_dir = app_handle.path().app_log_dir()?;
     let vendored_plugin_dir =
         app_handle.path().resolve("vendored/plugins", BaseDirectory::Resource)?;
+    let default_project_dir = app_handle.path().home_dir()?.join("YaakProjects");
     Ok(AppMetaData {
         is_dev: is_dev(),
         version: app_handle.package_info().version.to_string(),
@@ -118,6 +120,7 @@ async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
         app_data_dir: app_data_dir.to_string_lossy().to_string(),
         app_log_dir: app_log_dir.to_string_lossy().to_string(),
         vendored_plugin_dir: vendored_plugin_dir.to_string_lossy().to_string(),
+        default_project_dir: default_project_dir.to_string_lossy().to_string(),
         feature_license: cfg!(feature = "license"),
         feature_updater: cfg!(feature = "updater"),
     })
@@ -1753,6 +1756,7 @@ pub fn run() {
             git_ext::cmd_git_status,
             git_ext::cmd_git_log,
             git_ext::cmd_git_initialize,
+            git_ext::cmd_git_clone,
             git_ext::cmd_git_commit,
             git_ext::cmd_git_fetch_all,
             git_ext::cmd_git_push,

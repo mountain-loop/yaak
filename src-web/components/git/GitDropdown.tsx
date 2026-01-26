@@ -17,7 +17,6 @@ import type { DropdownItem } from '../core/Dropdown';
 import { Dropdown } from '../core/Dropdown';
 import { Icon } from '../core/Icon';
 import { InlineCode } from '../core/InlineCode';
-import { BranchSelectionDialog } from './BranchSelectionDialog';
 import { gitCallbacks } from './callbacks';
 import { GitCommitDialog } from './GitCommitDialog';
 import { GitRemotesDialog } from './GitRemotesDialog';
@@ -39,7 +38,18 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const workspace = useAtomValue(activeWorkspaceAtom);
   const [
     { status, log },
-    { createBranch, deleteBranch, deleteRemoteBranch, renameBranch, fetchAll, mergeBranch, push, pull, checkout, init },
+    {
+      createBranch,
+      deleteBranch,
+      deleteRemoteBranch,
+      renameBranch,
+      fetchAll,
+      mergeBranch,
+      push,
+      pull,
+      checkout,
+      init,
+    },
   ] = useGit(syncDir, gitCallbacks(syncDir));
 
   const localBranches = status.data?.localBranches ?? [];
@@ -222,54 +232,38 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             onSelect: () => tryCheckout(branch, false),
           },
           {
-            label: <>Merge into <InlineCode>{currentBranch}</InlineCode></>,
+            label: (
+              <>
+                Merge into <InlineCode>{currentBranch}</InlineCode>
+              </>
+            ),
             hidden: isCurrent,
             async onSelect() {
-              showDialog({
-                id: 'git-merge',
-                title: 'Merge Branch',
-                size: 'sm',
-                description: (
-                  <>
-                    Select a branch to merge into <InlineCode>{currentBranch}</InlineCode>
-                  </>
-                ),
-                render: ({ hide }) => (
-                  <BranchSelectionDialog
-                    selectText="Merge"
-                    branches={localBranches.filter((b) => b !== currentBranch)}
-                    onCancel={hide}
-                    onSelect={async (branch) => {
-                      await mergeBranch.mutateAsync(
-                        { branch },
-                        {
-                          disableToastError: true,
-                          onSettled: hide,
-                          onSuccess() {
-                            showToast({
-                              id: 'git-merged-branch',
-                              message: (
-                                <>
-                                  Merged <InlineCode>{branch}</InlineCode> into{' '}
-                                  <InlineCode>{currentBranch}</InlineCode>
-                                </>
-                              ),
-                            });
-                            sync({ force: true });
-                          },
-                          onError(err) {
-                            showErrorToast({
-                              id: 'git-merged-branch-error',
-                              title: 'Error merging branch',
-                              message: String(err),
-                            });
-                          },
-                        },
-                      );
-                    }}
-                  />
-                ),
-              });
+              await mergeBranch.mutateAsync(
+                { branch },
+                {
+                  disableToastError: true,
+                  onSuccess() {
+                    showToast({
+                      id: 'git-merged-branch',
+                      message: (
+                        <>
+                          Merged <InlineCode>{branch}</InlineCode> into{' '}
+                          <InlineCode>{currentBranch}</InlineCode>
+                        </>
+                      ),
+                    });
+                    sync({ force: true });
+                  },
+                  onError(err) {
+                    showErrorToast({
+                      id: 'git-merged-branch-error',
+                      title: 'Error merging branch',
+                      message: String(err),
+                    });
+                  },
+                },
+              );
             },
           },
           {
@@ -347,8 +341,6 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             color: 'danger',
             hidden: isCurrent,
             onSelect: async () => {
-              if (currentBranch == null) return;
-
               const confirmed = await showConfirmDelete({
                 id: 'git-delete-branch',
                 title: 'Delete Branch',
@@ -362,19 +354,19 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                 return;
               }
 
-                const result = await deleteBranch.mutateAsync(
-                  { branch },
-                  {
-                    disableToastError: true,
-                    onError(err) {
-                      showErrorToast({
-                        id: 'git-delete-branch-error',
-                        title: 'Error deleting branch',
-                        message: String(err),
-                      });
-                    },
+              const result = await deleteBranch.mutateAsync(
+                { branch },
+                {
+                  disableToastError: true,
+                  onError(err) {
+                    showErrorToast({
+                      id: 'git-delete-branch-error',
+                      title: 'Error deleting branch',
+                      message: String(err),
+                    });
                   },
-                );
+                },
+              );
 
               if (result.type === 'not_fully_merged') {
                 const confirmed = await showConfirm({
@@ -385,9 +377,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                       <p>
                         Branch <InlineCode>{branch}</InlineCode> is not fully merged.
                       </p>
-                      <p>
-                        Do you want to delete it anyway?
-                      </p>
+                      <p>Do you want to delete it anyway?</p>
                     </>
                   ),
                 });
