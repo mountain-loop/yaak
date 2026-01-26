@@ -6,10 +6,10 @@ use crate::error::Result;
 use std::path::{Path, PathBuf};
 use tauri::command;
 use yaak_git::{
-    GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult, git_add, git_add_credential,
-    git_add_remote, git_checkout_branch, git_commit, git_create_branch, git_delete_branch,
-    git_fetch_all, git_init, git_log, git_merge_branch, git_pull, git_push, git_remotes,
-    git_rm_remote, git_status, git_unstage,
+    BranchDeleteResult, GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult, git_add,
+    git_add_credential, git_add_remote, git_checkout_branch, git_commit, git_create_branch,
+    git_delete_branch, git_fetch_all, git_init, git_log, git_merge_branch, git_pull, git_push,
+    git_remotes, git_rm_remote, git_status, git_unstage,
 };
 
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
@@ -25,8 +25,12 @@ pub async fn cmd_git_branch(dir: &Path, branch: &str) -> Result<()> {
 }
 
 #[command]
-pub async fn cmd_git_delete_branch(dir: &Path, branch: &str) -> Result<()> {
-    Ok(git_delete_branch(dir, branch).await?)
+pub async fn cmd_git_delete_branch(
+    dir: &Path,
+    branch: &str,
+    force: Option<bool>,
+) -> Result<BranchDeleteResult> {
+    Ok(git_delete_branch(dir, branch, force.unwrap_or(false)).await?)
 }
 
 #[command]

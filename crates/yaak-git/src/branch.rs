@@ -1,7 +1,18 @@
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
 use crate::binary::new_binary_command;
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use std::path::Path;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case", tag = "type")]
+#[ts(export, export_to = "gen_git.ts")]
+pub enum BranchDeleteResult {
+    Success { message: String },
+    NotFullyMerged,
+}
 
 pub async fn git_checkout_branch(dir: &Path, branch_name: &str, force: bool) -> Result<String> {
     let branch_name = branch_name.trim_start_matches("origin/");
@@ -49,52 +60,28 @@ pub async fn git_create_branch(dir: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn git_delete_branch(dir: &Path, name: &str) -> Result<()> {
-    // Get current branch name
-    let head_out = new_binary_command(dir)
-        .await?
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .await
-        .map_err(|e| GenericError(format!("failed to get current branch: {e}")))?;
+pub async fn git_delete_branch(dir: &Path, name: &str, force: bool) -> Result<BranchDeleteResult> {
+    let mut cmd = new_binary_command(dir).await?;
 
-    let current_branch = String::from_utf8_lossy(&head_out.stdout).trim().to_string();
-
-    // If trying to delete the current branch, switch to another one first
-    if current_branch == name {
-        // Get list of local branches
-        let branches_out = new_binary_command(dir)
-            .await?
-            .args(["branch", "--format=%(refname:short)"])
+    let out =
+        if force { cmd.args(["branch", "-D", name]) } else { cmd.args(["branch", "-d", name]) }
             .output()
             .await
-            .map_err(|e| GenericError(format!("failed to list branches: {e}")))?;
-
-        let branches_str = String::from_utf8_lossy(&branches_out.stdout);
-        let other_branch = branches_str
-            .lines()
-            .find(|b| *b != name)
-            .ok_or_else(|| GenericError("Cannot delete the only branch".to_string()))?;
-
-        git_checkout_branch(dir, other_branch, true).await?;
-    }
-
-    let out = new_binary_command(dir)
-        .await?
-        .args(["branch", "-d", name])
-        .output()
-        .await
-        .map_err(|e| GenericError(format!("failed to run git branch -d: {e}")))?;
+            .map_err(|e| GenericError(format!("failed to run git branch -d: {e}")))?;
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
     let combined = format!("{}{}", stdout, stderr);
 
+    if combined.contains("not fully merged") {
+        return Ok(BranchDeleteResult::NotFullyMerged);
+    }
+
     if !out.status.success() {
         return Err(GenericError(format!("Failed to delete branch: {}", combined.trim())));
     }
 
-    Ok(())
+    Ok(BranchDeleteResult::Success { message: combined })
 }
 
 pub async fn git_merge_branch(dir: &Path, name: &str) -> Result<()> {

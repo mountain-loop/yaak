@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { createFastMutation } from '@yaakapp/app/hooks/useFastMutation';
 import { queryClient } from '@yaakapp/app/lib/queryClient';
 import { useMemo } from 'react';
-import { GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
+import { BranchDeleteResult, GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
 
 export * from './bindings/gen_git';
 
@@ -100,7 +100,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationFn: (args) => invoke('cmd_git_merge_branch', { dir, ...args }),
       onSuccess,
     }),
-    deleteBranch: createFastMutation<void, string, { branch: string }>({
+    deleteBranch: createFastMutation<BranchDeleteResult, string, { branch: string, force?: boolean }>({
       mutationKey: ['git', 'delete-branch', dir],
       mutationFn: (args) => invoke('cmd_git_delete_branch', { dir, ...args }),
       onSuccess,
