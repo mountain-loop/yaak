@@ -25,7 +25,7 @@ import type {
   TemplateRenderRequest,
   WorkspaceInfo,
 } from '../bindings/gen_events.ts';
-import type { HttpRequest } from '../bindings/gen_models.ts';
+import type { Folder, HttpRequest } from '../bindings/gen_models.ts';
 import type { JsonValue } from '../bindings/serde_json/JsonValue';
 
 export type WorkspaceHandle = Pick<WorkspaceInfo, 'id' | 'name'>;
@@ -82,6 +82,15 @@ export interface Context {
   };
   folder: {
     list(args?: ListFoldersRequest): Promise<ListFoldersResponse['folders']>;
+    getById(args: { id: string }): Promise<Folder | null>;
+    create(
+      args: Omit<Partial<Folder>, 'id' | 'model' | 'createdAt' | 'updatedAt'> &
+        Pick<Folder, 'workspaceId' | 'name'>,
+    ): Promise<Folder>;
+    update(
+      args: Omit<Partial<Folder>, 'model' | 'createdAt' | 'updatedAt'> & Pick<Folder, 'id'>,
+    ): Promise<Folder>;
+    delete(args: { id: string }): Promise<Folder>;
   };
   httpResponse: {
     find(args: FindHttpResponsesRequest): Promise<FindHttpResponsesResponse['httpResponses']>;

@@ -2,6 +2,15 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { McpServerContext } from '../types.js';
 import { getWorkspaceContext } from './helpers.js';
+import {
+  authenticationSchema,
+  authenticationTypeSchema,
+  bodySchema,
+  bodyTypeSchema,
+  headersSchema,
+  urlParametersSchema,
+  workspaceIdSchema,
+} from './schemas.js';
 
 export function registerHttpRequestTools(server: McpServer, ctx: McpServerContext) {
   server.registerTool(
@@ -10,10 +19,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       title: 'List HTTP Requests',
       description: 'List all HTTP requests in a workspace',
       inputSchema: {
-        workspaceId: z
-          .string()
-          .optional()
-          .describe('Workspace ID (required if multiple workspaces are open)'),
+        workspaceId: workspaceIdSchema,
       },
     },
     async ({ workspaceId }) => {
@@ -38,10 +44,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       description: 'Get details of a specific HTTP request by ID',
       inputSchema: {
         id: z.string().describe('The HTTP request ID'),
-        workspaceId: z
-          .string()
-          .optional()
-          .describe('Workspace ID (required if multiple workspaces are open)'),
+        workspaceId: workspaceIdSchema,
       },
     },
     async ({ id, workspaceId }) => {
@@ -67,10 +70,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       inputSchema: {
         id: z.string().describe('The HTTP request ID to send'),
         environmentId: z.string().optional().describe('Optional environment ID to use'),
-        workspaceId: z
-          .string()
-          .optional()
-          .describe('Workspace ID (required if multiple workspaces are open)'),
+        workspaceId: workspaceIdSchema,
       },
     },
     async ({ id, workspaceId }) => {
@@ -99,10 +99,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       title: 'Create HTTP Request',
       description: 'Create a new HTTP request',
       inputSchema: {
-        workspaceId: z
-          .string()
-          .optional()
-          .describe('Workspace ID (required if multiple workspaces are open)'),
+        workspaceId: workspaceIdSchema,
         name: z
           .string()
           .optional()
@@ -111,62 +108,12 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
         method: z.string().optional().describe('HTTP method (defaults to GET)'),
         folderId: z.string().optional().describe('Parent folder ID'),
         description: z.string().optional().describe('Request description'),
-        headers: z
-          .array(
-            z.object({
-              name: z.string(),
-              value: z.string(),
-              enabled: z.boolean().default(true),
-            }),
-          )
-          .optional()
-          .describe('Request headers'),
-        urlParameters: z
-          .array(
-            z.object({
-              name: z.string(),
-              value: z.string(),
-              enabled: z.boolean().default(true),
-            }),
-          )
-          .optional()
-          .describe('URL query parameters'),
-        bodyType: z
-          .string()
-          .optional()
-          .describe(
-            'Body type. Supported values: "binary", "graphql", "application/x-www-form-urlencoded", "multipart/form-data", or any text-based type (e.g., "application/json", "text/plain")',
-          ),
-        body: z
-          .record(z.string(), z.any())
-          .optional()
-          .describe(
-            'Body content object. Structure varies by bodyType:\n' +
-              '- "binary": { filePath: "/path/to/file" }\n' +
-              '- "graphql": { query: "{ users { name } }", variables: "{\\"id\\": \\"123\\"}" }\n' +
-              '- "application/x-www-form-urlencoded": { form: [{ name: "key", value: "val", enabled: true }] }\n' +
-              '- "multipart/form-data": { form: [{ name: "field", value: "text", file: "/path/to/file", enabled: true }] }\n' +
-              '- text-based (application/json, etc.): { text: "raw body content" }',
-          ),
-        authenticationType: z
-          .string()
-          .optional()
-          .describe(
-            'Authentication type. Common values: "basic", "bearer", "oauth2", "apikey", "jwt", "awsv4", "oauth1", "ntlm", "none". Use null to inherit from parent folder/workspace.',
-          ),
-        authentication: z
-          .record(z.string(), z.any())
-          .optional()
-          .describe(
-            'Authentication configuration object. Structure varies by authenticationType:\n' +
-              '- "basic": { username: "user", password: "pass" }\n' +
-              '- "bearer": { token: "abc123", prefix: "Bearer" }\n' +
-              '- "oauth2": { clientId: "...", clientSecret: "...", grantType: "authorization_code", authorizationUrl: "...", accessTokenUrl: "...", scope: "...", ... }\n' +
-              '- "apikey": { location: "header" | "query", key: "X-API-Key", value: "..." }\n' +
-              '- "jwt": { algorithm: "HS256", secret: "...", payload: "{ ... }" }\n' +
-              '- "awsv4": { accessKeyId: "...", secretAccessKey: "...", service: "sts", region: "us-east-1", sessionToken: "..." }\n' +
-              '- "none": {}',
-          ),
+        headers: headersSchema.describe('Request headers'),
+        urlParameters: urlParametersSchema,
+        bodyType: bodyTypeSchema,
+        body: bodySchema,
+        authenticationType: authenticationTypeSchema,
+        authentication: authenticationSchema,
       },
     },
     async ({ workspaceId: ogWorkspaceId, ...args }) => {
@@ -194,68 +141,18 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       description: 'Update an existing HTTP request',
       inputSchema: {
         id: z.string().describe('HTTP request ID to update'),
-        workspaceId: z.string().describe('Workspace ID'),
+        workspaceId: workspaceIdSchema,
         name: z.string().optional().describe('Request name'),
         url: z.string().optional().describe('Request URL'),
         method: z.string().optional().describe('HTTP method'),
         folderId: z.string().optional().describe('Parent folder ID'),
         description: z.string().optional().describe('Request description'),
-        headers: z
-          .array(
-            z.object({
-              name: z.string(),
-              value: z.string(),
-              enabled: z.boolean().default(true),
-            }),
-          )
-          .optional()
-          .describe('Request headers'),
-        urlParameters: z
-          .array(
-            z.object({
-              name: z.string(),
-              value: z.string(),
-              enabled: z.boolean().default(true),
-            }),
-          )
-          .optional()
-          .describe('URL query parameters'),
-        bodyType: z
-          .string()
-          .optional()
-          .describe(
-            'Body type. Supported values: "binary", "graphql", "application/x-www-form-urlencoded", "multipart/form-data", or any text-based type (e.g., "application/json", "text/plain")',
-          ),
-        body: z
-          .record(z.string(), z.any())
-          .optional()
-          .describe(
-            'Body content object. Structure varies by bodyType:\n' +
-              '- "binary": { filePath: "/path/to/file" }\n' +
-              '- "graphql": { query: "{ users { name } }", variables: "{\\"id\\": \\"123\\"}" }\n' +
-              '- "application/x-www-form-urlencoded": { form: [{ name: "key", value: "val", enabled: true }] }\n' +
-              '- "multipart/form-data": { form: [{ name: "field", value: "text", file: "/path/to/file", enabled: true }] }\n' +
-              '- text-based (application/json, etc.): { text: "raw body content" }',
-          ),
-        authenticationType: z
-          .string()
-          .optional()
-          .describe(
-            'Authentication type. Common values: "basic", "bearer", "oauth2", "apikey", "jwt", "awsv4", "oauth1", "ntlm", "none". Use null to inherit from parent folder/workspace.',
-          ),
-        authentication: z
-          .record(z.string(), z.any())
-          .optional()
-          .describe(
-            'Authentication configuration object. Structure varies by authenticationType:\n' +
-              '- "basic": { username: "user", password: "pass" }\n' +
-              '- "bearer": { token: "abc123", prefix: "Bearer" }\n' +
-              '- "oauth2": { clientId: "...", clientSecret: "...", grantType: "authorization_code", authorizationUrl: "...", accessTokenUrl: "...", scope: "...", ... }\n' +
-              '- "apikey": { location: "header" | "query", key: "X-API-Key", value: "..." }\n' +
-              '- "jwt": { algorithm: "HS256", secret: "...", payload: "{ ... }" }\n' +
-              '- "awsv4": { accessKeyId: "...", secretAccessKey: "...", service: "sts", region: "us-east-1", sessionToken: "..." }\n' +
-              '- "none": {}',
-          ),
+        headers: headersSchema.describe('Request headers'),
+        urlParameters: urlParametersSchema,
+        bodyType: bodyTypeSchema,
+        body: bodySchema,
+        authenticationType: authenticationTypeSchema,
+        authentication: authenticationSchema,
       },
     },
     async ({ id, workspaceId, ...updates }) => {
