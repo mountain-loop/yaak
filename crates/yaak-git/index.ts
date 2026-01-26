@@ -90,7 +90,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationFn: (args) => invoke('cmd_git_rm_remote', { dir, ...args }),
       onSuccess,
     }),
-    branch: createFastMutation<void, string, { branch: string }>({
+    createBranch: createFastMutation<void, string, { branch: string; base?: string }>({
       mutationKey: ['git', 'branch', dir],
       mutationFn: (args) => invoke('cmd_git_branch', { dir, ...args }),
       onSuccess,
@@ -103,6 +103,11 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     deleteBranch: createFastMutation<BranchDeleteResult, string, { branch: string, force?: boolean }>({
       mutationKey: ['git', 'delete-branch', dir],
       mutationFn: (args) => invoke('cmd_git_delete_branch', { dir, ...args }),
+      onSuccess,
+    }),
+    deleteRemoteBranch: createFastMutation<void, string, { branch: string }>({
+      mutationKey: ['git', 'delete-remote-branch', dir],
+      mutationFn: (args) => invoke('cmd_git_delete_remote_branch', { dir, ...args }),
       onSuccess,
     }),
     renameBranch: createFastMutation<void, string, { oldName: string, newName: string }>({

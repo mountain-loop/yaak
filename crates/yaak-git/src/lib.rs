@@ -20,7 +20,7 @@ mod util;
 pub use add::git_add;
 pub use branch::{
     BranchDeleteResult, git_checkout_branch, git_create_branch, git_delete_branch,
-    git_merge_branch, git_rename_branch,
+    git_delete_remote_branch, git_merge_branch, git_rename_branch,
 };
 pub use commit::git_commit;
 pub use credential::git_add_credential;

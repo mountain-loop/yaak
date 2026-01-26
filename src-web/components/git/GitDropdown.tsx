@@ -39,7 +39,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const workspace = useAtomValue(activeWorkspaceAtom);
   const [
     { status, log },
-    { branch, deleteBranch, renameBranch, fetchAll, mergeBranch, push, pull, checkout, init },
+    { createBranch, deleteBranch, deleteRemoteBranch, renameBranch, fetchAll, mergeBranch, push, pull, checkout, init },
   ] = useGit(syncDir, gitCallbacks(syncDir));
 
   const localBranches = status.data?.localBranches ?? [];
@@ -47,8 +47,6 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const remoteOnlyBranches = remoteBranches.filter(
     (b) => !localBranches.includes(b.replace(/^origin\//, '')),
   );
-  const currentBranch = status.data?.headRefShorthand ?? 'UNKNOWN';
-
   if (workspace == null) {
     return null;
   }
@@ -57,6 +55,13 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   if (noRepo) {
     return <SetupGitDropdown workspaceId={workspace.id} initRepo={init.mutate} />;
   }
+
+  // Still loading
+  if (status.data == null) {
+    return null;
+  }
+
+  const currentBranch = status.data.headRefShorthand;
 
   const tryCheckout = (branch: string, force: boolean) => {
     checkout.mutate(
@@ -104,7 +109,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
 
   const items: DropdownItem[] = [
     {
-      label: 'View History',
+      label: 'View History...',
       hidden: (log.data ?? []).length === 0,
       leftSlot: <Icon icon="history" />,
       onSelect: async () => {
@@ -118,13 +123,13 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       },
     },
     {
-      label: 'Manage Remotes',
+      label: 'Manage Remotes...',
       leftSlot: <Icon icon="hard_drive_download" />,
       onSelect: () => GitRemotesDialog.show(syncDir),
     },
     { type: 'separator' },
     {
-      label: 'New Branch',
+      label: 'New Branch...',
       leftSlot: <Icon icon="git_branch_plus" />,
       async onSelect() {
         const name = await showPrompt({
@@ -134,7 +139,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
         });
         if (!name) return;
 
-        await branch.mutateAsync(
+        await createBranch.mutateAsync(
           { branch: name },
           {
             disableToastError: true,
@@ -189,7 +194,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       },
     },
     {
-      label: 'Commit',
+      label: 'Commit...',
       leftSlot: <Icon icon="git_commit_vertical" />,
       onSelect() {
         showDialog({
@@ -209,50 +214,12 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       return {
         label: branch,
         leftSlot: <Icon icon={isCurrent ? 'check' : 'empty'} />,
-        onSelect: isCurrent ? undefined : () => tryCheckout(branch, false),
+        submenuOpenOnClick: true,
         submenu: [
           {
             label: 'Checkout',
             hidden: isCurrent,
             onSelect: () => tryCheckout(branch, false),
-          },
-          {
-            label: 'Rename',
-            async onSelect() {
-              const newName = await showPrompt({
-                id: 'git-rename-branch',
-                title: 'Rename Branch',
-                label: 'New Branch Name',
-                defaultValue: branch,
-              });
-              if (!newName || newName === branch) return;
-
-              await renameBranch.mutateAsync(
-                { oldName: branch, newName },
-                {
-                  disableToastError: true,
-                  onSuccess() {
-                    showToast({
-                      id: 'git-rename-branch-success',
-                      message: (
-                        <>
-                          Renamed <InlineCode>{branch}</InlineCode> to{' '}
-                          <InlineCode>{newName}</InlineCode>
-                        </>
-                      ),
-                      color: 'success',
-                    });
-                  },
-                  onError(err) {
-                    showErrorToast({
-                      id: 'git-rename-branch-error',
-                      title: 'Error renaming branch',
-                      message: String(err),
-                    });
-                  },
-                },
-              );
-            },
           },
           {
             label: <>Merge into <InlineCode>{currentBranch}</InlineCode></>,
@@ -305,6 +272,76 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
               });
             },
           },
+          {
+            label: 'New Branch...',
+            async onSelect() {
+              const name = await showPrompt({
+                id: 'git-new-branch-from',
+                title: 'New Branch',
+                description: (
+                  <>
+                    Create a new branch from <InlineCode>{branch}</InlineCode>
+                  </>
+                ),
+                label: 'Branch Name',
+              });
+              if (!name) return;
+
+              await createBranch.mutateAsync(
+                { branch: name, base: branch },
+                {
+                  disableToastError: true,
+                  onError: (err) => {
+                    showErrorToast({
+                      id: 'git-branch-error',
+                      title: 'Error creating branch',
+                      message: String(err),
+                    });
+                  },
+                },
+              );
+              tryCheckout(name, false);
+            },
+          },
+          {
+            label: 'Rename...',
+            async onSelect() {
+              const newName = await showPrompt({
+                id: 'git-rename-branch',
+                title: 'Rename Branch',
+                label: 'New Branch Name',
+                defaultValue: branch,
+              });
+              if (!newName || newName === branch) return;
+
+              await renameBranch.mutateAsync(
+                { oldName: branch, newName },
+                {
+                  disableToastError: true,
+                  onSuccess() {
+                    showToast({
+                      id: 'git-rename-branch-success',
+                      message: (
+                        <>
+                          Renamed <InlineCode>{branch}</InlineCode> to{' '}
+                          <InlineCode>{newName}</InlineCode>
+                        </>
+                      ),
+                      color: 'success',
+                    });
+                  },
+                  onError(err) {
+                    showErrorToast({
+                      id: 'git-rename-branch-error',
+                      title: 'Error renaming branch',
+                      message: String(err),
+                    });
+                  },
+                },
+              );
+            },
+          },
+          { type: 'separator', hidden: isCurrent },
           {
             label: 'Delete',
             color: 'danger',
@@ -380,8 +417,56 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       return {
         label: branch,
         leftSlot: <Icon icon={isCurrent ? 'check' : 'empty'} />,
-        onSelect: isCurrent ? undefined : () => tryCheckout(branch, false),
-      };
+        submenuOpenOnClick: true,
+        submenu: [
+          {
+            label: 'Checkout',
+            hidden: isCurrent,
+            onSelect: () => tryCheckout(branch, false),
+          },
+          {
+            label: 'Delete',
+            color: 'danger',
+            async onSelect() {
+              const confirmed = await showConfirmDelete({
+                id: 'git-delete-remote-branch',
+                title: 'Delete Remote Branch',
+                description: (
+                  <>
+                    Permanently delete <InlineCode>{branch}</InlineCode> from the remote?
+                  </>
+                ),
+              });
+              if (!confirmed) return;
+
+              await deleteRemoteBranch.mutateAsync(
+                { branch },
+                {
+                  disableToastError: true,
+                  onSuccess() {
+                    showToast({
+                      id: 'git-delete-remote-branch-success',
+                      message: (
+                        <>
+                          Deleted remote branch <InlineCode>{branch}</InlineCode>
+                        </>
+                      ),
+                      color: 'success',
+                    });
+                  },
+                  onError(err) {
+                    showErrorToast({
+                      id: 'git-delete-remote-branch-error',
+                      title: 'Error deleting remote branch',
+                      message: String(err),
+                    });
+                  },
+                },
+              );
+            },
+          },
+        ],
+      } satisfies DropdownItem;
     }),
   ];
 

@@ -41,13 +41,15 @@ pub async fn git_checkout_branch(dir: &Path, branch_name: &str, force: bool) -> 
     Ok(branch_name.to_string())
 }
 
-pub async fn git_create_branch(dir: &Path, name: &str) -> Result<()> {
-    let out = new_binary_command(dir)
-        .await?
-        .args(["branch", name])
-        .output()
-        .await
-        .map_err(|e| GenericError(format!("failed to run git branch: {e}")))?;
+pub async fn git_create_branch(dir: &Path, name: &str, base: Option<&str>) -> Result<()> {
+    let mut cmd = new_binary_command(dir).await?;
+    cmd.arg("branch").arg(name);
+    if let Some(base_branch) = base {
+        cmd.arg(base_branch);
+    }
+
+    let out =
+        cmd.output().await.map_err(|e| GenericError(format!("failed to run git branch: {e}")))?;
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -104,6 +106,28 @@ pub async fn git_merge_branch(dir: &Path, name: &str) -> Result<()> {
             ));
         }
         return Err(GenericError(format!("Failed to merge: {}", combined.trim())));
+    }
+
+    Ok(())
+}
+
+pub async fn git_delete_remote_branch(dir: &Path, name: &str) -> Result<()> {
+    // Remote branch names come in as "origin/branch-name", extract the branch name
+    let branch_name = name.trim_start_matches("origin/");
+
+    let out = new_binary_command(dir)
+        .await?
+        .args(["push", "origin", "--delete", branch_name])
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to run git push --delete: {e}")))?;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    if !out.status.success() {
+        return Err(GenericError(format!("Failed to delete remote branch: {}", combined.trim())));
     }
 
     Ok(())
