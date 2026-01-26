@@ -66,6 +66,8 @@ export type DropdownItemDefault = {
   keepOpenOnSelect?: boolean;
   onSelect?: () => void | Promise<void>;
   submenu?: DropdownItem[];
+  /** If true, submenu opens on click instead of hover */
+  submenuOpenOnClick?: boolean;
   icon?: IconProps['icon'];
 };
 
@@ -272,6 +274,7 @@ interface MenuProps {
   defaultSelectedIndex: number | null;
   triggerShape: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'right'> | null;
   onClose: () => void;
+  onCloseAll?: () => void;
   showTriangle?: boolean;
   fullWidth?: boolean;
   isOpen: boolean;
@@ -288,6 +291,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       items,
       fullWidth,
       onClose,
+      onCloseAll,
       triggerShape,
       defaultSelectedIndex,
       showTriangle,
@@ -300,7 +304,16 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       defaultSelectedIndex ?? -1,
       [defaultSelectedIndex],
     );
+
     const [filter, setFilter] = useState<string>('');
+
+    // Clear filter when menu opens
+    useEffect(() => {
+      if (isOpen) {
+        setFilter('');
+      }
+    }, [isOpen]);
+
     const [activeSubmenu, setActiveSubmenu] = useState<{
       item: DropdownItemDefault;
       parent: HTMLButtonElement;
@@ -320,9 +333,17 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
 
     const handleClose = useCallback(() => {
       onClose();
-      setFilter('');
       setActiveSubmenu(null);
     }, [onClose]);
+
+    // Close the entire menu hierarchy (used when selecting an item)
+    const handleCloseAll = useCallback(() => {
+      if (onCloseAll) {
+        onCloseAll();
+      } else {
+        handleClose();
+      }
+    }, [onCloseAll, handleClose]);
 
     // Handle type-ahead filtering (only for the deepest open menu)
     const handleMenuKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -393,6 +414,14 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       [items, setSelectedIndex],
     );
 
+    // Ensure selection is on a valid item (not hidden/separator/content)
+    useEffect(() => {
+      const item = items[selectedIndex ?? -1];
+      if (item?.hidden || item?.type === 'separator' || item?.type === 'content') {
+        handleNext();
+      }
+    }, [selectedIndex, items, handleNext]);
+
     useKey(
       'ArrowUp',
       (e) => {
@@ -433,7 +462,13 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     );
 
     const handleSelect = useCallback(
-      async (item: DropdownItem) => {
+      async (item: DropdownItem, parentEl?: HTMLButtonElement) => {
+        // Handle click-to-open submenu
+        if ('submenu' in item && item.submenu && item.submenuOpenOnClick && parentEl) {
+          setActiveSubmenu({ item, parent: parentEl });
+          return;
+        }
+
         if (!('onSelect' in item) || !item.onSelect) return;
         setSelectedIndex(null);
 
@@ -446,9 +481,9 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           }
         }
 
-        if (!item.keepOpenOnSelect) handleClose();
+        if (!item.keepOpenOnSelect) handleCloseAll();
       },
-      [handleClose, setSelectedIndex],
+      [handleCloseAll, setSelectedIndex],
     );
 
     useImperativeHandle(ref, () => {
@@ -476,17 +511,23 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
         const parentRect = triggerShape;
         const docRect = document.documentElement.getBoundingClientRect();
         const spaceRight = docRect.width - parentRect.right;
+        const spaceBelow = docRect.height - parentRect.top;
+        const spaceAbove = parentRect.bottom;
         const openLeft = spaceRight < 200; // Heuristic to open on left if not enough space on right
+        // Estimate submenu height (items * ~28px + padding), flip if not enough space below
+        const estimatedHeight = items.length * 28 + 20;
+        const openUpward = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
 
         return {
-          upsideDown: false,
+          upsideDown: openUpward,
           container: {
-            top: parentRect.top,
+            top: openUpward ? undefined : parentRect.top,
+            bottom: openUpward ? docRect.height - parentRect.bottom : undefined,
             left: openLeft ? undefined : parentRect.right,
             right: openLeft ? docRect.width - parentRect.left : undefined,
           },
           menu: {
-            maxHeight: `${docRect.height - parentRect.top - 20}px`,
+            maxHeight: `${(openUpward ? spaceAbove : spaceBelow) - 20}px`,
           },
           triangle: {}, // No triangle for submenus
         };
@@ -586,7 +627,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           clearTimeout(submenuTimeoutRef.current);
         }
 
-        if (item.submenu) {
+        if (item.submenu && !item.submenuOpenOnClick) {
           setActiveSubmenu({ item, parent });
         } else if (activeSubmenu) {
           submenuTimeoutRef.current = window.setTimeout(() => {
@@ -759,6 +800,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
               items={activeSubmenu.item.submenu ?? []}
               defaultSelectedIndex={activeSubmenu.viaKeyboard ? 0 : null}
               onClose={() => setActiveSubmenu(null)}
+              onCloseAll={handleCloseAll}
               triggerShape={submenuTriggerShape}
             />
           </div>
@@ -804,7 +846,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
 interface MenuItemProps {
   className?: string;
   item: DropdownItemDefault;
-  onSelect: (item: DropdownItemDefault) => Promise<void>;
+  onSelect: (item: DropdownItemDefault, el?: HTMLButtonElement) => Promise<void>;
   onFocus: (item: DropdownItemDefault) => void;
   onHover: (item: DropdownItemDefault, el: HTMLButtonElement) => void;
   focused: boolean;
@@ -824,7 +866,7 @@ function MenuItem({
   const [isLoading, setIsLoading] = useState(false);
   const handleClick = useCallback(async () => {
     if (item.waitForOnSelect) setIsLoading(true);
-    await onSelect?.(item);
+    await onSelect?.(item, buttonRef.current ?? undefined);
     if (item.waitForOnSelect) setIsLoading(false);
   }, [item, onSelect]);
 
@@ -854,7 +896,7 @@ function MenuItem({
   };
 
   const rightSlot = item.submenu ? (
-    <Icon icon="chevron_right" />
+    <Icon icon="chevron_right" color='secondary' />
   ) : (
     (item.rightSlot ?? <Hotkey action={item.hotKeyAction ?? null} />)
   );
