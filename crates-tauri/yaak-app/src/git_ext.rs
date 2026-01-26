@@ -6,9 +6,10 @@ use crate::error::Result;
 use std::path::{Path, PathBuf};
 use tauri::command;
 use yaak_git::{
-    GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult, git_add, git_add_credential,
-    git_add_remote, git_checkout_branch, git_commit, git_create_branch, git_delete_branch,
-    git_fetch_all, git_init, git_log, git_merge_branch, git_pull, git_push, git_remotes,
+    BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, PullResult,
+    PushResult, git_add, git_add_credential, git_add_remote, git_checkout_branch, git_clone,
+    git_commit, git_create_branch, git_delete_branch, git_delete_remote_branch, git_fetch_all,
+    git_init, git_log, git_merge_branch, git_pull, git_push, git_remotes, git_rename_branch,
     git_rm_remote, git_status, git_unstage,
 };
 
@@ -16,22 +17,36 @@ use yaak_git::{
 
 #[command]
 pub async fn cmd_git_checkout(dir: &Path, branch: &str, force: bool) -> Result<String> {
-    Ok(git_checkout_branch(dir, branch, force)?)
+    Ok(git_checkout_branch(dir, branch, force).await?)
 }
 
 #[command]
-pub async fn cmd_git_branch(dir: &Path, branch: &str) -> Result<()> {
-    Ok(git_create_branch(dir, branch)?)
+pub async fn cmd_git_branch(dir: &Path, branch: &str, base: Option<&str>) -> Result<()> {
+    Ok(git_create_branch(dir, branch, base).await?)
 }
 
 #[command]
-pub async fn cmd_git_delete_branch(dir: &Path, branch: &str) -> Result<()> {
-    Ok(git_delete_branch(dir, branch)?)
+pub async fn cmd_git_delete_branch(
+    dir: &Path,
+    branch: &str,
+    force: Option<bool>,
+) -> Result<BranchDeleteResult> {
+    Ok(git_delete_branch(dir, branch, force.unwrap_or(false)).await?)
 }
 
 #[command]
-pub async fn cmd_git_merge_branch(dir: &Path, branch: &str, force: bool) -> Result<()> {
-    Ok(git_merge_branch(dir, branch, force)?)
+pub async fn cmd_git_delete_remote_branch(dir: &Path, branch: &str) -> Result<()> {
+    Ok(git_delete_remote_branch(dir, branch).await?)
+}
+
+#[command]
+pub async fn cmd_git_merge_branch(dir: &Path, branch: &str) -> Result<()> {
+    Ok(git_merge_branch(dir, branch).await?)
+}
+
+#[command]
+pub async fn cmd_git_rename_branch(dir: &Path, old_name: &str, new_name: &str) -> Result<()> {
+    Ok(git_rename_branch(dir, old_name, new_name).await?)
 }
 
 #[command]
@@ -47,6 +62,11 @@ pub async fn cmd_git_log(dir: &Path) -> Result<Vec<GitCommit>> {
 #[command]
 pub async fn cmd_git_initialize(dir: &Path) -> Result<()> {
     Ok(git_init(dir)?)
+}
+
+#[command]
+pub async fn cmd_git_clone(url: &str, dir: &Path) -> Result<CloneResult> {
+    Ok(git_clone(url, dir).await?)
 }
 
 #[command]
@@ -87,12 +107,11 @@ pub async fn cmd_git_unstage(dir: &Path, rela_paths: Vec<PathBuf>) -> Result<()>
 
 #[command]
 pub async fn cmd_git_add_credential(
-    dir: &Path,
     remote_url: &str,
     username: &str,
     password: &str,
 ) -> Result<()> {
-    Ok(git_add_credential(dir, remote_url, username, password).await?)
+    Ok(git_add_credential(remote_url, username, password).await?)
 }
 
 #[command]

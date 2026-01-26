@@ -47,10 +47,6 @@ pub(crate) fn remote_branch_names(repo: &Repository) -> Result<Vec<String>> {
     Ok(branches)
 }
 
-pub(crate) fn get_branch_by_name<'s>(repo: &'s Repository, name: &str) -> Result<Branch<'s>> {
-    Ok(repo.find_branch(name, BranchType::Local)?)
-}
-
 pub(crate) fn bytes_to_string(bytes: &[u8]) -> Result<String> {
     Ok(String::from_utf8(bytes.to_vec())?)
 }
