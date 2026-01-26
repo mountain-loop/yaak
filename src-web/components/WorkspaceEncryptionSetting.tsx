@@ -1,4 +1,9 @@
-import { enableEncryption, revealWorkspaceKey, setWorkspaceKey } from '@yaakapp-internal/crypto';
+import {
+  disableEncryption,
+  enableEncryption,
+  revealWorkspaceKey,
+  setWorkspaceKey,
+} from '@yaakapp-internal/crypto';
 import type { WorkspaceMeta } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
@@ -6,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
+import { showConfirm } from '../lib/confirm';
 import { CopyIconButton } from './CopyIconButton';
 import { Banner } from './core/Banner';
 import type { ButtonProps } from './core/Button';
@@ -69,6 +75,9 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
           onDone?.();
           onEnabledEncryption?.();
         }}
+        onDisabled={() => {
+          onDone?.();
+        }}
       />
     );
   }
@@ -109,6 +118,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
   return (
     <div className="mb-auto flex flex-col-reverse">
       <Button
+        className="mt-3"
         color={expanded ? 'info' : 'secondary'}
         size={size}
         onClick={async () => {
@@ -149,13 +159,39 @@ const setWorkspaceKeyMut = createFastMutation({
 function EnterWorkspaceKey({
   workspaceMeta,
   onEnabled,
+  onDisabled,
   error,
 }: {
   workspaceMeta: WorkspaceMeta;
   onEnabled?: () => void;
+  onDisabled?: () => void;
   error?: string | null;
 }) {
   const [key, setKey] = useState<string>('');
+
+  const handleForgotKey = async () => {
+    const confirmed = await showConfirm({
+      id: 'disable-encryption',
+      title: 'Disable Encryption',
+      color: 'danger',
+      confirmText: 'Disable Encryption',
+      description: (
+        <>
+          This will disable encryption for this workspace. Any previously encrypted values will fail
+          to decrypt and will need to be re-entered manually.
+          <br />
+          <br />
+          This action cannot be undone.
+        </>
+      ),
+    });
+
+    if (confirmed) {
+      await disableEncryption(workspaceMeta.workspaceId);
+      onDisabled?.();
+    }
+  };
+
   return (
     <VStack space={4} className="w-full">
       {error ? (
@@ -192,6 +228,13 @@ function EnterWorkspaceKey({
           Submit
         </Button>
       </HStack>
+      <button
+        type="button"
+        onClick={handleForgotKey}
+        className="text-text-subtlest text-sm hover:text-text-subtle"
+      >
+        Forgot your key?
+      </button>
     </VStack>
   );
 }

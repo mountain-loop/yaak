@@ -115,6 +115,35 @@ impl EncryptionManager {
         self.set_workspace_key(workspace_id, &wkey)
     }
 
+    pub fn disable_encryption(&self, workspace_id: &str) -> Result<()> {
+        info!("Disabling encryption for {workspace_id}");
+
+        self.query_manager.with_tx::<(), Error>(|tx| {
+            let workspace = tx.get_workspace(workspace_id)?;
+            let workspace_meta = tx.get_or_create_workspace_meta(workspace_id)?;
+
+            // Clear encryption challenge on workspace
+            tx.upsert_workspace(
+                &Workspace { encryption_key_challenge: None, ..workspace },
+                &UpdateSource::Background,
+            )?;
+
+            // Clear encryption key on workspace meta
+            tx.upsert_workspace_meta(
+                &WorkspaceMeta { encryption_key: None, ..workspace_meta },
+                &UpdateSource::Background,
+            )?;
+
+            Ok(())
+        })?;
+
+        // Remove from cache
+        let mut cache = self.cached_workspace_keys.lock().unwrap();
+        cache.remove(workspace_id);
+
+        Ok(())
+    }
+
     fn get_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceKey> {
         {
             let cache = self.cached_workspace_keys.lock().unwrap();
