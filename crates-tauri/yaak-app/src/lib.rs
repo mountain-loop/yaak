@@ -1722,6 +1722,7 @@ pub fn run() {
             // Migrated commands
             crate::commands::cmd_decrypt_template,
             crate::commands::cmd_default_headers,
+            crate::commands::cmd_disable_encryption,
             crate::commands::cmd_enable_encryption,
             crate::commands::cmd_get_themes,
             crate::commands::cmd_reveal_workspace_key,
