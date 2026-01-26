@@ -25,6 +25,7 @@ type TauriCmd =
   | 'cmd_get_sse_events'
   | 'cmd_get_themes'
   | 'cmd_get_workspace_meta'
+  | 'cmd_git_add_credential'
   | 'cmd_git_clone'
   | 'cmd_grpc_go'
   | 'cmd_grpc_reflect'

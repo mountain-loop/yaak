@@ -59,7 +59,6 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     if (creds == null) throw new Error('Canceled');
 
     await invoke('cmd_git_add_credential', {
-      dir,
       remoteUrl: result.url,
       username: creds.username,
       password: creds.password,
@@ -154,7 +153,6 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
         if (creds == null) throw new Error('Canceled');
 
         await invoke('cmd_git_add_credential', {
-          dir,
           remoteUrl: result.url,
           username: creds.username,
           password: creds.password,

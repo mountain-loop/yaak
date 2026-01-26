@@ -1,9 +1,8 @@
 import { open } from '@tauri-apps/plugin-dialog';
-import type { WorkspaceMeta } from '@yaakapp-internal/models';
-import { createGlobalModel, updateModel } from '@yaakapp-internal/models';
+import type { CloneResult } from '@yaakapp-internal/git';
 import { useState } from 'react';
+import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
 import { appInfo } from '../lib/appInfo';
-import { router } from '../lib/router';
 import { invokeCmd } from '../lib/tauri';
 import { showErrorToast } from '../lib/toast';
 import { Banner } from './core/Banner';
@@ -11,6 +10,7 @@ import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
 import { PlainInput } from './core/PlainInput';
 import { VStack } from './core/Stacks';
+import { promptCredentials } from './git/credentials';
 
 interface Props {
   hide: () => void;
@@ -45,6 +45,24 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
     }
   };
 
+  const doClone = async (): Promise<CloneResult> => {
+    const result = await invokeCmd<CloneResult>('cmd_git_clone', { url, dir: directory });
+    if (result.type !== 'needs_credentials') return result;
+
+    // Prompt for credentials
+    const creds = await promptCredentials({ url: result.url, error: result.error });
+    if (creds == null) throw new Error('Cancelled');
+
+    // Store credentials and retry
+    await invokeCmd('cmd_git_add_credential', {
+      remoteUrl: result.url,
+      username: creds.username,
+      password: creds.password,
+    });
+
+    return invokeCmd<CloneResult>('cmd_git_clone', { url, dir: directory });
+  };
+
   const handleClone = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url || !directory) return;
@@ -53,29 +71,17 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
     setError(null);
 
     try {
-      // Clone the repository
-      await invokeCmd('cmd_git_clone', { url, dir: directory });
+      const result = await doClone();
 
-      // Create a new workspace
-      const workspaceId = await createGlobalModel({ model: 'workspace', name: repoName });
-      if (workspaceId == null) {
-        throw new Error('Failed to create workspace');
+      if (result.type === 'needs_credentials') {
+        setError(
+          result.error ?? 'Authentication failed. Please check your credentials and try again.',
+        );
+        return;
       }
 
-      // Get and update workspace meta to set the sync directory
-      const workspaceMeta = await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', {
-        workspaceId,
-      });
-      await updateModel({
-        ...workspaceMeta,
-        settingSyncDir: directory,
-      });
-
-      // Navigate to the new workspace
-      await router.navigate({
-        to: '/workspaces/$workspaceId',
-        params: { workspaceId },
-      });
+      // Open the workspace from the cloned directory
+      await openWorkspaceFromSyncDir.mutateAsync(directory);
 
       hide();
     } catch (err) {
