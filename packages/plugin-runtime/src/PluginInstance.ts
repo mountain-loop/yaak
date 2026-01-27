@@ -28,6 +28,7 @@ import type {
   ListHttpRequestsRequest,
   ListHttpRequestsResponse,
   ListWorkspacesResponse,
+  GetWorkspaceMetaResponse,
   PluginContext,
   PromptFormResponse,
   PromptTextResponse,
@@ -900,6 +901,12 @@ export class PluginInstance {
             workspaceId: workspaceHandle.id,
           };
           return this.#newCtx(newContext);
+        },
+        getMeta: async ()=>{
+          const payload = {
+            type: 'get_workspace_meta_request',
+          } as InternalEventPayload;
+          return await this.#sendForReply<GetWorkspaceMetaResponse>(context, payload);
         },
       },
     };

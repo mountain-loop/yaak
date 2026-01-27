@@ -5,6 +5,7 @@ import type {
   GetCookieValueResponse,
   GetHttpRequestByIdRequest,
   GetHttpRequestByIdResponse,
+  GetWorkspaceMetaResponse,
   ListCookieNamesResponse,
   ListFoldersRequest,
   ListFoldersResponse,
@@ -104,5 +105,6 @@ export interface Context {
   workspace: {
     list(): Promise<WorkspaceHandle[]>;
     withContext(handle: WorkspaceHandle): Context;
+    getMeta(): Promise<GetWorkspaceMetaResponse>;
   };
 }
