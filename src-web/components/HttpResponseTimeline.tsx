@@ -149,14 +149,27 @@ function EventDetails({
       );
     }
 
-    // Request URL - show method and path separately
+    // Request URL - show all URL parts separately
     if (e.type === 'send_url') {
+      const auth = e.username || e.password ? `${e.username}:${e.password}@` : '';
+      const isDefaultPort =
+        (e.scheme === 'http' && e.port === 80) || (e.scheme === 'https' && e.port === 443);
+      const portStr = isDefaultPort ? '' : `:${e.port}`;
+      const query = e.query ? `?${e.query}` : '';
+      const fragment = e.fragment ? `#${e.fragment}` : '';
+      const fullUrl = `${e.scheme}://${auth}${e.host}${portStr}${e.path}${query}${fragment}`;
       return (
         <KeyValueRows>
-          <KeyValueRow label="Method">
-            <HttpMethodTagRaw forceColor method={e.method} />
-          </KeyValueRow>
+          <KeyValueRow label="URL">{fullUrl}</KeyValueRow>
+          <KeyValueRow label="Method">{e.method}</KeyValueRow>
+          <KeyValueRow label="Scheme">{e.scheme}</KeyValueRow>
+          {e.username ? <KeyValueRow label="Username">{e.username}</KeyValueRow> : null}
+          {e.password ? <KeyValueRow label="Password">{e.password}</KeyValueRow> : null}
+          <KeyValueRow label="Host">{e.host}</KeyValueRow>
+          {!isDefaultPort ? <KeyValueRow label="Port">{e.port}</KeyValueRow> : null}
           <KeyValueRow label="Path">{e.path}</KeyValueRow>
+          {e.query ? <KeyValueRow label="Query">{e.query}</KeyValueRow> : null}
+          {e.fragment ? <KeyValueRow label="Fragment">{e.fragment}</KeyValueRow> : null}
         </KeyValueRows>
       );
     }
@@ -244,7 +257,10 @@ type EventTextParts = { prefix: '>' | '<' | '*'; text: string };
 function getEventTextParts(event: HttpResponseEventData): EventTextParts {
   switch (event.type) {
     case 'send_url':
-      return { prefix: '>', text: `${event.method} ${event.path}` };
+      return {
+        prefix: '>',
+        text: `${event.method} ${event.path}${event.query ? `?${event.query}` : ''}${event.fragment ? `#${event.fragment}` : ''}`,
+      };
     case 'receive_url':
       return { prefix: '<', text: `${event.version} ${event.status}` };
     case 'header_up':
@@ -265,9 +281,15 @@ function getEventTextParts(event: HttpResponseEventData): EventTextParts {
       return { prefix: '*', text: `[${formatBytes(event.bytes)} received]` };
     case 'dns_resolved':
       if (event.overridden) {
-        return { prefix: '*', text: `DNS override ${event.hostname} -> ${event.addresses.join(', ')}` };
+        return {
+          prefix: '*',
+          text: `DNS override ${event.hostname} -> ${event.addresses.join(', ')}`,
+        };
       }
-      return { prefix: '*', text: `DNS resolved ${event.hostname} to ${event.addresses.join(', ')} (${event.duration}ms)` };
+      return {
+        prefix: '*',
+        text: `DNS resolved ${event.hostname} to ${event.addresses.join(', ')} (${event.duration}ms)`,
+      };
     default:
       return { prefix: '*', text: '[unknown event]' };
   }
@@ -314,7 +336,7 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
         icon: 'arrow_big_up_dash',
         color: 'primary',
         label: 'Request',
-        summary: `${event.method} ${event.path}`,
+        summary: `${event.method} ${event.path}${event.query ? `?${event.query}` : ''}${event.fragment ? `#${event.fragment}` : ''}`,
       };
     case 'receive_url':
       return {

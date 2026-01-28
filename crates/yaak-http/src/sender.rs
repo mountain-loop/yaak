@@ -31,7 +31,14 @@ pub enum HttpResponseEvent {
     },
     SendUrl {
         method: String,
+        scheme: String,
+        username: String,
+        password: String,
+        host: String,
+        port: u16,
         path: String,
+        query: String,
+        fragment: String,
     },
     ReceiveUrl {
         version: Version,
@@ -65,7 +72,16 @@ impl Display for HttpResponseEvent {
                 };
                 write!(f, "* Redirect {} -> {} ({})", status, url, behavior_str)
             }
-            HttpResponseEvent::SendUrl { method, path } => write!(f, "> {} {}", method, path),
+            HttpResponseEvent::SendUrl { method, scheme, username, password, host, port, path, query, fragment } => {
+                let auth_str = if username.is_empty() && password.is_empty() {
+                    String::new()
+                } else {
+                    format!("{}:{}@", username, password)
+                };
+                let query_str = if query.is_empty() { String::new() } else { format!("?{}", query) };
+                let fragment_str = if fragment.is_empty() { String::new() } else { format!("#{}", fragment) };
+                write!(f, "> {} {}://{}{}:{}{}{}{}", method, scheme, auth_str, host, port, path, query_str, fragment_str)
+            }
             HttpResponseEvent::ReceiveUrl { version, status } => {
                 write!(f, "< {} {}", version_to_str(version), status)
             }
@@ -104,7 +120,9 @@ impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
                     RedirectBehavior::DropBody => "drop_body".to_string(),
                 },
             },
-            HttpResponseEvent::SendUrl { method, path } => D::SendUrl { method, path },
+            HttpResponseEvent::SendUrl { method, scheme, username, password, host, port, path, query, fragment } => {
+                D::SendUrl { method, scheme, username, password, host, port, path, query, fragment }
+            }
             HttpResponseEvent::ReceiveUrl { version, status } => {
                 D::ReceiveUrl { version: format!("{:?}", version), status }
             }
@@ -415,8 +433,15 @@ impl HttpSender for ReqwestSender {
         ));
 
         send_event(HttpResponseEvent::SendUrl {
-            path: sendable_req.url().path().to_string(),
             method: sendable_req.method().to_string(),
+            scheme: sendable_req.url().scheme().to_string(),
+            username: sendable_req.url().username().to_string(),
+            password: sendable_req.url().password().unwrap_or_default().to_string(),
+            host: sendable_req.url().host_str().unwrap_or_default().to_string(),
+            port: sendable_req.url().port_or_known_default().unwrap_or(0),
+            path: sendable_req.url().path().to_string(),
+            query: sendable_req.url().query().unwrap_or_default().to_string(),
+            fragment: sendable_req.url().fragment().unwrap_or_default().to_string(),
         });
 
         let mut request_headers = Vec::new();
