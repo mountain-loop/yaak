@@ -1495,7 +1495,21 @@ pub enum HttpResponseEventData {
     },
     SendUrl {
         method: String,
+        #[serde(default)]
+        scheme: String,
+        #[serde(default)]
+        username: String,
+        #[serde(default)]
+        password: String,
+        #[serde(default)]
+        host: String,
+        #[serde(default)]
+        port: u16,
         path: String,
+        #[serde(default)]
+        query: String,
+        #[serde(default)]
+        fragment: String,
     },
     ReceiveUrl {
         version: String,
