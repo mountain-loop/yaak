@@ -21,7 +21,8 @@ export const plugin: PluginDefinition = {
       },
     ],
     async onApply(_ctx, { values }) {
-      const { username, password } = values;
+      const username = values.username ?? '';
+      const password = values.password ?? '';
       const value = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
       return { setHeaders: [{ name: 'Authorization', value }] };
     },
