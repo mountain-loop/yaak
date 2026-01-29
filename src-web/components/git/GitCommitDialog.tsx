@@ -12,6 +12,7 @@ import type {
 import classNames from 'classnames';
 import { useCallback, useMemo, useState } from 'react';
 import { modelToYaml } from '../../lib/diffYaml';
+import { isSubEnvironment } from '../../lib/model_util';
 import { resolvedModelName } from '../../lib/resolvedModelName';
 import { showErrorToast } from '../../lib/toast';
 import { Banner } from '../core/Banner';
@@ -293,11 +294,18 @@ function TreeNodeChildren({
   return (
     <div
       className={classNames(
-        depth > 0 && 'pl-4 ml-2 border-l border-dashed border-border-subtle rounded',
-        isSelected && 'outline outline-1 outline-text-subtlest',
+        depth > 0 && 'pl-4 ml-2 border-l border-dashed border-border-subtle relative',
       )}
     >
-      <div className="flex gap-1 w-full h-xs items-center">
+      <div
+        className={classNames(
+          'relative flex gap-1 w-full h-xs items-center',
+          isSelected ? 'text-text' : 'text-text-subtle',
+        )}
+      >
+        {isSelected && (
+          <div className="absolute -left-[100vw] right-0 top-0 bottom-0 bg-surface-active opacity-30 -z-10" />
+        )}
         <Checkbox
           checked={checked}
           title={checked ? 'Unstage change' : 'Stage change'}
@@ -464,24 +472,12 @@ function DiffPanel({ entry }: { entry: GitStatusEntry }) {
   const prevYaml = modelToYaml(entry.prev);
   const nextYaml = modelToYaml(entry.next);
 
-  // Handle special cases
-  if (entry.status === 'untracked') {
-    return (
-      <div className="h-full flex flex-col">
-        <div className="text-sm text-text-subtle mb-2 px-1">New file (untracked)</div>
-        <DiffViewer original="" modified={nextYaml} className="flex-1 min-h-0" />
+  return (
+    <div className="h-full flex flex-col">
+      <div className="text-sm text-text-subtle mb-2 px-1">
+        {resolvedModelName(entry.next ?? entry.prev)} ({entry.status})
       </div>
-    );
-  }
-
-  if (entry.status === 'removed') {
-    return (
-      <div className="h-full flex flex-col">
-        <div className="text-sm text-text-subtle mb-2 px-1">File removed</div>
-        <DiffViewer original={prevYaml} modified="" className="flex-1 min-h-0" />
-      </div>
-    );
-  }
-
-  return <DiffViewer original={prevYaml} modified={nextYaml} className="h-full" />;
+      <DiffViewer original={prevYaml ?? ''} modified={nextYaml ?? ''} className="flex-1 min-h-0" />
+    </div>
+  );
 }

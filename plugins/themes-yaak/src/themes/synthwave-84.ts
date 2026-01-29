@@ -19,9 +19,6 @@ export const synthwave84: Theme = {
     danger: 'hsl(340, 100%, 65%)',
   },
   components: {
-    dialog: {
-      surface: 'hsl(253, 45%, 12%)',
-    },
     sidebar: {
       surface: 'hsl(253, 42%, 18%)',
       border: 'hsl(253, 40%, 22%)',
