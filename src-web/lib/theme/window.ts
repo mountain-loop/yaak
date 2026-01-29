@@ -138,6 +138,16 @@ function bannerColorVariables(color: YaakColor | null): Partial<CSSVariables> {
   };
 }
 
+function inputCSS(color: YaakColor | null): Partial<CSSVariables> {
+  if (color == null) return {};
+
+  const theme: Partial<ThemeComponentColors> = {
+    border: color.css(),
+  };
+
+  return theme;
+}
+
 function buttonSolidColorVariables(
   color: YaakColor | null,
   isDefault = false,
