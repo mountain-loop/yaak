@@ -1,5 +1,5 @@
 .cm-wrapper.cm-multiline .cm-mergeView {
-  @apply h-full w-full overflow-auto;
+  @apply h-full w-full overflow-auto pr-0.5;
 
   .cm-mergeViewEditors {
     @apply w-full min-h-full;

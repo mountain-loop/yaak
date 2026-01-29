@@ -1,3 +1,4 @@
+import { useCachedNode } from '@dnd-kit/core/dist/hooks/utilities';
 import type { GitStatusEntry } from '@yaakapp-internal/git';
 import { useGit } from '@yaakapp-internal/git';
 import type {
@@ -9,8 +10,7 @@ import type {
   Workspace,
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { modelToYaml } from '../../lib/diffYaml';
 import { resolvedModelName } from '../../lib/resolvedModelName';
 import { showErrorToast } from '../../lib/toast';
@@ -141,6 +141,35 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     return next(workspace, []);
   }, [workspace, internalEntries]);
 
+  const checkNode = useCallback(
+    (treeNode: CommitTreeNode) => {
+      const checked = nodeCheckedStatus(treeNode);
+      const newChecked = checked === 'indeterminate' ? true : !checked;
+      setCheckedAndChildren(treeNode, newChecked, unstage.mutate, add.mutate);
+      // TODO: Also ensure parents are added properly
+    },
+    [add.mutate, unstage.mutate],
+  );
+
+  const checkEntry = useCallback(
+    (entry: GitStatusEntry) => {
+      if (entry.staged) unstage.mutate({ relaPaths: [entry.relaPath] });
+      else add.mutate({ relaPaths: [entry.relaPath] });
+    },
+    [add.mutate, unstage.mutate],
+  );
+
+  const handleSelectChild = useCallback(
+    (entry: GitStatusEntry) => {
+      if (entry === selectedEntry) {
+        setSelectedEntry(null);
+      } else {
+        setSelectedEntry(entry);
+      }
+    },
+    [selectedEntry],
+  );
+
   if (tree == null) {
     return null;
   }
@@ -149,98 +178,92 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     return <EmptyStateText>No changes since last commit</EmptyStateText>;
   }
 
-  const checkNode = (treeNode: CommitTreeNode) => {
-    const checked = nodeCheckedStatus(treeNode);
-    const newChecked = checked === 'indeterminate' ? true : !checked;
-    setCheckedAndChildren(treeNode, newChecked, unstage.mutate, add.mutate);
-    // TODO: Also ensure parents are added properly
-  };
-
-  const checkEntry = (entry: GitStatusEntry) => {
-    if (entry.staged) unstage.mutate({ relaPaths: [entry.relaPath] });
-    else add.mutate({ relaPaths: [entry.relaPath] });
-  };
-
   return (
-    <div className="grid grid-rows-1 h-full">
+    <div className="h-full px-2 pb-4">
       <SplitLayout
-        name="commit"
-        layout="vertical"
-        defaultRatio={0.3}
+        name="commit-horizontal"
+        layout="horizontal"
+        defaultRatio={0.6}
         firstSlot={({ style }) => (
-          <div style={style} className="h-full overflow-y-auto pb-3">
-            <TreeNodeChildren
-              node={tree}
-              depth={0}
-              onCheck={checkNode}
-              onSelect={setSelectedEntry}
-              selectedPath={selectedEntry?.relaPath ?? null}
-            />
-            {externalEntries.find((e) => e.status !== 'current') && (
-              <>
-                <Separator className="mt-3 mb-1">External file changes</Separator>
-                {externalEntries.map((entry) => (
-                  <ExternalTreeNode
-                    key={entry.relaPath + entry.status}
-                    entry={entry}
-                    onCheck={checkEntry}
+          <div style={style} className="h-full px-4">
+            <SplitLayout
+              name="commit-vertical"
+              layout="vertical"
+              defaultRatio={0.35}
+              firstSlot={({ style: innerStyle }) => (
+                <div
+                  style={innerStyle}
+                  className="h-full overflow-y-auto pb-3 pr-0.5 transform-cpu"
+                >
+                  <TreeNodeChildren
+                    node={tree}
+                    depth={0}
+                    onCheck={checkNode}
+                    onSelect={handleSelectChild}
+                    selectedPath={selectedEntry?.relaPath ?? null}
                   />
-                ))}
-              </>
-            )}
+                  {externalEntries.find((e) => e.status !== 'current') && (
+                    <>
+                      <Separator className="mt-3 mb-1">External file changes</Separator>
+                      {externalEntries.map((entry) => (
+                        <ExternalTreeNode
+                          key={entry.relaPath + entry.status}
+                          entry={entry}
+                          onCheck={checkEntry}
+                        />
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+              secondSlot={({ style: innerStyle }) => (
+                <div style={innerStyle} className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2">
+                  <Input
+                    className="!text-base font-sans rounded-md"
+                    placeholder="Commit message..."
+                    onChange={setMessage}
+                    stateKey={null}
+                    label="Commit message"
+                    fullHeight
+                    multiLine
+                    hideLabel
+                  />
+                  {commitError && <Banner color="danger">{commitError}</Banner>}
+                  <HStack alignItems="center">
+                    <InlineCode>{status.data?.headRefShorthand}</InlineCode>
+                    <HStack space={2} className="ml-auto">
+                      <Button
+                        color="secondary"
+                        size="sm"
+                        onClick={handleCreateCommit}
+                        disabled={!hasAddedAnything}
+                        isLoading={isPushing}
+                      >
+                        Commit
+                      </Button>
+                      <Button
+                        color="primary"
+                        size="sm"
+                        disabled={!hasAddedAnything}
+                        onClick={handleCreateCommitAndPush}
+                        isLoading={isPushing}
+                      >
+                        Commit and Push
+                      </Button>
+                    </HStack>
+                  </HStack>
+                </div>
+              )}
+            />
           </div>
         )}
         secondSlot={({ style }) => (
-          <div style={style} className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2">
+          <div style={style} className="h-full px-4 border-l border-l-border-subtle">
             {selectedEntry ? (
               <DiffPanel entry={selectedEntry} />
             ) : (
-              <Input
-                className="!text-base font-sans rounded-md"
-                placeholder="Commit message..."
-                onChange={setMessage}
-                stateKey={null}
-                label="Commit message"
-                fullHeight
-                multiLine
-                hideLabel
-              />
+              <EmptyStateText>Select a change to view diff</EmptyStateText>
             )}
-            {commitError && <Banner color="danger">{commitError}</Banner>}
-            <HStack alignItems="center">
-              <InlineCode>{status.data?.headRefShorthand}</InlineCode>
-              {selectedEntry && (
-                <Button
-                  color="secondary"
-                  size="sm"
-                  variant="border"
-                  onClick={() => setSelectedEntry(null)}
-                  className="ml-2"
-                >
-                  Back to commit
-                </Button>
-              )}
-              <HStack space={2} className="ml-auto">
-                <Button
-                  color="secondary"
-                  size="sm"
-                  onClick={handleCreateCommit}
-                  disabled={!hasAddedAnything}
-                  isLoading={isPushing}
-                >
-                  Commit
-                </Button>
-                <Button
-                  color="primary"
-                  size="sm"
-                  disabled={!hasAddedAnything}
-                  onClick={handleCreateCommitAndPush}
-                  isLoading={isPushing}
-                >
-                  Commit and Push
-                </Button>
-              </HStack>
-            </HStack>
           </div>
         )}
       />
@@ -270,24 +293,20 @@ function TreeNodeChildren({
   return (
     <div
       className={classNames(
-        depth > 0 && 'pl-1 ml-[10px] border-l border-dashed border-border-subtle',
+        depth > 0 && 'pl-4 ml-2 border-l border-dashed border-border-subtle rounded',
+        isSelected && 'outline outline-1 outline-text-subtlest',
       )}
     >
       <div className="flex gap-1 w-full h-xs items-center">
         <Checkbox
-          className="shrink-0"
           checked={checked}
-          title=""
+          title={checked ? 'Unstage change' : 'Stage change'}
           hideLabel
           onChange={(checked) => onCheck(node, checked)}
         />
         <button
           type="button"
-          className={classNames(
-            'flex-1 min-w-0 flex items-center gap-1 px-1 py-0.5 rounded text-left',
-            'hover:bg-surface-highlight',
-            isSelected && 'bg-surface-highlight ring-1 ring-border',
-          )}
+          className={classNames('flex-1 min-w-0 flex items-center gap-1 px-1 py-0.5 text-left')}
           onClick={() => node.status.status !== 'current' && onSelect(node.status)}
         >
           {node.model.model !== 'http_request' &&
