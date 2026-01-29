@@ -1,0 +1,39 @@
+.cm-wrapper.cm-multiline .cm-mergeView {
+  @apply h-full w-full overflow-auto pr-0.5;
+
+  .cm-mergeViewEditors {
+    @apply w-full min-h-full;
+  }
+
+  .cm-mergeViewEditor {
+    @apply w-full min-h-full relative;
+
+    .cm-collapsedLines {
+      @apply bg-none bg-surface border border-border py-1 mx-0.5 text-text opacity-80 hover:opacity-100 rounded cursor-default;
+    }
+  }
+
+  .cm-line {
+    @apply pl-1.5;
+  }
+  .cm-changedLine {
+    /* Round top corners only if previous line is not a changed line */
+    &:not(.cm-changedLine + &) {
+      @apply rounded-t;
+    }
+    /* Round bottom corners only if next line is not a changed line */
+    &:not(:has(+ .cm-changedLine)) {
+      @apply rounded-b;
+    }
+  }
+
+  /* Let content grow and disable individual scrolling for sync */
+  .cm-editor {
+    @apply h-auto relative !important;
+    position: relative !important;
+  }
+
+  .cm-scroller {
+    @apply overflow-visible !important;
+  }
+}

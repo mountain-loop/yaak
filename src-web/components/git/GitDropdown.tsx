@@ -211,7 +211,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           id: 'commit',
           title: 'Commit Changes',
           size: 'full',
-          className: '!max-h-[min(80vh,40rem)] !max-w-[min(50rem,90vw)]',
+          noPadding: true,
           render: ({ hide }) => (
             <GitCommitDialog syncDir={syncDir} onDone={hide} workspace={workspace} />
           ),

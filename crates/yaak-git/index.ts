@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
 
 export * from './bindings/gen_git';
+export * from './bindings/gen_models';
 
 export interface GitCredentials {
   username: string;
