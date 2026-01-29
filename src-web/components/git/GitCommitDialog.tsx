@@ -11,12 +11,14 @@ import type {
 import classNames from 'classnames';
 
 import { useMemo, useState } from 'react';
+import { modelToYaml } from '../../lib/diffYaml';
 import { resolvedModelName } from '../../lib/resolvedModelName';
 import { showErrorToast } from '../../lib/toast';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import type { CheckboxProps } from '../core/Checkbox';
 import { Checkbox } from '../core/Checkbox';
+import { DiffViewer } from '../core/Editor/DiffViewer';
 import { Icon } from '../core/Icon';
 import { InlineCode } from '../core/InlineCode';
 import { Input } from '../core/Input';
@@ -48,6 +50,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   const [isPushing, setIsPushing] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [message, setMessage] = useState<string>('');
+  const [selectedEntry, setSelectedEntry] = useState<GitStatusEntry | null>(null);
 
   const handleCreateCommit = async () => {
     setCommitError(null);
@@ -166,7 +169,13 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         defaultRatio={0.3}
         firstSlot={({ style }) => (
           <div style={style} className="h-full overflow-y-auto pb-3">
-            <TreeNodeChildren node={tree} depth={0} onCheck={checkNode} />
+            <TreeNodeChildren
+              node={tree}
+              depth={0}
+              onCheck={checkNode}
+              onSelect={setSelectedEntry}
+              selectedPath={selectedEntry?.relaPath ?? null}
+            />
             {externalEntries.find((e) => e.status !== 'current') && (
               <>
                 <Separator className="mt-3 mb-1">External file changes</Separator>
@@ -183,19 +192,34 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         )}
         secondSlot={({ style }) => (
           <div style={style} className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2">
-            <Input
-              className="!text-base font-sans rounded-md"
-              placeholder="Commit message..."
-              onChange={setMessage}
-              stateKey={null}
-              label="Commit message"
-              fullHeight
-              multiLine
-              hideLabel
-            />
+            {selectedEntry ? (
+              <DiffPanel entry={selectedEntry} />
+            ) : (
+              <Input
+                className="!text-base font-sans rounded-md"
+                placeholder="Commit message..."
+                onChange={setMessage}
+                stateKey={null}
+                label="Commit message"
+                fullHeight
+                multiLine
+                hideLabel
+              />
+            )}
             {commitError && <Banner color="danger">{commitError}</Banner>}
             <HStack alignItems="center">
               <InlineCode>{status.data?.headRefShorthand}</InlineCode>
+              {selectedEntry && (
+                <Button
+                  color="secondary"
+                  size="sm"
+                  variant="border"
+                  onClick={() => setSelectedEntry(null)}
+                  className="ml-2"
+                >
+                  Back to commit
+                </Button>
+              )}
               <HStack space={2} className="ml-auto">
                 <Button
                   color="secondary"
@@ -228,61 +252,74 @@ function TreeNodeChildren({
   node,
   depth,
   onCheck,
+  onSelect,
+  selectedPath,
 }: {
   node: CommitTreeNode | null;
   depth: number;
   onCheck: (node: CommitTreeNode, checked: boolean) => void;
+  onSelect: (entry: GitStatusEntry) => void;
+  selectedPath: string | null;
 }) {
   if (node === null) return null;
   if (!isNodeRelevant(node)) return null;
 
   const checked = nodeCheckedStatus(node);
+  const isSelected = selectedPath === node.status.relaPath;
+
   return (
     <div
       className={classNames(
         depth > 0 && 'pl-1 ml-[10px] border-l border-dashed border-border-subtle',
       )}
     >
-      <div className="flex gap-3 w-full h-xs">
+      <div className="flex gap-1 w-full h-xs items-center">
         <Checkbox
-          fullWidth
-          className="w-full hover:bg-surface-highlight rounded px-1 group"
+          className="shrink-0"
           checked={checked}
+          title=""
+          hideLabel
           onChange={(checked) => onCheck(node, checked)}
-          title={
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-1 w-full items-center">
-              {node.model.model !== 'http_request' &&
-              node.model.model !== 'grpc_request' &&
-              node.model.model !== 'websocket_request' ? (
-                <Icon
-                  color="secondary"
-                  icon={
-                    node.model.model === 'folder'
-                      ? 'folder'
-                      : node.model.model === 'environment'
-                        ? 'variable'
-                        : 'house'
-                  }
-                />
-              ) : (
-                <span aria-hidden />
-              )}
-              <div className="truncate">{resolvedModelName(node.model)}</div>
-              {node.status.status !== 'current' && (
-                <InlineCode
-                  className={classNames(
-                    'py-0 ml-auto bg-transparent w-[6rem] text-center',
-                    node.status.status === 'modified' && 'text-info',
-                    node.status.status === 'untracked' && 'text-success',
-                    node.status.status === 'removed' && 'text-danger',
-                  )}
-                >
-                  {node.status.status}
-                </InlineCode>
-              )}
-            </div>
-          }
         />
+        <button
+          type="button"
+          className={classNames(
+            'flex-1 min-w-0 flex items-center gap-1 px-1 py-0.5 rounded text-left',
+            'hover:bg-surface-highlight',
+            isSelected && 'bg-surface-highlight ring-1 ring-border',
+          )}
+          onClick={() => node.status.status !== 'current' && onSelect(node.status)}
+        >
+          {node.model.model !== 'http_request' &&
+          node.model.model !== 'grpc_request' &&
+          node.model.model !== 'websocket_request' ? (
+            <Icon
+              color="secondary"
+              icon={
+                node.model.model === 'folder'
+                  ? 'folder'
+                  : node.model.model === 'environment'
+                    ? 'variable'
+                    : 'house'
+              }
+            />
+          ) : (
+            <span aria-hidden className="w-4" />
+          )}
+          <div className="truncate flex-1">{resolvedModelName(node.model)}</div>
+          {node.status.status !== 'current' && (
+            <InlineCode
+              className={classNames(
+                'py-0 bg-transparent w-[6rem] text-center shrink-0',
+                node.status.status === 'modified' && 'text-info',
+                node.status.status === 'untracked' && 'text-success',
+                node.status.status === 'removed' && 'text-danger',
+              )}
+            >
+              {node.status.status}
+            </InlineCode>
+          )}
+        </button>
       </div>
 
       {node.children.map((childNode) => {
@@ -292,6 +329,8 @@ function TreeNodeChildren({
             node={childNode}
             depth={depth + 1}
             onCheck={onCheck}
+            onSelect={onSelect}
+            selectedPath={selectedPath}
           />
         );
       })}
@@ -400,4 +439,30 @@ function isNodeRelevant(node: CommitTreeNode): boolean {
 
   // Recursively check children
   return node.children.some((c) => isNodeRelevant(c));
+}
+
+function DiffPanel({ entry }: { entry: GitStatusEntry }) {
+  const prevYaml = modelToYaml(entry.prev);
+  const nextYaml = modelToYaml(entry.next);
+
+  // Handle special cases
+  if (entry.status === 'untracked') {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="text-sm text-text-subtle mb-2 px-1">New file (untracked)</div>
+        <DiffViewer original="" modified={nextYaml} className="flex-1 min-h-0" />
+      </div>
+    );
+  }
+
+  if (entry.status === 'removed') {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="text-sm text-text-subtle mb-2 px-1">File removed</div>
+        <DiffViewer original={prevYaml} modified="" className="flex-1 min-h-0" />
+      </div>
+    );
+  }
+
+  return <DiffViewer original={prevYaml} modified={nextYaml} className="h-full" />;
 }
