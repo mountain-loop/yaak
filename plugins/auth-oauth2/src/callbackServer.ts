@@ -4,6 +4,9 @@ import http from 'node:http';
 const HOSTED_CALLBACK_URL = 'https://yaak.app/oauth-callback';
 const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
+/** Singleton: only one callback server runs at a time across all OAuth flows. */
+let activeServer: CallbackServerResult | null = null;
+
 export interface CallbackServerResult {
   /** The port the server is listening on */
   port: number;
@@ -17,6 +20,8 @@ export interface CallbackServerResult {
 
 /**
  * Start a local HTTP server to receive OAuth callbacks.
+ * Only one server runs at a time — if a previous server is still active,
+ * it is stopped before starting the new one.
  * Returns the port, redirect URI, and a promise that resolves when the callback is received.
  */
 export function startCallbackServer(options: {
@@ -27,6 +32,13 @@ export function startCallbackServer(options: {
   /** Timeout in milliseconds (default 5 minutes) */
   timeoutMs?: number;
 }): Promise<CallbackServerResult> {
+  // Stop any previously active server before starting a new one
+  if (activeServer) {
+    console.log('[oauth2] Stopping previous callback server before starting new one');
+    activeServer.stop();
+    activeServer = null;
+  }
+
   const { port = 0, path = '/callback', timeoutMs = CALLBACK_TIMEOUT_MS } = options;
 
   return new Promise((resolve, reject) => {
@@ -73,6 +85,11 @@ export function startCallbackServer(options: {
       if (stopped) return;
       stopped = true;
 
+      // Clear the singleton reference
+      if (activeServer?.stop === stopServer) {
+        activeServer = null;
+      }
+
       if (timeoutHandle) {
         clearTimeout(timeoutHandle);
         timeoutHandle = null;
@@ -99,7 +116,7 @@ export function startCallbackServer(options: {
 
       console.log(`[oauth2] Callback server listening on ${redirectUri}`);
 
-      resolve({
+      const result: CallbackServerResult = {
         port: actualPort,
         redirectUri,
         waitForCallback: () => {
@@ -124,7 +141,10 @@ export function startCallbackServer(options: {
           });
         },
         stop: stopServer,
-      });
+      };
+
+      activeServer = result;
+      resolve(result);
     });
   });
 }
@@ -146,7 +166,7 @@ function getSuccessHtml(): string {
   return `<!DOCTYPE html>
 <html>
 <head>
-  <title>Authorization Complete</title>
+  <title>Yaak Authorization Complete</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -183,8 +203,8 @@ function getSuccessHtml(): string {
       margin-bottom: 12px;
     }
     p {
-      opacity: 0.9;
       font-size: 16px;
+      opacity: 0.9;
     }
   </style>
 </head>

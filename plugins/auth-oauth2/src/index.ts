@@ -6,13 +6,13 @@ import type {
   PluginDefinition,
 } from '@yaakapp/api';
 import {
+  type CallbackType,
   DEFAULT_LOCALHOST_PORT,
   DEFAULT_PKCE_METHOD,
   genPkceCodeVerifier,
   getAuthorizationCode,
   PKCE_PLAIN,
   PKCE_SHA256,
-  type CallbackType,
 } from './grants/authorizationCode';
 import { getClientCredentials } from './grants/clientCredentials';
 import { getImplicit } from './grants/implicit';
@@ -135,6 +135,7 @@ export const plugin: PluginDefinition = {
         icon: 'copy',
         async onSelect(ctx, { values }) {
           const useExternalBrowser = !!values.useExternalBrowser;
+          console.log('HELLO', values);
           const callbackType = (stringArg(values, 'callbackType') || 'localhost') as CallbackType;
 
           if (!useExternalBrowser) {
@@ -276,10 +277,7 @@ export const plugin: PluginDefinition = {
           const callbackType = (stringArg(values, 'callbackType') || 'localhost') as CallbackType;
 
           // Only show for authorization_code and implicit with external browser enabled
-          if (
-            !['authorization_code', 'implicit'].includes(grantType) ||
-            !useExternalBrowser
-          ) {
+          if (!['authorization_code', 'implicit'].includes(grantType) || !useExternalBrowser) {
             return { hidden: true };
           }
 
@@ -441,7 +439,7 @@ export const plugin: PluginDefinition = {
       const useExternalBrowser = !!values.useExternalBrowser;
       const externalBrowserOptions = useExternalBrowser
         ? {
-            useExternalBrowser: true as const,
+            useExternalBrowser: true,
             callbackType: (stringArg(values, 'callbackType') || 'localhost') as CallbackType,
             callbackPort: intArg(values, 'callbackPort') ?? undefined,
           }

@@ -102,7 +102,6 @@ export async function getAuthorizationCode(
     const result = await getCodeViaExternalBrowser(ctx, authorizationUrl, {
       callbackType: externalBrowser.callbackType,
       callbackPort: externalBrowser.callbackPort,
-      redirectUri,
     });
     code = result.code;
     actualRedirectUri = result.redirectUri;
@@ -191,10 +190,9 @@ async function getCodeViaExternalBrowser(
   options: {
     callbackType: CallbackType;
     callbackPort?: number;
-    redirectUri: string | null;
   },
 ): Promise<{ code: string; redirectUri: string }> {
-  const { callbackType, callbackPort, redirectUri } = options;
+  const { callbackType, callbackPort } = options;
 
   // Determine port based on callback type:
   // - localhost: use specified port or default stable port
@@ -221,9 +219,10 @@ async function getCodeViaExternalBrowser(
       oauthRedirectUri = buildHostedCallbackRedirectUri(server.port, '/callback');
       console.log('[oauth2] Using hosted callback redirect:', oauthRedirectUri);
     } else {
-      // For localhost callback, use the local server directly
-      // If user provided a custom redirect URI, use that instead
-      oauthRedirectUri = redirectUri ?? server.redirectUri;
+      // For localhost callback, always use the local server's URI so the
+      // callback actually reaches our listener. The user-configured
+      // redirectUri is ignored here — it only applies to embedded browser flow.
+      oauthRedirectUri = server.redirectUri;
       console.log('[oauth2] Using localhost callback redirect:', oauthRedirectUri);
     }
 
@@ -262,10 +261,10 @@ async function getCodeViaExternalBrowser(
       code,
       redirectUri: oauthRedirectUri,
     };
-  } catch (err) {
-    // Ensure server is stopped on error
+  } finally {
+    // Always stop the server to release the port, even on success.
+    // This is safe to call multiple times (guarded by `stopped` flag).
     server.stop();
-    throw err;
   }
 }
 
