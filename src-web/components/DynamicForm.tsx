@@ -59,7 +59,6 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
   className,
   disabled,
 }: Props<T>) {
-  console.log('hello ----------------------------------------------', inputs);
   const setDataAttr = useCallback(
     (name: string, value: JsonPrimitive) => {
       onChange({ ...data, [name]: value === DYNAMIC_FORM_NULL_ARG ? undefined : value });
@@ -126,7 +125,6 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
         if ('disabled' in input && disabled != null) {
           input.disabled = disabled;
         }
-        console.log('INPUT', input.type);
 
         switch (input.type) {
           case 'select':
@@ -200,7 +198,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               />
             );
           case 'accordion':
-            if (!(input.inputs ?? []).find(i => !i.hidden)) {
+            if (!(input.inputs ?? []).find((i) => !i.hidden)) {
               return null; // No inputs to show inside
             }
             return (
@@ -224,7 +222,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               </div>
             );
           case 'h_stack':
-            if (!(input.inputs ?? []).find(i => !i.hidden)) {
+            if (!(input.inputs ?? []).find((i) => !i.hidden)) {
               return null; // No inputs to show inside
             }
             return (
@@ -241,7 +239,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               </div>
             );
           case 'banner':
-            if (!(input.inputs ?? []).find(i => !i.hidden)) {
+            if (!(input.inputs ?? []).find((i) => !i.hidden)) {
               return null; // No inputs to show inside
             }
             return (

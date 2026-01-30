@@ -5,6 +5,7 @@ import type {
   JsonPrimitive,
   PluginDefinition,
 } from '@yaakapp/api';
+import { HOSTED_CALLBACK_URL } from './callbackServer';
 import {
   type CallbackType,
   DEFAULT_LOCALHOST_PORT,
@@ -19,9 +20,6 @@ import { getImplicit } from './grants/implicit';
 import { getPassword } from './grants/password';
 import type { AccessToken, TokenStoreArgs } from './store';
 import { deleteToken, getToken, resetDataDirKey } from './store';
-
-/** Hosted callback URL that redirects to local server */
-const HOSTED_CALLBACK_URL = 'https://callbacks.yaak.app/callbacks/oauth2';
 
 type GrantType = 'authorization_code' | 'implicit' | 'password' | 'client_credentials';
 
@@ -187,6 +185,8 @@ export const plugin: PluginDefinition = {
             type: 'text',
             name: 'redirectUri',
             label: 'Redirect URI',
+            description:
+              'URI the OAuth provider redirects to after authorization. Yaak intercepts this automatically in its embedded browser so any valid URI will work.',
             optional: true,
             dynamic: hiddenIfNot(
               ['authorization_code', 'implicit'],
@@ -201,12 +201,11 @@ export const plugin: PluginDefinition = {
                 name: 'callbackType',
                 label: 'Callback Type',
                 description:
-                  'How to receive the OAuth callback. "Localhost" uses a local server (must be registered with provider). ' +
-                  '"Hosted Redirect" uses yaak.app to redirect back to your local server (no registration needed).',
-                defaultValue: 'localhost',
+                  '"Hosted Redirect" uses an external Yaak-hosted endpoint. "Localhost" starts a local server to receive the callback.',
+                defaultValue: 'hosted',
                 options: [
-                  { label: 'Localhost', value: 'localhost' },
                   { label: 'Hosted Redirect', value: 'hosted' },
+                  { label: 'Localhost', value: 'localhost' },
                 ],
                 dynamic: hiddenIfNot(
                   ['authorization_code', 'implicit'],
@@ -219,8 +218,9 @@ export const plugin: PluginDefinition = {
                 label: 'Callback Port',
                 placeholder: `${DEFAULT_LOCALHOST_PORT}`,
                 description:
-                  'Port for the local callback server. Leave empty for the default port. ' +
-                  'Register http://127.0.0.1:{port}/callback as a redirect URI with your OAuth provider.',
+                  'Port for the local callback server. Defaults to ' +
+                  DEFAULT_LOCALHOST_PORT +
+                  ' if empty.',
                 optional: true,
                 dynamic: hiddenIfNot(
                   ['authorization_code', 'implicit'],
@@ -231,33 +231,42 @@ export const plugin: PluginDefinition = {
             ],
           },
           {
-            type: 'markdown',
-            content: 'Redirect URI to Register',
-            async dynamic(_ctx, { values }) {
-              const grantType = String(values.grantType ?? defaultGrantType);
-              const useExternalBrowser = !!values.useExternalBrowser;
-              const callbackType = (stringArg(values, 'callbackType') ||
-                'localhost') as CallbackType;
+            type: 'banner',
+            color: 'info',
+            inputs: [
+              {
+                type: 'markdown',
+                content: 'Redirect URI to Register',
+                async dynamic(_ctx, { values }) {
+                  const grantType = String(values.grantType ?? defaultGrantType);
+                  const useExternalBrowser = !!values.useExternalBrowser;
+                  const callbackType = (stringArg(values, 'callbackType') ||
+                    'localhost') as CallbackType;
 
-              // Only show for authorization_code and implicit with external browser enabled
-              if (!['authorization_code', 'implicit'].includes(grantType) || !useExternalBrowser) {
-                return { hidden: true };
-              }
+                  // Only show for authorization_code and implicit with external browser enabled
+                  if (
+                    !['authorization_code', 'implicit'].includes(grantType) ||
+                    !useExternalBrowser
+                  ) {
+                    return { hidden: true };
+                  }
 
-              // Compute the redirect URI based on callback type
-              let redirectUri: string;
-              if (callbackType === 'hosted') {
-                redirectUri = HOSTED_CALLBACK_URL;
-              } else {
-                const port = intArg(values, 'callbackPort') || DEFAULT_LOCALHOST_PORT;
-                redirectUri = `http://127.0.0.1:${port}/callback`;
-              }
+                  // Compute the redirect URI based on callback type
+                  let redirectUri: string;
+                  if (callbackType === 'hosted') {
+                    redirectUri = HOSTED_CALLBACK_URL;
+                  } else {
+                    const port = intArg(values, 'callbackPort') || DEFAULT_LOCALHOST_PORT;
+                    redirectUri = `http://127.0.0.1:${port}/callback`;
+                  }
 
-              return {
-                hidden: false,
-                content: `Yaak will capture the token by setting the redirect URL to \`${redirectUri}\`. You may need to register this with your OAuth provider.`,
-              };
-            },
+                  return {
+                    hidden: false,
+                    content: `Register \`${redirectUri}\` as a redirect URI with your OAuth provider.`,
+                  };
+                },
+              },
+            ],
           },
         ],
       },

@@ -48,6 +48,7 @@ export function useHttpAuthenticationConfig(
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {
       if (authName == null || authName === 'inherit') return null;
+      console.log('REFRESHING AUTH CONFIG', values);
       const config = await invokeCmd<GetHttpAuthenticationConfigResponse>(
         'cmd_get_http_authentication_config',
         {
