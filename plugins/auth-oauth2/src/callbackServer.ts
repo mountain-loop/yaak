@@ -58,22 +58,45 @@ export function startCallbackServer(options: {
         return;
       }
 
-      // Build the full callback URL
-      const fullCallbackUrl = reqUrl.toString();
+      if (req.method === 'POST') {
+        // POST: read JSON body with the final callback URL and resolve
+        let body = '';
+        req.on('data', (chunk: Buffer) => {
+          body += chunk.toString();
+        });
+        req.on('end', () => {
+          try {
+            const { url: callbackUrl } = JSON.parse(body);
+            if (!callbackUrl || typeof callbackUrl !== 'string') {
+              res.writeHead(400, { 'Content-Type': 'text/plain' });
+              res.end('Missing url in request body');
+              return;
+            }
 
-      // Send success response
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(getSuccessHtml());
+            // Send success response
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(getSuccessHtml());
 
-      // Resolve the callback promise
-      if (callbackResolve) {
-        callbackResolve(fullCallbackUrl);
-        callbackResolve = null;
-        callbackReject = null;
+            // Resolve the callback promise
+            if (callbackResolve) {
+              callbackResolve(callbackUrl);
+              callbackResolve = null;
+              callbackReject = null;
+            }
+
+            // Stop the server after a short delay to ensure response is sent
+            setTimeout(() => stopServer(), 100);
+          } catch {
+            res.writeHead(400, { 'Content-Type': 'text/plain' });
+            res.end('Invalid JSON');
+          }
+        });
+        return;
       }
 
-      // Stop the server after a short delay to ensure response is sent
-      setTimeout(() => stopServer(), 100);
+      // GET: serve intermediate page that reads the fragment and POSTs back
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(getFragmentForwardingHtml());
     });
 
     server.on('error', (err: Error) => {
@@ -158,6 +181,55 @@ export function buildHostedCallbackRedirectUri(localPort: number, localPath: str
   const localRedirectUri = `http://127.0.0.1:${localPort}${localPath}`;
   // The hosted callback page will read params and redirect to the local server
   return `${HOSTED_CALLBACK_URL}?redirect_to=${encodeURIComponent(localRedirectUri)}`;
+}
+
+/**
+ * Intermediate HTML page that reads the URL fragment and _fragment query param,
+ * reconstructs a proper OAuth callback URL, and POSTs it back to the server.
+ *
+ * Handles three cases:
+ * - Localhost implicit: fragment is in location.hash (e.g. #access_token=...)
+ * - Hosted implicit: fragment was converted to ?_fragment=... by the hosted redirect page
+ * - Auth code: no fragment, code is already in query params
+ */
+function getFragmentForwardingHtml(): string {
+  return `<!DOCTYPE html>
+<html>
+<head><title>Yaak</title></head>
+<body>
+<script>
+(function() {
+  var url = new URL(window.location.href);
+  var fragment = window.location.hash;
+  var fragmentParam = url.searchParams.get('_fragment');
+
+  // Build the final callback URL:
+  // 1. If _fragment query param exists (from hosted redirect), convert it back to a real fragment
+  // 2. If location.hash exists (direct localhost implicit), use it as-is
+  // 3. Otherwise (auth code flow), use the URL as-is with query params
+  if (fragmentParam) {
+    url.searchParams.delete('_fragment');
+    url.hash = fragmentParam;
+  } else if (fragment && fragment.length > 1) {
+    url.hash = fragment;
+  }
+
+  // POST the final URL back to the callback server
+  fetch(url.pathname, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: url.toString() })
+  }).then(function(res) {
+    return res.text();
+  }).then(function(html) {
+    document.open();
+    document.write(html);
+    document.close();
+  });
+})();
+</script>
+</body>
+</html>`;
 }
 
 /**
