@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import http from 'node:http';
 
 export const HOSTED_CALLBACK_URL = 'https://oauth.yaak.app/redirect';
+export const DEFAULT_LOCALHOST_PORT = 8765;
 const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 /** Singleton: only one callback server runs at a time across all OAuth flows. */

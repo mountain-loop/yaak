@@ -5,10 +5,9 @@ import type {
   JsonPrimitive,
   PluginDefinition,
 } from '@yaakapp/api';
-import { HOSTED_CALLBACK_URL } from './callbackServer';
+import { DEFAULT_LOCALHOST_PORT, HOSTED_CALLBACK_URL } from './callbackServer';
 import {
   type CallbackType,
-  DEFAULT_LOCALHOST_PORT,
   DEFAULT_PKCE_METHOD,
   genPkceCodeVerifier,
   getAuthorizationCode,

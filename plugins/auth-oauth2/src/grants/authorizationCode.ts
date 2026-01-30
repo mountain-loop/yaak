@@ -1,6 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { Context } from '@yaakapp/api';
-import { buildHostedCallbackRedirectUri, startCallbackServer } from '../callbackServer';
+import {
+  buildHostedCallbackRedirectUri,
+  DEFAULT_LOCALHOST_PORT,
+  startCallbackServer,
+} from '../callbackServer';
 import { fetchAccessToken } from '../fetchAccessToken';
 import { getOrRefreshAccessToken } from '../getOrRefreshAccessToken';
 import type { AccessToken, TokenStoreArgs } from '../store';
@@ -10,9 +14,6 @@ import { extractCode } from '../util';
 export const PKCE_SHA256 = 'S256';
 export const PKCE_PLAIN = 'plain';
 export const DEFAULT_PKCE_METHOD = PKCE_SHA256;
-
-/** Default port for localhost callback when user specifies a fixed port */
-export const DEFAULT_LOCALHOST_PORT = 8765;
 
 export type CallbackType = 'localhost' | 'hosted';
 
@@ -197,11 +198,11 @@ async function getCodeViaExternalBrowser(
   // Determine port based on callback type:
   // - localhost: use specified port or default stable port
   // - hosted: use random port (0) since hosted page redirects to local
-  const port = callbackType === 'localhost'
-    ? (callbackPort ?? DEFAULT_LOCALHOST_PORT)
-    : 0; // Random port for hosted callback
+  const port = callbackType === 'localhost' ? (callbackPort ?? DEFAULT_LOCALHOST_PORT) : 0; // Random port for hosted callback
 
-  console.log(`[oauth2] Starting callback server (type: ${callbackType}, port: ${port || 'random'})`);
+  console.log(
+    `[oauth2] Starting callback server (type: ${callbackType}, port: ${port || 'random'})`,
+  );
 
   // Start the local callback server
   const server = await startCallbackServer({

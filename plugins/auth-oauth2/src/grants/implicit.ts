@@ -1,9 +1,13 @@
 import type { Context } from '@yaakapp/api';
-import { buildHostedCallbackRedirectUri, startCallbackServer } from '../callbackServer';
+import {
+  buildHostedCallbackRedirectUri,
+  DEFAULT_LOCALHOST_PORT,
+  startCallbackServer,
+} from '../callbackServer';
 import type { AccessToken, AccessTokenRawResponse } from '../store';
 import { getDataDirKey, getToken, storeToken } from '../store';
 import { isTokenExpired } from '../util';
-import { DEFAULT_LOCALHOST_PORT, type CallbackType, type ExternalBrowserOptions } from './authorizationCode';
+import type { CallbackType, ExternalBrowserOptions } from './authorizationCode';
 
 export async function getImplicit(
   ctx: Context,
@@ -73,7 +77,13 @@ export async function getImplicit(
     if (redirectUri) {
       authorizationUrl.searchParams.set('redirect_uri', redirectUri);
     }
-    newToken = await getTokenViaEmbeddedBrowser(ctx, contextId, authorizationUrl, tokenArgs, tokenName);
+    newToken = await getTokenViaEmbeddedBrowser(
+      ctx,
+      contextId,
+      authorizationUrl,
+      tokenArgs,
+      tokenName,
+    );
   }
 
   return newToken;
@@ -87,7 +97,12 @@ async function getTokenViaEmbeddedBrowser(
   ctx: Context,
   contextId: string,
   authorizationUrl: URL,
-  tokenArgs: { contextId: string; clientId: string; accessTokenUrl: null; authorizationUrl: string },
+  tokenArgs: {
+    contextId: string;
+    clientId: string;
+    accessTokenUrl: null;
+    authorizationUrl: string;
+  },
   tokenName: 'access_token' | 'id_token',
 ): Promise<AccessToken> {
   const dataDirKey = await getDataDirKey(ctx, contextId);
@@ -142,7 +157,12 @@ async function getTokenViaEmbeddedBrowser(
 async function getTokenViaExternalBrowser(
   ctx: Context,
   authorizationUrl: URL,
-  tokenArgs: { contextId: string; clientId: string; accessTokenUrl: null; authorizationUrl: string },
+  tokenArgs: {
+    contextId: string;
+    clientId: string;
+    accessTokenUrl: null;
+    authorizationUrl: string;
+  },
   options: {
     callbackType: CallbackType;
     callbackPort?: number;
@@ -154,11 +174,11 @@ async function getTokenViaExternalBrowser(
   // Determine port based on callback type:
   // - localhost: use specified port or default stable port
   // - hosted: use random port (0) since hosted page redirects to local
-  const port = callbackType === 'localhost'
-    ? (callbackPort ?? DEFAULT_LOCALHOST_PORT)
-    : 0; // Random port for hosted callback
+  const port = callbackType === 'localhost' ? (callbackPort ?? DEFAULT_LOCALHOST_PORT) : 0; // Random port for hosted callback
 
-  console.log(`[oauth2] Starting callback server for implicit flow (type: ${callbackType}, port: ${port || 'random'})`);
+  console.log(
+    `[oauth2] Starting callback server for implicit flow (type: ${callbackType}, port: ${port || 'random'})`,
+  );
 
   // Start the local callback server
   const server = await startCallbackServer({
