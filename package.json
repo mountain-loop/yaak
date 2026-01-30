@@ -95,7 +95,7 @@
     "js-yaml": "^4.1.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.10",
+    "@biomejs/biome": "^2.3.13",
     "@tauri-apps/cli": "^2.9.6",
     "@yaakapp/cli": "^0.3.4",
     "dotenv-cli": "^11.0.0",
