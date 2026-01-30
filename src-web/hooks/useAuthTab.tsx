@@ -1,5 +1,5 @@
 import type { Folder } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
+import { modelTypeLabel, patchModel } from '@yaakapp-internal/models';
 import { useMemo } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
@@ -109,28 +109,45 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
             );
           }
 
-          // Copy inherited: copy auth from ancestor down to current model
-          if (
-            inheritedAuth &&
-            inheritedAuth.id !== model.id &&
-            inheritedAuth.authenticationType &&
-            inheritedAuth.authenticationType !== 'none'
-          ) {
+          // Copy from ancestor: copy auth config down to current model
+          const ancestorWithAuth = ancestors.find(
+            (a) => a.authenticationType != null && a.authenticationType !== 'none',
+          );
+          if (ancestorWithAuth) {
             if (actions.length === 0) {
               actions.push({ type: 'separator', label: 'Actions' });
             }
             actions.push({
-              label: `Copy from ${capitalize(inheritedAuth.model)}`,
+              label: `Copy from ${modelTypeLabel(ancestorWithAuth)}`,
               leftSlot: (
                 <Icon
-                  icon={inheritedAuth.model === 'workspace' ? 'corner_right_down' : 'folder_down'}
+                  icon={
+                    ancestorWithAuth.model === 'workspace' ? 'corner_right_down' : 'folder_down'
+                  }
                 />
               ),
               onSelect: async () => {
-                await patchModel(model, {
-                  authentication: { ...inheritedAuth.authentication },
-                  authenticationType: inheritedAuth.authenticationType,
+                const confirmed = await showConfirm({
+                  id: 'copy-auth-confirm',
+                  title: 'Copy Authentication',
+                  confirmText: 'Copy',
+                  description: (
+                    <>
+                      Copy{' '}
+                      {authentication.find((a) => a.name === ancestorWithAuth.authenticationType)
+                        ?.label ?? 'authentication'}{' '}
+                      config from <InlineCode>{resolvedModelName(ancestorWithAuth)}</InlineCode>?
+                      This will override the current authentication but will not affect the{' '}
+                      {modelTypeLabel(ancestorWithAuth).toLowerCase()}.
+                    </>
+                  ),
                 });
+                if (confirmed) {
+                  await patchModel(model, {
+                    authentication: { ...ancestorWithAuth.authentication },
+                    authenticationType: ancestorWithAuth.authenticationType,
+                  });
+                }
               },
             });
           }
@@ -150,5 +167,5 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
     };
 
     return [tab];
-  }, [authentication, inheritedAuth, model, parentModel, tabValue]);
+  }, [authentication, inheritedAuth, model, parentModel, tabValue, ancestors]);
 }

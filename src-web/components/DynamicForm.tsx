@@ -198,8 +198,8 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               />
             );
           case 'accordion':
-            if (!(input.inputs ?? []).find((i) => !i.hidden)) {
-              return null; // No inputs to show inside
+            if (!hasVisibleInputs(input.inputs)) {
+              return null;
             }
             return (
               <div key={i + stateKey}>
@@ -222,8 +222,8 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               </div>
             );
           case 'h_stack':
-            if (!(input.inputs ?? []).find((i) => !i.hidden)) {
-              return null; // No inputs to show inside
+            if (!hasVisibleInputs(input.inputs)) {
+              return null;
             }
             return (
               <div className="flex flex-wrap sm:flex-nowrap gap-3 items-end" key={i + stateKey}>
@@ -239,8 +239,8 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               </div>
             );
           case 'banner':
-            if (!(input.inputs ?? []).find((i) => !i.hidden)) {
-              return null; // No inputs to show inside
+            if (!hasVisibleInputs(input.inputs)) {
+              return null;
             }
             return (
               <Banner
@@ -611,4 +611,9 @@ function KeyValueArg({
       />
     </div>
   );
+}
+
+function hasVisibleInputs(inputs: FormInput[] | undefined): boolean {
+  if (!inputs) return false;
+  return inputs.some((i) => !i.hidden);
 }
