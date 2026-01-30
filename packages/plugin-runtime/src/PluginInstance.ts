@@ -338,8 +338,8 @@ export class PluginInstance {
       if (payload.type === 'call_http_authentication_request' && this.#mod?.authentication) {
         const auth = this.#mod.authentication;
         if (typeof auth?.onApply === 'function') {
-          auth.args = await applyDynamicFormInput(ctx, auth.args, payload);
-          payload.values = applyFormInputDefaults(auth.args, payload.values);
+          const resolvedArgs = await applyDynamicFormInput(ctx, auth.args, payload);
+          payload.values = applyFormInputDefaults(resolvedArgs, payload.values);
           this.#sendPayload(
             context,
             {
