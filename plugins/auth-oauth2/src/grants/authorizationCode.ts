@@ -100,7 +100,8 @@ export async function getAuthorizationCode(
       callbackType: externalBrowser.callbackType,
       callbackPort: externalBrowser.callbackPort,
     });
-    const extractedCode = extractCode(result.callbackUrl, result.redirectUri);
+    // Pass null to skip redirect URI matching — the callback came from our own local server
+    const extractedCode = extractCode(result.callbackUrl, null);
     if (!extractedCode) {
       throw new Error('No authorization code found in callback URL');
     }
