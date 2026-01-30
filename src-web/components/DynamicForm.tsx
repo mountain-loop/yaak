@@ -83,7 +83,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
 function FormInputsStack<T extends Record<string, JsonPrimitive>>({
   className,
   ...props
-}: FormInputsProps<T> & { className?: string}) {
+}: FormInputsProps<T> & { className?: string }) {
   return (
     <VStack
       space={3}
@@ -198,6 +198,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               />
             );
           case 'accordion':
+            if (!hasVisibleInputs(input.inputs)) {
+              return null;
+            }
             return (
               <div key={i + stateKey}>
                 <DetailsBanner
@@ -219,6 +222,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               </div>
             );
           case 'h_stack':
+            if (!hasVisibleInputs(input.inputs)) {
+              return null;
+            }
             return (
               <div className="flex flex-wrap sm:flex-nowrap gap-3 items-end" key={i + stateKey}>
                 <FormInputs
@@ -233,6 +239,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               </div>
             );
           case 'banner':
+            if (!hasVisibleInputs(input.inputs)) {
+              return null;
+            }
             return (
               <Banner
                 key={i + stateKey}
@@ -602,4 +611,9 @@ function KeyValueArg({
       />
     </div>
   );
+}
+
+function hasVisibleInputs(inputs: FormInput[] | undefined): boolean {
+  if (!inputs) return false;
+  return inputs.some((i) => !i.hidden);
 }

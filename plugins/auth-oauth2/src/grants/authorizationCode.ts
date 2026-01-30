@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { Context } from '@yaakapp/api';
+import { getRedirectUrlViaExternalBrowser } from '../callbackServer';
 import { fetchAccessToken } from '../fetchAccessToken';
 import { getOrRefreshAccessToken } from '../getOrRefreshAccessToken';
 import type { AccessToken, TokenStoreArgs } from '../store';
@@ -9,6 +10,15 @@ import { extractCode } from '../util';
 export const PKCE_SHA256 = 'S256';
 export const PKCE_PLAIN = 'plain';
 export const DEFAULT_PKCE_METHOD = PKCE_SHA256;
+
+export type CallbackType = 'localhost' | 'hosted';
+
+export interface ExternalBrowserOptions {
+  useExternalBrowser: boolean;
+  callbackType: CallbackType;
+  /** Port for localhost callback (only used when callbackType is 'localhost') */
+  callbackPort?: number;
+}
 
 export async function getAuthorizationCode(
   ctx: Context,
@@ -25,6 +35,7 @@ export async function getAuthorizationCode(
     credentialsInBody,
     pkce,
     tokenName,
+    externalBrowser,
   }: {
     authorizationUrl: string;
     accessTokenUrl: string;
@@ -40,6 +51,7 @@ export async function getAuthorizationCode(
       codeVerifier: string;
     } | null;
     tokenName: 'access_token' | 'id_token';
+    externalBrowser?: ExternalBrowserOptions;
   },
 ): Promise<AccessToken> {
   const tokenArgs: TokenStoreArgs = {
@@ -68,7 +80,6 @@ export async function getAuthorizationCode(
   }
   authorizationUrl.searchParams.set('response_type', 'code');
   authorizationUrl.searchParams.set('client_id', clientId);
-  if (redirectUri) authorizationUrl.searchParams.set('redirect_uri', redirectUri);
   if (scope) authorizationUrl.searchParams.set('scope', scope);
   if (state) authorizationUrl.searchParams.set('state', state);
   if (audience) authorizationUrl.searchParams.set('audience', audience);
@@ -80,12 +91,65 @@ export async function getAuthorizationCode(
     authorizationUrl.searchParams.set('code_challenge_method', pkce.challengeMethod);
   }
 
+  let code: string;
+  let actualRedirectUri: string | null = redirectUri;
+
+  // Use external browser flow if enabled
+  if (externalBrowser?.useExternalBrowser) {
+    const result = await getRedirectUrlViaExternalBrowser(ctx, authorizationUrl, {
+      callbackType: externalBrowser.callbackType,
+      callbackPort: externalBrowser.callbackPort,
+    });
+    // Pass null to skip redirect URI matching — the callback came from our own local server
+    const extractedCode = extractCode(result.callbackUrl, null);
+    if (!extractedCode) {
+      throw new Error('No authorization code found in callback URL');
+    }
+    code = extractedCode;
+    actualRedirectUri = result.redirectUri;
+  } else {
+    // Use embedded browser flow (original behavior)
+    if (redirectUri) {
+      authorizationUrl.searchParams.set('redirect_uri', redirectUri);
+    }
+    code = await getCodeViaEmbeddedBrowser(ctx, contextId, authorizationUrl, redirectUri);
+  }
+
+  console.log('[oauth2] Code found');
+  const response = await fetchAccessToken(ctx, {
+    grantType: 'authorization_code',
+    accessTokenUrl,
+    clientId,
+    clientSecret,
+    scope,
+    audience,
+    credentialsInBody,
+    params: [
+      { name: 'code', value: code },
+      ...(pkce ? [{ name: 'code_verifier', value: pkce.codeVerifier }] : []),
+      ...(actualRedirectUri ? [{ name: 'redirect_uri', value: actualRedirectUri }] : []),
+    ],
+  });
+
+  return storeToken(ctx, tokenArgs, response, tokenName);
+}
+
+/**
+ * Get authorization code using the embedded browser window.
+ * This is the original flow that monitors navigation events.
+ */
+async function getCodeViaEmbeddedBrowser(
+  ctx: Context,
+  contextId: string,
+  authorizationUrl: URL,
+  redirectUri: string | null,
+): Promise<string> {
   const dataDirKey = await getDataDirKey(ctx, contextId);
   const authorizationUrlStr = authorizationUrl.toString();
-  console.log('[oauth2] Authorizing', authorizationUrlStr);
+  console.log('[oauth2] Authorizing via embedded browser', authorizationUrlStr);
 
-  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: none
-  const code = await new Promise<string>(async (resolve, reject) => {
+  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: Required for this pattern
+  return new Promise<string>(async (resolve, reject) => {
     let foundCode = false;
     const { close } = await ctx.window.openUrl({
       dataDirKey,
@@ -110,31 +174,12 @@ export async function getAuthorizationCode(
           return;
         }
 
-        // Close the window here, because we don't need it anymore!
         foundCode = true;
         close();
         resolve(code);
       },
     });
   });
-
-  console.log('[oauth2] Code found');
-  const response = await fetchAccessToken(ctx, {
-    grantType: 'authorization_code',
-    accessTokenUrl,
-    clientId,
-    clientSecret,
-    scope,
-    audience,
-    credentialsInBody,
-    params: [
-      { name: 'code', value: code },
-      ...(pkce ? [{ name: 'code_verifier', value: pkce.codeVerifier }] : []),
-      ...(redirectUri ? [{ name: 'redirect_uri', value: redirectUri }] : []),
-    ],
-  });
-
-  return storeToken(ctx, tokenArgs, response, tokenName);
 }
 
 export function genPkceCodeVerifier() {
