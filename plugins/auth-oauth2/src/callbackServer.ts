@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import http from 'node:http';
+import type { Context } from '@yaakapp/api';
 
 export const HOSTED_CALLBACK_URL = 'https://oauth.yaak.app/redirect';
 export const DEFAULT_LOCALHOST_PORT = 8765;
@@ -181,6 +182,77 @@ export function buildHostedCallbackRedirectUri(localPort: number, localPath: str
   const localRedirectUri = `http://127.0.0.1:${localPort}${localPath}`;
   // The hosted callback page will read params and redirect to the local server
   return `${HOSTED_CALLBACK_URL}?redirect_to=${encodeURIComponent(localRedirectUri)}`;
+}
+
+/**
+ * Open an authorization URL in the system browser, start a local callback server,
+ * and wait for the OAuth provider to redirect back.
+ *
+ * Returns the raw callback URL and the redirect URI that was registered with the
+ * OAuth provider (needed for token exchange).
+ */
+export async function getRedirectUrlViaExternalBrowser(
+  ctx: Context,
+  authorizationUrl: URL,
+  options: {
+    callbackType: 'localhost' | 'hosted';
+    callbackPort?: number;
+  },
+): Promise<{ callbackUrl: string; redirectUri: string }> {
+  const { callbackType, callbackPort } = options;
+
+  // Determine port based on callback type:
+  // - localhost: use specified port or default stable port
+  // - hosted: use random port (0) since hosted page redirects to local
+  const port = callbackType === 'localhost' ? (callbackPort ?? DEFAULT_LOCALHOST_PORT) : 0;
+
+  console.log(
+    `[oauth2] Starting callback server (type: ${callbackType}, port: ${port || 'random'})`,
+  );
+
+  const server = await startCallbackServer({
+    port,
+    path: '/callback',
+  });
+
+  try {
+    // Determine the redirect URI to send to the OAuth provider
+    let oauthRedirectUri: string;
+
+    if (callbackType === 'hosted') {
+      oauthRedirectUri = buildHostedCallbackRedirectUri(server.port, '/callback');
+      console.log('[oauth2] Using hosted callback redirect:', oauthRedirectUri);
+    } else {
+      oauthRedirectUri = server.redirectUri;
+      console.log('[oauth2] Using localhost callback redirect:', oauthRedirectUri);
+    }
+
+    // Set the redirect URI on the authorization URL
+    authorizationUrl.searchParams.set('redirect_uri', oauthRedirectUri);
+
+    const authorizationUrlStr = authorizationUrl.toString();
+    console.log('[oauth2] Opening external browser:', authorizationUrlStr);
+
+    // Show toast to inform user
+    await ctx.toast.show({
+      message: 'Opening browser for authorization...',
+      icon: 'info',
+      timeout: 3000,
+    });
+
+    // Open the system browser
+    await ctx.window.openExternalUrl(authorizationUrlStr);
+
+    // Wait for the callback
+    console.log('[oauth2] Waiting for callback on', server.redirectUri);
+    const callbackUrl = await server.waitForCallback();
+
+    console.log('[oauth2] Received callback:', callbackUrl);
+
+    return { callbackUrl, redirectUri: oauthRedirectUri };
+  } finally {
+    server.stop();
+  }
 }
 
 /**

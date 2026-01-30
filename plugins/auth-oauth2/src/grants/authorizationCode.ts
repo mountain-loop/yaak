@@ -1,10 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { Context } from '@yaakapp/api';
-import {
-  buildHostedCallbackRedirectUri,
-  DEFAULT_LOCALHOST_PORT,
-  startCallbackServer,
-} from '../callbackServer';
+import { getRedirectUrlViaExternalBrowser } from '../callbackServer';
 import { fetchAccessToken } from '../fetchAccessToken';
 import { getOrRefreshAccessToken } from '../getOrRefreshAccessToken';
 import type { AccessToken, TokenStoreArgs } from '../store';
@@ -100,11 +96,15 @@ export async function getAuthorizationCode(
 
   // Use external browser flow if enabled
   if (externalBrowser?.useExternalBrowser) {
-    const result = await getCodeViaExternalBrowser(ctx, authorizationUrl, {
+    const result = await getRedirectUrlViaExternalBrowser(ctx, authorizationUrl, {
       callbackType: externalBrowser.callbackType,
       callbackPort: externalBrowser.callbackPort,
     });
-    code = result.code;
+    const extractedCode = extractCode(result.callbackUrl, result.redirectUri);
+    if (!extractedCode) {
+      throw new Error('No authorization code found in callback URL');
+    }
+    code = extractedCode;
     actualRedirectUri = result.redirectUri;
   } else {
     // Use embedded browser flow (original behavior)
@@ -179,94 +179,6 @@ async function getCodeViaEmbeddedBrowser(
       },
     });
   });
-}
-
-/**
- * Get authorization code using the system's default browser.
- * Starts a local HTTP server to receive the callback.
- */
-async function getCodeViaExternalBrowser(
-  ctx: Context,
-  authorizationUrl: URL,
-  options: {
-    callbackType: CallbackType;
-    callbackPort?: number;
-  },
-): Promise<{ code: string; redirectUri: string }> {
-  const { callbackType, callbackPort } = options;
-
-  // Determine port based on callback type:
-  // - localhost: use specified port or default stable port
-  // - hosted: use random port (0) since hosted page redirects to local
-  const port = callbackType === 'localhost' ? (callbackPort ?? DEFAULT_LOCALHOST_PORT) : 0; // Random port for hosted callback
-
-  console.log(
-    `[oauth2] Starting callback server (type: ${callbackType}, port: ${port || 'random'})`,
-  );
-
-  // Start the local callback server
-  const server = await startCallbackServer({
-    port,
-    path: '/callback',
-  });
-
-  try {
-    // Determine the redirect URI to send to the OAuth provider
-    let oauthRedirectUri: string;
-
-    if (callbackType === 'hosted') {
-      // For hosted callback, the OAuth provider redirects to the hosted page,
-      // which then redirects to our local server
-      oauthRedirectUri = buildHostedCallbackRedirectUri(server.port, '/callback');
-      console.log('[oauth2] Using hosted callback redirect:', oauthRedirectUri);
-    } else {
-      // For localhost callback, always use the local server's URI so the
-      // callback actually reaches our listener. The user-configured
-      // redirectUri is ignored here — it only applies to embedded browser flow.
-      oauthRedirectUri = server.redirectUri;
-      console.log('[oauth2] Using localhost callback redirect:', oauthRedirectUri);
-    }
-
-    // Set the redirect URI on the authorization URL
-    authorizationUrl.searchParams.set('redirect_uri', oauthRedirectUri);
-
-    const authorizationUrlStr = authorizationUrl.toString();
-    console.log('[oauth2] Opening external browser:', authorizationUrlStr);
-
-    // Show toast to inform user
-    await ctx.toast.show({
-      message: 'Opening browser for authorization...',
-      icon: 'info',
-      timeout: 3000,
-    });
-
-    // Open the system browser
-    await ctx.window.openExternalUrl(authorizationUrlStr);
-
-    // Wait for the callback
-    console.log('[oauth2] Waiting for callback on', server.redirectUri);
-    const callbackUrl = await server.waitForCallback();
-
-    console.log('[oauth2] Received callback:', callbackUrl);
-
-    // Extract the authorization code from the callback URL
-    const code = extractCode(callbackUrl, server.redirectUri);
-    if (!code) {
-      throw new Error('No authorization code found in callback URL');
-    }
-
-    // For hosted callback, the redirect_uri sent in token exchange must match
-    // what was sent to the OAuth provider (the hosted URL)
-    // For localhost, use the local server's redirect URI
-    return {
-      code,
-      redirectUri: oauthRedirectUri,
-    };
-  } finally {
-    // Always stop the server to release the port, even on success.
-    // This is safe to call multiple times (guarded by `stopped` flag).
-    server.stop();
-  }
 }
 
 export function genPkceCodeVerifier() {

@@ -1,13 +1,9 @@
 import type { Context } from '@yaakapp/api';
-import {
-  buildHostedCallbackRedirectUri,
-  DEFAULT_LOCALHOST_PORT,
-  startCallbackServer,
-} from '../callbackServer';
+import { getRedirectUrlViaExternalBrowser } from '../callbackServer';
 import type { AccessToken, AccessTokenRawResponse } from '../store';
 import { getDataDirKey, getToken, storeToken } from '../store';
 import { isTokenExpired } from '../util';
-import type { CallbackType, ExternalBrowserOptions } from './authorizationCode';
+import type { ExternalBrowserOptions } from './authorizationCode';
 
 export async function getImplicit(
   ctx: Context,
@@ -67,11 +63,11 @@ export async function getImplicit(
 
   // Use external browser flow if enabled
   if (externalBrowser?.useExternalBrowser) {
-    newToken = await getTokenViaExternalBrowser(ctx, authorizationUrl, tokenArgs, {
+    const result = await getRedirectUrlViaExternalBrowser(ctx, authorizationUrl, {
       callbackType: externalBrowser.callbackType,
       callbackPort: externalBrowser.callbackPort,
-      tokenName,
     });
+    newToken = await extractImplicitToken(ctx, result.callbackUrl, tokenArgs, tokenName);
   } else {
     // Use embedded browser flow (original behavior)
     if (redirectUri) {
@@ -151,122 +147,53 @@ async function getTokenViaEmbeddedBrowser(
 }
 
 /**
- * Get token using the system's default browser.
- * Starts a local HTTP server to receive the callback with token in fragment.
+ * Extract the implicit grant token from a callback URL and store it.
  */
-async function getTokenViaExternalBrowser(
+async function extractImplicitToken(
   ctx: Context,
-  authorizationUrl: URL,
+  callbackUrl: string,
   tokenArgs: {
     contextId: string;
     clientId: string;
     accessTokenUrl: null;
     authorizationUrl: string;
   },
-  options: {
-    callbackType: CallbackType;
-    callbackPort?: number;
-    tokenName: 'access_token' | 'id_token';
-  },
+  tokenName: 'access_token' | 'id_token',
 ): Promise<AccessToken> {
-  const { callbackType, callbackPort, tokenName } = options;
+  const url = new URL(callbackUrl);
 
-  // Determine port based on callback type:
-  // - localhost: use specified port or default stable port
-  // - hosted: use random port (0) since hosted page redirects to local
-  const port = callbackType === 'localhost' ? (callbackPort ?? DEFAULT_LOCALHOST_PORT) : 0; // Random port for hosted callback
-
-  console.log(
-    `[oauth2] Starting callback server for implicit flow (type: ${callbackType}, port: ${port || 'random'})`,
-  );
-
-  // Start the local callback server
-  const server = await startCallbackServer({
-    port,
-    path: '/callback',
-  });
-
-  try {
-    // Determine the redirect URI to send to the OAuth provider
-    let oauthRedirectUri: string;
-
-    if (callbackType === 'hosted') {
-      // For hosted callback, the OAuth provider redirects to the hosted page,
-      // which then redirects to our local server (preserving the fragment)
-      oauthRedirectUri = buildHostedCallbackRedirectUri(server.port, '/callback');
-      console.log('[oauth2] Using hosted callback redirect:', oauthRedirectUri);
-    } else {
-      // For localhost callback, always use the local server's URI so the
-      // callback actually reaches our listener. The user-configured
-      // redirectUri is ignored here — it only applies to embedded browser flow.
-      oauthRedirectUri = server.redirectUri;
-      console.log('[oauth2] Using localhost callback redirect:', oauthRedirectUri);
-    }
-
-    // Set the redirect URI on the authorization URL
-    authorizationUrl.searchParams.set('redirect_uri', oauthRedirectUri);
-
-    const authorizationUrlStr = authorizationUrl.toString();
-    console.log('[oauth2] Opening external browser (implicit):', authorizationUrlStr);
-
-    // Show toast to inform user
-    await ctx.toast.show({
-      message: 'Opening browser for authorization...',
-      icon: 'info',
-      timeout: 3000,
-    });
-
-    // Open the system browser
-    await ctx.window.openExternalUrl(authorizationUrlStr);
-
-    // Wait for the callback
-    // Note: For implicit flow, the token is in the URL fragment (#access_token=...)
-    // The hosted callback page will need to preserve this and pass it to the local server
-    console.log('[oauth2] Waiting for callback on', server.redirectUri);
-    const callbackUrl = await server.waitForCallback();
-
-    console.log('[oauth2] Received callback:', callbackUrl);
-
-    // Parse the callback URL
-    const url = new URL(callbackUrl);
-
-    // Check for errors
-    if (url.searchParams.has('error')) {
-      throw new Error(`Failed to authorize: ${url.searchParams.get('error')}`);
-    }
-
-    // Extract token from fragment
-    const hash = url.hash.slice(1);
-    const params = new URLSearchParams(hash);
-
-    // Also check query params (in case fragment was converted)
-    const accessToken = params.get(tokenName) ?? url.searchParams.get(tokenName);
-    if (!accessToken) {
-      throw new Error(`No ${tokenName} found in callback URL`);
-    }
-
-    // Build response from params (prefer fragment, fall back to query)
-    const response: AccessTokenRawResponse = {
-      access_token: params.get('access_token') ?? url.searchParams.get('access_token') ?? '',
-      token_type: params.get('token_type') ?? url.searchParams.get('token_type') ?? undefined,
-      expires_in: params.has('expires_in')
-        ? parseInt(params.get('expires_in') ?? '0', 10)
-        : url.searchParams.has('expires_in')
-          ? parseInt(url.searchParams.get('expires_in') ?? '0', 10)
-          : undefined,
-      scope: params.get('scope') ?? url.searchParams.get('scope') ?? undefined,
-    };
-
-    // Include id_token if present
-    const idToken = params.get('id_token') ?? url.searchParams.get('id_token');
-    if (idToken) {
-      response.id_token = idToken;
-    }
-
-    return storeToken(ctx, tokenArgs, response);
-  } finally {
-    // Always stop the server to release the port, even on success.
-    // This is safe to call multiple times (guarded by `stopped` flag).
-    server.stop();
+  // Check for errors
+  if (url.searchParams.has('error')) {
+    throw new Error(`Failed to authorize: ${url.searchParams.get('error')}`);
   }
+
+  // Extract token from fragment
+  const hash = url.hash.slice(1);
+  const params = new URLSearchParams(hash);
+
+  // Also check query params (in case fragment was converted)
+  const accessToken = params.get(tokenName) ?? url.searchParams.get(tokenName);
+  if (!accessToken) {
+    throw new Error(`No ${tokenName} found in callback URL`);
+  }
+
+  // Build response from params (prefer fragment, fall back to query)
+  const response: AccessTokenRawResponse = {
+    access_token: params.get('access_token') ?? url.searchParams.get('access_token') ?? '',
+    token_type: params.get('token_type') ?? url.searchParams.get('token_type') ?? undefined,
+    expires_in: params.has('expires_in')
+      ? parseInt(params.get('expires_in') ?? '0', 10)
+      : url.searchParams.has('expires_in')
+        ? parseInt(url.searchParams.get('expires_in') ?? '0', 10)
+        : undefined,
+    scope: params.get('scope') ?? url.searchParams.get('scope') ?? undefined,
+  };
+
+  // Include id_token if present
+  const idToken = params.get('id_token') ?? url.searchParams.get('id_token');
+  if (idToken) {
+    response.id_token = idToken;
+  }
+
+  return storeToken(ctx, tokenArgs, response);
 }
