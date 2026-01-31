@@ -51,10 +51,9 @@ function ActualEventStreamViewer({ response }: Props) {
               <span className="truncate text-xs">{event.data.slice(0, 1000)}</span>
             </HStack>
           }
-
         />
       )}
-      renderDetail={({ event, index }) => (
+      renderDetail={({ event, index, onClose }) => (
         <EventDetail
           event={event}
           index={index}
@@ -62,6 +61,7 @@ function ActualEventStreamViewer({ response }: Props) {
           showingLarge={showingLarge}
           setShowLarge={setShowLarge}
           setShowingLarge={setShowingLarge}
+          onClose={onClose}
         />
       )}
     />
@@ -75,6 +75,7 @@ function EventDetail({
   showingLarge,
   setShowLarge,
   setShowingLarge,
+  onClose,
 }: {
   event: ServerSentEvent;
   index: number;
@@ -82,6 +83,7 @@ function EventDetail({
   showingLarge: boolean;
   setShowLarge: (v: boolean) => void;
   setShowingLarge: (v: boolean) => void;
+  onClose: () => void;
 }) {
   const language = useMemo<'text' | 'json'>(() => {
     if (!event?.data) return 'text';
@@ -90,7 +92,11 @@ function EventDetail({
 
   return (
     <div className="flex flex-col h-full">
-      <EventDetailHeader title="Message Received" prefix={<EventLabels event={event} index={index} />} />
+      <EventDetailHeader
+        title="Message Received"
+        prefix={<EventLabels event={event} index={index} />}
+        onClose={onClose}
+      />
       {!showLarge && event.data.length > 1000 * 1000 ? (
         <VStack space={2} className="italic text-text-subtlest">
           Message previews larger than 1MB are hidden

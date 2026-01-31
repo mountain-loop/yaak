@@ -13,7 +13,7 @@ import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { languageFromContentType } from '../lib/contentType';
 import { Button } from './core/Button';
 import { Editor } from './core/Editor/LazyEditor';
-import { EventDetailHeader, EventViewer, type EventDetailAction } from './core/EventViewer';
+import { type EventDetailAction, EventDetailHeader, EventViewer } from './core/EventViewer';
 import { EventViewerRow } from './core/EventViewerRow';
 import { HotkeyList } from './core/HotkeyList';
 import { Icon } from './core/Icon';
@@ -75,7 +75,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
         renderRow={({ event, isActive, onClick }) => (
           <WebsocketEventRow event={event} isActive={isActive} onClick={onClick} />
         )}
-        renderDetail={({ event, index }) => (
+        renderDetail={({ event, index, onClose }) => (
           <WebsocketEventDetail
             event={event}
             hexDump={hexDumps[index] ?? event.messageType === 'binary'}
@@ -84,6 +84,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
             showingLarge={showingLarge}
             setShowLarge={setShowLarge}
             setShowingLarge={setShowingLarge}
+            onClose={onClose}
           />
         )}
       />
@@ -145,6 +146,7 @@ function WebsocketEventDetail({
   showingLarge,
   setShowLarge,
   setShowingLarge,
+  onClose,
 }: {
   event: WebsocketEvent;
   hexDump: boolean;
@@ -153,6 +155,7 @@ function WebsocketEventDetail({
   showingLarge: boolean;
   setShowLarge: (v: boolean) => void;
   setShowingLarge: (v: boolean) => void;
+  onClose: () => void;
 }) {
   const message = useMemo(() => {
     if (hexDump) {
@@ -185,11 +188,12 @@ function WebsocketEventDetail({
   return (
     <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
       <EventDetailHeader
-          title={title}
-          timestamp={event.createdAt}
-          actions={actions}
-          copyText={formattedMessage || undefined}
-        />
+        title={title}
+        timestamp={event.createdAt}
+        actions={actions}
+        copyText={formattedMessage || undefined}
+        onClose={onClose}
+      />
       {!showLarge && event.message.length > 1000 * 1000 ? (
         <VStack space={2} className="italic text-text-subtlest">
           Message previews larger than 1MB are hidden
