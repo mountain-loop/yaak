@@ -98,13 +98,14 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
           renderRow={({ event, isActive, onClick }) => (
             <GrpcEventRow event={event} isActive={isActive} onClick={onClick} />
           )}
-          renderDetail={({ event }) => (
+          renderDetail={({ event, onClose }) => (
             <GrpcEventDetail
               event={event}
               showLarge={showLarge}
               showingLarge={showingLarge}
               setShowLarge={setShowLarge}
               setShowingLarge={setShowingLarge}
+              onClose={onClose}
             />
           )}
         />
@@ -147,19 +148,26 @@ function GrpcEventDetail({
   showingLarge,
   setShowLarge,
   setShowingLarge,
+  onClose,
 }: {
   event: GrpcEvent;
   showLarge: boolean;
   showingLarge: boolean;
   setShowLarge: (v: boolean) => void;
   setShowingLarge: (v: boolean) => void;
+  onClose: () => void;
 }) {
   if (event.eventType === 'client_message' || event.eventType === 'server_message') {
     const title = `Message ${event.eventType === 'client_message' ? 'Sent' : 'Received'}`;
 
     return (
       <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
-        <EventDetailHeader title={title} timestamp={event.createdAt} copyText={event.content} />
+        <EventDetailHeader
+          title={title}
+          timestamp={event.createdAt}
+          copyText={event.content}
+          onClose={onClose}
+        />
         {!showLarge && event.content.length > 1000 * 1000 ? (
           <VStack space={2} className="italic text-text-subtlest">
             Message previews larger than 1MB are hidden
@@ -197,7 +205,7 @@ function GrpcEventDetail({
   // Error or connection_end - show metadata/trailers
   return (
     <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
-      <EventDetailHeader title={event.content} timestamp={event.createdAt} />
+      <EventDetailHeader title={event.content} timestamp={event.createdAt} onClose={onClose} />
       {event.error && (
         <div className="select-text cursor-text text-sm font-mono py-1 text-warning">
           {event.error}
