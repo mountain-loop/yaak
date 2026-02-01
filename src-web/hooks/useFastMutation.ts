@@ -23,14 +23,17 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
     variables: TVariables,
     args?: CallbackMutationOptions<TData, TError, TVariables>,
   ) => {
-    const { mutationKey, mutationFn, onSuccess, onError, onSettled, disableToastError } = {
+    const { mutationKey, mutationFn, disableToastError } = {
       ...defaultArgs,
       ...args,
     };
     try {
       const data = await mutationFn(variables);
-      onSuccess?.(data);
-      onSettled?.();
+      // Run both default and custom onSuccess callbacks
+      defaultArgs.onSuccess?.(data);
+      args?.onSuccess?.(data);
+      defaultArgs.onSettled?.();
+      args?.onSettled?.();
       return data;
     } catch (err: unknown) {
       const stringKey = mutationKey.join('.');
@@ -44,8 +47,11 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
           timeout: 5000,
         });
       }
-      onError?.(e);
-      onSettled?.();
+      // Run both default and custom onError callbacks
+      defaultArgs.onError?.(e);
+      args?.onError?.(e);
+      defaultArgs.onSettled?.();
+      args?.onSettled?.();
       throw e;
     }
   };

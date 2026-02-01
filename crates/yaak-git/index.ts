@@ -3,9 +3,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { createFastMutation } from '@yaakapp/app/hooks/useFastMutation';
 import { queryClient } from '@yaakapp/app/lib/queryClient';
 import { useMemo } from 'react';
-import { GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
+import { BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
 
 export * from './bindings/gen_git';
+export * from './bindings/gen_models';
 
 export interface GitCredentials {
   username: string;
@@ -59,7 +60,6 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     if (creds == null) throw new Error('Canceled');
 
     await invoke('cmd_git_add_credential', {
-      dir,
       remoteUrl: result.url,
       username: creds.username,
       password: creds.password,
@@ -90,19 +90,29 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationFn: (args) => invoke('cmd_git_rm_remote', { dir, ...args }),
       onSuccess,
     }),
-    branch: createFastMutation<void, string, { branch: string }>({
+    createBranch: createFastMutation<void, string, { branch: string; base?: string }>({
       mutationKey: ['git', 'branch', dir],
       mutationFn: (args) => invoke('cmd_git_branch', { dir, ...args }),
       onSuccess,
     }),
-    mergeBranch: createFastMutation<void, string, { branch: string; force: boolean }>({
+    mergeBranch: createFastMutation<void, string, { branch: string }>({
       mutationKey: ['git', 'merge', dir],
       mutationFn: (args) => invoke('cmd_git_merge_branch', { dir, ...args }),
       onSuccess,
     }),
-    deleteBranch: createFastMutation<void, string, { branch: string }>({
+    deleteBranch: createFastMutation<BranchDeleteResult, string, { branch: string, force?: boolean }>({
       mutationKey: ['git', 'delete-branch', dir],
       mutationFn: (args) => invoke('cmd_git_delete_branch', { dir, ...args }),
+      onSuccess,
+    }),
+    deleteRemoteBranch: createFastMutation<void, string, { branch: string }>({
+      mutationKey: ['git', 'delete-remote-branch', dir],
+      mutationFn: (args) => invoke('cmd_git_delete_remote_branch', { dir, ...args }),
+      onSuccess,
+    }),
+    renameBranch: createFastMutation<void, string, { oldName: string, newName: string }>({
+      mutationKey: ['git', 'rename-branch', dir],
+      mutationFn: (args) => invoke('cmd_git_rename_branch', { dir, ...args }),
       onSuccess,
     }),
     checkout: createFastMutation<string, string, { branch: string; force: boolean }>({
@@ -144,7 +154,6 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
         if (creds == null) throw new Error('Canceled');
 
         await invoke('cmd_git_add_credential', {
-          dir,
           remoteUrl: result.url,
           username: creds.username,
           password: creds.password,
@@ -165,4 +174,29 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
 
 async function getRemotes(dir: string) {
   return invoke<GitRemote[]>('cmd_git_remotes', { dir });
+}
+
+/**
+ * Clone a git repository, prompting for credentials if needed.
+ */
+export async function gitClone(
+  url: string,
+  dir: string,
+  promptCredentials: (args: { url: string; error: string | null }) => Promise<GitCredentials | null>,
+): Promise<CloneResult> {
+  const result = await invoke<CloneResult>('cmd_git_clone', { url, dir });
+  if (result.type !== 'needs_credentials') return result;
+
+  // Prompt for credentials
+  const creds = await promptCredentials({ url: result.url, error: result.error });
+  if (creds == null) return {type: 'cancelled'};
+
+  // Store credentials and retry
+  await invoke('cmd_git_add_credential', {
+    remoteUrl: result.url,
+    username: creds.username,
+    password: creds.password,
+  });
+
+  return invoke<CloneResult>('cmd_git_clone', { url, dir });
 }

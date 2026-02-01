@@ -89,6 +89,8 @@ jobs:
 
       - run: npm ci
       - run: npm run bootstrap
+        env:
+          YAAK_TARGET_ARCH: ${{ matrix.yaak_arch }}
       - run: npm run lint
       - name: Run JS Tests
         run: npm test

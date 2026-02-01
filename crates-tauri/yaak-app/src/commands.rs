@@ -101,6 +101,15 @@ pub(crate) async fn cmd_set_workspace_key<R: Runtime>(
 }
 
 #[command]
+pub(crate) async fn cmd_disable_encryption<R: Runtime>(
+    window: WebviewWindow<R>,
+    workspace_id: &str,
+) -> Result<()> {
+    window.crypto().disable_encryption(workspace_id)?;
+    Ok(())
+}
+
+#[command]
 pub(crate) fn cmd_default_headers() -> Vec<HttpRequestHeader> {
     default_headers()
 }

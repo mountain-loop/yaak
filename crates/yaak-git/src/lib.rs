@@ -1,13 +1,14 @@
 mod add;
 mod binary;
 mod branch;
+mod clone;
 mod commit;
 mod credential;
 pub mod error;
 mod fetch;
 mod init;
 mod log;
-mod merge;
+
 mod pull;
 mod push;
 mod remotes;
@@ -18,7 +19,11 @@ mod util;
 
 // Re-export all git functions for external use
 pub use add::git_add;
-pub use branch::{git_checkout_branch, git_create_branch, git_delete_branch, git_merge_branch};
+pub use branch::{
+    BranchDeleteResult, git_checkout_branch, git_create_branch, git_delete_branch,
+    git_delete_remote_branch, git_merge_branch, git_rename_branch,
+};
+pub use clone::{CloneResult, git_clone};
 pub use commit::git_commit;
 pub use credential::git_add_credential;
 pub use fetch::git_fetch_all;
