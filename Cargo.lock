@@ -8006,6 +8006,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak-actions-builtin"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+ "yaak-actions",
+ "yaak-crypto",
+ "yaak-http",
+ "yaak-models",
+ "yaak-plugins",
+ "yaak-templates",
+]
+
+[[package]]
 name = "yaak-app"
 version = "0.0.0"
 dependencies = [
@@ -8074,6 +8090,8 @@ dependencies = [
  "log",
  "serde_json",
  "tokio",
+ "yaak-actions",
+ "yaak-actions-builtin",
  "yaak-crypto",
  "yaak-http",
  "yaak-models",

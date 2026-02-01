@@ -1,0 +1,18 @@
+[package]
+name = "yaak-actions-builtin"
+version = "0.1.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+[dependencies]
+yaak-actions = { workspace = true }
+yaak-http = { workspace = true }
+yaak-models = { workspace = true }
+yaak-templates = { workspace = true }
+yaak-plugins = { workspace = true }
+yaak-crypto = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt-multi-thread"] }
+log = { workspace = true }

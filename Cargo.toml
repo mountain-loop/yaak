@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     # Shared crates (no Tauri dependency)
     "crates/yaak-actions",
+    "crates/yaak-actions-builtin",
     "crates/yaak-core",
     "crates/yaak-common",
     "crates/yaak-crypto",
@@ -47,6 +48,7 @@ ts-rs = "11.1.0"
 
 # Internal crates - shared
 yaak-actions = { path = "crates/yaak-actions" }
+yaak-actions-builtin = { path = "crates/yaak-actions-builtin" }
 yaak-core = { path = "crates/yaak-core" }
 yaak-common = { path = "crates/yaak-common" }
 yaak-crypto = { path = "crates/yaak-crypto" }
