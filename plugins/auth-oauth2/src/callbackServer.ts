@@ -185,6 +185,18 @@ export function buildHostedCallbackRedirectUri(localPort: number, localPath: str
 }
 
 /**
+ * Stop the active callback server if one is running.
+ * Called during plugin dispose to ensure the server is cleaned up before the process exits.
+ */
+export function stopActiveServer(): void {
+  if (activeServer) {
+    console.log('[oauth2] Stopping active callback server during dispose');
+    activeServer.stop();
+    activeServer = null;
+  }
+}
+
+/**
  * Open an authorization URL in the system browser, start a local callback server,
  * and wait for the OAuth provider to redirect back.
  *
