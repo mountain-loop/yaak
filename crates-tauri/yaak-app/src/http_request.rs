@@ -182,7 +182,14 @@ async fn send_http_request_inner<R: Runtime>(
     );
     let env_chain =
         window.db().resolve_environments(&workspace.id, folder_id, environment_id.as_deref())?;
-    let request = render_http_request(&resolved, env_chain, &cb, &RenderOptions::throw()).await?;
+    let mut cancel_rx = cancelled_rx.clone();
+    let render_options = RenderOptions::throw();
+    let request = tokio::select! {
+        result = render_http_request(&resolved, env_chain, &cb, &render_options) => result?,
+        _ = cancel_rx.changed() => {
+            return Err(GenericError("Request canceled".to_string()));
+        }
+    };
 
     // Build the sendable request using the new SendableHttpRequest type
     let options = SendableHttpRequestOptions {
@@ -244,16 +251,22 @@ async fn send_http_request_inner<R: Runtime>(
         })
         .await?;
 
-    // Apply authentication to the request
-    apply_authentication(
-        &window,
-        &mut sendable_request,
-        &request,
-        auth_context_id,
-        &plugin_manager,
-        plugin_context,
-    )
-    .await?;
+    // Apply authentication to the request, racing against cancellation since
+    // auth plugins (e.g. OAuth2) can block indefinitely waiting for user action.
+    let mut cancel_rx = cancelled_rx.clone();
+    tokio::select! {
+        result = apply_authentication(
+            &window,
+            &mut sendable_request,
+            &request,
+            auth_context_id,
+            &plugin_manager,
+            plugin_context,
+        ) => result?,
+        _ = cancel_rx.changed() => {
+            return Err(GenericError("Request canceled".to_string()));
+        }
+    };
 
     let cookie_store = maybe_cookie_store.as_ref().map(|(cs, _)| cs.clone());
     let result = execute_transaction(
