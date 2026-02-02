@@ -31,7 +31,7 @@ use std::time::Duration;
 use tokio::fs::read_dir;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::time::{Instant, timeout};
 use yaak_models::models::Plugin;
 use yaak_models::util::generate_id;
@@ -43,6 +43,7 @@ pub struct PluginManager {
     subscribers: Arc<Mutex<HashMap<String, mpsc::Sender<InternalEvent>>>>,
     plugin_handles: Arc<Mutex<Vec<PluginHandle>>>,
     kill_tx: tokio::sync::watch::Sender<bool>,
+    killed_rx: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
     ws_service: Arc<PluginRuntimeServerWebsocket>,
     vendored_plugin_dir: PathBuf,
     pub(crate) installed_plugin_dir: PathBuf,
@@ -70,6 +71,7 @@ impl PluginManager {
     ) -> PluginManager {
         let (events_tx, mut events_rx) = mpsc::channel(2048);
         let (kill_server_tx, kill_server_rx) = tokio::sync::watch::channel(false);
+        let (killed_tx, killed_rx) = oneshot::channel();
 
         let (client_disconnect_tx, mut client_disconnect_rx) = mpsc::channel(128);
         let (client_connect_tx, mut client_connect_rx) = tokio::sync::watch::channel(false);
@@ -81,6 +83,7 @@ impl PluginManager {
             subscribers: Default::default(),
             ws_service: Arc::new(ws_service.clone()),
             kill_tx: kill_server_tx,
+            killed_rx: Arc::new(Mutex::new(Some(killed_rx))),
             vendored_plugin_dir,
             installed_plugin_dir,
             dev_mode,
@@ -141,9 +144,15 @@ impl PluginManager {
         });
 
         // 2. Start Node.js runtime
-        start_nodejs_plugin_runtime(&node_bin_path, &plugin_runtime_main, addr, &kill_server_rx)
-            .await
-            .unwrap();
+        start_nodejs_plugin_runtime(
+            &node_bin_path,
+            &plugin_runtime_main,
+            addr,
+            &kill_server_rx,
+            killed_tx,
+        )
+        .await
+        .unwrap();
         info!("Waiting for plugins to initialize");
         init_plugins_task.await.unwrap();
 
@@ -296,8 +305,15 @@ impl PluginManager {
     pub async fn terminate(&self) {
         self.kill_tx.send_replace(true);
 
-        // Give it a bit of time to kill
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        // Wait for the plugin runtime process to actually exit
+        let killed_rx = self.killed_rx.lock().await.take();
+        if let Some(rx) = killed_rx {
+            if timeout(Duration::from_secs(5), rx).await.is_err() {
+                warn!("Timed out waiting for plugin runtime to exit");
+            } else {
+                info!("Plugin runtime exited")
+            }
+        }
     }
 
     pub async fn reply(
