@@ -5,7 +5,7 @@ import type {
   JsonPrimitive,
   PluginDefinition,
 } from '@yaakapp/api';
-import { DEFAULT_LOCALHOST_PORT, HOSTED_CALLBACK_URL } from './callbackServer';
+import { DEFAULT_LOCALHOST_PORT, HOSTED_CALLBACK_URL, stopActiveServer } from './callbackServer';
 import {
   type CallbackType,
   DEFAULT_PKCE_METHOD,
@@ -78,6 +78,9 @@ const accessTokenUrls = [
 ];
 
 export const plugin: PluginDefinition = {
+  dispose() {
+    stopActiveServer();
+  },
   authentication: {
     name: 'oauth2',
     label: 'OAuth 2.0',
