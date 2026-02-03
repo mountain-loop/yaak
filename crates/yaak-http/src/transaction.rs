@@ -168,6 +168,7 @@ impl<S: HttpSender> HttpTransaction<S> {
             response.drain().await?;
 
             // Update the request URL
+            let previous_url = current_url.clone();
             current_url = if location.starts_with("http://") || location.starts_with("https://") {
                 // Absolute URL
                 location
@@ -180,6 +181,8 @@ impl<S: HttpSender> HttpTransaction<S> {
                 let base_path = Self::extract_base_path(&current_url)?;
                 format!("{}/{}", base_path, location)
             };
+
+            Self::remove_sensitive_headers(&mut current_headers, &previous_url, &current_url);
 
             // Determine redirect behavior based on status code and method
             let behavior = if status == 303 {
@@ -217,6 +220,33 @@ impl<S: HttpSender> HttpTransaction<S> {
             current_body = None;
 
             redirect_count += 1;
+        }
+    }
+
+    /// Remove sensitive headers when redirecting to a different host.
+    /// This matches reqwest's `remove_sensitive_headers()` behavior and prevents
+    /// credentials from being forwarded to third-party servers (e.g., an
+    /// Authorization header sent from an API redirect to an S3 bucket).
+    fn remove_sensitive_headers(
+        headers: &mut Vec<(String, String)>,
+        previous_url: &str,
+        next_url: &str,
+    ) {
+        let previous_host = Url::parse(previous_url).ok().and_then(|u| {
+            u.host_str().map(|h| format!("{}:{}", h, u.port_or_known_default().unwrap_or(0)))
+        });
+        let next_host = Url::parse(next_url).ok().and_then(|u| {
+            u.host_str().map(|h| format!("{}:{}", h, u.port_or_known_default().unwrap_or(0)))
+        });
+        if previous_host != next_host {
+            headers.retain(|h| {
+                let name_lower = h.0.to_lowercase();
+                name_lower != "authorization"
+                    && name_lower != "cookie"
+                    && name_lower != "cookie2"
+                    && name_lower != "proxy-authorization"
+                    && name_lower != "www-authenticate"
+            });
         }
     }
 
@@ -269,9 +299,20 @@ mod tests {
     use tokio::io::AsyncRead;
     use tokio::sync::Mutex;
 
+    /// Captured request metadata for test assertions
+    #[derive(Debug, Clone)]
+    #[allow(dead_code)]
+    struct CapturedRequest {
+        url: String,
+        method: String,
+        headers: Vec<(String, String)>,
+    }
+
     /// Mock sender for testing
     struct MockSender {
         responses: Arc<Mutex<Vec<MockResponse>>>,
+        /// Captured requests for assertions
+        captured_requests: Arc<Mutex<Vec<CapturedRequest>>>,
     }
 
     struct MockResponse {
@@ -282,7 +323,10 @@ mod tests {
 
     impl MockSender {
         fn new(responses: Vec<MockResponse>) -> Self {
-            Self { responses: Arc::new(Mutex::new(responses)) }
+            Self {
+                responses: Arc::new(Mutex::new(responses)),
+                captured_requests: Arc::new(Mutex::new(Vec::new())),
+            }
         }
     }
 
@@ -290,9 +334,16 @@ mod tests {
     impl HttpSender for MockSender {
         async fn send(
             &self,
-            _request: SendableHttpRequest,
+            request: SendableHttpRequest,
             _event_tx: mpsc::Sender<HttpResponseEvent>,
         ) -> Result<HttpResponse> {
+            // Capture the request metadata for later assertions
+            self.captured_requests.lock().await.push(CapturedRequest {
+                url: request.url.clone(),
+                method: request.method.clone(),
+                headers: request.headers.clone(),
+            });
+
             let mut responses = self.responses.lock().await;
             if responses.is_empty() {
                 Err(crate::error::Error::RequestError("No more mock responses".to_string()))
@@ -725,5 +776,117 @@ mod tests {
         let result = transaction.execute_with_cancellation(request, rx, event_tx).await;
         assert!(result.is_ok());
         assert_eq!(request_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn test_cross_origin_redirect_strips_auth_headers() {
+        // Redirect from api.example.com -> s3.amazonaws.com should strip Authorization
+        let responses = vec![
+            MockResponse {
+                status: 302,
+                headers: vec![(
+                    "Location".to_string(),
+                    "https://s3.amazonaws.com/bucket/file.pdf".to_string(),
+                )],
+                body: vec![],
+            },
+            MockResponse { status: 200, headers: Vec::new(), body: b"PDF content".to_vec() },
+        ];
+
+        let sender = MockSender::new(responses);
+        let captured = sender.captured_requests.clone();
+        let transaction = HttpTransaction::new(sender);
+
+        let request = SendableHttpRequest {
+            url: "https://api.example.com/download".to_string(),
+            method: "GET".to_string(),
+            headers: vec![
+                ("Authorization".to_string(), "Basic dXNlcjpwYXNz".to_string()),
+                ("Accept".to_string(), "application/pdf".to_string()),
+            ],
+            options: crate::types::SendableHttpRequestOptions {
+                follow_redirects: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let (event_tx, _event_rx) = mpsc::channel(100);
+        let result = transaction.execute_with_cancellation(request, rx, event_tx).await.unwrap();
+        assert_eq!(result.status, 200);
+
+        let requests = captured.lock().await;
+        assert_eq!(requests.len(), 2);
+
+        // First request should have the Authorization header
+        assert!(
+            requests[0].headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")),
+            "First request should have Authorization header"
+        );
+
+        // Second request (to different host) should NOT have the Authorization header
+        assert!(
+            !requests[1].headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")),
+            "Redirected request to different host should NOT have Authorization header"
+        );
+
+        // Non-sensitive headers should still be present
+        assert!(
+            requests[1].headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("accept")),
+            "Non-sensitive headers should be preserved across cross-origin redirects"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_same_origin_redirect_preserves_auth_headers() {
+        // Redirect within the same host should keep Authorization
+        let responses = vec![
+            MockResponse {
+                status: 302,
+                headers: vec![(
+                    "Location".to_string(),
+                    "https://api.example.com/v2/download".to_string(),
+                )],
+                body: vec![],
+            },
+            MockResponse { status: 200, headers: Vec::new(), body: b"OK".to_vec() },
+        ];
+
+        let sender = MockSender::new(responses);
+        let captured = sender.captured_requests.clone();
+        let transaction = HttpTransaction::new(sender);
+
+        let request = SendableHttpRequest {
+            url: "https://api.example.com/v1/download".to_string(),
+            method: "GET".to_string(),
+            headers: vec![
+                ("Authorization".to_string(), "Bearer token123".to_string()),
+                ("Accept".to_string(), "application/json".to_string()),
+            ],
+            options: crate::types::SendableHttpRequestOptions {
+                follow_redirects: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let (event_tx, _event_rx) = mpsc::channel(100);
+        let result = transaction.execute_with_cancellation(request, rx, event_tx).await.unwrap();
+        assert_eq!(result.status, 200);
+
+        let requests = captured.lock().await;
+        assert_eq!(requests.len(), 2);
+
+        // Both requests should have the Authorization header (same host)
+        assert!(
+            requests[0].headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")),
+            "First request should have Authorization header"
+        );
+        assert!(
+            requests[1].headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")),
+            "Redirected request to same host should preserve Authorization header"
+        );
     }
 }
