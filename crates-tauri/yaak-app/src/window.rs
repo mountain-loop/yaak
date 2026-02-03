@@ -162,9 +162,14 @@ pub(crate) fn create_window<R: Runtime>(
             "dev.reset_size" => webview_window
                 .set_size(LogicalSize::new(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT))
                 .unwrap(),
-            "dev.reset_size_record" => {
+            "dev.reset_size_16x9" => {
                 let width = webview_window.outer_size().unwrap().width;
                 let height = width * 9 / 16;
+                webview_window.set_size(PhysicalSize::new(width, height)).unwrap()
+            }
+            "dev.reset_size_16x10" => {
+                let width = webview_window.outer_size().unwrap().width;
+                let height = width * 10 / 16;
                 webview_window.set_size(PhysicalSize::new(width, height)).unwrap()
             }
             "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
