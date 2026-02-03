@@ -135,6 +135,7 @@ export function Workspace() {
           open={!floatingSidebarHidden}
           portalName="sidebar"
           onClose={() => setFloatingSidebarHidden(true)}
+          zIndex={20}
         >
           <m.div
             initial={{ opacity: 0, x: -20 }}
