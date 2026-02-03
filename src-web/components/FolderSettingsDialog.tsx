@@ -75,8 +75,8 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
   if (folder == null) return null;
 
   return (
-    <div className="h-full flex flex-col text-xl">
-      <div className="flex items-center gap-3 px-6 pr-10 mt-4 mb-2 min-w-0">
+    <div className="h-full flex flex-col">
+      <div className="flex items-center gap-3 px-6 pr-10 mt-4 mb-2 min-w-0 text-xl">
         <Icon icon="folder_cog" size="lg" color="secondary" className="flex-shrink-0" />
         <div className="flex items-center gap-1.5 font-semibold text-text min-w-0 overflow-hidden flex-1">
           {breadcrumbs.map((item, index) => (
