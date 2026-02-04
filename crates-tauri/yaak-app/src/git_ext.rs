@@ -9,8 +9,8 @@ use yaak_git::{
     BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, PullResult,
     PushResult, git_add, git_add_credential, git_add_remote, git_checkout_branch, git_clone,
     git_commit, git_create_branch, git_delete_branch, git_delete_remote_branch, git_fetch_all,
-    git_init, git_log, git_merge_branch, git_pull, git_push, git_remotes, git_rename_branch,
-    git_rm_remote, git_status, git_unstage,
+    git_init, git_log, git_merge_branch, git_pull, git_pull_force_reset, git_pull_merge, git_push,
+    git_remotes, git_rename_branch, git_reset_changes, git_rm_remote, git_status, git_unstage,
 };
 
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
@@ -90,6 +90,20 @@ pub async fn cmd_git_pull(dir: &Path) -> Result<PullResult> {
 }
 
 #[command]
+pub async fn cmd_git_pull_force_reset(
+    dir: &Path,
+    remote: &str,
+    branch: &str,
+) -> Result<PullResult> {
+    Ok(git_pull_force_reset(dir, remote, branch).await?)
+}
+
+#[command]
+pub async fn cmd_git_pull_merge(dir: &Path, remote: &str, branch: &str) -> Result<PullResult> {
+    Ok(git_pull_merge(dir, remote, branch).await?)
+}
+
+#[command]
 pub async fn cmd_git_add(dir: &Path, rela_paths: Vec<PathBuf>) -> Result<()> {
     for path in rela_paths {
         git_add(dir, &path)?;
@@ -103,6 +117,11 @@ pub async fn cmd_git_unstage(dir: &Path, rela_paths: Vec<PathBuf>) -> Result<()>
         git_unstage(dir, &path)?;
     }
     Ok(())
+}
+
+#[command]
+pub async fn cmd_git_reset_changes(dir: &Path) -> Result<()> {
+    Ok(git_reset_changes(dir).await?)
 }
 
 #[command]

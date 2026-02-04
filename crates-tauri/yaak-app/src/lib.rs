@@ -37,8 +37,8 @@ use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
-    GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState,
-    Plugin, Workspace, WorkspaceMeta,
+    GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState, Plugin,
+    Workspace, WorkspaceMeta,
 };
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
 use yaak_plugins::events::{
@@ -1709,8 +1709,11 @@ pub fn run() {
             git_ext::cmd_git_fetch_all,
             git_ext::cmd_git_push,
             git_ext::cmd_git_pull,
+            git_ext::cmd_git_pull_force_reset,
+            git_ext::cmd_git_pull_merge,
             git_ext::cmd_git_add,
             git_ext::cmd_git_unstage,
+            git_ext::cmd_git_reset_changes,
             git_ext::cmd_git_add_credential,
             git_ext::cmd_git_remotes,
             git_ext::cmd_git_add_remote,
