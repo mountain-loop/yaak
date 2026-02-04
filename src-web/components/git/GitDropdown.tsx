@@ -20,7 +20,7 @@ import { InlineCode } from '../core/InlineCode';
 import { gitCallbacks } from './callbacks';
 import { GitCommitDialog } from './GitCommitDialog';
 import { GitRemotesDialog } from './GitRemotesDialog';
-import { handlePullResult } from './git-util';
+import { handlePullResult, handlePushResult } from './git-util';
 import { HistoryDialog } from './HistoryDialog';
 
 export function GitDropdown() {
@@ -48,6 +48,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       push,
       pull,
       checkout,
+      resetChanges,
       init,
     },
   ] = useGit(syncDir, gitCallbacks(syncDir));
@@ -72,6 +73,9 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   }
 
   const currentBranch = status.data.headRefShorthand;
+  const hasChanges = status.data.entries.some((e) => e.status !== 'current');
+  const hasRemotes = (status.data.origins ?? []).length > 0;
+  const { ahead, behind } = status.data;
 
   const tryCheckout = (branch: string, force: boolean) => {
     checkout.mutate(
@@ -168,12 +172,13 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     { type: 'separator' },
     {
       label: 'Push',
+      disabled: !hasRemotes || ahead === 0,
       leftSlot: <Icon icon="arrow_up_from_line" />,
       waitForOnSelect: true,
       async onSelect() {
         await push.mutateAsync(undefined, {
           disableToastError: true,
-          onSuccess: handlePullResult,
+          onSuccess: handlePushResult,
           onError(err) {
             showErrorToast({
               id: 'git-push-error',
@@ -186,7 +191,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     },
     {
       label: 'Pull',
-      hidden: (status.data?.origins ?? []).length === 0,
+      disabled: !hasRemotes || behind === 0,
       leftSlot: <Icon icon="arrow_down_to_line" />,
       waitForOnSelect: true,
       async onSelect() {
@@ -205,6 +210,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     },
     {
       label: 'Commit...',
+      disabled: !hasChanges,
       leftSlot: <Icon icon="git_commit_vertical" />,
       onSelect() {
         showDialog({
@@ -215,6 +221,41 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           render: ({ hide }) => (
             <GitCommitDialog syncDir={syncDir} onDone={hide} workspace={workspace} />
           ),
+        });
+      },
+    },
+    {
+      label: 'Reset Changes',
+      hidden: !hasChanges,
+      leftSlot: <Icon icon="rotate_ccw" />,
+      color: 'danger',
+      async onSelect() {
+        const confirmed = await showConfirm({
+          id: 'git-reset-changes',
+          title: 'Reset Changes',
+          description: 'This will discard all uncommitted changes. This cannot be undone.',
+          confirmText: 'Reset',
+          color: 'danger',
+        });
+        if (!confirmed) return;
+
+        await resetChanges.mutateAsync(undefined, {
+          disableToastError: true,
+          onSuccess() {
+            showToast({
+              id: 'git-reset-success',
+              message: 'Changes have been reset',
+              color: 'success',
+            });
+            sync({ force: true });
+          },
+          onError(err) {
+            showErrorToast({
+              id: 'git-reset-error',
+              title: 'Error resetting changes',
+              message: String(err),
+            });
+          },
         });
       },
     },
@@ -463,8 +504,14 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   return (
     <Dropdown fullWidth items={items} onOpen={fetchAll.mutate}>
       <GitMenuButton>
-        <InlineCode>{currentBranch}</InlineCode>
-        <Icon icon="git_branch" size="sm" />
+        <InlineCode className="flex items-center gap-1">
+          <Icon icon="git_branch" size="xs" className="opacity-50" />
+          {currentBranch}
+        </InlineCode>
+        <div className="flex items-center gap-1.5">
+          {ahead > 0 && <span className="text-xs flex items-center gap-0.5"><span className="text-primary">↗</span>{ahead}</span>}
+          {behind > 0 && <span className="text-xs flex items-center gap-0.5"><span className="text-info">↙</span>{behind}</span>}
+        </div>
       </GitMenuButton>
     </Dropdown>
   );

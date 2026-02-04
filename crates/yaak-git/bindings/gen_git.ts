@@ -15,8 +15,8 @@ export type GitStatus = "untracked" | "conflict" | "current" | "modified" | "rem
 
 export type GitStatusEntry = { relaPath: string, status: GitStatus, staged: boolean, prev: SyncModel | null, next: SyncModel | null, };
 
-export type GitStatusSummary = { path: string, headRef: string | null, headRefShorthand: string | null, entries: Array<GitStatusEntry>, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, };
+export type GitStatusSummary = { path: string, headRef: string | null, headRefShorthand: string | null, entries: Array<GitStatusEntry>, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, ahead: number, behind: number, };
 
-export type PullResult = { "type": "success", message: string, } | { "type": "up_to_date" } | { "type": "needs_credentials", url: string, error: string | null, } | { "type": "diverged", remote: string, branch: string, };
+export type PullResult = { "type": "success", message: string, } | { "type": "up_to_date" } | { "type": "needs_credentials", url: string, error: string | null, } | { "type": "diverged", remote: string, branch: string, } | { "type": "uncommitted_changes" };
 
 export type PushResult = { "type": "success", message: string, } | { "type": "up_to_date" } | { "type": "needs_credentials", url: string, error: string | null, };

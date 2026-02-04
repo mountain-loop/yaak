@@ -29,5 +29,8 @@ export function handlePullResult(r: PullResult) {
     case 'diverged':
       // Handled by mutation callback before reaching here
       break;
+    case 'uncommitted_changes':
+      // Handled by mutation callback before reaching here
+      break;
   }
 }

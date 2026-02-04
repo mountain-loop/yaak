@@ -16,9 +16,22 @@ pub enum PullResult {
     UpToDate,
     NeedsCredentials { url: String, error: Option<String> },
     Diverged { remote: String, branch: String },
+    UncommittedChanges,
+}
+
+fn has_uncommitted_changes(dir: &Path) -> Result<bool> {
+    let repo = open_repo(dir)?;
+    let mut opts = git2::StatusOptions::new();
+    opts.include_ignored(false).include_untracked(false);
+    let statuses = repo.statuses(Some(&mut opts))?;
+    Ok(statuses.iter().any(|e| e.status() != git2::Status::CURRENT))
 }
 
 pub async fn git_pull(dir: &Path) -> Result<PullResult> {
+    if has_uncommitted_changes(dir)? {
+        return Ok(PullResult::UncommittedChanges);
+    }
+
     // Extract all git2 data before any await points (git2 types are not Send)
     let (branch_name, remote_name, remote_url) = {
         let repo = open_repo(dir)?;
@@ -62,10 +75,7 @@ pub async fn git_pull(dir: &Path) -> Result<PullResult> {
             || combined_lower.contains("not possible to fast-forward")
             || combined_lower.contains("diverged")
         {
-            return Ok(PullResult::Diverged {
-                remote: remote_name,
-                branch: branch_name,
-            });
+            return Ok(PullResult::Diverged { remote: remote_name, branch: branch_name });
         }
         return Err(GenericError(format!("Failed to pull {combined}")));
     }
@@ -106,9 +116,7 @@ pub async fn git_pull_force_reset(dir: &Path, remote: &str, branch: &str) -> Res
         return Err(GenericError(format!("Failed to reset: {}", stderr.trim())));
     }
 
-    Ok(PullResult::Success {
-        message: format!("Reset to {}/{}", remote, branch),
-    })
+    Ok(PullResult::Success { message: format!("Reset to {}/{}", remote, branch) })
 }
 
 pub async fn git_pull_merge(dir: &Path, remote: &str, branch: &str) -> Result<PullResult> {
@@ -135,9 +143,7 @@ pub async fn git_pull_merge(dir: &Path, remote: &str, branch: &str) -> Result<Pu
         return Err(GenericError(format!("Failed to merge pull: {}", combined.trim())));
     }
 
-    Ok(PullResult::Success {
-        message: format!("Merged from {}/{}", remote, branch),
-    })
+    Ok(PullResult::Success { message: format!("Merged from {}/{}", remote, branch) })
 }
 
 // pub(crate) fn git_pull_old(dir: &Path) -> Result<PullResult> {

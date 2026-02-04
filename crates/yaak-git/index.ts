@@ -16,6 +16,8 @@ export interface GitCredentials {
 
 export type DivergedStrategy = 'force_reset' | 'merge' | 'cancel';
 
+export type UncommittedChangesStrategy = 'reset' | 'cancel';
+
 export interface GitCallbacks {
   addRemote: () => Promise<GitRemote | null>;
   promptCredentials: (
@@ -24,6 +26,8 @@ export interface GitCallbacks {
   promptDiverged: (
     result: Extract<PullResult, { type: 'diverged' }>,
   ) => Promise<DivergedStrategy>;
+  promptUncommittedChanges: () => Promise<UncommittedChangesStrategy>;
+  forceSync: () => Promise<void>;
 }
 
 const onSuccess = () => queryClient.invalidateQueries({ queryKey: ['git'] });
@@ -148,10 +152,9 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       },
       onSuccess,
     }),
-    fetchAll: createFastMutation<string, string, void>({
-      mutationKey: ['git', 'checkout', dir],
+    fetchAll: createFastMutation<void, string, void>({
+      mutationKey: ['git', 'fetch_all', dir],
       mutationFn: () => invoke('cmd_git_fetch_all', { dir }),
-      onSuccess,
     }),
     push: createFastMutation<PushResult, string, void>({
       mutationKey: ['git', 'push', dir],
@@ -177,6 +180,15 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
           return invoke<PullResult>('cmd_git_pull', { dir });
         }
 
+        if (result.type === 'uncommitted_changes') {
+          callbacks.promptUncommittedChanges().then(async (strategy) => {
+            if (strategy === 'cancel') return;
+
+            await invoke('cmd_git_reset_changes', { dir });
+            return invoke<PullResult>('cmd_git_pull', { dir });
+          }).then(async () => { onSuccess(); await callbacks.forceSync(); }, handleError);
+        }
+
         if (result.type === 'diverged') {
           callbacks.promptDiverged(result).then((strategy) => {
             if (strategy === 'cancel') return;
@@ -194,7 +206,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
               remote: result.remote,
               branch: result.branch,
             });
-          }).then(() => onSuccess(), handleError);
+          }).then(async () => { onSuccess(); await callbacks.forceSync(); }, handleError);
         }
 
         return result;
@@ -204,6 +216,11 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     unstage: createFastMutation<void, string, { relaPaths: string[] }>({
       mutationKey: ['git', 'unstage', dir],
       mutationFn: (args) => invoke('cmd_git_unstage', { dir, ...args }),
+      onSuccess,
+    }),
+    resetChanges: createFastMutation<void, string, void>({
+      mutationKey: ['git', 'reset-changes', dir],
+      mutationFn: () => invoke('cmd_git_reset_changes', { dir }),
       onSuccess,
     }),
   } as const;
