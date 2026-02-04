@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 chrono = { workspace = true, features = ["serde"] }
-git2 = { version = "0.20.0", features = ["vendored-libgit2", "vendored-openssl"] }
+git2 = { version = "0.20.4", features = ["vendored-libgit2", "vendored-openssl"] }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
