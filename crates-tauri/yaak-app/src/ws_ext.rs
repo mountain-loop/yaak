@@ -29,18 +29,6 @@ use yaak_tls::find_client_certificate;
 use yaak_ws::{WebsocketManager, render_websocket_request};
 
 #[command]
-pub async fn cmd_ws_delete_connection<R: Runtime>(
-    connection_id: &str,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> Result<WebsocketConnection> {
-    Ok(app_handle.db().delete_websocket_connection_by_id(
-        connection_id,
-        &UpdateSource::from_window_label(window.label()),
-    )?)
-}
-
-#[command]
 pub async fn cmd_ws_delete_connections<R: Runtime>(
     request_id: &str,
     app_handle: AppHandle<R>,

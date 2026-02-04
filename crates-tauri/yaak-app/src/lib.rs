@@ -1724,7 +1724,6 @@ pub fn run() {
             plugins_ext::cmd_plugins_update_all,
             //
             // WebSocket commands
-            ws_ext::cmd_ws_delete_connection,
             ws_ext::cmd_ws_delete_connections,
             ws_ext::cmd_ws_send,
             ws_ext::cmd_ws_close,
