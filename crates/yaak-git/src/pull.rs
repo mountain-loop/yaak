@@ -15,9 +15,23 @@ pub enum PullResult {
     Success { message: String },
     UpToDate,
     NeedsCredentials { url: String, error: Option<String> },
+    Diverged { remote: String, branch: String },
+    UncommittedChanges,
+}
+
+fn has_uncommitted_changes(dir: &Path) -> Result<bool> {
+    let repo = open_repo(dir)?;
+    let mut opts = git2::StatusOptions::new();
+    opts.include_ignored(false).include_untracked(false);
+    let statuses = repo.statuses(Some(&mut opts))?;
+    Ok(statuses.iter().any(|e| e.status() != git2::Status::CURRENT))
 }
 
 pub async fn git_pull(dir: &Path) -> Result<PullResult> {
+    if has_uncommitted_changes(dir)? {
+        return Ok(PullResult::UncommittedChanges);
+    }
+
     // Extract all git2 data before any await points (git2 types are not Send)
     let (branch_name, remote_name, remote_url) = {
         let repo = open_repo(dir)?;
@@ -56,6 +70,13 @@ pub async fn git_pull(dir: &Path) -> Result<PullResult> {
     }
 
     if !out.status.success() {
+        let combined_lower = combined.to_lowercase();
+        if combined_lower.contains("cannot fast-forward")
+            || combined_lower.contains("not possible to fast-forward")
+            || combined_lower.contains("diverged")
+        {
+            return Ok(PullResult::Diverged { remote: remote_name, branch: branch_name });
+        }
         return Err(GenericError(format!("Failed to pull {combined}")));
     }
 
@@ -64,6 +85,65 @@ pub async fn git_pull(dir: &Path) -> Result<PullResult> {
     }
 
     Ok(PullResult::Success { message: format!("Pulled from {}/{}", remote_name, branch_name) })
+}
+
+pub async fn git_pull_force_reset(dir: &Path, remote: &str, branch: &str) -> Result<PullResult> {
+    // Step 1: fetch the remote
+    let fetch_out = new_binary_command(dir)
+        .await?
+        .args(["fetch", remote])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to run git fetch: {e}")))?;
+
+    if !fetch_out.status.success() {
+        let stderr = String::from_utf8_lossy(&fetch_out.stderr);
+        return Err(GenericError(format!("Failed to fetch: {stderr}")));
+    }
+
+    // Step 2: reset --hard to remote/branch
+    let ref_name = format!("{}/{}", remote, branch);
+    let reset_out = new_binary_command(dir)
+        .await?
+        .args(["reset", "--hard", &ref_name])
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to run git reset: {e}")))?;
+
+    if !reset_out.status.success() {
+        let stderr = String::from_utf8_lossy(&reset_out.stderr);
+        return Err(GenericError(format!("Failed to reset: {}", stderr.trim())));
+    }
+
+    Ok(PullResult::Success { message: format!("Reset to {}/{}", remote, branch) })
+}
+
+pub async fn git_pull_merge(dir: &Path, remote: &str, branch: &str) -> Result<PullResult> {
+    let out = new_binary_command(dir)
+        .await?
+        .args(["pull", "--no-rebase", remote, branch])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .await
+        .map_err(|e| GenericError(format!("failed to run git pull --no-rebase: {e}")))?;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    info!("Pull merge status={} {combined}", out.status);
+
+    if !out.status.success() {
+        if combined.to_lowercase().contains("conflict") {
+            return Err(GenericError(
+                "Merge conflicts detected. Please resolve them manually.".to_string(),
+            ));
+        }
+        return Err(GenericError(format!("Failed to merge pull: {}", combined.trim())));
+    }
+
+    Ok(PullResult::Success { message: format!("Merged from {}/{}", remote, branch) })
 }
 
 // pub(crate) fn git_pull_old(dir: &Path) -> Result<PullResult> {
