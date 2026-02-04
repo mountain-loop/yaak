@@ -1,12 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { WebsocketConnection } from '@yaakapp-internal/models';
 
-export function deleteWebsocketConnection(connectionId: string) {
-  return invoke('cmd_ws_delete_connection', {
-    connectionId,
-  });
-}
-
 export function deleteWebsocketConnections(requestId: string) {
   return invoke('cmd_ws_delete_connections', {
     requestId,
