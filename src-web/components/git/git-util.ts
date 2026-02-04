@@ -26,5 +26,8 @@ export function handlePullResult(r: PullResult) {
     case 'up_to_date':
       showToast({ id: 'pull-nothing', message: 'Already up-to-date', color: 'info' });
       break;
+    case 'diverged':
+      // Handled by mutation callback before reaching here
+      break;
   }
 }

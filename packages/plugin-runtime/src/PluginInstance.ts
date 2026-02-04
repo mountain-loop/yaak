@@ -788,12 +788,12 @@ export class PluginInstance {
           const { folders } = await this.#sendForReply<ListFoldersResponse>(context, payload);
           return folders.find((f) => f.id === args.id) ?? null;
         },
-        create: async (args) => {
+        create: async ({ name, ...args }) => {
           const payload = {
             type: 'upsert_model_request',
             model: {
-              name: '',
               ...args,
+              name: name ?? '',
               id: '',
               model: 'folder',
             },

@@ -29,7 +29,7 @@ pub use credential::git_add_credential;
 pub use fetch::git_fetch_all;
 pub use init::git_init;
 pub use log::{GitCommit, git_log};
-pub use pull::{PullResult, git_pull};
+pub use pull::{PullResult, git_pull, git_pull_force_reset, git_pull_merge};
 pub use push::{PushResult, git_push};
 pub use remotes::{GitRemote, git_add_remote, git_remotes, git_rm_remote};
 pub use status::{GitStatusSummary, git_status};

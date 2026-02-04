@@ -4,6 +4,7 @@ import { createFastMutation } from '@yaakapp/app/hooks/useFastMutation';
 import { queryClient } from '@yaakapp/app/lib/queryClient';
 import { useMemo } from 'react';
 import { BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, PullResult, PushResult } from './bindings/gen_git';
+import { showToast } from '@yaakapp/app/lib/toast';
 
 export * from './bindings/gen_git';
 export * from './bindings/gen_models';
@@ -13,11 +14,16 @@ export interface GitCredentials {
   password: string;
 }
 
+export type DivergedStrategy = 'force_reset' | 'merge' | 'cancel';
+
 export interface GitCallbacks {
   addRemote: () => Promise<GitRemote | null>;
   promptCredentials: (
     result: Extract<PushResult, { type: 'needs_credentials' }>,
   ) => Promise<GitCredentials | null>;
+  promptDiverged: (
+    result: Extract<PullResult, { type: 'diverged' }>,
+  ) => Promise<DivergedStrategy>;
 }
 
 const onSuccess = () => queryClient.invalidateQueries({ queryKey: ['git'] });
@@ -68,6 +74,15 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     // Push again
     return invoke<PushResult>('cmd_git_push', { dir });
   };
+
+  const handleError = (err: unknown) => {
+    showToast({
+      id: `${err}`,
+      message: `${err}`,
+      color: 'danger',
+      timeout: 5000,
+    });
+  }
 
   return {
     init: createFastMutation<void, string, void>({
@@ -147,20 +162,42 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationKey: ['git', 'pull', dir],
       async mutationFn() {
         const result = await invoke<PullResult>('cmd_git_pull', { dir });
-        if (result.type !== 'needs_credentials') return result;
 
-        // Needs credentials, prompt for them
-        const creds = await callbacks.promptCredentials(result);
-        if (creds == null) throw new Error('Canceled');
+        if (result.type === 'needs_credentials') {
+          const creds = await callbacks.promptCredentials(result);
+          if (creds == null) throw new Error('Canceled');
 
-        await invoke('cmd_git_add_credential', {
-          remoteUrl: result.url,
-          username: creds.username,
-          password: creds.password,
-        });
+          await invoke('cmd_git_add_credential', {
+            remoteUrl: result.url,
+            username: creds.username,
+            password: creds.password,
+          });
 
-        // Pull again
-        return invoke<PullResult>('cmd_git_pull', { dir });
+          // Pull again after credentials
+          return invoke<PullResult>('cmd_git_pull', { dir });
+        }
+
+        if (result.type === 'diverged') {
+          callbacks.promptDiverged(result).then((strategy) => {
+            if (strategy === 'cancel') return;
+
+            if (strategy === 'force_reset') {
+              return invoke<PullResult>('cmd_git_pull_force_reset', {
+                dir,
+                remote: result.remote,
+                branch: result.branch,
+              });
+            }
+
+            return invoke<PullResult>('cmd_git_pull_merge', {
+              dir,
+              remote: result.remote,
+              branch: result.branch,
+            });
+          }).then(() => onSuccess(), handleError);
+        }
+
+        return result;
       },
       onSuccess,
     }),

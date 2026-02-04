@@ -9,8 +9,8 @@ use yaak_git::{
     BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, PullResult,
     PushResult, git_add, git_add_credential, git_add_remote, git_checkout_branch, git_clone,
     git_commit, git_create_branch, git_delete_branch, git_delete_remote_branch, git_fetch_all,
-    git_init, git_log, git_merge_branch, git_pull, git_push, git_remotes, git_rename_branch,
-    git_rm_remote, git_status, git_unstage,
+    git_init, git_log, git_merge_branch, git_pull, git_pull_force_reset, git_pull_merge, git_push,
+    git_remotes, git_rename_branch, git_rm_remote, git_status, git_unstage,
 };
 
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
@@ -87,6 +87,20 @@ pub async fn cmd_git_push(dir: &Path) -> Result<PushResult> {
 #[command]
 pub async fn cmd_git_pull(dir: &Path) -> Result<PullResult> {
     Ok(git_pull(dir).await?)
+}
+
+#[command]
+pub async fn cmd_git_pull_force_reset(
+    dir: &Path,
+    remote: &str,
+    branch: &str,
+) -> Result<PullResult> {
+    Ok(git_pull_force_reset(dir, remote, branch).await?)
+}
+
+#[command]
+pub async fn cmd_git_pull_merge(dir: &Path, remote: &str, branch: &str) -> Result<PullResult> {
+    Ok(git_pull_merge(dir, remote, branch).await?)
 }
 
 #[command]

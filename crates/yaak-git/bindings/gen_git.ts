@@ -17,6 +17,6 @@ export type GitStatusEntry = { relaPath: string, status: GitStatus, staged: bool
 
 export type GitStatusSummary = { path: string, headRef: string | null, headRefShorthand: string | null, entries: Array<GitStatusEntry>, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, };
 
-export type PullResult = { "type": "success", message: string, } | { "type": "up_to_date" } | { "type": "needs_credentials", url: string, error: string | null, };
+export type PullResult = { "type": "success", message: string, } | { "type": "up_to_date" } | { "type": "needs_credentials", url: string, error: string | null, } | { "type": "diverged", remote: string, branch: string, };
 
 export type PushResult = { "type": "success", message: string, } | { "type": "up_to_date" } | { "type": "needs_credentials", url: string, error: string | null, };

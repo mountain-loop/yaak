@@ -1709,6 +1709,8 @@ pub fn run() {
             git_ext::cmd_git_fetch_all,
             git_ext::cmd_git_push,
             git_ext::cmd_git_pull,
+            git_ext::cmd_git_pull_force_reset,
+            git_ext::cmd_git_pull_merge,
             git_ext::cmd_git_add,
             git_ext::cmd_git_unstage,
             git_ext::cmd_git_add_credential,
