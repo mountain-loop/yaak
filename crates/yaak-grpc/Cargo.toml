@@ -1,0 +1,27 @@
+[package]
+name = "yaak-grpc"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1.0.97"
+async-recursion = "1.1.1"
+dunce = "1.0.4"
+hyper-rustls = { version = "0.27.7", default-features = false, features = ["http2"] }
+hyper-util = { version = "0.1.13", default-features = false, features = ["client-legacy"] }
+log = { workspace = true }
+md5 = "0.7.0"
+prost = "0.13.4"
+prost-reflect = { version = "0.14.4", default-features = false, features = ["serde", "derive"] }
+prost-types = "0.13.4"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs", "process"] }
+tokio-stream = "0.1.14"
+tonic = { version = "0.12.3", default-features = false, features = ["transport"] }
+tonic-reflection = "0.12.3"
+uuid = { version = "1.7.0", features = ["v4"] }
+yaak-common = { workspace = true }
+yaak-tls = { workspace = true }
+thiserror = "2.0.17"

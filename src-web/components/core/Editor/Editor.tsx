@@ -1,3 +1,4 @@
+import { startCompletion } from '@codemirror/autocomplete';
 import { defaultKeymap, historyField, indentWithTab } from '@codemirror/commands';
 import { foldState, forceParsing, indentUnit } from '@codemirror/language';
 import type { EditorStateConfig, Extension } from '@codemirror/state';
@@ -28,6 +29,7 @@ import {
 import { activeEnvironmentAtom } from '../../../hooks/useActiveEnvironment';
 import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
 import { useEnvironmentVariables } from '../../../hooks/useEnvironmentVariables';
+import { eventMatchesHotkey } from '../../../hooks/useHotKey';
 import { useRequestEditor } from '../../../hooks/useRequestEditor';
 import { useTemplateFunctionCompletionOptions } from '../../../hooks/useTemplateFunctions';
 import { editEnvironment } from '../../../lib/editEnvironment';
@@ -76,7 +78,7 @@ export interface EditorProps {
   heightMode?: 'auto' | 'full';
   hideGutter?: boolean;
   id?: string;
-  language?: EditorLanguage | 'pairs' | 'url' | null;
+  language?: EditorLanguage | 'pairs' | 'url' | 'timeline' | null;
   graphQLSchema?: GraphQLSchema | null;
   onBlur?: () => void;
   onChange?: (value: string) => void;
@@ -589,7 +591,13 @@ function getExtensions({
       blur: () => {
         onBlur.current?.();
       },
-      keydown: (e) => {
+      keydown: (e, view) => {
+        // Check if the hotkey matches the editor.autocomplete action
+        if (eventMatchesHotkey(e, 'editor.autocomplete')) {
+          e.preventDefault();
+          startCompletion(view);
+          return true;
+        }
         onKeyDown.current?.(e);
       },
       paste: (e, v) => {

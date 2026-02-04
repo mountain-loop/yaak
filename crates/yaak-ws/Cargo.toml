@@ -1,0 +1,21 @@
+[package]
+name = "yaak-ws"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+futures-util = "0.3.31"
+http = "1"
+log = { workspace = true }
+md5 = "0.8.0"
+serde = { workspace = true, features = ["derive"] }
+url = "2"
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "time", "test-util", "rt"] }
+tokio-tungstenite = { version = "0.26.2", default-features = false, features = ["rustls-tls-native-roots", "connect"] }
+yaak-http = { workspace = true }
+yaak-tls = { workspace = true }
+yaak-models = { workspace = true }
+yaak-templates = { workspace = true }

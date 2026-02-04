@@ -33,17 +33,17 @@ const SRC_BIN_MAP = {
 };
 
 const DST_BIN_MAP = {
-  [MAC_ARM]: 'yaaknode-aarch64-apple-darwin',
-  [MAC_X64]: 'yaaknode-x86_64-apple-darwin',
-  [LNX_ARM]: 'yaaknode-aarch64-unknown-linux-gnu',
-  [LNX_X64]: 'yaaknode-x86_64-unknown-linux-gnu',
-  [WIN_X64]: 'yaaknode-x86_64-pc-windows-msvc.exe',
-  [WIN_ARM]: 'yaaknode-aarch64-pc-windows-msvc.exe',
+  [MAC_ARM]: 'yaaknode',
+  [MAC_X64]: 'yaaknode',
+  [LNX_ARM]: 'yaaknode',
+  [LNX_X64]: 'yaaknode',
+  [WIN_X64]: 'yaaknode.exe',
+  [WIN_ARM]: 'yaaknode.exe',
 };
 
 const key = `${process.platform}_${process.env.YAAK_TARGET_ARCH ?? process.arch}`;
 
-const destDir = path.join(__dirname, `..`, 'src-tauri', 'vendored', 'node');
+const destDir = path.join(__dirname, `..`, 'crates-tauri', 'yaak-app', 'vendored', 'node');
 const binDest = path.join(destDir, DST_BIN_MAP[key]);
 console.log(`Vendoring NodeJS ${NODE_VERSION} for ${key}`);
 

@@ -1,0 +1,13 @@
+[package]
+name = "yaak-tauri-utils"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+tauri = { workspace = true }
+reqwest = { workspace = true, features = ["gzip"] }
+thiserror = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+regex = "1.11.0"
+yaak-common = { workspace = true }

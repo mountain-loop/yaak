@@ -19,6 +19,7 @@ type Props = {
   forceUpdateKey: string;
   headers: HttpRequestHeader[];
   inheritedHeaders?: HttpRequestHeader[];
+  inheritedHeadersLabel?: string;
   stateKey: string;
   onChange: (headers: HttpRequestHeader[]) => void;
   label?: string;
@@ -28,20 +29,36 @@ export function HeadersEditor({
   stateKey,
   headers,
   inheritedHeaders,
+  inheritedHeadersLabel = 'Inherited',
   onChange,
   forceUpdateKey,
 }: Props) {
+  // Get header names defined at current level (case-insensitive)
+  const currentHeaderNames = new Set(
+    headers.filter((h) => h.name).map((h) => h.name.toLowerCase()),
+  );
+  // Filter inherited headers: must be enabled, have content, and not be overridden by current level
   const validInheritedHeaders =
-    inheritedHeaders?.filter((pair) => pair.enabled && (pair.name || pair.value)) ?? [];
+    inheritedHeaders?.filter(
+      (pair) =>
+        pair.enabled && (pair.name || pair.value) && !currentHeaderNames.has(pair.name.toLowerCase()),
+    ) ?? [];
+  const hasInheritedHeaders = validInheritedHeaders.length > 0;
   return (
-    <div className="@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)]">
-      {validInheritedHeaders.length > 0 ? (
+    <div
+      className={
+        hasInheritedHeaders
+          ? '@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)] gap-y-1.5'
+          : '@container w-full h-full'
+      }
+    >
+      {hasInheritedHeaders && (
         <DetailsBanner
           color="secondary"
-          className="text-sm mb-1.5"
+          className="text-sm"
           summary={
             <HStack>
-              Inherited <CountBadge count={validInheritedHeaders.length} />
+              {inheritedHeadersLabel} <CountBadge count={validInheritedHeaders.length} />
             </HStack>
           }
         >
@@ -63,8 +80,6 @@ export function HeadersEditor({
             ))}
           </div>
         </DetailsBanner>
-      ) : (
-        <span />
       )}
       <PairOrBulkEditor
         forceUpdateKey={forceUpdateKey}

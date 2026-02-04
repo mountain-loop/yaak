@@ -33,7 +33,7 @@ import { jotaiStore } from '../lib/jotai';
 import { CreateDropdown } from './CreateDropdown';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { HotKeyList } from './core/HotKeyList';
+import { HotkeyList } from './core/HotkeyList';
 import { FeedbackLink } from './core/Link';
 import { HStack } from './core/Stacks';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -73,14 +73,14 @@ export function Workspace() {
 
       const newWidth = startWidth.current + (x - xStart);
       if (newWidth < 50) {
-        await setSidebarHidden(true);
+        if (!sidebarHidden) await setSidebarHidden(true);
         resetWidth();
       } else {
-        await setSidebarHidden(false);
+        if (sidebarHidden) await setSidebarHidden(false);
         setWidth(newWidth);
       }
     },
-    [width, setSidebarHidden, resetWidth, setWidth],
+    [width, sidebarHidden, setSidebarHidden, resetWidth, setWidth],
   );
 
   const handleResizeStart = useCallback(() => {
@@ -135,6 +135,7 @@ export function Workspace() {
           open={!floatingSidebarHidden}
           portalName="sidebar"
           onClose={() => setFloatingSidebarHidden(true)}
+          zIndex={20}
         >
           <m.div
             initial={{ opacity: 0, x: -20 }}
@@ -185,7 +186,7 @@ export function Workspace() {
           />
           <div // Add a subtle border bottom
             style={environmentBgStyle}
-            className="absolute left-0 right-0 bottom-0 h-[0.5px] opacity-20"
+            className="absolute left-0 right-0 -bottom-[1px] h-[1px] opacity-20"
           />
         </div>
         <WorkspaceHeader className="pointer-events-none" />
@@ -233,7 +234,7 @@ function WorkspaceBody() {
   }
 
   return (
-    <HotKeyList
+    <HotkeyList
       hotkeys={['model.create', 'sidebar.focus', 'settings.show']}
       bottomSlot={
         <HStack space={1} justifyContent="center" className="mt-3">

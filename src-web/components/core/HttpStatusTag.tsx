@@ -1,4 +1,4 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
+import type { HttpResponse, HttpResponseState } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 
 interface Props {
@@ -8,25 +8,40 @@ interface Props {
   short?: boolean;
 }
 
-export function HttpStatusTag({ response, className, showReason, short }: Props) {
-  const { status, state } = response;
+export function HttpStatusTag({ response, ...props }: Props) {
+  const { status, state, statusReason } = response;
+  return <HttpStatusTagRaw status={status} state={state} statusReason={statusReason} {...props} />;
+}
 
+export function HttpStatusTagRaw({
+  status,
+  state,
+  className,
+  showReason,
+  statusReason,
+  short,
+}: Omit<Props, 'response'> & {
+  status: number | string;
+  state?: HttpResponseState;
+  statusReason?: string | null;
+}) {
   let colorClass: string;
   let label = `${status}`;
+  const statusN = typeof status === 'number' ? status : parseInt(status, 10);
 
   if (state === 'initialized') {
     label = short ? 'CONN' : 'CONNECTING';
     colorClass = 'text-text-subtle';
-  } else if (status < 100) {
+  } else if (statusN < 100) {
     label = short ? 'ERR' : 'ERROR';
     colorClass = 'text-danger';
-  } else if (status < 200) {
+  } else if (statusN < 200) {
     colorClass = 'text-info';
-  } else if (status < 300) {
+  } else if (statusN < 300) {
     colorClass = 'text-success';
-  } else if (status < 400) {
+  } else if (statusN < 400) {
     colorClass = 'text-primary';
-  } else if (status < 500) {
+  } else if (statusN < 500) {
     colorClass = 'text-warning';
   } else {
     colorClass = 'text-danger';
@@ -34,7 +49,7 @@ export function HttpStatusTag({ response, className, showReason, short }: Props)
 
   return (
     <span className={classNames(className, 'font-mono min-w-0', colorClass)}>
-      {label} {showReason && 'statusReason' in response ? response.statusReason : null}
+      {label} {showReason && statusReason}
     </span>
   );
 }

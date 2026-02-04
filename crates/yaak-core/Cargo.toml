@@ -1,0 +1,9 @@
+[package]
+name = "yaak-core"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }

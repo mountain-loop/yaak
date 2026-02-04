@@ -101,8 +101,8 @@
 
     .template-tag {
       /* Colors */
-      @apply bg-surface text-text border-border-subtle whitespace-nowrap;
-      @apply hover:border-border-subtle hover:text-text hover:bg-surface-highlight;
+      @apply bg-surface text-text-subtle border-border-subtle whitespace-nowrap cursor-default;
+      @apply hover:border-border hover:text-text hover:bg-surface-highlight;
 
       @apply inline border px-1 mx-[0.5px] rounded dark:shadow;
 

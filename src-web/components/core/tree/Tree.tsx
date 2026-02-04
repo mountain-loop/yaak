@@ -486,11 +486,11 @@ function TreeInner<T extends { id: string }>(
       let hoveredParent = node.parent;
       const dragIndex = selectableItems.findIndex((n) => n.node.item.id === item.id) ?? -1;
       const hovered = selectableItems[dragIndex]?.node ?? null;
-      const hoveredIndex = dragIndex + (side === 'above' ? 0 : 1);
-      let hoveredChildIndex = overSelectableItem.index + (side === 'above' ? 0 : 1);
+      const hoveredIndex = dragIndex + (side === 'before' ? 0 : 1);
+      let hoveredChildIndex = overSelectableItem.index + (side === 'before' ? 0 : 1);
 
-      // Move into the folder if it's open and we're moving below it
-      if (hovered?.children != null && side === 'below') {
+      // Move into the folder if it's open and we're moving after it
+      if (hovered?.children != null && side === 'after') {
         hoveredParent = hovered;
         hoveredChildIndex = 0;
       }
@@ -679,7 +679,8 @@ function TreeInner<T extends { id: string }>(
             className={classNames(
               '[&_.tree-item.selected_.tree-item-inner]:text-text',
               '[&:focus-within]:[&_.tree-item.selected]:bg-surface-active',
-              '[&:not(:focus-within)]:[&_.tree-item.selected]:bg-surface-highlight',
+              '[&:not(:focus-within)]:[&_.tree-item.selected:not([data-context-menu-open])]:bg-surface-highlight',
+              '[&_.tree-item.selected[data-context-menu-open]]:bg-surface-active',
               // Round the items, but only if the ends of the selection.
               // Also account for the drop marker being in between items
               '[&_.tree-item]:rounded-md',

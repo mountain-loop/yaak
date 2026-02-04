@@ -1,7 +1,7 @@
 name: Generate Artifacts
 on:
   push:
-    tags: [ v* ]
+    tags: [v*]
 
 jobs:
   build-artifacts:
@@ -13,37 +13,37 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # for Arm-based Macs (M1 and above).
-            args: '--target aarch64-apple-darwin'
-            yaak_arch: 'arm64'
-            os: 'macos'
-            targets: 'aarch64-apple-darwin'
-          - platform: 'macos-latest' # for Intel-based Macs.
-            args: '--target x86_64-apple-darwin'
-            yaak_arch: 'x64'
-            os: 'macos'
-            targets: 'x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04'
-            args: ''
-            yaak_arch: 'x64'
-            os: 'ubuntu'
-            targets: ''
-          - platform: 'ubuntu-22.04-arm'
-            args: ''
-            yaak_arch: 'arm64'
-            os: 'ubuntu'
-            targets: ''
-          - platform: 'windows-latest'
-            args: ''
-            yaak_arch: 'x64'
-            os: 'windows'
-            targets: ''
+          - platform: "macos-latest" # for Arm-based Macs (M1 and above).
+            args: "--target aarch64-apple-darwin"
+            yaak_arch: "arm64"
+            os: "macos"
+            targets: "aarch64-apple-darwin"
+          - platform: "macos-latest" # for Intel-based Macs.
+            args: "--target x86_64-apple-darwin"
+            yaak_arch: "x64"
+            os: "macos"
+            targets: "x86_64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+            yaak_arch: "x64"
+            os: "ubuntu"
+            targets: ""
+          - platform: "ubuntu-22.04-arm"
+            args: ""
+            yaak_arch: "arm64"
+            os: "ubuntu"
+            targets: ""
+          - platform: "windows-latest"
+            args: ""
+            yaak_arch: "x64"
+            os: "windows"
+            targets: ""
           # Windows ARM64
-          - platform: 'windows-latest'
-            args: '--target aarch64-pc-windows-msvc'
-            yaak_arch: 'arm64'
-            os: 'windows'
-            targets: 'aarch64-pc-windows-msvc'
+          - platform: "windows-latest"
+            args: "--target aarch64-pc-windows-msvc"
+            yaak_arch: "arm64"
+            os: "windows"
+            targets: "aarch64-pc-windows-msvc"
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 40
     steps:
@@ -60,7 +60,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: 'src-tauri'
           shared-key: ci
           cache-on-failure: true
 
@@ -89,17 +88,42 @@ jobs:
           & $exe --version
 
       - run: npm ci
+      - run: npm run bootstrap
+        env:
+          YAAK_TARGET_ARCH: ${{ matrix.yaak_arch }}
       - run: npm run lint
       - name: Run JS Tests
         run: npm test
       - name: Run Rust Tests
         run: cargo test --all
-        working-directory: src-tauri
 
       - name: Set version
         run: npm run replace-version
         env:
           YAAK_VERSION: ${{ github.ref_name }}
+
+      - name: Sign vendored binaries (macOS only)
+        if: matrix.os == 'macos'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Create keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security import certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Sign vendored binaries with hardened runtime and their specific entitlements
+          codesign --force --options runtime --entitlements crates-tauri/yaak-app/macos/entitlements.yaakprotoc.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/protoc/yaakprotoc || true
+          codesign --force --options runtime --entitlements crates-tauri/yaak-app/macos/entitlements.yaaknode.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/node/yaaknode || true
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -123,9 +147,9 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ matrix.os == 'windows' && secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ matrix.os == 'windows' && secrets.AZURE_TENANT_ID }}
         with:
-          tagName: 'v__VERSION__'
-          releaseName: 'Release __VERSION__'
-          releaseBody: '[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)'
+          tagName: "v__VERSION__"
+          releaseName: "Release __VERSION__"
+          releaseBody: "[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)"
           releaseDraft: true
           prerelease: true
-          args: '${{ matrix.args }} --config ./src-tauri/tauri.release.conf.json'
+          args: "${{ matrix.args }} --config ./crates-tauri/yaak-app/tauri.release.conf.json"

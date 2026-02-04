@@ -3,12 +3,15 @@ import classNames from 'classnames';
 
 interface Props {
   count: number | true;
+  count2?: number | true;
   className?: string;
   color?: Color;
+  showZero?: boolean;
 }
 
-export function CountBadge({ count, className, color }: Props) {
-  if (count === 0) return null;
+export function CountBadge({ count, count2, className, color, showZero }: Props) {
+  if (count === 0 && !showZero) return null;
+
   return (
     <div
       aria-hidden
@@ -29,6 +32,16 @@ export function CountBadge({ count, className, color }: Props) {
         <div aria-hidden className="rounded-full h-1 w-1 bg-[currentColor]" />
       ) : (
         count
+      )}
+      {count2 != null && (
+        <>
+          /
+          {count2 === true ? (
+            <div aria-hidden className="rounded-full h-1 w-1 bg-[currentColor]" />
+          ) : (
+            count2
+          )}
+        </>
       )}
     </div>
   );

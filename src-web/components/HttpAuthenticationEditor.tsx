@@ -62,9 +62,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
           <p>
             Apply auth to all requests in <strong>{resolvedModelName(model)}</strong>
           </p>
-          <Link href="https://feedback.yaak.app/help/articles/2112119-request-inheritance">
-            Documentation
-          </Link>
+          <Link href="https://yaak.app/docs/using-yaak/request-inheritance">Documentation</Link>
         </EmptyStateText>
       );
     }
@@ -140,7 +138,12 @@ export function HttpAuthenticationEditor({ model }: Props) {
                 }),
               )}
             >
-              <IconButton title="Authentication Actions" icon="settings" size="xs" />
+              <IconButton
+                title="Authentication Actions"
+                icon="settings"
+                size="xs"
+                className="!text-secondary"
+              />
             </Dropdown>
           )}
         </HStack>

@@ -48,6 +48,7 @@ import type { EditorProps } from './Editor';
 import { jsonParseLinter } from './json-lint';
 import { pairs } from './pairs/extension';
 import { text } from './text/extension';
+import { timeline } from './timeline/extension';
 import type { TwigCompletionOption } from './twig/completion';
 import { twig } from './twig/extension';
 import { pathParametersPlugin } from './twig/pathParameters';
@@ -95,6 +96,7 @@ const syntaxExtensions: Record<
   url: url,
   pairs: pairs,
   text: text,
+  timeline: timeline,
   markdown: markdown,
 };
 
@@ -184,6 +186,16 @@ export function getLanguageExtension({
   });
 }
 
+// Filter out autocomplete start triggers from completionKeymap since we handle it via configurable hotkeys.
+// Keep navigation keys (ArrowUp/Down, Enter, Escape, etc.) but remove startCompletion bindings.
+const filteredCompletionKeymap = completionKeymap.filter((binding) => {
+  const key = binding.key?.toLowerCase() ?? '';
+  const mac = (binding as { mac?: string }).mac?.toLowerCase() ?? '';
+  // Filter out Ctrl-Space and Mac-specific autocomplete triggers (Alt-`, Alt-i)
+  const isStartTrigger = key.includes('space') || mac.includes('alt-') || mac.includes('`');
+  return !isStartTrigger;
+});
+
 export const baseExtensions = [
   highlightSpecialChars(),
   history(),
@@ -192,6 +204,7 @@ export const baseExtensions = [
   autocompletion({
     tooltipClass: () => 'x-theme-menu',
     closeOnBlur: true, // Set to `false` for debugging in devtools without closing it
+    defaultKeymap: false, // We handle the trigger via configurable hotkeys
     compareCompletions: (a, b) => {
       // Don't sort completions at all, only on boost
       return (a.boost ?? 0) - (b.boost ?? 0);
@@ -199,7 +212,7 @@ export const baseExtensions = [
   }),
   syntaxHighlighting(syntaxHighlightStyle),
   syntaxTheme,
-  keymap.of([...historyKeymap, ...completionKeymap]),
+  keymap.of([...historyKeymap, ...filteredCompletionKeymap]),
 ];
 
 export const readonlyExtensions = [

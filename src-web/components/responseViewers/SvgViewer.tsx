@@ -1,30 +1,30 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
 import { useEffect, useState } from 'react';
-import { useResponseBodyText } from '../../hooks/useResponseBodyText';
 
 interface Props {
-  response: HttpResponse;
+  text: string;
+  className?: string;
 }
 
-export function SvgViewer({ response }: Props) {
-  const rawTextBody = useResponseBodyText({ response, filter: null });
+export function SvgViewer({ text, className }: Props) {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!rawTextBody.data) {
+    if (!text) {
       return setSrc(null);
     }
 
-    const blob = new Blob([rawTextBody.data], { type: 'image/svg+xml;charset=utf-8' });
+    const blob = new Blob([text], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     setSrc(url);
 
     return () => URL.revokeObjectURL(url);
-  }, [rawTextBody.data]);
+  }, [text]);
 
   if (src == null) {
     return null;
   }
 
-  return <img src={src} alt="Response preview" className="max-w-full max-h-full pb-2" />;
+  return (
+    <img src={src} alt="Response preview" className={className ?? 'max-w-full max-h-full pb-2'} />
+  );
 }

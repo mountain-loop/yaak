@@ -1,0 +1,51 @@
+{
+  "productName": "Yaak",
+  "version": "0.0.0",
+  "identifier": "app.yaak.desktop",
+  "build": {
+    "beforeBuildCommand": "npm run tauri-before-build",
+    "beforeDevCommand": "npm run tauri-before-dev",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": [
+            "$APPDATA/responses/*",
+            "$RESOURCE/static/*"
+          ]
+        }
+      }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "yaak"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "icon": [
+      "icons/release/32x32.png",
+      "icons/release/128x128.png",
+      "icons/release/128x128@2x.png",
+      "icons/release/icon.icns",
+      "icons/release/icon.ico"
+    ],
+    "resources": [
+      "static",
+      "vendored/protoc/include",
+      "vendored/plugins",
+      "vendored/plugin-runtime",
+      "vendored/node/yaaknode*",
+      "vendored/protoc/yaakprotoc*"
+    ]
+  }
+}

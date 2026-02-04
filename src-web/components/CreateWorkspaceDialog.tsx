@@ -51,7 +51,11 @@ export function CreateWorkspaceDialog({ hide }: Props) {
           gitMutations(syncConfig.filePath, gitCallbacks(syncConfig.filePath))
             .init.mutateAsync()
             .catch((err) => {
-              showErrorToast('git-init-error', String(err));
+              showErrorToast({
+                id: 'git-init-error',
+                title: 'Error initializing Git',
+                message: String(err),
+              });
             });
         }
 

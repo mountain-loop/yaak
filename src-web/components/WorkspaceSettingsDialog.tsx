@@ -1,6 +1,5 @@
 import { patchModel, workspaceMetasAtom, workspacesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { useState } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
@@ -9,10 +8,12 @@ import { router } from '../lib/router';
 import { CopyIconButton } from './CopyIconButton';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
+import { CountBadge } from './core/CountBadge';
 import { InlineCode } from './core/InlineCode';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
+import { DnsOverridesEditor } from './DnsOverridesEditor';
 import { HeadersEditor } from './HeadersEditor';
 import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -27,11 +28,13 @@ interface Props {
 
 const TAB_AUTH = 'auth';
 const TAB_DATA = 'data';
+const TAB_DNS = 'dns';
 const TAB_HEADERS = 'headers';
 const TAB_GENERAL = 'general';
 
 export type WorkspaceSettingsTab =
   | typeof TAB_AUTH
+  | typeof TAB_DNS
   | typeof TAB_HEADERS
   | typeof TAB_GENERAL
   | typeof TAB_DATA;
@@ -41,7 +44,6 @@ const DEFAULT_TAB: WorkspaceSettingsTab = TAB_GENERAL;
 export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
   const workspace = useAtomValue(workspacesAtom).find((w) => w.id === workspaceId);
   const workspaceMeta = useAtomValue(workspaceMetasAtom).find((m) => m.workspaceId === workspaceId);
-  const [activeTab, setActiveTab] = useState<string>(tab ?? DEFAULT_TAB);
   const authTab = useAuthTab(TAB_AUTH, workspace ?? null);
   const headersTab = useHeadersTab(TAB_HEADERS, workspace ?? null);
   const inheritedHeaders = useInheritedHeaders(workspace ?? null);
@@ -63,8 +65,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
 
   return (
     <Tabs
-      value={activeTab}
-      onChangeValue={setActiveTab}
+      defaultValue={tab ?? DEFAULT_TAB}
       label="Folder Settings"
       className="pt-4 pb-2 px-3"
       tabListClassName="pl-4"
@@ -77,7 +78,16 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
         },
         ...headersTab,
         ...authTab,
+        {
+          value: TAB_DNS,
+          label: 'DNS',
+          rightSlot:
+            workspace.settingDnsOverrides.length > 0 ? (
+              <CountBadge count={workspace.settingDnsOverrides.length} />
+            ) : null,
+        },
       ]}
+      storageKey="workspace_settings_tabs"
     >
       <TabContent value={TAB_AUTH} className="overflow-y-auto h-full px-4">
         <HttpAuthenticationEditor model={workspace} />
@@ -85,6 +95,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       <TabContent value={TAB_HEADERS} className="overflow-y-auto h-full px-4">
         <HeadersEditor
           inheritedHeaders={inheritedHeaders}
+          inheritedHeadersLabel="Defaults"
           forceUpdateKey={workspace.id}
           headers={workspace.headers}
           onChange={(headers) => patchModel(workspace, { headers })}
@@ -152,6 +163,9 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
           />
           <WorkspaceEncryptionSetting size="xs" />
         </VStack>
+      </TabContent>
+      <TabContent value={TAB_DNS} className="overflow-y-auto h-full px-4">
+        <DnsOverridesEditor workspace={workspace} />
       </TabContent>
     </Tabs>
   );

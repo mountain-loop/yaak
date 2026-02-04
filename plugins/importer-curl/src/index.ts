@@ -194,11 +194,18 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
       let value: string | boolean;
       const nextEntry = parseEntries[i + 1];
       const hasValue = !BOOLEAN_FLAGS.includes(name);
+      // Check if nextEntry looks like a flag:
+      // - Single dash followed by a letter: -X, -H, -d
+      // - Double dash followed by a letter: --data-raw, --header
+      // This prevents mistaking data that starts with dashes (like multipart boundaries ------) as flags
+      const nextEntryIsFlag =
+        typeof nextEntry === 'string' &&
+        (nextEntry.match(/^-[a-zA-Z]/) || nextEntry.match(/^--[a-zA-Z]/));
       if (isSingleDash && name.length > 1) {
         // Handle squished arguments like -XPOST
         value = name.slice(1);
         name = name.slice(0, 1);
-      } else if (typeof nextEntry === 'string' && hasValue && !nextEntry.startsWith('-')) {
+      } else if (typeof nextEntry === 'string' && hasValue && !nextEntryIsFlag) {
         // Next arg is not a flag, so assign it as the value
         value = nextEntry;
         i++; // Skip next one
@@ -305,11 +312,34 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
   }
 
   // Body (Text or Blob)
-  const dataParameters = pairsToDataParameters(flagsByName);
   const contentTypeHeader = headers.find((header) => header.name.toLowerCase() === 'content-type');
-  const mimeType = contentTypeHeader ? contentTypeHeader.value.split(';')[0] : null;
+  const mimeType = contentTypeHeader ? contentTypeHeader.value.split(';')[0]?.trim() : null;
 
-  // Body (Multipart Form Data)
+  // Extract boundary from Content-Type header for multipart parsing
+  const boundaryMatch = contentTypeHeader?.value.match(/boundary=([^\s;]+)/i);
+  const boundary = boundaryMatch?.[1];
+
+  // Get raw data from --data-raw flags (before splitting by &)
+  const rawDataValues = [
+    ...((flagsByName['data-raw'] as string[] | undefined) || []),
+    ...((flagsByName.d as string[] | undefined) || []),
+    ...((flagsByName.data as string[] | undefined) || []),
+    ...((flagsByName['data-binary'] as string[] | undefined) || []),
+    ...((flagsByName['data-ascii'] as string[] | undefined) || []),
+  ];
+
+  // Check if this is multipart form data in --data-raw (Chrome DevTools format)
+  let multipartFormDataFromRaw:
+    | { name: string; value?: string; file?: string; enabled: boolean }[]
+    | null = null;
+  if (mimeType === 'multipart/form-data' && boundary && rawDataValues.length > 0) {
+    const rawBody = rawDataValues.join('');
+    multipartFormDataFromRaw = parseMultipartFormData(rawBody, boundary);
+  }
+
+  const dataParameters = pairsToDataParameters(flagsByName);
+
+  // Body (Multipart Form Data from -F flags)
   const formDataParams = [
     ...((flagsByName.form as string[] | undefined) || []),
     ...((flagsByName.F as string[] | undefined) || []),
@@ -336,7 +366,13 @@ function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
   let bodyType: string | null = null;
   const bodyAsGET = getPairValue(flagsByName, false, ['G', 'get']);
 
-  if (dataParameters.length > 0 && bodyAsGET) {
+  if (multipartFormDataFromRaw) {
+    // Handle multipart form data parsed from --data-raw (Chrome DevTools format)
+    bodyType = 'multipart/form-data';
+    body = {
+      form: multipartFormDataFromRaw,
+    };
+  } else if (dataParameters.length > 0 && bodyAsGET) {
     urlParameters.push(...dataParameters);
   } else if (
     dataParameters.length > 0 &&
@@ -471,6 +507,71 @@ function splitOnce(str: string, sep: string): string[] {
     return [str.slice(0, index), str.slice(index + 1)];
   }
   return [str];
+}
+
+/**
+ * Parses multipart form data from a raw body string
+ * Used when Chrome DevTools exports a cURL with --data-raw containing multipart data
+ */
+function parseMultipartFormData(
+  rawBody: string,
+  boundary: string,
+): { name: string; value?: string; file?: string; enabled: boolean }[] | null {
+  const results: { name: string; value?: string; file?: string; enabled: boolean }[] = [];
+
+  // The boundary in the body typically has -- prefix
+  const boundaryMarker = `--${boundary}`;
+  const parts = rawBody.split(boundaryMarker);
+
+  for (const part of parts) {
+    // Skip empty parts and the closing boundary marker
+    if (!part || part.trim() === '--' || part.trim() === '--\r\n') {
+      continue;
+    }
+
+    // Each part has headers and content separated by \r\n\r\n
+    const headerContentSplit = part.indexOf('\r\n\r\n');
+    if (headerContentSplit === -1) {
+      continue;
+    }
+
+    const headerSection = part.slice(0, headerContentSplit);
+    let content = part.slice(headerContentSplit + 4); // Skip \r\n\r\n
+
+    // Remove trailing \r\n from content
+    if (content.endsWith('\r\n')) {
+      content = content.slice(0, -2);
+    }
+
+    // Parse Content-Disposition header to get name and filename
+    const contentDispositionMatch = headerSection.match(
+      /Content-Disposition:\s*form-data;\s*name="([^"]+)"(?:;\s*filename="([^"]+)")?/i,
+    );
+
+    if (!contentDispositionMatch) {
+      continue;
+    }
+
+    const name = contentDispositionMatch[1] ?? '';
+    const filename = contentDispositionMatch[2];
+
+    const item: { name: string; value?: string; file?: string; enabled: boolean } = {
+      name,
+      enabled: true,
+    };
+
+    if (filename) {
+      // This is a file upload field
+      item.file = filename;
+    } else {
+      // This is a regular text field
+      item.value = content;
+    }
+
+    results.push(item);
+  }
+
+  return results.length > 0 ? results : null;
 }
 
 const idCount: Partial<Record<string, number>> = {};

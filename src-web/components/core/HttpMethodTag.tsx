@@ -8,6 +8,7 @@ interface Props {
   request: HttpRequest | GrpcRequest | WebsocketRequest;
   className?: string;
   short?: boolean;
+  noAlias?: boolean;
 }
 
 const methodNames: Record<string, string> = {
@@ -24,9 +25,9 @@ const methodNames: Record<string, string> = {
   websocket: 'WS',
 };
 
-export const HttpMethodTag = memo(function HttpMethodTag({ request, className, short }: Props) {
+export const HttpMethodTag = memo(function HttpMethodTag({ request, className, short, noAlias }: Props) {
   const method =
-    request.model === 'http_request' && request.bodyType === 'graphql'
+    request.model === 'http_request' && (request.bodyType === 'graphql' && !noAlias)
       ? 'graphql'
       : request.model === 'grpc_request'
         ? 'grpc'
@@ -41,10 +42,12 @@ export function HttpMethodTagRaw({
   className,
   method,
   short,
+  forceColor,
 }: {
   method: string;
   className?: string;
   short?: boolean;
+  forceColor?: boolean;
 }) {
   let label = method.toUpperCase();
   if (short) {
@@ -54,7 +57,8 @@ export function HttpMethodTagRaw({
 
   const m = method.toUpperCase();
 
-  const colored = useAtomValue(settingsAtom).coloredMethods;
+  const settings = useAtomValue(settingsAtom);
+  const colored = forceColor || settings.coloredMethods;
 
   return (
     <span

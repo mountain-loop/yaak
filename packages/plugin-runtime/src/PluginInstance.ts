@@ -1,31 +1,45 @@
-import { applyFormInputDefaults, validateTemplateFunctionArgs } from '@yaakapp-internal/lib/templateFunction';
+import console from 'node:console';
+import { type Stats, statSync, watch } from 'node:fs';
+import path from 'node:path';
+import type { Context, PluginDefinition } from '@yaakapp/api';
 import {
+  applyFormInputDefaults,
+  validateTemplateFunctionArgs,
+} from '@yaakapp-internal/lib/templateFunction';
+import type {
   BootRequest,
   DeleteKeyValueResponse,
+  DeleteModelResponse,
   FindHttpResponsesResponse,
+  Folder,
   GetCookieValueRequest,
   GetCookieValueResponse,
   GetHttpRequestByIdResponse,
   GetKeyValueResponse,
   GrpcRequestAction,
   HttpAuthenticationAction,
+  HttpRequest,
   HttpRequestAction,
+  ImportResources,
   InternalEvent,
   InternalEventPayload,
   ListCookieNamesResponse,
+  ListFoldersResponse,
+  ListHttpRequestsRequest,
+  ListHttpRequestsResponse,
+  ListWorkspacesResponse,
   PluginContext,
+  PromptFormResponse,
   PromptTextResponse,
   RenderGrpcRequestResponse,
   RenderHttpRequestResponse,
   SendHttpRequestResponse,
   TemplateFunction,
+  TemplateRenderRequest,
   TemplateRenderResponse,
+  UpsertModelResponse,
   WindowInfoResponse,
 } from '@yaakapp-internal/plugins';
-import { Context, PluginDefinition } from '@yaakapp/api';
-import console from 'node:console';
-import { type Stats, statSync, watch } from 'node:fs';
-import path from 'node:path';
 import { applyDynamicFormInput } from './common';
 import { EventChannel } from './EventChannel';
 import { migrateTemplateFunctionSelectOptions } from './migrations';
@@ -52,20 +66,30 @@ export class PluginInstance {
       await this.#onMessage(event);
     });
 
-    this.#mod = {} as any;
+    this.#mod = {};
 
     const fileChangeCallback = async () => {
       await this.#mod?.dispose?.();
       this.#importModule();
-      await this.#mod?.init?.(this.#newCtx(workerData.context));
-      return this.#sendPayload(
-        workerData.context,
-        {
-          type: 'reload_response',
-          silent: false,
-        },
-        null,
-      );
+      const ctx = this.#newCtx(workerData.context);
+      try {
+        await this.#mod?.init?.(ctx);
+        this.#sendPayload(
+          workerData.context,
+          {
+            type: 'reload_response',
+            silent: false,
+          },
+          null,
+        );
+      } catch (err: unknown) {
+        ctx.toast.show({
+          message: `Failed to initialize plugin ${this.#workerData.bootRequest.dir.split('/').pop()}: ${err}`,
+          color: 'notice',
+          icon: 'alert_triangle',
+          timeout: 30000,
+        });
+      }
     };
 
     if (this.#workerData.bootRequest.watch) {
@@ -116,8 +140,7 @@ export class PluginInstance {
         if (reply != null) {
           const replyPayload: InternalEventPayload = {
             type: 'import_response',
-            // deno-lint-ignore no-explicit-any
-            resources: reply.resources as any,
+            resources: reply.resources as ImportResources,
           };
           this.#sendPayload(context, replyPayload, replyId);
           return;
@@ -172,6 +195,57 @@ export class PluginInstance {
         return;
       }
 
+      if (
+        payload.type === 'get_websocket_request_actions_request' &&
+        Array.isArray(this.#mod?.websocketRequestActions)
+      ) {
+        const reply = this.#mod.websocketRequestActions.map((a) => ({
+          ...a,
+          onSelect: undefined,
+        }));
+        const replyPayload: InternalEventPayload = {
+          type: 'get_websocket_request_actions_response',
+          pluginRefId: this.#workerData.pluginRefId,
+          actions: reply,
+        };
+        this.#sendPayload(context, replyPayload, replyId);
+        return;
+      }
+
+      if (
+        payload.type === 'get_workspace_actions_request' &&
+        Array.isArray(this.#mod?.workspaceActions)
+      ) {
+        const reply = this.#mod.workspaceActions.map((a) => ({
+          ...a,
+          onSelect: undefined,
+        }));
+        const replyPayload: InternalEventPayload = {
+          type: 'get_workspace_actions_response',
+          pluginRefId: this.#workerData.pluginRefId,
+          actions: reply,
+        };
+        this.#sendPayload(context, replyPayload, replyId);
+        return;
+      }
+
+      if (
+        payload.type === 'get_folder_actions_request' &&
+        Array.isArray(this.#mod?.folderActions)
+      ) {
+        const reply = this.#mod.folderActions.map((a) => ({
+          ...a,
+          onSelect: undefined,
+        }));
+        const replyPayload: InternalEventPayload = {
+          type: 'get_folder_actions_response',
+          pluginRefId: this.#workerData.pluginRefId,
+          actions: reply,
+        };
+        this.#sendPayload(context, replyPayload, replyId);
+        return;
+      }
+
       if (payload.type === 'get_themes_request' && Array.isArray(this.#mod?.themes)) {
         const replyPayload: InternalEventPayload = {
           type: 'get_themes_response',
@@ -207,7 +281,7 @@ export class PluginInstance {
         payload.type === 'get_template_function_config_request' &&
         Array.isArray(this.#mod?.templateFunctions)
       ) {
-        let templateFunction = this.#mod.templateFunctions.find((f) => f.name === payload.name);
+        const templateFunction = this.#mod.templateFunctions.find((f) => f.name === payload.name);
         if (templateFunction == null) {
           this.#sendEmpty(context, replyId);
           return;
@@ -264,8 +338,8 @@ export class PluginInstance {
       if (payload.type === 'call_http_authentication_request' && this.#mod?.authentication) {
         const auth = this.#mod.authentication;
         if (typeof auth?.onApply === 'function') {
-          auth.args = await applyDynamicFormInput(ctx, auth.args, payload);
-          payload.values = applyFormInputDefaults(auth.args, payload.values);
+          const resolvedArgs = await applyDynamicFormInput(ctx, auth.args, payload);
+          payload.values = applyFormInputDefaults(resolvedArgs, payload.values);
           this.#sendPayload(
             context,
             {
@@ -295,6 +369,39 @@ export class PluginInstance {
         Array.isArray(this.#mod.httpRequestActions)
       ) {
         const action = this.#mod.httpRequestActions[payload.index];
+        if (typeof action?.onSelect === 'function') {
+          await action.onSelect(ctx, payload.args);
+          this.#sendEmpty(context, replyId);
+          return;
+        }
+      }
+
+      if (
+        payload.type === 'call_websocket_request_action_request' &&
+        Array.isArray(this.#mod.websocketRequestActions)
+      ) {
+        const action = this.#mod.websocketRequestActions[payload.index];
+        if (typeof action?.onSelect === 'function') {
+          await action.onSelect(ctx, payload.args);
+          this.#sendEmpty(context, replyId);
+          return;
+        }
+      }
+
+      if (
+        payload.type === 'call_workspace_action_request' &&
+        Array.isArray(this.#mod.workspaceActions)
+      ) {
+        const action = this.#mod.workspaceActions[payload.index];
+        if (typeof action?.onSelect === 'function') {
+          await action.onSelect(ctx, payload.args);
+          this.#sendEmpty(context, replyId);
+          return;
+        }
+      }
+
+      if (payload.type === 'call_folder_action_request' && Array.isArray(this.#mod.folderActions)) {
+        const action = this.#mod.folderActions[payload.index];
         if (typeof action?.onSelect === 'function') {
           await action.onSelect(ctx, payload.args);
           this.#sendEmpty(context, replyId);
@@ -541,6 +648,12 @@ export class PluginInstance {
             },
           };
         },
+        openExternalUrl: async (url) => {
+          await this.#sendForReply(context, {
+            type: 'open_external_url_request',
+            url,
+          });
+        },
       },
       prompt: {
         text: async (args) => {
@@ -549,6 +662,13 @@ export class PluginInstance {
             ...args,
           });
           return reply.value;
+        },
+        form: async (args) => {
+          const reply: PromptFormResponse = await this.#sendForReply(context, {
+            type: 'prompt_form_request',
+            ...args,
+          });
+          return reply.values;
         },
       },
       httpResponse: {
@@ -611,6 +731,96 @@ export class PluginInstance {
           );
           return httpRequest;
         },
+        list: async (args?: { folderId?: string }) => {
+          const payload: InternalEventPayload = {
+            type: 'list_http_requests_request',
+            folderId: args?.folderId,
+          } satisfies ListHttpRequestsRequest & { type: 'list_http_requests_request' };
+          const { httpRequests } = await this.#sendForReply<ListHttpRequestsResponse>(
+            context,
+            payload,
+          );
+          return httpRequests;
+        },
+        create: async (args) => {
+          const payload = {
+            type: 'upsert_model_request',
+            model: {
+              name: '',
+              method: 'GET',
+              ...args,
+              id: '',
+              model: 'http_request',
+            },
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
+          return response.model as HttpRequest;
+        },
+        update: async (args) => {
+          const payload = {
+            type: 'upsert_model_request',
+            model: {
+              model: 'http_request',
+              ...args,
+            },
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
+          return response.model as HttpRequest;
+        },
+        delete: async (args) => {
+          const payload = {
+            type: 'delete_model_request',
+            model: 'http_request',
+            id: args.id,
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<DeleteModelResponse>(context, payload);
+          return response.model as HttpRequest;
+        },
+      },
+      folder: {
+        list: async () => {
+          const payload = { type: 'list_folders_request' } as const;
+          const { folders } = await this.#sendForReply<ListFoldersResponse>(context, payload);
+          return folders;
+        },
+        getById: async (args: { id: string }) => {
+          const payload = { type: 'list_folders_request' } as const;
+          const { folders } = await this.#sendForReply<ListFoldersResponse>(context, payload);
+          return folders.find((f) => f.id === args.id) ?? null;
+        },
+        create: async ({ name, ...args }) => {
+          const payload = {
+            type: 'upsert_model_request',
+            model: {
+              ...args,
+              name: name ?? '',
+              id: '',
+              model: 'folder',
+            },
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
+          return response.model as Folder;
+        },
+        update: async (args) => {
+          const payload = {
+            type: 'upsert_model_request',
+            model: {
+              model: 'folder',
+              ...args,
+            },
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
+          return response.model as Folder;
+        },
+        delete: async (args: { id: string }) => {
+          const payload = {
+            type: 'delete_model_request',
+            model: 'folder',
+            id: args.id,
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<DeleteModelResponse>(context, payload);
+          return response.model as Folder;
+        },
       },
       cookies: {
         getValue: async (args: GetCookieValueRequest) => {
@@ -632,9 +842,10 @@ export class PluginInstance {
          * Invoke Yaak's template engine to render a value. If the value is a nested type
          * (eg. object), it will be recursively rendered.
          */
-        render: async (args) => {
+        render: async (args: TemplateRenderRequest) => {
           const payload = { type: 'template_render_request', ...args } as const;
           const result = await this.#sendForReply<TemplateRenderResponse>(context, payload);
+          // biome-ignore lint/suspicious/noExplicitAny: That's okay
           return result.data as any;
         },
       },
@@ -662,6 +873,33 @@ export class PluginInstance {
       plugin: {
         reload: () => {
           this.#sendPayload(context, { type: 'reload_response', silent: true }, null);
+        },
+      },
+      workspace: {
+        list: async () => {
+          const payload = {
+            type: 'list_workspaces_request',
+          } as InternalEventPayload;
+          const response = await this.#sendForReply<ListWorkspacesResponse>(context, payload);
+          return response.workspaces.map((w) => {
+            // Internal workspace info includes label field not in public API
+            type WorkspaceInfoInternal = typeof w & { label?: string };
+            return {
+              id: w.id,
+              name: w.name,
+              // Hide label from plugin authors, but keep it for internal routing
+              _label: (w as WorkspaceInfoInternal).label as string,
+            };
+          });
+        },
+        withContext: (workspaceHandle: { id: string; name: string; _label?: string }) => {
+          // Create a new context with the workspace's window label
+          const newContext: PluginContext = {
+            ...context,
+            label: workspaceHandle._label || null,
+            workspaceId: workspaceHandle.id,
+          };
+          return this.#newCtx(newContext);
         },
       },
     };

@@ -6,9 +6,22 @@ import type { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
 
 const _clients: Record<string, Client> = {};
 
-async function op(args: CallTemplateFunctionArgs): Promise<{ client?: Client; error?: unknown }> {
-  let authMethod: string | DesktopAuth | null = null;
-  let hash: string | null = null;
+// Cache for API responses to avoid rate limiting
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+type Result<T> = { error: unknown } | T;
+
+const CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
+const _cache: Record<string, CacheEntry<unknown>> = {};
+
+async function op(
+  args: CallTemplateFunctionArgs,
+): Promise<Result<{ client: Client; clientHash: string }>> {
+  let authMethod: string | DesktopAuth;
+  let hash: string;
   switch (args.values.authMethod) {
     case 'desktop': {
       const account = args.values.token;
@@ -26,21 +39,23 @@ async function op(args: CallTemplateFunctionArgs): Promise<{ client?: Client; er
       authMethod = token;
       break;
     }
+    default:
+      return { error: 'Invalid authentication method' };
   }
 
-  if (hash == null || authMethod == null) return { error: 'Invalid authentication method' };
-
-  try {
-    _clients[hash] ??= await createClient({
-      auth: authMethod,
-      integrationName: 'Yaak 1Password Plugin',
-      integrationVersion: 'v1.0.0',
-    });
-  } catch (e) {
-    return { error: e };
+  if (!_clients[hash]) {
+    try {
+      _clients[hash] = await createClient({
+        auth: authMethod,
+        integrationName: 'Yaak 1Password Plugin',
+        integrationVersion: 'v1.0.0',
+      });
+    } catch (e) {
+      return { error: e };
+    }
   }
 
-  return { client: _clients[hash] };
+  return { client: _clients[hash], clientHash: hash };
 }
 
 async function getValue(
@@ -48,39 +63,35 @@ async function getValue(
   vaultId?: JsonPrimitive,
   itemId?: JsonPrimitive,
   fieldId?: JsonPrimitive,
-): Promise<{ value?: string; error?: unknown }> {
-  const { client, error } = await op(args);
-  if (!client) return { error };
+): Promise<Result<{ value: string }>> {
+  const res = await op(args);
+  if ('error' in res) return { error: res.error };
+  const clientHash = res.clientHash;
+  const client = res.client;
 
-  if (vaultId && typeof vaultId === 'string') {
-    try {
-      await client.vaults.getOverview(vaultId);
-    } catch {
-      return { error: `Vault ${vaultId} not found` };
-    }
-  } else {
+  if (!vaultId || typeof vaultId !== 'string') {
     return { error: 'No vault specified' };
   }
-
-  if (itemId && typeof itemId === 'string') {
-    try {
-      const item = await client.items.get(vaultId, itemId);
-      if (fieldId && typeof fieldId === 'string') {
-        const field = item.fields.find((f) => f.id === fieldId);
-        if (field) {
-          return { value: field.value };
-        } else {
-          return { error: `Field ${fieldId} not found in item ${itemId} in vault ${vaultId}` };
-        }
-      }
-    } catch {
-      return { error: `Item ${itemId} not found in vault ${vaultId}` };
-    }
-  } else {
+  if (!itemId || typeof itemId !== 'string') {
     return { error: 'No item specified' };
   }
+  if (!fieldId || typeof fieldId !== 'string') {
+    return { error: 'No field specified' };
+  }
 
-  return {};
+  try {
+    const cacheKey = `${clientHash}:item:${vaultId}:${itemId}:${fieldId}`;
+    let value = getCached<string>(cacheKey);
+
+    if (!value) {
+      value = await client.secrets.resolve(`op://${vaultId}/${itemId}/${fieldId}`);
+      setCache(cacheKey, value);
+    }
+
+    return { value };
+  } catch (e) {
+    return { error: e };
+  }
 }
 
 export const plugin: PluginDefinition = {
@@ -142,15 +153,33 @@ export const plugin: PluginDefinition = {
           type: 'select',
           options: [],
           async dynamic(_ctx, args) {
-            const { client } = await op(args);
-            if (client == null) return { hidden: true };
-            // Fetches a secret.
-            const vaults = await client.vaults.list({ decryptDetails: true });
+            const res = await op(args);
+            if ('error' in res) return { hidden: true };
+            const clientHash = res.clientHash;
+            const client = res.client;
+
+            const cacheKey = `${clientHash}:vaults`;
+            const cachedVaults =
+              getCached<Awaited<ReturnType<typeof client.vaults.list>>>(cacheKey);
+            const vaults =
+              cachedVaults ??
+              setCache(cacheKey, await client.vaults.list({ decryptDetails: true }));
+
             return {
-              options: vaults.map((vault) => ({
-                label: `${vault.title} (${vault.activeItemCount} Items)`,
-                value: vault.id,
-              })),
+              options: vaults.map((vault) => {
+                let title = vault.id;
+                if ('title' in vault) {
+                  title = vault.title;
+                } else if ('name' in vault) {
+                  // The SDK returns 'name' instead of 'title' but the bindings still use 'title'
+                  title = (vault as { name: string }).name;
+                }
+
+                return {
+                  label: `${title} (${vault.activeItemCount} Items)`,
+                  value: vault.id,
+                };
+              }),
             };
           },
         },
@@ -160,13 +189,19 @@ export const plugin: PluginDefinition = {
           type: 'select',
           options: [],
           async dynamic(_ctx, args) {
-            const { client } = await op(args);
-            if (client == null) return { hidden: true };
+            const res = await op(args);
+            if ('error' in res) return { hidden: true };
+            const clientHash = res.clientHash;
+            const client = res.client;
+
             const vaultId = args.values.vault;
             if (typeof vaultId !== 'string') return { hidden: true };
 
             try {
-              const items = await client.items.list(vaultId);
+              const cacheKey = `${clientHash}:items:${vaultId}`;
+              const cachedItems =
+                getCached<Awaited<ReturnType<typeof client.items.list>>>(cacheKey);
+              const items = cachedItems ?? setCache(cacheKey, await client.items.list(vaultId));
               return {
                 options: items.map((item) => ({
                   label: `${item.title} ${item.category}`,
@@ -185,8 +220,11 @@ export const plugin: PluginDefinition = {
           type: 'select',
           options: [],
           async dynamic(_ctx, args) {
-            const { client } = await op(args);
-            if (client == null) return { hidden: true };
+            const res = await op(args);
+            if ('error' in res) return { hidden: true };
+            const clientHash = res.clientHash;
+            const client = res.client;
+
             const vaultId = args.values.vault;
             const itemId = args.values.item;
             if (typeof vaultId !== 'string' || typeof itemId !== 'string') {
@@ -194,7 +232,10 @@ export const plugin: PluginDefinition = {
             }
 
             try {
-              const item = await client.items.get(vaultId, itemId);
+              const cacheKey = `${clientHash}:item:${vaultId}:${itemId}`;
+              const cachedItem = getCached<Awaited<ReturnType<typeof client.items.get>>>(cacheKey);
+              const item =
+                cachedItem ?? setCache(cacheKey, await client.items.get(vaultId, itemId));
               return {
                 options: item.fields.map((field) => ({ label: field.title, value: field.id })),
               };
@@ -209,13 +250,33 @@ export const plugin: PluginDefinition = {
         const vaultId = args.values.vault;
         const itemId = args.values.item;
         const fieldId = args.values.field;
-        const { value, error } = await getValue(args, vaultId, itemId, fieldId);
-        if (error) {
-          throw error;
+        const res = await getValue(args, vaultId, itemId, fieldId);
+        if ('error' in res) {
+          throw res.error;
         }
 
-        return value ?? '';
+        return res.value;
       },
     },
   ],
 };
+
+function getCached<T>(key: string): T | undefined {
+  const entry = _cache[key];
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry.data as T;
+  }
+  // Clean up expired entry
+  if (entry) {
+    delete _cache[key];
+  }
+  return undefined;
+}
+
+function setCache<T>(key: string, data: T): T {
+  _cache[key] = {
+    data,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  };
+  return data;
+}

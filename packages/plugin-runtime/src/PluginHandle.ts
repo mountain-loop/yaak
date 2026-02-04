@@ -1,7 +1,7 @@
-import { PluginContext } from '@yaakapp-internal/plugins';
 import type { BootRequest, InternalEvent } from '@yaakapp/api';
+import type { PluginContext } from '@yaakapp-internal/plugins';
 import type { EventChannel } from './EventChannel';
-import { PluginInstance, PluginWorkerData } from './PluginInstance';
+import { PluginInstance, type PluginWorkerData } from './PluginInstance';
 
 export class PluginHandle {
   #instance: PluginInstance;

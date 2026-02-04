@@ -1,4 +1,4 @@
-import { FilterResponse } from '../bindings/gen_events';
+import type { FilterResponse } from '../bindings/gen_events';
 import type { Context } from './Context';
 
 export type FilterPlugin = {

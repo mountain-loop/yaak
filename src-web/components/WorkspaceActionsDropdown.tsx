@@ -14,9 +14,11 @@ import {
 } from '../hooks/useActiveWorkspace';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
 import { useDeleteSendHistory } from '../hooks/useDeleteSendHistory';
+import { useWorkspaceActions } from '../hooks/useWorkspaceActions';
 import { showDialog } from '../lib/dialog';
 import { jotaiStore } from '../lib/jotai';
 import { revealInFinderText } from '../lib/reveal';
+import { CloneGitRepositoryDialog } from './CloneGitRepositoryDialog';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
@@ -36,10 +38,21 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
   const createWorkspace = useCreateWorkspace();
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const { mutate: deleteSendHistory } = useDeleteSendHistory();
+  const workspaceActions = useWorkspaceActions();
 
-  const { workspaceItems, itemsAfter } = useMemo<{
+  const openCloneGitRepositoryDialog = useCallback(() => {
+    showDialog({
+      id: 'clone-git-repository',
+      size: 'md',
+      title: 'Clone Git Repository',
+      render: ({ hide }) => <CloneGitRepositoryDialog hide={hide} />,
+    });
+  }, []);
+
+  const { workspaceItems, itemsAfter, itemsBefore } = useMemo<{
     workspaceItems: RadioDropdownItem[];
     itemsAfter: DropdownItem[];
+    itemsBefore: DropdownItem[];
   }>(() => {
     const workspaceItems: RadioDropdownItem[] = workspaces.map((w) => ({
       key: w.id,
@@ -48,7 +61,47 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
       leftSlot: w.id === workspace?.id ? <Icon icon="check" /> : <Icon icon="empty" />,
     }));
 
+    const itemsBefore: DropdownItem[] = [
+      {
+        label: 'New Workspace',
+        leftSlot: <Icon icon="plus" />,
+        submenu: [
+          {
+            label: 'Create Empty',
+            leftSlot: <Icon icon="plus_circle" />,
+            onSelect: createWorkspace,
+          },
+          {
+            label: 'Open Folder',
+            leftSlot: <Icon icon="folder_open" />,
+            onSelect: async () => {
+              const dir = await open({
+                title: 'Select Workspace Directory',
+                directory: true,
+                multiple: false,
+              });
+
+              if (dir == null) return;
+              openWorkspaceFromSyncDir.mutate(dir);
+            },
+          },
+          {
+            label: 'Clone Git Repository',
+            leftSlot: <Icon icon="hard_drive_download" />,
+            onSelect: openCloneGitRepositoryDialog,
+          },
+        ],
+      },
+    ];
     const itemsAfter: DropdownItem[] = [
+      ...workspaceActions.map((a) => ({
+        label: a.label,
+        leftSlot: <Icon icon={a.icon ?? 'empty'} />,
+        onSelect: async () => {
+          if (workspace != null) await a.call(workspace);
+        },
+      })),
+      ...(workspaceActions.length > 0 ? [{ type: 'separator' as const }] : []),
       {
         label: 'Workspace Settings',
         leftSlot: <Icon icon="settings" />,
@@ -70,30 +123,20 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         leftSlot: <Icon icon="history" />,
         onSelect: deleteSendHistory,
       },
-      { type: 'separator' },
-      {
-        label: 'New Workspace',
-        leftSlot: <Icon icon="plus" />,
-        onSelect: createWorkspace,
-      },
-      {
-        label: 'Open Existing Workspace',
-        leftSlot: <Icon icon="folder_open" />,
-        onSelect: async () => {
-          const dir = await open({
-            title: 'Select Workspace Directory',
-            directory: true,
-            multiple: false,
-          });
-
-          if (dir == null) return;
-          openWorkspaceFromSyncDir.mutate(dir);
-        },
-      },
     ];
 
-    return { workspaceItems, itemsAfter };
-  }, [workspaces, workspaceMeta, deleteSendHistory, createWorkspace, workspace?.id]);
+    return { workspaceItems, itemsAfter, itemsBefore };
+  }, [
+    workspaces,
+    workspaceMeta,
+    deleteSendHistory,
+    createWorkspace,
+    openCloneGitRepositoryDialog,
+    workspace?.id,
+    workspace,
+    workspaceActions.map,
+    workspaceActions.length,
+  ]);
 
   const handleSwitchWorkspace = useCallback(async (workspaceId: string | null) => {
     if (workspaceId == null) return;
@@ -125,6 +168,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
     <RadioDropdown
       items={workspaceItems}
       itemsAfter={itemsAfter}
+      itemsBefore={itemsBefore}
       onChange={handleSwitchWorkspace}
       value={workspace?.id ?? null}
     >

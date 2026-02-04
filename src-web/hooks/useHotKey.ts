@@ -1,6 +1,7 @@
 import { type } from '@tauri-apps/plugin-os';
 import { debounce } from '@yaakapp-internal/lib';
-import { atom } from 'jotai';
+import { settingsAtom } from '@yaakapp-internal/models';
+import { atom, useAtomValue } from 'jotai';
 import { useEffect } from 'react';
 import { capitalize } from '../lib/capitalize';
 import { jotaiStore } from '../lib/jotai';
@@ -13,7 +14,8 @@ export type HotkeyAction =
   | 'app.zoom_out'
   | 'app.zoom_reset'
   | 'command_palette.toggle'
-  | 'environmentEditor.toggle'
+  | 'editor.autocomplete'
+  | 'environment_editor.toggle'
   | 'hotkeys.showHelp'
   | 'model.create'
   | 'model.duplicate'
@@ -34,39 +36,97 @@ export type HotkeyAction =
   | 'url_bar.focus'
   | 'workspace_settings.show';
 
-const hotkeys: Record<HotkeyAction, string[]> = {
-  'app.zoom_in': ['CmdCtrl+Equal'],
-  'app.zoom_out': ['CmdCtrl+Minus'],
-  'app.zoom_reset': ['CmdCtrl+0'],
-  'command_palette.toggle': ['CmdCtrl+k'],
-  'environmentEditor.toggle': ['CmdCtrl+Shift+E', 'CmdCtrl+Shift+e'],
-  'request.rename': type() === 'macos' ? ['Control+Shift+r'] : ['F2'],
-  'request.send': ['CmdCtrl+Enter', 'CmdCtrl+r'],
-  'hotkeys.showHelp': ['CmdCtrl+Shift+/', 'CmdCtrl+Shift+?'], // when shift is pressed, it might be a question mark
-  'model.create': ['CmdCtrl+n'],
-  'model.duplicate': ['CmdCtrl+d'],
+/** Default hotkeys for macOS (uses Meta for Cmd) */
+const defaultHotkeysMac: Record<HotkeyAction, string[]> = {
+  'app.zoom_in': ['Meta+Equal'],
+  'app.zoom_out': ['Meta+Minus'],
+  'app.zoom_reset': ['Meta+0'],
+  'command_palette.toggle': ['Meta+k'],
+  'editor.autocomplete': ['Control+Space'],
+  'environment_editor.toggle': ['Meta+Shift+e'],
+  'request.rename': ['Control+Shift+r'],
+  'request.send': ['Meta+Enter', 'Meta+r'],
+  'hotkeys.showHelp': ['Meta+Shift+/'],
+  'model.create': ['Meta+n'],
+  'model.duplicate': ['Meta+d'],
   'switcher.next': ['Control+Shift+Tab'],
   'switcher.prev': ['Control+Tab'],
-  'switcher.toggle': ['CmdCtrl+p'],
-  'settings.show': ['CmdCtrl+,'],
-  'sidebar.filter': ['CmdCtrl+f'],
-  'sidebar.expand_all': ['CmdCtrl+Shift+Equal'],
-  'sidebar.collapse_all': ['CmdCtrl+Shift+Minus'],
-  'sidebar.selected.delete': ['Delete', 'CmdCtrl+Backspace'],
-  'sidebar.selected.duplicate': ['CmdCtrl+d'],
+  'switcher.toggle': ['Meta+p'],
+  'settings.show': ['Meta+,'],
+  'sidebar.filter': ['Meta+f'],
+  'sidebar.expand_all': ['Meta+Shift+Equal'],
+  'sidebar.collapse_all': ['Meta+Shift+Minus'],
+  'sidebar.selected.delete': ['Delete', 'Meta+Backspace'],
+  'sidebar.selected.duplicate': ['Meta+d'],
   'sidebar.selected.rename': ['Enter'],
-  'sidebar.focus': ['CmdCtrl+b'],
-  'sidebar.context_menu': type() === 'macos' ? ['Control+Enter'] : ['Alt+Insert'],
-  'url_bar.focus': ['CmdCtrl+l'],
-  'workspace_settings.show': ['CmdCtrl+;'],
+  'sidebar.focus': ['Meta+b'],
+  'sidebar.context_menu': ['Control+Enter'],
+  'url_bar.focus': ['Meta+l'],
+  'workspace_settings.show': ['Meta+;'],
 };
+
+/** Default hotkeys for Windows/Linux (uses Control for Ctrl) */
+const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
+  'app.zoom_in': ['Control+Equal'],
+  'app.zoom_out': ['Control+Minus'],
+  'app.zoom_reset': ['Control+0'],
+  'command_palette.toggle': ['Control+k'],
+  'editor.autocomplete': ['Control+Space'],
+  'environment_editor.toggle': ['Control+Shift+e'],
+  'request.rename': ['F2'],
+  'request.send': ['Control+Enter', 'Control+r'],
+  'hotkeys.showHelp': ['Control+Shift+/'],
+  'model.create': ['Control+n'],
+  'model.duplicate': ['Control+d'],
+  'switcher.next': ['Control+Shift+Tab'],
+  'switcher.prev': ['Control+Tab'],
+  'switcher.toggle': ['Control+p'],
+  'settings.show': ['Control+,'],
+  'sidebar.filter': ['Control+f'],
+  'sidebar.expand_all': ['Control+Shift+Equal'],
+  'sidebar.collapse_all': ['Control+Shift+Minus'],
+  'sidebar.selected.delete': ['Delete', 'Control+Backspace'],
+  'sidebar.selected.duplicate': ['Control+d'],
+  'sidebar.selected.rename': ['Enter'],
+  'sidebar.focus': ['Control+b'],
+  'sidebar.context_menu': ['Alt+Insert'],
+  'url_bar.focus': ['Control+l'],
+  'workspace_settings.show': ['Control+;'],
+};
+
+/** Get the default hotkeys for the current platform */
+export const defaultHotkeys: Record<HotkeyAction, string[]> =
+  type() === 'macos' ? defaultHotkeysMac : defaultHotkeysOther;
+
+/** Atom that provides the effective hotkeys by merging defaults with user settings */
+export const hotkeysAtom = atom((get) => {
+  const settings = get(settingsAtom);
+  const customHotkeys = settings?.hotkeys ?? {};
+
+  // Merge default hotkeys with custom hotkeys from settings
+  // Custom hotkeys override defaults for the same action
+  // An empty array means the hotkey is intentionally disabled
+  const merged: Record<HotkeyAction, string[]> = { ...defaultHotkeys };
+  for (const [action, keys] of Object.entries(customHotkeys)) {
+    if (action in defaultHotkeys && Array.isArray(keys)) {
+      merged[action as HotkeyAction] = keys;
+    }
+  }
+  return merged;
+});
+
+/** Helper function to get current hotkeys from the store */
+function getHotkeys(): Record<HotkeyAction, string[]> {
+  return jotaiStore.get(hotkeysAtom);
+}
 
 const hotkeyLabels: Record<HotkeyAction, string> = {
   'app.zoom_in': 'Zoom In',
   'app.zoom_out': 'Zoom Out',
   'app.zoom_reset': 'Zoom to Actual Size',
   'command_palette.toggle': 'Toggle Command Palette',
-  'environmentEditor.toggle': 'Edit Environments',
+  'editor.autocomplete': 'Trigger Autocomplete',
+  'environment_editor.toggle': 'Edit Environments',
   'hotkeys.showHelp': 'Show Keyboard Shortcuts',
   'model.create': 'New Request',
   'model.duplicate': 'Duplicate Request',
@@ -88,9 +148,25 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'workspace_settings.show': 'Open Workspace Settings',
 };
 
-const layoutInsensitiveKeys = ['Equal', 'Minus', 'BracketLeft', 'BracketRight', 'Backquote'];
+const layoutInsensitiveKeys = [
+  'Equal',
+  'Minus',
+  'BracketLeft',
+  'BracketRight',
+  'Backquote',
+  'Space',
+];
 
-export const hotkeyActions: HotkeyAction[] = Object.keys(hotkeys) as (keyof typeof hotkeys)[];
+export const hotkeyActions: HotkeyAction[] = (
+  Object.keys(defaultHotkeys) as (keyof typeof defaultHotkeys)[]
+).sort((a, b) => {
+  const scopeA = a.split('.')[0] || '';
+  const scopeB = b.split('.')[0] || '';
+  if (scopeA !== scopeB) {
+    return scopeA.localeCompare(scopeB);
+  }
+  return hotkeyLabels[a].localeCompare(hotkeyLabels[b]);
+});
 
 export type HotKeyOptions = {
   enable?: boolean | (() => boolean);
@@ -200,29 +276,20 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 
   const executed: string[] = [];
-  outer: for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
-    for (const [hkAction, hkKeys] of Object.entries(hotkeys) as [HotkeyAction, string[]][]) {
-      if (hkAction !== action) {
-        continue;
-      }
-      const enable = typeof options.enable === 'function' ? options.enable() : options.enable;
-      if (enable === false) {
-        continue;
-      }
+  for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
+    const enable = typeof options.enable === 'function' ? options.enable() : options.enable;
+    if (enable === false) {
+      continue;
+    }
 
-      for (const hkKey of hkKeys) {
-        const keys = hkKey.split('+');
-        const adjustedKeys = keys.map(resolveHotkeyKey);
-        if (compareKeys(adjustedKeys, Array.from(currentKeysWithModifiers))) {
-          if (!options.allowDefault) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-          callback(e);
-          executed.push(`${action} ${options.priority ?? 0}`);
-          break outer;
-        }
+    if (keysMatchAction(Array.from(currentKeysWithModifiers), action)) {
+      if (!options.allowDefault) {
+        e.preventDefault();
+        e.stopPropagation();
       }
+      callback(e);
+      executed.push(`${action} ${options.priority ?? 0}`);
+      break;
     }
   }
 
@@ -233,46 +300,54 @@ function handleKeyDown(e: KeyboardEvent) {
   clearCurrentKeysDebounced();
 }
 
-export function useHotKeyLabel(action: HotkeyAction): string {
+export function useHotkeyLabel(action: HotkeyAction): string {
   return hotkeyLabels[action];
 }
 
-export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {
-  const trigger = action != null ? (hotkeys[action]?.[0] ?? null) : null;
-  if (trigger == null) {
-    return null;
-  }
+export function getHotkeyScope(action: HotkeyAction): string {
+  const scope = action.split('.')[0];
+  return scope || '';
+}
 
+export function formatHotkeyString(trigger: string): string[] {
   const os = type();
   const parts = trigger.split('+');
   const labelParts: string[] = [];
 
   for (const p of parts) {
     if (os === 'macos') {
-      if (p === 'CmdCtrl') {
+      if (p === 'Meta') {
         labelParts.push('⌘');
       } else if (p === 'Shift') {
         labelParts.push('⇧');
       } else if (p === 'Control') {
         labelParts.push('⌃');
+      } else if (p === 'Alt') {
+        labelParts.push('⌥');
       } else if (p === 'Enter') {
         labelParts.push('↩');
       } else if (p === 'Tab') {
         labelParts.push('⇥');
       } else if (p === 'Backspace') {
         labelParts.push('⌫');
+      } else if (p === 'Delete') {
+        labelParts.push('⌦');
       } else if (p === 'Minus') {
         labelParts.push('-');
       } else if (p === 'Plus') {
         labelParts.push('+');
       } else if (p === 'Equal') {
         labelParts.push('=');
+      } else if (p === 'Space') {
+        labelParts.push('Space');
       } else {
         labelParts.push(capitalize(p));
       }
     } else {
-      if (p === 'CmdCtrl') {
+      if (p === 'Control') {
         labelParts.push('Ctrl');
+      } else if (p === 'Space') {
+        labelParts.push('Space');
       } else {
         labelParts.push(capitalize(p));
       }
@@ -285,12 +360,15 @@ export function useFormattedHotkey(action: HotkeyAction | null): string[] | null
   return [labelParts.join('+')];
 }
 
-const resolveHotkeyKey = (key: string) => {
-  const os = type();
-  if (key === 'CmdCtrl' && os === 'macos') return 'Meta';
-  if (key === 'CmdCtrl') return 'Control';
-  return key;
-};
+export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {
+  const hotkeys = useAtomValue(hotkeysAtom);
+  const trigger = action != null ? (hotkeys[action]?.[0] ?? null) : null;
+  if (trigger == null) {
+    return null;
+  }
+
+  return formatHotkeyString(trigger);
+}
 
 function compareKeys(keysA: string[], keysB: string[]) {
   if (keysA.length !== keysB.length) return false;
@@ -303,4 +381,40 @@ function compareKeys(keysA: string[], keysB: string[]) {
     .sort()
     .join('::');
   return sortedA === sortedB;
+}
+
+/** Build the full key combination from a KeyboardEvent including modifiers */
+function getKeysFromEvent(e: KeyboardEvent): string[] {
+  const keys: string[] = [];
+  if (e.altKey) keys.push('Alt');
+  if (e.ctrlKey) keys.push('Control');
+  if (e.metaKey) keys.push('Meta');
+  if (e.shiftKey) keys.push('Shift');
+
+  // Add the actual key (use code for layout-insensitive keys)
+  const keyToAdd = layoutInsensitiveKeys.includes(e.code) ? e.code : e.key;
+  keys.push(keyToAdd);
+
+  return keys;
+}
+
+/** Check if a set of pressed keys matches any hotkey for the given action */
+function keysMatchAction(keys: string[], action: HotkeyAction): boolean {
+  const hotkeys = getHotkeys();
+  const hkKeys = hotkeys[action];
+  if (!hkKeys || hkKeys.length === 0) return false;
+
+  for (const hkKey of hkKeys) {
+    const hotkeyParts = hkKey.split('+');
+    if (compareKeys(hotkeyParts, keys)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Check if a KeyboardEvent matches a hotkey action */
+export function eventMatchesHotkey(e: KeyboardEvent, action: HotkeyAction): boolean {
+  const keys = getKeysFromEvent(e);
+  return keysMatchAction(keys, action);
 }

@@ -1,5 +1,5 @@
 import type { Folder } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
+import { modelTypeLabel, patchModel } from '@yaakapp-internal/models';
 import { useMemo } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
@@ -57,49 +57,103 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
           },
           { label: 'No Auth', shortLabel: 'No Auth', value: 'none' },
         ],
-        itemsAfter:
-          parentModel &&
-          model.authenticationType &&
-          model.authenticationType !== 'none' &&
-          (parentModel.authenticationType == null || parentModel.authenticationType === 'none')
-            ? [
-                { type: 'separator', label: 'Actions' },
-                {
-                  label: `Promote to ${capitalize(parentModel.model)}`,
-                  leftSlot: (
-                    <Icon
-                      icon={parentModel.model === 'workspace' ? 'corner_right_up' : 'folder_up'}
-                    />
-                  ),
-                  onSelect: async () => {
-                    const confirmed = await showConfirm({
-                      id: 'promote-auth-confirm',
-                      title: 'Promote Authentication',
-                      confirmText: 'Promote',
-                      description: (
-                        <>
-                          Move authentication config to{' '}
-                          <InlineCode>{resolvedModelName(parentModel)}</InlineCode>?
-                        </>
-                      ),
-                    });
-                    if (confirmed) {
-                      await patchModel(model, { authentication: {}, authenticationType: null });
-                      await patchModel(parentModel, {
-                        authentication: model.authentication,
-                        authenticationType: model.authenticationType,
-                      });
+        itemsAfter: (() => {
+          const actions: (
+            | { type: 'separator'; label: string }
+            | { label: string; leftSlot: React.ReactNode; onSelect: () => Promise<void> }
+          )[] = [];
 
-                      if (parentModel.model === 'folder') {
-                        openFolderSettings(parentModel.id, 'auth');
-                      } else {
-                        openWorkspaceSettings('auth');
-                      }
+          // Promote: move auth from current model up to parent
+          if (
+            parentModel &&
+            model.authenticationType &&
+            model.authenticationType !== 'none' &&
+            (parentModel.authenticationType == null || parentModel.authenticationType === 'none')
+          ) {
+            actions.push(
+              { type: 'separator', label: 'Actions' },
+              {
+                label: `Promote to ${capitalize(parentModel.model)}`,
+                leftSlot: (
+                  <Icon
+                    icon={parentModel.model === 'workspace' ? 'corner_right_up' : 'folder_up'}
+                  />
+                ),
+                onSelect: async () => {
+                  const confirmed = await showConfirm({
+                    id: 'promote-auth-confirm',
+                    title: 'Promote Authentication',
+                    confirmText: 'Promote',
+                    description: (
+                      <>
+                        Move authentication config to{' '}
+                        <InlineCode>{resolvedModelName(parentModel)}</InlineCode>?
+                      </>
+                    ),
+                  });
+                  if (confirmed) {
+                    await patchModel(model, { authentication: {}, authenticationType: null });
+                    await patchModel(parentModel, {
+                      authentication: model.authentication,
+                      authenticationType: model.authenticationType,
+                    });
+
+                    if (parentModel.model === 'folder') {
+                      openFolderSettings(parentModel.id, 'auth');
+                    } else {
+                      openWorkspaceSettings('auth');
                     }
-                  },
+                  }
                 },
-              ]
-            : undefined,
+              },
+            );
+          }
+
+          // Copy from ancestor: copy auth config down to current model
+          const ancestorWithAuth = ancestors.find(
+            (a) => a.authenticationType != null && a.authenticationType !== 'none',
+          );
+          if (ancestorWithAuth) {
+            if (actions.length === 0) {
+              actions.push({ type: 'separator', label: 'Actions' });
+            }
+            actions.push({
+              label: `Copy from ${modelTypeLabel(ancestorWithAuth)}`,
+              leftSlot: (
+                <Icon
+                  icon={
+                    ancestorWithAuth.model === 'workspace' ? 'corner_right_down' : 'folder_down'
+                  }
+                />
+              ),
+              onSelect: async () => {
+                const confirmed = await showConfirm({
+                  id: 'copy-auth-confirm',
+                  title: 'Copy Authentication',
+                  confirmText: 'Copy',
+                  description: (
+                    <>
+                      Copy{' '}
+                      {authentication.find((a) => a.name === ancestorWithAuth.authenticationType)
+                        ?.label ?? 'authentication'}{' '}
+                      config from <InlineCode>{resolvedModelName(ancestorWithAuth)}</InlineCode>?
+                      This will override the current authentication but will not affect the{' '}
+                      {modelTypeLabel(ancestorWithAuth).toLowerCase()}.
+                    </>
+                  ),
+                });
+                if (confirmed) {
+                  await patchModel(model, {
+                    authentication: { ...ancestorWithAuth.authentication },
+                    authenticationType: ancestorWithAuth.authenticationType,
+                  });
+                }
+              },
+            });
+          }
+
+          return actions.length > 0 ? actions : undefined;
+        })(),
         onChange: async (authenticationType) => {
           let authentication: Folder['authentication'] = model.authentication;
           if (model.authenticationType !== authenticationType) {
@@ -113,5 +167,5 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
     };
 
     return [tab];
-  }, [authentication, inheritedAuth, model, parentModel, tabValue]);
+  }, [authentication, inheritedAuth, model, parentModel, tabValue, ancestors]);
 }
