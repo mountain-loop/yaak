@@ -37,7 +37,7 @@ use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
-    GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState,
+    GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState,
     Plugin, Workspace, WorkspaceMeta,
 };
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
@@ -1272,35 +1272,6 @@ async fn cmd_save_response<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_send_folder<R: Runtime>(
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-    environment_id: Option<String>,
-    cookie_jar_id: Option<String>,
-    folder_id: &str,
-) -> YaakResult<()> {
-    let requests = app_handle.db().list_http_requests_for_folder_recursive(folder_id)?;
-    for request in requests {
-        let app_handle = app_handle.clone();
-        let window = window.clone();
-        let environment_id = environment_id.clone();
-        let cookie_jar_id = cookie_jar_id.clone();
-        tokio::spawn(async move {
-            let _ = cmd_send_http_request(
-                app_handle,
-                window,
-                environment_id.as_deref(),
-                cookie_jar_id.as_deref(),
-                request,
-            )
-            .await;
-        });
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
 async fn cmd_send_http_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -1394,27 +1365,6 @@ async fn cmd_install_plugin<R: Runtime>(
         .await?;
 
     Ok(plugin)
-}
-
-#[tauri::command]
-async fn cmd_create_grpc_request<R: Runtime>(
-    workspace_id: &str,
-    name: &str,
-    sort_priority: f64,
-    folder_id: Option<&str>,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> YaakResult<GrpcRequest> {
-    Ok(app_handle.db().upsert_grpc_request(
-        &GrpcRequest {
-            workspace_id: workspace_id.to_string(),
-            name: name.to_string(),
-            folder_id: folder_id.map(|s| s.to_string()),
-            sort_priority,
-            ..Default::default()
-        },
-        &UpdateSource::from_window_label(window.label()),
-    )?)
 }
 
 #[tauri::command]
@@ -1679,7 +1629,6 @@ pub fn run() {
             cmd_call_folder_action,
             cmd_call_grpc_request_action,
             cmd_check_for_updates,
-            cmd_create_grpc_request,
             cmd_curl_to_request,
             cmd_delete_all_grpc_connections,
             cmd_delete_all_http_responses,
@@ -1713,7 +1662,6 @@ pub fn run() {
             cmd_save_response,
             cmd_send_ephemeral_request,
             cmd_send_http_request,
-            cmd_send_folder,
             cmd_template_function_config,
             cmd_template_function_summaries,
             cmd_template_tokens_to_string,
@@ -1728,7 +1676,6 @@ pub fn run() {
             crate::commands::cmd_reveal_workspace_key,
             crate::commands::cmd_secure_template,
             crate::commands::cmd_set_workspace_key,
-            crate::commands::cmd_show_workspace_key,
             //
             // Models commands
             models_ext::models_delete,
