@@ -587,6 +587,19 @@ pub struct PromptFormRequest {
     pub confirm_text: Option<String>,
     #[ts(optional)]
     pub cancel_text: Option<String>,
+    #[ts(optional)]
+    pub size: Option<PromptFormSize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_events.ts")]
+pub enum PromptFormSize {
+    Sm,
+    Md,
+    Lg,
+    Full,
+    Dynamic,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -594,6 +607,8 @@ pub struct PromptFormRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct PromptFormResponse {
     pub values: Option<HashMap<String, JsonPrimitive>>,
+    #[ts(optional)]
+    pub done: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -965,6 +980,10 @@ pub struct FormInputEditor {
 
     #[ts(optional)]
     pub read_only: Option<bool>,
+
+    /// Fixed number of visible rows
+    #[ts(optional)]
+    pub rows: Option<i32>,
 
     #[ts(optional)]
     pub completion_options: Option<Vec<GenericCompletionOption>>,

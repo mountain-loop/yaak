@@ -172,7 +172,11 @@ hideGutter?: boolean,
 /**
  * Language for syntax highlighting
  */
-language?: EditorLanguage, readOnly?: boolean, completionOptions?: Array<GenericCompletionOption>, 
+language?: EditorLanguage, readOnly?: boolean, 
+/**
+ * Fixed number of visible rows
+ */
+rows?: number, completionOptions?: Array<GenericCompletionOption>, 
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
@@ -476,9 +480,11 @@ label: string, title?: string, size?: WindowSize, dataDirKey?: string, };
 
 export type PluginContext = { id: string, label: string | null, workspaceId: string | null, };
 
-export type PromptFormRequest = { id: string, title: string, description?: string, inputs: Array<FormInput>, confirmText?: string, cancelText?: string, };
+export type PromptFormRequest = { id: string, title: string, description?: string, inputs: Array<FormInput>, confirmText?: string, cancelText?: string, size?: PromptFormSize, };
 
-export type PromptFormResponse = { values: { [key in string]?: JsonPrimitive } | null, };
+export type PromptFormResponse = { values: { [key in string]?: JsonPrimitive } | null, done?: boolean, };
+
+export type PromptFormSize = "sm" | "md" | "lg" | "full" | "dynamic";
 
 export type PromptTextRequest = { id: string, title: string, label: string, description?: string, defaultValue?: string, placeholder?: string, 
 /**

@@ -27,6 +27,11 @@ import type {
 } from '../bindings/gen_events.ts';
 import type { Folder, HttpRequest } from '../bindings/gen_models.ts';
 import type { JsonValue } from '../bindings/serde_json/JsonValue';
+import type { DynamicPromptFormArg } from './PromptFormPlugin';
+
+type DynamicPromptFormRequest = Omit<PromptFormRequest, 'inputs'> & {
+  inputs: DynamicPromptFormArg[];
+};
 
 export type WorkspaceHandle = Pick<WorkspaceInfo, 'id' | 'name'>;
 
@@ -39,7 +44,7 @@ export interface Context {
   };
   prompt: {
     text(args: PromptTextRequest): Promise<PromptTextResponse['value']>;
-    form(args: PromptFormRequest): Promise<PromptFormResponse['values']>;
+    form(args: DynamicPromptFormRequest): Promise<PromptFormResponse['values']>;
   };
   store: {
     set<T>(key: string, value: T): Promise<void>;

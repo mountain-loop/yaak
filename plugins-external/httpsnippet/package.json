@@ -1,0 +1,24 @@
+{
+  "name": "@yaak/httpsnippet",
+  "private": true,
+  "version": "1.0.0",
+  "displayName": "HTTP Snippet",
+  "description": "Generate code snippets for HTTP requests in various languages and frameworks",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mountain-loop/yaak.git",
+    "directory": "plugins-external/httpsnippet"
+  },
+  "scripts": {
+    "build": "yaakcli build",
+    "dev": "yaakcli dev",
+    "test": "vitest --run tests"
+  },
+  "dependencies": {
+    "@readme/httpsnippet": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}
