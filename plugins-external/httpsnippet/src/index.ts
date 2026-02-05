@@ -1,5 +1,5 @@
 import { type HarRequest, availableTargets, HTTPSnippet } from '@readme/httpsnippet';
-import type { HttpRequest, PluginDefinition } from '@yaakapp/api';
+import type { EditorLanguage, HttpRequest, PluginDefinition } from '@yaakapp/api';
 
 // Get all available targets and build select options
 const targets = availableTargets();
@@ -44,7 +44,7 @@ const defaultTarget = 'javascript';
 const defaultClient = 'fetch';
 
 // Map httpsnippet target key to editor language for syntax highlighting
-const editorLanguageMap: Record<string, string> = {
+const editorLanguageMap: Record<string, EditorLanguage> = {
   c: 'c',
   clojure: 'clojure',
   csharp: 'csharp',
@@ -66,7 +66,7 @@ const editorLanguageMap: Record<string, string> = {
   swift: 'swift',
 };
 
-function getEditorLanguage(targetKey: string): string {
+function getEditorLanguage(targetKey: string): EditorLanguage {
   return editorLanguageMap[targetKey] ?? 'text';
 }
 
