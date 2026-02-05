@@ -66,7 +66,7 @@ export type DeleteModelRequest = { model: string, id: string, };
 
 export type DeleteModelResponse = { model: AnyModel, };
 
-export type EditorLanguage = "text" | "javascript" | "json" | "html" | "xml" | "graphql" | "markdown";
+export type EditorLanguage = "text" | "javascript" | "json" | "html" | "xml" | "graphql" | "markdown" | "c" | "clojure" | "csharp" | "go" | "java" | "kotlin" | "objective_c" | "ocaml" | "php" | "powershell" | "python" | "r" | "ruby" | "shell" | "swift";
 
 export type EmptyPayload = {};
 

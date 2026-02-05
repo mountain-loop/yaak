@@ -1,4 +1,4 @@
-import { availableTargets, HTTPSnippet } from '@readme/httpsnippet';
+import { type HarRequest, availableTargets, HTTPSnippet } from '@readme/httpsnippet';
 import type { HttpRequest, PluginDefinition } from '@yaakapp/api';
 
 // Get all available targets and build select options
@@ -10,31 +10,64 @@ const languageOptions = targets.map((target) => ({
   value: target.key,
 }));
 
+// Preferred clients per target (shown first in the list)
+const preferredClients: Record<string, string> = {
+  javascript: 'fetch',
+  node: 'fetch',
+};
+
 // Get client options for a given target key
 function getClientOptions(targetKey: string) {
   const target = targets.find((t) => t.key === targetKey);
   if (!target) return [];
-  return target.clients.map((client) => ({
-    label: client.title,
-    value: client.key,
-  }));
+  const preferred = preferredClients[targetKey];
+  return target.clients
+    .map((client) => ({
+      label: client.title,
+      value: client.key,
+    }))
+    .sort((a, b) => {
+      if (a.value === preferred) return -1;
+      if (b.value === preferred) return 1;
+      return 0;
+    });
 }
 
 // Get default client for a target
 function getDefaultClient(targetKey: string): string {
-  const target = targets.find((t) => t.key === targetKey);
-  return target?.clients[0]?.key ?? '';
+  const options = getClientOptions(targetKey);
+  return options[0]?.value ?? '';
 }
 
 // Defaults
 const defaultTarget = 'javascript';
 const defaultClient = 'fetch';
 
-// Map target key to editor language for syntax highlighting
-function getEditorLanguage(targetKey: string): 'javascript' | 'json' | 'text' {
-  if (['javascript', 'node'].includes(targetKey)) return 'javascript';
-  if (targetKey === 'json') return 'json';
-  return 'text';
+// Map httpsnippet target key to editor language for syntax highlighting
+const editorLanguageMap: Record<string, string> = {
+  c: 'c',
+  clojure: 'clojure',
+  csharp: 'csharp',
+  go: 'go',
+  http: 'text',
+  java: 'java',
+  javascript: 'javascript',
+  json: 'json',
+  kotlin: 'kotlin',
+  node: 'javascript',
+  objc: 'objective_c',
+  ocaml: 'ocaml',
+  php: 'php',
+  powershell: 'powershell',
+  python: 'python',
+  r: 'r',
+  ruby: 'ruby',
+  shell: 'shell',
+  swift: 'swift',
+};
+
+function getEditorLanguage(targetKey: string): string {
+  return editorLanguageMap[targetKey] ?? 'text';
 }
 
 // Convert Yaak HttpRequest to HAR format
@@ -159,7 +192,7 @@ export const plugin: PluginDefinition = {
         });
 
         // Convert to HAR format
-        const harRequest = toHarRequest(renderedRequest);
+        const harRequest = toHarRequest(renderedRequest) as HarRequest;
 
         // Get previously selected language or use defaults
         const storedTarget = await ctx.store.get<string>('selectedTarget');
@@ -169,12 +202,15 @@ export const plugin: PluginDefinition = {
 
         // Create snippet generator
         const snippet = new HTTPSnippet(harRequest);
+        const generateSnippet = (target: string, client: string): string => {
+          const result = snippet.convert(target as any, client);
+          return (Array.isArray(result) ? result.join('\n') : result || '').replace(/\r\n/g, '\n');
+        };
 
         // Generate initial code preview
         let initialCode = '';
         try {
-          const result = snippet.convert(initialTarget as any, initialClient);
-          initialCode = Array.isArray(result) ? result.join('\n') : result || '';
+          initialCode = generateSnippet(initialTarget, initialClient);
         } catch {
           initialCode = '// Error generating snippet';
         }
@@ -230,8 +266,7 @@ export const plugin: PluginDefinition = {
                 );
                 let code: string;
                 try {
-                  const result = snippet.convert(targetKey as any, clientKey);
-                  code = Array.isArray(result) ? result.join('\n') : result || '';
+                  code = generateSnippet(targetKey, clientKey);
                 } catch {
                   code = '// Error generating snippet';
                 }
@@ -255,8 +290,7 @@ export const plugin: PluginDefinition = {
 
           // Generate snippet for the selected language
           try {
-            const code = snippet.convert(selectedTarget as any, selectedClient);
-            const codeText = Array.isArray(code) ? code.join('\n') : code || '';
+            const codeText = generateSnippet(selectedTarget, selectedClient);
             await ctx.clipboard.copyText(codeText);
             await ctx.toast.show({
               message: 'Code snippet copied to clipboard',

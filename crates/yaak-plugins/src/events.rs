@@ -951,6 +951,21 @@ pub enum EditorLanguage {
     Xml,
     Graphql,
     Markdown,
+    C,
+    Clojure,
+    Csharp,
+    Go,
+    Java,
+    Kotlin,
+    ObjectiveC,
+    Ocaml,
+    Php,
+    Powershell,
+    Python,
+    R,
+    Ruby,
+    Shell,
+    Swift,
 }
 
 impl Default for EditorLanguage {
