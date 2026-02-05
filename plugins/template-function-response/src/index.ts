@@ -55,6 +55,7 @@ const requestArg: FormInput = {
   type: 'http_request',
   name: 'request',
   label: 'Request',
+  defaultValue: '', // Make it not select the active one by default
 };
 
 export const plugin: PluginDefinition = {
