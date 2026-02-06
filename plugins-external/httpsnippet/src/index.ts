@@ -1,4 +1,4 @@
-import { type HarRequest, availableTargets, HTTPSnippet } from '@readme/httpsnippet';
+import { availableTargets, type HarRequest, HTTPSnippet } from '@readme/httpsnippet';
 import type { EditorLanguage, HttpRequest, PluginDefinition } from '@yaakapp/api';
 
 // Get all available targets and build select options
@@ -46,7 +46,6 @@ function getDefaultClient(targetKey: string): string {
 
 // Defaults
 const defaultTarget = 'javascript';
-const defaultClient = 'fetch';
 
 // Map httpsnippet target key to editor language for syntax highlighting
 const editorLanguageMap: Record<string, EditorLanguage> = {
@@ -200,9 +199,9 @@ export const plugin: PluginDefinition = {
 
         // Get previously selected language or use defaults
         const storedTarget = await ctx.store.get<string>('selectedTarget');
-        const storedClient = await ctx.store.get<string>('selectedClient');
         const initialTarget = storedTarget || defaultTarget;
-        const initialClient = storedClient || defaultClient;
+        const storedClient = await ctx.store.get<string>(`selectedClient:${initialTarget}`);
+        const initialClient = storedClient || getDefaultClient(initialTarget);
 
         // Create snippet generator
         const snippet = new HTTPSnippet(harRequest);
@@ -290,7 +289,7 @@ export const plugin: PluginDefinition = {
             result[`client-${selectedTarget}`] || getDefaultClient(selectedTarget),
           );
           await ctx.store.set('selectedTarget', selectedTarget);
-          await ctx.store.set('selectedClient', selectedClient);
+          await ctx.store.set(`selectedClient:${selectedTarget}`, selectedClient);
 
           // Generate snippet for the selected language
           try {

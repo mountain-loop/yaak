@@ -705,8 +705,9 @@ export class PluginInstance {
                   resolve({ values } as PromptFormResponse);
                 } else {
                   // Intermediate value change — resolve dynamic inputs and send back
+                  // Skip empty values (fired on initial mount before user interaction)
                   const storedInputs = this.#pendingDynamicForms.get(eventToSend.id);
-                  if (storedInputs && values) {
+                  if (storedInputs && values && Object.keys(values).length > 0) {
                     const ctx = this.#newCtx(context);
                     const callArgs: CallPromptFormDynamicArgs = { values };
                     applyDynamicFormInput(ctx, storedInputs, callArgs)
