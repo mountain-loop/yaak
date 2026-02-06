@@ -66,7 +66,9 @@ export type DeleteModelRequest = { model: string, id: string, };
 
 export type DeleteModelResponse = { model: AnyModel, };
 
-export type EditorLanguage = "text" | "javascript" | "json" | "html" | "xml" | "graphql" | "markdown" | "c" | "clojure" | "csharp" | "go" | "java" | "kotlin" | "objective_c" | "ocaml" | "php" | "powershell" | "python" | "r" | "ruby" | "shell" | "swift";
+export type DialogSize = "sm" | "md" | "lg" | "full" | "dynamic";
+
+export type EditorLanguage = "text" | "javascript" | "json" | "html" | "xml" | "graphql" | "markdown" | "c" | "clojure" | "csharp" | "go" | "http" | "java" | "kotlin" | "objective_c" | "ocaml" | "php" | "powershell" | "python" | "r" | "ruby" | "shell" | "swift";
 
 export type EmptyPayload = {};
 
@@ -480,11 +482,9 @@ label: string, title?: string, size?: WindowSize, dataDirKey?: string, };
 
 export type PluginContext = { id: string, label: string | null, workspaceId: string | null, };
 
-export type PromptFormRequest = { id: string, title: string, description?: string, inputs: Array<FormInput>, confirmText?: string, cancelText?: string, size?: PromptFormSize, };
+export type PromptFormRequest = { id: string, title: string, description?: string, inputs: Array<FormInput>, confirmText?: string, cancelText?: string, size?: DialogSize, };
 
 export type PromptFormResponse = { values: { [key in string]?: JsonPrimitive } | null, done?: boolean, };
-
-export type PromptFormSize = "sm" | "md" | "lg" | "full" | "dynamic";
 
 export type PromptTextRequest = { id: string, title: string, label: string, description?: string, defaultValue?: string, placeholder?: string, 
 /**

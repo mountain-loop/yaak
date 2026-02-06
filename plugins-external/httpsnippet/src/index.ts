@@ -4,11 +4,16 @@ import type { EditorLanguage, HttpRequest, PluginDefinition } from '@yaakapp/api
 // Get all available targets and build select options
 const targets = availableTargets();
 
+// Targets to exclude from the language list
+const excludedTargets = new Set(['json']);
+
 // Build language (target) options
-const languageOptions = targets.map((target) => ({
-  label: target.title,
-  value: target.key,
-}));
+const languageOptions = targets
+  .filter((target) => !excludedTargets.has(target.key))
+  .map((target) => ({
+    label: target.title,
+    value: target.key,
+  }));
 
 // Preferred clients per target (shown first in the list)
 const preferredClients: Record<string, string> = {
@@ -49,10 +54,9 @@ const editorLanguageMap: Record<string, EditorLanguage> = {
   clojure: 'clojure',
   csharp: 'csharp',
   go: 'go',
-  http: 'text',
+  http: 'http',
   java: 'java',
   javascript: 'javascript',
-  json: 'json',
   kotlin: 'kotlin',
   node: 'javascript',
   objc: 'objective_c',

@@ -26,6 +26,7 @@ import {
 } from '@codemirror/language';
 import { c, csharp, kotlin, objectiveC } from '@codemirror/legacy-modes/mode/clike';
 import { clojure } from '@codemirror/legacy-modes/mode/clojure';
+import { http } from '@codemirror/legacy-modes/mode/http';
 import { oCaml } from '@codemirror/legacy-modes/mode/mllike';
 import { powerShell } from '@codemirror/legacy-modes/mode/powershell';
 import { r } from '@codemirror/legacy-modes/mode/r';
@@ -119,6 +120,7 @@ const syntaxExtensions: Record<
   clojure: legacyLang(clojure),
   csharp: legacyLang(csharp),
   go: go,
+  http: legacyLang(http),
   java: java,
   kotlin: legacyLang(kotlin),
   objective_c: legacyLang(objectiveC),

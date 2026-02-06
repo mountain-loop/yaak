@@ -588,13 +588,13 @@ pub struct PromptFormRequest {
     #[ts(optional)]
     pub cancel_text: Option<String>,
     #[ts(optional)]
-    pub size: Option<PromptFormSize>,
+    pub size: Option<DialogSize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_events.ts")]
-pub enum PromptFormSize {
+pub enum DialogSize {
     Sm,
     Md,
     Lg,
@@ -955,6 +955,7 @@ pub enum EditorLanguage {
     Clojure,
     Csharp,
     Go,
+    Http,
     Java,
     Kotlin,
     ObjectiveC,

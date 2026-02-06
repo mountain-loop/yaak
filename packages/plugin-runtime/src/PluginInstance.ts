@@ -307,7 +307,7 @@ export class PluginInstance {
         const replyPayload: InternalEventPayload = {
           type: 'get_template_function_config_response',
           pluginRefId: this.#workerData.pluginRefId,
-          function: { ...fn, args: resolvedArgs },
+          function: { ...fn, args: stripDynamicCallbacks(resolvedArgs) },
         };
         this.#sendPayload(context, replyPayload, replyId);
         return;
@@ -334,7 +334,7 @@ export class PluginInstance {
 
         const replyPayload: InternalEventPayload = {
           type: 'get_http_authentication_config_response',
-          args: resolvedArgs,
+          args: stripDynamicCallbacks(resolvedArgs),
           actions: resolvedActions,
           pluginRefId: this.#workerData.pluginRefId,
         };
@@ -672,8 +672,15 @@ export class PluginInstance {
           return reply.value;
         },
         form: async (args) => {
-          // Strip dynamic callbacks before serializing (they can't cross the wire)
-          const strippedInputs = stripDynamicCallbacks(args.inputs);
+          // Resolve dynamic callbacks on initial inputs using default values
+          const defaults = applyFormInputDefaults(args.inputs, {});
+          const callArgs: CallPromptFormDynamicArgs = { values: defaults };
+          const resolvedInputs = await applyDynamicFormInput(
+            this.#newCtx(context),
+            args.inputs,
+            callArgs,
+          );
+          const strippedInputs = stripDynamicCallbacks(resolvedInputs);
 
           // Build the event manually so we can get the event ID for keying
           const eventToSend = this.#buildEventToSend(
