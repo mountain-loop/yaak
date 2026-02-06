@@ -11,8 +11,7 @@
   },
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev",
-    "test": "vitest --run tests"
+    "dev": "yaakcli dev"
   },
   "dependencies": {
     "@readme/httpsnippet": "^11.0.0"
