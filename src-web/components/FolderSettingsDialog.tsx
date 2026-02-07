@@ -10,12 +10,16 @@ import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { useModelAncestors } from '../hooks/useModelAncestors';
+import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
+import { hideDialog } from '../lib/dialog';
+import { CopyIconButton } from './CopyIconButton';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
 import { Icon } from './core/Icon';
+import { InlineCode } from './core/InlineCode';
 import { Input } from './core/Input';
 import { Link } from './core/Link';
-import { VStack } from './core/Stacks';
+import { HStack, VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
@@ -117,7 +121,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
           <HttpAuthenticationEditor model={folder} />
         </TabContent>
         <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-4">
-          <VStack space={3} className="pb-3 h-full">
+          <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] gap-3 pb-3 h-full">
             <Input
               label="Folder Name"
               defaultValue={folder.name}
@@ -132,7 +136,32 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
               stateKey={`description.${folder.id}`}
               onChange={(description) => patchModel(folder, { description })}
             />
-          </VStack>
+            <HStack alignItems="center" justifyContent="between" className="w-full">
+              <Button
+                onClick={async () => {
+                  const didDelete = await deleteModelWithConfirm(folder);
+                  if (didDelete) {
+                    hideDialog('folder-settings');
+                  }
+                }}
+                color="danger"
+                variant="border"
+                size="xs"
+              >
+                Delete Folder
+              </Button>
+              <InlineCode className="flex gap-1 items-center text-primary pl-2.5">
+                {folder.id}
+                <CopyIconButton
+                  className="opacity-70 !text-primary"
+                  size="2xs"
+                  iconSize="sm"
+                  title="Copy folder ID"
+                  text={folder.id}
+                />
+              </InlineCode>
+            </HStack>
+          </div>
         </TabContent>
         <TabContent value={TAB_HEADERS} className="overflow-y-auto h-full px-4">
           <HeadersEditor
