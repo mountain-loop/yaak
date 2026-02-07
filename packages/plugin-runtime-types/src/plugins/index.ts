@@ -13,7 +13,7 @@ import type { WorkspaceActionPlugin } from './WorkspaceActionPlugin';
 
 export type { Context };
 export type { DynamicAuthenticationArg } from './AuthenticationPlugin';
-export type { CallPromptFormDynamicArgs, DynamicPromptFormArg } from './PromptFormPlugin';
+export type { CallPromptFormDynamicArgs, DynamicPromptFormArg } from './Context';
 export type { DynamicTemplateFunctionArg } from './TemplateFunctionPlugin';
 export type { TemplateFunctionPlugin };
 export type { FolderActionPlugin } from './FolderActionPlugin';

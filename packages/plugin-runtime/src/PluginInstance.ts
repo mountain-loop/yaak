@@ -970,7 +970,7 @@ export class PluginInstance {
   }
 }
 
-function stripDynamicCallbacks(inputs: DynamicPromptFormArg[]): FormInput[] {
+function stripDynamicCallbacks(inputs: { dynamic?: unknown }[]): FormInput[] {
   return inputs.map((input) => {
     // biome-ignore lint/suspicious/noExplicitAny: stripping dynamic from union type
     const { dynamic, ...rest } = input as any;
