@@ -49,7 +49,7 @@ export type HttpResponseEvent = { model: "http_response_event", id: string, crea
  * This mirrors `yaak_http::sender::HttpResponseEvent` but with serde support.
  * The `From` impl is in yaak-http to avoid circular dependencies.
  */
-export type HttpResponseEventData = { "type": "setting", name: string, value: string, } | { "type": "info", message: string, } | { "type": "redirect", url: string, status: number, behavior: string, } | { "type": "send_url", method: string, path: string, } | { "type": "receive_url", version: string, status: string, } | { "type": "header_up", name: string, value: string, } | { "type": "header_down", name: string, value: string, } | { "type": "chunk_sent", bytes: number, } | { "type": "chunk_received", bytes: number, } | { "type": "dns_resolved", hostname: string, addresses: Array<string>, duration: bigint, overridden: boolean, };
+export type HttpResponseEventData = { "type": "setting", name: string, value: string, } | { "type": "info", message: string, } | { "type": "redirect", url: string, status: number, behavior: string, } | { "type": "send_url", method: string, scheme: string, username: string, password: string, host: string, port: number, path: string, query: string, fragment: string, } | { "type": "receive_url", version: string, status: string, } | { "type": "header_up", name: string, value: string, } | { "type": "header_down", name: string, value: string, } | { "type": "chunk_sent", bytes: number, } | { "type": "chunk_received", bytes: number, } | { "type": "dns_resolved", hostname: string, addresses: Array<string>, duration: bigint, overridden: boolean, };
 
 export type HttpResponseHeader = { name: string, value: string, };
 
