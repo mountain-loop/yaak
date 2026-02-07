@@ -1,7 +1,7 @@
 {
   "name": "@yaak/httpsnippet",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.3",
   "displayName": "HTTP Snippet",
   "description": "Generate code snippets for HTTP requests in various languages and frameworks",
   "minYaakVersion": "2026.2.0-beta.10",
