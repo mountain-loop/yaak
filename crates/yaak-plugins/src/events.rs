@@ -166,6 +166,9 @@ pub enum InternalEventPayload {
     ListWorkspacesRequest(ListWorkspacesRequest),
     ListWorkspacesResponse(ListWorkspacesResponse),
 
+    GetWorkspaceMetaRequest(GetWorkspaceMetaRequest),
+    GetWorkspaceMetaResponse(GetWorkspaceMetaResponse),
+
     GetHttpRequestByIdRequest(GetHttpRequestByIdRequest),
     GetHttpRequestByIdResponse(GetHttpRequestByIdResponse),
 
@@ -617,6 +620,19 @@ pub struct WindowInfoResponse {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct ListWorkspacesRequest {}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GetWorkspaceMetaRequest {}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GetWorkspaceMetaResponse {
+    pub id: String,
+    pub setting_sync_dir: Option<String>,
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
