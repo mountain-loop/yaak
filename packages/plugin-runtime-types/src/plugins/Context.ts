@@ -1,10 +1,12 @@
 import type {
   FindHttpResponsesRequest,
   FindHttpResponsesResponse,
+  FormInput,
   GetCookieValueRequest,
   GetCookieValueResponse,
   GetHttpRequestByIdRequest,
   GetHttpRequestByIdResponse,
+  JsonPrimitive,
   ListCookieNamesResponse,
   ListFoldersRequest,
   ListFoldersResponse,
@@ -27,6 +29,39 @@ import type {
 } from '../bindings/gen_events.ts';
 import type { Folder, HttpRequest } from '../bindings/gen_models.ts';
 import type { JsonValue } from '../bindings/serde_json/JsonValue';
+import type { MaybePromise } from '../helpers';
+
+export type CallPromptFormDynamicArgs = {
+  values: { [key in string]?: JsonPrimitive };
+};
+
+type AddDynamicMethod<T> = {
+  dynamic?: (
+    ctx: Context,
+    args: CallPromptFormDynamicArgs,
+  ) => MaybePromise<Partial<T> | null | undefined>;
+};
+
+// biome-ignore lint/suspicious/noExplicitAny: distributive conditional type pattern
+type AddDynamic<T> = T extends any
+  ? T extends { inputs?: FormInput[] }
+    ? Omit<T, 'inputs'> & {
+        inputs: Array<AddDynamic<FormInput>>;
+        dynamic?: (
+          ctx: Context,
+          args: CallPromptFormDynamicArgs,
+        ) => MaybePromise<
+          Partial<Omit<T, 'inputs'> & { inputs: Array<AddDynamic<FormInput>> }> | null | undefined
+        >;
+      }
+    : T & AddDynamicMethod<T>
+  : never;
+
+export type DynamicPromptFormArg = AddDynamic<FormInput>;
+
+type DynamicPromptFormRequest = Omit<PromptFormRequest, 'inputs'> & {
+  inputs: DynamicPromptFormArg[];
+};
 
 export type WorkspaceHandle = Pick<WorkspaceInfo, 'id' | 'name'>;
 
@@ -39,7 +74,7 @@ export interface Context {
   };
   prompt: {
     text(args: PromptTextRequest): Promise<PromptTextResponse['value']>;
-    form(args: PromptFormRequest): Promise<PromptFormResponse['values']>;
+    form(args: DynamicPromptFormRequest): Promise<PromptFormResponse['values']>;
   };
   store: {
     set<T>(key: string, value: T): Promise<void>;

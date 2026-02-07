@@ -1,8 +1,20 @@
-import type { Context, DynamicAuthenticationArg, DynamicTemplateFunctionArg } from '@yaakapp/api';
+import type {
+  CallPromptFormDynamicArgs,
+  Context,
+  DynamicAuthenticationArg,
+  DynamicPromptFormArg,
+  DynamicTemplateFunctionArg,
+} from '@yaakapp/api';
 import type {
   CallHttpAuthenticationActionArgs,
   CallTemplateFunctionArgs,
 } from '@yaakapp-internal/plugins';
+
+type AnyDynamicArg = DynamicTemplateFunctionArg | DynamicAuthenticationArg | DynamicPromptFormArg;
+type AnyCallArgs =
+  | CallTemplateFunctionArgs
+  | CallHttpAuthenticationActionArgs
+  | CallPromptFormDynamicArgs;
 
 export async function applyDynamicFormInput(
   ctx: Context,
@@ -18,30 +30,40 @@ export async function applyDynamicFormInput(
 
 export async function applyDynamicFormInput(
   ctx: Context,
-  args: (DynamicTemplateFunctionArg | DynamicAuthenticationArg)[],
-  callArgs: CallTemplateFunctionArgs | CallHttpAuthenticationActionArgs,
-): Promise<(DynamicTemplateFunctionArg | DynamicAuthenticationArg)[]> {
-  const resolvedArgs: (DynamicTemplateFunctionArg | DynamicAuthenticationArg)[] = [];
+  args: DynamicPromptFormArg[],
+  callArgs: CallPromptFormDynamicArgs,
+): Promise<DynamicPromptFormArg[]>;
+
+export async function applyDynamicFormInput(
+  ctx: Context,
+  args: AnyDynamicArg[],
+  callArgs: AnyCallArgs,
+): Promise<AnyDynamicArg[]> {
+  const resolvedArgs: AnyDynamicArg[] = [];
   for (const { dynamic, ...arg } of args) {
     const dynamicResult =
       typeof dynamic === 'function'
         ? await dynamic(
             ctx,
-            callArgs as CallTemplateFunctionArgs & CallHttpAuthenticationActionArgs,
+            callArgs as CallTemplateFunctionArgs &
+              CallHttpAuthenticationActionArgs &
+              CallPromptFormDynamicArgs,
           )
         : undefined;
 
     const newArg = {
       ...arg,
       ...dynamicResult,
-    } as DynamicTemplateFunctionArg | DynamicAuthenticationArg;
+    } as AnyDynamicArg;
 
     if ('inputs' in newArg && Array.isArray(newArg.inputs)) {
       try {
         newArg.inputs = await applyDynamicFormInput(
           ctx,
           newArg.inputs as DynamicTemplateFunctionArg[],
-          callArgs as CallTemplateFunctionArgs & CallHttpAuthenticationActionArgs,
+          callArgs as CallTemplateFunctionArgs &
+            CallHttpAuthenticationActionArgs &
+            CallPromptFormDynamicArgs,
         );
       } catch (e) {
         console.error('Failed to apply dynamic form input', e);

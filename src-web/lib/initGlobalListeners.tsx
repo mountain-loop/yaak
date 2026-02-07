@@ -1,6 +1,12 @@
 import { emit } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import type { InternalEvent, ShowToastRequest } from '@yaakapp-internal/plugins';
+import { debounce } from '@yaakapp-internal/lib';
+import type {
+  FormInput,
+  InternalEvent,
+  JsonPrimitive,
+  ShowToastRequest,
+} from '@yaakapp-internal/plugins';
 import { updateAllPlugins } from '@yaakapp-internal/plugins';
 import type {
   PluginUpdateNotification,
@@ -32,6 +38,9 @@ export function initGlobalListeners() {
 
   listenToTauriEvent('settings', () => openSettings.mutate(null));
 
+  // Track active dynamic form dialogs so follow-up input updates can reach them
+  const activeForms = new Map<string, (inputs: FormInput[]) => void>();
+
   // Listen for plugin events
   listenToTauriEvent<InternalEvent>('plugin_event', async ({ payload: event }) => {
     if (event.payload.type === 'prompt_text_request') {
@@ -49,26 +58,47 @@ export function initGlobalListeners() {
       };
       await emit(event.id, result);
     } else if (event.payload.type === 'prompt_form_request') {
+      if (event.replyId != null) {
+        // Follow-up update from plugin runtime — update the active dialog's inputs
+        const updateInputs = activeForms.get(event.replyId);
+        if (updateInputs) {
+          updateInputs(event.payload.inputs);
+        }
+        return;
+      }
+
+      // Initial request — show the dialog with bidirectional support
+      const emitFormResponse = (values: Record<string, JsonPrimitive> | null, done: boolean) => {
+        const result: InternalEvent = {
+          id: generateId(),
+          replyId: event.id,
+          pluginName: event.pluginName,
+          pluginRefId: event.pluginRefId,
+          context: event.context,
+          payload: {
+            type: 'prompt_form_response',
+            values,
+            done,
+          },
+        };
+        emit(event.id, result);
+      };
+
       const values = await showPromptForm({
         id: event.payload.id,
         title: event.payload.title,
         description: event.payload.description,
+        size: event.payload.size,
         inputs: event.payload.inputs,
         confirmText: event.payload.confirmText,
         cancelText: event.payload.cancelText,
+        onValuesChange: debounce((values) => emitFormResponse(values, false), 150),
+        onInputsUpdated: (cb) => activeForms.set(event.id, cb),
       });
-      const result: InternalEvent = {
-        id: generateId(),
-        replyId: event.id,
-        pluginName: event.pluginName,
-        pluginRefId: event.pluginRefId,
-        context: event.context,
-        payload: {
-          type: 'prompt_form_response',
-          values,
-        },
-      };
-      await emit(event.id, result);
+
+      // Clean up and send final response
+      activeForms.delete(event.id);
+      emitFormResponse(values, true);
     }
   });
 

@@ -12,7 +12,7 @@ use chrono::Utc;
 use cookie::Cookie;
 use log::error;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Listener, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
 use yaak_crypto::manager::EncryptionManager;
@@ -59,7 +59,55 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
         }
         InternalEventPayload::PromptFormRequest(_) => {
             let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
-            Ok(call_frontend(&window, event).await)
+            if event.reply_id.is_some() {
+                // Follow-up update from plugin runtime with resolved inputs — forward to frontend
+                window.emit_to(window.label(), "plugin_event", event.clone())?;
+                Ok(None)
+            } else {
+                // Initial request — set up bidirectional communication
+                window.emit_to(window.label(), "plugin_event", event.clone()).unwrap();
+
+                let event_id = event.id.clone();
+                let plugin_handle = plugin_handle.clone();
+                let plugin_context = plugin_context.clone();
+                let window = window.clone();
+
+                // Spawn async task to handle bidirectional form communication
+                tauri::async_runtime::spawn(async move {
+                    let (tx, mut rx) = tokio::sync::mpsc::channel::<InternalEvent>(128);
+
+                    // Listen for replies from the frontend
+                    let listener_id = window.listen(event_id, move |ev: tauri::Event| {
+                        let resp: InternalEvent = serde_json::from_str(ev.payload()).unwrap();
+                        let _ = tx.try_send(resp);
+                    });
+
+                    // Forward each reply to the plugin runtime
+                    while let Some(resp) = rx.recv().await {
+                        let is_done = matches!(
+                            &resp.payload,
+                            InternalEventPayload::PromptFormResponse(r) if r.done.unwrap_or(false)
+                        );
+
+                        let event_to_send = plugin_handle.build_event_to_send(
+                            &plugin_context,
+                            &resp.payload,
+                            Some(resp.reply_id.unwrap_or_default()),
+                        );
+                        if let Err(e) = plugin_handle.send(&event_to_send).await {
+                            log::warn!("Failed to forward form response to plugin: {:?}", e);
+                        }
+
+                        if is_done {
+                            break;
+                        }
+                    }
+
+                    window.unlisten(listener_id);
+                });
+
+                Ok(None)
+            }
         }
         InternalEventPayload::FindHttpResponsesRequest(req) => {
             let http_responses = app_handle

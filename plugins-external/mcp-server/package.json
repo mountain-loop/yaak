@@ -1,10 +1,10 @@
 {
   "name": "@yaak/mcp-server",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.2.1",
   "displayName": "MCP Server",
   "description": "Expose Yaak functionality via Model Context Protocol",
-  "minYaakVersion": "2025.10.0-beta.6",
+  "minYaakVersion": "2026.1.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/mountain-loop/yaak.git",

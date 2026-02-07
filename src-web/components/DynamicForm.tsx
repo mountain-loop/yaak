@@ -360,8 +360,9 @@ function EditorArg({
         className={classNames(
           'border border-border rounded-md overflow-hidden px-2 py-1',
           'focus-within:border-border-focus',
-          'max-h-[10rem]', // So it doesn't take up too much space
+          !arg.rows && 'max-h-[10rem]', // So it doesn't take up too much space
         )}
+        style={arg.rows ? { height: `${arg.rows * 1.4 + 0.75}rem` } : undefined}
       >
         <Editor
           id={id}
