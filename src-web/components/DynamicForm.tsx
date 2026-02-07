@@ -317,7 +317,7 @@ function TextArg({
     autocompleteFunctions,
     autocompleteVariables,
   };
-  if (autocompleteVariables || autocompleteFunctions) {
+  if (autocompleteVariables || autocompleteFunctions || arg.completionOptions) {
     return <Input {...props} />;
   }
   return <PlainInput {...props} />;
