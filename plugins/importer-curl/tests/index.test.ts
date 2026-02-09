@@ -112,9 +112,28 @@ describe('importer-curl', () => {
     });
   });
 
+  test('Imports with Windows CRLF line endings', () => {
+    expect(
+      convertCurl('curl \\\r\n  -X POST \\\r\n  https://yaak.app'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({ url: 'https://yaak.app', method: 'POST' }),
+        ],
+      },
+    });
+  });
+
+  test('Throws on malformed quotes', () => {
+    expect(() =>
+      convertCurl('curl -X POST -F "a=aaa" -F b=bbb" https://yaak.app'),
+    ).toThrow();
+  });
+
   test('Imports form data', () => {
     expect(
-      convertCurl('curl -X POST -F "a=aaa" -F b=bbb" -F f=@filepath https://yaak.app'),
+      convertCurl('curl -X POST -F "a=aaa" -F b=bbb -F f=@filepath https://yaak.app'),
     ).toEqual({
       resources: {
         workspaces: [baseWorkspace()],
@@ -470,6 +489,130 @@ describe('importer-curl', () => {
                 { name: 'captcha', file: 'test.xlsx', enabled: true },
               ],
             },
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Imports JSON body with newlines in $quotes', () => {
+    expect(
+      convertCurl(
+        `curl 'https://yaak.app' -H 'Content-Type: application/json' --data-raw $'{\\n  "foo": "bar",\\n  "baz": "qux"\\n}' -X POST`,
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            headers: [{ name: 'Content-Type', value: 'application/json', enabled: true }],
+            bodyType: 'application/json',
+            body: { text: '{\n  "foo": "bar",\n  "baz": "qux"\n}' },
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Handles double-quoted string ending with even backslashes before semicolon', () => {
+    // "C:\\" has two backslashes which escape each other, so the closing " is real.
+    // The ; after should split into a second command.
+    expect(
+      convertCurl(
+        'curl -d "C:\\\\" https://yaak.app;curl https://example.com',
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            bodyType: 'application/x-www-form-urlencoded',
+            body: {
+              form: [{ name: 'C:\\', value: '', enabled: true }],
+            },
+            headers: [
+              {
+                name: 'Content-Type',
+                value: 'application/x-www-form-urlencoded',
+                enabled: true,
+              },
+            ],
+          }),
+          baseRequest({ url: 'https://example.com' }),
+        ],
+      },
+    });
+  });
+
+  test('Handles $quoted string ending with a literal backslash before semicolon', () => {
+    // $'C:\\\\' has two backslashes which become one literal backslash.
+    // The closing ' must not be misinterpreted as escaped.
+    // The ; after should split into a second command.
+    expect(
+      convertCurl(
+        "curl -d $'C:\\\\' https://yaak.app;curl https://example.com",
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            bodyType: 'application/x-www-form-urlencoded',
+            body: {
+              form: [{ name: 'C:\\', value: '', enabled: true }],
+            },
+            headers: [
+              {
+                name: 'Content-Type',
+                value: 'application/x-www-form-urlencoded',
+                enabled: true,
+              },
+            ],
+          }),
+          baseRequest({ url: 'https://example.com' }),
+        ],
+      },
+    });
+  });
+
+  test('Imports $quoted header with escaped single quotes', () => {
+    expect(
+      convertCurl(
+        `curl https://yaak.app -H $'X-Custom: it\\'s a test'`,
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            headers: [{ name: 'X-Custom', value: "it's a test", enabled: true }],
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Does not split on escaped semicolon outside quotes', () => {
+    // In shell, \; is a literal semicolon and should not split commands.
+    // This should be treated as a single curl command with the URL "https://yaak.app?a=1;b=2"
+    expect(
+      convertCurl('curl https://yaak.app?a=1\\;b=2'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            urlParameters: [
+              { name: 'a', value: '1;b=2', enabled: true },
+            ],
           }),
         ],
       },
