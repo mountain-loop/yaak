@@ -10,9 +10,6 @@
     "test": "vitest --run tests"
   },
   "dependencies": {
-    "shell-quote": "^1.8.1"
-  },
-  "devDependencies": {
-    "@types/shell-quote": "^1.7.5"
+    "shlex": "^3.0.0"
   }
 }

@@ -112,6 +112,19 @@ describe('importer-curl', () => {
     });
   });
 
+  test('Imports with Windows CRLF line endings', () => {
+    expect(
+      convertCurl('curl \\\r\n  -X POST \\\r\n  https://yaak.app'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({ url: 'https://yaak.app', method: 'POST' }),
+        ],
+      },
+    });
+  });
+
   test('Imports form data', () => {
     expect(
       convertCurl('curl -X POST -F "a=aaa" -F b=bbb" -F f=@filepath https://yaak.app'),
@@ -470,6 +483,45 @@ describe('importer-curl', () => {
                 { name: 'captcha', file: 'test.xlsx', enabled: true },
               ],
             },
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Imports JSON body with newlines in $quotes', () => {
+    expect(
+      convertCurl(
+        `curl 'https://yaak.app' -H 'Content-Type: application/json' --data-raw $'{\\n  "foo": "bar",\\n  "baz": "qux"\\n}' -X POST`,
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            headers: [{ name: 'Content-Type', value: 'application/json', enabled: true }],
+            bodyType: 'application/json',
+            body: { text: '{\n  "foo": "bar",\n  "baz": "qux"\n}' },
+          }),
+        ],
+      },
+    });
+  });
+
+  test('Imports $quoted header with escaped single quotes', () => {
+    expect(
+      convertCurl(
+        `curl https://yaak.app -H $'X-Custom: it\\'s a test'`,
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            headers: [{ name: 'X-Custom', value: "it's a test", enabled: true }],
           }),
         ],
       },
