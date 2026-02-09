@@ -599,6 +599,26 @@ describe('importer-curl', () => {
     });
   });
 
+  test('Does not split on escaped semicolon outside quotes', () => {
+    // In shell, \; is a literal semicolon and should not split commands.
+    // This should be treated as a single curl command with the URL "https://yaak.app?a=1;b=2"
+    expect(
+      convertCurl('curl https://yaak.app?a=1\\;b=2'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            urlParameters: [
+              { name: 'a', value: '1;b=2', enabled: true },
+            ],
+          }),
+        ],
+      },
+    });
+  });
+
   test('Imports multipart form data with text-only fields from --data-raw', () => {
     const curlCommand = `curl 'http://example.com/api' \
   -H 'Content-Type: multipart/form-data; boundary=----FormBoundary123' \

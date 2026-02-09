@@ -120,8 +120,8 @@ function splitCommands(rawData: string): string[] {
 
     const inQuote = inSingleQuote || inDoubleQuote || inDollarQuote;
 
-    // Split on ;, newline, or CRLF when not inside quotes
-    if (!inQuote && (ch === ';' || ch === '\n' || (ch === '\r' && next === '\n'))) {
+    // Split on ;, newline, or CRLF when not inside quotes and not escaped
+    if (!inQuote && !isEscaped(i) && (ch === ';' || ch === '\n' || (ch === '\r' && next === '\n'))) {
       if (ch === '\r') i++; // Skip the \n in \r\n
       if (current.trim()) {
         commands.push(current.trim());
