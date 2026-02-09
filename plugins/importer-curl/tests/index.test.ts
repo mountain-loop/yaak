@@ -125,9 +125,15 @@ describe('importer-curl', () => {
     });
   });
 
+  test('Throws on malformed quotes', () => {
+    expect(() =>
+      convertCurl('curl -X POST -F "a=aaa" -F b=bbb" https://yaak.app'),
+    ).toThrow();
+  });
+
   test('Imports form data', () => {
     expect(
-      convertCurl('curl -X POST -F "a=aaa" -F b=bbb" -F f=@filepath https://yaak.app'),
+      convertCurl('curl -X POST -F "a=aaa" -F b=bbb -F f=@filepath https://yaak.app'),
     ).toEqual({
       resources: {
         workspaces: [baseWorkspace()],
@@ -505,6 +511,71 @@ describe('importer-curl', () => {
             bodyType: 'application/json',
             body: { text: '{\n  "foo": "bar",\n  "baz": "qux"\n}' },
           }),
+        ],
+      },
+    });
+  });
+
+  test('Handles double-quoted string ending with even backslashes before semicolon', () => {
+    // "C:\\" has two backslashes which escape each other, so the closing " is real.
+    // The ; after should split into a second command.
+    expect(
+      convertCurl(
+        'curl -d "C:\\\\" https://yaak.app;curl https://example.com',
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            bodyType: 'application/x-www-form-urlencoded',
+            body: {
+              form: [{ name: 'C:\\', value: '', enabled: true }],
+            },
+            headers: [
+              {
+                name: 'Content-Type',
+                value: 'application/x-www-form-urlencoded',
+                enabled: true,
+              },
+            ],
+          }),
+          baseRequest({ url: 'https://example.com' }),
+        ],
+      },
+    });
+  });
+
+  test('Handles $quoted string ending with a literal backslash before semicolon', () => {
+    // $'C:\\\\' has two backslashes which become one literal backslash.
+    // The closing ' must not be misinterpreted as escaped.
+    // The ; after should split into a second command.
+    expect(
+      convertCurl(
+        "curl -d $'C:\\\\' https://yaak.app;curl https://example.com",
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: 'https://yaak.app',
+            method: 'POST',
+            bodyType: 'application/x-www-form-urlencoded',
+            body: {
+              form: [{ name: 'C:\\', value: '', enabled: true }],
+            },
+            headers: [
+              {
+                name: 'Content-Type',
+                value: 'application/x-www-form-urlencoded',
+                enabled: true,
+              },
+            ],
+          }),
+          baseRequest({ url: 'https://example.com' }),
         ],
       },
     });

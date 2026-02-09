@@ -62,6 +62,18 @@ function splitCommands(rawData: string): string[] {
   // Join line continuations (backslash-newline, and backslash-CRLF for Windows)
   const joined = rawData.replace(/\\\r?\n/g, ' ');
 
+  // Count consecutive backslashes immediately before position i.
+  // An even count means the quote at i is NOT escaped; odd means it IS escaped.
+  function isEscaped(i: number): boolean {
+    let backslashes = 0;
+    let j = i - 1;
+    while (j >= 0 && joined[j] === '\\') {
+      backslashes++;
+      j--;
+    }
+    return backslashes % 2 !== 0;
+  }
+
   // Split on semicolons and newlines to separate commands
   const commands: string[] = [];
   let current = '';
@@ -89,7 +101,7 @@ function splitCommands(rawData: string): string[] {
       current += ch;
       continue;
     }
-    if (inDoubleQuote && ch === '"' && joined[i - 1] !== '\\') {
+    if (inDoubleQuote && ch === '"' && !isEscaped(i)) {
       inDoubleQuote = false;
       current += ch;
       continue;
@@ -100,7 +112,7 @@ function splitCommands(rawData: string): string[] {
       i++; // Skip the opening quote
       continue;
     }
-    if (inDollarQuote && ch === "'" && joined[i - 1] !== '\\') {
+    if (inDollarQuote && ch === "'" && !isEscaped(i)) {
       inDollarQuote = false;
       current += ch;
       continue;
@@ -128,37 +140,13 @@ function splitCommands(rawData: string): string[] {
   return commands;
 }
 
-/**
- * Tokenizes a single shell command string using shlex.
- * Falls back to basic whitespace splitting if shlex fails (e.g., unmatched quotes).
- */
-function tokenize(command: string): string[] {
-  try {
-    return split(command);
-  } catch {
-    // shlex is strict about unmatched quotes. Fall back to basic splitting
-    // and strip surrounding quotes that shell-like parsing would normally remove.
-    return command.split(/\s+/).filter(Boolean).map((token) => {
-      // Strip matching surrounding quotes
-      if (
-        (token.startsWith('"') && token.endsWith('"')) ||
-        (token.startsWith("'") && token.endsWith("'"))
-      ) {
-        return token.slice(1, -1);
-      }
-      // Strip unmatched quotes (e.g., from malformed input)
-      return token.replace(/['"]/g, '');
-    });
-  }
-}
-
 export function convertCurl(rawData: string) {
   if (!rawData.match(/^\s*curl /)) {
     return null;
   }
 
   const commands: string[][] = splitCommands(rawData).map((cmd) => {
-    const tokens = tokenize(cmd);
+    const tokens = split(cmd);
 
     // Break up squished arguments like `-XPOST` into `-X POST`
     return tokens.flatMap((token) => {
