@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.yaak.desktop</id>
+
+  <name>Yaak</name>
+  <summary>Play with APIs, intuitively</summary>
+
+  <developer id="app.yaak">
+    <name>Yaak</name>
+  </developer>
+
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+
+  <url type="homepage">https://yaak.app</url>
+  <url type="bugtracker">https://github.com/mountain-loop/yaak/issues</url>
+  <url type="vcs-browser">https://github.com/mountain-loop/yaak</url>
+
+  <description>
+    <p>
+      Yaak is a cross-platform desktop app for interacting with REST, GraphQL,
+      and gRPC APIs. It provides an intuitive interface for crafting requests,
+      organizing projects, and managing environments.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>REST, GraphQL, and gRPC support</li>
+      <li>Environment variables and template functions</li>
+      <li>Request chaining and dynamic values</li>
+      <li>OAuth 2.0, Bearer, Basic, API Key, AWS, JWT, and NTLM authentication</li>
+      <li>Import from cURL, Postman, Insomnia, and OpenAPI</li>
+      <li>Extensible plugin system</li>
+      <li>Git-friendly project storage</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">app.yaak.desktop.desktop</launchable>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#6e56cf</color>
+    <color type="primary" scheme_preference="dark">#7c66dc</color>
+  </branding>
+
+  <content_rating type="oars-1.1" />
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <!-- TODO: Screenshots are REQUIRED for Flathub submission.
+       Host images at a stable URL (e.g. on yaak.app or in a GitHub repo).
+       Recommended: 16:9 aspect ratio, at least 1248x702, PNG format.
+       See https://docs.flathub.org/docs/for-app-authors/metainfo-guidelines/quality-guidelines -->
+  <screenshots>
+    <screenshot type="default">
+      <caption>Crafting an API request</caption>
+      <image>https://yaak.app/static/screenshots/flatpak-main.png</image>
+    </screenshot>
+  </screenshots>
+
+  <releases>
+    <!-- Releases will be added as part of the Flathub update process -->
+  </releases>
+</component>
