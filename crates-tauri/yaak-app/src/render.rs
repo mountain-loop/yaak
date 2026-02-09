@@ -38,6 +38,9 @@ pub async fn render_grpc_request<T: TemplateCallback>(
 
     let mut metadata = Vec::new();
     for p in r.metadata.clone() {
+        if !p.enabled {
+            continue;
+        }
         metadata.push(HttpRequestHeader {
             enabled: p.enabled,
             name: parse_and_render(p.name.as_str(), vars, cb, &opt).await?,
@@ -119,6 +122,7 @@ pub async fn render_http_request<T: TemplateCallback>(
 
     let mut body = BTreeMap::new();
     for (k, v) in r.body.clone() {
+        let v = if k == "form" { strip_disabled_form_entries(v) } else { v };
         body.insert(k, render_json_value_raw(v, vars, cb, &opt).await?);
     }
 
@@ -160,4 +164,72 @@ pub async fn render_http_request<T: TemplateCallback>(
     let (url, url_parameters) = apply_path_placeholders(&url, &url_parameters);
 
     Ok(HttpRequest { url, url_parameters, headers, body, authentication, ..r.to_owned() })
+}
+
+/// Strip disabled entries from a JSON array of form objects.
+fn strip_disabled_form_entries(v: Value) -> Value {
+    match v {
+        Value::Array(items) => Value::Array(
+            items
+                .into_iter()
+                .filter(|item| item.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true))
+                .collect(),
+        ),
+        v => v,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_strip_disabled_form_entries() {
+        let input = json!([
+            {"enabled": true, "name": "foo", "value": "bar"},
+            {"enabled": false, "name": "disabled", "value": "gone"},
+            {"enabled": true, "name": "baz", "value": "qux"},
+        ]);
+        let result = strip_disabled_form_entries(input);
+        assert_eq!(
+            result,
+            json!([
+                {"enabled": true, "name": "foo", "value": "bar"},
+                {"enabled": true, "name": "baz", "value": "qux"},
+            ])
+        );
+    }
+
+    #[test]
+    fn test_strip_disabled_form_entries_all_disabled() {
+        let input = json!([
+            {"enabled": false, "name": "a", "value": "b"},
+            {"enabled": false, "name": "c", "value": "d"},
+        ]);
+        let result = strip_disabled_form_entries(input);
+        assert_eq!(result, json!([]));
+    }
+
+    #[test]
+    fn test_strip_disabled_form_entries_missing_enabled_defaults_to_kept() {
+        let input = json!([
+            {"name": "no_enabled_field", "value": "kept"},
+            {"enabled": false, "name": "disabled", "value": "gone"},
+        ]);
+        let result = strip_disabled_form_entries(input);
+        assert_eq!(
+            result,
+            json!([
+                {"name": "no_enabled_field", "value": "kept"},
+            ])
+        );
+    }
+
+    #[test]
+    fn test_strip_disabled_form_entries_non_array_passthrough() {
+        let input = json!("just a string");
+        let result = strip_disabled_form_entries(input.clone());
+        assert_eq!(result, input);
+    }
 }
