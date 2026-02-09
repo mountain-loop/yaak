@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <component type="desktop-application">
   <id>app.yaak.desktop</id>
 
@@ -27,7 +27,8 @@
       <li>REST, GraphQL, and gRPC support</li>
       <li>Environment variables and template functions</li>
       <li>Request chaining and dynamic values</li>
-      <li>OAuth 2.0, Bearer, Basic, API Key, AWS, JWT, and NTLM authentication</li>
+      <li
+            >OAuth 2.0, Bearer, Basic, API Key, AWS, JWT, and NTLM authentication</li>
       <li>Import from cURL, Postman, Insomnia, and OpenAPI</li>
       <li>Extensible plugin system</li>
       <li>Git-friendly project storage</li>
@@ -59,7 +60,8 @@
   <screenshots>
     <screenshot type="default">
       <caption>Crafting an API request</caption>
-      <image>https://yaak.app/static/screenshots/flatpak-main.png</image>
+      <image
+            >https://assets.yaak.app/uploads/screenshot-BLG1w_2310x1326.png</image>
     </screenshot>
   </screenshots>
 
