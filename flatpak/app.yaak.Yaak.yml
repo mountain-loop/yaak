@@ -12,12 +12,11 @@ finish-args:
   - --share=ipc
   - --device=dri
   - --share=network
-  - --socket=pulseaudio
-  - --socket=ssh-auth
-  - --socket=gpg-agent
-  - --talk-name=org.freedesktop.secrets
-  - --filesystem=host
-  - --filesystem=xdg-data/fonts:ro
+  - --socket=pulseaudio # Preview audio responses
+  - --socket=ssh-auth # Git SSH remotes
+  - --socket=gpg-agent # Git commit signing
+  - --talk-name=org.freedesktop.secrets # Keyring for encryption
+  - --filesystem=home # Git repos, ~/.gitconfig, ~/.ssh, etc
 
 modules:
   - name: git
