@@ -47,58 +47,27 @@ echo "  SHA256: $SHA_ARM64"
 echo ""
 echo "Updating manifest: $MANIFEST"
 
-# Use Python for reliable YAML-like replacement (avoids sed edge cases)
-python3 << PYEOF
-import re
+# Update URLs by matching the arch-specific deb filename
+sed -i "s|url: .*amd64\.deb|url: $BASE_URL/$DEB_AMD64|" "$MANIFEST"
+sed -i "s|url: .*arm64\.deb|url: $BASE_URL/$DEB_ARM64|" "$MANIFEST"
 
-with open("$MANIFEST", "r") as f:
-    content = f.read()
+# Update SHA256 hashes by finding the current ones and replacing
+OLD_SHA_AMD64=$(grep -A2 "amd64\.deb" "$MANIFEST" | grep sha256 | sed 's/.*"\(.*\)"/\1/')
+OLD_SHA_ARM64=$(grep -A2 "arm64\.deb" "$MANIFEST" | grep sha256 | sed 's/.*"\(.*\)"/\1/')
 
-# Replace x86_64 source block
-content = re.sub(
-    r'(dest-filename: yaak\.deb\n\s+url: )https://.*?\.deb(\n\s+sha256: )"[^"]*"(\n\s+only-arches:\n\s+- x86_64)',
-    rf'\g<1>${BASE_URL}/${DEB_AMD64}\2"${SHA_AMD64}"\3',
-    content,
-)
+sed -i "s|$OLD_SHA_AMD64|$SHA_AMD64|" "$MANIFEST"
+sed -i "s|$OLD_SHA_ARM64|$SHA_ARM64|" "$MANIFEST"
 
-# Replace aarch64 source block
-content = re.sub(
-    r'(dest-filename: yaak\.deb\n\s+url: )https://.*?\.deb(\n\s+sha256: )"[^"]*"(\n\s+only-arches:\n\s+- aarch64)',
-    rf'\g<1>${BASE_URL}/${DEB_ARM64}\2"${SHA_ARM64}"\3',
-    content,
-)
-
-with open("$MANIFEST", "w") as f:
-    f.write(content)
-
-print("  Manifest updated.")
-PYEOF
+echo "  Manifest updated."
 
 echo "Updating metainfo: $METAINFO"
 
 TODAY=$(date +%Y-%m-%d)
 
-python3 << PYEOF
-import re
+# Insert new release entry after <releases>
+sed -i "s|  <releases>|  <releases>\n    <release version=\"$VERSION\" date=\"$TODAY\" />|" "$METAINFO"
 
-with open("$METAINFO", "r") as f:
-    content = f.read()
-
-release_entry = f'  <releases>\n    <release version="${VERSION}" date="${TODAY}" />'
-
-# Replace existing <releases> block opening (add new release at the top)
-content = re.sub(
-    r'  <releases>\n(\s+<release )?',
-    release_entry + '\n    <release ' if '<release ' in content else release_entry + '\n',
-    content,
-    count=1,
-)
-
-with open("$METAINFO", "w") as f:
-    f.write(content)
-
-print("  Metainfo updated.")
-PYEOF
+echo "  Metainfo updated."
 
 echo ""
 echo "Done! Review the changes:"
