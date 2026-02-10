@@ -32,22 +32,30 @@ export interface GitCallbacks {
 
 const onSuccess = () => queryClient.invalidateQueries({ queryKey: ['git'] });
 
-export function useGit(dir: string, callbacks: GitCallbacks) {
+export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string) {
   const mutations = useMemo(() => gitMutations(dir, callbacks), [dir, callbacks]);
+  const fetchAll = useQuery<void, string>({
+    queryKey: ['git', 'fetch_all', dir, refreshKey],
+    queryFn: () => invoke('cmd_git_fetch_all', { dir }),
+    refetchInterval: 10 * 60_000,
+  });
   return [
     {
       remotes: useQuery<GitRemote[], string>({
-        queryKey: ['git', 'remotes', dir],
+        queryKey: ['git', 'remotes', dir, refreshKey],
         queryFn: () => getRemotes(dir),
+        placeholderData: (prev) => prev,
       }),
       log: useQuery<GitCommit[], string>({
-        queryKey: ['git', 'log', dir],
+        queryKey: ['git', 'log', dir, refreshKey],
         queryFn: () => invoke('cmd_git_log', { dir }),
+        placeholderData: (prev) => prev,
       }),
       status: useQuery<GitStatusSummary, string>({
         refetchOnMount: true,
-        queryKey: ['git', 'status', dir],
+        queryKey: ['git', 'status', dir, refreshKey, fetchAll.dataUpdatedAt],
         queryFn: () => invoke('cmd_git_status', { dir }),
+        placeholderData: (prev) => prev,
       }),
     },
     mutations,
@@ -152,10 +160,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       },
       onSuccess,
     }),
-    fetchAll: createFastMutation<void, string, void>({
-      mutationKey: ['git', 'fetch_all', dir],
-      mutationFn: () => invoke('cmd_git_fetch_all', { dir }),
-    }),
+
     push: createFastMutation<PushResult, string, void>({
       mutationKey: ['git', 'push', dir],
       mutationFn: push,

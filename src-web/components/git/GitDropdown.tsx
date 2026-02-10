@@ -7,6 +7,7 @@ import { forwardRef } from 'react';
 import { openWorkspaceSettings } from '../../commands/openWorkspaceSettings';
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../../hooks/useActiveWorkspace';
 import { useKeyValue } from '../../hooks/useKeyValue';
+import { useRandomKey } from '../../hooks/useRandomKey';
 import { sync } from '../../init/sync';
 import { showConfirm, showConfirmDelete } from '../../lib/confirm';
 import { showDialog } from '../../lib/dialog';
@@ -36,6 +37,7 @@ export function GitDropdown() {
 
 function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const workspace = useAtomValue(activeWorkspaceAtom);
+  const [refreshKey, regenerateKey] = useRandomKey();
   const [
     { status, log },
     {
@@ -43,7 +45,6 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       deleteBranch,
       deleteRemoteBranch,
       renameBranch,
-      fetchAll,
       mergeBranch,
       push,
       pull,
@@ -51,7 +52,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       resetChanges,
       init,
     },
-  ] = useGit(syncDir, gitCallbacks(syncDir));
+  ] = useGit(syncDir, gitCallbacks(syncDir), refreshKey);
 
   const localBranches = status.data?.localBranches ?? [];
   const remoteBranches = status.data?.remoteBranches ?? [];
@@ -172,7 +173,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     { type: 'separator' },
     {
       label: 'Push',
-      disabled: !hasRemotes || ahead === 0,
+      hidden: !hasRemotes,
       leftSlot: <Icon icon="arrow_up_from_line" />,
       waitForOnSelect: true,
       async onSelect() {
@@ -191,7 +192,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     },
     {
       label: 'Pull',
-      disabled: !hasRemotes || behind === 0,
+      hidden: !hasRemotes,
       leftSlot: <Icon icon="arrow_down_to_line" />,
       waitForOnSelect: true,
       async onSelect() {
@@ -210,7 +211,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     },
     {
       label: 'Commit...',
-      disabled: !hasChanges,
+
       leftSlot: <Icon icon="git_commit_vertical" />,
       onSelect() {
         showDialog({
@@ -502,15 +503,25 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   ];
 
   return (
-    <Dropdown fullWidth items={items} onOpen={fetchAll.mutate}>
+    <Dropdown fullWidth items={items} onOpen={regenerateKey}>
       <GitMenuButton>
         <InlineCode className="flex items-center gap-1">
           <Icon icon="git_branch" size="xs" className="opacity-50" />
           {currentBranch}
         </InlineCode>
         <div className="flex items-center gap-1.5">
-          {ahead > 0 && <span className="text-xs flex items-center gap-0.5"><span className="text-primary">↗</span>{ahead}</span>}
-          {behind > 0 && <span className="text-xs flex items-center gap-0.5"><span className="text-info">↙</span>{behind}</span>}
+          {ahead > 0 && (
+            <span className="text-xs flex items-center gap-0.5">
+              <span className="text-primary">↗</span>
+              {ahead}
+            </span>
+          )}
+          {behind > 0 && (
+            <span className="text-xs flex items-center gap-0.5">
+              <span className="text-info">↙</span>
+              {behind}
+            </span>
+          )}
         </div>
       </GitMenuButton>
     </Dropdown>
