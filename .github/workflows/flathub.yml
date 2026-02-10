@@ -29,7 +29,6 @@ jobs:
       - name: Copy updated files to Flathub repo
         run: |
           cp flatpak/app.yaak.Yaak.yml flathub-repo/
-          cp flatpak/app.yaak.Yaak.metainfo.xml flathub-repo/
           cp LICENSE flathub-repo/
           sed -i 's|path: \.\./LICENSE|path: LICENSE|' flathub-repo/app.yaak.Yaak.yml
 

@@ -1,9 +1,6 @@
 {
   "build": {
-    "features": [
-      "updater",
-      "license"
-    ]
+    "features": ["updater", "license"]
   },
   "app": {
     "security": {
@@ -11,12 +8,8 @@
         "default",
         {
           "identifier": "release",
-          "windows": [
-            "*"
-          ],
-          "permissions": [
-            "yaak-license:default"
-          ]
+          "windows": ["*"],
+          "permissions": ["yaak-license:default"]
         }
       ]
     }
@@ -39,14 +32,7 @@
     "createUpdaterArtifacts": true,
     "longDescription": "A cross-platform desktop app for interacting with REST, GraphQL, and gRPC",
     "shortDescription": "Play with APIs, intuitively",
-    "targets": [
-      "app",
-      "appimage",
-      "deb",
-      "dmg",
-      "nsis",
-      "rpm"
-    ],
+    "targets": ["app", "appimage", "deb", "dmg", "nsis", "rpm"],
     "macOS": {
       "minimumSystemVersion": "13.0",
       "exceptionDomain": "",
@@ -58,10 +44,16 @@
     },
     "linux": {
       "deb": {
-        "desktopTemplate": "./template.desktop"
+        "desktopTemplate": "./template.desktop",
+        "files": {
+          "usr/share/metainfo/app.yaak.Yaak.metainfo.xml": "../../flatpak/app.yaak.Yaak.metainfo.xml"
+        }
       },
       "rpm": {
-        "desktopTemplate": "./template.desktop"
+        "desktopTemplate": "./template.desktop",
+        "files": {
+          "usr/share/metainfo/app.yaak.Yaak.metainfo.xml": "../../flatpak/app.yaak.Yaak.metainfo.xml"
+        }
       }
     }
   }

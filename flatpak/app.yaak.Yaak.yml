@@ -42,7 +42,6 @@ modules:
       - mv usr/bin/* /app/bin
       - mv usr/lib/* /app/lib
       - mv usr/share/* /app/share
-      - install -Dm644 app.yaak.Yaak.metainfo.xml /app/share/metainfo/app.yaak.Yaak.metainfo.xml
       - install -Dm644 LICENSE /app/share/licenses/app.yaak.Yaak/LICENSE
 
     sources:
@@ -58,7 +57,5 @@ modules:
         sha256: "9ba9b7c9df56ffb9b801e40cb38685f1650cf7e2f9e85dad0ae3329f8e01ff6d"
         only-arches:
           - aarch64
-      - type: file
-        path: app.yaak.Yaak.metainfo.xml
       - type: file
         path: ../LICENSE
