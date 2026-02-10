@@ -14,8 +14,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MANIFEST="$SCRIPT_DIR/app.yaak.desktop.yml"
-METAINFO="$SCRIPT_DIR/app.yaak.desktop.metainfo.xml"
+MANIFEST="$SCRIPT_DIR/app.yaak.Yaak.yml"
+METAINFO="$SCRIPT_DIR/app.yaak.Yaak.metainfo.xml"
 
 if [ $# -lt 1 ]; then
     echo "Usage: $0 <version-tag>"

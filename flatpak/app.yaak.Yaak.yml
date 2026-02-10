@@ -2,12 +2,12 @@
 #
 # To build and test locally:
 #   flatpak install flathub org.gnome.Platform//48 org.gnome.Sdk//48
-#   flatpak-builder --force-clean --user --install-deps-from=flathub --repo=flatpak-repo build flatpak/app.yaak.desktop.yml
+#   flatpak-builder --force-clean --user --install-deps-from=flathub --repo=flatpak-repo build flatpak/app.yaak.Yaak.yml
 #   flatpak --user remote-add --if-not-exists yaak-local flatpak-repo
-#   flatpak --user install yaak-local app.yaak.desktop
-#   flatpak run app.yaak.desktop
+#   flatpak --user install yaak-local app.yaak.Yaak
+#   flatpak run app.yaak.Yaak
 
-id: app.yaak.desktop
+id: app.yaak.Yaak
 runtime: org.gnome.Platform
 runtime-version: "48"
 sdk: org.gnome.Sdk
@@ -41,19 +41,22 @@ modules:
       - cp -r usr/lib/yaak /app/lib/yaak
 
       # Install desktop file, updating Exec and Icon to match Flatpak conventions
-      - install -Dm644 usr/share/applications/yaak.desktop /app/share/applications/app.yaak.desktop.desktop
-      - desktop-file-edit --set-key=Exec --set-value=yaak-app /app/share/applications/app.yaak.desktop.desktop
-      - desktop-file-edit --set-icon=app.yaak.desktop /app/share/applications/app.yaak.desktop.desktop
-      - desktop-file-edit --set-key=StartupWMClass --set-value=yaak-app /app/share/applications/app.yaak.desktop.desktop
+      - install -Dm644 usr/share/applications/yaak.desktop /app/share/applications/app.yaak.Yaak.desktop
+      - desktop-file-edit --set-key=Exec --set-value=yaak-app /app/share/applications/app.yaak.Yaak.desktop
+      - desktop-file-edit --set-icon=app.yaak.Yaak /app/share/applications/app.yaak.Yaak.desktop
+      - desktop-file-edit --set-key=StartupWMClass --set-value=yaak-app /app/share/applications/app.yaak.Yaak.desktop
 
       # Install icons from deb (small sizes) and from this repo (large sizes)
-      - install -Dm644 usr/share/icons/hicolor/32x32/apps/yaak-app.png /app/share/icons/hicolor/32x32/apps/app.yaak.desktop.png
-      - install -Dm644 usr/share/icons/hicolor/128x128/apps/yaak-app.png /app/share/icons/hicolor/128x128/apps/app.yaak.desktop.png
-      - install -Dm644 256x256/app.yaak.desktop.png /app/share/icons/hicolor/256x256/apps/app.yaak.desktop.png
-      - install -Dm644 512x512/app.yaak.desktop.png /app/share/icons/hicolor/512x512/apps/app.yaak.desktop.png
+      - install -Dm644 usr/share/icons/hicolor/32x32/apps/yaak-app.png /app/share/icons/hicolor/32x32/apps/app.yaak.Yaak.png
+      - install -Dm644 usr/share/icons/hicolor/128x128/apps/yaak-app.png /app/share/icons/hicolor/128x128/apps/app.yaak.Yaak.png
+      - install -Dm644 256x256/app.yaak.Yaak.png /app/share/icons/hicolor/256x256/apps/app.yaak.Yaak.png
+      - install -Dm644 512x512/app.yaak.Yaak.png /app/share/icons/hicolor/512x512/apps/app.yaak.Yaak.png
 
       # Install AppStream metainfo
-      - install -Dm644 app.yaak.desktop.metainfo.xml /app/share/metainfo/app.yaak.desktop.metainfo.xml
+      - install -Dm644 app.yaak.Yaak.metainfo.xml /app/share/metainfo/app.yaak.Yaak.metainfo.xml
+
+      # Install license
+      - install -Dm644 LICENSE /app/share/licenses/app.yaak.Yaak/LICENSE
 
     sources:
       # The deb package from GitHub releases
@@ -77,4 +80,8 @@ modules:
 
       # AppStream metainfo (from this repo)
       - type: file
-        path: app.yaak.desktop.metainfo.xml
+        path: app.yaak.Yaak.metainfo.xml
+
+      # License file (from repo root)
+      - type: file
+        path: ../LICENSE

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>app.yaak.desktop</id>
+  <id>app.yaak.Yaak</id>
 
   <name>Yaak</name>
   <summary>Play with APIs, intuitively</summary>
@@ -34,7 +34,7 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">app.yaak.desktop.desktop</launchable>
+  <launchable type="desktop-id">app.yaak.Yaak.desktop</launchable>
 
   <branding>
     <color type="primary" scheme_preference="light">#8b32ff</color>

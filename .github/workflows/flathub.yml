@@ -19,14 +19,14 @@ jobs:
       - name: Checkout Flathub repo
         uses: actions/checkout@v4
         with:
-          repository: flathub/app.yaak.desktop
+          repository: flathub/app.yaak.Yaak
           token: ${{ secrets.FLATHUB_TOKEN }}
           path: flathub-repo
 
       - name: Copy updated files to Flathub repo
         run: |
-          cp flatpak/app.yaak.desktop.yml flathub-repo/
-          cp flatpak/app.yaak.desktop.metainfo.xml flathub-repo/
+          cp flatpak/app.yaak.Yaak.yml flathub-repo/
+          cp flatpak/app.yaak.Yaak.metainfo.xml flathub-repo/
           cp -r flatpak/icons flathub-repo/
 
       - name: Commit and push to Flathub
