@@ -1,0 +1,44 @@
+name: Update Flathub
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  update-flathub:
+    name: Update Flathub manifest
+    runs-on: ubuntu-latest
+    # Only run for stable releases (skip betas/pre-releases)
+    if: ${{ !github.event.release.prerelease }}
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+
+      - name: Run update-manifest.sh
+        run: bash flatpak/update-manifest.sh "${{ github.event.release.tag_name }}"
+
+      - name: Checkout Flathub repo
+        uses: actions/checkout@v4
+        with:
+          repository: flathub/app.yaak.Yaak
+          token: ${{ secrets.FLATHUB_TOKEN }}
+          path: flathub-repo
+
+      - name: Copy updated files to Flathub repo
+        run: |
+          cp flatpak/app.yaak.Yaak.yml flathub-repo/
+          cp flatpak/app.yaak.Yaak.metainfo.xml flathub-repo/
+          cp LICENSE flathub-repo/
+          sed -i 's|path: \.\./LICENSE|path: LICENSE|' flathub-repo/app.yaak.Yaak.yml
+
+      - name: Commit and push to Flathub
+        working-directory: flathub-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Update to ${{ github.event.release.tag_name }}"
+          git push
