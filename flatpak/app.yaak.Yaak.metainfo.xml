@@ -3,7 +3,7 @@
   <id>app.yaak.Yaak</id>
 
   <name>Yaak</name>
-  <summary>Play with APIs, intuitively</summary>
+  <summary>An offline, Git friendly API Client</summary>
 
   <developer id="app.yaak">
     <name>Yaak</name>
@@ -19,19 +19,19 @@
 
   <description>
     <p>
-      Yaak is a cross-platform desktop app for interacting with REST, GraphQL,
-      and gRPC APIs. It provides an intuitive interface for crafting requests,
-      organizing projects, and managing environments.
+      A fast, privacy-first API client for REST, GraphQL, SSE, WebSocket,
+      and gRPC — built with Tauri, Rust, and React.
     </p>
     <p>Features include:</p>
     <ul>
-      <li>REST, GraphQL, and gRPC support</li>
+      <li>REST, GraphQL, SSE, WebSocket, and gRPC support</li>
+      <li>Local-only data, secrets encryption, and zero telemetry</li>
+      <li>Git-friendly plain-text project storage</li>
       <li>Environment variables and template functions</li>
       <li>Request chaining and dynamic values</li>
       <li>OAuth 2.0, Bearer, Basic, API Key, AWS, JWT, and NTLM authentication</li>
       <li>Import from cURL, Postman, Insomnia, and OpenAPI</li>
       <li>Extensible plugin system</li>
-      <li>Git-friendly project storage</li>
     </ul>
   </description>
 
