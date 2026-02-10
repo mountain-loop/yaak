@@ -1,6 +1,6 @@
 id: app.yaak.Yaak
 runtime: org.gnome.Platform
-runtime-version: "48"
+runtime-version: "49"
 sdk: org.gnome.Sdk
 command: yaak-app
 rename-desktop-file: yaak.desktop
