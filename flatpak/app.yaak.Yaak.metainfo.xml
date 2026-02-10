@@ -14,6 +14,7 @@
 
   <url type="homepage">https://yaak.app</url>
   <url type="bugtracker">https://yaak.app/feedback</url>
+  <url type="contact">https://yaak.app/feedback</url>
   <url type="vcs-browser">https://github.com/mountain-loop/yaak</url>
 
   <description>
@@ -43,15 +44,6 @@
 
   <content_rating type="oars-1.1" />
 
-  <supports>
-    <control>pointing</control>
-    <control>keyboard</control>
-  </supports>
-
-  <requires>
-    <display_length compare="ge">768</display_length>
-  </requires>
-
   <screenshots>
     <screenshot type="default">
       <caption>Crafting an API request</caption>
@@ -60,6 +52,6 @@
   </screenshots>
 
   <releases>
-    <!-- Releases will be added as part of the Flathub update process -->
+    <release version="2026.1.2" date="2026-02-10" />
   </releases>
 </component>

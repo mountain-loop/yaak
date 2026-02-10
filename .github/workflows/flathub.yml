@@ -27,7 +27,8 @@ jobs:
         run: |
           cp flatpak/app.yaak.Yaak.yml flathub-repo/
           cp flatpak/app.yaak.Yaak.metainfo.xml flathub-repo/
-          cp flatpak/app.yaak.Yaak.png flathub-repo/
+          cp LICENSE flathub-repo/
+          sed -i 's|path: \.\./LICENSE|path: LICENSE|' flathub-repo/app.yaak.Yaak.yml
 
       - name: Commit and push to Flathub
         working-directory: flathub-repo
