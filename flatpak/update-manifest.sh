@@ -25,6 +25,13 @@ fi
 
 VERSION_TAG="$1"
 VERSION="${VERSION_TAG#v}"
+
+# Only allow stable releases (skip beta, alpha, rc, etc.)
+if [[ "$VERSION" == *-* ]]; then
+    echo "Skipping pre-release version '$VERSION_TAG' (only stable releases are published to Flathub)"
+    exit 0
+fi
+
 REPO="mountain-loop/yaak"
 BASE_URL="https://github.com/$REPO/releases/download/$VERSION_TAG"
 
