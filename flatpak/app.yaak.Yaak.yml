@@ -1,0 +1,64 @@
+id: app.yaak.Yaak
+runtime: org.gnome.Platform
+runtime-version: "48"
+sdk: org.gnome.Sdk
+command: yaak-app
+rename-desktop-file: yaak.desktop
+rename-icon: yaak-app
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --share=network
+  - --socket=pulseaudio # Preview audio responses
+  - --socket=ssh-auth # Git SSH remotes
+  - --socket=gpg-agent # Git commit signing
+  - --talk-name=org.freedesktop.secrets # Keyring for encryption
+  - --filesystem=home # Git repos, ~/.gitconfig, ~/.ssh, etc
+
+modules:
+  - name: git
+    cleanup:
+      - /share
+    make-args:
+      - NO_PERL=1
+      - NO_TCLTK=1
+    make-install-args:
+      - INSTALL_SYMLINKS=1
+      - NO_PERL=1
+      - NO_TCLTK=1
+    sources:
+      - type: archive
+        url: https://www.kernel.org/pub/software/scm/git/git-2.48.1.tar.gz
+        sha256: 51b4d03b1e311ba673591210f94f24a4c5781453e1eb188822e3d9cdc04c2212
+
+  - name: yaak
+    buildsystem: simple
+    build-commands:
+      - ar -x yaak.deb
+      - tar -xf data.tar.gz
+      - mv usr/bin/* /app/bin
+      - mv usr/lib/* /app/lib
+      - mv usr/share/* /app/share
+      - install -Dm644 app.yaak.Yaak.metainfo.xml /app/share/metainfo/app.yaak.Yaak.metainfo.xml
+      - install -Dm644 LICENSE /app/share/licenses/app.yaak.Yaak/LICENSE
+
+    sources:
+      - type: file
+        dest-filename: yaak.deb
+        url: https://github.com/mountain-loop/yaak/releases/download/v2026.1.2/yaak_2026.1.2_amd64.deb
+        sha256: "c4236b5bcf391e579dc79b71c3b5c58f6f9bfc6c175fc70426d0ca85799beba5"
+        only-arches:
+          - x86_64
+      - type: file
+        dest-filename: yaak.deb
+        url: https://github.com/mountain-loop/yaak/releases/download/v2026.1.2/yaak_2026.1.2_arm64.deb
+        sha256: "9ba9b7c9df56ffb9b801e40cb38685f1650cf7e2f9e85dad0ae3329f8e01ff6d"
+        only-arches:
+          - aarch64
+      - type: file
+        path: app.yaak.Yaak.metainfo.xml
+      - type: file
+        path: ../LICENSE

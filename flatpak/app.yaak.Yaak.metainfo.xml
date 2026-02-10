@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.yaak.Yaak</id>
+
+  <name>Yaak</name>
+  <summary>An offline, Git friendly API Client</summary>
+
+  <developer id="app.yaak">
+    <name>Yaak</name>
+  </developer>
+
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+
+  <url type="homepage">https://yaak.app</url>
+  <url type="bugtracker">https://yaak.app/feedback</url>
+  <url type="contact">https://yaak.app/feedback</url>
+  <url type="vcs-browser">https://github.com/mountain-loop/yaak</url>
+
+  <description>
+    <p>
+      A fast, privacy-first API client for REST, GraphQL, SSE, WebSocket,
+      and gRPC — built with Tauri, Rust, and React.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>REST, GraphQL, SSE, WebSocket, and gRPC support</li>
+      <li>Local-only data, secrets encryption, and zero telemetry</li>
+      <li>Git-friendly plain-text project storage</li>
+      <li>Environment variables and template functions</li>
+      <li>Request chaining and dynamic values</li>
+      <li>OAuth 2.0, Bearer, Basic, API Key, AWS, JWT, and NTLM authentication</li>
+      <li>Import from cURL, Postman, Insomnia, and OpenAPI</li>
+      <li>Extensible plugin system</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">app.yaak.Yaak.desktop</launchable>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#8b32ff</color>
+    <color type="primary" scheme_preference="dark">#c293ff</color>
+  </branding>
+
+  <content_rating type="oars-1.1" />
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Crafting an API request</caption>
+      <image>https://assets.yaak.app/uploads/screenshot-BLG1w_2310x1326.png</image>
+    </screenshot>
+  </screenshots>
+
+  <releases>
+    <release version="2026.1.2" date="2026-02-10" />
+  </releases>
+</component>
