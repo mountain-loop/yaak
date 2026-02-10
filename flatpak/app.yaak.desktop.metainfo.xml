@@ -66,6 +66,7 @@
   </screenshots>
 
   <releases>
+    <release version="2026.2.0-beta.10" date="2026-02-09" />
     <!-- Releases will be added as part of the Flathub update process -->
   </releases>
 </component>

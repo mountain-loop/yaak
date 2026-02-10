@@ -1,7 +1,7 @@
 # Flatpak manifest for Yaak
 #
 # To build and test locally:
-#   flatpak install flathub org.gnome.Platform//47 org.gnome.Sdk//47
+#   flatpak install flathub org.gnome.Platform//48 org.gnome.Sdk//48
 #   flatpak-builder --force-clean --user --install-deps-from=flathub --repo=flatpak-repo build flatpak/app.yaak.desktop.yml
 #   flatpak --user remote-add --if-not-exists yaak-local flatpak-repo
 #   flatpak --user install yaak-local app.yaak.desktop
@@ -9,7 +9,7 @@
 
 id: app.yaak.desktop
 runtime: org.gnome.Platform
-runtime-version: "47"
+runtime-version: "48"
 sdk: org.gnome.Sdk
 command: yaak-app
 
@@ -37,6 +37,7 @@ modules:
       - install -Dm755 usr/bin/yaak-app /app/bin/yaak-app
 
       # Install bundled resources (plugins, node runtime, protoc, etc.)
+      - mkdir -p /app/lib
       - cp -r usr/lib/yaak /app/lib/yaak
 
       # Install desktop file, updating Exec and Icon to match Flatpak conventions
@@ -48,8 +49,8 @@ modules:
       # Install icons from deb (small sizes) and from this repo (large sizes)
       - install -Dm644 usr/share/icons/hicolor/32x32/apps/yaak-app.png /app/share/icons/hicolor/32x32/apps/app.yaak.desktop.png
       - install -Dm644 usr/share/icons/hicolor/128x128/apps/yaak-app.png /app/share/icons/hicolor/128x128/apps/app.yaak.desktop.png
-      - install -Dm644 icons/256x256/app.yaak.desktop.png /app/share/icons/hicolor/256x256/apps/app.yaak.desktop.png
-      - install -Dm644 icons/512x512/app.yaak.desktop.png /app/share/icons/hicolor/512x512/apps/app.yaak.desktop.png
+      - install -Dm644 256x256/app.yaak.desktop.png /app/share/icons/hicolor/256x256/apps/app.yaak.desktop.png
+      - install -Dm644 512x512/app.yaak.desktop.png /app/share/icons/hicolor/512x512/apps/app.yaak.desktop.png
 
       # Install AppStream metainfo
       - install -Dm644 app.yaak.desktop.metainfo.xml /app/share/metainfo/app.yaak.desktop.metainfo.xml
@@ -60,13 +61,13 @@ modules:
       - type: file
         dest-filename: yaak.deb
         url: https://github.com/mountain-loop/yaak/releases/download/v2026.2.0-beta.10/yaak_2026.2.0-beta.10_amd64.deb
-        sha256: "FILL_IN_SHA256_HASH"
+        sha256: "05584886dad9d6b4222f09e4998b019edc0e2efdc51908dde4205dbfb0b58b4c"
         only-arches:
           - x86_64
       - type: file
         dest-filename: yaak.deb
         url: https://github.com/mountain-loop/yaak/releases/download/v2026.2.0-beta.10/yaak_2026.2.0-beta.10_arm64.deb
-        sha256: "FILL_IN_SHA256_HASH"
+        sha256: "3a3923e5e29ae3e6e1ed345259992492196895a67e94c1284315334342e6ae23"
         only-arches:
           - aarch64
 
