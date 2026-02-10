@@ -27,7 +27,7 @@ jobs:
         run: |
           cp flatpak/app.yaak.Yaak.yml flathub-repo/
           cp flatpak/app.yaak.Yaak.metainfo.xml flathub-repo/
-          cp -r flatpak/icons flathub-repo/
+          cp flatpak/app.yaak.Yaak.png flathub-repo/
 
       - name: Commit and push to Flathub
         working-directory: flathub-repo
