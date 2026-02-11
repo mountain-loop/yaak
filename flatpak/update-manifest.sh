@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# Update the Flatpak manifest with URLs and SHA256 hashes for a given release.
+# Update the Flatpak manifest for a new release.
 #
 # Usage:
 #   ./flatpak/update-manifest.sh v2026.2.0
 #
 # This script:
-#   1. Downloads the x86_64 and aarch64 .deb files from the GitHub release
-#   2. Computes their SHA256 checksums
-#   3. Updates the manifest YAML with the correct URLs and hashes
-#   4. Updates the metainfo.xml with a new <release> entry
+#   1. Resolves the git commit for the given tag
+#   2. Updates the manifest YAML with the new tag and commit
+#   3. Updates the metainfo.xml with a new <release> entry
+#   4. Regenerates cargo-sources.json and node-sources.json
 
 set -euo pipefail
 
@@ -33,37 +33,24 @@ if [[ "$VERSION" == *-* ]]; then
 fi
 
 REPO="mountain-loop/yaak"
-BASE_URL="https://github.com/$REPO/releases/download/$VERSION_TAG"
 
-DEB_AMD64="yaak_${VERSION}_amd64.deb"
-DEB_ARM64="yaak_${VERSION}_arm64.deb"
-
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
-
-echo "Downloading $DEB_AMD64..."
-curl -fSL "$BASE_URL/$DEB_AMD64" -o "$TMPDIR/$DEB_AMD64"
-SHA_AMD64=$(sha256sum "$TMPDIR/$DEB_AMD64" | cut -d' ' -f1)
-echo "  SHA256: $SHA_AMD64"
-
-echo "Downloading $DEB_ARM64..."
-curl -fSL "$BASE_URL/$DEB_ARM64" -o "$TMPDIR/$DEB_ARM64"
-SHA_ARM64=$(sha256sum "$TMPDIR/$DEB_ARM64" | cut -d' ' -f1)
-echo "  SHA256: $SHA_ARM64"
+# Resolve the commit hash for this tag
+echo "Resolving commit for tag $VERSION_TAG..."
+COMMIT=$(git ls-remote "https://github.com/$REPO.git" "refs/tags/$VERSION_TAG" | cut -f1)
+if [ -z "$COMMIT" ]; then
+    echo "Error: Could not resolve commit for tag '$VERSION_TAG'"
+    exit 1
+fi
+echo "  Commit: $COMMIT"
 
 echo ""
 echo "Updating manifest: $MANIFEST"
 
-# Update URLs by matching the arch-specific deb filename
-sed -i "s|url: .*amd64\.deb|url: $BASE_URL/$DEB_AMD64|" "$MANIFEST"
-sed -i "s|url: .*arm64\.deb|url: $BASE_URL/$DEB_ARM64|" "$MANIFEST"
+# Update tag
+sed -i "s|tag: v[0-9.]*$|tag: $VERSION_TAG|" "$MANIFEST"
 
-# Update SHA256 hashes by finding the current ones and replacing
-OLD_SHA_AMD64=$(grep -A2 "amd64\.deb" "$MANIFEST" | grep sha256 | sed 's/.*"\(.*\)"/\1/')
-OLD_SHA_ARM64=$(grep -A2 "arm64\.deb" "$MANIFEST" | grep sha256 | sed 's/.*"\(.*\)"/\1/')
-
-sed -i "s|$OLD_SHA_AMD64|$SHA_AMD64|" "$MANIFEST"
-sed -i "s|$OLD_SHA_ARM64|$SHA_ARM64|" "$MANIFEST"
+# Update commit
+sed -i "s|commit: [0-9a-f]\{40\}|commit: $COMMIT|" "$MANIFEST"
 
 echo "  Manifest updated."
 
@@ -76,7 +63,14 @@ sed -i "s|  <releases>|  <releases>\n    <release version=\"$VERSION\" date=\"$T
 
 echo "  Metainfo updated."
 
+# Regenerate offline dependency sources
+echo ""
+echo "Regenerating dependency sources..."
+bash "$SCRIPT_DIR/generate-sources.sh"
+
 echo ""
 echo "Done! Review the changes:"
 echo "  $MANIFEST"
 echo "  $METAINFO"
+echo "  $SCRIPT_DIR/cargo-sources.json"
+echo "  $SCRIPT_DIR/node-sources.json"
