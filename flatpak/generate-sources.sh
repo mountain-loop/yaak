@@ -44,72 +44,35 @@ echo "  Done: flatpak/cargo-sources.json"
 
 echo "Generating node-sources.json..."
 
-# flatpak-node-generator doesn't handle npm workspace packages (local paths
-# without "resolved" or "link" fields). Strip them from a temp copy of the
-# lockfile before running the generator.
+# npm sometimes omits `resolved` and `integrity` fields from the lockfile for
+# nested dependencies inside workspace packages. flatpak-node-generator needs
+# these fields to know which tarballs to download. We fix the lockfile in a temp
+# copy before running the generator.
+#
+# We also strip workspace link entries (no download needed for local packages).
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-python3 -c "
-import json, sys, shutil
-with open(sys.argv[1]) as f:
-    data = json.load(f)
-packages = data.get('packages', {})
-to_remove = []
-needs_resolve = []
-for name, info in packages.items():
-    if not name:
-        continue
-    if info.get('link'):
-        continue
-    if 'resolved' in info:
-        continue
-    # No 'resolved' and not a link — local workspace package or nested dep.
-    if '/node_modules/' in name:
-        # Nested node_modules entry inside a workspace package — needs
-        # resolved URL and integrity for flatpak-node-generator.
-        needs_resolve.append((name, info))
-    else:
-        to_remove.append(name)
+cp "$REPO_ROOT/package-lock.json" "$TMPDIR/package-lock.json"
+cp "$REPO_ROOT/package.json" "$TMPDIR/package.json"
 
-# Fetch missing resolved/integrity from the npm registry
-import urllib.request
-_packument_cache = {}
-for name, info in needs_resolve:
-    pkg = name.split('/node_modules/')[-1]
-    version = info.get('version', '')
-    if not version:
-        to_remove.append(name)
-        continue
-    if pkg not in _packument_cache:
-        url = f'https://registry.npmjs.org/{pkg}'
-        try:
-            req = urllib.request.Request(url, headers={'Accept': 'application/json'})
-            with urllib.request.urlopen(req) as resp:
-                _packument_cache[pkg] = json.loads(resp.read())
-        except Exception as e:
-            print(f'Warning: failed to fetch {url}: {e}', file=sys.stderr)
-            to_remove.append(name)
-            continue
-    packument = _packument_cache[pkg]
-    ver_info = packument.get('versions', {}).get(version, {})
-    dist = ver_info.get('dist', {})
-    if dist.get('tarball') and dist.get('integrity'):
-        info['resolved'] = dist['tarball']
-        info['integrity'] = dist['integrity']
-        print(f'Resolved {pkg}@{version}', file=sys.stderr)
-    else:
-        print(f'Warning: no dist info for {pkg}@{version}, removing', file=sys.stderr)
-        to_remove.append(name)
+# Add missing resolved/integrity fields
+node "$SCRIPT_DIR/fix-lockfile.mjs" "$TMPDIR/package-lock.json"
 
-for name in to_remove:
-    del packages[name]
-with open(sys.argv[2], 'w') as f:
-    json.dump(data, f, indent=2)
-# Copy package.json so the generator can read the root entry
-shutil.copy2(sys.argv[3], sys.argv[4])
-print(f'Stripped {len(to_remove)} local workspace packages from lockfile', file=sys.stderr)
-" "$REPO_ROOT/package-lock.json" "$TMPDIR/package-lock.json" "$REPO_ROOT/package.json" "$TMPDIR/package.json"
+# Strip workspace link entries (flatpak-node-generator doesn't handle them)
+node -e "
+  const fs = require('fs');
+  const p = process.argv[1];
+  const data = JSON.parse(fs.readFileSync(p, 'utf-8'));
+  const packages = data.packages || {};
+  for (const [name, info] of Object.entries(packages)) {
+    if (!name) continue;
+    if (info.link || (!info.resolved && !name.includes('node_modules/'))) {
+      delete packages[name];
+    }
+  }
+  fs.writeFileSync(p, JSON.stringify(data, null, 2));
+" "$TMPDIR/package-lock.json"
 
 flatpak-node-generator --no-requests-cache -o "$SCRIPT_DIR/node-sources.json" npm "$TMPDIR/package-lock.json"
 echo "  Done: flatpak/node-sources.json"

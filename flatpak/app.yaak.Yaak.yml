@@ -61,14 +61,18 @@ modules:
       - install -Dm755 protoc-bin/protoc crates-tauri/yaak-app/vendored/protoc/yaakprotoc
       - mkdir -p crates-tauri/yaak-app/vendored/protoc/include && cp -r protoc-bin/google crates-tauri/yaak-app/vendored/protoc/include/google
 
-      # Patch lockfile: add resolved URLs for nested workspace deps
+      # Patch lockfile: add resolved URLs for nested workspace deps that npm
+      # omits (see https://github.com/npm/cli/issues/4460)
       - >-
-        python3 -c "import json;
-        p='package-lock.json';f=open(p);d=json.load(f);f.close();
-        [info.update({'resolved':'https://registry.npmjs.org/'+n.split('/node_modules/')[-1]+'/-/'+n.split('/')[-1]+'-'+info['version']+'.tgz'})
-        for n,info in d.get('packages',{}).items()
-        if '/node_modules/' in n and 'resolved' not in info and not info.get('link') and info.get('version')];
-        f=open(p,'w');json.dump(d,f);f.close()"
+        node -e "const fs=require('fs');
+        const p='package-lock.json';
+        const d=JSON.parse(fs.readFileSync(p,'utf-8'));
+        for(const[n,info]of Object.entries(d.packages||{})){
+        if(!n||info.link||info.resolved||!n.includes('node_modules/')||!info.version)continue;
+        const pkg=n.split('node_modules/').pop();
+        const base=pkg.split('/').pop();
+        info.resolved='https://registry.npmjs.org/'+pkg+'/-/'+base+'-'+info.version+'.tgz';
+        }fs.writeFileSync(p,JSON.stringify(d,null,2));"
 
       # Install npm dependencies offline
       - npm ci --offline
