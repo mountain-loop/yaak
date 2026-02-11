@@ -56,6 +56,7 @@ with open(sys.argv[1]) as f:
     data = json.load(f)
 packages = data.get('packages', {})
 to_remove = []
+needs_resolve = []
 for name, info in packages.items():
     if not name:
         continue
@@ -63,8 +64,44 @@ for name, info in packages.items():
         continue
     if 'resolved' in info:
         continue
-    # No 'resolved' and not a link — this is a local workspace package
-    to_remove.append(name)
+    # No 'resolved' and not a link — local workspace package or nested dep.
+    if '/node_modules/' in name:
+        # Nested node_modules entry inside a workspace package — needs
+        # resolved URL and integrity for flatpak-node-generator.
+        needs_resolve.append((name, info))
+    else:
+        to_remove.append(name)
+
+# Fetch missing resolved/integrity from the npm registry
+import urllib.request
+_packument_cache = {}
+for name, info in needs_resolve:
+    pkg = name.split('/node_modules/')[-1]
+    version = info.get('version', '')
+    if not version:
+        to_remove.append(name)
+        continue
+    if pkg not in _packument_cache:
+        url = f'https://registry.npmjs.org/{pkg}'
+        try:
+            req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+            with urllib.request.urlopen(req) as resp:
+                _packument_cache[pkg] = json.loads(resp.read())
+        except Exception as e:
+            print(f'Warning: failed to fetch {url}: {e}', file=sys.stderr)
+            to_remove.append(name)
+            continue
+    packument = _packument_cache[pkg]
+    ver_info = packument.get('versions', {}).get(version, {})
+    dist = ver_info.get('dist', {})
+    if dist.get('tarball') and dist.get('integrity'):
+        info['resolved'] = dist['tarball']
+        info['integrity'] = dist['integrity']
+        print(f'Resolved {pkg}@{version}', file=sys.stderr)
+    else:
+        print(f'Warning: no dist info for {pkg}@{version}, removing', file=sys.stderr)
+        to_remove.append(name)
+
 for name in to_remove:
     del packages[name]
 with open(sys.argv[2], 'w') as f:
