@@ -446,4 +446,8 @@
   button[name="select"] {
     @apply hidden;
   }
+
+  .cm-search-match-count {
+    @apply text-text-subtle text-xs font-mono whitespace-nowrap px-1.5 py-0.5 self-center;
+  }
 }
