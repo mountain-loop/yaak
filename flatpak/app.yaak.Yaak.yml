@@ -50,6 +50,7 @@ modules:
         npm_config_offline: "true"
         npm_config_nodedir: /usr/lib/sdk/node22
         NODE_OPTIONS: --max_old_space_size=4096
+        SKIP_WASM_BUILD: "1"
 
     build-commands:
       # Vendor Node.js binary (sidecar for plugin runtime)
@@ -80,14 +81,6 @@ modules:
       # Pre-fetch Cargo dependencies offline
       - cargo --offline fetch --manifest-path Cargo.toml
 
-      # Skip wasm-pack build (pre-built wasm is checked into the repo)
-      - >-
-        node -e "const fs=require('fs');
-        const p='crates/yaak-templates/package.json';
-        const d=JSON.parse(fs.readFileSync(p));
-        d.scripts['build:pack']='echo Skipping wasm-pack build';
-        fs.writeFileSync(p,JSON.stringify(d,null,2));"
-
       # Build all workspace packages (frontend, plugins, wasm, plugin-runtime)
       - npm run build
 
@@ -113,15 +106,15 @@ modules:
       - install -Dm644 yaak.desktop /app/share/applications/yaak.desktop
 
       # Install metainfo and license
-      - install -Dm644 app.yaak.Yaak.metainfo.xml /app/share/metainfo/app.yaak.Yaak.metainfo.xml
+      - install -Dm644 flatpak/app.yaak.Yaak.metainfo.xml /app/share/metainfo/app.yaak.Yaak.metainfo.xml
       - install -Dm644 LICENSE /app/share/licenses/app.yaak.Yaak/LICENSE
 
     sources:
       # Application source
       - type: git
         url: https://github.com/mountain-loop/yaak.git
-        tag: v2026.1.2
-        commit: bd7e840a5700ddefb5ef1f22771cc5555000f777
+        tag: v2026.2.0
+        commit: 76ee3fa61bebe8a5cc57cb286e8210155f516b75
         x-checker-data:
           type: git
           tag-pattern: ^v(\d+\.\d+\.\d+)$
@@ -170,6 +163,3 @@ modules:
       - type: file
         path: ../LICENSE
 
-      # Metainfo file (not in tagged source yet)
-      - type: file
-        path: app.yaak.Yaak.metainfo.xml
