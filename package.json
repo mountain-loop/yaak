@@ -11,7 +11,7 @@
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
     "plugins-external/mcp-server",
-    "plugins/template-function-faker",
+    "plugins-external/faker",
     "plugins-external/httpsnippet",
     "plugins/action-copy-curl",
     "plugins/action-copy-grpcurl",
