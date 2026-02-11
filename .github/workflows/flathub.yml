@@ -4,7 +4,7 @@ on:
     types: [published]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   update-flathub:
@@ -34,15 +34,6 @@ jobs:
       - name: Run update-manifest.sh
         run: bash flatpak/update-manifest.sh "${{ github.event.release.tag_name }}"
 
-      - name: Commit metainfo update to app repo
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add flatpak/app.yaak.Yaak.metainfo.xml
-          git diff --cached --quiet && echo "No metainfo changes" && exit 0
-          git commit -m "Add ${{ github.event.release.tag_name }} to metainfo releases"
-          git push origin HEAD:main
-
       - name: Checkout Flathub repo
         uses: actions/checkout@v4
         with:
@@ -53,13 +44,10 @@ jobs:
       - name: Copy updated files to Flathub repo
         run: |
           cp flatpak/app.yaak.Yaak.yml flathub-repo/
-          cp flatpak/app.yaak.Yaak.metainfo.xml flathub-repo/
           cp flatpak/cargo-sources.json flathub-repo/
           cp flatpak/node-sources.json flathub-repo/
           cp LICENSE flathub-repo/
           sed -i 's|path: \.\./LICENSE|path: LICENSE|' flathub-repo/app.yaak.Yaak.yml
-          sed -i 's|install -Dm644 flatpak/app.yaak.Yaak.metainfo.xml|install -Dm644 app.yaak.Yaak.metainfo.xml|' flathub-repo/app.yaak.Yaak.yml
-          sed -i '/path: LICENSE/a\      # Metainfo file (with release history)\n      - type: file\n        path: app.yaak.Yaak.metainfo.xml' flathub-repo/app.yaak.Yaak.yml
 
       - name: Commit and push to Flathub
         working-directory: flathub-repo
