@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 #
-# Update the Flatpak manifest with URLs and SHA256 hashes for a given release.
+# Update the Flatpak manifest for a new release.
 #
 # Usage:
 #   ./flatpak/update-manifest.sh v2026.2.0
 #
 # This script:
-#   1. Downloads the x86_64 and aarch64 .deb files from the GitHub release
-#   2. Computes their SHA256 checksums
-#   3. Updates the manifest YAML with the correct URLs and hashes
-#   4. Updates the metainfo.xml with a new <release> entry
+#   1. Updates the git tag and commit in the manifest
+#   2. Regenerates cargo-sources.json and node-sources.json from the tagged lockfiles
+#   3. Adds a new <release> entry to the metainfo
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$SCRIPT_DIR/app.yaak.Yaak.yml"
 METAINFO="$SCRIPT_DIR/app.yaak.Yaak.metainfo.xml"
 
@@ -26,57 +26,64 @@ fi
 VERSION_TAG="$1"
 VERSION="${VERSION_TAG#v}"
 
-# Only allow stable releases (skip beta, alpha, rc, etc.)
 if [[ "$VERSION" == *-* ]]; then
     echo "Skipping pre-release version '$VERSION_TAG' (only stable releases are published to Flathub)"
     exit 0
 fi
 
 REPO="mountain-loop/yaak"
-BASE_URL="https://github.com/$REPO/releases/download/$VERSION_TAG"
+COMMIT=$(git ls-remote "https://github.com/$REPO.git" "refs/tags/$VERSION_TAG" | cut -f1)
 
-DEB_AMD64="yaak_${VERSION}_amd64.deb"
-DEB_ARM64="yaak_${VERSION}_arm64.deb"
+if [ -z "$COMMIT" ]; then
+    echo "Error: Could not resolve commit for tag $VERSION_TAG"
+    exit 1
+fi
 
+echo "Tag: $VERSION_TAG"
+echo "Commit: $COMMIT"
+
+# Update git tag and commit in the manifest
+sed -i "s|tag: v.*|tag: $VERSION_TAG|" "$MANIFEST"
+sed -i "s|commit: .*|commit: $COMMIT|" "$MANIFEST"
+echo "Updated manifest tag and commit."
+
+# Regenerate offline dependency sources from the tagged lockfiles
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-echo "Downloading $DEB_AMD64..."
-curl -fSL "$BASE_URL/$DEB_AMD64" -o "$TMPDIR/$DEB_AMD64"
-SHA_AMD64=$(sha256sum "$TMPDIR/$DEB_AMD64" | cut -d' ' -f1)
-echo "  SHA256: $SHA_AMD64"
+echo "Fetching lockfiles from $VERSION_TAG..."
+curl -fsSL "https://raw.githubusercontent.com/$REPO/$VERSION_TAG/Cargo.lock" -o "$TMPDIR/Cargo.lock"
+curl -fsSL "https://raw.githubusercontent.com/$REPO/$VERSION_TAG/package-lock.json" -o "$TMPDIR/package-lock.json"
+curl -fsSL "https://raw.githubusercontent.com/$REPO/$VERSION_TAG/package.json" -o "$TMPDIR/package.json"
 
-echo "Downloading $DEB_ARM64..."
-curl -fSL "$BASE_URL/$DEB_ARM64" -o "$TMPDIR/$DEB_ARM64"
-SHA_ARM64=$(sha256sum "$TMPDIR/$DEB_ARM64" | cut -d' ' -f1)
-echo "  SHA256: $SHA_ARM64"
+echo "Generating cargo-sources.json..."
+python3 "$SCRIPT_DIR/flatpak-builder-tools/cargo/flatpak-cargo-generator.py" \
+  -o "$SCRIPT_DIR/cargo-sources.json" "$TMPDIR/Cargo.lock"
 
-echo ""
-echo "Updating manifest: $MANIFEST"
+echo "Generating node-sources.json..."
+node "$SCRIPT_DIR/fix-lockfile.mjs" "$TMPDIR/package-lock.json"
 
-# Update URLs by matching the arch-specific deb filename
-sed -i "s|url: .*amd64\.deb|url: $BASE_URL/$DEB_AMD64|" "$MANIFEST"
-sed -i "s|url: .*arm64\.deb|url: $BASE_URL/$DEB_ARM64|" "$MANIFEST"
+node -e "
+  const fs = require('fs');
+  const p = process.argv[1];
+  const d = JSON.parse(fs.readFileSync(p, 'utf-8'));
+  for (const [name, info] of Object.entries(d.packages || {})) {
+    if (name && (info.link || !info.resolved)) delete d.packages[name];
+  }
+  fs.writeFileSync(p, JSON.stringify(d, null, 2));
+" "$TMPDIR/package-lock.json"
 
-# Update SHA256 hashes by finding the current ones and replacing
-OLD_SHA_AMD64=$(grep -A2 "amd64\.deb" "$MANIFEST" | grep sha256 | sed 's/.*"\(.*\)"/\1/')
-OLD_SHA_ARM64=$(grep -A2 "arm64\.deb" "$MANIFEST" | grep sha256 | sed 's/.*"\(.*\)"/\1/')
+flatpak-node-generator --no-requests-cache \
+  -o "$SCRIPT_DIR/node-sources.json" npm "$TMPDIR/package-lock.json"
 
-sed -i "s|$OLD_SHA_AMD64|$SHA_AMD64|" "$MANIFEST"
-sed -i "s|$OLD_SHA_ARM64|$SHA_ARM64|" "$MANIFEST"
-
-echo "  Manifest updated."
-
-echo "Updating metainfo: $METAINFO"
-
+# Update metainfo with new release
 TODAY=$(date +%Y-%m-%d)
-
-# Insert new release entry after <releases>
 sed -i "s|  <releases>|  <releases>\n    <release version=\"$VERSION\" date=\"$TODAY\" />|" "$METAINFO"
-
-echo "  Metainfo updated."
+echo "Updated metainfo with release $VERSION."
 
 echo ""
 echo "Done! Review the changes:"
 echo "  $MANIFEST"
 echo "  $METAINFO"
+echo "  $SCRIPT_DIR/cargo-sources.json"
+echo "  $SCRIPT_DIR/node-sources.json"

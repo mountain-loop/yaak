@@ -48,3 +48,6 @@ crates-tauri/yaak-app/tauri.worktree.conf.json
 # Flatpak build artifacts
 flatpak-repo/
 .flatpak-builder/
+flatpak/flatpak-builder-tools/
+flatpak/cargo-sources.json
+flatpak/node-sources.json
