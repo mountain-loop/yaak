@@ -58,6 +58,8 @@ jobs:
           cp flatpak/node-sources.json flathub-repo/
           cp LICENSE flathub-repo/
           sed -i 's|path: \.\./LICENSE|path: LICENSE|' flathub-repo/app.yaak.Yaak.yml
+          sed -i 's|install -Dm644 flatpak/app.yaak.Yaak.metainfo.xml|install -Dm644 app.yaak.Yaak.metainfo.xml|' flathub-repo/app.yaak.Yaak.yml
+          sed -i '/path: LICENSE/a\      # Metainfo file (with release history)\n      - type: file\n        path: app.yaak.Yaak.metainfo.xml' flathub-repo/app.yaak.Yaak.yml
 
       - name: Commit and push to Flathub
         working-directory: flathub-repo
