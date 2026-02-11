@@ -21,6 +21,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Install source generators
         run: |
           pip install flatpak-node-generator tomlkit aiohttp
@@ -44,7 +49,6 @@ jobs:
           cp flatpak/node-sources.json flathub-repo/
           cp LICENSE flathub-repo/
           sed -i 's|path: \.\./LICENSE|path: LICENSE|' flathub-repo/app.yaak.Yaak.yml
-          sed -i 's|flatpak/app.yaak.Yaak.metainfo.xml|app.yaak.Yaak.metainfo.xml|' flathub-repo/app.yaak.Yaak.yml
 
       - name: Commit and push to Flathub
         working-directory: flathub-repo
