@@ -6,7 +6,7 @@
   "scripts": {
     "bootstrap": "npm run build",
     "build": "run-s build:*",
-    "build:pack": "wasm-pack build --target bundler",
+    "build:pack": "node build-wasm.cjs",
     "build:clean": "rimraf ./pkg/.gitignore"
   },
   "devDependencies": {

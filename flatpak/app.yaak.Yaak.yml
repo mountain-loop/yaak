@@ -3,6 +3,11 @@ runtime: org.gnome.Platform
 runtime-version: "49"
 sdk: org.gnome.Sdk
 command: yaak-app
+
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.node22
+  - org.freedesktop.Sdk.Extension.rust-stable
+
 rename-desktop-file: yaak.desktop
 rename-icon: yaak-app
 
@@ -36,26 +41,135 @@ modules:
 
   - name: yaak
     buildsystem: simple
+    build-options:
+      append-path: /app/bin:/usr/lib/sdk/node22/bin:/usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/yaak/cargo
+        XDG_CACHE_HOME: /run/build/yaak/flatpak-node/cache
+        npm_config_cache: /run/build/yaak/flatpak-node/npm-cache
+        npm_config_offline: "true"
+        npm_config_nodedir: /usr/lib/sdk/node22
+        NODE_OPTIONS: --max_old_space_size=4096
+
     build-commands:
-      - ar -x yaak.deb
-      - tar -xf data.tar.gz
-      - mv usr/bin/* /app/bin
-      - mv usr/lib/* /app/lib
-      - mv usr/share/* /app/share
+      # Vendor Node.js binary (sidecar for plugin runtime)
+      - mkdir -p crates-tauri/yaak-app/vendored/node
+      - install -Dm755 vendored-node/bin/node crates-tauri/yaak-app/vendored/node/yaaknode
+
+      # Vendor protoc binary and includes
+      - mkdir -p crates-tauri/yaak-app/vendored/protoc
+      - install -Dm755 protoc-bin/protoc crates-tauri/yaak-app/vendored/protoc/yaakprotoc
+      - mkdir -p crates-tauri/yaak-app/vendored/protoc/include && cp -r protoc-bin/google crates-tauri/yaak-app/vendored/protoc/include/google
+
+      # Patch lockfile: add resolved URLs for nested workspace deps that npm
+      # omits (see https://github.com/npm/cli/issues/4460)
+      - >-
+        node -e "const fs=require('fs');
+        const p='package-lock.json';
+        const d=JSON.parse(fs.readFileSync(p,'utf-8'));
+        for(const[n,info]of Object.entries(d.packages||{})){
+        if(!n||info.link||info.resolved||!n.includes('node_modules/')||!info.version)continue;
+        const pkg=n.split('node_modules/').pop();
+        const base=pkg.split('/').pop();
+        info.resolved='https://registry.npmjs.org/'+pkg+'/-/'+base+'-'+info.version+'.tgz';
+        }fs.writeFileSync(p,JSON.stringify(d,null,2));"
+
+      # Install npm dependencies offline
+      - npm ci --offline
+
+      # Pre-fetch Cargo dependencies offline
+      - cargo --offline fetch --manifest-path Cargo.toml
+
+      # Skip wasm-pack build (pre-built wasm is checked into the repo)
+      - >-
+        node -e "const fs=require('fs');
+        const p='crates/yaak-templates/package.json';
+        const d=JSON.parse(fs.readFileSync(p));
+        d.scripts['build:pack']='echo Skipping wasm-pack build';
+        fs.writeFileSync(p,JSON.stringify(d,null,2));"
+
+      # Build all workspace packages (frontend, plugins, wasm, plugin-runtime)
+      - npm run build
+
+      # Copy built plugins to vendored directory
+      - npm run vendor:vendor-plugins
+
+      # Build the Tauri app (cargo build directly to avoid inotify limits from tauri CLI)
+      - cargo build --offline --release -p yaak-app
+
+      # Install binary
+      - install -Dm755 target/release/yaak-app /app/bin/yaak-app
+
+      # Install icons from source
+      - install -Dm644 crates-tauri/yaak-app/icons/release/32x32.png /app/share/icons/hicolor/32x32/apps/yaak-app.png
+      - install -Dm644 crates-tauri/yaak-app/icons/release/64x64.png /app/share/icons/hicolor/64x64/apps/yaak-app.png
+      - install -Dm644 crates-tauri/yaak-app/icons/release/128x128.png /app/share/icons/hicolor/128x128/apps/yaak-app.png
+      - install -Dm644 crates-tauri/yaak-app/icons/release/icon.png /app/share/icons/hicolor/512x512/apps/yaak-app.png
+
+      # Install desktop file
+      - >-
+        printf '[Desktop Entry]\nCategories=Development;\nComment=The API client for modern developers\nExec=yaak-app\nIcon=yaak-app\nName=Yaak\nStartupWMClass=yaak\nTerminal=false\nType=Application\n'
+        > yaak.desktop
+      - install -Dm644 yaak.desktop /app/share/applications/yaak.desktop
+
+      # Install metainfo and license
+      - install -Dm644 app.yaak.Yaak.metainfo.xml /app/share/metainfo/app.yaak.Yaak.metainfo.xml
       - install -Dm644 LICENSE /app/share/licenses/app.yaak.Yaak/LICENSE
 
     sources:
-      - type: file
-        dest-filename: yaak.deb
-        url: https://github.com/mountain-loop/yaak/releases/download/v2026.1.2/yaak_2026.1.2_amd64.deb
-        sha256: "c4236b5bcf391e579dc79b71c3b5c58f6f9bfc6c175fc70426d0ca85799beba5"
+      # Application source
+      - type: git
+        url: https://github.com/mountain-loop/yaak.git
+        tag: v2026.1.2
+        commit: bd7e840a5700ddefb5ef1f22771cc5555000f777
+        x-checker-data:
+          type: git
+          tag-pattern: ^v(\d+\.\d+\.\d+)$
+
+      # Offline npm dependencies
+      - node-sources.json
+
+      # Offline Cargo dependencies
+      - cargo-sources.json
+
+      # Vendored Node.js binary (x86_64)
+      - type: archive
+        url: https://nodejs.org/download/release/v24.11.1/node-v24.11.1-linux-x64.tar.gz
+        sha256: 58a5ff5cc8f2200e458bea22e329d5c1994aa1b111d499ca46ec2411d58239ca
+        strip-components: 1
+        dest: vendored-node
         only-arches:
           - x86_64
-      - type: file
-        dest-filename: yaak.deb
-        url: https://github.com/mountain-loop/yaak/releases/download/v2026.1.2/yaak_2026.1.2_arm64.deb
-        sha256: "9ba9b7c9df56ffb9b801e40cb38685f1650cf7e2f9e85dad0ae3329f8e01ff6d"
+
+      # Vendored Node.js binary (aarch64)
+      - type: archive
+        url: https://nodejs.org/download/release/v24.11.1/node-v24.11.1-linux-arm64.tar.gz
+        sha256: 0dc93ec5c798b0d347f068db6d205d03dea9a71765e6a53922b682b91265d71f
+        strip-components: 1
+        dest: vendored-node
         only-arches:
           - aarch64
+
+      # Vendored protoc binary and includes (x86_64)
+      - type: archive
+        url: https://github.com/protocolbuffers/protobuf/releases/download/v33.1/protoc-33.1-linux-x86_64.zip
+        sha256: f3340e28a83d1c637d8bafdeed92b9f7db6a384c26bca880a6e5217b40a4328b
+        dest: protoc-bin
+        only-arches:
+          - x86_64
+
+      # Vendored protoc binary and includes (aarch64)
+      - type: archive
+        url: https://github.com/protocolbuffers/protobuf/releases/download/v33.1/protoc-33.1-linux-aarch_64.zip
+        sha256: 6018147740548e0e0f764408c87f4cd040e6e1c1203e13aeacaf811892b604f3
+        dest: protoc-bin
+        only-arches:
+          - aarch64
+
+      # License file
       - type: file
         path: ../LICENSE
+
+      # Metainfo file (not in tagged source yet)
+      - type: file
+        path: app.yaak.Yaak.metainfo.xml
