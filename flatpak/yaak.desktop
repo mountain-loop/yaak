@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=Development;
+Comment=The API client for modern developers
+Exec=yaak-app
+Icon=yaak-app
+Name=Yaak
+StartupWMClass=yaak
+Terminal=false
+Type=Application

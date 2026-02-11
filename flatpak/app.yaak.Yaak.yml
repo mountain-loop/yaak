@@ -53,50 +53,23 @@ modules:
         SKIP_WASM_BUILD: "1"
 
     build-commands:
-      # Vendor Node.js binary (sidecar for plugin runtime)
       - mkdir -p crates-tauri/yaak-app/vendored/node
       - install -Dm755 vendored-node/bin/node crates-tauri/yaak-app/vendored/node/yaaknode
-
-      # Vendor protoc binary and includes
       - mkdir -p crates-tauri/yaak-app/vendored/protoc
       - install -Dm755 protoc-bin/protoc crates-tauri/yaak-app/vendored/protoc/yaakprotoc
       - mkdir -p crates-tauri/yaak-app/vendored/protoc/include && cp -r protoc-bin/google crates-tauri/yaak-app/vendored/protoc/include/google
-
-      # Patch lockfile: add resolved URLs for nested workspace deps that npm
-      # omits (see https://github.com/npm/cli/issues/4460)
       - node flatpak/patch-lockfile.cjs
-
-      # Install npm dependencies offline
       - npm ci --offline
-
-      # Pre-fetch Cargo dependencies offline
       - cargo --offline fetch --manifest-path Cargo.toml
-
-      # Build all workspace packages (frontend, plugins, wasm, plugin-runtime)
       - npm run build
-
-      # Copy built plugins to vendored directory
       - npm run vendor:vendor-plugins
-
-      # Build the Tauri app (cargo build directly to avoid inotify limits from tauri CLI)
       - cargo build --offline --release -p yaak-app
-
-      # Install binary
       - install -Dm755 target/release/yaak-app /app/bin/yaak-app
-
-      # Install icons from source
       - install -Dm644 crates-tauri/yaak-app/icons/release/32x32.png /app/share/icons/hicolor/32x32/apps/yaak-app.png
       - install -Dm644 crates-tauri/yaak-app/icons/release/64x64.png /app/share/icons/hicolor/64x64/apps/yaak-app.png
       - install -Dm644 crates-tauri/yaak-app/icons/release/128x128.png /app/share/icons/hicolor/128x128/apps/yaak-app.png
       - install -Dm644 crates-tauri/yaak-app/icons/release/icon.png /app/share/icons/hicolor/512x512/apps/yaak-app.png
-
-      # Install desktop file
-      - >-
-        printf '[Desktop Entry]\nCategories=Development;\nComment=The API client for modern developers\nExec=yaak-app\nIcon=yaak-app\nName=Yaak\nStartupWMClass=yaak\nTerminal=false\nType=Application\n'
-        > yaak.desktop
-      - install -Dm644 yaak.desktop /app/share/applications/yaak.desktop
-
-      # Install metainfo and license
+      - install -Dm644 flatpak/yaak.desktop /app/share/applications/yaak.desktop
       - install -Dm644 flatpak/app.yaak.Yaak.metainfo.xml /app/share/metainfo/app.yaak.Yaak.metainfo.xml
       - install -Dm644 LICENSE /app/share/licenses/app.yaak.Yaak/LICENSE
 
@@ -105,7 +78,7 @@ modules:
       - type: git
         url: https://github.com/mountain-loop/yaak.git
         tag: v2026.2.0
-        commit: adeaaccc4504db3c737334633b08dad3053aa82c
+        commit: bb1b1c2f15b85427fe057e17d98849fa8a5bb836
         x-checker-data:
           type: git
           tag-pattern: ^v(\d+\.\d+\.\d+)$
@@ -153,4 +126,3 @@ modules:
       # License file
       - type: file
         path: ../LICENSE
-
