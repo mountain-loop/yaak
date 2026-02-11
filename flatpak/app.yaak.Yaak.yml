@@ -64,16 +64,7 @@ modules:
 
       # Patch lockfile: add resolved URLs for nested workspace deps that npm
       # omits (see https://github.com/npm/cli/issues/4460)
-      - >-
-        node -e "const fs=require('fs');
-        const p='package-lock.json';
-        const d=JSON.parse(fs.readFileSync(p,'utf-8'));
-        for(const[n,info]of Object.entries(d.packages||{})){
-        if(!n||info.link||info.resolved||!n.includes('node_modules/')||!info.version)continue;
-        const pkg=n.split('node_modules/').pop();
-        const base=pkg.split('/').pop();
-        info.resolved='https://registry.npmjs.org/'+pkg+'/-/'+base+'-'+info.version+'.tgz';
-        }fs.writeFileSync(p,JSON.stringify(d,null,2));"
+      - node flatpak/patch-lockfile.cjs
 
       # Install npm dependencies offline
       - npm ci --offline
@@ -114,7 +105,7 @@ modules:
       - type: git
         url: https://github.com/mountain-loop/yaak.git
         tag: v2026.2.0
-        commit: 76ee3fa61bebe8a5cc57cb286e8210155f516b75
+        commit: adeaaccc4504db3c737334633b08dad3053aa82c
         x-checker-data:
           type: git
           tag-pattern: ^v(\d+\.\d+\.\d+)$
