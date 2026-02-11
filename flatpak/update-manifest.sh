@@ -8,12 +8,14 @@
 # This script:
 #   1. Updates the git tag and commit in the manifest
 #   2. Regenerates cargo-sources.json and node-sources.json from the tagged lockfiles
+#   3. Adds a new <release> entry to the metainfo
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$SCRIPT_DIR/app.yaak.Yaak.yml"
+METAINFO="$SCRIPT_DIR/app.yaak.Yaak.metainfo.xml"
 
 if [ $# -lt 1 ]; then
     echo "Usage: $0 <version-tag>"
@@ -74,8 +76,14 @@ node -e "
 flatpak-node-generator --no-requests-cache \
   -o "$SCRIPT_DIR/node-sources.json" npm "$TMPDIR/package-lock.json"
 
+# Update metainfo with new release
+TODAY=$(date +%Y-%m-%d)
+sed -i "s|  <releases>|  <releases>\n    <release version=\"$VERSION\" date=\"$TODAY\" />|" "$METAINFO"
+echo "Updated metainfo with release $VERSION."
+
 echo ""
 echo "Done! Review the changes:"
 echo "  $MANIFEST"
+echo "  $METAINFO"
 echo "  $SCRIPT_DIR/cargo-sources.json"
 echo "  $SCRIPT_DIR/node-sources.json"
