@@ -16,6 +16,13 @@ jobs:
       - name: Checkout app repo
         uses: actions/checkout@v4
 
+      - name: Checkout Flathub repo
+        uses: actions/checkout@v4
+        with:
+          repository: flathub/app.yaak.Yaak
+          token: ${{ secrets.FLATHUB_TOKEN }}
+          path: flathub-repo
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -32,22 +39,7 @@ jobs:
           git clone --depth 1 https://github.com/flatpak/flatpak-builder-tools flatpak/flatpak-builder-tools
 
       - name: Run update-manifest.sh
-        run: bash flatpak/update-manifest.sh "${{ github.event.release.tag_name }}"
-
-      - name: Checkout Flathub repo
-        uses: actions/checkout@v4
-        with:
-          repository: flathub/app.yaak.Yaak
-          token: ${{ secrets.FLATHUB_TOKEN }}
-          path: flathub-repo
-
-      - name: Copy updated files to Flathub repo
-        run: |
-          cp flatpak/app.yaak.Yaak.yml flathub-repo/
-          cp flatpak/cargo-sources.json flathub-repo/
-          cp flatpak/node-sources.json flathub-repo/
-          cp LICENSE flathub-repo/
-          sed -i 's|path: \.\./LICENSE|path: LICENSE|' flathub-repo/app.yaak.Yaak.yml
+        run: bash flatpak/update-manifest.sh "${{ github.event.release.tag_name }}" flathub-repo
 
       - name: Commit and push to Flathub
         working-directory: flathub-repo

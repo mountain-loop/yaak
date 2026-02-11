@@ -7,20 +7,25 @@
 #   Clone https://github.com/flatpak/flatpak-builder-tools (for cargo generator)
 #
 # Usage:
-#   ./flatpak/generate-sources.sh
+#   ./flatpak/generate-sources.sh <flathub-repo-path>
+#   ./flatpak/generate-sources.sh ../flathub-repo
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Generate cargo-sources.json
-python3 "$SCRIPT_DIR/flatpak-builder-tools/cargo/flatpak-cargo-generator.py" \
-  -o "$SCRIPT_DIR/cargo-sources.json" "$REPO_ROOT/Cargo.lock"
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <flathub-repo-path>"
+    echo "Example: $0 ../flathub-repo"
+    exit 1
+fi
 
-# Generate node-sources.json from a patched copy of the lockfile.
-# npm omits resolved/integrity for some workspace deps, and
-# flatpak-node-generator can't handle workspace link entries.
+FLATHUB_REPO="$(cd "$1" && pwd)"
+
+python3 "$SCRIPT_DIR/flatpak-builder-tools/cargo/flatpak-cargo-generator.py" \
+  -o "$FLATHUB_REPO/cargo-sources.json" "$REPO_ROOT/Cargo.lock"
+
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
@@ -40,4 +45,4 @@ node -e "
 " "$TMPDIR/package-lock.json"
 
 flatpak-node-generator --no-requests-cache \
-  -o "$SCRIPT_DIR/node-sources.json" npm "$TMPDIR/package-lock.json"
+  -o "$FLATHUB_REPO/node-sources.json" npm "$TMPDIR/package-lock.json"
