@@ -81,6 +81,10 @@ impl RenderOptions {
     pub fn throw() -> Self {
         Self { error_behavior: RenderErrorBehavior::Throw }
     }
+
+    pub fn return_empty() -> Self {
+        Self { error_behavior: RenderErrorBehavior::ReturnEmpty }
+    }
 }
 
 impl RenderErrorBehavior {

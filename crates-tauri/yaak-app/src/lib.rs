@@ -1095,8 +1095,13 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
 
     // Convert HashMap<String, JsonPrimitive> to serde_json::Value for rendering
     let values_json: serde_json::Value = serde_json::to_value(&values)?;
-    let rendered_json =
-        render_json_value(values_json, environment_chain, &cb, &RenderOptions::throw()).await?;
+    let rendered_json = render_json_value(
+        values_json,
+        environment_chain,
+        &cb,
+        &RenderOptions::return_empty(),
+    )
+    .await?;
 
     // Convert back to HashMap<String, JsonPrimitive>
     let rendered_values: HashMap<String, JsonPrimitive> = serde_json::from_value(rendered_json)?;
