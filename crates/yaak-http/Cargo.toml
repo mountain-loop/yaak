@@ -12,6 +12,7 @@ bytes = "1.11.1"
 cookie = "0.18.1"
 flate2 = "1"
 futures-util = "0.3"
+http-body = "1"
 url = "2"
 zstd = "0.13"
 hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }

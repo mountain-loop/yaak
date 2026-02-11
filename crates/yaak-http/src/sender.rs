@@ -2,7 +2,9 @@ use crate::decompress::{ContentEncoding, streaming_decoder};
 use crate::error::{Error, Result};
 use crate::types::{SendableBody, SendableHttpRequest};
 use async_trait::async_trait;
+use bytes::Bytes;
 use futures_util::StreamExt;
+use http_body::{Body as HttpBody, Frame, SizeHint};
 use reqwest::{Client, Method, Version};
 use std::fmt::Display;
 use std::pin::Pin;
@@ -413,10 +415,16 @@ impl HttpSender for ReqwestSender {
             Some(SendableBody::Bytes(bytes)) => {
                 req_builder = req_builder.body(bytes);
             }
-            Some(SendableBody::Stream(stream)) => {
-                // Convert AsyncRead stream to reqwest Body
-                let stream = tokio_util::io::ReaderStream::new(stream);
-                let body = reqwest::Body::wrap_stream(stream);
+            Some(SendableBody::Stream { data, content_length }) => {
+                // Convert AsyncRead stream to reqwest Body. If content length is
+                // known, wrap with a SizedBody so hyper can set Content-Length
+                // automatically (for both HTTP/1.1 and HTTP/2).
+                let stream = tokio_util::io::ReaderStream::new(data);
+                let body = if let Some(len) = content_length {
+                    reqwest::Body::wrap(SizedBody::new(stream, len))
+                } else {
+                    reqwest::Body::wrap_stream(stream)
+                };
                 req_builder = req_builder.body(body);
             }
         }
@@ -517,6 +525,55 @@ impl HttpSender for ReqwestSender {
             body_stream,
             encoding,
         ))
+    }
+}
+
+/// A wrapper around a byte stream that reports a known content length via
+/// `size_hint()`. This lets hyper set `Content-Length` automatically (as a
+/// pseudo-header in HTTP/2, or a regular header in HTTP/1.1) without us
+/// having to add it as an explicit header — which causes duplicates and
+/// breaks HTTP/2.
+struct SizedBody<S> {
+    stream: S,
+    remaining: u64,
+}
+
+// SAFETY: SizedBody is only ever accessed via Pin<&mut Self> through the
+// HttpBody::poll_frame method. It is never actually shared across threads.
+// This is needed because reqwest::Body::wrap requires Sync, but our inner
+// stream (ReaderStream<Pin<Box<dyn AsyncRead + Send>>>) is not Sync.
+unsafe impl<S: Send> Sync for SizedBody<S> {}
+
+impl<S> SizedBody<S> {
+    fn new(stream: S, content_length: u64) -> Self {
+        Self { stream, remaining: content_length }
+    }
+}
+
+impl<S> HttpBody for SizedBody<S>
+where
+    S: futures_util::Stream<Item = std::result::Result<Bytes, std::io::Error>> + Send + Unpin + 'static,
+{
+    type Data = Bytes;
+    type Error = std::io::Error;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<std::result::Result<Frame<Self::Data>, Self::Error>>> {
+        match Pin::new(&mut self.stream).poll_next(cx) {
+            Poll::Ready(Some(Ok(chunk))) => {
+                self.remaining = self.remaining.saturating_sub(chunk.len() as u64);
+                Poll::Ready(Some(Ok(Frame::data(chunk))))
+            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        SizeHint::with_exact(self.remaining)
     }
 }
 
