@@ -47,7 +47,9 @@ let changesMade = false;
 async function fillAllResolved(packages) {
   for (const packagePath in packages) {
     if (packagePath === "") continue;
+    if (!packagePath.includes("node_modules/")) continue;
     const p = packages[packagePath];
+    if (p.link) continue;
     if (!p.inBundle && !p.bundled && (!p.resolved || !p.integrity)) {
       const packageName =
         p.name ||

@@ -4,7 +4,7 @@ on:
     types: [published]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   update-flathub:
@@ -33,6 +33,15 @@ jobs:
 
       - name: Run update-manifest.sh
         run: bash flatpak/update-manifest.sh "${{ github.event.release.tag_name }}"
+
+      - name: Commit metainfo update to app repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add flatpak/app.yaak.Yaak.metainfo.xml
+          git diff --cached --quiet && echo "No metainfo changes" && exit 0
+          git commit -m "Add ${{ github.event.release.tag_name }} to metainfo releases"
+          git push origin HEAD:main
 
       - name: Checkout Flathub repo
         uses: actions/checkout@v4
