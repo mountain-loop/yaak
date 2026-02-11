@@ -6,14 +6,14 @@
 #   ./flatpak/update-manifest.sh v2026.2.0
 #
 # This script:
-#   1. Resolves the git commit for the given tag
-#   2. Updates the manifest YAML with the new tag and commit
-#   3. Updates the metainfo.xml with a new <release> entry
-#   4. Regenerates cargo-sources.json and node-sources.json
+#   1. Updates the git tag and commit in the manifest
+#   2. Regenerates cargo-sources.json and node-sources.json from the tagged lockfiles
+#   3. Adds a new <release> entry to the metainfo
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$SCRIPT_DIR/app.yaak.Yaak.yml"
 METAINFO="$SCRIPT_DIR/app.yaak.Yaak.metainfo.xml"
 
@@ -26,47 +26,60 @@ fi
 VERSION_TAG="$1"
 VERSION="${VERSION_TAG#v}"
 
-# Only allow stable releases (skip beta, alpha, rc, etc.)
 if [[ "$VERSION" == *-* ]]; then
     echo "Skipping pre-release version '$VERSION_TAG' (only stable releases are published to Flathub)"
     exit 0
 fi
 
 REPO="mountain-loop/yaak"
-
-# Resolve the commit hash for this tag
-echo "Resolving commit for tag $VERSION_TAG..."
 COMMIT=$(git ls-remote "https://github.com/$REPO.git" "refs/tags/$VERSION_TAG" | cut -f1)
+
 if [ -z "$COMMIT" ]; then
-    echo "Error: Could not resolve commit for tag '$VERSION_TAG'"
+    echo "Error: Could not resolve commit for tag $VERSION_TAG"
     exit 1
 fi
-echo "  Commit: $COMMIT"
 
-echo ""
-echo "Updating manifest: $MANIFEST"
+echo "Tag: $VERSION_TAG"
+echo "Commit: $COMMIT"
 
-# Update tag
-sed -i "s|tag: v[0-9.]*$|tag: $VERSION_TAG|" "$MANIFEST"
+# Update git tag and commit in the manifest
+sed -i "s|tag: v.*|tag: $VERSION_TAG|" "$MANIFEST"
+sed -i "s|commit: .*|commit: $COMMIT|" "$MANIFEST"
+echo "Updated manifest tag and commit."
 
-# Update commit
-sed -i "s|commit: [0-9a-f]\{40\}|commit: $COMMIT|" "$MANIFEST"
+# Regenerate offline dependency sources from the tagged lockfiles
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
 
-echo "  Manifest updated."
+echo "Fetching lockfiles from $VERSION_TAG..."
+curl -fsSL "https://raw.githubusercontent.com/$REPO/$VERSION_TAG/Cargo.lock" -o "$TMPDIR/Cargo.lock"
+curl -fsSL "https://raw.githubusercontent.com/$REPO/$VERSION_TAG/package-lock.json" -o "$TMPDIR/package-lock.json"
+curl -fsSL "https://raw.githubusercontent.com/$REPO/$VERSION_TAG/package.json" -o "$TMPDIR/package.json"
 
-echo "Updating metainfo: $METAINFO"
+echo "Generating cargo-sources.json..."
+python3 "$SCRIPT_DIR/flatpak-builder-tools/cargo/flatpak-cargo-generator.py" \
+  -o "$SCRIPT_DIR/cargo-sources.json" "$TMPDIR/Cargo.lock"
 
+echo "Generating node-sources.json..."
+node "$SCRIPT_DIR/fix-lockfile.mjs" "$TMPDIR/package-lock.json"
+
+node -e "
+  const fs = require('fs');
+  const p = process.argv[1];
+  const d = JSON.parse(fs.readFileSync(p, 'utf-8'));
+  for (const [name, info] of Object.entries(d.packages || {})) {
+    if (name && (info.link || !info.resolved)) delete d.packages[name];
+  }
+  fs.writeFileSync(p, JSON.stringify(d, null, 2));
+" "$TMPDIR/package-lock.json"
+
+flatpak-node-generator --no-requests-cache \
+  -o "$SCRIPT_DIR/node-sources.json" npm "$TMPDIR/package-lock.json"
+
+# Update metainfo with new release
 TODAY=$(date +%Y-%m-%d)
-
-# Insert new release entry after <releases>
 sed -i "s|  <releases>|  <releases>\n    <release version=\"$VERSION\" date=\"$TODAY\" />|" "$METAINFO"
-
-echo "  Metainfo updated."
-
-# Regenerate offline dependency sources
-echo ""
-echo "Regenerating dependency sources..."
-bash "$SCRIPT_DIR/generate-sources.sh"
+echo "Updated metainfo with release $VERSION."
 
 echo ""
 echo "Done! Review the changes:"
