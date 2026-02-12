@@ -529,24 +529,18 @@ impl HttpSender for ReqwestSender {
 }
 
 /// A wrapper around a byte stream that reports a known content length via
-/// `size_hint()`. This lets hyper set `Content-Length` automatically (as a
-/// pseudo-header in HTTP/2, or a regular header in HTTP/1.1) without us
-/// having to add it as an explicit header — which causes duplicates and
-/// breaks HTTP/2.
+/// `size_hint()`. This lets hyper set the `Content-Length` header
+/// automatically based on the body size, without us having to add it as an
+/// explicit header — which can cause duplicate `Content-Length` headers and
+/// break HTTP/2.
 struct SizedBody<S> {
-    stream: S,
+    stream: std::sync::Mutex<S>,
     remaining: u64,
 }
 
-// SAFETY: SizedBody is only ever accessed via Pin<&mut Self> through the
-// HttpBody::poll_frame method. It is never actually shared across threads.
-// This is needed because reqwest::Body::wrap requires Sync, but our inner
-// stream (ReaderStream<Pin<Box<dyn AsyncRead + Send>>>) is not Sync.
-unsafe impl<S: Send> Sync for SizedBody<S> {}
-
 impl<S> SizedBody<S> {
     fn new(stream: S, content_length: u64) -> Self {
-        Self { stream, remaining: content_length }
+        Self { stream: std::sync::Mutex::new(stream), remaining: content_length }
     }
 }
 
@@ -558,12 +552,14 @@ where
     type Error = std::io::Error;
 
     fn poll_frame(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<std::result::Result<Frame<Self::Data>, Self::Error>>> {
-        match Pin::new(&mut self.stream).poll_next(cx) {
+        let this = self.get_mut();
+        let mut stream = this.stream.lock().unwrap();
+        match stream.poll_next_unpin(cx) {
             Poll::Ready(Some(Ok(chunk))) => {
-                self.remaining = self.remaining.saturating_sub(chunk.len() as u64);
+                this.remaining = this.remaining.saturating_sub(chunk.len() as u64);
                 Poll::Ready(Some(Ok(Frame::data(chunk))))
             }
             Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
