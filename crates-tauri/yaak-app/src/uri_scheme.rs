@@ -55,7 +55,7 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                 &http_client,
                 &plugin_context,
                 name,
-                version,
+                Some(version),
             )
             .await?;
             app_handle.emit(
