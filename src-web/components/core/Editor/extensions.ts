@@ -67,6 +67,7 @@ import type { TwigCompletionOption } from './twig/completion';
 import { twig } from './twig/extension';
 import { pathParametersPlugin } from './twig/pathParameters';
 import { url } from './url/extension';
+import { searchMatchCount } from './searchMatchCount';
 
 export const syntaxHighlightStyle = HighlightStyle.define([
   {
@@ -256,6 +257,7 @@ export const readonlyExtensions = [
 
 export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) => [
   search({ top: true }),
+  searchMatchCount(),
   hideGutter
     ? []
     : [
