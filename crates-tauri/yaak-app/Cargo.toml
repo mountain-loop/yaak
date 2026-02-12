@@ -57,6 +57,7 @@ url = "2"
 tokio-util = { version = "0.7", features = ["codec"] }
 ts-rs = { workspace = true }
 uuid = "1.12.1"
+yaak-api = { workspace = true }
 yaak-common = { workspace = true }
 yaak-tauri-utils = { workspace = true }
 yaak-core = { workspace = true }
