@@ -414,7 +414,7 @@ async fn execute_transaction<R: Runtime>(
             sendable_request.body = Some(SendableBody::Bytes(bytes));
             None
         }
-        Some(SendableBody::Stream(stream)) => {
+        Some(SendableBody::Stream { data: stream, content_length }) => {
             // Wrap stream with TeeReader to capture data as it's read
             // Use unbounded channel to ensure all data is captured without blocking the HTTP request
             let (body_chunk_tx, body_chunk_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
@@ -448,7 +448,7 @@ async fn execute_transaction<R: Runtime>(
                 None
             };
 
-            sendable_request.body = Some(SendableBody::Stream(pinned));
+            sendable_request.body = Some(SendableBody::Stream { data: pinned, content_length });
             handle
         }
         None => {

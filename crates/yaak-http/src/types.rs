@@ -16,7 +16,13 @@ pub(crate) const MULTIPART_BOUNDARY: &str = "------YaakFormBoundary";
 
 pub enum SendableBody {
     Bytes(Bytes),
-    Stream(Pin<Box<dyn AsyncRead + Send + 'static>>),
+    Stream {
+        data: Pin<Box<dyn AsyncRead + Send + 'static>>,
+        /// Known content length for the stream, if available. This is used by
+        /// the sender to set the body size hint so that hyper can set
+        /// Content-Length automatically for both HTTP/1.1 and HTTP/2.
+        content_length: Option<u64>,
+    },
 }
 
 enum SendableBodyWithMeta {
@@ -31,7 +37,10 @@ impl From<SendableBodyWithMeta> for SendableBody {
     fn from(value: SendableBodyWithMeta) -> Self {
         match value {
             SendableBodyWithMeta::Bytes(b) => SendableBody::Bytes(b),
-            SendableBodyWithMeta::Stream { data, .. } => SendableBody::Stream(data),
+            SendableBodyWithMeta::Stream { data, content_length } => SendableBody::Stream {
+                data,
+                content_length: content_length.map(|l| l as u64),
+            },
         }
     }
 }
@@ -186,23 +195,11 @@ async fn build_body(
         }
     }
 
-    // Check if Transfer-Encoding: chunked is already set
-    let has_chunked_encoding = headers.iter().any(|h| {
-        h.0.to_lowercase() == "transfer-encoding" && h.1.to_lowercase().contains("chunked")
-    });
-
-    // Add a Content-Length header only if chunked encoding is not being used
-    if !has_chunked_encoding {
-        let content_length = match body {
-            Some(SendableBodyWithMeta::Bytes(ref bytes)) => Some(bytes.len()),
-            Some(SendableBodyWithMeta::Stream { content_length, .. }) => content_length,
-            None => None,
-        };
-
-        if let Some(cl) = content_length {
-            headers.push(("Content-Length".to_string(), cl.to_string()));
-        }
-    }
+    // NOTE: Content-Length is NOT set as an explicit header here. Instead, the
+    // body's content length is carried via SendableBody::Stream { content_length }
+    // and used by the sender to set the body size hint. This lets hyper handle
+    // Content-Length automatically for both HTTP/1.1 and HTTP/2, avoiding the
+    // duplicate Content-Length that breaks HTTP/2 servers.
 
     Ok((body.map(|b| b.into()), headers))
 }
@@ -928,7 +925,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_no_content_length_with_chunked_encoding() -> Result<()> {
+    async fn test_no_content_length_header_added_by_build_body() -> Result<()> {
+        let mut body = BTreeMap::new();
+        body.insert("text".to_string(), json!("Hello, World!"));
+
+        let headers = vec![];
+
+        let (_, result_headers) =
+            build_body("POST", &Some("text/plain".to_string()), &body, headers).await?;
+
+        // Content-Length should NOT be set as an explicit header. Instead, the
+        // sender uses the body's size_hint to let hyper set it automatically,
+        // which works correctly for both HTTP/1.1 and HTTP/2.
+        let has_content_length =
+            result_headers.iter().any(|h| h.0.to_lowercase() == "content-length");
+        assert!(!has_content_length, "Content-Length should not be set as an explicit header");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_chunked_encoding_header_preserved() -> Result<()> {
         let mut body = BTreeMap::new();
         body.insert("text".to_string(), json!("Hello, World!"));
 
@@ -938,43 +955,11 @@ mod tests {
         let (_, result_headers) =
             build_body("POST", &Some("text/plain".to_string()), &body, headers).await?;
 
-        // Verify that Content-Length is NOT present when Transfer-Encoding: chunked is set
-        let has_content_length =
-            result_headers.iter().any(|h| h.0.to_lowercase() == "content-length");
-        assert!(!has_content_length, "Content-Length should not be present with chunked encoding");
-
         // Verify that the Transfer-Encoding header is still present
         let has_chunked = result_headers.iter().any(|h| {
             h.0.to_lowercase() == "transfer-encoding" && h.1.to_lowercase().contains("chunked")
         });
         assert!(has_chunked, "Transfer-Encoding: chunked should be preserved");
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_content_length_without_chunked_encoding() -> Result<()> {
-        let mut body = BTreeMap::new();
-        body.insert("text".to_string(), json!("Hello, World!"));
-
-        // Headers without Transfer-Encoding: chunked
-        let headers = vec![];
-
-        let (_, result_headers) =
-            build_body("POST", &Some("text/plain".to_string()), &body, headers).await?;
-
-        // Verify that Content-Length IS present when Transfer-Encoding: chunked is NOT set
-        let content_length_header =
-            result_headers.iter().find(|h| h.0.to_lowercase() == "content-length");
-        assert!(
-            content_length_header.is_some(),
-            "Content-Length should be present without chunked encoding"
-        );
-        assert_eq!(
-            content_length_header.unwrap().1,
-            "13",
-            "Content-Length should match the body size"
-        );
 
         Ok(())
     }
