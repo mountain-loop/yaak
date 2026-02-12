@@ -33,6 +33,25 @@ pub fn yaak_api_client(version: &str) -> Result<Client> {
     Ok(builder.build()?)
 }
 
+/// Returns the system proxy URL if one is enabled, e.g. `http://host:port`.
+pub fn get_system_proxy_url() -> Option<String> {
+    let sys = match sysproxy::Sysproxy::get_system_proxy() {
+        Ok(sys) if sys.enable => sys,
+        Ok(_) => {
+            debug!("System proxy detected but not enabled");
+            return None;
+        }
+        Err(e) => {
+            debug!("Could not detect system proxy: {e}");
+            return None;
+        }
+    };
+
+    let url = format!("http://{}:{}", sys.host, sys.port);
+    debug!("Detected system proxy: {url}");
+    Some(url)
+}
+
 fn get_system_proxy() -> Option<reqwest::Proxy> {
     let sys = match sysproxy::Sysproxy::get_system_proxy() {
         Ok(sys) if sys.enable => sys,
