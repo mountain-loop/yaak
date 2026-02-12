@@ -1,0 +1,12 @@
+[package]
+name = "yaak-api"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+log = { workspace = true }
+reqwest = { workspace = true, features = ["gzip"] }
+sysproxy = "0.3"
+thiserror = { workspace = true }
+yaak-common = { workspace = true }
