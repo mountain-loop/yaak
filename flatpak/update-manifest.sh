@@ -1,30 +1,27 @@
 #!/usr/bin/env bash
 #
-# Update the Flatpak manifest for a new release.
+# Update the Flathub repo for a new release.
 #
 # Usage:
-#   ./flatpak/update-manifest.sh v2026.2.0
-#
-# This script:
-#   1. Updates the git tag and commit in the manifest
-#   2. Regenerates cargo-sources.json and node-sources.json from the tagged lockfiles
-#   3. Adds a new <release> entry to the metainfo
+#   ./flatpak/update-manifest.sh <version-tag> <flathub-repo-path>
+#   ./flatpak/update-manifest.sh v2026.2.0 ../flathub-repo
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MANIFEST="$SCRIPT_DIR/app.yaak.Yaak.yml"
-METAINFO="$SCRIPT_DIR/app.yaak.Yaak.metainfo.xml"
 
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <version-tag>"
-    echo "Example: $0 v2026.2.0"
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <version-tag> <flathub-repo-path>"
+    echo "Example: $0 v2026.2.0 ../flathub-repo"
     exit 1
 fi
 
 VERSION_TAG="$1"
 VERSION="${VERSION_TAG#v}"
+FLATHUB_REPO="$(cd "$2" && pwd)"
+MANIFEST="$FLATHUB_REPO/app.yaak.Yaak.yml"
+METAINFO="$SCRIPT_DIR/app.yaak.Yaak.metainfo.xml"
 
 if [[ "$VERSION" == *-* ]]; then
     echo "Skipping pre-release version '$VERSION_TAG' (only stable releases are published to Flathub)"
@@ -58,7 +55,7 @@ curl -fsSL "https://raw.githubusercontent.com/$REPO/$VERSION_TAG/package.json" -
 
 echo "Generating cargo-sources.json..."
 python3 "$SCRIPT_DIR/flatpak-builder-tools/cargo/flatpak-cargo-generator.py" \
-  -o "$SCRIPT_DIR/cargo-sources.json" "$TMPDIR/Cargo.lock"
+  -o "$FLATHUB_REPO/cargo-sources.json" "$TMPDIR/Cargo.lock"
 
 echo "Generating node-sources.json..."
 node "$SCRIPT_DIR/fix-lockfile.mjs" "$TMPDIR/package-lock.json"
@@ -74,7 +71,7 @@ node -e "
 " "$TMPDIR/package-lock.json"
 
 flatpak-node-generator --no-requests-cache \
-  -o "$SCRIPT_DIR/node-sources.json" npm "$TMPDIR/package-lock.json"
+  -o "$FLATHUB_REPO/node-sources.json" npm "$TMPDIR/package-lock.json"
 
 # Update metainfo with new release
 TODAY=$(date +%Y-%m-%d)
@@ -85,5 +82,5 @@ echo ""
 echo "Done! Review the changes:"
 echo "  $MANIFEST"
 echo "  $METAINFO"
-echo "  $SCRIPT_DIR/cargo-sources.json"
-echo "  $SCRIPT_DIR/node-sources.json"
+echo "  $FLATHUB_REPO/cargo-sources.json"
+echo "  $FLATHUB_REPO/node-sources.json"
