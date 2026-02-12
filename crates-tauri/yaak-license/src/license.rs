@@ -118,7 +118,7 @@ pub async fn activate_license<R: Runtime>(
     license_key: &str,
 ) -> Result<()> {
     info!("Activating license {}", license_key);
-    let client = reqwest::Client::new();
+    let client = yaak_api_client(window.app_handle())?;
     let payload = ActivateLicenseRequestPayload {
         license_key: license_key.to_string(),
         app_platform: get_os_str().to_string(),
@@ -155,7 +155,7 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
     let app_handle = window.app_handle();
     let activation_id = get_activation_id(app_handle).await;
 
-    let client = reqwest::Client::new();
+    let client = yaak_api_client(window.app_handle())?;
     let path = format!("/licenses/activations/{}/deactivate", activation_id);
     let payload = DeactivateLicenseRequestPayload {
         app_platform: get_os_str().to_string(),

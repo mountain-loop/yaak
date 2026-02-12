@@ -11,3 +11,5 @@ thiserror = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 regex = "1.11.0"
 yaak-common = { workspace = true }
+yaak-models = { workspace = true }
+log = { workspace = true }

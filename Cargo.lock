@@ -8301,12 +8301,14 @@ dependencies = [
 name = "yaak-tauri-utils"
 version = "0.1.0"
 dependencies = [
+ "log",
  "regex",
  "reqwest",
  "serde",
  "tauri",
  "thiserror 2.0.17",
  "yaak-common",
+ "yaak-models",
 ]
 
 [[package]]
