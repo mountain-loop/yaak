@@ -43,5 +43,7 @@ The skill generates markdown-formatted release notes following this structure:
 After outputting the release notes, ask the user if they would like to create a draft GitHub release with these notes. If they confirm, create the release using:
 
 ```bash
-gh release create <tag> --draft --prerelease --title "<tag>" --notes '<release notes>'
+gh release create <tag> --draft --prerelease --title "Release <version>" --notes '<release notes>'
 ```
+
+**IMPORTANT**: The release title format is "Release XXXX" where XXXX is the version WITHOUT the `v` prefix. For example, tag `v2026.2.1-beta.1` gets title "Release 2026.2.1-beta.1".
