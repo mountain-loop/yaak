@@ -16,13 +16,13 @@ export function searchMatchCount(): Extension {
       }
 
       update(update: ViewUpdate) {
-        // Recompute when doc changes, or search state changes
+        // Recompute when doc changes, search state changes, or selection moves
         const query = getSearchQuery(update.state);
         const prevQuery = getSearchQuery(update.startState);
         const open = searchPanelOpen(update.state);
         const prevOpen = searchPanelOpen(update.startState);
 
-        if (update.docChanged || !query.eq(prevQuery) || open !== prevOpen) {
+        if (update.docChanged || update.selectionSet || !query.eq(prevQuery) || open !== prevOpen) {
           this.updateCount();
         }
       }
@@ -32,27 +32,43 @@ export function searchMatchCount(): Extension {
         const open = searchPanelOpen(state);
         const query = getSearchQuery(state);
 
-        if (!open || !query.search) {
+        if (!open) {
           this.removeCountEl();
           return;
         }
 
+        this.ensureCountEl();
+
+        if (!query.search) {
+          if (this.countEl) {
+            this.countEl.textContent = '0/0';
+          }
+          return;
+        }
+
+        const selection = state.selection.main;
         let count = 0;
+        let currentIndex = 0;
         const MAX_COUNT = 9999;
         const cursor = query.getCursor(state);
         while (!cursor.next().done) {
           count++;
+          if (cursor.value.from <= selection.from && cursor.value.to >= selection.to) {
+            currentIndex = count;
+          }
           if (count > MAX_COUNT) break;
         }
 
-        this.ensureCountEl();
         if (this.countEl) {
-          this.countEl.textContent =
-            count > MAX_COUNT
-              ? `${MAX_COUNT}+ matches`
-              : count === 1
-                ? '1 match'
-                : `${count} matches`;
+          if (count > MAX_COUNT) {
+            this.countEl.textContent = `${MAX_COUNT}+`;
+          } else if (count === 0) {
+            this.countEl.textContent = '0/0';
+          } else if (currentIndex > 0) {
+            this.countEl.textContent = `${currentIndex}/${count}`;
+          } else {
+            this.countEl.textContent = `0/${count}`;
+          }
         }
       }
 
@@ -70,10 +86,15 @@ export function searchMatchCount(): Extension {
 
         this.countEl = document.createElement('span');
         this.countEl.className = 'cm-search-match-count';
-        // Insert after the first input (the search input)
+
+        // Reorder: insert prev button, then next button, then count after the search input
         const searchInput = panel.querySelector('input');
+        const prevBtn = panel.querySelector('button[name="prev"]');
+        const nextBtn = panel.querySelector('button[name="next"]');
         if (searchInput && searchInput.parentElement === panel) {
           searchInput.after(this.countEl);
+          if (prevBtn) this.countEl.after(prevBtn);
+          if (nextBtn && prevBtn) prevBtn.after(nextBtn);
         } else {
           panel.prepend(this.countEl);
         }

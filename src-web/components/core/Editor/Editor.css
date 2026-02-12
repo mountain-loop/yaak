@@ -434,17 +434,52 @@
 
   input {
     @apply bg-surface border-border-subtle focus:border-border-focus;
-    @apply border outline-none cursor-text;
+    @apply border outline-none;
   }
 
-  label {
-    @apply focus-within:text-text;
+  input.cm-textfield {
+      @apply cursor-text;
+  }
+
+  .cm-search label {
+    @apply inline-flex items-center h-6 px-1.5 rounded-sm border border-border-subtle cursor-default text-text-subtle text-xs;
+
+    input[type="checkbox"] {
+      @apply hidden;
+    }
+
+    &:has(:checked) {
+      @apply text-primary border-border;
+    }
   }
 
   /* Hide the "All" button */
 
   button[name="select"] {
     @apply hidden;
+  }
+
+  /* Replace next/prev button text with chevron icons */
+
+  .cm-search button[name="next"],
+  .cm-search button[name="prev"] {
+    @apply text-[0px] w-7 h-6 inline-flex items-center justify-center border border-border-subtle mr-1;
+  }
+
+  .cm-search button[name="prev"]::after,
+  .cm-search button[name="next"]::after {
+    @apply block w-3.5 h-3.5 bg-text;
+    content: "";
+  }
+
+  .cm-search button[name="prev"]::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 18l-6-6 6-6'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 18l-6-6 6-6'/%3E%3C/svg%3E");
+  }
+
+  .cm-search button[name="next"]::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E");
   }
 
   .cm-search-match-count {
