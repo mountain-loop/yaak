@@ -47,7 +47,8 @@
       "!src-web/vite.config.ts",
       "!src-web/routeTree.gen.ts",
       "!packages/plugin-runtime-types/lib",
-      "!**/bindings"
+      "!**/bindings",
+      "!flatpak"
     ]
   }
 }

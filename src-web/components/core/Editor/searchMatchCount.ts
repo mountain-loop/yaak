@@ -51,9 +51,10 @@ export function searchMatchCount(): Extension {
         let currentIndex = 0;
         const MAX_COUNT = 9999;
         const cursor = query.getCursor(state);
-        while (!cursor.next().done) {
+        for (let result = cursor.next(); !result.done; result = cursor.next()) {
           count++;
-          if (cursor.value.from <= selection.from && cursor.value.to >= selection.to) {
+          const match = result.value;
+          if (match.from <= selection.from && match.to >= selection.to) {
             currentIndex = count;
           }
           if (count > MAX_COUNT) break;
