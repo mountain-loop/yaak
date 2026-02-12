@@ -46,8 +46,8 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
 
             let plugin_manager = Arc::new((*window.state::<PluginManager>()).clone());
             let query_manager = app_handle.db_manager();
-            let version = app_handle.package_info().version.to_string();
-            let http_client = yaak_api_client(&version)?;
+            let app_version = app_handle.package_info().version.to_string();
+            let http_client = yaak_api_client(&app_version)?;
             let plugin_context = window.plugin_context();
             let pv = download_and_install(
                 plugin_manager,
@@ -55,7 +55,7 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                 &http_client,
                 &plugin_context,
                 name,
-                Some(version),
+                version,
             )
             .await?;
             app_handle.emit(
