@@ -8167,6 +8167,7 @@ dependencies = [
  "cookie",
  "flate2",
  "futures-util",
+ "http-body",
  "hyper-util",
  "log",
  "mime_guess",
