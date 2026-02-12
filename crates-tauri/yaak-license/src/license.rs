@@ -118,12 +118,12 @@ pub async fn activate_license<R: Runtime>(
     license_key: &str,
 ) -> Result<()> {
     info!("Activating license {}", license_key);
-    let version = window.app_handle().package_info().version.to_string();
-    let client = yaak_api_client(&version)?;
+    let app_version = window.app_handle().package_info().version.to_string();
+    let client = yaak_api_client(&app_version)?;
     let payload = ActivateLicenseRequestPayload {
         license_key: license_key.to_string(),
         app_platform: get_os_str().to_string(),
-        app_version: window.app_handle().package_info().version.to_string(),
+        app_version,
     };
     let response = client.post(build_url("/licenses/activate")).json(&payload).send().await?;
 
@@ -156,12 +156,12 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
     let app_handle = window.app_handle();
     let activation_id = get_activation_id(app_handle).await;
 
-    let version = window.app_handle().package_info().version.to_string();
-    let client = yaak_api_client(&version)?;
+    let app_version = window.app_handle().package_info().version.to_string();
+    let client = yaak_api_client(&app_version)?;
     let path = format!("/licenses/activations/{}/deactivate", activation_id);
     let payload = DeactivateLicenseRequestPayload {
         app_platform: get_os_str().to_string(),
-        app_version: window.app_handle().package_info().version.to_string(),
+        app_version,
     };
     let response = client.post(build_url(&path)).json(&payload).send().await?;
 
@@ -188,9 +188,10 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
 }
 
 pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<LicenseCheckStatus> {
+    let app_version = window.app_handle().package_info().version.to_string();
     let payload = CheckActivationRequestPayload {
         app_platform: get_os_str().to_string(),
-        app_version: window.package_info().version.to_string(),
+        app_version,
     };
     let activation_id = get_activation_id(window.app_handle()).await;
 
@@ -206,8 +207,7 @@ pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<Lice
         (true, _) => {
             info!("Checking license activation");
             // A license has been activated, so let's check the license server
-            let version = window.app_handle().package_info().version.to_string();
-            let client = yaak_api_client(&version)?;
+            let client = yaak_api_client(&payload.app_version)?;
             let path = format!("/licenses/activations/{activation_id}/check-v2");
             let response = client.post(build_url(&path)).json(&payload).send().await?;
 

@@ -101,8 +101,8 @@ impl YaakNotifier {
         let license_check = "disabled".to_string();
 
         let launch_info = get_or_upsert_launch_info(app_handle);
-        let version = app_handle.package_info().version.to_string();
-        let req = yaak_api_client(&version)?
+        let app_version = app_handle.package_info().version.to_string();
+        let req = yaak_api_client(&app_version)?
             .request(Method::GET, "https://notify.yaak.app/notifications")
             .query(&[
                 ("version", &launch_info.current_version),

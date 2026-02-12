@@ -87,8 +87,8 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                     return Ok(());
                 }
 
-                let version = app_handle.package_info().version.to_string();
-                let resp = yaak_api_client(&version)?.get(file_url).send().await?;
+                let app_version = app_handle.package_info().version.to_string();
+                let resp = yaak_api_client(&app_version)?.get(file_url).send().await?;
                 let json = resp.bytes().await?;
                 let p = app_handle
                     .path()
