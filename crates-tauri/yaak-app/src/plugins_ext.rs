@@ -31,7 +31,7 @@ use yaak_plugins::events::{Color, Icon, PluginContext, ShowToastRequest};
 use yaak_plugins::install::{delete_and_uninstall, download_and_install};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::get_plugin_meta;
-use yaak_tauri_utils::api_client::yaak_api_client;
+use yaak_api::yaak_api_client;
 
 static EXITING: AtomicBool = AtomicBool::new(false);
 
@@ -72,7 +72,8 @@ impl PluginUpdater {
 
         info!("Checking for plugin updates");
 
-        let http_client = yaak_api_client(window.app_handle())?;
+        let version = window.app_handle().package_info().version.to_string();
+        let http_client = yaak_api_client(&version)?;
         let plugins = window.app_handle().db().list_plugins()?;
         let updates = check_plugin_updates(&http_client, plugins.clone()).await?;
 
@@ -136,7 +137,8 @@ pub async fn cmd_plugins_search<R: Runtime>(
     app_handle: AppHandle<R>,
     query: &str,
 ) -> Result<PluginSearchResponse> {
-    let http_client = yaak_api_client(&app_handle)?;
+    let version = app_handle.package_info().version.to_string();
+    let http_client = yaak_api_client(&version)?;
     Ok(search_plugins(&http_client, query).await?)
 }
 
@@ -147,7 +149,8 @@ pub async fn cmd_plugins_install<R: Runtime>(
     version: Option<String>,
 ) -> Result<()> {
     let plugin_manager = Arc::new((*window.state::<PluginManager>()).clone());
-    let http_client = yaak_api_client(window.app_handle())?;
+    let app_version = window.app_handle().package_info().version.to_string();
+    let http_client = yaak_api_client(&app_version)?;
     let query_manager = window.state::<yaak_models::query_manager::QueryManager>();
     let plugin_context = window.plugin_context();
     download_and_install(
@@ -177,7 +180,8 @@ pub async fn cmd_plugins_uninstall<R: Runtime>(
 pub async fn cmd_plugins_updates<R: Runtime>(
     app_handle: AppHandle<R>,
 ) -> Result<PluginUpdatesResponse> {
-    let http_client = yaak_api_client(&app_handle)?;
+    let version = app_handle.package_info().version.to_string();
+    let http_client = yaak_api_client(&version)?;
     let plugins = app_handle.db().list_plugins()?;
     Ok(check_plugin_updates(&http_client, plugins).await?)
 }
@@ -186,7 +190,8 @@ pub async fn cmd_plugins_updates<R: Runtime>(
 pub async fn cmd_plugins_update_all<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> Result<Vec<PluginNameVersion>> {
-    let http_client = yaak_api_client(window.app_handle())?;
+    let version = window.app_handle().package_info().version.to_string();
+    let http_client = yaak_api_client(&version)?;
     let plugins = window.db().list_plugins()?;
 
     // Get list of available updates (already filtered to only registry plugins)

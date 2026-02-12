@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
 use yaak_common::platform::get_os_str;
 use yaak_models::util::UpdateSource;
-use yaak_tauri_utils::api_client::yaak_api_client;
+use yaak_api::yaak_api_client;
 
 // Check for updates every hour
 const MAX_UPDATE_CHECK_SECONDS: u64 = 60 * 60;
@@ -101,7 +101,8 @@ impl YaakNotifier {
         let license_check = "disabled".to_string();
 
         let launch_info = get_or_upsert_launch_info(app_handle);
-        let req = yaak_api_client(app_handle)?
+        let version = app_handle.package_info().version.to_string();
+        let req = yaak_api_client(&version)?
             .request(Method::GET, "https://notify.yaak.app/notifications")
             .query(&[
                 ("version", &launch_info.current_version),
