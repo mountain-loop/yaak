@@ -26,8 +26,21 @@ pub fn yaak_api_client(version: &str) -> Result<Client> {
         .gzip(true)
         .user_agent(ua);
 
-    if let Some(proxy) = get_system_proxy() {
-        builder = builder.proxy(proxy);
+    if let Some(sys) = get_enabled_system_proxy() {
+        let proxy_url = format!("http://{}:{}", sys.host, sys.port);
+        match reqwest::Proxy::all(&proxy_url) {
+            Ok(p) => {
+                let p = if !sys.bypass.is_empty() {
+                    p.no_proxy(reqwest::NoProxy::from_string(&sys.bypass))
+                } else {
+                    p
+                };
+                builder = builder.proxy(p);
+            }
+            Err(e) => {
+                warn!("Failed to configure system proxy: {e}");
+            }
+        }
     }
 
     Ok(builder.build()?)
@@ -35,50 +48,22 @@ pub fn yaak_api_client(version: &str) -> Result<Client> {
 
 /// Returns the system proxy URL if one is enabled, e.g. `http://host:port`.
 pub fn get_system_proxy_url() -> Option<String> {
-    let sys = match sysproxy::Sysproxy::get_system_proxy() {
-        Ok(sys) if sys.enable => sys,
-        Ok(_) => {
-            debug!("System proxy detected but not enabled");
-            return None;
-        }
-        Err(e) => {
-            debug!("Could not detect system proxy: {e}");
-            return None;
-        }
-    };
-
-    let url = format!("http://{}:{}", sys.host, sys.port);
-    debug!("Detected system proxy: {url}");
-    Some(url)
+    let sys = get_enabled_system_proxy()?;
+    Some(format!("http://{}:{}", sys.host, sys.port))
 }
 
-fn get_system_proxy() -> Option<reqwest::Proxy> {
-    let sys = match sysproxy::Sysproxy::get_system_proxy() {
-        Ok(sys) if sys.enable => sys,
+fn get_enabled_system_proxy() -> Option<sysproxy::Sysproxy> {
+    match sysproxy::Sysproxy::get_system_proxy() {
+        Ok(sys) if sys.enable => {
+            debug!("Detected system proxy: http://{}:{}", sys.host, sys.port);
+            Some(sys)
+        }
         Ok(_) => {
             debug!("System proxy detected but not enabled");
-            return None;
+            None
         }
         Err(e) => {
             debug!("Could not detect system proxy: {e}");
-            return None;
-        }
-    };
-
-    let proxy_url = format!("http://{}:{}", sys.host, sys.port);
-    debug!("Detected system proxy: {proxy_url}");
-
-    match reqwest::Proxy::all(&proxy_url) {
-        Ok(p) => {
-            let p = if !sys.bypass.is_empty() {
-                p.no_proxy(reqwest::NoProxy::from_string(&sys.bypass))
-            } else {
-                p
-            };
-            Some(p)
-        }
-        Err(e) => {
-            warn!("Failed to configure system proxy: {e}");
             None
         }
     }
