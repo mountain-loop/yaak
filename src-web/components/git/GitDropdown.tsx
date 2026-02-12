@@ -173,7 +173,6 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     { type: 'separator' },
     {
       label: 'Push',
-      hidden: !hasRemotes,
       leftSlot: <Icon icon="arrow_up_from_line" />,
       waitForOnSelect: true,
       async onSelect() {
@@ -192,7 +191,6 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     },
     {
       label: 'Pull',
-      hidden: !hasRemotes,
       leftSlot: <Icon icon="arrow_down_to_line" />,
       waitForOnSelect: true,
       async onSelect() {
