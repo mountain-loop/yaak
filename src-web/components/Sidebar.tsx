@@ -25,6 +25,7 @@ import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { bulkMoveToWorkspace } from '../commands/bulkMoveToWorkspace';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
@@ -290,6 +291,19 @@ function Sidebar({ className }: { className?: string }) {
           }
         },
       },
+      'sidebar.selected.moveToWorkspace': {
+        enable,
+        cb: async (items: SidebarModel[]) => {
+          // Filter to only include requests (not folders or workspaces)
+          const requests = items.filter(
+            (i): i is HttpRequest | GrpcRequest | WebsocketRequest =>
+              i.model === 'http_request' || i.model === 'grpc_request' || i.model === 'websocket_request'
+          );
+          if (requests.length > 0) {
+            bulkMoveToWorkspace.mutate(requests);
+          }
+        },
+      },
       'request.send': {
         enable,
         cb: async (items: SidebarModel[]) => {
@@ -426,6 +440,22 @@ function Sidebar({ className }: { className?: string }) {
           onSelect: () => {
             if (child.model === 'folder' || child.model === 'workspace') return;
             moveToWorkspace.mutate(child);
+          },
+        },
+        {
+          label: `Move ${items.length} Requests`,
+          leftSlot: <Icon icon="arrow_right_circle" />,
+          hidden:
+            workspaces.length <= 1 ||
+            items.length <= 1 ||
+            !items.some(
+              (i) =>
+                i.model === 'http_request' ||
+                i.model === 'grpc_request' ||
+                i.model === 'websocket_request'
+            ),
+          onSelect: () => {
+            actions['sidebar.selected.moveToWorkspace'].cb(items);
           },
         },
         {
