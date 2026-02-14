@@ -5,6 +5,7 @@ import type {
   JsonPrimitive,
   PluginDefinition,
 } from '@yaakapp/api';
+import type { Algorithm } from 'jsonwebtoken';
 import { DEFAULT_LOCALHOST_PORT, HOSTED_CALLBACK_URL, stopActiveServer } from './callbackServer';
 import {
   type CallbackType,
@@ -14,7 +15,11 @@ import {
   PKCE_PLAIN,
   PKCE_SHA256,
 } from './grants/authorizationCode';
-import { getClientCredentials } from './grants/clientCredentials';
+import {
+  defaultJwtAlgorithm,
+  getClientCredentials,
+  jwtAlgorithms,
+} from './grants/clientCredentials';
 import { getImplicit } from './grants/implicit';
 import { getPassword } from './grants/password';
 import type { AccessToken, TokenStoreArgs } from './store';
@@ -97,7 +102,10 @@ export const plugin: PluginDefinition = {
           };
           const token = await getToken(ctx, tokenArgs);
           if (token == null) {
-            await ctx.toast.show({ message: 'No token to copy', color: 'warning' });
+            await ctx.toast.show({
+              message: 'No token to copy',
+              color: 'warning',
+            });
           } else {
             await ctx.clipboard.copyText(token.response.access_token);
             await ctx.toast.show({
@@ -118,9 +126,15 @@ export const plugin: PluginDefinition = {
             clientId: stringArg(values, 'clientId'),
           };
           if (await deleteToken(ctx, tokenArgs)) {
-            await ctx.toast.show({ message: 'Token deleted', color: 'success' });
+            await ctx.toast.show({
+              message: 'Token deleted',
+              color: 'success',
+            });
           } else {
-            await ctx.toast.show({ message: 'No token to delete', color: 'warning' });
+            await ctx.toast.show({
+              message: 'No token to delete',
+              color: 'warning',
+            });
           }
         },
       },
@@ -140,6 +154,19 @@ export const plugin: PluginDefinition = {
         options: grantTypes,
       },
       {
+        type: 'select',
+        name: 'clientCredentialsMethod',
+        label: 'Authentication Method',
+        description:
+          '"Client Secret" sends client_secret. \n' + '"Client Assertion" sends a signed JWT.',
+        defaultValue: 'client_secret',
+        options: [
+          { label: 'Client Secret', value: 'client_secret' },
+          { label: 'Client Assertion', value: 'client_assertion' },
+        ],
+        dynamic: hiddenIfNot(['client_credentials']),
+      },
+      {
         type: 'text',
         name: 'clientId',
         label: 'Client ID',
@@ -151,7 +178,47 @@ export const plugin: PluginDefinition = {
         label: 'Client Secret',
         optional: true,
         password: true,
-        dynamic: hiddenIfNot(['authorization_code', 'password', 'client_credentials']),
+        dynamic: hiddenIfNot(
+          ['authorization_code', 'password', 'client_credentials'],
+          (values) => values.clientCredentialsMethod === 'client_secret',
+        ),
+      },
+      {
+        type: 'select',
+        name: 'clientAssertionAlgorithm',
+        label: 'JWT Algorithm',
+        defaultValue: defaultJwtAlgorithm,
+        options: jwtAlgorithms.map((value) => ({
+          label: value === 'none' ? 'None' : value,
+          value,
+        })),
+        dynamic: hiddenIfNot(
+          ['client_credentials'],
+          ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
+        ),
+      },
+      {
+        type: 'text',
+        name: 'clientAssertionSecret',
+        label: 'JWT Secret',
+        description:
+          'Can be HMAC, PEM or JWK. Make sure you pick the correct algorithm type above.',
+        password: true,
+        optional: true,
+        multiLine: true,
+        dynamic: hiddenIfNot(
+          ['client_credentials'],
+          ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
+        ),
+      },
+      {
+        type: 'checkbox',
+        name: 'clientAssertionSecretBase64',
+        label: 'JWT secret is base64 encoded',
+        dynamic: hiddenIfNot(
+          ['client_credentials'],
+          ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
+        ),
       },
       {
         type: 'text',
@@ -160,7 +227,10 @@ export const plugin: PluginDefinition = {
         label: 'Authorization URL',
         dynamic: hiddenIfNot(['authorization_code', 'implicit']),
         placeholder: authorizationUrls[0],
-        completionOptions: authorizationUrls.map((url) => ({ label: url, value: url })),
+        completionOptions: authorizationUrls.map((url) => ({
+          label: url,
+          value: url,
+        })),
       },
       {
         type: 'text',
@@ -169,7 +239,10 @@ export const plugin: PluginDefinition = {
         label: 'Access Token URL',
         placeholder: accessTokenUrls[0],
         dynamic: hiddenIfNot(['authorization_code', 'password', 'client_credentials']),
-        completionOptions: accessTokenUrls.map((url) => ({ label: url, value: url })),
+        completionOptions: accessTokenUrls.map((url) => ({
+          label: url,
+          value: url,
+        })),
       },
       {
         type: 'banner',
@@ -186,7 +259,8 @@ export const plugin: PluginDefinition = {
           {
             type: 'text',
             name: 'redirectUri',
-            label: 'Redirect URI',
+            label: 'Redirect URI (can be any valid URL)',
+            placeholder: 'https://mysite.example.com/oauth/callback',
             description:
               'URI the OAuth provider redirects to after authorization. Yaak intercepts this automatically in its embedded browser so any valid URI will work.',
             optional: true,
@@ -383,6 +457,11 @@ export const plugin: PluginDefinition = {
               { label: 'In Request Body', value: 'body' },
               { label: 'As Basic Authentication', value: 'basic' },
             ],
+            dynamic: (_ctx: Context, { values }: GetHttpAuthenticationConfigRequest) => ({
+              hidden:
+                values.grantType === 'client_credentials' &&
+                values.clientCredentialsMethod === 'client_assertion',
+            }),
           },
         ],
       },
@@ -484,7 +563,11 @@ export const plugin: PluginDefinition = {
             ? accessTokenUrl
             : `https://${accessTokenUrl}`,
           clientId: stringArg(values, 'clientId'),
+          clientAssertionAlgorithm: stringArg(values, 'clientAssertionAlgorithm') as Algorithm,
           clientSecret: stringArg(values, 'clientSecret'),
+          clientCredentialsMethod: stringArg(values, 'clientCredentialsMethod'),
+          clientAssertionSecret: stringArg(values, 'clientAssertionSecret'),
+          clientAssertionSecretBase64: !!values.clientAssertionSecretBase64,
           scope: stringArgOrNull(values, 'scope'),
           audience: stringArgOrNull(values, 'audience'),
           credentialsInBody,

@@ -616,5 +616,16 @@ function KeyValueArg({
 
 function hasVisibleInputs(inputs: FormInput[] | undefined): boolean {
   if (!inputs) return false;
-  return inputs.some((i) => !i.hidden);
+
+  for (const input of inputs) {
+    if ('inputs' in input && !hasVisibleInputs(input.inputs)) {
+      // Has children, but none are visible
+      return false;
+    }
+    if (!input.hidden) {
+      return true;
+    }
+  }
+
+  return false;
 }
