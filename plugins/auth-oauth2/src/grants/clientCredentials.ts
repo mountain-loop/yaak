@@ -60,7 +60,7 @@ function buildClientAssertionJwt(params: {
       throw new Error('Client Assertion secret looks like JSON but is not valid');
     }
 
-    kid = jwk.kid;
+    kid = jwk?.kid;
     signingKey = createPrivateKey({ key: jwk, format: 'jwk' });
   } else if (trimmed.startsWith('-----')) {
     // PEM-encoded key
