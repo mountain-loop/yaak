@@ -153,7 +153,7 @@ export async function getClientCredentials(
     });
   }
 
-  if (clientCredentialsMethod === 'client_credentials') {
+  if (clientCredentialsMethod === 'client_secret') {
     fetchParams.clientSecret = clientSecret;
   }
 
