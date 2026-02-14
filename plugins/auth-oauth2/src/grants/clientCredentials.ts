@@ -1,10 +1,10 @@
-import { createPrivateKey, JsonWebKeyInput, randomUUID } from 'node:crypto';
+import { createPrivateKey, randomUUID } from 'node:crypto';
 import type { Context } from '@yaakapp/api';
+import jwt, { type Algorithm } from 'jsonwebtoken';
 import { fetchAccessToken } from '../fetchAccessToken';
 import type { TokenStoreArgs } from '../store';
 import { getToken, storeToken } from '../store';
 import { isTokenExpired } from '../util';
-import jwt, { Algorithm, JwtHeader } from 'jsonwebtoken';
 
 export const jwtAlgorithms = [
   'HS256',
@@ -132,30 +132,36 @@ export async function getClientCredentials(
     return token;
   }
 
-  const fetchParams: Parameters<typeof fetchAccessToken>[1] = {
+  const common: Omit<
+    Parameters<typeof fetchAccessToken>[1],
+    'clientAssertion' | 'clientSecret' | 'credentialsInBody'
+  > = {
     grantType: 'client_credentials',
     accessTokenUrl,
     audience,
     clientId,
     scope,
-    credentialsInBody,
     params: [],
   };
 
-  if (clientCredentialsMethod === 'client_assertion') {
-    fetchParams.clientAssertion = buildClientAssertionJwt({
-      clientId,
-      algorithm: clientAssertionAlgorithm as Algorithm,
-      accessTokenUrl,
-      secret: clientAssertionSecretBase64
-        ? Buffer.from(clientAssertionSecret, 'base64').toString('utf-8')
-        : clientAssertionSecret,
-    });
-  }
-
-  if (clientCredentialsMethod === 'client_secret') {
-    fetchParams.clientSecret = clientSecret;
-  }
+  const fetchParams: Parameters<typeof fetchAccessToken>[1] =
+    clientCredentialsMethod === 'client_assertion'
+      ? {
+          ...common,
+          clientAssertion: buildClientAssertionJwt({
+            clientId,
+            algorithm: clientAssertionAlgorithm as Algorithm,
+            accessTokenUrl,
+            secret: clientAssertionSecretBase64
+              ? Buffer.from(clientAssertionSecret, 'base64').toString('utf-8')
+              : clientAssertionSecret,
+          }),
+        }
+      : {
+          ...common,
+          clientSecret,
+          credentialsInBody,
+        };
 
   const response = await fetchAccessToken(ctx, fetchParams);
 

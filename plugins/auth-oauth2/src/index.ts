@@ -5,6 +5,7 @@ import type {
   JsonPrimitive,
   PluginDefinition,
 } from '@yaakapp/api';
+import type { Algorithm } from 'jsonwebtoken';
 import { DEFAULT_LOCALHOST_PORT, HOSTED_CALLBACK_URL, stopActiveServer } from './callbackServer';
 import {
   type CallbackType,
@@ -15,16 +16,14 @@ import {
   PKCE_SHA256,
 } from './grants/authorizationCode';
 import {
-  getClientCredentials,
   defaultJwtAlgorithm,
+  getClientCredentials,
   jwtAlgorithms,
 } from './grants/clientCredentials';
 import { getImplicit } from './grants/implicit';
 import { getPassword } from './grants/password';
 import type { AccessToken, TokenStoreArgs } from './store';
 import { deleteToken, getToken, resetDataDirKey } from './store';
-
-import { Algorithm } from 'jsonwebtoken';
 
 type GrantType = 'authorization_code' | 'implicit' | 'password' | 'client_credentials';
 
@@ -155,12 +154,6 @@ export const plugin: PluginDefinition = {
         options: grantTypes,
       },
       {
-        type: 'text',
-        name: 'clientId',
-        label: 'Client ID',
-        optional: true,
-      },
-      {
         type: 'select',
         name: 'clientCredentialsMethod',
         label: 'Authentication Method',
@@ -172,6 +165,12 @@ export const plugin: PluginDefinition = {
           { label: 'Client Assertion', value: 'client_assertion' },
         ],
         dynamic: hiddenIfNot(['client_credentials']),
+      },
+      {
+        type: 'text',
+        name: 'clientId',
+        label: 'Client ID',
+        optional: true,
       },
       {
         type: 'text',
@@ -201,7 +200,7 @@ export const plugin: PluginDefinition = {
       {
         type: 'text',
         name: 'clientAssertionSecret',
-        label: 'Secret',
+        label: 'JWT Secret',
         description:
           'Can be HMAC, PEM or JWK. Make sure you pick the correct algorithm type above.',
         password: true,
@@ -215,7 +214,7 @@ export const plugin: PluginDefinition = {
       {
         type: 'checkbox',
         name: 'clientAssertionSecretBase64',
-        label: 'Secret is base64 encoded',
+        label: 'JWT secret is base64 encoded',
         dynamic: hiddenIfNot(
           ['client_credentials'],
           ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
@@ -260,7 +259,8 @@ export const plugin: PluginDefinition = {
           {
             type: 'text',
             name: 'redirectUri',
-            label: 'Redirect URI',
+            label: 'Redirect URI (can be any valid URL)',
+            placeholder: 'https://mysite.example.com/oauth/callback',
             description:
               'URI the OAuth provider redirects to after authorization. Yaak intercepts this automatically in its embedded browser so any valid URI will work.',
             optional: true,
@@ -457,6 +457,11 @@ export const plugin: PluginDefinition = {
               { label: 'In Request Body', value: 'body' },
               { label: 'As Basic Authentication', value: 'basic' },
             ],
+            dynamic: (_ctx: Context, { values }: GetHttpAuthenticationConfigRequest) => ({
+              hidden:
+                values.grantType === 'client_credentials' &&
+                values.clientCredentialsMethod === 'client_assertion',
+            }),
           },
         ],
       },

@@ -4,28 +4,16 @@ import type { AccessTokenRawResponse } from './store';
 
 export async function fetchAccessToken(
   ctx: Context,
-  {
-    accessTokenUrl,
-    scope,
-    audience,
-    params,
-    grantType,
-    credentialsInBody,
-    clientId,
-    clientSecret,
-    clientAssertion,
-  }: {
+  args: {
     clientId: string;
-    clientSecret?: string;
-    clientAssertion?: string;
     grantType: string;
     accessTokenUrl: string;
     scope: string | null;
     audience: string | null;
-    credentialsInBody: boolean;
     params: HttpUrlParameter[];
-  },
+  } & ({ clientAssertion: string } | { clientSecret: string; credentialsInBody: boolean }),
 ): Promise<AccessTokenRawResponse> {
+  const { clientId, grantType, accessTokenUrl, scope, audience, params } = args;
   console.log('[oauth2] Getting access token', accessTokenUrl);
   const httpRequest: Partial<HttpRequest> = {
     method: 'POST',
@@ -47,7 +35,7 @@ export async function fetchAccessToken(
   if (scope) httpRequest.body?.form.push({ name: 'scope', value: scope });
   if (audience) httpRequest.body?.form.push({ name: 'audience', value: audience });
 
-  if (grantType === 'client_credentials' && clientAssertion) {
+  if ('clientAssertion' in args) {
     httpRequest.body?.form.push({ name: 'client_id', value: clientId });
     httpRequest.body?.form.push({
       name: 'client_assertion_type',
@@ -55,16 +43,16 @@ export async function fetchAccessToken(
     });
     httpRequest.body?.form.push({
       name: 'client_assertion',
-      value: clientAssertion,
+      value: args.clientAssertion,
     });
-  } else if (credentialsInBody) {
+  } else if (args.credentialsInBody) {
     httpRequest.body?.form.push({ name: 'client_id', value: clientId });
     httpRequest.body?.form.push({
       name: 'client_secret',
-      value: clientSecret ?? '',
+      value: args.clientSecret,
     });
   } else {
-    const value = `Basic ${Buffer.from(`${clientId}:${clientSecret ?? ''}`).toString('base64')}`;
+    const value = `Basic ${Buffer.from(`${clientId}:${args.clientSecret}`).toString('base64')}`;
     httpRequest.headers?.push({ name: 'Authorization', value });
   }
 
