@@ -13,9 +13,11 @@ export async function fetchAccessToken(
     credentialsInBody,
     clientId,
     clientSecret,
+    clientAssertion,
   }: {
     clientId: string;
-    clientSecret: string;
+    clientSecret?: string;
+    clientAssertion?: string;
     grantType: string;
     accessTokenUrl: string;
     scope: string | null;
@@ -34,7 +36,10 @@ export async function fetchAccessToken(
     },
     headers: [
       { name: 'User-Agent', value: 'yaak' },
-      { name: 'Accept', value: 'application/x-www-form-urlencoded, application/json' },
+      {
+        name: 'Accept',
+        value: 'application/x-www-form-urlencoded, application/json',
+      },
       { name: 'Content-Type', value: 'application/x-www-form-urlencoded' },
     ],
   };
@@ -42,11 +47,24 @@ export async function fetchAccessToken(
   if (scope) httpRequest.body?.form.push({ name: 'scope', value: scope });
   if (audience) httpRequest.body?.form.push({ name: 'audience', value: audience });
 
-  if (credentialsInBody) {
+  if (grantType === 'client_credentials' && clientAssertion) {
     httpRequest.body?.form.push({ name: 'client_id', value: clientId });
-    httpRequest.body?.form.push({ name: 'client_secret', value: clientSecret });
+    httpRequest.body?.form.push({
+      name: 'client_assertion_type',
+      value: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+    });
+    httpRequest.body?.form.push({
+      name: 'client_assertion',
+      value: clientAssertion,
+    });
+  } else if (credentialsInBody) {
+    httpRequest.body?.form.push({ name: 'client_id', value: clientId });
+    httpRequest.body?.form.push({
+      name: 'client_secret',
+      value: clientSecret ?? '',
+    });
   } else {
-    const value = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+    const value = `Basic ${Buffer.from(`${clientId}:${clientSecret ?? ''}`).toString('base64')}`;
     httpRequest.headers?.push({ name: 'Authorization', value });
   }
 

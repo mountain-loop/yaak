@@ -14,11 +14,17 @@ import {
   PKCE_PLAIN,
   PKCE_SHA256,
 } from './grants/authorizationCode';
-import { getClientCredentials } from './grants/clientCredentials';
+import {
+  getClientCredentials,
+  defaultJwtAlgorithm,
+  jwtAlgorithms,
+} from './grants/clientCredentials';
 import { getImplicit } from './grants/implicit';
 import { getPassword } from './grants/password';
 import type { AccessToken, TokenStoreArgs } from './store';
 import { deleteToken, getToken, resetDataDirKey } from './store';
+
+import { Algorithm } from 'jsonwebtoken';
 
 type GrantType = 'authorization_code' | 'implicit' | 'password' | 'client_credentials';
 
@@ -97,7 +103,10 @@ export const plugin: PluginDefinition = {
           };
           const token = await getToken(ctx, tokenArgs);
           if (token == null) {
-            await ctx.toast.show({ message: 'No token to copy', color: 'warning' });
+            await ctx.toast.show({
+              message: 'No token to copy',
+              color: 'warning',
+            });
           } else {
             await ctx.clipboard.copyText(token.response.access_token);
             await ctx.toast.show({
@@ -118,9 +127,15 @@ export const plugin: PluginDefinition = {
             clientId: stringArg(values, 'clientId'),
           };
           if (await deleteToken(ctx, tokenArgs)) {
-            await ctx.toast.show({ message: 'Token deleted', color: 'success' });
+            await ctx.toast.show({
+              message: 'Token deleted',
+              color: 'success',
+            });
           } else {
-            await ctx.toast.show({ message: 'No token to delete', color: 'warning' });
+            await ctx.toast.show({
+              message: 'No token to delete',
+              color: 'warning',
+            });
           }
         },
       },
@@ -146,12 +161,65 @@ export const plugin: PluginDefinition = {
         optional: true,
       },
       {
+        type: 'select',
+        name: 'clientCredentialsMethod',
+        label: 'Authentication Method',
+        description:
+          '"Client Secret" sends client_secret. \n' + '"Client Assertion" sends a signed JWT.',
+        defaultValue: 'client_secret',
+        options: [
+          { label: 'Client Secret', value: 'client_secret' },
+          { label: 'Client Assertion', value: 'client_assertion' },
+        ],
+        dynamic: hiddenIfNot(['client_credentials']),
+      },
+      {
         type: 'text',
         name: 'clientSecret',
         label: 'Client Secret',
         optional: true,
         password: true,
-        dynamic: hiddenIfNot(['authorization_code', 'password', 'client_credentials']),
+        dynamic: hiddenIfNot(
+          ['authorization_code', 'password', 'client_credentials'],
+          (values) => values.clientCredentialsMethod === 'client_secret',
+        ),
+      },
+      {
+        type: 'select',
+        name: 'clientAssertionAlgorithm',
+        label: 'JWT Algorithm',
+        defaultValue: defaultJwtAlgorithm,
+        options: jwtAlgorithms.map((value) => ({
+          label: value === 'none' ? 'None' : value,
+          value,
+        })),
+        dynamic: hiddenIfNot(
+          ['client_credentials'],
+          ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
+        ),
+      },
+      {
+        type: 'text',
+        name: 'clientAssertionSecret',
+        label: 'Secret',
+        description:
+          'Can be HMAC, PEM or JWK. Make sure you pick the correct algorithm type above.',
+        password: true,
+        optional: true,
+        multiLine: true,
+        dynamic: hiddenIfNot(
+          ['client_credentials'],
+          ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
+        ),
+      },
+      {
+        type: 'checkbox',
+        name: 'clientAssertionSecretBase64',
+        label: 'Secret is base64 encoded',
+        dynamic: hiddenIfNot(
+          ['client_credentials'],
+          ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
+        ),
       },
       {
         type: 'text',
@@ -160,7 +228,10 @@ export const plugin: PluginDefinition = {
         label: 'Authorization URL',
         dynamic: hiddenIfNot(['authorization_code', 'implicit']),
         placeholder: authorizationUrls[0],
-        completionOptions: authorizationUrls.map((url) => ({ label: url, value: url })),
+        completionOptions: authorizationUrls.map((url) => ({
+          label: url,
+          value: url,
+        })),
       },
       {
         type: 'text',
@@ -169,7 +240,10 @@ export const plugin: PluginDefinition = {
         label: 'Access Token URL',
         placeholder: accessTokenUrls[0],
         dynamic: hiddenIfNot(['authorization_code', 'password', 'client_credentials']),
-        completionOptions: accessTokenUrls.map((url) => ({ label: url, value: url })),
+        completionOptions: accessTokenUrls.map((url) => ({
+          label: url,
+          value: url,
+        })),
       },
       {
         type: 'banner',
@@ -484,7 +558,11 @@ export const plugin: PluginDefinition = {
             ? accessTokenUrl
             : `https://${accessTokenUrl}`,
           clientId: stringArg(values, 'clientId'),
+          clientAssertionAlgorithm: stringArg(values, 'clientAssertionAlgorithm') as Algorithm,
           clientSecret: stringArg(values, 'clientSecret'),
+          clientCredentialsMethod: stringArg(values, 'clientCredentialsMethod'),
+          clientAssertionSecret: stringArg(values, 'clientAssertionSecret'),
+          clientAssertionSecretBase64: !!values.clientAssertionSecretBase64,
           scope: stringArgOrNull(values, 'scope'),
           audience: stringArgOrNull(values, 'audience'),
           credentialsInBody,
