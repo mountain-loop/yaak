@@ -9,7 +9,6 @@ type TauriCmd =
   | 'cmd_call_workspace_action'
   | 'cmd_call_folder_action'
   | 'cmd_check_for_updates'
-  | 'cmd_create_grpc_request'
   | 'cmd_curl_to_request'
   | 'cmd_decrypt_template'
   | 'cmd_default_headers'
@@ -48,9 +47,7 @@ type TauriCmd =
   | 'cmd_save_response'
   | 'cmd_secure_template'
   | 'cmd_send_ephemeral_request'
-  | 'cmd_send_folder'
   | 'cmd_send_http_request'
-  | 'cmd_show_workspace_key'
   | 'cmd_template_function_summaries'
   | 'cmd_template_function_config'
   | 'cmd_template_tokens_to_string';

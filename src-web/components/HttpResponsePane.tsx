@@ -239,7 +239,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                         <HttpMultipartViewer response={activeResponse} />
                       ) : mimeType?.match(/pdf/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={PdfViewer} />
-                      ) : mimeType?.match(/csv|tab-separated/i) ? (
+                      ) : mimeType?.match(/csv|tab-separated/i) && viewMode === 'pretty' ? (
                         <HttpCsvViewer className="pb-2" response={activeResponse} />
                       ) : (
                         <HTMLOrTextViewer

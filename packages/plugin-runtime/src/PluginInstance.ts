@@ -1,7 +1,12 @@
 import console from 'node:console';
 import { type Stats, statSync, watch } from 'node:fs';
 import path from 'node:path';
-import type { Context, PluginDefinition } from '@yaakapp/api';
+import type {
+  CallPromptFormDynamicArgs,
+  Context,
+  DynamicPromptFormArg,
+  PluginDefinition,
+} from '@yaakapp/api';
 import {
   applyFormInputDefaults,
   validateTemplateFunctionArgs,
@@ -12,6 +17,7 @@ import type {
   DeleteModelResponse,
   FindHttpResponsesResponse,
   Folder,
+  FormInput,
   GetCookieValueRequest,
   GetCookieValueResponse,
   GetHttpRequestByIdResponse,
@@ -55,6 +61,7 @@ export class PluginInstance {
   #mod: PluginDefinition;
   #pluginToAppEvents: EventChannel;
   #appToPluginEvents: EventChannel;
+  #pendingDynamicForms = new Map<string, DynamicPromptFormArg[]>();
 
   constructor(workerData: PluginWorkerData, pluginEvents: EventChannel) {
     this.#workerData = workerData;
@@ -106,6 +113,7 @@ export class PluginInstance {
 
   async terminate() {
     await this.#mod?.dispose?.();
+    this.#pendingDynamicForms.clear();
     this.#unimportModule();
   }
 
@@ -299,7 +307,7 @@ export class PluginInstance {
         const replyPayload: InternalEventPayload = {
           type: 'get_template_function_config_response',
           pluginRefId: this.#workerData.pluginRefId,
-          function: { ...fn, args: resolvedArgs },
+          function: { ...fn, args: stripDynamicCallbacks(resolvedArgs) },
         };
         this.#sendPayload(context, replyPayload, replyId);
         return;
@@ -326,7 +334,7 @@ export class PluginInstance {
 
         const replyPayload: InternalEventPayload = {
           type: 'get_http_authentication_config_response',
-          args: resolvedArgs,
+          args: stripDynamicCallbacks(resolvedArgs),
           actions: resolvedActions,
           pluginRefId: this.#workerData.pluginRefId,
         };
@@ -664,10 +672,66 @@ export class PluginInstance {
           return reply.value;
         },
         form: async (args) => {
-          const reply: PromptFormResponse = await this.#sendForReply(context, {
-            type: 'prompt_form_request',
-            ...args,
+          // Resolve dynamic callbacks on initial inputs using default values
+          const defaults = applyFormInputDefaults(args.inputs, {});
+          const callArgs: CallPromptFormDynamicArgs = { values: defaults };
+          const resolvedInputs = await applyDynamicFormInput(
+            this.#newCtx(context),
+            args.inputs,
+            callArgs,
+          );
+          const strippedInputs = stripDynamicCallbacks(resolvedInputs);
+
+          // Build the event manually so we can get the event ID for keying
+          const eventToSend = this.#buildEventToSend(
+            context,
+            { type: 'prompt_form_request', ...args, inputs: strippedInputs },
+            null,
+          );
+
+          // Store original inputs (with dynamic callbacks) for later resolution
+          this.#pendingDynamicForms.set(eventToSend.id, args.inputs);
+
+          const reply = await new Promise<PromptFormResponse>((resolve) => {
+            const cb = (event: InternalEvent) => {
+              if (event.replyId !== eventToSend.id) return;
+
+              if (event.payload.type === 'prompt_form_response') {
+                const { done, values } = event.payload as PromptFormResponse;
+                if (done) {
+                  // Final response — resolve the promise and clean up
+                  this.#appToPluginEvents.unlisten(cb);
+                  this.#pendingDynamicForms.delete(eventToSend.id);
+                  resolve({ values } as PromptFormResponse);
+                } else {
+                  // Intermediate value change — resolve dynamic inputs and send back
+                  // Skip empty values (fired on initial mount before user interaction)
+                  const storedInputs = this.#pendingDynamicForms.get(eventToSend.id);
+                  if (storedInputs && values && Object.keys(values).length > 0) {
+                    const ctx = this.#newCtx(context);
+                    const callArgs: CallPromptFormDynamicArgs = { values };
+                    applyDynamicFormInput(ctx, storedInputs, callArgs)
+                      .then((resolvedInputs) => {
+                        const stripped = stripDynamicCallbacks(resolvedInputs);
+                        this.#sendPayload(
+                          context,
+                          { type: 'prompt_form_request', ...args, inputs: stripped },
+                          eventToSend.id,
+                        );
+                      })
+                      .catch((err) => {
+                        console.error('Failed to resolve dynamic form inputs', err);
+                      });
+                  }
+                }
+              }
+            };
+            this.#appToPluginEvents.listen(cb);
+
+            // Send the initial event after we start listening (to prevent race)
+            this.#sendEvent(eventToSend);
           });
+
           return reply.values;
         },
       },
@@ -788,12 +852,12 @@ export class PluginInstance {
           const { folders } = await this.#sendForReply<ListFoldersResponse>(context, payload);
           return folders.find((f) => f.id === args.id) ?? null;
         },
-        create: async (args) => {
+        create: async ({ name, ...args }) => {
           const payload = {
             type: 'upsert_model_request',
             model: {
-              name: '',
               ...args,
+              name: name ?? '',
               id: '',
               model: 'folder',
             },
@@ -904,6 +968,17 @@ export class PluginInstance {
       },
     };
   }
+}
+
+function stripDynamicCallbacks(inputs: { dynamic?: unknown }[]): FormInput[] {
+  return inputs.map((input) => {
+    // biome-ignore lint/suspicious/noExplicitAny: stripping dynamic from union type
+    const { dynamic, ...rest } = input as any;
+    if ('inputs' in rest && Array.isArray(rest.inputs)) {
+      rest.inputs = stripDynamicCallbacks(rest.inputs);
+    }
+    return rest as FormInput;
+  });
 }
 
 function genId(len = 5): string {

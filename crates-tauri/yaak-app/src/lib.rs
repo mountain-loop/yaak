@@ -37,8 +37,8 @@ use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
-    GrpcEventType, GrpcRequest, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState,
-    Plugin, Workspace, WorkspaceMeta,
+    GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState, Plugin,
+    Workspace, WorkspaceMeta,
 };
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
 use yaak_plugins::events::{
@@ -1095,8 +1095,13 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
 
     // Convert HashMap<String, JsonPrimitive> to serde_json::Value for rendering
     let values_json: serde_json::Value = serde_json::to_value(&values)?;
-    let rendered_json =
-        render_json_value(values_json, environment_chain, &cb, &RenderOptions::throw()).await?;
+    let rendered_json = render_json_value(
+        values_json,
+        environment_chain,
+        &cb,
+        &RenderOptions::return_empty(),
+    )
+    .await?;
 
     // Convert back to HashMap<String, JsonPrimitive>
     let rendered_values: HashMap<String, JsonPrimitive> = serde_json::from_value(rendered_json)?;
@@ -1272,35 +1277,6 @@ async fn cmd_save_response<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_send_folder<R: Runtime>(
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-    environment_id: Option<String>,
-    cookie_jar_id: Option<String>,
-    folder_id: &str,
-) -> YaakResult<()> {
-    let requests = app_handle.db().list_http_requests_for_folder_recursive(folder_id)?;
-    for request in requests {
-        let app_handle = app_handle.clone();
-        let window = window.clone();
-        let environment_id = environment_id.clone();
-        let cookie_jar_id = cookie_jar_id.clone();
-        tokio::spawn(async move {
-            let _ = cmd_send_http_request(
-                app_handle,
-                window,
-                environment_id.as_deref(),
-                cookie_jar_id.as_deref(),
-                request,
-            )
-            .await;
-        });
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
 async fn cmd_send_http_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -1394,27 +1370,6 @@ async fn cmd_install_plugin<R: Runtime>(
         .await?;
 
     Ok(plugin)
-}
-
-#[tauri::command]
-async fn cmd_create_grpc_request<R: Runtime>(
-    workspace_id: &str,
-    name: &str,
-    sort_priority: f64,
-    folder_id: Option<&str>,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> YaakResult<GrpcRequest> {
-    Ok(app_handle.db().upsert_grpc_request(
-        &GrpcRequest {
-            workspace_id: workspace_id.to_string(),
-            name: name.to_string(),
-            folder_id: folder_id.map(|s| s.to_string()),
-            sort_priority,
-            ..Default::default()
-        },
-        &UpdateSource::from_window_label(window.label()),
-    )?)
 }
 
 #[tauri::command]
@@ -1679,7 +1634,6 @@ pub fn run() {
             cmd_call_folder_action,
             cmd_call_grpc_request_action,
             cmd_check_for_updates,
-            cmd_create_grpc_request,
             cmd_curl_to_request,
             cmd_delete_all_grpc_connections,
             cmd_delete_all_http_responses,
@@ -1713,7 +1667,6 @@ pub fn run() {
             cmd_save_response,
             cmd_send_ephemeral_request,
             cmd_send_http_request,
-            cmd_send_folder,
             cmd_template_function_config,
             cmd_template_function_summaries,
             cmd_template_tokens_to_string,
@@ -1728,7 +1681,6 @@ pub fn run() {
             crate::commands::cmd_reveal_workspace_key,
             crate::commands::cmd_secure_template,
             crate::commands::cmd_set_workspace_key,
-            crate::commands::cmd_show_workspace_key,
             //
             // Models commands
             models_ext::models_delete,
@@ -1762,8 +1714,11 @@ pub fn run() {
             git_ext::cmd_git_fetch_all,
             git_ext::cmd_git_push,
             git_ext::cmd_git_pull,
+            git_ext::cmd_git_pull_force_reset,
+            git_ext::cmd_git_pull_merge,
             git_ext::cmd_git_add,
             git_ext::cmd_git_unstage,
+            git_ext::cmd_git_reset_changes,
             git_ext::cmd_git_add_credential,
             git_ext::cmd_git_remotes,
             git_ext::cmd_git_add_remote,
@@ -1777,14 +1732,7 @@ pub fn run() {
             plugins_ext::cmd_plugins_update_all,
             //
             // WebSocket commands
-            ws_ext::cmd_ws_upsert_request,
-            ws_ext::cmd_ws_duplicate_request,
-            ws_ext::cmd_ws_delete_request,
-            ws_ext::cmd_ws_delete_connection,
             ws_ext::cmd_ws_delete_connections,
-            ws_ext::cmd_ws_list_events,
-            ws_ext::cmd_ws_list_requests,
-            ws_ext::cmd_ws_list_connections,
             ws_ext::cmd_ws_send,
             ws_ext::cmd_ws_close,
             ws_ext::cmd_ws_connect,

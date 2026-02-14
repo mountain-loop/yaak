@@ -182,7 +182,14 @@ async fn send_http_request_inner<R: Runtime>(
     );
     let env_chain =
         window.db().resolve_environments(&workspace.id, folder_id, environment_id.as_deref())?;
-    let request = render_http_request(&resolved, env_chain, &cb, &RenderOptions::throw()).await?;
+    let mut cancel_rx = cancelled_rx.clone();
+    let render_options = RenderOptions::throw();
+    let request = tokio::select! {
+        result = render_http_request(&resolved, env_chain, &cb, &render_options) => result?,
+        _ = cancel_rx.changed() => {
+            return Err(GenericError("Request canceled".to_string()));
+        }
+    };
 
     // Build the sendable request using the new SendableHttpRequest type
     let options = SendableHttpRequestOptions {
@@ -244,16 +251,22 @@ async fn send_http_request_inner<R: Runtime>(
         })
         .await?;
 
-    // Apply authentication to the request
-    apply_authentication(
-        &window,
-        &mut sendable_request,
-        &request,
-        auth_context_id,
-        &plugin_manager,
-        plugin_context,
-    )
-    .await?;
+    // Apply authentication to the request, racing against cancellation since
+    // auth plugins (e.g. OAuth2) can block indefinitely waiting for user action.
+    let mut cancel_rx = cancelled_rx.clone();
+    tokio::select! {
+        result = apply_authentication(
+            &window,
+            &mut sendable_request,
+            &request,
+            auth_context_id,
+            &plugin_manager,
+            plugin_context,
+        ) => result?,
+        _ = cancel_rx.changed() => {
+            return Err(GenericError("Request canceled".to_string()));
+        }
+    };
 
     let cookie_store = maybe_cookie_store.as_ref().map(|(cs, _)| cs.clone());
     let result = execute_transaction(
@@ -401,7 +414,7 @@ async fn execute_transaction<R: Runtime>(
             sendable_request.body = Some(SendableBody::Bytes(bytes));
             None
         }
-        Some(SendableBody::Stream(stream)) => {
+        Some(SendableBody::Stream { data: stream, content_length }) => {
             // Wrap stream with TeeReader to capture data as it's read
             // Use unbounded channel to ensure all data is captured without blocking the HTTP request
             let (body_chunk_tx, body_chunk_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
@@ -435,7 +448,7 @@ async fn execute_transaction<R: Runtime>(
                 None
             };
 
-            sendable_request.body = Some(SendableBody::Stream(pinned));
+            sendable_request.body = Some(SendableBody::Stream { data: pinned, content_length });
             handle
         }
         None => {

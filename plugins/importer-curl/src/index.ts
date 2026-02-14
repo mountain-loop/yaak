@@ -7,8 +7,7 @@ import type {
   PluginDefinition,
   Workspace,
 } from '@yaakapp/api';
-import type { ControlOperator, ParseEntry } from 'shell-quote';
-import { parse } from 'shell-quote';
+import { split } from 'shlex';
 
 type AtLeast<T, K extends keyof T> = Partial<T> & Pick<T, K>;
 
@@ -56,31 +55,89 @@ export const plugin: PluginDefinition = {
 };
 
 /**
- * Decodes escape sequences in shell $'...' strings
- * Handles Unicode escape sequences (\uXXXX) and common escape codes
+ * Splits raw input into individual shell command strings.
+ * Handles line continuations, semicolons, and newline-separated curl commands.
  */
-function decodeShellString(str: string): string {
-  return str
-    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/\\n/g, '\n')
-    .replace(/\\r/g, '\r')
-    .replace(/\\t/g, '\t')
-    .replace(/\\'/g, "'")
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\');
-}
+function splitCommands(rawData: string): string[] {
+  // Join line continuations (backslash-newline, and backslash-CRLF for Windows)
+  const joined = rawData.replace(/\\\r?\n/g, ' ');
 
-/**
- * Checks if a string might contain escape sequences that need decoding
- * If so, decodes them; otherwise returns the string as-is
- */
-function maybeDecodeEscapeSequences(str: string): string {
-  // Check if the string contains escape sequences that shell-quote might not handle
-  if (str.includes('\\u') || str.includes('\\x')) {
-    return decodeShellString(str);
+  // Count consecutive backslashes immediately before position i.
+  // An even count means the quote at i is NOT escaped; odd means it IS escaped.
+  function isEscaped(i: number): boolean {
+    let backslashes = 0;
+    let j = i - 1;
+    while (j >= 0 && joined[j] === '\\') {
+      backslashes++;
+      j--;
+    }
+    return backslashes % 2 !== 0;
   }
-  return str;
+
+  // Split on semicolons and newlines to separate commands
+  const commands: string[] = [];
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inDollarQuote = false;
+
+  for (let i = 0; i < joined.length; i++) {
+    const ch = joined[i]!;
+    const next = joined[i + 1];
+
+    // Track quoting state to avoid splitting inside quoted strings
+    if (!inDoubleQuote && !inDollarQuote && ch === "'" && !inSingleQuote) {
+      inSingleQuote = true;
+      current += ch;
+      continue;
+    }
+    if (inSingleQuote && ch === "'") {
+      inSingleQuote = false;
+      current += ch;
+      continue;
+    }
+    if (!inSingleQuote && !inDollarQuote && ch === '"' && !inDoubleQuote) {
+      inDoubleQuote = true;
+      current += ch;
+      continue;
+    }
+    if (inDoubleQuote && ch === '"' && !isEscaped(i)) {
+      inDoubleQuote = false;
+      current += ch;
+      continue;
+    }
+    if (!inSingleQuote && !inDoubleQuote && !inDollarQuote && ch === '$' && next === "'") {
+      inDollarQuote = true;
+      current += ch + next;
+      i++; // Skip the opening quote
+      continue;
+    }
+    if (inDollarQuote && ch === "'" && !isEscaped(i)) {
+      inDollarQuote = false;
+      current += ch;
+      continue;
+    }
+
+    const inQuote = inSingleQuote || inDoubleQuote || inDollarQuote;
+
+    // Split on ;, newline, or CRLF when not inside quotes and not escaped
+    if (!inQuote && !isEscaped(i) && (ch === ';' || ch === '\n' || (ch === '\r' && next === '\n'))) {
+      if (ch === '\r') i++; // Skip the \n in \r\n
+      if (current.trim()) {
+        commands.push(current.trim());
+      }
+      current = '';
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (current.trim()) {
+    commands.push(current.trim());
+  }
+
+  return commands;
 }
 
 export function convertCurl(rawData: string) {
@@ -88,68 +145,17 @@ export function convertCurl(rawData: string) {
     return null;
   }
 
-  const commands: ParseEntry[][] = [];
+  const commands: string[][] = splitCommands(rawData).map((cmd) => {
+    const tokens = split(cmd);
 
-  // Replace non-escaped newlines with semicolons to make parsing easier
-  // NOTE: This is really slow in debug build but fast in release mode
-  const normalizedData = rawData.replace(/\ncurl/g, '; curl');
-
-  let currentCommand: ParseEntry[] = [];
-
-  const parsed = parse(normalizedData);
-
-  // Break up `-XPOST` into `-X POST`
-  const normalizedParseEntries = parsed.flatMap((entry) => {
-    if (
-      typeof entry === 'string' &&
-      entry.startsWith('-') &&
-      !entry.startsWith('--') &&
-      entry.length > 2
-    ) {
-      return [entry.slice(0, 2), entry.slice(2)];
-    }
-    return entry;
-  });
-
-  for (const parseEntry of normalizedParseEntries) {
-    if (typeof parseEntry === 'string') {
-      if (parseEntry.startsWith('$')) {
-        // Handle $'...' strings from shell-quote - decode escape sequences
-        currentCommand.push(decodeShellString(parseEntry.slice(1)));
-      } else {
-        // Decode escape sequences that shell-quote might not handle
-        currentCommand.push(maybeDecodeEscapeSequences(parseEntry));
+    // Break up squished arguments like `-XPOST` into `-X POST`
+    return tokens.flatMap((token) => {
+      if (token.startsWith('-') && !token.startsWith('--') && token.length > 2) {
+        return [token.slice(0, 2), token.slice(2)];
       }
-      continue;
-    }
-
-    if ('comment' in parseEntry) {
-      continue;
-    }
-
-    const { op } = parseEntry as { op: 'glob'; pattern: string } | { op: ControlOperator };
-
-    // `;` separates commands
-    if (op === ';') {
-      commands.push(currentCommand);
-      currentCommand = [];
-      continue;
-    }
-
-    if (op?.startsWith('$')) {
-      // Handle the case where literal like -H $'Header: \'Some Quoted Thing\''
-      const str = decodeShellString(op.slice(2, op.length - 1));
-
-      currentCommand.push(str);
-      continue;
-    }
-
-    if (op === 'glob') {
-      currentCommand.push((parseEntry as { op: 'glob'; pattern: string }).pattern);
-    }
-  }
-
-  commands.push(currentCommand);
+      return token;
+    });
+  });
 
   const workspace: ExportResources['workspaces'][0] = {
     model: 'workspace',
@@ -169,12 +175,12 @@ export function convertCurl(rawData: string) {
   };
 }
 
-function importCommand(parseEntries: ParseEntry[], workspaceId: string) {
+function importCommand(parseEntries: string[], workspaceId: string) {
   // ~~~~~~~~~~~~~~~~~~~~~ //
   // Collect all the flags //
   // ~~~~~~~~~~~~~~~~~~~~~ //
   const flagsByName: FlagsByName = {};
-  const singletons: ParseEntry[] = [];
+  const singletons: string[] = [];
 
   // Start at 1 so we can skip the ^curl part
   for (let i = 1; i < parseEntries.length; i++) {

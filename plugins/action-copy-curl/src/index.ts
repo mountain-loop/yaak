@@ -10,7 +10,7 @@ export const plugin: PluginDefinition = {
       async onSelect(ctx, args) {
         const rendered_request = await ctx.httpRequest.render({
           httpRequest: args.httpRequest,
-          purpose: 'preview',
+          purpose: 'send',
         });
         const data = await convertToCurl(rendered_request);
         await ctx.clipboard.copyText(data);
