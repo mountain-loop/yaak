@@ -19,18 +19,42 @@ use yaak_plugins::events::{PluginContext, RenderPurpose};
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderOptions, parse_and_render, render_json_value_raw};
 
-pub async fn run(ctx: &CliContext, args: RequestArgs, environment: Option<&str>, verbose: bool) {
+pub async fn run(
+    ctx: &CliContext,
+    args: RequestArgs,
+    environment: Option<&str>,
+    verbose: bool,
+) -> i32 {
     match args.command {
-        RequestCommands::List { workspace_id } => list(ctx, &workspace_id),
-        RequestCommands::Show { request_id } => show(ctx, &request_id),
+        RequestCommands::List { workspace_id } => {
+            list(ctx, &workspace_id);
+            0
+        }
+        RequestCommands::Show { request_id } => {
+            show(ctx, &request_id);
+            0
+        }
         RequestCommands::Send { request_id } => {
-            send_request_by_id(ctx, &request_id, environment, verbose).await;
+            match send_request_by_id(ctx, &request_id, environment, verbose).await {
+                Ok(()) => 0,
+                Err(error) => {
+                    eprintln!("Error: {error}");
+                    1
+                }
+            }
         }
         RequestCommands::Create { workspace_id, name, method, url, json } => {
-            create(ctx, workspace_id, name, method, url, json)
+            create(ctx, workspace_id, name, method, url, json);
+            0
         }
-        RequestCommands::Update { json, json_input } => update(ctx, json, json_input),
-        RequestCommands::Delete { request_id, yes } => delete(ctx, &request_id, yes),
+        RequestCommands::Update { json, json_input } => {
+            update(ctx, json, json_input);
+            0
+        }
+        RequestCommands::Delete { request_id, yes } => {
+            delete(ctx, &request_id, yes);
+            0
+        }
     }
 }
 
@@ -151,13 +175,14 @@ pub async fn send_request_by_id(
     request_id: &str,
     environment: Option<&str>,
     verbose: bool,
-) {
-    let request = ctx.db().get_http_request(request_id).expect("Failed to get request");
+) -> Result<(), String> {
+    let request =
+        ctx.db().get_http_request(request_id).map_err(|e| format!("Failed to get request: {e}"))?;
 
     let environment_chain = ctx
         .db()
         .resolve_environments(&request.workspace_id, request.folder_id.as_deref(), environment)
-        .unwrap_or_default();
+        .map_err(|e| format!("Failed to resolve environments: {e}"))?;
 
     let plugin_context = PluginContext::new(None, Some(request.workspace_id.clone()));
     let template_callback = PluginTemplateCallback::new(
@@ -174,7 +199,7 @@ pub async fn send_request_by_id(
         &RenderOptions::throw(),
     )
     .await
-    .expect("Failed to render request templates");
+    .map_err(|e| format!("Failed to render request templates: {e}"))?;
 
     if verbose {
         println!("> {} {}", rendered_request.method, rendered_request.url);
@@ -185,7 +210,7 @@ pub async fn send_request_by_id(
         SendableHttpRequestOptions::default(),
     )
     .await
-    .expect("Failed to build request");
+    .map_err(|e| format!("Failed to build request: {e}"))?;
 
     let (event_tx, mut event_rx) = mpsc::channel(100);
 
@@ -200,8 +225,11 @@ pub async fn send_request_by_id(
         None
     };
 
-    let sender = ReqwestSender::new().expect("Failed to create HTTP client");
-    let response = sender.send(sendable, event_tx).await.expect("Failed to send request");
+    let sender = ReqwestSender::new().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+    let response = sender
+        .send(sendable, event_tx)
+        .await
+        .map_err(|e| format!("Failed to send request: {e}"))?;
 
     if let Some(handle) = verbose_handle {
         let _ = handle.await;
@@ -219,8 +247,10 @@ pub async fn send_request_by_id(
         println!();
     }
 
-    let (body, _stats) = response.text().await.expect("Failed to read response body");
+    let (body, _stats) =
+        response.text().await.map_err(|e| format!("Failed to read response body: {e}"))?;
     println!("{}", body);
+    Ok(())
 }
 
 /// Render an HTTP request with template variables and plugin functions.

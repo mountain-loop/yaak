@@ -30,16 +30,14 @@ async fn main() {
 
     let exit_code = match command {
         Commands::Send(args) => {
-            commands::send::run(&context, args, environment.as_deref(), verbose).await;
-            0
+            commands::send::run(&context, args, environment.as_deref(), verbose).await
         }
         Commands::Workspace(args) => {
             commands::workspace::run(&context, args);
             0
         }
         Commands::Request(args) => {
-            commands::request::run(&context, args, environment.as_deref(), verbose).await;
-            0
+            commands::request::run(&context, args, environment.as_deref(), verbose).await
         }
         Commands::Folder(args) => {
             commands::folder::run(&context, args);
