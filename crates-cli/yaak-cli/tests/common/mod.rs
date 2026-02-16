@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod http_server;
+
 use assert_cmd::Command;
 use assert_cmd::cargo::cargo_bin_cmd;
 use std::path::Path;

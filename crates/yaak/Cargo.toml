@@ -1,0 +1,14 @@
+[package]
+name = "yaak"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+log = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt"] }
+yaak-http = { workspace = true }
+yaak-models = { workspace = true }
+yaak-templates = { workspace = true }

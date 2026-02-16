@@ -8240,6 +8240,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.29",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "yaak-http",
+ "yaak-models",
+ "yaak-templates",
+]
+
+[[package]]
 name = "yaak-api"
 version = "0.1.0"
 dependencies = [
@@ -8290,6 +8303,7 @@ dependencies = [
  "ts-rs",
  "url",
  "uuid",
+ "yaak",
  "yaak-api",
  "yaak-common",
  "yaak-core",
@@ -8324,6 +8338,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "yaak",
  "yaak-crypto",
  "yaak-http",
  "yaak-models",
