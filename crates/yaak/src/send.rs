@@ -231,9 +231,7 @@ pub struct SendHttpRequestByIdParams<'a, T: TemplateCallback> {
     pub template_callback: &'a T,
     pub update_source: UpdateSource,
     pub cookie_jar_id: Option<String>,
-    pub cookie_jar_update_source: UpdateSource,
     pub response_dir: &'a Path,
-    pub persist_events: bool,
     pub emit_events_to: Option<mpsc::Sender<SenderHttpResponseEvent>>,
     pub prepare_sendable_request: Option<&'a dyn PrepareSendableRequest>,
     pub executor: Option<&'a dyn SendRequestExecutor>,
@@ -248,9 +246,7 @@ pub struct SendHttpRequestParams<'a, T: TemplateCallback> {
     pub send_options: Option<SendableHttpRequestOptions>,
     pub update_source: UpdateSource,
     pub cookie_jar_id: Option<String>,
-    pub cookie_jar_update_source: UpdateSource,
     pub response_dir: &'a Path,
-    pub persist_events: bool,
     pub emit_events_to: Option<mpsc::Sender<SenderHttpResponseEvent>>,
     pub auth_context_id: Option<String>,
     pub existing_response: Option<HttpResponse>,
@@ -265,9 +261,7 @@ pub struct SendHttpRequestWithPluginsParams<'a> {
     pub environment_id: Option<&'a str>,
     pub update_source: UpdateSource,
     pub cookie_jar_id: Option<String>,
-    pub cookie_jar_update_source: UpdateSource,
     pub response_dir: &'a Path,
-    pub persist_events: bool,
     pub emit_events_to: Option<mpsc::Sender<SenderHttpResponseEvent>>,
     pub existing_response: Option<HttpResponse>,
     pub plugin_manager: Arc<PluginManager>,
@@ -284,9 +278,7 @@ pub struct SendHttpRequestByIdWithPluginsParams<'a> {
     pub environment_id: Option<&'a str>,
     pub update_source: UpdateSource,
     pub cookie_jar_id: Option<String>,
-    pub cookie_jar_update_source: UpdateSource,
     pub response_dir: &'a Path,
-    pub persist_events: bool,
     pub emit_events_to: Option<mpsc::Sender<SenderHttpResponseEvent>>,
     pub plugin_manager: Arc<PluginManager>,
     pub encryption_manager: Arc<EncryptionManager>,
@@ -351,9 +343,7 @@ pub async fn send_http_request_by_id_with_plugins(
         environment_id: params.environment_id,
         update_source: params.update_source,
         cookie_jar_id: params.cookie_jar_id,
-        cookie_jar_update_source: params.cookie_jar_update_source,
         response_dir: params.response_dir,
-        persist_events: params.persist_events,
         emit_events_to: params.emit_events_to,
         existing_response: None,
         plugin_manager: params.plugin_manager,
@@ -397,9 +387,7 @@ pub async fn send_http_request_with_plugins(
         send_options: None,
         update_source: params.update_source,
         cookie_jar_id: params.cookie_jar_id,
-        cookie_jar_update_source: params.cookie_jar_update_source,
         response_dir: params.response_dir,
-        persist_events: params.persist_events,
         emit_events_to: params.emit_events_to,
         auth_context_id: None,
         existing_response: params.existing_response,
@@ -428,9 +416,7 @@ pub async fn send_http_request_by_id<T: TemplateCallback>(
         send_options: None,
         update_source: params.update_source,
         cookie_jar_id: params.cookie_jar_id,
-        cookie_jar_update_source: params.cookie_jar_update_source,
         response_dir: params.response_dir,
-        persist_events: params.persist_events,
         emit_events_to: params.emit_events_to,
         existing_response: None,
         prepare_sendable_request: params.prepare_sendable_request,
@@ -515,21 +501,18 @@ pub async fn send_http_request<T: TemplateCallback>(
     let event_workspace_id = params.request.workspace_id.clone();
     let event_update_source = params.update_source.clone();
     let emit_events_to = params.emit_events_to.clone();
-    let persist_events = params.persist_events;
     let event_handle = tokio::spawn(async move {
         while let Some(event) = event_rx.recv().await {
-            if persist_events {
-                let db_event = HttpResponseEvent::new(
-                    &event_response_id,
-                    &event_workspace_id,
-                    event.clone().into(),
-                );
-                if let Err(err) = event_query_manager
-                    .connect()
-                    .upsert_http_response_event(&db_event, &event_update_source)
-                {
-                    warn!("Failed to persist HTTP response event: {}", err);
-                }
+            let db_event = HttpResponseEvent::new(
+                &event_response_id,
+                &event_workspace_id,
+                event.clone().into(),
+            );
+            if let Err(err) = event_query_manager
+                .connect()
+                .upsert_http_response_event(&db_event, &event_update_source)
+            {
+                warn!("Failed to persist HTTP response event: {}", err);
             }
 
             if let Some(tx) = emit_events_to.as_ref() {
@@ -547,12 +530,7 @@ pub async fn send_http_request<T: TemplateCallback>(
     {
         Ok(response) => response,
         Err(err) => {
-            persist_cookie_jar(
-                params.query_manager,
-                cookie_jar.as_mut(),
-                cookie_store.as_ref(),
-                &params.cookie_jar_update_source,
-            )?;
+            persist_cookie_jar(params.query_manager, cookie_jar.as_mut(), cookie_store.as_ref())?;
             let _ = persist_response_error(
                 params.query_manager,
                 params.blob_manager,
@@ -641,12 +619,7 @@ pub async fn send_http_request<T: TemplateCallback>(
     if let Err(join_err) = event_handle.await {
         warn!("Failed to join response event task: {}", join_err);
     }
-    persist_cookie_jar(
-        params.query_manager,
-        cookie_jar.as_mut(),
-        cookie_store.as_ref(),
-        &params.cookie_jar_update_source,
-    )?;
+    persist_cookie_jar(params.query_manager, cookie_jar.as_mut(), cookie_store.as_ref())?;
 
     Ok(SendHttpRequestResult { rendered_request, response, response_body })
 }
@@ -700,14 +673,13 @@ fn persist_cookie_jar(
     query_manager: &QueryManager,
     cookie_jar: Option<&mut CookieJar>,
     cookie_store: Option<&CookieStore>,
-    source: &UpdateSource,
 ) -> Result<()> {
     match (cookie_jar, cookie_store) {
         (Some(cookie_jar), Some(cookie_store)) => {
             cookie_jar.cookies = cookie_store.get_all_cookies();
             query_manager
                 .connect()
-                .upsert_cookie_jar(cookie_jar, source)
+                .upsert_cookie_jar(cookie_jar, &UpdateSource::Background)
                 .map_err(SendHttpRequestError::PersistCookieJar)?;
             Ok(())
         }
