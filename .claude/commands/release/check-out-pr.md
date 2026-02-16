@@ -1,35 +1,46 @@
 ---
 description: Review a PR in a new worktree
-allowed-tools: Bash(git worktree:*), Bash(gh pr:*)
+allowed-tools: Bash(git worktree:*), Bash(gh pr:*), Bash(git branch:*)
 ---
 
-Review a GitHub pull request in a new git worktree.
+Check out a GitHub pull request for review.
 
 ## Usage
 
 ```
-/review-pr <PR_NUMBER>
+/check-out-pr <PR_NUMBER>
 ```
 
 ## What to do
 
-1. List all open pull requests and ask the user to select one
+1. If no PR number is provided, list all open pull requests and ask the user to select one
 2. Get PR information using `gh pr view <PR_NUMBER> --json number,headRefName`
-3. Extract the branch name from the PR
-4. Create a new worktree at `../yaak-worktrees/pr-<PR_NUMBER>` using `git worktree add` with a timeout of at least 300000ms (5 minutes) since the post-checkout hook runs a bootstrap script
-5. Checkout the PR branch in the new worktree using `gh pr checkout <PR_NUMBER>`
-6. The post-checkout hook will automatically:
+3. **Ask the user** whether they want to:
+   - **A) Check out in current directory** — simple `gh pr checkout <PR_NUMBER>`
+   - **B) Create a new worktree** — isolated copy at `../yaak-worktrees/pr-<PR_NUMBER>`
+4. Follow the appropriate path below
+
+## Option A: Check out in current directory
+
+1. Run `gh pr checkout <PR_NUMBER>`
+2. Inform the user which branch they're now on
+
+## Option B: Create a new worktree
+
+1. Create a new worktree at `../yaak-worktrees/pr-<PR_NUMBER>` using `git worktree add` with a timeout of at least 300000ms (5 minutes) since the post-checkout hook runs a bootstrap script
+2. Checkout the PR branch in the new worktree using `gh pr checkout <PR_NUMBER>`
+3. The post-checkout hook will automatically:
    - Create `.env.local` with unique ports
    - Copy editor config folders
    - Run `npm install && npm run bootstrap`
-7. Inform the user:
+4. Inform the user:
    - Where the worktree was created
    - What ports were assigned
    - How to access it (cd command)
    - How to run the dev server
    - How to remove the worktree when done
 
-## Example Output
+### Example worktree output
 
 ```
 Created worktree for PR #123 at ../yaak-worktrees/pr-123
