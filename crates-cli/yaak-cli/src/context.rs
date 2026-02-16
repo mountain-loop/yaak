@@ -9,11 +9,11 @@ use yaak_plugins::manager::PluginManager;
 pub struct CliContext {
     query_manager: QueryManager,
     pub encryption_manager: Arc<EncryptionManager>,
-    pub plugin_manager: Arc<PluginManager>,
+    plugin_manager: Option<Arc<PluginManager>>,
 }
 
 impl CliContext {
-    pub async fn initialize(data_dir: PathBuf, app_id: &str) -> Self {
+    pub async fn initialize(data_dir: PathBuf, app_id: &str, with_plugins: bool) -> Self {
         let db_path = data_dir.join("db.sqlite");
         let blob_path = data_dir.join("blobs.sqlite");
 
@@ -23,35 +23,45 @@ impl CliContext {
 
         let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 
-        let vendored_plugin_dir = data_dir.join("vendored-plugins");
-        let installed_plugin_dir = data_dir.join("installed-plugins");
-        let node_bin_path = PathBuf::from("node");
+        let plugin_manager = if with_plugins {
+            let vendored_plugin_dir = data_dir.join("vendored-plugins");
+            let installed_plugin_dir = data_dir.join("installed-plugins");
+            let node_bin_path = PathBuf::from("node");
 
-        let plugin_runtime_main =
-            std::env::var("YAAK_PLUGIN_RUNTIME").map(PathBuf::from).unwrap_or_else(|_| {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs")
-            });
+            let plugin_runtime_main =
+                std::env::var("YAAK_PLUGIN_RUNTIME").map(PathBuf::from).unwrap_or_else(|_| {
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("../../crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs")
+                });
 
-        let plugin_manager = Arc::new(
-            PluginManager::new(
-                vendored_plugin_dir,
-                installed_plugin_dir,
-                node_bin_path,
-                plugin_runtime_main,
-                false,
-            )
-            .await,
-        );
+            let plugin_manager = Arc::new(
+                PluginManager::new(
+                    vendored_plugin_dir,
+                    installed_plugin_dir,
+                    node_bin_path,
+                    plugin_runtime_main,
+                    false,
+                )
+                .await,
+            );
 
-        let plugins = query_manager.connect().list_plugins().unwrap_or_default();
-        if !plugins.is_empty() {
-            let errors =
-                plugin_manager.initialize_all_plugins(plugins, &PluginContext::new_empty()).await;
-            for (plugin_dir, error_msg) in errors {
-                eprintln!("Warning: Failed to initialize plugin '{}': {}", plugin_dir, error_msg);
+            let plugins = query_manager.connect().list_plugins().unwrap_or_default();
+            if !plugins.is_empty() {
+                let errors = plugin_manager
+                    .initialize_all_plugins(plugins, &PluginContext::new_empty())
+                    .await;
+                for (plugin_dir, error_msg) in errors {
+                    eprintln!(
+                        "Warning: Failed to initialize plugin '{}': {}",
+                        plugin_dir, error_msg
+                    );
+                }
             }
-        }
+
+            Some(plugin_manager)
+        } else {
+            None
+        };
 
         Self { query_manager, encryption_manager, plugin_manager }
     }
@@ -60,7 +70,13 @@ impl CliContext {
         self.query_manager.connect()
     }
 
+    pub fn plugin_manager(&self) -> Arc<PluginManager> {
+        self.plugin_manager.clone().expect("Plugin manager was not initialized for this command")
+    }
+
     pub async fn shutdown(&self) {
-        self.plugin_manager.terminate().await;
+        if let Some(plugin_manager) = &self.plugin_manager {
+            plugin_manager.terminate().await;
+        }
     }
 }

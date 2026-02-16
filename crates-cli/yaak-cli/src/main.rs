@@ -3,7 +3,7 @@ mod commands;
 mod context;
 
 use clap::Parser;
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, RequestCommands};
 use context::CliContext;
 
 #[tokio::main]
@@ -20,7 +20,13 @@ async fn main() {
         dirs::data_dir().expect("Could not determine data directory").join(app_id)
     });
 
-    let context = CliContext::initialize(data_dir, app_id).await;
+    let needs_plugins = matches!(
+        &command,
+        Commands::Send(_)
+            | Commands::Request(cli::RequestArgs { command: RequestCommands::Send { .. } })
+    );
+
+    let context = CliContext::initialize(data_dir, app_id, needs_plugins).await;
 
     let exit_code = match command {
         Commands::Send(args) => {

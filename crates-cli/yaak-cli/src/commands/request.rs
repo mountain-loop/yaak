@@ -161,7 +161,7 @@ pub async fn send_request_by_id(
 
     let plugin_context = PluginContext::new(None, Some(request.workspace_id.clone()));
     let template_callback = PluginTemplateCallback::new(
-        ctx.plugin_manager.clone(),
+        ctx.plugin_manager(),
         ctx.encryption_manager.clone(),
         &plugin_context,
         RenderPurpose::Send,
