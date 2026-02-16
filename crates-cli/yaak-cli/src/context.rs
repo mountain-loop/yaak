@@ -18,7 +18,8 @@ impl CliContext {
         let blob_path = data_dir.join("blobs.sqlite");
 
         let (query_manager, _blob_manager, _rx) =
-            yaak_models::init_standalone(&db_path, &blob_path).expect("Failed to initialize database");
+            yaak_models::init_standalone(&db_path, &blob_path)
+                .expect("Failed to initialize database");
 
         let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 

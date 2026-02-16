@@ -32,12 +32,10 @@ pub enum Commands {
     /// Request commands
     Request(RequestArgs),
 
-    /// Folder commands (coming soon)
-    #[command(hide = true)]
+    /// Folder commands
     Folder(FolderArgs),
 
-    /// Environment commands (coming soon)
-    #[command(hide = true)]
+    /// Environment commands
     Environment(EnvironmentArgs),
 }
 
@@ -57,6 +55,29 @@ pub struct WorkspaceArgs {
 pub enum WorkspaceCommands {
     /// List all workspaces
     List,
+
+    /// Show a workspace as JSON
+    Show {
+        /// Workspace ID
+        workspace_id: String,
+    },
+
+    /// Create a workspace
+    Create {
+        /// Workspace name
+        #[arg(short, long)]
+        name: String,
+    },
+
+    /// Delete a workspace
+    Delete {
+        /// Workspace ID
+        workspace_id: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
 }
 
 #[derive(Args)]
@@ -115,7 +136,83 @@ pub enum RequestCommands {
 }
 
 #[derive(Args)]
-pub struct FolderArgs {}
+pub struct FolderArgs {
+    #[command(subcommand)]
+    pub command: FolderCommands,
+}
+
+#[derive(Subcommand)]
+pub enum FolderCommands {
+    /// List folders in a workspace
+    List {
+        /// Workspace ID
+        workspace_id: String,
+    },
+
+    /// Show a folder as JSON
+    Show {
+        /// Folder ID
+        folder_id: String,
+    },
+
+    /// Create a folder
+    Create {
+        /// Workspace ID
+        workspace_id: String,
+
+        /// Folder name
+        #[arg(short, long)]
+        name: String,
+    },
+
+    /// Delete a folder
+    Delete {
+        /// Folder ID
+        folder_id: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+}
 
 #[derive(Args)]
-pub struct EnvironmentArgs {}
+pub struct EnvironmentArgs {
+    #[command(subcommand)]
+    pub command: EnvironmentCommands,
+}
+
+#[derive(Subcommand)]
+pub enum EnvironmentCommands {
+    /// List environments in a workspace
+    List {
+        /// Workspace ID
+        workspace_id: String,
+    },
+
+    /// Show an environment as JSON
+    Show {
+        /// Environment ID
+        environment_id: String,
+    },
+
+    /// Create an environment
+    Create {
+        /// Workspace ID
+        workspace_id: String,
+
+        /// Environment name
+        #[arg(short, long)]
+        name: String,
+    },
+
+    /// Delete an environment
+    Delete {
+        /// Environment ID
+        environment_id: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+}

@@ -16,8 +16,9 @@ async fn main() {
 
     let app_id = if cfg!(debug_assertions) { "app.yaak.desktop.dev" } else { "app.yaak.desktop" };
 
-    let data_dir =
-        data_dir.unwrap_or_else(|| dirs::data_dir().expect("Could not determine data directory").join(app_id));
+    let data_dir = data_dir.unwrap_or_else(|| {
+        dirs::data_dir().expect("Could not determine data directory").join(app_id)
+    });
 
     let context = CliContext::initialize(data_dir, app_id).await;
 
@@ -34,13 +35,13 @@ async fn main() {
             commands::request::run(&context, args, environment.as_deref(), verbose).await;
             0
         }
-        Commands::Folder(_) => {
-            eprintln!("Folder commands are not implemented yet");
-            1
+        Commands::Folder(args) => {
+            commands::folder::run(&context, args);
+            0
         }
-        Commands::Environment(_) => {
-            eprintln!("Environment commands are not implemented yet");
-            1
+        Commands::Environment(args) => {
+            commands::environment::run(&context, args);
+            0
         }
     };
 

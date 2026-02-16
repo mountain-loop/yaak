@@ -1,9 +1,9 @@
 use crate::cli::{RequestArgs, RequestCommands};
+use crate::commands::confirm::confirm_delete;
 use crate::context::CliContext;
 use log::info;
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::io::{self, IsTerminal, Write};
 use tokio::sync::mpsc;
 use yaak_http::path_placeholders::apply_path_placeholders;
 use yaak_http::sender::{HttpSender, ReqwestSender};
@@ -30,10 +30,7 @@ pub async fn run(ctx: &CliContext, args: RequestArgs, environment: Option<&str>,
 }
 
 fn list(ctx: &CliContext, workspace_id: &str) {
-    let requests = ctx
-        .db()
-        .list_http_requests(workspace_id)
-        .expect("Failed to list requests");
+    let requests = ctx.db().list_http_requests(workspace_id).expect("Failed to list requests");
     if requests.is_empty() {
         println!("No requests found in workspace {}", workspace_id);
     } else {
@@ -61,16 +58,13 @@ fn create(ctx: &CliContext, workspace_id: String, name: String, method: String, 
 }
 
 fn show(ctx: &CliContext, request_id: &str) {
-    let request = ctx
-        .db()
-        .get_http_request(request_id)
-        .expect("Failed to get request");
+    let request = ctx.db().get_http_request(request_id).expect("Failed to get request");
     let output = serde_json::to_string_pretty(&request).expect("Failed to serialize request");
     println!("{output}");
 }
 
 fn delete(ctx: &CliContext, request_id: &str, yes: bool) {
-    if !yes && !confirm_delete_request(request_id) {
+    if !yes && !confirm_delete("request", request_id) {
         println!("Aborted");
         return;
     }
@@ -82,21 +76,6 @@ fn delete(ctx: &CliContext, request_id: &str, yes: bool) {
     println!("Deleted request: {}", deleted.id);
 }
 
-fn confirm_delete_request(request_id: &str) -> bool {
-    if !io::stdin().is_terminal() {
-        eprintln!("Refusing to delete in non-interactive mode without --yes");
-        std::process::exit(1);
-    }
-
-    print!("Delete request {request_id}? [y/N]: ");
-    io::stdout().flush().expect("Failed to flush stdout");
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).expect("Failed to read confirmation");
-
-    matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
-}
-
 /// Send a request by ID and print response in the same format as legacy `send`.
 pub async fn send_request_by_id(
     ctx: &CliContext,
@@ -104,18 +83,11 @@ pub async fn send_request_by_id(
     environment: Option<&str>,
     verbose: bool,
 ) {
-    let request = ctx
-        .db()
-        .get_http_request(request_id)
-        .expect("Failed to get request");
+    let request = ctx.db().get_http_request(request_id).expect("Failed to get request");
 
     let environment_chain = ctx
         .db()
-        .resolve_environments(
-            &request.workspace_id,
-            request.folder_id.as_deref(),
-            environment,
-        )
+        .resolve_environments(&request.workspace_id, request.folder_id.as_deref(), environment)
         .unwrap_or_default();
 
     let plugin_context = PluginContext::new(None, Some(request.workspace_id.clone()));
@@ -169,11 +141,7 @@ pub async fn send_request_by_id(
     if verbose {
         println!();
     }
-    println!(
-        "HTTP {} {}",
-        response.status,
-        response.status_reason.as_deref().unwrap_or("")
-    );
+    println!("HTTP {} {}", response.status, response.status_reason.as_deref().unwrap_or(""));
 
     if verbose {
         for (name, value) in &response.headers {
@@ -267,12 +235,5 @@ async fn render_http_request(
 
     let (url, url_parameters) = apply_path_placeholders(&url, &url_parameters);
 
-    Ok(HttpRequest {
-        url,
-        url_parameters,
-        headers,
-        body,
-        authentication,
-        ..request.to_owned()
-    })
+    Ok(HttpRequest { url, url_parameters, headers, body, authentication, ..request.to_owned() })
 }
