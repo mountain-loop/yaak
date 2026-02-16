@@ -74,15 +74,31 @@ impl Display for HttpResponseEvent {
                 };
                 write!(f, "* Redirect {} -> {} ({})", status, url, behavior_str)
             }
-            HttpResponseEvent::SendUrl { method, scheme, username, password, host, port, path, query, fragment } => {
+            HttpResponseEvent::SendUrl {
+                method,
+                scheme,
+                username,
+                password,
+                host,
+                port,
+                path,
+                query,
+                fragment,
+            } => {
                 let auth_str = if username.is_empty() && password.is_empty() {
                     String::new()
                 } else {
                     format!("{}:{}@", username, password)
                 };
-                let query_str = if query.is_empty() { String::new() } else { format!("?{}", query) };
-                let fragment_str = if fragment.is_empty() { String::new() } else { format!("#{}", fragment) };
-                write!(f, "> {} {}://{}{}:{}{}{}{}", method, scheme, auth_str, host, port, path, query_str, fragment_str)
+                let query_str =
+                    if query.is_empty() { String::new() } else { format!("?{}", query) };
+                let fragment_str =
+                    if fragment.is_empty() { String::new() } else { format!("#{}", fragment) };
+                write!(
+                    f,
+                    "> {} {}://{}{}:{}{}{}{}",
+                    method, scheme, auth_str, host, port, path, query_str, fragment_str
+                )
             }
             HttpResponseEvent::ReceiveUrl { version, status } => {
                 write!(f, "< {} {}", version_to_str(version), status)
@@ -122,7 +138,17 @@ impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
                     RedirectBehavior::DropBody => "drop_body".to_string(),
                 },
             },
-            HttpResponseEvent::SendUrl { method, scheme, username, password, host, port, path, query, fragment } => {
+            HttpResponseEvent::SendUrl {
+                method,
+                scheme,
+                username,
+                password,
+                host,
+                port,
+                path,
+                query,
+                fragment,
+            } => {
                 D::SendUrl { method, scheme, username, password, host, port, path, query, fragment }
             }
             HttpResponseEvent::ReceiveUrl { version, status } => {
@@ -546,7 +572,10 @@ impl<S> SizedBody<S> {
 
 impl<S> HttpBody for SizedBody<S>
 where
-    S: futures_util::Stream<Item = std::result::Result<Bytes, std::io::Error>> + Send + Unpin + 'static,
+    S: futures_util::Stream<Item = std::result::Result<Bytes, std::io::Error>>
+        + Send
+        + Unpin
+        + 'static,
 {
     type Data = Bytes;
     type Error = std::io::Error;
