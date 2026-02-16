@@ -5,6 +5,31 @@
 Redesign the yaak-cli command structure to use a resource-oriented `<resource> <action>`
 pattern that scales well, is discoverable, and supports both human and LLM workflows.
 
+## Status Snapshot
+
+Current branch state:
+
+- Modular CLI structure with command modules and shared `CliContext`
+- Resource/action hierarchy in place for:
+  - `workspace list`
+  - `request list`
+  - `request send`
+  - `request create`
+- Top-level `send` exists as a request-send shortcut (not yet flexible request/folder/workspace resolution)
+- Legacy `get` command removed
+- No folder/workspace/environment CRUD surface yet
+- No JSON merge/update flow yet
+- No `request schema` command yet
+
+Progress checklist:
+
+- [x] Phase 1 complete
+- [ ] Phase 2 complete
+- [ ] Phase 3 complete
+- [ ] Phase 4 complete
+- [ ] Phase 5 complete
+- [ ] Phase 6 complete
+
 ## Command Architecture
 
 ### Design Principles
@@ -190,6 +215,122 @@ Implementation:
 3. For folder: list all requests in folder, send each
 4. For workspace: list all requests in workspace, send each
 5. Add execution options: `--sequential` (default), `--parallel`, `--fail-fast`
+
+## Execution Plan (PR Slices)
+
+### PR 1: Command tree refactor + compatibility aliases
+
+Scope:
+
+1. Introduce `commands/` modules and a `CliContext` for shared setup
+2. Add new clap hierarchy (`workspace`, `request`, `folder`, `environment`)
+3. Route existing behavior into:
+   - `workspace list`
+   - `request list <workspace_id>`
+   - `request send <id>`
+   - `request create <workspace_id> ...`
+4. Keep compatibility aliases temporarily:
+   - `workspaces` -> `workspace list`
+   - `requests <workspace_id>` -> `request list <workspace_id>`
+   - `create ...` -> `request create ...`
+5. Remove `get` and update help text
+
+Acceptance criteria:
+
+- `yaakcli --help` shows noun/verb structure
+- Existing list/send/create workflows still work
+- No behavior change in HTTP send output format
+
+### PR 2: CRUD surface area
+
+Scope:
+
+1. Implement `show/create/update/delete` for `workspace`, `request`, `folder`, `environment`
+2. Ensure delete commands require confirmation by default (`--yes` bypass)
+3. Normalize output format for list/show/create/update/delete responses
+
+Acceptance criteria:
+
+- Every command listed in the "Commands" section parses and executes
+- Delete commands are safe by default in interactive terminals
+- `--yes` supports non-interactive scripts
+
+### PR 3: JSON input + merge patch semantics
+
+Scope:
+
+1. Add shared parser for `--json` and positional JSON shorthand
+2. Add `create --json` and `update --json` for all mutable resources
+3. Implement server-side RFC 7386 merge patch behavior
+4. Add guardrails:
+   - `create --json`: reject non-empty `id`
+   - `update --json`: require `id`
+
+Acceptance criteria:
+
+- Partial `update --json` only modifies provided keys
+- `null` clears optional values
+- Invalid JSON and missing required fields return actionable errors
+
+### PR 4: `request schema` and plugin auth integration
+
+Scope:
+
+1. Add `schemars` to `yaak-models` and derive `JsonSchema` for request models
+2. Implement `request schema <http|grpc|websocket>`
+3. Merge plugin auth form inputs into `authentication` schema at runtime
+
+Acceptance criteria:
+
+- Command prints valid JSON schema
+- Schema reflects installed auth providers at runtime
+- No panic when plugins fail to initialize (degrade gracefully)
+
+### PR 5: Polymorphic request send
+
+Scope:
+
+1. Replace request resolution in `request send` with `get_any_request`
+2. Dispatch by request type
+3. Keep HTTP fully functional
+4. Return explicit NYI errors for gRPC/WebSocket until implemented
+
+Acceptance criteria:
+
+- HTTP behavior remains unchanged
+- gRPC/WebSocket IDs are recognized and return explicit status
+
+### PR 6: Top-level `send` + bulk execution
+
+Scope:
+
+1. Add top-level `send <id>` for request/folder/workspace IDs
+2. Implement folder/workspace fan-out execution
+3. Add execution controls: `--sequential`, `--parallel`, `--fail-fast`
+
+Acceptance criteria:
+
+- Correct ID dispatch order: request -> folder -> workspace
+- Deterministic summary output (success/failure counts)
+- Non-zero exit code when any request fails (unless explicitly configured otherwise)
+
+## Validation Matrix
+
+1. CLI parsing tests for every command path (including aliases while retained)
+2. Integration tests against temp SQLite DB for CRUD flows
+3. Snapshot tests for output text where scripting compatibility matters
+4. Manual smoke tests:
+   - Send HTTP request with template/rendered vars
+   - JSON create/update for each resource
+   - Delete confirmation and `--yes`
+   - Top-level `send` on request/folder/workspace
+
+## Open Questions
+
+1. Should compatibility aliases (`workspaces`, `requests`, `create`) be removed immediately or after one release cycle?
+2. For bulk `send`, should default behavior stop on first failure or continue and summarize?
+3. Should command output default to human-readable text with an optional `--format json`, or return JSON by default for `show`/`list`?
+4. For `request schema`, should plugin-derived auth fields be namespaced by plugin ID to avoid collisions?
 
 ## Crate Changes
 
