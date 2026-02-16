@@ -8243,13 +8243,18 @@ dependencies = [
 name = "yaak"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "log 0.4.29",
+ "md5 0.8.0",
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
+ "yaak-crypto",
  "yaak-http",
  "yaak-models",
+ "yaak-plugins",
  "yaak-templates",
+ "yaak-tls",
 ]
 
 [[package]]

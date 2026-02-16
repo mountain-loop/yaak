@@ -6,12 +6,10 @@ use crate::commands::json::{
 };
 use crate::context::CliContext;
 use tokio::sync::mpsc;
-use yaak::send::{SendHttpRequestByIdParams, send_http_request_by_id};
-use yaak_http::types::SendableHttpRequestOptions;
+use yaak::send::{SendHttpRequestByIdWithPluginsParams, send_http_request_by_id_with_plugins};
 use yaak_models::models::HttpRequest;
 use yaak_models::util::UpdateSource;
-use yaak_plugins::events::{PluginContext, RenderPurpose};
-use yaak_plugins::template_callback::PluginTemplateCallback;
+use yaak_plugins::events::PluginContext;
 
 pub async fn run(
     ctx: &CliContext,
@@ -174,12 +172,6 @@ pub async fn send_request_by_id(
         ctx.db().get_http_request(request_id).map_err(|e| format!("Failed to get request: {e}"))?;
 
     let plugin_context = PluginContext::new(None, Some(request.workspace_id.clone()));
-    let template_callback = PluginTemplateCallback::new(
-        ctx.plugin_manager(),
-        ctx.encryption_manager.clone(),
-        &plugin_context,
-        RenderPurpose::Send,
-    );
 
     let (event_tx, mut event_rx) = mpsc::channel(100);
     let event_handle = tokio::spawn(async move {
@@ -191,17 +183,22 @@ pub async fn send_request_by_id(
     });
     let response_dir = ctx.data_dir().join("responses");
 
-    let result = send_http_request_by_id(SendHttpRequestByIdParams {
+    let result = send_http_request_by_id_with_plugins(SendHttpRequestByIdWithPluginsParams {
         query_manager: ctx.query_manager(),
         blob_manager: ctx.blob_manager(),
         request_id,
         environment_id: environment,
-        template_callback: &template_callback,
-        send_options: SendableHttpRequestOptions::default(),
         update_source: UpdateSource::Sync,
+        cookie_jar_id: None,
+        cookie_jar_update_source: UpdateSource::Sync,
         response_dir: &response_dir,
         persist_events: true,
         emit_events_to: Some(event_tx),
+        plugin_manager: ctx.plugin_manager(),
+        encryption_manager: ctx.encryption_manager.clone(),
+        plugin_context: &plugin_context,
+        cancelled_rx: None,
+        connection_manager: None,
     })
     .await;
 
