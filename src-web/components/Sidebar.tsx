@@ -291,7 +291,7 @@ function Sidebar({ className }: { className?: string }) {
           }
         },
       },
-      'sidebar.selected.moveToWorkspace': {
+      'sidebar.selected.move': {
         enable,
         cb: async (items: SidebarModel[]) => {
           const requests = items.filter(
@@ -434,10 +434,12 @@ function Sidebar({ className }: { className?: string }) {
         },
         {
           label: items.length <= 1 ? 'Move' : `Move ${requestItems.length} Requests`,
+          hotKeyAction: 'sidebar.selected.move',
+          hotKeyLabelOnly: true,
           leftSlot: <Icon icon="arrow_right_circle" />,
           hidden: workspaces.length <= 1 || requestItems.length === 0 || requestItems.length !== items.length,
           onSelect: () => {
-            actions['sidebar.selected.moveToWorkspace'].cb(items);
+            actions['sidebar.selected.move'].cb(items);
           },
         },
         {
