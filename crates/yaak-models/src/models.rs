@@ -2347,6 +2347,15 @@ macro_rules! define_any_model {
                     )*
                 }
             }
+
+            #[inline]
+            pub fn model(&self) -> &str {
+                match self {
+                    $(
+                        AnyModel::$type(inner) => &inner.model,
+                    )*
+                }
+            }
         }
 
         $(

@@ -3,6 +3,8 @@
 //! This module provides the Tauri plugin initialization and extension traits
 //! that allow accessing QueryManager and BlobManager from Tauri's Manager types.
 
+use log::error;
+use std::time::Duration;
 use tauri::plugin::TauriPlugin;
 use tauri::{Emitter, Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -12,6 +14,10 @@ use yaak_models::error::Result;
 use yaak_models::models::{AnyModel, GraphQlIntrospection, GrpcEvent, Settings, WebsocketEvent};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
+
+const MODEL_CHANGES_RETENTION_DAYS: i64 = 30;
+const MODEL_CHANGES_POLL_INTERVAL_MS: u64 = 250;
+const MODEL_CHANGES_POLL_BATCH_SIZE: usize = 200;
 
 /// Extension trait for accessing the QueryManager from Tauri Manager types.
 pub trait QueryManagerExt<'a, R> {
@@ -249,7 +255,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             let db_path = app_path.join("db.sqlite");
             let blob_path = app_path.join("blobs.sqlite");
 
-            let (query_manager, blob_manager, rx) =
+            let (query_manager, blob_manager, _rx) =
                 match yaak_models::init_standalone(&db_path, &blob_path) {
                     Ok(result) => result,
                     Err(e) => {
@@ -262,14 +268,46 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     }
                 };
 
+            let db = query_manager.connect();
+            if let Err(err) = db.prune_model_changes_older_than_days(MODEL_CHANGES_RETENTION_DAYS) {
+                error!("Failed to prune model_changes rows on startup: {err:?}");
+            }
+            let mut last_seen_change_id = match db.latest_model_change_id() {
+                Ok(id) => id,
+                Err(err) => {
+                    error!("Failed to read latest model_changes cursor: {err:?}");
+                    0
+                }
+            };
+
+            let poll_query_manager = query_manager.clone();
+
             app_handle.manage(query_manager);
             app_handle.manage(blob_manager);
 
-            // Forward model change events to the frontend
+            // Poll model_changes so all writers (including external CLI processes) update the UI.
             let app_handle = app_handle.clone();
+            let query_manager = poll_query_manager;
             tauri::async_runtime::spawn(async move {
-                for payload in rx {
-                    app_handle.emit("model_write", payload).unwrap();
+                loop {
+                    match query_manager.connect().list_model_changes_after(
+                        last_seen_change_id,
+                        MODEL_CHANGES_POLL_BATCH_SIZE,
+                    ) {
+                        Ok(changes) => {
+                            for change in changes {
+                                last_seen_change_id = change.id;
+                                if let Err(err) = app_handle.emit("model_write", change.payload) {
+                                    error!("Failed to emit model_write event: {err:?}");
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            error!("Failed to poll model_changes rows: {err:?}");
+                        }
+                    }
+
+                    tokio::time::sleep(Duration::from_millis(MODEL_CHANGES_POLL_INTERVAL_MS)).await;
                 }
             });
 

@@ -25,7 +25,7 @@ impl QueryManager {
             .expect("Failed to gain lock on DB")
             .get()
             .expect("Failed to get a new DB connection from the pool");
-        DbContext { events_tx: self.events_tx.clone(), conn: ConnectionOrTx::Connection(conn) }
+        DbContext { _events_tx: self.events_tx.clone(), conn: ConnectionOrTx::Connection(conn) }
     }
 
     pub fn with_conn<F, T>(&self, func: F) -> T
@@ -39,8 +39,10 @@ impl QueryManager {
             .get()
             .expect("Failed to get new DB connection from the pool");
 
-        let db_context =
-            DbContext { events_tx: self.events_tx.clone(), conn: ConnectionOrTx::Connection(conn) };
+        let db_context = DbContext {
+            _events_tx: self.events_tx.clone(),
+            conn: ConnectionOrTx::Connection(conn),
+        };
 
         func(&db_context)
     }
@@ -62,8 +64,10 @@ impl QueryManager {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .expect("Failed to start DB transaction");
 
-        let db_context =
-            DbContext { events_tx: self.events_tx.clone(), conn: ConnectionOrTx::Transaction(&tx) };
+        let db_context = DbContext {
+            _events_tx: self.events_tx.clone(),
+            conn: ConnectionOrTx::Transaction(&tx),
+        };
 
         match func(&db_context) {
             Ok(val) => {
