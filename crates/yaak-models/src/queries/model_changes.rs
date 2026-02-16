@@ -99,6 +99,7 @@ mod tests {
     use crate::init_in_memory;
     use crate::models::Workspace;
     use crate::util::{ModelChangeEvent, UpdateSource};
+    use serde_json::json;
 
     #[test]
     fn records_model_changes_for_upsert_and_delete() {
@@ -239,5 +240,50 @@ mod tests {
         let pruned =
             db.prune_model_changes_older_than_hours(1).expect("Failed to prune model changes");
         assert_eq!(pruned, 1);
+    }
+
+    #[test]
+    fn list_model_changes_deserializes_http_response_event_payload() {
+        let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
+        let db = query_manager.connect();
+
+        let payload = json!({
+            "model": {
+                "model": "http_response_event",
+                "id": "re_test",
+                "createdAt": "2026-02-16T21:01:34.809162",
+                "updatedAt": "2026-02-16T21:01:34.809163",
+                "workspaceId": "wk_test",
+                "responseId": "rs_test",
+                "event": {
+                    "type": "info",
+                    "message": "hello"
+                }
+            },
+            "updateSource": { "type": "sync" },
+            "change": { "type": "upsert", "created": false }
+        });
+
+        db.conn
+            .resolve()
+            .execute(
+                r#"
+                INSERT INTO model_changes (model, model_id, change, update_source, payload)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+                "#,
+                params![
+                    "http_response_event",
+                    "re_test",
+                    r#"{"type":"upsert","created":false}"#,
+                    r#"{"type":"sync"}"#,
+                    payload.to_string(),
+                ],
+            )
+            .expect("Failed to insert model change row");
+
+        let changes = db.list_model_changes_after(0, 10).expect("Failed to list changes");
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].payload.model.model(), "http_response_event");
+        assert_eq!(changes[0].payload.model.id(), "re_test");
     }
 }
