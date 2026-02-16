@@ -55,8 +55,53 @@ fn delete_without_yes_fails_in_non_interactive_mode() {
         .code(1)
         .stderr(contains("Refusing to delete in non-interactive mode without --yes"));
 
-    assert!(query_manager(data_dir)
-        .connect()
-        .get_http_request("rq_seed_delete_noninteractive")
-        .is_ok());
+    assert!(
+        query_manager(data_dir).connect().get_http_request("rq_seed_delete_noninteractive").is_ok()
+    );
+}
+
+#[test]
+fn json_create_and_update_merge_patch_round_trip() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+
+    let create_assert = cli_cmd(data_dir)
+        .args([
+            "request",
+            "create",
+            r#"{"workspaceId":"wk_test","name":"Json Request","url":"https://example.com"}"#,
+        ])
+        .assert()
+        .success();
+    let request_id = parse_created_id(&create_assert.get_output().stdout, "request create");
+
+    cli_cmd(data_dir)
+        .args([
+            "request",
+            "update",
+            &format!(r#"{{"id":"{}","name":"Renamed Request"}}"#, request_id),
+        ])
+        .assert()
+        .success()
+        .stdout(contains(format!("Updated request: {request_id}")));
+
+    cli_cmd(data_dir)
+        .args(["request", "show", &request_id])
+        .assert()
+        .success()
+        .stdout(contains("\"name\": \"Renamed Request\""))
+        .stdout(contains("\"url\": \"https://example.com\""));
+}
+
+#[test]
+fn update_requires_id_in_json_payload() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+
+    cli_cmd(data_dir)
+        .args(["request", "update", r#"{"name":"No ID"}"#])
+        .assert()
+        .failure()
+        .stderr(contains("request update requires a non-empty \"id\" field"));
 }

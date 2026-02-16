@@ -8320,6 +8320,7 @@ dependencies = [
  "env_logger",
  "log 0.4.29",
  "predicates",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",

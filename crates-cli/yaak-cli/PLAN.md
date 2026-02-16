@@ -11,21 +11,20 @@ Current branch state:
 
 - Modular CLI structure with command modules and shared `CliContext`
 - Resource/action hierarchy in place for:
-  - `workspace list`
-  - `request list`
-  - `request send`
-  - `request create`
+  - `workspace list|show|create|update|delete`
+  - `request list|show|create|update|send|delete`
+  - `folder list|show|create|update|delete`
+  - `environment list|show|create|update|delete`
 - Top-level `send` exists as a request-send shortcut (not yet flexible request/folder/workspace resolution)
 - Legacy `get` command removed
-- No folder/workspace/environment CRUD surface yet
-- No JSON merge/update flow yet
+- JSON create/update flow implemented (`--json` and positional JSON shorthand)
 - No `request schema` command yet
 
 Progress checklist:
 
 - [x] Phase 1 complete
-- [ ] Phase 2 complete
-- [ ] Phase 3 complete
+- [x] Phase 2 complete
+- [x] Phase 3 complete
 - [ ] Phase 4 complete
 - [ ] Phase 5 complete
 - [ ] Phase 6 complete
@@ -145,7 +144,7 @@ Existing behavior stays the same, just reorganized. Remove the `get` command.
 
 ### Phase 2: Add missing CRUD commands
 
-Status: in progress (`show`/`create`/`delete` implemented for workspace, request, folder, environment; JSON update flow pending)
+Status: complete
 
 1. `workspace show <id>`
 2. `workspace create --name <name>` (and `--json`)

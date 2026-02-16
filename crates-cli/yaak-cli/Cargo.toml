@@ -13,6 +13,7 @@ clap = { version = "4", features = ["derive"] }
 dirs = "6"
 env_logger = "0.11"
 log = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 yaak-crypto = { workspace = true }

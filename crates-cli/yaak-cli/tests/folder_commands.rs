@@ -38,3 +38,37 @@ fn create_list_show_delete_round_trip() {
 
     assert!(query_manager(data_dir).connect().get_folder(&folder_id).is_err());
 }
+
+#[test]
+fn json_create_and_update_merge_patch_round_trip() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+
+    let create_assert = cli_cmd(data_dir)
+        .args([
+            "folder",
+            "create",
+            r#"{"workspaceId":"wk_test","name":"Json Folder"}"#,
+        ])
+        .assert()
+        .success();
+    let folder_id = parse_created_id(&create_assert.get_output().stdout, "folder create");
+
+    cli_cmd(data_dir)
+        .args([
+            "folder",
+            "update",
+            &format!(r#"{{"id":"{}","description":"Folder Description"}}"#, folder_id),
+        ])
+        .assert()
+        .success()
+        .stdout(contains(format!("Updated folder: {folder_id}")));
+
+    cli_cmd(data_dir)
+        .args(["folder", "show", &folder_id])
+        .assert()
+        .success()
+        .stdout(contains("\"name\": \"Json Folder\""))
+        .stdout(contains("\"description\": \"Folder Description\""));
+}

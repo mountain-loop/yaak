@@ -66,7 +66,26 @@ pub enum WorkspaceCommands {
     Create {
         /// Workspace name
         #[arg(short, long)]
-        name: String,
+        name: Option<String>,
+
+        /// JSON payload
+        #[arg(long, conflicts_with = "json_input")]
+        json: Option<String>,
+
+        /// JSON payload shorthand
+        #[arg(value_name = "JSON", conflicts_with = "json")]
+        json_input: Option<String>,
+    },
+
+    /// Update a workspace
+    Update {
+        /// JSON payload
+        #[arg(long, conflicts_with = "json_input")]
+        json: Option<String>,
+
+        /// JSON payload shorthand
+        #[arg(value_name = "JSON", conflicts_with = "json")]
+        json_input: Option<String>,
     },
 
     /// Delete a workspace
@@ -108,20 +127,35 @@ pub enum RequestCommands {
 
     /// Create a new HTTP request
     Create {
-        /// Workspace ID
-        workspace_id: String,
+        /// Workspace ID (or positional JSON payload shorthand)
+        workspace_id: Option<String>,
 
         /// Request name
         #[arg(short, long)]
-        name: String,
+        name: Option<String>,
 
         /// HTTP method
-        #[arg(short, long, default_value = "GET")]
-        method: String,
+        #[arg(short, long)]
+        method: Option<String>,
 
         /// URL
         #[arg(short, long)]
-        url: String,
+        url: Option<String>,
+
+        /// JSON payload
+        #[arg(long)]
+        json: Option<String>,
+    },
+
+    /// Update an HTTP request
+    Update {
+        /// JSON payload
+        #[arg(long, conflicts_with = "json_input")]
+        json: Option<String>,
+
+        /// JSON payload shorthand
+        #[arg(value_name = "JSON", conflicts_with = "json")]
+        json_input: Option<String>,
     },
 
     /// Delete a request
@@ -157,12 +191,27 @@ pub enum FolderCommands {
 
     /// Create a folder
     Create {
-        /// Workspace ID
-        workspace_id: String,
+        /// Workspace ID (or positional JSON payload shorthand)
+        workspace_id: Option<String>,
 
         /// Folder name
         #[arg(short, long)]
-        name: String,
+        name: Option<String>,
+
+        /// JSON payload
+        #[arg(long)]
+        json: Option<String>,
+    },
+
+    /// Update a folder
+    Update {
+        /// JSON payload
+        #[arg(long, conflicts_with = "json_input")]
+        json: Option<String>,
+
+        /// JSON payload shorthand
+        #[arg(value_name = "JSON", conflicts_with = "json")]
+        json_input: Option<String>,
     },
 
     /// Delete a folder
@@ -198,12 +247,27 @@ pub enum EnvironmentCommands {
 
     /// Create an environment
     Create {
-        /// Workspace ID
-        workspace_id: String,
+        /// Workspace ID (or positional JSON payload shorthand)
+        workspace_id: Option<String>,
 
         /// Environment name
         #[arg(short, long)]
-        name: String,
+        name: Option<String>,
+
+        /// JSON payload
+        #[arg(long)]
+        json: Option<String>,
+    },
+
+    /// Update an environment
+    Update {
+        /// JSON payload
+        #[arg(long, conflicts_with = "json_input")]
+        json: Option<String>,
+
+        /// JSON payload shorthand
+        #[arg(value_name = "JSON", conflicts_with = "json")]
+        json_input: Option<String>,
     },
 
     /// Delete an environment
