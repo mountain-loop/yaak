@@ -73,6 +73,12 @@ pub enum RequestCommands {
         workspace_id: String,
     },
 
+    /// Show a request as JSON
+    Show {
+        /// Request ID
+        request_id: String,
+    },
+
     /// Send an HTTP request by ID
     Send {
         /// Request ID
@@ -95,6 +101,16 @@ pub enum RequestCommands {
         /// URL
         #[arg(short, long)]
         url: String,
+    },
+
+    /// Delete a request
+    Delete {
+        /// Request ID
+        request_id: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
     },
 }
 

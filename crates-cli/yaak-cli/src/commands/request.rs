@@ -3,6 +3,7 @@ use crate::context::CliContext;
 use log::info;
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::io::{self, IsTerminal, Write};
 use tokio::sync::mpsc;
 use yaak_http::path_placeholders::apply_path_placeholders;
 use yaak_http::sender::{HttpSender, ReqwestSender};
@@ -17,12 +18,14 @@ use yaak_templates::{RenderOptions, parse_and_render, render_json_value_raw};
 pub async fn run(ctx: &CliContext, args: RequestArgs, environment: Option<&str>, verbose: bool) {
     match args.command {
         RequestCommands::List { workspace_id } => list(ctx, &workspace_id),
+        RequestCommands::Show { request_id } => show(ctx, &request_id),
         RequestCommands::Send { request_id } => {
             send_request_by_id(ctx, &request_id, environment, verbose).await;
         }
         RequestCommands::Create { workspace_id, name, method, url } => {
             create(ctx, workspace_id, name, method, url)
         }
+        RequestCommands::Delete { request_id, yes } => delete(ctx, &request_id, yes),
     }
 }
 
@@ -55,6 +58,43 @@ fn create(ctx: &CliContext, workspace_id: String, name: String, method: String, 
         .expect("Failed to create request");
 
     println!("Created request: {}", created.id);
+}
+
+fn show(ctx: &CliContext, request_id: &str) {
+    let request = ctx
+        .db()
+        .get_http_request(request_id)
+        .expect("Failed to get request");
+    let output = serde_json::to_string_pretty(&request).expect("Failed to serialize request");
+    println!("{output}");
+}
+
+fn delete(ctx: &CliContext, request_id: &str, yes: bool) {
+    if !yes && !confirm_delete_request(request_id) {
+        println!("Aborted");
+        return;
+    }
+
+    let deleted = ctx
+        .db()
+        .delete_http_request_by_id(request_id, &UpdateSource::Sync)
+        .expect("Failed to delete request");
+    println!("Deleted request: {}", deleted.id);
+}
+
+fn confirm_delete_request(request_id: &str) -> bool {
+    if !io::stdin().is_terminal() {
+        eprintln!("Refusing to delete in non-interactive mode without --yes");
+        std::process::exit(1);
+    }
+
+    print!("Delete request {request_id}? [y/N]: ");
+    io::stdout().flush().expect("Failed to flush stdout");
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).expect("Failed to read confirmation");
+
+    matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
 /// Send a request by ID and print response in the same format as legacy `send`.

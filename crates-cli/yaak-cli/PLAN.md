@@ -145,6 +145,8 @@ Existing behavior stays the same, just reorganized. Remove the `get` command.
 
 ### Phase 2: Add missing CRUD commands
 
+Status: in progress (request `show` and `delete` implemented)
+
 1. `workspace show <id>`
 2. `workspace create --name <name>` (and `--json`)
 3. `workspace update --json`
