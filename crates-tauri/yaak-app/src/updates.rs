@@ -15,6 +15,9 @@ use ts_rs::TS;
 use yaak_models::util::generate_id;
 use yaak_plugins::manager::PluginManager;
 
+use url::Url;
+use yaak_api::get_system_proxy_url;
+
 use crate::error::Error::GenericError;
 use crate::is_dev;
 
@@ -87,8 +90,13 @@ impl YaakUpdater {
         info!("Checking for updates mode={} autodl={}", mode, auto_download);
 
         let w = window.clone();
-        let update_check_result = w
-            .updater_builder()
+        let mut updater_builder = w.updater_builder();
+        if let Some(proxy_url) = get_system_proxy_url() {
+            if let Ok(url) = Url::parse(&proxy_url) {
+                updater_builder = updater_builder.proxy(url);
+            }
+        }
+        let update_check_result = updater_builder
             .on_before_exit(move || {
                 // Kill plugin manager before exit or NSIS installer will fail to replace sidecar
                 // while it's running.

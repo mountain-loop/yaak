@@ -176,7 +176,11 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   }
 
   if (!hasAnythingToAdd) {
-    return <EmptyStateText>No changes since last commit</EmptyStateText>;
+    return (
+      <div className="h-full px-6 pb-4">
+        <EmptyStateText>No changes since last commit</EmptyStateText>
+      </div>
+    );
   }
 
   return (
@@ -230,14 +234,14 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                     hideLabel
                   />
                   {commitError && <Banner color="danger">{commitError}</Banner>}
-                  <HStack alignItems="center">
+                  <HStack alignItems="center" space={2}>
                     <InlineCode>{status.data?.headRefShorthand}</InlineCode>
                     <HStack space={2} className="ml-auto">
                       <Button
                         color="secondary"
                         size="sm"
                         onClick={handleCreateCommit}
-                        disabled={!hasAddedAnything}
+                        disabled={!hasAddedAnything || message.trim().length === 0}
                         isLoading={isPushing}
                       >
                         Commit
@@ -245,7 +249,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                       <Button
                         color="primary"
                         size="sm"
-                        disabled={!hasAddedAnything}
+                        disabled={!hasAddedAnything || message.trim().length === 0}
                         onClick={handleCreateCommitAndPush}
                         isLoading={isPushing}
                       >
