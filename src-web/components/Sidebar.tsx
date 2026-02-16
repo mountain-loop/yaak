@@ -25,7 +25,6 @@ import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { bulkMoveToWorkspace } from '../commands/bulkMoveToWorkspace';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
@@ -279,6 +278,7 @@ function Sidebar({ className }: { className?: string }) {
         },
       },
       'sidebar.selected.duplicate': {
+        // Higher priority so this takes precedence over model.duplicate (same Meta+d binding)
         priority: 10,
         enable,
         cb: async (items: SidebarModel[]) => {
@@ -294,13 +294,12 @@ function Sidebar({ className }: { className?: string }) {
       'sidebar.selected.moveToWorkspace': {
         enable,
         cb: async (items: SidebarModel[]) => {
-          // Filter to only include requests (not folders or workspaces)
           const requests = items.filter(
             (i): i is HttpRequest | GrpcRequest | WebsocketRequest =>
               i.model === 'http_request' || i.model === 'grpc_request' || i.model === 'websocket_request'
           );
           if (requests.length > 0) {
-            bulkMoveToWorkspace.mutate(requests);
+            moveToWorkspace.mutate(requests);
           }
         },
       },
@@ -334,6 +333,10 @@ function Sidebar({ className }: { className?: string }) {
 
       const workspaces = jotaiStore.get(workspacesAtom);
       const onlyHttpRequests = items.every((i) => i.model === 'http_request');
+      const requestItems = items.filter(
+        (i) =>
+          i.model === 'http_request' || i.model === 'grpc_request' || i.model === 'websocket_request',
+      );
 
       const initialItems: ContextMenuProps['items'] = [
         {
@@ -430,30 +433,9 @@ function Sidebar({ className }: { className?: string }) {
           onSelect: () => actions['sidebar.selected.duplicate'].cb(items),
         },
         {
-          label: 'Move',
+          label: items.length <= 1 ? 'Move' : `Move ${requestItems.length} Requests`,
           leftSlot: <Icon icon="arrow_right_circle" />,
-          hidden:
-            workspaces.length <= 1 ||
-            items.length > 1 ||
-            child.model === 'folder' ||
-            child.model === 'workspace',
-          onSelect: () => {
-            if (child.model === 'folder' || child.model === 'workspace') return;
-            moveToWorkspace.mutate(child);
-          },
-        },
-        {
-          label: `Move ${items.length} Requests`,
-          leftSlot: <Icon icon="arrow_right_circle" />,
-          hidden:
-            workspaces.length <= 1 ||
-            items.length <= 1 ||
-            !items.some(
-              (i) =>
-                i.model === 'http_request' ||
-                i.model === 'grpc_request' ||
-                i.model === 'websocket_request'
-            ),
+          hidden: workspaces.length <= 1 || requestItems.length === 0 || requestItems.length !== items.length,
           onSelect: () => {
             actions['sidebar.selected.moveToWorkspace'].cb(items);
           },
