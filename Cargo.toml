@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/yaak",
     # Shared crates (no Tauri dependency)
     "crates/yaak-core",
     "crates/yaak-common",
@@ -47,6 +48,7 @@ ts-rs = "11.1.0"
 
 # Internal crates - shared
 yaak-core = { path = "crates/yaak-core" }
+yaak = { path = "crates/yaak" }
 yaak-common = { path = "crates/yaak-common" }
 yaak-crypto = { path = "crates/yaak-crypto" }
 yaak-git = { path = "crates/yaak-git" }

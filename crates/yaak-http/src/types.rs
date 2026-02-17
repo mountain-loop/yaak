@@ -37,10 +37,9 @@ impl From<SendableBodyWithMeta> for SendableBody {
     fn from(value: SendableBodyWithMeta) -> Self {
         match value {
             SendableBodyWithMeta::Bytes(b) => SendableBody::Bytes(b),
-            SendableBodyWithMeta::Stream { data, content_length } => SendableBody::Stream {
-                data,
-                content_length: content_length.map(|l| l as u64),
-            },
+            SendableBodyWithMeta::Stream { data, content_length } => {
+                SendableBody::Stream { data, content_length: content_length.map(|l| l as u64) }
+            }
         }
     }
 }

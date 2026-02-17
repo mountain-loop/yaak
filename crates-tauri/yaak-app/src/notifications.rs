@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
+use yaak_api::yaak_api_client;
 use yaak_common::platform::get_os_str;
 use yaak_models::util::UpdateSource;
-use yaak_api::yaak_api_client;
 
 // Check for updates every hour
 const MAX_UPDATE_CHECK_SECONDS: u64 = 60 * 60;

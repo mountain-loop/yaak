@@ -68,7 +68,9 @@ pub async fn start_nodejs_plugin_runtime(
     // Handle kill signal
     let mut kill_rx = kill_rx.clone();
     tokio::spawn(async move {
-        kill_rx.wait_for(|b| *b == true).await.expect("Kill channel errored");
+        if kill_rx.wait_for(|b| *b == true).await.is_err() {
+            warn!("Kill channel closed before explicit shutdown; terminating plugin runtime");
+        }
         info!("Killing plugin runtime");
         if let Err(e) = child.kill().await {
             warn!("Failed to kill plugin runtime: {e}");

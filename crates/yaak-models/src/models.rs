@@ -2347,6 +2347,15 @@ macro_rules! define_any_model {
                     )*
                 }
             }
+
+            #[inline]
+            pub fn model(&self) -> &str {
+                match self {
+                    $(
+                        AnyModel::$type(inner) => &inner.model,
+                    )*
+                }
+            }
         }
 
         $(
@@ -2400,30 +2409,29 @@ impl<'de> Deserialize<'de> for AnyModel {
     {
         let value = Value::deserialize(deserializer)?;
         let model = value.as_object().unwrap();
+        use AnyModel::*;
         use serde_json::from_value as fv;
 
         let model = match model.get("model") {
-            Some(m) if m == "cookie_jar" => AnyModel::CookieJar(fv(value).unwrap()),
-            Some(m) if m == "environment" => AnyModel::Environment(fv(value).unwrap()),
-            Some(m) if m == "folder" => AnyModel::Folder(fv(value).unwrap()),
-            Some(m) if m == "graphql_introspection" => {
-                AnyModel::GraphQlIntrospection(fv(value).unwrap())
-            }
-            Some(m) if m == "grpc_connection" => AnyModel::GrpcConnection(fv(value).unwrap()),
-            Some(m) if m == "grpc_event" => AnyModel::GrpcEvent(fv(value).unwrap()),
-            Some(m) if m == "grpc_request" => AnyModel::GrpcRequest(fv(value).unwrap()),
-            Some(m) if m == "http_request" => AnyModel::HttpRequest(fv(value).unwrap()),
-            Some(m) if m == "http_response" => AnyModel::HttpResponse(fv(value).unwrap()),
-            Some(m) if m == "key_value" => AnyModel::KeyValue(fv(value).unwrap()),
-            Some(m) if m == "plugin" => AnyModel::Plugin(fv(value).unwrap()),
-            Some(m) if m == "settings" => AnyModel::Settings(fv(value).unwrap()),
-            Some(m) if m == "websocket_connection" => {
-                AnyModel::WebsocketConnection(fv(value).unwrap())
-            }
-            Some(m) if m == "websocket_event" => AnyModel::WebsocketEvent(fv(value).unwrap()),
-            Some(m) if m == "websocket_request" => AnyModel::WebsocketRequest(fv(value).unwrap()),
-            Some(m) if m == "workspace" => AnyModel::Workspace(fv(value).unwrap()),
-            Some(m) if m == "workspace_meta" => AnyModel::WorkspaceMeta(fv(value).unwrap()),
+            Some(m) if m == "cookie_jar" => CookieJar(fv(value).unwrap()),
+            Some(m) if m == "environment" => Environment(fv(value).unwrap()),
+            Some(m) if m == "folder" => Folder(fv(value).unwrap()),
+            Some(m) if m == "graphql_introspection" => GraphQlIntrospection(fv(value).unwrap()),
+            Some(m) if m == "grpc_connection" => GrpcConnection(fv(value).unwrap()),
+            Some(m) if m == "grpc_event" => GrpcEvent(fv(value).unwrap()),
+            Some(m) if m == "grpc_request" => GrpcRequest(fv(value).unwrap()),
+            Some(m) if m == "http_request" => HttpRequest(fv(value).unwrap()),
+            Some(m) if m == "http_response" => HttpResponse(fv(value).unwrap()),
+            Some(m) if m == "http_response_event" => HttpResponseEvent(fv(value).unwrap()),
+            Some(m) if m == "key_value" => KeyValue(fv(value).unwrap()),
+            Some(m) if m == "plugin" => Plugin(fv(value).unwrap()),
+            Some(m) if m == "settings" => Settings(fv(value).unwrap()),
+            Some(m) if m == "sync_state" => SyncState(fv(value).unwrap()),
+            Some(m) if m == "websocket_connection" => WebsocketConnection(fv(value).unwrap()),
+            Some(m) if m == "websocket_event" => WebsocketEvent(fv(value).unwrap()),
+            Some(m) if m == "websocket_request" => WebsocketRequest(fv(value).unwrap()),
+            Some(m) if m == "workspace" => Workspace(fv(value).unwrap()),
+            Some(m) if m == "workspace_meta" => WorkspaceMeta(fv(value).unwrap()),
             Some(m) => {
                 return Err(serde::de::Error::custom(format!(
                     "Failed to deserialize AnyModel {}",

@@ -21,6 +21,7 @@ use tauri::{
 };
 use tokio::sync::Mutex;
 use ts_rs::TS;
+use yaak_api::yaak_api_client;
 use yaak_models::models::Plugin;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::api::{
@@ -31,7 +32,6 @@ use yaak_plugins::events::{Color, Icon, PluginContext, ShowToastRequest};
 use yaak_plugins::install::{delete_and_uninstall, download_and_install};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::get_plugin_meta;
-use yaak_api::yaak_api_client;
 
 static EXITING: AtomicBool = AtomicBool::new(false);
 

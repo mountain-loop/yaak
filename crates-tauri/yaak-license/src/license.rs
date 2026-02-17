@@ -7,11 +7,11 @@ use std::ops::Add;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use ts_rs::TS;
+use yaak_api::yaak_api_client;
 use yaak_common::platform::get_os_str;
 use yaak_models::db_context::DbContext;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
-use yaak_api::yaak_api_client;
 
 /// Extension trait for accessing the QueryManager from Tauri Manager types.
 /// This is needed temporarily until all crates are refactored to not use Tauri.
@@ -159,10 +159,8 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
     let app_version = window.app_handle().package_info().version.to_string();
     let client = yaak_api_client(&app_version)?;
     let path = format!("/licenses/activations/{}/deactivate", activation_id);
-    let payload = DeactivateLicenseRequestPayload {
-        app_platform: get_os_str().to_string(),
-        app_version,
-    };
+    let payload =
+        DeactivateLicenseRequestPayload { app_platform: get_os_str().to_string(), app_version };
     let response = client.post(build_url(&path)).json(&payload).send().await?;
 
     if response.status().is_client_error() {
@@ -189,10 +187,8 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
 
 pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<LicenseCheckStatus> {
     let app_version = window.app_handle().package_info().version.to_string();
-    let payload = CheckActivationRequestPayload {
-        app_platform: get_os_str().to_string(),
-        app_version,
-    };
+    let payload =
+        CheckActivationRequestPayload { app_platform: get_os_str().to_string(), app_version };
     let activation_id = get_activation_id(window.app_handle()).await;
 
     let settings = window.db().get_settings();

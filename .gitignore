@@ -51,3 +51,6 @@ flatpak-repo/
 flatpak/flatpak-builder-tools/
 flatpak/cargo-sources.json
 flatpak/node-sources.json
+
+# Local Codex desktop env state
+.codex/environments/environment.toml

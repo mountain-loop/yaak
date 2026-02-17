@@ -13,10 +13,17 @@ clap = { version = "4", features = ["derive"] }
 dirs = "6"
 env_logger = "0.11"
 log = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+yaak = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-http = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-templates = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"

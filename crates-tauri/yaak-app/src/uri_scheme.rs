@@ -8,11 +8,11 @@ use std::fs;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Url};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use yaak_api::yaak_api_client;
 use yaak_models::util::generate_id;
 use yaak_plugins::events::{Color, ShowToastRequest};
 use yaak_plugins::install::download_and_install;
 use yaak_plugins::manager::PluginManager;
-use yaak_api::yaak_api_client;
 
 pub(crate) async fn handle_deep_link<R: Runtime>(
     app_handle: &AppHandle<R>,
