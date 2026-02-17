@@ -1,10 +1,10 @@
 use crate::cli::{FolderArgs, FolderCommands};
-use crate::commands::confirm::confirm_delete;
-use crate::commands::json::{
+use crate::context::CliContext;
+use crate::utils::confirm::confirm_delete;
+use crate::utils::json::{
     apply_merge_patch, is_json_shorthand, parse_optional_json, parse_required_json, require_id,
     validate_create_id,
 };
-use crate::context::CliContext;
 use yaak_models::models::Folder;
 use yaak_models::util::UpdateSource;
 

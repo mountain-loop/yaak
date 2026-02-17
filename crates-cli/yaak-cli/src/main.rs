@@ -1,6 +1,7 @@
 mod cli;
 mod commands;
 mod context;
+mod utils;
 
 use clap::Parser;
 use cli::{Cli, Commands, RequestCommands};

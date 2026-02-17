@@ -1,10 +1,10 @@
 use crate::cli::{RequestArgs, RequestCommands};
-use crate::commands::confirm::confirm_delete;
-use crate::commands::json::{
+use crate::context::CliContext;
+use crate::utils::confirm::confirm_delete;
+use crate::utils::json::{
     apply_merge_patch, is_json_shorthand, parse_optional_json, parse_required_json, require_id,
     validate_create_id,
 };
-use crate::context::CliContext;
 use tokio::sync::mpsc;
 use yaak::send::{SendHttpRequestByIdWithPluginsParams, send_http_request_by_id_with_plugins};
 use yaak_models::models::HttpRequest;
