@@ -17,7 +17,7 @@ use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 
 const MODEL_CHANGES_RETENTION_HOURS: i64 = 1;
-const MODEL_CHANGES_POLL_INTERVAL_MS: u64 = 250;
+const MODEL_CHANGES_POLL_INTERVAL_MS: u64 = 1000;
 const MODEL_CHANGES_POLL_BATCH_SIZE: usize = 200;
 
 struct ModelChangeCursor {
