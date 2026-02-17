@@ -11,47 +11,47 @@ use yaak_models::models::HttpRequest;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::PluginContext;
 
+type CommandResult<T = ()> = std::result::Result<T, String>;
+
 pub async fn run(
     ctx: &CliContext,
     args: RequestArgs,
     environment: Option<&str>,
     verbose: bool,
 ) -> i32 {
-    match args.command {
-        RequestCommands::List { workspace_id } => {
-            list(ctx, &workspace_id);
-            0
-        }
-        RequestCommands::Show { request_id } => {
-            show(ctx, &request_id);
-            0
-        }
+    let result = match args.command {
+        RequestCommands::List { workspace_id } => list(ctx, &workspace_id),
+        RequestCommands::Show { request_id } => show(ctx, &request_id),
         RequestCommands::Send { request_id } => {
-            match send_request_by_id(ctx, &request_id, environment, verbose).await {
+            return match send_request_by_id(ctx, &request_id, environment, verbose).await {
                 Ok(()) => 0,
                 Err(error) => {
                     eprintln!("Error: {error}");
                     1
                 }
-            }
+            };
         }
         RequestCommands::Create { workspace_id, name, method, url, json } => {
-            create(ctx, workspace_id, name, method, url, json);
-            0
+            create(ctx, workspace_id, name, method, url, json)
         }
-        RequestCommands::Update { json, json_input } => {
-            update(ctx, json, json_input);
-            0
-        }
-        RequestCommands::Delete { request_id, yes } => {
-            delete(ctx, &request_id, yes);
-            0
+        RequestCommands::Update { json, json_input } => update(ctx, json, json_input),
+        RequestCommands::Delete { request_id, yes } => delete(ctx, &request_id, yes),
+    };
+
+    match result {
+        Ok(()) => 0,
+        Err(error) => {
+            eprintln!("Error: {error}");
+            1
         }
     }
 }
 
-fn list(ctx: &CliContext, workspace_id: &str) {
-    let requests = ctx.db().list_http_requests(workspace_id).expect("Failed to list requests");
+fn list(ctx: &CliContext, workspace_id: &str) -> CommandResult {
+    let requests = ctx
+        .db()
+        .list_http_requests(workspace_id)
+        .map_err(|e| format!("Failed to list requests: {e}"))?;
     if requests.is_empty() {
         println!("No requests found in workspace {}", workspace_id);
     } else {
@@ -59,6 +59,7 @@ fn list(ctx: &CliContext, workspace_id: &str) {
             println!("{} - {} {}", request.id, request.method, request.name);
         }
     }
+    Ok(())
 }
 
 fn create(
@@ -68,47 +69,44 @@ fn create(
     method: Option<String>,
     url: Option<String>,
     json: Option<String>,
-) {
+) -> CommandResult {
     if json.is_some() && workspace_id.as_deref().is_some_and(|v| !is_json_shorthand(v)) {
-        panic!("request create cannot combine workspace_id with --json payload");
+        return Err("request create cannot combine workspace_id with --json payload".to_string());
     }
 
     let payload = parse_optional_json(
         json,
         workspace_id.clone().filter(|v| is_json_shorthand(v)),
         "request create",
-    );
+    )?;
 
     if let Some(payload) = payload {
         if name.is_some() || method.is_some() || url.is_some() {
-            panic!("request create cannot combine simple flags with JSON payload");
+            return Err("request create cannot combine simple flags with JSON payload".to_string());
         }
 
-        validate_create_id(&payload, "request");
-        let request: HttpRequest =
-            serde_json::from_value(payload).expect("Failed to parse request create JSON");
+        validate_create_id(&payload, "request")?;
+        let request: HttpRequest = serde_json::from_value(payload)
+            .map_err(|e| format!("Failed to parse request create JSON: {e}"))?;
 
         if request.workspace_id.is_empty() {
-            panic!("request create JSON requires non-empty \"workspaceId\"");
+            return Err("request create JSON requires non-empty \"workspaceId\"".to_string());
         }
 
         let created = ctx
             .db()
             .upsert_http_request(&request, &UpdateSource::Sync)
-            .expect("Failed to create request");
+            .map_err(|e| format!("Failed to create request: {e}"))?;
 
         println!("Created request: {}", created.id);
-        return;
+        return Ok(());
     }
 
-    let workspace_id = workspace_id.unwrap_or_else(|| {
-        panic!("request create requires workspace_id unless JSON payload is provided")
-    });
-    let name = name.unwrap_or_else(|| {
-        panic!("request create requires --name unless JSON payload is provided")
-    });
-    let url = url
-        .unwrap_or_else(|| panic!("request create requires --url unless JSON payload is provided"));
+    let workspace_id = workspace_id.ok_or_else(|| {
+        "request create requires workspace_id unless JSON payload is provided".to_string()
+    })?;
+    let name = name.unwrap_or_default();
+    let url = url.unwrap_or_default();
     let method = method.unwrap_or_else(|| "GET".to_string());
 
     let request = HttpRequest {
@@ -122,43 +120,54 @@ fn create(
     let created = ctx
         .db()
         .upsert_http_request(&request, &UpdateSource::Sync)
-        .expect("Failed to create request");
+        .map_err(|e| format!("Failed to create request: {e}"))?;
 
     println!("Created request: {}", created.id);
+    Ok(())
 }
 
-fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) {
-    let patch = parse_required_json(json, json_input, "request update");
-    let id = require_id(&patch, "request update");
+fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) -> CommandResult {
+    let patch = parse_required_json(json, json_input, "request update")?;
+    let id = require_id(&patch, "request update")?;
 
-    let existing = ctx.db().get_http_request(&id).expect("Failed to get request for update");
-    let updated = apply_merge_patch(&existing, &patch, &id, "request update");
+    let existing = ctx
+        .db()
+        .get_http_request(&id)
+        .map_err(|e| format!("Failed to get request for update: {e}"))?;
+    let updated = apply_merge_patch(&existing, &patch, &id, "request update")?;
 
     let saved = ctx
         .db()
         .upsert_http_request(&updated, &UpdateSource::Sync)
-        .expect("Failed to update request");
+        .map_err(|e| format!("Failed to update request: {e}"))?;
 
     println!("Updated request: {}", saved.id);
+    Ok(())
 }
 
-fn show(ctx: &CliContext, request_id: &str) {
-    let request = ctx.db().get_http_request(request_id).expect("Failed to get request");
-    let output = serde_json::to_string_pretty(&request).expect("Failed to serialize request");
+fn show(ctx: &CliContext, request_id: &str) -> CommandResult {
+    let request = ctx
+        .db()
+        .get_http_request(request_id)
+        .map_err(|e| format!("Failed to get request: {e}"))?;
+    let output =
+        serde_json::to_string_pretty(&request).map_err(|e| format!("Failed to serialize request: {e}"))?;
     println!("{output}");
+    Ok(())
 }
 
-fn delete(ctx: &CliContext, request_id: &str, yes: bool) {
+fn delete(ctx: &CliContext, request_id: &str, yes: bool) -> CommandResult {
     if !yes && !confirm_delete("request", request_id) {
         println!("Aborted");
-        return;
+        return Ok(());
     }
 
     let deleted = ctx
         .db()
         .delete_http_request_by_id(request_id, &UpdateSource::Sync)
-        .expect("Failed to delete request");
+        .map_err(|e| format!("Failed to delete request: {e}"))?;
     println!("Deleted request: {}", deleted.id);
+    Ok(())
 }
 
 /// Send a request by ID and print response in the same format as legacy `send`.

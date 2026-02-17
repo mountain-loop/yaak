@@ -2,33 +2,35 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
+type JsonResult<T> = std::result::Result<T, String>;
+
 pub fn is_json_shorthand(input: &str) -> bool {
     input.trim_start().starts_with('{')
 }
 
-pub fn parse_json_object(raw: &str, context: &str) -> Value {
+pub fn parse_json_object(raw: &str, context: &str) -> JsonResult<Value> {
     let value: Value = serde_json::from_str(raw)
-        .unwrap_or_else(|error| panic!("Invalid JSON for {context}: {error}"));
+        .map_err(|error| format!("Invalid JSON for {context}: {error}"))?;
 
     if !value.is_object() {
-        panic!("JSON payload for {context} must be an object");
+        return Err(format!("JSON payload for {context} must be an object"));
     }
 
-    value
+    Ok(value)
 }
 
 pub fn parse_optional_json(
     json_flag: Option<String>,
     json_shorthand: Option<String>,
     context: &str,
-) -> Option<Value> {
+) -> JsonResult<Option<Value>> {
     match (json_flag, json_shorthand) {
-        (Some(_), Some(_)) => {
-            panic!("Cannot provide both --json and positional JSON for {context}")
-        }
-        (Some(raw), None) => Some(parse_json_object(&raw, context)),
-        (None, Some(raw)) => Some(parse_json_object(&raw, context)),
-        (None, None) => None,
+        (Some(_), Some(_)) => Err(format!(
+            "Cannot provide both --json and positional JSON for {context}"
+        )),
+        (Some(raw), None) => parse_json_object(&raw, context).map(Some),
+        (None, Some(raw)) => parse_json_object(&raw, context).map(Some),
+        (None, None) => Ok(None),
     }
 }
 
@@ -36,49 +38,49 @@ pub fn parse_required_json(
     json_flag: Option<String>,
     json_shorthand: Option<String>,
     context: &str,
-) -> Value {
-    parse_optional_json(json_flag, json_shorthand, context).unwrap_or_else(|| {
-        panic!("Missing JSON payload for {context}. Use --json or positional JSON")
+) -> JsonResult<Value> {
+    parse_optional_json(json_flag, json_shorthand, context)?.ok_or_else(|| {
+        format!("Missing JSON payload for {context}. Use --json or positional JSON")
     })
 }
 
-pub fn require_id(payload: &Value, context: &str) -> String {
+pub fn require_id(payload: &Value, context: &str) -> JsonResult<String> {
     payload
         .get("id")
         .and_then(|value| value.as_str())
         .filter(|value| !value.is_empty())
         .map(|value| value.to_string())
-        .unwrap_or_else(|| panic!("{context} requires a non-empty \"id\" field"))
+        .ok_or_else(|| format!("{context} requires a non-empty \"id\" field"))
 }
 
-pub fn validate_create_id(payload: &Value, context: &str) {
+pub fn validate_create_id(payload: &Value, context: &str) -> JsonResult<()> {
     let Some(id_value) = payload.get("id") else {
-        return;
+        return Ok(());
     };
 
     match id_value {
-        Value::String(id) if id.is_empty() => {}
-        _ => panic!("{context} create JSON must omit \"id\" or set it to an empty string"),
+        Value::String(id) if id.is_empty() => Ok(()),
+        _ => Err(format!(
+            "{context} create JSON must omit \"id\" or set it to an empty string"
+        )),
     }
 }
 
-pub fn apply_merge_patch<T>(existing: &T, patch: &Value, id: &str, context: &str) -> T
+pub fn apply_merge_patch<T>(existing: &T, patch: &Value, id: &str, context: &str) -> JsonResult<T>
 where
     T: Serialize + DeserializeOwned,
 {
-    let mut base = serde_json::to_value(existing).unwrap_or_else(|error| {
-        panic!("Failed to serialize existing model for {context}: {error}")
-    });
+    let mut base = serde_json::to_value(existing)
+        .map_err(|error| format!("Failed to serialize existing model for {context}: {error}"))?;
     merge_patch(&mut base, patch);
 
     let Some(base_object) = base.as_object_mut() else {
-        panic!("Merged payload for {context} must be an object");
+        return Err(format!("Merged payload for {context} must be an object"));
     };
     base_object.insert("id".to_string(), Value::String(id.to_string()));
 
-    serde_json::from_value(base).unwrap_or_else(|error| {
-        panic!("Failed to deserialize merged payload for {context}: {error}")
-    })
+    serde_json::from_value(base)
+        .map_err(|error| format!("Failed to deserialize merged payload for {context}: {error}"))
 }
 
 fn merge_patch(target: &mut Value, patch: &Value) {

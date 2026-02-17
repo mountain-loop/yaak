@@ -109,6 +109,26 @@ fn update_requires_id_in_json_payload() {
 }
 
 #[test]
+fn create_allows_workspace_only_with_empty_defaults() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+
+    let create_assert =
+        cli_cmd(data_dir).args(["request", "create", "wk_test"]).assert().success();
+    let request_id = parse_created_id(&create_assert.get_output().stdout, "request create");
+
+    let request = query_manager(data_dir)
+        .connect()
+        .get_http_request(&request_id)
+        .expect("Failed to load created request");
+    assert_eq!(request.workspace_id, "wk_test");
+    assert_eq!(request.method, "GET");
+    assert_eq!(request.name, "");
+    assert_eq!(request.url, "");
+}
+
+#[test]
 fn request_send_persists_response_body_and_events() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let data_dir = temp_dir.path();

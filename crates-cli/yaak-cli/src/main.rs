@@ -33,21 +33,12 @@ async fn main() {
         Commands::Send(args) => {
             commands::send::run(&context, args, environment.as_deref(), verbose).await
         }
-        Commands::Workspace(args) => {
-            commands::workspace::run(&context, args);
-            0
-        }
+        Commands::Workspace(args) => commands::workspace::run(&context, args),
         Commands::Request(args) => {
             commands::request::run(&context, args, environment.as_deref(), verbose).await
         }
-        Commands::Folder(args) => {
-            commands::folder::run(&context, args);
-            0
-        }
-        Commands::Environment(args) => {
-            commands::environment::run(&context, args);
-            0
-        }
+        Commands::Folder(args) => commands::folder::run(&context, args),
+        Commands::Environment(args) => commands::environment::run(&context, args),
     };
 
     context.shutdown().await;
