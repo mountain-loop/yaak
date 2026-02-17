@@ -28,6 +28,7 @@ export type HotkeyAction =
   | 'sidebar.filter'
   | 'sidebar.selected.delete'
   | 'sidebar.selected.duplicate'
+  | 'sidebar.selected.move'
   | 'sidebar.selected.rename'
   | 'sidebar.expand_all'
   | 'sidebar.collapse_all'
@@ -58,6 +59,7 @@ const defaultHotkeysMac: Record<HotkeyAction, string[]> = {
   'sidebar.collapse_all': ['Meta+Shift+Minus'],
   'sidebar.selected.delete': ['Delete', 'Meta+Backspace'],
   'sidebar.selected.duplicate': ['Meta+d'],
+  'sidebar.selected.move': [],
   'sidebar.selected.rename': ['Enter'],
   'sidebar.focus': ['Meta+b'],
   'sidebar.context_menu': ['Control+Enter'],
@@ -87,6 +89,7 @@ const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
   'sidebar.collapse_all': ['Control+Shift+Minus'],
   'sidebar.selected.delete': ['Delete', 'Control+Backspace'],
   'sidebar.selected.duplicate': ['Control+d'],
+  'sidebar.selected.move': [],
   'sidebar.selected.rename': ['Enter'],
   'sidebar.focus': ['Control+b'],
   'sidebar.context_menu': ['Alt+Insert'],
@@ -141,6 +144,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   'sidebar.collapse_all': 'Collapse All Folders',
   'sidebar.selected.delete': 'Delete Selected Sidebar Item',
   'sidebar.selected.duplicate': 'Duplicate Selected Sidebar Item',
+  'sidebar.selected.move': 'Move Selected to Workspace',
   'sidebar.selected.rename': 'Rename Selected Sidebar Item',
   'sidebar.focus': 'Focus or Toggle Sidebar',
   'sidebar.context_menu': 'Show Context Menu',

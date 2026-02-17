@@ -2,6 +2,7 @@ import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-intern
 import { patchModel, workspacesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { useState } from 'react';
+import { pluralizeCount } from '../lib/pluralize';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
 import { showToast } from '../lib/toast';
@@ -12,18 +13,21 @@ import { VStack } from './core/Stacks';
 
 interface Props {
   activeWorkspaceId: string;
-  request: HttpRequest | GrpcRequest | WebsocketRequest;
+  requests: (HttpRequest | GrpcRequest | WebsocketRequest)[];
   onDone: () => void;
 }
 
-export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Props) {
+export function MoveToWorkspaceDialog({ onDone, requests, activeWorkspaceId }: Props) {
   const workspaces = useAtomValue(workspacesAtom);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>(activeWorkspaceId);
+
+  const targetWorkspace = workspaces.find((w) => w.id === selectedWorkspaceId);
+  const isSameWorkspace = selectedWorkspaceId === activeWorkspaceId;
 
   return (
     <VStack space={4} className="mb-4">
       <Select
-        label="New Workspace"
+        label="Target Workspace"
         name="workspace"
         value={selectedWorkspaceId}
         onChange={setSelectedWorkspaceId}
@@ -34,27 +38,31 @@ export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Pr
       />
       <Button
         color="primary"
-        disabled={selectedWorkspaceId === activeWorkspaceId}
+        disabled={isSameWorkspace}
         onClick={async () => {
           const patch = {
             workspaceId: selectedWorkspaceId,
             folderId: null,
           };
 
-          await patchModel(request, patch);
+          await Promise.all(requests.map((r) => patchModel(r, patch)));
 
-          // Hide after a moment, to give time for request to disappear
+          // Hide after a moment, to give time for requests to disappear
           setTimeout(onDone, 100);
           showToast({
             id: 'workspace-moved',
-            message: (
-              <>
-                <InlineCode>{resolvedModelName(request)}</InlineCode> moved to{' '}
-                <InlineCode>
-                  {workspaces.find((w) => w.id === selectedWorkspaceId)?.name ?? 'unknown'}
-                </InlineCode>
-              </>
-            ),
+            message:
+              requests.length === 1 && requests[0] != null ? (
+                <>
+                  <InlineCode>{resolvedModelName(requests[0])}</InlineCode> moved to{' '}
+                  <InlineCode>{targetWorkspace?.name ?? 'unknown'}</InlineCode>
+                </>
+              ) : (
+                <>
+                  {pluralizeCount('request', requests.length)} moved to{' '}
+                  <InlineCode>{targetWorkspace?.name ?? 'unknown'}</InlineCode>
+                </>
+              ),
             action: ({ hide }) => (
               <Button
                 size="xs"
@@ -74,7 +82,7 @@ export function MoveToWorkspaceDialog({ onDone, request, activeWorkspaceId }: Pr
           });
         }}
       >
-        Move
+        {requests.length === 1 ? 'Move' : `Move ${pluralizeCount('Request', requests.length)}`}
       </Button>
     </VStack>
   );

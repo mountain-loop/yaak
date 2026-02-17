@@ -3,6 +3,9 @@
 //! This module provides the Tauri plugin initialization and extension traits
 //! that allow accessing QueryManager and BlobManager from Tauri's Manager types.
 
+use chrono::Utc;
+use log::error;
+use std::time::Duration;
 use tauri::plugin::TauriPlugin;
 use tauri::{Emitter, Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -12,6 +15,74 @@ use yaak_models::error::Result;
 use yaak_models::models::{AnyModel, GraphQlIntrospection, GrpcEvent, Settings, WebsocketEvent};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
+
+const MODEL_CHANGES_RETENTION_HOURS: i64 = 1;
+const MODEL_CHANGES_POLL_INTERVAL_MS: u64 = 1000;
+const MODEL_CHANGES_POLL_BATCH_SIZE: usize = 200;
+
+struct ModelChangeCursor {
+    created_at: String,
+    id: i64,
+}
+
+impl ModelChangeCursor {
+    fn from_launch_time() -> Self {
+        Self {
+            created_at: Utc::now().naive_utc().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
+            id: 0,
+        }
+    }
+}
+
+fn drain_model_changes_batch<R: Runtime>(
+    query_manager: &QueryManager,
+    app_handle: &tauri::AppHandle<R>,
+    cursor: &mut ModelChangeCursor,
+) -> bool {
+    let changes = match query_manager.connect().list_model_changes_since(
+        &cursor.created_at,
+        cursor.id,
+        MODEL_CHANGES_POLL_BATCH_SIZE,
+    ) {
+        Ok(changes) => changes,
+        Err(err) => {
+            error!("Failed to poll model_changes rows: {err:?}");
+            return false;
+        }
+    };
+
+    if changes.is_empty() {
+        return false;
+    }
+
+    let fetched_count = changes.len();
+    for change in changes {
+        cursor.created_at = change.created_at;
+        cursor.id = change.id;
+
+        // Local window-originated writes are forwarded immediately from the
+        // in-memory model event channel.
+        if matches!(change.payload.update_source, UpdateSource::Window { .. }) {
+            continue;
+        }
+        if let Err(err) = app_handle.emit("model_write", change.payload) {
+            error!("Failed to emit model_write event: {err:?}");
+        }
+    }
+
+    fetched_count == MODEL_CHANGES_POLL_BATCH_SIZE
+}
+
+async fn run_model_change_poller<R: Runtime>(
+    query_manager: QueryManager,
+    app_handle: tauri::AppHandle<R>,
+    mut cursor: ModelChangeCursor,
+) {
+    loop {
+        while drain_model_changes_batch(&query_manager, &app_handle, &mut cursor) {}
+        tokio::time::sleep(Duration::from_millis(MODEL_CHANGES_POLL_INTERVAL_MS)).await;
+    }
+}
 
 /// Extension trait for accessing the QueryManager from Tauri Manager types.
 pub trait QueryManagerExt<'a, R> {
@@ -262,14 +333,37 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     }
                 };
 
+            let db = query_manager.connect();
+            if let Err(err) = db.prune_model_changes_older_than_hours(MODEL_CHANGES_RETENTION_HOURS)
+            {
+                error!("Failed to prune model_changes rows on startup: {err:?}");
+            }
+            // Only stream writes that happen after this app launch.
+            let cursor = ModelChangeCursor::from_launch_time();
+
+            let poll_query_manager = query_manager.clone();
+
             app_handle.manage(query_manager);
             app_handle.manage(blob_manager);
 
-            // Forward model change events to the frontend
-            let app_handle = app_handle.clone();
+            // Poll model_changes so all writers (including external CLI processes) update the UI.
+            let app_handle_poll = app_handle.clone();
+            let query_manager = poll_query_manager;
+            tauri::async_runtime::spawn(async move {
+                run_model_change_poller(query_manager, app_handle_poll, cursor).await;
+            });
+
+            // Fast path for local app writes initiated by frontend windows. This keeps the
+            // current sync-model UX snappy, while DB polling handles external writers (CLI).
+            let app_handle_local = app_handle.clone();
             tauri::async_runtime::spawn(async move {
                 for payload in rx {
-                    app_handle.emit("model_write", payload).unwrap();
+                    if !matches!(payload.update_source, UpdateSource::Window { .. }) {
+                        continue;
+                    }
+                    if let Err(err) = app_handle_local.emit("model_write", payload) {
+                        error!("Failed to emit local model_write event: {err:?}");
+                    }
                 }
             });
 
