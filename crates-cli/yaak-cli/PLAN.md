@@ -12,22 +12,23 @@ Current branch state:
 - Modular CLI structure with command modules and shared `CliContext`
 - Resource/action hierarchy in place for:
   - `workspace list|show|create|update|delete`
-  - `request list|show|create|update|send|delete`
+  - `request list|show|create|update|send|delete|schema`
   - `folder list|show|create|update|delete`
   - `environment list|show|create|update|delete`
-- Top-level `send` exists as a request-send shortcut (not yet flexible request/folder/workspace resolution)
+- Top-level `send` resolves request/folder/workspace IDs and supports `--sequential|--parallel` + `--fail-fast`
 - Legacy `get` command removed
 - JSON create/update flow implemented (`--json` and positional JSON shorthand)
-- No `request schema` command yet
+- Request schema generation implemented via `schemars`, with plugin auth-field merge into `authentication`
+- `request send` is polymorphic via `get_any_request`; HTTP is implemented, gRPC/WebSocket return explicit NYI errors
 
 Progress checklist:
 
 - [x] Phase 1 complete
 - [x] Phase 2 complete
 - [x] Phase 3 complete
-- [ ] Phase 4 complete
-- [ ] Phase 5 complete
-- [ ] Phase 6 complete
+- [x] Phase 4 complete
+- [x] Phase 5 complete
+- [x] Phase 6 complete
 
 ## Command Architecture
 
@@ -47,7 +48,7 @@ Progress checklist:
 
 ```
 # Top-level shortcut
-yaakcli send <id> [-e <env_id>]          # id can be a request, folder, or workspace
+yaakcli send <id> [--sequential|--parallel] [--fail-fast] [-e <env_id>]
 
 # Resource commands
 yaakcli workspace list
@@ -102,8 +103,8 @@ is purely by DB lookup.
 `send` means "execute this request" regardless of protocol:
 
 - **HTTP**: send request, print response, exit
-- **gRPC**: invoke the method; for streaming, stream output to stdout until done/Ctrl+C
-- **WebSocket**: connect, stream messages to stdout until closed/Ctrl+C
+- **gRPC**: currently returns explicit "not implemented yet in yaak-cli"
+- **WebSocket**: currently returns explicit "not implemented yet in yaak-cli"
 
 ### `request schema` — Runtime JSON Schema
 

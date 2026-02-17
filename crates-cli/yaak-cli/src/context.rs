@@ -1,5 +1,7 @@
+use crate::plugin_events::CliPluginEventBridge;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::db_context::DbContext;
@@ -13,6 +15,7 @@ pub struct CliContext {
     blob_manager: BlobManager,
     pub encryption_manager: Arc<EncryptionManager>,
     plugin_manager: Option<Arc<PluginManager>>,
+    plugin_event_bridge: Mutex<Option<CliPluginEventBridge>>,
 }
 
 impl CliContext {
@@ -65,7 +68,20 @@ impl CliContext {
             None
         };
 
-        Self { data_dir, query_manager, blob_manager, encryption_manager, plugin_manager }
+        let plugin_event_bridge = if let Some(plugin_manager) = &plugin_manager {
+            Some(CliPluginEventBridge::start(plugin_manager.clone(), query_manager.clone()).await)
+        } else {
+            None
+        };
+
+        Self {
+            data_dir,
+            query_manager,
+            blob_manager,
+            encryption_manager,
+            plugin_manager,
+            plugin_event_bridge: Mutex::new(plugin_event_bridge),
+        }
     }
 
     pub fn data_dir(&self) -> &Path {
@@ -90,6 +106,9 @@ impl CliContext {
 
     pub async fn shutdown(&self) {
         if let Some(plugin_manager) = &self.plugin_manager {
+            if let Some(plugin_event_bridge) = self.plugin_event_bridge.lock().await.take() {
+                plugin_event_bridge.shutdown(plugin_manager).await;
+            }
             plugin_manager.terminate().await;
         }
     }

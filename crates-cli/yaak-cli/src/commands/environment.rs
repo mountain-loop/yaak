@@ -51,8 +51,8 @@ fn show(ctx: &CliContext, environment_id: &str) -> CommandResult {
         .db()
         .get_environment(environment_id)
         .map_err(|e| format!("Failed to get environment: {e}"))?;
-    let output =
-        serde_json::to_string_pretty(&environment).map_err(|e| format!("Failed to serialize environment: {e}"))?;
+    let output = serde_json::to_string_pretty(&environment)
+        .map_err(|e| format!("Failed to serialize environment: {e}"))?;
     println!("{output}");
     Ok(())
 }
@@ -81,9 +81,8 @@ fn create(
         }
 
         validate_create_id(&payload, "environment")?;
-        let mut environment: Environment =
-            serde_json::from_value(payload)
-                .map_err(|e| format!("Failed to parse environment create JSON: {e}"))?;
+        let mut environment: Environment = serde_json::from_value(payload)
+            .map_err(|e| format!("Failed to parse environment create JSON: {e}"))?;
 
         if environment.workspace_id.is_empty() {
             return Err("environment create JSON requires non-empty \"workspaceId\"".to_string());
@@ -105,8 +104,9 @@ fn create(
     let workspace_id = workspace_id.ok_or_else(|| {
         "environment create requires workspace_id unless JSON payload is provided".to_string()
     })?;
-    let name = name
-        .ok_or_else(|| "environment create requires --name unless JSON payload is provided".to_string())?;
+    let name = name.ok_or_else(|| {
+        "environment create requires --name unless JSON payload is provided".to_string()
+    })?;
 
     let environment = Environment {
         workspace_id,

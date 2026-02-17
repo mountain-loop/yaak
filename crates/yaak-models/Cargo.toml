@@ -17,6 +17,7 @@ sea-query = { version = "0.32.1", features = ["with-chrono", "attr"] }
 sea-query-rusqlite = { version = "0.7.0", features = ["with-chrono"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+schemars = { version = "0.8.22", features = ["chrono"] }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }

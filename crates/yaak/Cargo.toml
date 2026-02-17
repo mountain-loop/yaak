@@ -17,3 +17,6 @@ yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-tls = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

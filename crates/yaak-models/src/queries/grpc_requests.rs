@@ -1,7 +1,7 @@
 use super::dedupe_headers;
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{GrpcRequest, GrpcRequestIden, HttpRequestHeader};
+use crate::models::{Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequestHeader};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -13,6 +13,20 @@ impl<'a> DbContext<'a> {
 
     pub fn list_grpc_requests(&self, workspace_id: &str) -> Result<Vec<GrpcRequest>> {
         self.find_many(GrpcRequestIden::WorkspaceId, workspace_id, None)
+    }
+
+    pub fn list_grpc_requests_for_folder_recursive(
+        &self,
+        folder_id: &str,
+    ) -> Result<Vec<GrpcRequest>> {
+        let mut children = Vec::new();
+        for folder in self.find_many::<Folder>(FolderIden::FolderId, folder_id, None)? {
+            children.extend(self.list_grpc_requests_for_folder_recursive(&folder.id)?);
+        }
+        for request in self.find_many::<GrpcRequest>(GrpcRequestIden::FolderId, folder_id, None)? {
+            children.push(request);
+        }
+        Ok(children)
     }
 
     pub fn delete_grpc_request(

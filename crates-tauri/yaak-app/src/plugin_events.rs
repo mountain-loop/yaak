@@ -15,18 +15,21 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
+use yaak::plugin_events::{
+    GroupedPluginEvent, HostRequest, SharedEvent, SharedPluginEventContext,
+    handle_shared_plugin_event,
+};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::models::{AnyModel, HttpResponse, Plugin};
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{
-    Color, DeleteKeyValueResponse, EmptyPayload, ErrorResponse, FindHttpResponsesResponse,
-    GetCookieValueResponse, GetHttpRequestByIdResponse, GetKeyValueResponse, Icon, InternalEvent,
-    InternalEventPayload, ListCookieNamesResponse, ListHttpRequestsResponse,
-    ListWorkspacesResponse, RenderGrpcRequestResponse, RenderHttpRequestResponse,
-    SendHttpRequestResponse, SetKeyValueResponse, ShowToastRequest, TemplateRenderResponse,
-    WindowInfoResponse, WindowNavigateEvent, WorkspaceInfo,
+    Color, EmptyPayload, ErrorResponse, FindHttpResponsesResponse, GetCookieValueResponse, Icon,
+    InternalEvent, InternalEventPayload, ListCookieNamesResponse, ListOpenWorkspacesResponse,
+    RenderGrpcRequestResponse, RenderHttpRequestResponse, SendHttpRequestResponse,
+    ShowToastRequest, TemplateRenderResponse, WindowInfoResponse, WindowNavigateEvent,
+    WorkspaceInfo,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
@@ -41,30 +44,113 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
 ) -> Result<Option<InternalEventPayload>> {
     // log::debug!("Got event to app {event:?}");
     let plugin_context = event.context.to_owned();
-    match event.clone().payload {
-        InternalEventPayload::CopyTextRequest(req) => {
+    let plugin_name = plugin_handle.info().name;
+    let fallback_workspace_id = plugin_context.workspace_id.clone().or_else(|| {
+        plugin_context
+            .label
+            .as_ref()
+            .and_then(|label| app_handle.get_webview_window(label))
+            .and_then(|window| workspace_from_window(&window).map(|workspace| workspace.id))
+    });
+
+    match handle_shared_plugin_event(
+        app_handle.db_manager().inner(),
+        &event.payload,
+        SharedPluginEventContext {
+            plugin_name: &plugin_name,
+            workspace_id: fallback_workspace_id.as_deref(),
+        },
+    ) {
+        GroupedPluginEvent::Shared(SharedEvent::Reply(payload)) => Ok(Some(payload)),
+        GroupedPluginEvent::Shared(SharedEvent::ErrorResponse(resp)) => {
+            error!("Plugin error: {}: {:?}", resp.error, resp);
+            let toast_event = plugin_handle.build_event_to_send(
+                &plugin_context,
+                &InternalEventPayload::ShowToastRequest(ShowToastRequest {
+                    message: format!(
+                        "Plugin error from {}: {}",
+                        plugin_handle.info().name,
+                        resp.error
+                    ),
+                    color: Some(Color::Danger),
+                    timeout: Some(30000),
+                    ..Default::default()
+                }),
+                None,
+            );
+            Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await
+        }
+        GroupedPluginEvent::Shared(SharedEvent::ReloadResponse(req)) => {
+            let plugins = app_handle.db().list_plugins()?;
+            for plugin in plugins {
+                if plugin.directory != plugin_handle.dir {
+                    continue;
+                }
+
+                let new_plugin = Plugin { updated_at: Utc::now().naive_utc(), ..plugin };
+                app_handle.db().upsert_plugin(&new_plugin, &UpdateSource::Plugin)?;
+            }
+
+            if !req.silent {
+                let info = plugin_handle.info();
+                let toast_event = plugin_handle.build_event_to_send(
+                    &plugin_context,
+                    &InternalEventPayload::ShowToastRequest(ShowToastRequest {
+                        message: format!("Reloaded plugin {}@{}", info.name, info.version),
+                        icon: Some(Icon::Info),
+                        timeout: Some(3000),
+                        ..Default::default()
+                    }),
+                    None,
+                );
+                Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await
+            } else {
+                Ok(None)
+            }
+        }
+        GroupedPluginEvent::Host(host_request) => {
+            handle_host_plugin_request(
+                app_handle,
+                event,
+                plugin_handle,
+                &plugin_context,
+                host_request,
+            )
+            .await
+        }
+        GroupedPluginEvent::Ignore => Ok(None),
+    }
+}
+
+async fn handle_host_plugin_request<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    event: &InternalEvent,
+    plugin_handle: &PluginHandle,
+    plugin_context: &yaak_plugins::events::PluginContext,
+    host_request: HostRequest<'_>,
+) -> Result<Option<InternalEventPayload>> {
+    match host_request {
+        HostRequest::CopyText(req) => {
             app_handle.clipboard().write_text(req.text.as_str())?;
             Ok(Some(InternalEventPayload::CopyTextResponse(EmptyPayload {})))
         }
-        InternalEventPayload::ShowToastRequest(req) => {
-            match plugin_context.label {
+        HostRequest::ShowToast(req) => {
+            match &plugin_context.label {
                 Some(label) => app_handle.emit_to(label, "show_toast", req)?,
                 None => app_handle.emit("show_toast", req)?,
             };
             Ok(Some(InternalEventPayload::ShowToastResponse(EmptyPayload {})))
         }
-        InternalEventPayload::PromptTextRequest(_) => {
-            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
+        HostRequest::PromptText(_) => {
+            let window = get_window_from_plugin_context(app_handle, plugin_context)?;
             Ok(call_frontend(&window, event).await)
         }
-        InternalEventPayload::PromptFormRequest(_) => {
-            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
+        HostRequest::PromptForm(_) => {
+            let window = get_window_from_plugin_context(app_handle, plugin_context)?;
             if event.reply_id.is_some() {
-                // Follow-up update from plugin runtime with resolved inputs — forward to frontend
                 window.emit_to(window.label(), "plugin_event", event.clone())?;
                 Ok(None)
             } else {
-                // Initial request — set up bidirectional communication
                 window.emit_to(window.label(), "plugin_event", event.clone()).unwrap();
 
                 let event_id = event.id.clone();
@@ -72,17 +158,14 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 let plugin_context = plugin_context.clone();
                 let window = window.clone();
 
-                // Spawn async task to handle bidirectional form communication
                 tauri::async_runtime::spawn(async move {
                     let (tx, mut rx) = tokio::sync::mpsc::channel::<InternalEvent>(128);
 
-                    // Listen for replies from the frontend
                     let listener_id = window.listen(event_id, move |ev: tauri::Event| {
                         let resp: InternalEvent = serde_json::from_str(ev.payload()).unwrap();
                         let _ = tx.try_send(resp);
                     });
 
-                    // Forward each reply to the plugin runtime
                     while let Some(resp) = rx.recv().await {
                         let is_done = matches!(
                             &resp.payload,
@@ -109,7 +192,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 Ok(None)
             }
         }
-        InternalEventPayload::FindHttpResponsesRequest(req) => {
+        HostRequest::FindHttpResponses(req) => {
             let http_responses = app_handle
                 .db()
                 .list_http_responses_for_request(&req.request_id, req.limit.map(|l| l as u64))
@@ -118,32 +201,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 http_responses,
             })))
         }
-        InternalEventPayload::ListHttpRequestsRequest(req) => {
-            let w = get_window_from_plugin_context(app_handle, &plugin_context)?;
-            let workspace = workspace_from_window(&w)
-                .ok_or(PluginErr("Failed to get workspace from window".into()))?;
-
-            let http_requests = if let Some(folder_id) = req.folder_id {
-                app_handle.db().list_http_requests_for_folder_recursive(&folder_id)?
-            } else {
-                app_handle.db().list_http_requests(&workspace.id)?
-            };
-
-            Ok(Some(InternalEventPayload::ListHttpRequestsResponse(ListHttpRequestsResponse {
-                http_requests,
-            })))
-        }
-        InternalEventPayload::ListFoldersRequest(_req) => {
-            let w = get_window_from_plugin_context(app_handle, &plugin_context)?;
-            let workspace = workspace_from_window(&w)
-                .ok_or(PluginErr("Failed to get workspace from window".into()))?;
-            let folders = app_handle.db().list_folders(&workspace.id)?;
-
-            Ok(Some(InternalEventPayload::ListFoldersResponse(
-                yaak_plugins::events::ListFoldersResponse { folders },
-            )))
-        }
-        InternalEventPayload::UpsertModelRequest(req) => {
+        HostRequest::UpsertModel(req) => {
             use AnyModel::*;
             let model = match &req.model {
                 HttpRequest(m) => {
@@ -171,7 +229,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 yaak_plugins::events::UpsertModelResponse { model },
             )))
         }
-        InternalEventPayload::DeleteModelRequest(req) => {
+        HostRequest::DeleteModel(req) => {
             let model = match req.model.as_str() {
                 "http_request" => AnyModel::HttpRequest(
                     app_handle.db().delete_http_request_by_id(&req.id, &UpdateSource::Plugin)?,
@@ -199,14 +257,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 yaak_plugins::events::DeleteModelResponse { model },
             )))
         }
-        InternalEventPayload::GetHttpRequestByIdRequest(req) => {
-            let http_request = app_handle.db().get_http_request(&req.id).ok();
-            Ok(Some(InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
-                http_request,
-            })))
-        }
-        InternalEventPayload::RenderGrpcRequestRequest(req) => {
-            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
+        HostRequest::RenderGrpcRequest(req) => {
+            let window = get_window_from_plugin_context(app_handle, plugin_context)?;
 
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
@@ -221,8 +273,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let cb = PluginTemplateCallback::new(
                 plugin_manager,
                 encryption_manager,
-                &plugin_context,
-                req.purpose,
+                plugin_context,
+                req.purpose.clone(),
             );
             let opt = RenderOptions { error_behavior: RenderErrorBehavior::Throw };
             let grpc_request =
@@ -231,8 +283,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 grpc_request,
             })))
         }
-        InternalEventPayload::RenderHttpRequestRequest(req) => {
-            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
+        HostRequest::RenderHttpRequest(req) => {
+            let window = get_window_from_plugin_context(app_handle, plugin_context)?;
 
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
@@ -247,18 +299,18 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let cb = PluginTemplateCallback::new(
                 plugin_manager,
                 encryption_manager,
-                &plugin_context,
-                req.purpose,
+                plugin_context,
+                req.purpose.clone(),
             );
             let opt = &RenderOptions { error_behavior: RenderErrorBehavior::Throw };
             let http_request =
-                render_http_request(&req.http_request, environment_chain, &cb, &opt).await?;
+                render_http_request(&req.http_request, environment_chain, &cb, opt).await?;
             Ok(Some(InternalEventPayload::RenderHttpRequestResponse(RenderHttpRequestResponse {
                 http_request,
             })))
         }
-        InternalEventPayload::TemplateRenderRequest(req) => {
-            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
+        HostRequest::TemplateRender(req) => {
+            let window = get_window_from_plugin_context(app_handle, plugin_context)?;
 
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
@@ -283,65 +335,16 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             let cb = PluginTemplateCallback::new(
                 plugin_manager,
                 encryption_manager,
-                &plugin_context,
-                req.purpose,
+                plugin_context,
+                req.purpose.clone(),
             );
             let opt = RenderOptions { error_behavior: RenderErrorBehavior::Throw };
-            let data = render_json_value(req.data, environment_chain, &cb, &opt).await?;
+            let data = render_json_value(req.data.clone(), environment_chain, &cb, &opt).await?;
             Ok(Some(InternalEventPayload::TemplateRenderResponse(TemplateRenderResponse { data })))
         }
-        InternalEventPayload::ErrorResponse(resp) => {
-            error!("Plugin error: {}: {:?}", resp.error, resp);
-            let toast_event = plugin_handle.build_event_to_send(
-                &plugin_context,
-                &InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                    message: format!(
-                        "Plugin error from {}: {}",
-                        plugin_handle.info().name,
-                        resp.error
-                    ),
-                    color: Some(Color::Danger),
-                    timeout: Some(30000),
-                    ..Default::default()
-                }),
-                None,
-            );
-            Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await
-        }
-        InternalEventPayload::ReloadResponse(req) => {
-            let plugins = app_handle.db().list_plugins()?;
-            for plugin in plugins {
-                if plugin.directory != plugin_handle.dir {
-                    continue;
-                }
-
-                let new_plugin = Plugin {
-                    updated_at: Utc::now().naive_utc(), // TODO: Add reloaded_at field to use instead
-                    ..plugin
-                };
-                app_handle.db().upsert_plugin(&new_plugin, &UpdateSource::Plugin)?;
-            }
-
-            if !req.silent {
-                let info = plugin_handle.info();
-                let toast_event = plugin_handle.build_event_to_send(
-                    &plugin_context,
-                    &InternalEventPayload::ShowToastRequest(ShowToastRequest {
-                        message: format!("Reloaded plugin {}@{}", info.name, info.version),
-                        icon: Some(Icon::Info),
-                        timeout: Some(3000),
-                        ..Default::default()
-                    }),
-                    None,
-                );
-                Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await
-            } else {
-                Ok(None)
-            }
-        }
-        InternalEventPayload::SendHttpRequestRequest(req) => {
-            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
-            let mut http_request = req.http_request;
+        HostRequest::SendHttpRequest(req) => {
+            let window = get_window_from_plugin_context(app_handle, plugin_context)?;
+            let mut http_request = req.http_request.clone();
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let cookie_jar = cookie_jar_from_window(&window);
@@ -372,8 +375,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 &http_response,
                 environment,
                 cookie_jar,
-                &mut tokio::sync::watch::channel(false).1, // No-op cancel channel
-                &plugin_context,
+                &mut tokio::sync::watch::channel(false).1,
+                plugin_context,
             )
             .await?;
 
@@ -381,7 +384,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 http_response,
             })))
         }
-        InternalEventPayload::OpenWindowRequest(req) => {
+        HostRequest::OpenWindow(req) => {
             let (navigation_tx, mut navigation_rx) = tokio::sync::mpsc::channel(128);
             let (close_tx, mut close_rx) = tokio::sync::mpsc::channel(128);
             let win_config = CreateWindowConfig {
@@ -396,7 +399,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             };
             if let Err(e) = create_window(app_handle, win_config) {
                 let error_event = plugin_handle.build_event_to_send(
-                    &plugin_context,
+                    plugin_context,
                     &InternalEventPayload::ErrorResponse(ErrorResponse {
                         error: format!("Failed to create window: {:?}", e),
                     }),
@@ -414,7 +417,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                     while let Some(url) = navigation_rx.recv().await {
                         let url = url.to_string();
                         let event_to_send = plugin_handle.build_event_to_send(
-                            &plugin_context, // NOTE: Sending existing context on purpose here
+                            &plugin_context,
                             &InternalEventPayload::WindowNavigateEvent(WindowNavigateEvent { url }),
                             Some(event_id.clone()),
                         );
@@ -428,7 +431,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 let plugin_handle = plugin_handle.clone();
                 let plugin_context = plugin_context.clone();
                 tauri::async_runtime::spawn(async move {
-                    while let Some(_) = close_rx.recv().await {
+                    while close_rx.recv().await.is_some() {
                         let event_to_send = plugin_handle.build_event_to_send(
                             &plugin_context,
                             &InternalEventPayload::WindowCloseEvent,
@@ -441,35 +444,33 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
 
             Ok(None)
         }
-        InternalEventPayload::CloseWindowRequest(req) => {
+        HostRequest::CloseWindow(req) => {
             if let Some(window) = app_handle.webview_windows().get(&req.label) {
                 window.close()?;
             }
             Ok(None)
         }
-        InternalEventPayload::OpenExternalUrlRequest(req) => {
+        HostRequest::OpenExternalUrl(req) => {
             app_handle.opener().open_url(&req.url, None::<&str>)?;
             Ok(Some(InternalEventPayload::OpenExternalUrlResponse(EmptyPayload {})))
         }
-        InternalEventPayload::SetKeyValueRequest(req) => {
-            let name = plugin_handle.info().name;
-            app_handle.db().set_plugin_key_value(&name, &req.key, &req.value);
-            Ok(Some(InternalEventPayload::SetKeyValueResponse(SetKeyValueResponse {})))
-        }
-        InternalEventPayload::GetKeyValueRequest(req) => {
-            let name = plugin_handle.info().name;
-            let value = app_handle.db().get_plugin_key_value(&name, &req.key).map(|v| v.value);
-            Ok(Some(InternalEventPayload::GetKeyValueResponse(GetKeyValueResponse { value })))
-        }
-        InternalEventPayload::DeleteKeyValueRequest(req) => {
-            let name = plugin_handle.info().name;
-            let deleted = app_handle.db().delete_plugin_key_value(&name, &req.key)?;
-            Ok(Some(InternalEventPayload::DeleteKeyValueResponse(DeleteKeyValueResponse {
-                deleted,
+        HostRequest::ListOpenWorkspaces(_) => {
+            let mut workspaces = Vec::new();
+            for (_, window) in app_handle.webview_windows() {
+                if let Some(workspace) = workspace_from_window(&window) {
+                    workspaces.push(WorkspaceInfo {
+                        id: workspace.id.clone(),
+                        name: workspace.name.clone(),
+                        label: window.label().to_string(),
+                    });
+                }
+            }
+            Ok(Some(InternalEventPayload::ListOpenWorkspacesResponse(ListOpenWorkspacesResponse {
+                workspaces,
             })))
         }
-        InternalEventPayload::ListCookieNamesRequest(_req) => {
-            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
+        HostRequest::ListCookieNames(_) => {
+            let window = get_window_from_plugin_context(app_handle, plugin_context)?;
             let names = match cookie_jar_from_window(&window) {
                 None => Vec::new(),
                 Some(j) => j
@@ -482,8 +483,8 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 names,
             })))
         }
-        InternalEventPayload::GetCookieValueRequest(req) => {
-            let window = get_window_from_plugin_context(app_handle, &plugin_context)?;
+        HostRequest::GetCookieValue(req) => {
+            let window = get_window_from_plugin_context(app_handle, plugin_context)?;
             let value = match cookie_jar_from_window(&window) {
                 None => None,
                 Some(j) => j.cookies.into_iter().find_map(|c| match Cookie::parse(c.raw_cookie) {
@@ -495,12 +496,11 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             };
             Ok(Some(InternalEventPayload::GetCookieValueResponse(GetCookieValueResponse { value })))
         }
-        InternalEventPayload::WindowInfoRequest(req) => {
+        HostRequest::WindowInfo(req) => {
             let w = app_handle
                 .get_webview_window(&req.label)
                 .ok_or(PluginErr(format!("Failed to find window for {}", req.label)))?;
 
-            // Actually look up the data so we never return an invalid ID
             let environment_id = environment_from_window(&w).map(|m| m.id);
             let workspace_id = workspace_from_window(&w).map(|m| m.id);
             let request_id =
@@ -518,25 +518,13 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 environment_id,
             })))
         }
-
-        InternalEventPayload::ListWorkspacesRequest(_) => {
-            let mut workspaces = Vec::new();
-
-            for (_, window) in app_handle.webview_windows() {
-                if let Some(workspace) = workspace_from_window(&window) {
-                    workspaces.push(WorkspaceInfo {
-                        id: workspace.id.clone(),
-                        name: workspace.name.clone(),
-                        label: window.label().to_string(),
-                    });
-                }
-            }
-
-            Ok(Some(InternalEventPayload::ListWorkspacesResponse(ListWorkspacesResponse {
-                workspaces,
+        HostRequest::OtherRequest(req) => {
+            Ok(Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                error: format!(
+                    "Unsupported plugin request in app host handler: {}",
+                    req.type_name()
+                ),
             })))
         }
-
-        _ => Ok(None),
     }
 }

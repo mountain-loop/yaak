@@ -12,7 +12,9 @@ path = "src/main.rs"
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
 env_logger = "0.11"
+futures = "0.3"
 log = { workspace = true }
+schemars = { version = "0.8.22", features = ["chrono"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
