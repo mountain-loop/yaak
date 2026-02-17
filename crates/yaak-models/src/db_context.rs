@@ -3,8 +3,7 @@ use crate::error::Error::ModelNotFound;
 use crate::error::Result;
 use crate::models::{AnyModel, UpsertModelInfo};
 use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
-use log::error;
-use rusqlite::OptionalExtension;
+use rusqlite::{OptionalExtension, params};
 use sea_query::{
     Asterisk, Expr, Func, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr,
     SqliteQueryBuilder,
@@ -14,7 +13,7 @@ use std::fmt::Debug;
 use std::sync::mpsc;
 
 pub struct DbContext<'a> {
-    pub(crate) events_tx: mpsc::Sender<ModelPayload>,
+    pub(crate) _events_tx: mpsc::Sender<ModelPayload>,
     pub(crate) conn: ConnectionOrTx<'a>,
 }
 
@@ -180,9 +179,8 @@ impl<'a> DbContext<'a> {
             change: ModelChangeEvent::Upsert { created },
         };
 
-        if let Err(e) = self.events_tx.send(payload.clone()) {
-            error!("Failed to send model change {source:?}: {e:?}");
-        }
+        self.record_model_change(&payload)?;
+        let _ = self._events_tx.send(payload);
 
         Ok(m)
     }
@@ -203,9 +201,31 @@ impl<'a> DbContext<'a> {
             change: ModelChangeEvent::Delete,
         };
 
-        if let Err(e) = self.events_tx.send(payload) {
-            error!("Failed to send model change {source:?}: {e:?}");
-        }
+        self.record_model_change(&payload)?;
+        let _ = self._events_tx.send(payload);
+
         Ok(m.clone())
+    }
+
+    fn record_model_change(&self, payload: &ModelPayload) -> Result<()> {
+        let payload_json = serde_json::to_string(payload)?;
+        let source_json = serde_json::to_string(&payload.update_source)?;
+        let change_json = serde_json::to_string(&payload.change)?;
+
+        self.conn.resolve().execute(
+            r#"
+                INSERT INTO model_changes (model, model_id, change, update_source, payload)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+            "#,
+            params![
+                payload.model.model(),
+                payload.model.id(),
+                change_json,
+                source_json,
+                payload_json,
+            ],
+        )?;
+
+        Ok(())
     }
 }
