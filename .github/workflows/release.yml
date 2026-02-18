@@ -167,6 +167,6 @@ jobs:
         run: |
           npx tauri bundle ${{ matrix.args }} --bundles nsis --config ./crates-tauri/yaak-app/tauri.release.conf.json --config '{"bundle":{"createUpdaterArtifacts":false,"windows":{"nsis":{"installMode":"perMachine"}}}}'
           $setup = Get-ChildItem -Recurse -Path target -Filter "*setup*.exe" | Select-Object -First 1
-          $dest = $setup.FullName -replace '-setup\.exe$', 'setup-machine.exe'
+          $dest = $setup.FullName -replace '-setup\.exe$', '-setup-machine.exe'
           Copy-Item $setup.FullName $dest
           gh release upload "${{ github.ref_name }}" "$dest" --clobber
