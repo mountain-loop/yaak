@@ -184,6 +184,9 @@ function EnvironmentEditDialogSidebar({
       }
 
       const singleEnvironment = items.length === 1;
+      const canDeleteEnvironment =
+        isSubEnvironment(environment) ||
+        (isBaseEnvironment(environment) && baseEnvironments.length > 1);
 
       const menuItems: DropdownItem[] = [
         {
@@ -228,9 +231,7 @@ function EnvironmentEditDialogSidebar({
           label: 'Delete',
           hotKeyAction: 'sidebar.selected.delete',
           hotKeyLabelOnly: true,
-          hidden:
-            (isBaseEnvironment(environment) && baseEnvironments.length <= 1) ||
-            !isSubEnvironment(environment),
+          hidden: !canDeleteEnvironment,
           leftSlot: <Icon icon="trash" />,
           onSelect: () => handleDeleteEnvironment(environment),
         },
