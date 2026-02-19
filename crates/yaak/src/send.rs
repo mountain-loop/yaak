@@ -654,7 +654,6 @@ pub async fn send_http_request<T: TemplateCallback>(
         http_response.into_body_stream().map_err(SendHttpRequestError::ReadResponseBody)?;
     let mut response_body = Vec::new();
     let mut body_read_error = None;
-    let mut cancelled_during_body_read = false;
     let mut written_bytes: usize = 0;
     let mut last_progress_update = started_at;
     let mut cancelled_rx = params.cancelled_rx.clone();
@@ -668,7 +667,6 @@ pub async fn send_http_request<T: TemplateCallback>(
             tokio::select! {
                 biased;
                 _ = cancelled_rx.changed() => {
-                    cancelled_during_body_read = true;
                     None
                 }
                 result = body_stream.read_buf(&mut response_body) => {
@@ -726,12 +724,6 @@ pub async fn send_http_request<T: TemplateCallback>(
                 break;
             }
         }
-    }
-
-    if cancelled_during_body_read {
-        body_read_error = Some(SendHttpRequestError::SendRequest(
-            yaak_http::error::Error::RequestCanceledError,
-        ));
     }
 
     file.flush().await.map_err(|source| SendHttpRequestError::WriteResponseBody {
