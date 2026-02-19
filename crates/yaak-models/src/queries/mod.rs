@@ -11,6 +11,7 @@ mod http_requests;
 mod http_response_events;
 mod http_responses;
 mod key_values;
+mod model_changes;
 mod plugin_key_values;
 mod plugins;
 mod settings;
@@ -19,6 +20,27 @@ mod websocket_connections;
 mod websocket_events;
 mod websocket_requests;
 mod workspace_metas;
-mod workspaces;
+pub mod workspaces;
+pub use model_changes::PersistedModelChange;
 
 const MAX_HISTORY_ITEMS: usize = 20;
+
+use crate::models::HttpRequestHeader;
+use std::collections::HashMap;
+
+/// Deduplicate headers by name (case-insensitive), keeping the latest (most specific) value.
+/// Preserves the order of first occurrence for each header name.
+pub(crate) fn dedupe_headers(headers: Vec<HttpRequestHeader>) -> Vec<HttpRequestHeader> {
+    let mut index_by_name: HashMap<String, usize> = HashMap::new();
+    let mut deduped: Vec<HttpRequestHeader> = Vec::new();
+    for header in headers {
+        let key = header.name.to_lowercase();
+        if let Some(&idx) = index_by_name.get(&key) {
+            deduped[idx] = header;
+        } else {
+            index_by_name.insert(key, deduped.len());
+            deduped.push(header);
+        }
+    }
+    deduped
+}

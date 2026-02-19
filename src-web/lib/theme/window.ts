@@ -104,11 +104,12 @@ function templateTagColorVariables(color: YaakColor | null): Partial<CSSVariable
   if (color == null) return {};
 
   return {
-    text: color.lift(0.6).css(),
+    text: color.lift(0.7).css(),
     textSubtle: color.lift(0.4).css(),
     textSubtlest: color.css(),
     surface: color.lower(0.2).translucify(0.8).css(),
-    border: color.lower(0.2).translucify(0.2).css(),
+    border: color.translucify(0.6).css(),
+    borderSubtle: color.translucify(0.8).css(),
     surfaceHighlight: color.lower(0.1).translucify(0.7).css(),
   };
 }
@@ -135,6 +136,16 @@ function bannerColorVariables(color: YaakColor | null): Partial<CSSVariables> {
     surface: color.translucify(0.95).css(),
     border: color.lift(0.3).translucify(0.8).css(),
   };
+}
+
+function inputCSS(color: YaakColor | null): Partial<CSSVariables> {
+  if (color == null) return {};
+
+  const theme: Partial<ThemeComponentColors> = {
+    border: color.css(),
+  };
+
+  return theme;
 }
 
 function buttonSolidColorVariables(

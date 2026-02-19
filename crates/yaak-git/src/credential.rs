@@ -1,24 +1,18 @@
-use crate::binary::new_binary_command;
+use crate::binary::new_binary_command_global;
 use crate::error::Error::GenericError;
 use crate::error::Result;
-use std::path::Path;
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
 use url::Url;
 
-pub async fn git_add_credential(
-    dir: &Path,
-    remote_url: &str,
-    username: &str,
-    password: &str,
-) -> Result<()> {
+pub async fn git_add_credential(remote_url: &str, username: &str, password: &str) -> Result<()> {
     let url = Url::parse(remote_url)
         .map_err(|e| GenericError(format!("Failed to parse remote url {remote_url}: {e:?}")))?;
     let protocol = url.scheme();
     let host = url.host_str().unwrap();
     let path = Some(url.path());
 
-    let mut child = new_binary_command(dir)
+    let mut child = new_binary_command_global()
         .await?
         .args(["credential", "approve"])
         .stdin(Stdio::piped())

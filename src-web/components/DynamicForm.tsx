@@ -83,7 +83,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
 function FormInputsStack<T extends Record<string, JsonPrimitive>>({
   className,
   ...props
-}: FormInputsProps<T> & { className?: string}) {
+}: FormInputsProps<T> & { className?: string }) {
   return (
     <VStack
       space={3}
@@ -198,6 +198,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               />
             );
           case 'accordion':
+            if (!hasVisibleInputs(input.inputs)) {
+              return null;
+            }
             return (
               <div key={i + stateKey}>
                 <DetailsBanner
@@ -219,6 +222,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               </div>
             );
           case 'h_stack':
+            if (!hasVisibleInputs(input.inputs)) {
+              return null;
+            }
             return (
               <div className="flex flex-wrap sm:flex-nowrap gap-3 items-end" key={i + stateKey}>
                 <FormInputs
@@ -233,6 +239,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               </div>
             );
           case 'banner':
+            if (!hasVisibleInputs(input.inputs)) {
+              return null;
+            }
             return (
               <Banner
                 key={i + stateKey}
@@ -308,7 +317,7 @@ function TextArg({
     autocompleteFunctions,
     autocompleteVariables,
   };
-  if (autocompleteVariables || autocompleteFunctions) {
+  if (autocompleteVariables || autocompleteFunctions || arg.completionOptions) {
     return <Input {...props} />;
   }
   return <PlainInput {...props} />;
@@ -351,8 +360,9 @@ function EditorArg({
         className={classNames(
           'border border-border rounded-md overflow-hidden px-2 py-1',
           'focus-within:border-border-focus',
-          'max-h-[10rem]', // So it doesn't take up too much space
+          !arg.rows && 'max-h-[10rem]', // So it doesn't take up too much space
         )}
+        style={arg.rows ? { height: `${arg.rows * 1.4 + 0.75}rem` } : undefined}
       >
         <Editor
           id={id}
@@ -602,4 +612,20 @@ function KeyValueArg({
       />
     </div>
   );
+}
+
+function hasVisibleInputs(inputs: FormInput[] | undefined): boolean {
+  if (!inputs) return false;
+
+  for (const input of inputs) {
+    if ('inputs' in input && !hasVisibleInputs(input.inputs)) {
+      // Has children, but none are visible
+      return false;
+    }
+    if (!input.hidden) {
+      return true;
+    }
+  }
+
+  return false;
 }

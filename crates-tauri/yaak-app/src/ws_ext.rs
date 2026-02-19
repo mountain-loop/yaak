@@ -29,52 +29,6 @@ use yaak_tls::find_client_certificate;
 use yaak_ws::{WebsocketManager, render_websocket_request};
 
 #[command]
-pub async fn cmd_ws_upsert_request<R: Runtime>(
-    request: WebsocketRequest,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> Result<WebsocketRequest> {
-    Ok(app_handle
-        .db()
-        .upsert_websocket_request(&request, &UpdateSource::from_window_label(window.label()))?)
-}
-
-#[command]
-pub async fn cmd_ws_duplicate_request<R: Runtime>(
-    request_id: &str,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> Result<WebsocketRequest> {
-    let db = app_handle.db();
-    let request = db.get_websocket_request(request_id)?;
-    Ok(db.duplicate_websocket_request(&request, &UpdateSource::from_window_label(window.label()))?)
-}
-
-#[command]
-pub async fn cmd_ws_delete_request<R: Runtime>(
-    request_id: &str,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> Result<WebsocketRequest> {
-    Ok(app_handle.db().delete_websocket_request_by_id(
-        request_id,
-        &UpdateSource::from_window_label(window.label()),
-    )?)
-}
-
-#[command]
-pub async fn cmd_ws_delete_connection<R: Runtime>(
-    connection_id: &str,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> Result<WebsocketConnection> {
-    Ok(app_handle.db().delete_websocket_connection_by_id(
-        connection_id,
-        &UpdateSource::from_window_label(window.label()),
-    )?)
-}
-
-#[command]
 pub async fn cmd_ws_delete_connections<R: Runtime>(
     request_id: &str,
     app_handle: AppHandle<R>,
@@ -84,30 +38,6 @@ pub async fn cmd_ws_delete_connections<R: Runtime>(
         request_id,
         &UpdateSource::from_window_label(window.label()),
     )?)
-}
-
-#[command]
-pub async fn cmd_ws_list_events<R: Runtime>(
-    connection_id: &str,
-    app_handle: AppHandle<R>,
-) -> Result<Vec<WebsocketEvent>> {
-    Ok(app_handle.db().list_websocket_events(connection_id)?)
-}
-
-#[command]
-pub async fn cmd_ws_list_requests<R: Runtime>(
-    workspace_id: &str,
-    app_handle: AppHandle<R>,
-) -> Result<Vec<WebsocketRequest>> {
-    Ok(app_handle.db().list_websocket_requests(workspace_id)?)
-}
-
-#[command]
-pub async fn cmd_ws_list_connections<R: Runtime>(
-    workspace_id: &str,
-    app_handle: AppHandle<R>,
-) -> Result<Vec<WebsocketConnection>> {
-    Ok(app_handle.db().list_websocket_connections(workspace_id)?)
 }
 
 #[command]

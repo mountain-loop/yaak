@@ -5,14 +5,21 @@ import type {
   JsonPrimitive,
   PluginDefinition,
 } from '@yaakapp/api';
+import type { Algorithm } from 'jsonwebtoken';
+import { DEFAULT_LOCALHOST_PORT, HOSTED_CALLBACK_URL, stopActiveServer } from './callbackServer';
 import {
+  type CallbackType,
   DEFAULT_PKCE_METHOD,
   genPkceCodeVerifier,
   getAuthorizationCode,
   PKCE_PLAIN,
   PKCE_SHA256,
 } from './grants/authorizationCode';
-import { getClientCredentials } from './grants/clientCredentials';
+import {
+  defaultJwtAlgorithm,
+  getClientCredentials,
+  jwtAlgorithms,
+} from './grants/clientCredentials';
 import { getImplicit } from './grants/implicit';
 import { getPassword } from './grants/password';
 import type { AccessToken, TokenStoreArgs } from './store';
@@ -76,6 +83,9 @@ const accessTokenUrls = [
 ];
 
 export const plugin: PluginDefinition = {
+  dispose() {
+    stopActiveServer();
+  },
   authentication: {
     name: 'oauth2',
     label: 'OAuth 2.0',
@@ -92,7 +102,10 @@ export const plugin: PluginDefinition = {
           };
           const token = await getToken(ctx, tokenArgs);
           if (token == null) {
-            await ctx.toast.show({ message: 'No token to copy', color: 'warning' });
+            await ctx.toast.show({
+              message: 'No token to copy',
+              color: 'warning',
+            });
           } else {
             await ctx.clipboard.copyText(token.response.access_token);
             await ctx.toast.show({
@@ -113,9 +126,15 @@ export const plugin: PluginDefinition = {
             clientId: stringArg(values, 'clientId'),
           };
           if (await deleteToken(ctx, tokenArgs)) {
-            await ctx.toast.show({ message: 'Token deleted', color: 'success' });
+            await ctx.toast.show({
+              message: 'Token deleted',
+              color: 'success',
+            });
           } else {
-            await ctx.toast.show({ message: 'No token to delete', color: 'warning' });
+            await ctx.toast.show({
+              message: 'No token to delete',
+              color: 'warning',
+            });
           }
         },
       },
@@ -134,8 +153,19 @@ export const plugin: PluginDefinition = {
         defaultValue: defaultGrantType,
         options: grantTypes,
       },
-
-      // Always-present fields
+      {
+        type: 'select',
+        name: 'clientCredentialsMethod',
+        label: 'Authentication Method',
+        description:
+          '"Client Secret" sends client_secret. \n' + '"Client Assertion" sends a signed JWT.',
+        defaultValue: 'client_secret',
+        options: [
+          { label: 'Client Secret', value: 'client_secret' },
+          { label: 'Client Assertion', value: 'client_assertion' },
+        ],
+        dynamic: hiddenIfNot(['client_credentials']),
+      },
       {
         type: 'text',
         name: 'clientId',
@@ -148,7 +178,47 @@ export const plugin: PluginDefinition = {
         label: 'Client Secret',
         optional: true,
         password: true,
-        dynamic: hiddenIfNot(['authorization_code', 'password', 'client_credentials']),
+        dynamic: hiddenIfNot(
+          ['authorization_code', 'password', 'client_credentials'],
+          (values) => values.clientCredentialsMethod === 'client_secret',
+        ),
+      },
+      {
+        type: 'select',
+        name: 'clientAssertionAlgorithm',
+        label: 'JWT Algorithm',
+        defaultValue: defaultJwtAlgorithm,
+        options: jwtAlgorithms.map((value) => ({
+          label: value === 'none' ? 'None' : value,
+          value,
+        })),
+        dynamic: hiddenIfNot(
+          ['client_credentials'],
+          ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
+        ),
+      },
+      {
+        type: 'text',
+        name: 'clientAssertionSecret',
+        label: 'JWT Secret',
+        description:
+          'Can be HMAC, PEM or JWK. Make sure you pick the correct algorithm type above.',
+        password: true,
+        optional: true,
+        multiLine: true,
+        dynamic: hiddenIfNot(
+          ['client_credentials'],
+          ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
+        ),
+      },
+      {
+        type: 'checkbox',
+        name: 'clientAssertionSecretBase64',
+        label: 'JWT secret is base64 encoded',
+        dynamic: hiddenIfNot(
+          ['client_credentials'],
+          ({ clientCredentialsMethod }) => clientCredentialsMethod === 'client_assertion',
+        ),
       },
       {
         type: 'text',
@@ -157,7 +227,10 @@ export const plugin: PluginDefinition = {
         label: 'Authorization URL',
         dynamic: hiddenIfNot(['authorization_code', 'implicit']),
         placeholder: authorizationUrls[0],
-        completionOptions: authorizationUrls.map((url) => ({ label: url, value: url })),
+        completionOptions: authorizationUrls.map((url) => ({
+          label: url,
+          value: url,
+        })),
       },
       {
         type: 'text',
@@ -166,14 +239,112 @@ export const plugin: PluginDefinition = {
         label: 'Access Token URL',
         placeholder: accessTokenUrls[0],
         dynamic: hiddenIfNot(['authorization_code', 'password', 'client_credentials']),
-        completionOptions: accessTokenUrls.map((url) => ({ label: url, value: url })),
+        completionOptions: accessTokenUrls.map((url) => ({
+          label: url,
+          value: url,
+        })),
       },
       {
-        type: 'text',
-        name: 'redirectUri',
-        label: 'Redirect URI',
-        optional: true,
-        dynamic: hiddenIfNot(['authorization_code', 'implicit']),
+        type: 'banner',
+        inputs: [
+          {
+            type: 'checkbox',
+            name: 'useExternalBrowser',
+            label: 'Use External Browser',
+            description:
+              'Open authorization URL in your system browser instead of the embedded browser. ' +
+              'Useful when the OAuth provider blocks embedded browsers or you need existing browser sessions.',
+            dynamic: hiddenIfNot(['authorization_code', 'implicit']),
+          },
+          {
+            type: 'text',
+            name: 'redirectUri',
+            label: 'Redirect URI (can be any valid URL)',
+            placeholder: 'https://mysite.example.com/oauth/callback',
+            description:
+              'URI the OAuth provider redirects to after authorization. Yaak intercepts this automatically in its embedded browser so any valid URI will work.',
+            optional: true,
+            dynamic: hiddenIfNot(
+              ['authorization_code', 'implicit'],
+              ({ useExternalBrowser }) => !useExternalBrowser,
+            ),
+          },
+          {
+            type: 'h_stack',
+            inputs: [
+              {
+                type: 'select',
+                name: 'callbackType',
+                label: 'Callback Type',
+                description:
+                  '"Hosted Redirect" uses an external Yaak-hosted endpoint. "Localhost" starts a local server to receive the callback.',
+                defaultValue: 'hosted',
+                options: [
+                  { label: 'Hosted Redirect', value: 'hosted' },
+                  { label: 'Localhost', value: 'localhost' },
+                ],
+                dynamic: hiddenIfNot(
+                  ['authorization_code', 'implicit'],
+                  ({ useExternalBrowser }) => !!useExternalBrowser,
+                ),
+              },
+              {
+                type: 'text',
+                name: 'callbackPort',
+                label: 'Callback Port',
+                placeholder: `${DEFAULT_LOCALHOST_PORT}`,
+                description:
+                  'Port for the local callback server. Defaults to ' +
+                  DEFAULT_LOCALHOST_PORT +
+                  ' if empty.',
+                optional: true,
+                dynamic: hiddenIfNot(
+                  ['authorization_code', 'implicit'],
+                  ({ useExternalBrowser, callbackType }) =>
+                    !!useExternalBrowser && callbackType === 'localhost',
+                ),
+              },
+            ],
+          },
+          {
+            type: 'banner',
+            color: 'info',
+            inputs: [
+              {
+                type: 'markdown',
+                content: 'Redirect URI to Register',
+                async dynamic(_ctx, { values }) {
+                  const grantType = String(values.grantType ?? defaultGrantType);
+                  const useExternalBrowser = !!values.useExternalBrowser;
+                  const callbackType = (stringArg(values, 'callbackType') ||
+                    'localhost') as CallbackType;
+
+                  // Only show for authorization_code and implicit with external browser enabled
+                  if (
+                    !['authorization_code', 'implicit'].includes(grantType) ||
+                    !useExternalBrowser
+                  ) {
+                    return { hidden: true };
+                  }
+
+                  // Compute the redirect URI based on callback type
+                  let redirectUri: string;
+                  if (callbackType === 'hosted') {
+                    redirectUri = HOSTED_CALLBACK_URL;
+                  } else {
+                    const port = intArg(values, 'callbackPort') || DEFAULT_LOCALHOST_PORT;
+                    redirectUri = `http://127.0.0.1:${port}/callback`;
+                  }
+
+                  return {
+                    hidden: false,
+                    content: `Register \`${redirectUri}\` as a redirect URI with your OAuth provider.`,
+                  };
+                },
+              },
+            ],
+          },
+        ],
       },
       {
         type: 'text',
@@ -182,12 +353,8 @@ export const plugin: PluginDefinition = {
         optional: true,
         dynamic: hiddenIfNot(['authorization_code', 'implicit']),
       },
-      {
-        type: 'text',
-        name: 'audience',
-        label: 'Audience',
-        optional: true,
-      },
+      { type: 'text', name: 'scope', label: 'Scope', optional: true },
+      { type: 'text', name: 'audience', label: 'Audience', optional: true },
       {
         type: 'select',
         name: 'tokenName',
@@ -203,44 +370,54 @@ export const plugin: PluginDefinition = {
         dynamic: hiddenIfNot(['authorization_code', 'implicit']),
       },
       {
-        type: 'checkbox',
-        name: 'usePkce',
-        label: 'Use PKCE',
-        dynamic: hiddenIfNot(['authorization_code']),
-      },
-      {
-        type: 'select',
-        name: 'pkceChallengeMethod',
-        label: 'Code Challenge Method',
-        options: [
-          { label: 'SHA-256', value: PKCE_SHA256 },
-          { label: 'Plain', value: PKCE_PLAIN },
+        type: 'banner',
+        inputs: [
+          {
+            type: 'checkbox',
+            name: 'usePkce',
+            label: 'Use PKCE',
+            dynamic: hiddenIfNot(['authorization_code']),
+          },
+          {
+            type: 'select',
+            name: 'pkceChallengeMethod',
+            label: 'Code Challenge Method',
+            options: [
+              { label: 'SHA-256', value: PKCE_SHA256 },
+              { label: 'Plain', value: PKCE_PLAIN },
+            ],
+            defaultValue: DEFAULT_PKCE_METHOD,
+            dynamic: hiddenIfNot(['authorization_code'], ({ usePkce }) => !!usePkce),
+          },
+          {
+            type: 'text',
+            name: 'pkceCodeChallenge',
+            label: 'Code Verifier',
+            placeholder: 'Automatically generated when not set',
+            optional: true,
+            dynamic: hiddenIfNot(['authorization_code'], ({ usePkce }) => !!usePkce),
+          },
         ],
-        defaultValue: DEFAULT_PKCE_METHOD,
-        dynamic: hiddenIfNot(['authorization_code'], ({ usePkce }) => !!usePkce),
       },
       {
-        type: 'text',
-        name: 'pkceCodeChallenge',
-        label: 'Code Verifier',
-        placeholder: 'Automatically generated when not set',
-        optional: true,
-        dynamic: hiddenIfNot(['authorization_code'], ({ usePkce }) => !!usePkce),
-      },
-      {
-        type: 'text',
-        name: 'username',
-        label: 'Username',
-        optional: true,
-        dynamic: hiddenIfNot(['password']),
-      },
-      {
-        type: 'text',
-        name: 'password',
-        label: 'Password',
-        password: true,
-        optional: true,
-        dynamic: hiddenIfNot(['password']),
+        type: 'h_stack',
+        inputs: [
+          {
+            type: 'text',
+            name: 'username',
+            label: 'Username',
+            optional: true,
+            dynamic: hiddenIfNot(['password']),
+          },
+          {
+            type: 'text',
+            name: 'password',
+            label: 'Password',
+            password: true,
+            optional: true,
+            dynamic: hiddenIfNot(['password']),
+          },
+        ],
       },
       {
         type: 'select',
@@ -258,7 +435,6 @@ export const plugin: PluginDefinition = {
         type: 'accordion',
         label: 'Advanced',
         inputs: [
-          { type: 'text', name: 'scope', label: 'Scope', optional: true },
           {
             type: 'text',
             name: 'headerName',
@@ -281,6 +457,11 @@ export const plugin: PluginDefinition = {
               { label: 'In Request Body', value: 'body' },
               { label: 'As Basic Authentication', value: 'basic' },
             ],
+            dynamic: (_ctx: Context, { values }: GetHttpAuthenticationConfigRequest) => ({
+              hidden:
+                values.grantType === 'client_credentials' &&
+                values.clientCredentialsMethod === 'client_assertion',
+            }),
           },
         ],
       },
@@ -321,6 +502,16 @@ export const plugin: PluginDefinition = {
       const credentialsInBody = values.credentials === 'body';
       const tokenName = values.tokenName === 'id_token' ? 'id_token' : 'access_token';
 
+      // Build external browser options if enabled
+      const useExternalBrowser = !!values.useExternalBrowser;
+      const externalBrowserOptions = useExternalBrowser
+        ? {
+            useExternalBrowser: true,
+            callbackType: (stringArg(values, 'callbackType') || 'localhost') as CallbackType,
+            callbackPort: intArg(values, 'callbackPort') ?? undefined,
+          }
+        : undefined;
+
       let token: AccessToken;
       if (grantType === 'authorization_code') {
         const authorizationUrl = stringArg(values, 'authorizationUrl');
@@ -348,6 +539,7 @@ export const plugin: PluginDefinition = {
               }
             : null,
           tokenName: tokenName,
+          externalBrowser: externalBrowserOptions,
         });
       } else if (grantType === 'implicit') {
         const authorizationUrl = stringArg(values, 'authorizationUrl');
@@ -362,6 +554,7 @@ export const plugin: PluginDefinition = {
           audience: stringArgOrNull(values, 'audience'),
           state: stringArgOrNull(values, 'state'),
           tokenName: tokenName,
+          externalBrowser: externalBrowserOptions,
         });
       } else if (grantType === 'client_credentials') {
         const accessTokenUrl = stringArg(values, 'accessTokenUrl');
@@ -370,7 +563,11 @@ export const plugin: PluginDefinition = {
             ? accessTokenUrl
             : `https://${accessTokenUrl}`,
           clientId: stringArg(values, 'clientId'),
+          clientAssertionAlgorithm: stringArg(values, 'clientAssertionAlgorithm') as Algorithm,
           clientSecret: stringArg(values, 'clientSecret'),
+          clientCredentialsMethod: stringArg(values, 'clientCredentialsMethod'),
+          clientAssertionSecret: stringArg(values, 'clientAssertionSecret'),
+          clientAssertionSecretBase64: !!values.clientAssertionSecretBase64,
           scope: stringArgOrNull(values, 'scope'),
           audience: stringArgOrNull(values, 'audience'),
           credentialsInBody,
@@ -413,4 +610,11 @@ function stringArg(values: Record<string, JsonPrimitive | undefined>, name: stri
   const arg = stringArgOrNull(values, name);
   if (!arg) return '';
   return arg;
+}
+
+function intArg(values: Record<string, JsonPrimitive | undefined>, name: string): number | null {
+  const arg = values[name];
+  if (arg == null || arg === '') return null;
+  const num = parseInt(`${arg}`, 10);
+  return Number.isNaN(num) ? null : num;
 }

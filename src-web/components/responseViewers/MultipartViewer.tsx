@@ -1,5 +1,5 @@
 import { type MultipartPart, parseMultipart } from '@mjackson/multipart-parser';
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { languageFromContentType } from '../../lib/contentType';
 import { Banner } from '../core/Banner';
 import { Icon } from '../core/Icon';
@@ -22,8 +22,6 @@ interface Props {
 }
 
 export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Props) {
-  const [tab, setTab] = useState<string>();
-
   const parseResult = useMemo(() => {
     try {
       const maxFileSize = 1024 * 1024 * 10; // 10MB
@@ -55,15 +53,13 @@ export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Prop
 
   return (
     <Tabs
-      value={tab}
       addBorders
       label="Multipart"
       layout="horizontal"
-      tabListClassName="border-r border-r-border"
-      onChangeValue={setTab}
-      tabs={parts.map((part) => ({
+      tabListClassName="border-r border-r-border -ml-3"
+      tabs={parts.map((part, i) => ({
         label: part.name ?? '',
-        value: part.name ?? '',
+        value: tabValue(part, i),
         rightSlot:
           part.filename && part.headers.contentType.mediaType?.startsWith('image/') ? (
             <div className="h-5 w-5 overflow-auto flex items-center justify-end">
@@ -81,7 +77,7 @@ export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Prop
         <TabContent
           // biome-ignore lint/suspicious/noArrayIndexKey: Nothing else to key on
           key={idPrefix + part.name + i}
-          value={part.name ?? ''}
+          value={tabValue(part, i)}
           className="pl-3 !pt-0"
         >
           <Part part={part} />
@@ -119,7 +115,7 @@ function Part({ part }: { part: MultipartPart }) {
   }
 
   if (mimeType?.match(/csv|tab-separated/i)) {
-    return <CsvViewer text={content} />;
+    return <CsvViewer text={content} className="bg-primary h-10 w-10" />;
   }
 
   if (mimeType?.match(/^text\/html/i) || detectedLanguage === 'html') {
@@ -135,4 +131,8 @@ function Part({ part }: { part: MultipartPart }) {
   }
 
   return <TextViewer text={content} language={detectedLanguage} stateKey={null} />;
+}
+
+function tabValue(part: MultipartPart, i: number) {
+  return `${part.name ?? ''}::${i}`;
 }

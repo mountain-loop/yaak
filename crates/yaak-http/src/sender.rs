@@ -2,7 +2,9 @@ use crate::decompress::{ContentEncoding, streaming_decoder};
 use crate::error::{Error, Result};
 use crate::types::{SendableBody, SendableHttpRequest};
 use async_trait::async_trait;
+use bytes::Bytes;
 use futures_util::StreamExt;
+use http_body::{Body as HttpBody, Frame, SizeHint};
 use reqwest::{Client, Method, Version};
 use std::fmt::Display;
 use std::pin::Pin;
@@ -31,7 +33,14 @@ pub enum HttpResponseEvent {
     },
     SendUrl {
         method: String,
+        scheme: String,
+        username: String,
+        password: String,
+        host: String,
+        port: u16,
         path: String,
+        query: String,
+        fragment: String,
     },
     ReceiveUrl {
         version: Version,
@@ -65,7 +74,32 @@ impl Display for HttpResponseEvent {
                 };
                 write!(f, "* Redirect {} -> {} ({})", status, url, behavior_str)
             }
-            HttpResponseEvent::SendUrl { method, path } => write!(f, "> {} {}", method, path),
+            HttpResponseEvent::SendUrl {
+                method,
+                scheme,
+                username,
+                password,
+                host,
+                port,
+                path,
+                query,
+                fragment,
+            } => {
+                let auth_str = if username.is_empty() && password.is_empty() {
+                    String::new()
+                } else {
+                    format!("{}:{}@", username, password)
+                };
+                let query_str =
+                    if query.is_empty() { String::new() } else { format!("?{}", query) };
+                let fragment_str =
+                    if fragment.is_empty() { String::new() } else { format!("#{}", fragment) };
+                write!(
+                    f,
+                    "> {} {}://{}{}:{}{}{}{}",
+                    method, scheme, auth_str, host, port, path, query_str, fragment_str
+                )
+            }
             HttpResponseEvent::ReceiveUrl { version, status } => {
                 write!(f, "< {} {}", version_to_str(version), status)
             }
@@ -104,7 +138,19 @@ impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
                     RedirectBehavior::DropBody => "drop_body".to_string(),
                 },
             },
-            HttpResponseEvent::SendUrl { method, path } => D::SendUrl { method, path },
+            HttpResponseEvent::SendUrl {
+                method,
+                scheme,
+                username,
+                password,
+                host,
+                port,
+                path,
+                query,
+                fragment,
+            } => {
+                D::SendUrl { method, scheme, username, password, host, port, path, query, fragment }
+            }
             HttpResponseEvent::ReceiveUrl { version, status } => {
                 D::ReceiveUrl { version: format!("{:?}", version), status }
             }
@@ -376,6 +422,9 @@ impl HttpSender for ReqwestSender {
 
         // Add headers
         for header in request.headers {
+            if header.0.is_empty() {
+                continue;
+            }
             req_builder = req_builder.header(&header.0, &header.1);
         }
 
@@ -392,10 +441,16 @@ impl HttpSender for ReqwestSender {
             Some(SendableBody::Bytes(bytes)) => {
                 req_builder = req_builder.body(bytes);
             }
-            Some(SendableBody::Stream(stream)) => {
-                // Convert AsyncRead stream to reqwest Body
-                let stream = tokio_util::io::ReaderStream::new(stream);
-                let body = reqwest::Body::wrap_stream(stream);
+            Some(SendableBody::Stream { data, content_length }) => {
+                // Convert AsyncRead stream to reqwest Body. If content length is
+                // known, wrap with a SizedBody so hyper can set Content-Length
+                // automatically (for both HTTP/1.1 and HTTP/2).
+                let stream = tokio_util::io::ReaderStream::new(data);
+                let body = if let Some(len) = content_length {
+                    reqwest::Body::wrap(SizedBody::new(stream, len))
+                } else {
+                    reqwest::Body::wrap_stream(stream)
+                };
                 req_builder = req_builder.body(body);
             }
         }
@@ -412,8 +467,15 @@ impl HttpSender for ReqwestSender {
         ));
 
         send_event(HttpResponseEvent::SendUrl {
-            path: sendable_req.url().path().to_string(),
             method: sendable_req.method().to_string(),
+            scheme: sendable_req.url().scheme().to_string(),
+            username: sendable_req.url().username().to_string(),
+            password: sendable_req.url().password().unwrap_or_default().to_string(),
+            host: sendable_req.url().host_str().unwrap_or_default().to_string(),
+            port: sendable_req.url().port_or_known_default().unwrap_or(0),
+            path: sendable_req.url().path().to_string(),
+            query: sendable_req.url().query().unwrap_or_default().to_string(),
+            fragment: sendable_req.url().fragment().unwrap_or_default().to_string(),
         });
 
         let mut request_headers = Vec::new();
@@ -489,6 +551,54 @@ impl HttpSender for ReqwestSender {
             body_stream,
             encoding,
         ))
+    }
+}
+
+/// A wrapper around a byte stream that reports a known content length via
+/// `size_hint()`. This lets hyper set the `Content-Length` header
+/// automatically based on the body size, without us having to add it as an
+/// explicit header — which can cause duplicate `Content-Length` headers and
+/// break HTTP/2.
+struct SizedBody<S> {
+    stream: std::sync::Mutex<S>,
+    remaining: u64,
+}
+
+impl<S> SizedBody<S> {
+    fn new(stream: S, content_length: u64) -> Self {
+        Self { stream: std::sync::Mutex::new(stream), remaining: content_length }
+    }
+}
+
+impl<S> HttpBody for SizedBody<S>
+where
+    S: futures_util::Stream<Item = std::result::Result<Bytes, std::io::Error>>
+        + Send
+        + Unpin
+        + 'static,
+{
+    type Data = Bytes;
+    type Error = std::io::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<std::result::Result<Frame<Self::Data>, Self::Error>>> {
+        let this = self.get_mut();
+        let mut stream = this.stream.lock().unwrap();
+        match stream.poll_next_unpin(cx) {
+            Poll::Ready(Some(Ok(chunk))) => {
+                this.remaining = this.remaining.saturating_sub(chunk.len() as u64);
+                Poll::Ready(Some(Ok(Frame::data(chunk))))
+            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        SizeHint::with_exact(self.remaining)
     }
 }
 

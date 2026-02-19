@@ -15,6 +15,9 @@ use ts_rs::TS;
 use yaak_models::util::generate_id;
 use yaak_plugins::manager::PluginManager;
 
+use url::Url;
+use yaak_api::get_system_proxy_url;
+
 use crate::error::Error::GenericError;
 use crate::is_dev;
 
@@ -87,8 +90,13 @@ impl YaakUpdater {
         info!("Checking for updates mode={} autodl={}", mode, auto_download);
 
         let w = window.clone();
-        let update_check_result = w
-            .updater_builder()
+        let mut updater_builder = w.updater_builder();
+        if let Some(proxy_url) = get_system_proxy_url() {
+            if let Ok(url) = Url::parse(&proxy_url) {
+                updater_builder = updater_builder.proxy(url);
+            }
+        }
+        let update_check_result = updater_builder
             .on_before_exit(move || {
                 // Kill plugin manager before exit or NSIS installer will fail to replace sidecar
                 // while it's running.
@@ -111,6 +119,7 @@ impl YaakUpdater {
                     UpdateTrigger::User => "user",
                 },
             )?
+            .header("X-Install-Mode", detect_install_mode().unwrap_or("unknown"))?
             .build()?
             .check()
             .await;
@@ -351,6 +360,22 @@ pub async fn download_update_idempotent<R: Runtime>(
     info!("{} downloaded", update.version);
 
     Ok(dl_path)
+}
+
+/// Detect the installer type so the update server can serve the correct artifact.
+fn detect_install_mode() -> Option<&'static str> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(exe) = std::env::current_exe() {
+            let path = exe.to_string_lossy().to_lowercase();
+            if path.starts_with(r"c:\program files") {
+                return Some("nsis-machine");
+            }
+        }
+        return Some("nsis");
+    }
+    #[allow(unreachable_code)]
+    None
 }
 
 pub async fn install_update_maybe_download<R: Runtime>(

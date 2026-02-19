@@ -75,7 +75,7 @@ export function SettingsTheme() {
         <Heading>Theme</Heading>
         <p className="text-text-subtle">
           Make Yaak your own by selecting a theme, or{' '}
-          <Link href="https://feedback.yaak.app/help/articles/6911763-plugins-quick-start">
+          <Link href="https://yaak.app/docs/plugin-development/plugins-quick-start">
             Create Your Own
           </Link>
         </p>

@@ -1,6 +1,5 @@
 import { patchModel, workspaceMetasAtom, workspacesAtom } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
-import { useState } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
@@ -45,7 +44,6 @@ const DEFAULT_TAB: WorkspaceSettingsTab = TAB_GENERAL;
 export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
   const workspace = useAtomValue(workspacesAtom).find((w) => w.id === workspaceId);
   const workspaceMeta = useAtomValue(workspaceMetasAtom).find((m) => m.workspaceId === workspaceId);
-  const [activeTab, setActiveTab] = useState<string>(tab ?? DEFAULT_TAB);
   const authTab = useAuthTab(TAB_AUTH, workspace ?? null);
   const headersTab = useHeadersTab(TAB_HEADERS, workspace ?? null);
   const inheritedHeaders = useInheritedHeaders(workspace ?? null);
@@ -67,8 +65,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
 
   return (
     <Tabs
-      value={activeTab}
-      onChangeValue={setActiveTab}
+      defaultValue={tab ?? DEFAULT_TAB}
       label="Folder Settings"
       className="pt-4 pb-2 px-3"
       tabListClassName="pl-4"
@@ -90,7 +87,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
             ) : null,
         },
       ]}
-      storageKey="workspace_settings_tabs_order"
+      storageKey="workspace_settings_tabs"
     >
       <TabContent value={TAB_AUTH} className="overflow-y-auto h-full px-4">
         <HttpAuthenticationEditor model={workspace} />
@@ -98,6 +95,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       <TabContent value={TAB_HEADERS} className="overflow-y-auto h-full px-4">
         <HeadersEditor
           inheritedHeaders={inheritedHeaders}
+          inheritedHeadersLabel="Defaults"
           forceUpdateKey={workspace.id}
           headers={workspace.headers}
           onChange={(headers) => patchModel(workspace, { headers })}

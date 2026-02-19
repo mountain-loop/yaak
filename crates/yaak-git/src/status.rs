@@ -18,6 +18,8 @@ pub struct GitStatusSummary {
     pub origins: Vec<String>,
     pub local_branches: Vec<String>,
     pub remote_branches: Vec<String>,
+    pub ahead: u32,
+    pub behind: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -160,6 +162,18 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
     let local_branches = local_branch_names(&repo)?;
     let remote_branches = remote_branch_names(&repo)?;
 
+    // Compute ahead/behind relative to remote tracking branch
+    let (ahead, behind) = (|| -> Option<(usize, usize)> {
+        let head = repo.head().ok()?;
+        let local_oid = head.target()?;
+        let branch_name = head.shorthand()?;
+        let upstream_ref =
+            repo.find_branch(&format!("origin/{branch_name}"), git2::BranchType::Remote).ok()?;
+        let upstream_oid = upstream_ref.get().target()?;
+        repo.graph_ahead_behind(local_oid, upstream_oid).ok()
+    })()
+    .unwrap_or((0, 0));
+
     Ok(GitStatusSummary {
         entries,
         origins,
@@ -168,5 +182,7 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
         head_ref_shorthand,
         local_branches,
         remote_branches,
+        ahead: ahead as u32,
+        behind: behind as u32,
     })
 }

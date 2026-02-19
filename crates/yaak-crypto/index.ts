@@ -11,3 +11,7 @@ export function revealWorkspaceKey(workspaceId: string) {
 export function setWorkspaceKey(args: { workspaceId: string; key: string }) {
   return invoke<void>('cmd_set_workspace_key', args);
 }
+
+export function disableEncryption(workspaceId: string) {
+  return invoke<void>('cmd_disable_encryption', { workspaceId });
+}
