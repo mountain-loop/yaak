@@ -71,6 +71,10 @@ export async function getOrRefreshAccessToken(
   httpRequest.authenticationType = 'none'; // Don't inherit workspace auth
   const resp = await ctx.httpRequest.send({ httpRequest });
 
+  if (resp.error) {
+    throw new Error(`Failed to refresh access token: ${resp.error}`);
+  }
+
   if (resp.status >= 400 && resp.status < 500) {
     // Client errors (4xx) indicate the refresh token is invalid, expired, or revoked
     // Delete the token and return null to trigger a fresh authorization flow
