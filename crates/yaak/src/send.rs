@@ -513,10 +513,6 @@ pub async fn send_http_request<T: TemplateCallback>(
     let mut request_body_capture_task = None;
     let mut request_body_capture_error = None;
     if persist_response {
-        if let Err(err) = params.blob_manager.connect().delete_chunks(&request_body_id) {
-            request_body_capture_error = Some(err.to_string());
-        }
-
         match sendable_request.body.as_mut() {
             Some(SendableBody::Bytes(bytes)) => {
                 if let Err(err) = persist_request_body_bytes(
@@ -658,6 +654,7 @@ pub async fn send_http_request<T: TemplateCallback>(
         http_response.into_body_stream().map_err(SendHttpRequestError::ReadResponseBody)?;
     let mut response_body = Vec::new();
     let mut body_read_error = None;
+    let mut cancelled_during_body_read = false;
     let mut written_bytes: usize = 0;
     let mut last_progress_update = started_at;
     let mut cancelled_rx = params.cancelled_rx.clone();
@@ -671,6 +668,7 @@ pub async fn send_http_request<T: TemplateCallback>(
             tokio::select! {
                 biased;
                 _ = cancelled_rx.changed() => {
+                    cancelled_during_body_read = true;
                     None
                 }
                 result = body_stream.read_buf(&mut response_body) => {
@@ -730,6 +728,12 @@ pub async fn send_http_request<T: TemplateCallback>(
         }
     }
 
+    if cancelled_during_body_read {
+        body_read_error = Some(SendHttpRequestError::SendRequest(
+            yaak_http::error::Error::RequestCanceledError,
+        ));
+    }
+
     file.flush().await.map_err(|source| SendHttpRequestError::WriteResponseBody {
         path: body_path.clone(),
         source,
@@ -758,6 +762,17 @@ pub async fn send_http_request<T: TemplateCallback>(
     }
 
     if let Some(err) = body_read_error {
+        if persist_response {
+            let _ = persist_response_error(
+                params.query_manager,
+                params.blob_manager,
+                &params.update_source,
+                &response,
+                started_at,
+                err.to_string(),
+                request_started_url,
+            );
+        }
         persist_cookie_jar(params.query_manager, cookie_jar.as_mut(), cookie_store.as_ref())?;
         return Err(err);
     }
