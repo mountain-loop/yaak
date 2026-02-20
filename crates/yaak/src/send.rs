@@ -607,6 +607,13 @@ pub async fn send_http_request<T: TemplateCallback>(
     };
 
     let headers_elapsed = duration_to_i32(started_at.elapsed());
+    std::fs::create_dir_all(params.response_dir).map_err(|source| {
+        SendHttpRequestError::CreateResponseDirectory {
+            path: params.response_dir.to_path_buf(),
+            source,
+        }
+    })?;
+    let body_path = params.response_dir.join(&response.id);
     let connected_response = HttpResponse {
         state: HttpResponseState::Connected,
         elapsed_headers: headers_elapsed,
@@ -616,6 +623,8 @@ pub async fn send_http_request<T: TemplateCallback>(
         remote_addr: http_response.remote_addr.clone(),
         version: http_response.version.clone(),
         elapsed_dns: dns_elapsed.load(Ordering::Relaxed),
+        body_path: Some(body_path.to_string_lossy().to_string()),
+        content_length: http_response.content_length.map(u64_to_i32),
         headers: http_response
             .headers
             .iter()
@@ -638,14 +647,6 @@ pub async fn send_http_request<T: TemplateCallback>(
         response = connected_response;
     }
 
-    std::fs::create_dir_all(params.response_dir).map_err(|source| {
-        SendHttpRequestError::CreateResponseDirectory {
-            path: params.response_dir.to_path_buf(),
-            source,
-        }
-    })?;
-
-    let body_path = params.response_dir.join(&response.id);
     let mut file =
         File::options().create(true).truncate(true).write(true).open(&body_path).await.map_err(
             |source| SendHttpRequestError::WriteResponseBody { path: body_path.clone(), source },
@@ -688,6 +689,10 @@ pub async fn send_http_request<T: TemplateCallback>(
                 let start_idx = response_body.len() - n;
                 file.write_all(&response_body[start_idx..]).await.map_err(|source| {
                     SendHttpRequestError::WriteResponseBody { path: body_path.clone(), source }
+                })?;
+                file.flush().await.map_err(|source| SendHttpRequestError::WriteResponseBody {
+                    path: body_path.clone(),
+                    source,
                 })?;
 
                 let now = Instant::now();
