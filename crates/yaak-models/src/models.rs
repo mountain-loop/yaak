@@ -6,6 +6,7 @@ use crate::models::HttpRequestIden::{
 use crate::util::{UpdateSource, generate_prefixed_id};
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
+use schemars::JsonSchema;
 use sea_query::Order::Desc;
 use sea_query::{IntoColumnRef, IntoIden, IntoTableRef, Order, SimpleExpr, enum_def};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -824,7 +825,7 @@ impl UpsertModelInfo for Folder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct HttpRequestHeader {
@@ -837,7 +838,7 @@ pub struct HttpRequestHeader {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct HttpUrlParameter {
@@ -850,7 +851,7 @@ pub struct HttpUrlParameter {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "http_requests")]
@@ -1095,7 +1096,7 @@ impl Default for WebsocketMessageType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "websocket_requests")]
@@ -1704,7 +1705,7 @@ impl UpsertModelInfo for GraphQlIntrospection {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "grpc_requests")]

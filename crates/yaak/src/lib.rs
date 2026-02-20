@@ -1,4 +1,5 @@
 pub mod error;
+pub mod plugin_events;
 pub mod render;
 pub mod send;
 

@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -23,7 +23,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Send an HTTP request by ID
+    /// Send a request, folder, or workspace by ID
     Send(SendArgs),
 
     /// Workspace commands
@@ -41,8 +41,20 @@ pub enum Commands {
 
 #[derive(Args)]
 pub struct SendArgs {
-    /// Request ID
-    pub request_id: String,
+    /// Request, folder, or workspace ID
+    pub id: String,
+
+    /// Execute requests sequentially (default)
+    #[arg(long, conflicts_with = "parallel")]
+    pub sequential: bool,
+
+    /// Execute requests in parallel
+    #[arg(long, conflicts_with = "sequential")]
+    pub parallel: bool,
+
+    /// Stop on first request failure when sending folders/workspaces
+    #[arg(long, conflicts_with = "parallel")]
+    pub fail_fast: bool,
 }
 
 #[derive(Args)]
@@ -119,10 +131,16 @@ pub enum RequestCommands {
         request_id: String,
     },
 
-    /// Send an HTTP request by ID
+    /// Send a request by ID
     Send {
         /// Request ID
         request_id: String,
+    },
+
+    /// Output JSON schema for request create/update payloads
+    Schema {
+        #[arg(value_enum)]
+        request_type: RequestSchemaType,
     },
 
     /// Create a new HTTP request
@@ -167,6 +185,13 @@ pub enum RequestCommands {
         #[arg(short, long)]
         yes: bool,
     },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum RequestSchemaType {
+    Http,
+    Grpc,
+    Websocket,
 }
 
 #[derive(Args)]

@@ -33,7 +33,7 @@ import type {
   ListFoldersResponse,
   ListHttpRequestsRequest,
   ListHttpRequestsResponse,
-  ListWorkspacesResponse,
+  ListOpenWorkspacesResponse,
   PluginContext,
   PromptFormResponse,
   PromptTextResponse,
@@ -942,9 +942,9 @@ export class PluginInstance {
       workspace: {
         list: async () => {
           const payload = {
-            type: 'list_workspaces_request',
+            type: 'list_open_workspaces_request',
           } as InternalEventPayload;
-          const response = await this.#sendForReply<ListWorkspacesResponse>(context, payload);
+          const response = await this.#sendForReply<ListOpenWorkspacesResponse>(context, payload);
           return response.workspaces.map((w) => {
             // Internal workspace info includes label field not in public API
             type WorkspaceInfoInternal = typeof w & { label?: string };

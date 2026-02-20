@@ -28,7 +28,8 @@ pub fn run(ctx: &CliContext, args: WorkspaceArgs) -> i32 {
 }
 
 fn list(ctx: &CliContext) -> CommandResult {
-    let workspaces = ctx.db().list_workspaces().map_err(|e| format!("Failed to list workspaces: {e}"))?;
+    let workspaces =
+        ctx.db().list_workspaces().map_err(|e| format!("Failed to list workspaces: {e}"))?;
     if workspaces.is_empty() {
         println!("No workspaces found");
     } else {
@@ -75,8 +76,9 @@ fn create(
         return Ok(());
     }
 
-    let name =
-        name.ok_or_else(|| "workspace create requires --name unless JSON payload is provided".to_string())?;
+    let name = name.ok_or_else(|| {
+        "workspace create requires --name unless JSON payload is provided".to_string()
+    })?;
 
     let workspace = Workspace { name, ..Default::default() };
     let created = ctx
