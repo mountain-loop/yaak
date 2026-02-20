@@ -16,8 +16,7 @@ use tauri::{AppHandle, Emitter, Listener, Manager, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
 use yaak::plugin_events::{
-    GroupedPluginEvent, HostRequest, SharedEvent, SharedPluginEventContext,
-    handle_shared_plugin_event,
+    GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::models::{AnyModel, HttpResponse, Plugin};
@@ -61,11 +60,32 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             workspace_id: fallback_workspace_id.as_deref(),
         },
     ) {
-        GroupedPluginEvent::Shared(SharedEvent::Reply(payload)) => Ok(Some(payload)),
-        GroupedPluginEvent::Shared(SharedEvent::ErrorResponse(resp)) => {
+        GroupedPluginEvent::Handled(payload) => Ok(payload),
+        GroupedPluginEvent::ToHandle(host_request) => {
+            handle_host_plugin_request(
+                app_handle,
+                event,
+                plugin_handle,
+                &plugin_context,
+                host_request,
+            )
+            .await
+        }
+    }
+}
+
+async fn handle_host_plugin_request<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    event: &InternalEvent,
+    plugin_handle: &PluginHandle,
+    plugin_context: &yaak_plugins::events::PluginContext,
+    host_request: HostRequest<'_>,
+) -> Result<Option<InternalEventPayload>> {
+    match host_request {
+        HostRequest::ErrorResponse(resp) => {
             error!("Plugin error: {}: {:?}", resp.error, resp);
             let toast_event = plugin_handle.build_event_to_send(
-                &plugin_context,
+                plugin_context,
                 &InternalEventPayload::ShowToastRequest(ShowToastRequest {
                     message: format!(
                         "Plugin error from {}: {}",
@@ -80,7 +100,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             );
             Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await
         }
-        GroupedPluginEvent::Shared(SharedEvent::ReloadResponse(req)) => {
+        HostRequest::ReloadResponse(req) => {
             let plugins = app_handle.db().list_plugins()?;
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {
@@ -94,7 +114,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             if !req.silent {
                 let info = plugin_handle.info();
                 let toast_event = plugin_handle.build_event_to_send(
-                    &plugin_context,
+                    plugin_context,
                     &InternalEventPayload::ShowToastRequest(ShowToastRequest {
                         message: format!("Reloaded plugin {}@{}", info.name, info.version),
                         icon: Some(Icon::Info),
@@ -108,28 +128,6 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
                 Ok(None)
             }
         }
-        GroupedPluginEvent::Host(host_request) => {
-            handle_host_plugin_request(
-                app_handle,
-                event,
-                plugin_handle,
-                &plugin_context,
-                host_request,
-            )
-            .await
-        }
-        GroupedPluginEvent::Ignore => Ok(None),
-    }
-}
-
-async fn handle_host_plugin_request<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    event: &InternalEvent,
-    plugin_handle: &PluginHandle,
-    plugin_context: &yaak_plugins::events::PluginContext,
-    host_request: HostRequest<'_>,
-) -> Result<Option<InternalEventPayload>> {
-    match host_request {
         HostRequest::CopyText(req) => {
             app_handle.clipboard().write_text(req.text.as_str())?;
             Ok(Some(InternalEventPayload::CopyTextResponse(EmptyPayload {})))

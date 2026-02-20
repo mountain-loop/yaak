@@ -1,8 +1,7 @@
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 use yaak::plugin_events::{
-    GroupedPluginEvent, HostRequest, SharedEvent, SharedPluginEventContext,
-    handle_shared_plugin_event,
+    GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
 use yaak_models::query_manager::QueryManager;
 use yaak_plugins::events::{
@@ -75,36 +74,37 @@ fn build_plugin_reply(
             workspace_id: event.context.workspace_id.as_deref(),
         },
     ) {
-        GroupedPluginEvent::Shared(SharedEvent::Reply(payload)) => Some(payload),
-        GroupedPluginEvent::Shared(SharedEvent::ErrorResponse(resp)) => {
-            eprintln!("[plugin:{}] error: {}", plugin_name, resp.error);
-            None
-        }
-        GroupedPluginEvent::Shared(SharedEvent::ReloadResponse(_)) => None,
-        GroupedPluginEvent::Host(HostRequest::ShowToast(req)) => {
-            eprintln!("[plugin:{}] {}", plugin_name, req.message);
-            Some(InternalEventPayload::ShowToastResponse(EmptyPayload {}))
-        }
-        GroupedPluginEvent::Host(HostRequest::ListOpenWorkspaces(_)) => {
-            let workspaces = match query_manager.connect().list_workspaces() {
-                Ok(workspaces) => workspaces
-                    .into_iter()
-                    .map(|w| WorkspaceInfo { id: w.id.clone(), name: w.name, label: w.id })
-                    .collect(),
-                Err(err) => {
-                    return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                        error: format!("Failed to list workspaces in CLI: {err}"),
-                    }));
-                }
-            };
-            Some(InternalEventPayload::ListOpenWorkspacesResponse(ListOpenWorkspacesResponse {
-                workspaces,
-            }))
-        }
-        GroupedPluginEvent::Host(req) => Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-            error: format!("Unsupported plugin request in CLI: {}", req.type_name()),
-        })),
-        GroupedPluginEvent::Ignore => None,
+        GroupedPluginEvent::Handled(payload) => payload,
+        GroupedPluginEvent::ToHandle(host_request) => match host_request {
+            HostRequest::ErrorResponse(resp) => {
+                eprintln!("[plugin:{}] error: {}", plugin_name, resp.error);
+                None
+            }
+            HostRequest::ReloadResponse(_) => None,
+            HostRequest::ShowToast(req) => {
+                eprintln!("[plugin:{}] {}", plugin_name, req.message);
+                Some(InternalEventPayload::ShowToastResponse(EmptyPayload {}))
+            }
+            HostRequest::ListOpenWorkspaces(_) => {
+                let workspaces = match query_manager.connect().list_workspaces() {
+                    Ok(workspaces) => workspaces
+                        .into_iter()
+                        .map(|w| WorkspaceInfo { id: w.id.clone(), name: w.name, label: w.id })
+                        .collect(),
+                    Err(err) => {
+                        return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to list workspaces in CLI: {err}"),
+                        }));
+                    }
+                };
+                Some(InternalEventPayload::ListOpenWorkspacesResponse(ListOpenWorkspacesResponse {
+                    workspaces,
+                }))
+            }
+            req => Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                error: format!("Unsupported plugin request in CLI: {}", req.type_name()),
+            })),
+        },
     }
 }
 

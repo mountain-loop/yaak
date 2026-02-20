@@ -18,16 +18,8 @@ pub struct SharedPluginEventContext<'a> {
 
 #[derive(Debug)]
 pub enum GroupedPluginEvent<'a> {
-    Shared(SharedEvent<'a>),
-    Host(HostRequest<'a>),
-    Ignore,
-}
-
-#[derive(Debug)]
-pub enum SharedEvent<'a> {
-    Reply(InternalEventPayload),
-    ErrorResponse(&'a ErrorResponse),
-    ReloadResponse(&'a ReloadResponse),
+    Handled(Option<InternalEventPayload>),
+    ToHandle(HostRequest<'a>),
 }
 
 #[derive(Debug)]
@@ -43,8 +35,6 @@ pub enum SharedRequest<'a> {
     SetKeyValue(&'a SetKeyValueRequest),
     DeleteKeyValue(&'a DeleteKeyValueRequest),
     GetHttpRequestById(&'a GetHttpRequestByIdRequest),
-    ErrorResponse(&'a ErrorResponse),
-    ReloadResponse(&'a ReloadResponse),
     ListFolders(&'a ListFoldersRequest),
     ListHttpRequests(&'a ListHttpRequestsRequest),
 }
@@ -69,6 +59,8 @@ pub enum HostRequest<'a> {
     ListCookieNames(&'a ListCookieNamesRequest),
     GetCookieValue(&'a GetCookieValueRequest),
     WindowInfo(&'a WindowInfoRequest),
+    ErrorResponse(&'a ErrorResponse),
+    ReloadResponse(&'a ReloadResponse),
     OtherRequest(&'a InternalEventPayload),
 }
 
@@ -93,6 +85,8 @@ impl HostRequest<'_> {
             HostRequest::ListCookieNames(_) => "list_cookie_names_request".to_string(),
             HostRequest::GetCookieValue(_) => "get_cookie_value_request".to_string(),
             HostRequest::WindowInfo(_) => "window_info_request".to_string(),
+            HostRequest::ErrorResponse(_) => "error_response".to_string(),
+            HostRequest::ReloadResponse(_) => "reload_response".to_string(),
             HostRequest::OtherRequest(payload) => payload.type_name(),
         }
     }
@@ -114,10 +108,10 @@ impl<'a> From<&'a InternalEventPayload> for GroupedPluginRequest<'a> {
                 GroupedPluginRequest::Shared(SharedRequest::GetHttpRequestById(req))
             }
             InternalEventPayload::ErrorResponse(resp) => {
-                GroupedPluginRequest::Shared(SharedRequest::ErrorResponse(resp))
+                GroupedPluginRequest::Host(HostRequest::ErrorResponse(resp))
             }
             InternalEventPayload::ReloadResponse(req) => {
-                GroupedPluginRequest::Shared(SharedRequest::ReloadResponse(req))
+                GroupedPluginRequest::Host(HostRequest::ReloadResponse(req))
             }
             InternalEventPayload::ListOpenWorkspacesRequest(req) => {
                 GroupedPluginRequest::Host(HostRequest::ListOpenWorkspaces(req))
@@ -193,17 +187,11 @@ pub fn handle_shared_plugin_event<'a>(
     context: SharedPluginEventContext<'_>,
 ) -> GroupedPluginEvent<'a> {
     match GroupedPluginRequest::from(payload) {
-        GroupedPluginRequest::Shared(SharedRequest::ErrorResponse(resp)) => {
-            GroupedPluginEvent::Shared(SharedEvent::ErrorResponse(resp))
+        GroupedPluginRequest::Shared(req) => {
+            GroupedPluginEvent::Handled(Some(build_shared_reply(query_manager, req, context)))
         }
-        GroupedPluginRequest::Shared(SharedRequest::ReloadResponse(req)) => {
-            GroupedPluginEvent::Shared(SharedEvent::ReloadResponse(req))
-        }
-        GroupedPluginRequest::Shared(req) => GroupedPluginEvent::Shared(SharedEvent::Reply(
-            build_shared_reply(query_manager, req, context),
-        )),
-        GroupedPluginRequest::Host(req) => GroupedPluginEvent::Host(req),
-        GroupedPluginRequest::Ignore => GroupedPluginEvent::Ignore,
+        GroupedPluginRequest::Host(req) => GroupedPluginEvent::ToHandle(req),
+        GroupedPluginRequest::Ignore => GroupedPluginEvent::Handled(None),
     }
 }
 
@@ -239,9 +227,6 @@ fn build_shared_reply(
             InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
                 http_request,
             })
-        }
-        SharedRequest::ErrorResponse(_) | SharedRequest::ReloadResponse(_) => {
-            unreachable!("non-reply shared events are handled before build_shared_reply")
         }
         SharedRequest::ListFolders(_) => {
             let Some(workspace_id) = context.workspace_id else {
@@ -364,7 +349,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            GroupedPluginEvent::Shared(SharedEvent::Reply(InternalEventPayload::ErrorResponse(_)))
+            GroupedPluginEvent::Handled(Some(InternalEventPayload::ErrorResponse(_)))
         ));
     }
 
@@ -381,9 +366,9 @@ mod tests {
             SharedPluginEventContext { plugin_name: "@yaak/test", workspace_id: Some("wk_test") },
         );
         match by_workspace {
-            GroupedPluginEvent::Shared(SharedEvent::Reply(
-                InternalEventPayload::ListHttpRequestsResponse(resp),
-            )) => {
+            GroupedPluginEvent::Handled(Some(InternalEventPayload::ListHttpRequestsResponse(
+                resp,
+            ))) => {
                 assert_eq!(resp.http_requests.len(), 1);
             }
             other => panic!("unexpected workspace response: {other:?}"),
@@ -400,9 +385,9 @@ mod tests {
             SharedPluginEventContext { plugin_name: "@yaak/test", workspace_id: None },
         );
         match by_folder {
-            GroupedPluginEvent::Shared(SharedEvent::Reply(
-                InternalEventPayload::ListHttpRequestsResponse(resp),
-            )) => {
+            GroupedPluginEvent::Handled(Some(InternalEventPayload::ListHttpRequestsResponse(
+                resp,
+            ))) => {
                 assert_eq!(resp.http_requests.len(), 1);
             }
             other => panic!("unexpected folder response: {other:?}"),
@@ -422,7 +407,9 @@ mod tests {
         );
 
         match result {
-            GroupedPluginEvent::Host(HostRequest::WindowInfo(req)) => assert_eq!(req.label, "main"),
+            GroupedPluginEvent::ToHandle(HostRequest::WindowInfo(req)) => {
+                assert_eq!(req.label, "main")
+            }
             other => panic!("unexpected host classification: {other:?}"),
         }
     }
