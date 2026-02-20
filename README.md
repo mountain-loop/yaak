@@ -58,8 +58,10 @@ Built with [Tauri](https://tauri.app), Rust, and React, it’s fast, lightweight
 
 ## Contribution Policy
 
-Yaak is open source but only accepting contributions for bug fixes. To get started, 
-visit [`DEVELOPMENT.md`](DEVELOPMENT.md) for tips on setting up your environment.
+> [!IMPORTANT]
+> Community PRs are currently limited to bug fixes and small-scope improvements.
+> If your PR is out of scope, link an approved feedback item from [yaak.app/feedback](https://yaak.app/feedback).
+> See [`CONTRIBUTING.md`](CONTRIBUTING.md) for policy details and [`DEVELOPMENT.md`](DEVELOPMENT.md) for local setup.
 
 ## Useful Resources
 
