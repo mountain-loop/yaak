@@ -119,6 +119,7 @@ impl YaakUpdater {
                     UpdateTrigger::User => "user",
                 },
             )?
+            .header("X-Install-Mode", detect_install_mode().unwrap_or("unknown"))?
             .build()?
             .check()
             .await;
@@ -359,6 +360,22 @@ pub async fn download_update_idempotent<R: Runtime>(
     info!("{} downloaded", update.version);
 
     Ok(dl_path)
+}
+
+/// Detect the installer type so the update server can serve the correct artifact.
+fn detect_install_mode() -> Option<&'static str> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(exe) = std::env::current_exe() {
+            let path = exe.to_string_lossy().to_lowercase();
+            if path.starts_with(r"c:\program files") {
+                return Some("nsis-machine");
+            }
+        }
+        return Some("nsis");
+    }
+    #[allow(unreachable_code)]
+    None
 }
 
 pub async fn install_update_maybe_download<R: Runtime>(

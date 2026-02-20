@@ -61,6 +61,10 @@ export async function fetchAccessToken(
 
   console.log('[oauth2] Got access token response', resp.status);
 
+  if (resp.error) {
+    throw new Error(`Failed to fetch access token: ${resp.error}`);
+  }
+
   const body = resp.bodyPath ? readFileSync(resp.bodyPath, 'utf8') : '';
 
   if (resp.status < 200 || resp.status >= 300) {

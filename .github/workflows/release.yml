@@ -153,3 +153,27 @@ jobs:
           releaseDraft: true
           prerelease: true
           args: "${{ matrix.args }} --config ./crates-tauri/yaak-app/tauri.release.conf.json"
+
+      # Build a per-machine NSIS installer for enterprise deployment (PDQ, SCCM, Intune)
+      - name: Build and upload machine-wide installer (Windows only)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        env:
+          YAAK_TARGET_ARCH: ${{ matrix.yaak_arch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: |
+          Get-ChildItem -Recurse -Path target -File -Filter "*.exe.sig" | Remove-Item -Force
+          npx tauri bundle ${{ matrix.args }} --bundles nsis --config ./crates-tauri/yaak-app/tauri.release.conf.json --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
+          $setup = Get-ChildItem -Recurse -Path target -Filter "*setup*.exe" | Select-Object -First 1
+          $setupSig = "$($setup.FullName).sig"
+          $dest = $setup.FullName -replace '-setup\.exe$', '-setup-machine.exe'
+          $destSig = "$dest.sig"
+          Copy-Item $setup.FullName $dest
+          Copy-Item $setupSig $destSig
+          gh release upload "${{ github.ref_name }}" "$dest" --clobber
+          gh release upload "${{ github.ref_name }}" "$destSig" --clobber
