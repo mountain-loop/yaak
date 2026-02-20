@@ -2,6 +2,16 @@ import type { PluginDefinition } from '@yaakapp/api';
 
 import { ntlm } from 'httpntlm';
 
+function extractNtlmChallenge(headers: Array<{ name: string; value: string }>): string | null {
+  const authValues = headers
+    .filter((h) => h.name.toLowerCase() === 'www-authenticate')
+    .flatMap((h) => h.value.split(','))
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  return authValues.find((v) => /^NTLM\s+\S+/i.test(v)) ?? null;
+}
+
 export const plugin: PluginDefinition = {
   authentication: {
     name: 'windows',
@@ -68,15 +78,12 @@ export const plugin: PluginDefinition = {
         },
       });
 
-      const wwwAuthenticateHeader = negotiateResponse.headers.find(
-        (h) => h.name.toLowerCase() === 'www-authenticate',
-      );
-
-      if (!wwwAuthenticateHeader?.value) {
-        throw new Error('Unable to find www-authenticate response header for NTLM');
+      const ntlmChallenge = extractNtlmChallenge(negotiateResponse.headers);
+      if (ntlmChallenge == null) {
+        throw new Error('Unable to find NTLM challenge in WWW-Authenticate response headers');
       }
 
-      const type2 = ntlm.parseType2Message(wwwAuthenticateHeader.value, (err: Error | null) => {
+      const type2 = ntlm.parseType2Message(ntlmChallenge, (err: Error | null) => {
         if (err != null) throw err;
       });
       const type3 = ntlm.createType3Message(type2, options);
