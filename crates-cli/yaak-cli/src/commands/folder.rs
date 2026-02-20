@@ -31,7 +31,8 @@ pub fn run(ctx: &CliContext, args: FolderArgs) -> i32 {
 }
 
 fn list(ctx: &CliContext, workspace_id: &str) -> CommandResult {
-    let folders = ctx.db().list_folders(workspace_id).map_err(|e| format!("Failed to list folders: {e}"))?;
+    let folders =
+        ctx.db().list_folders(workspace_id).map_err(|e| format!("Failed to list folders: {e}"))?;
     if folders.is_empty() {
         println!("No folders found in workspace {}", workspace_id);
     } else {
@@ -43,9 +44,10 @@ fn list(ctx: &CliContext, workspace_id: &str) -> CommandResult {
 }
 
 fn show(ctx: &CliContext, folder_id: &str) -> CommandResult {
-    let folder = ctx.db().get_folder(folder_id).map_err(|e| format!("Failed to get folder: {e}"))?;
-    let output =
-        serde_json::to_string_pretty(&folder).map_err(|e| format!("Failed to serialize folder: {e}"))?;
+    let folder =
+        ctx.db().get_folder(folder_id).map_err(|e| format!("Failed to get folder: {e}"))?;
+    let output = serde_json::to_string_pretty(&folder)
+        .map_err(|e| format!("Failed to serialize folder: {e}"))?;
     println!("{output}");
     Ok(())
 }
@@ -72,8 +74,8 @@ fn create(
         }
 
         validate_create_id(&payload, "folder")?;
-        let folder: Folder =
-            serde_json::from_value(payload).map_err(|e| format!("Failed to parse folder create JSON: {e}"))?;
+        let folder: Folder = serde_json::from_value(payload)
+            .map_err(|e| format!("Failed to parse folder create JSON: {e}"))?;
 
         if folder.workspace_id.is_empty() {
             return Err("folder create JSON requires non-empty \"workspaceId\"".to_string());
@@ -88,10 +90,12 @@ fn create(
         return Ok(());
     }
 
-    let workspace_id = workspace_id
-        .ok_or_else(|| "folder create requires workspace_id unless JSON payload is provided".to_string())?;
-    let name =
-        name.ok_or_else(|| "folder create requires --name unless JSON payload is provided".to_string())?;
+    let workspace_id = workspace_id.ok_or_else(|| {
+        "folder create requires workspace_id unless JSON payload is provided".to_string()
+    })?;
+    let name = name.ok_or_else(|| {
+        "folder create requires --name unless JSON payload is provided".to_string()
+    })?;
 
     let folder = Folder { workspace_id, name, ..Default::default() };
 
@@ -108,10 +112,8 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
     let patch = parse_required_json(json, json_input, "folder update")?;
     let id = require_id(&patch, "folder update")?;
 
-    let existing = ctx
-        .db()
-        .get_folder(&id)
-        .map_err(|e| format!("Failed to get folder for update: {e}"))?;
+    let existing =
+        ctx.db().get_folder(&id).map_err(|e| format!("Failed to get folder for update: {e}"))?;
     let updated = apply_merge_patch(&existing, &patch, &id, "folder update")?;
 
     let saved = ctx

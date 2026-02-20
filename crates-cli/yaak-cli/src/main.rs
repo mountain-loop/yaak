@@ -1,6 +1,7 @@
 mod cli;
 mod commands;
 mod context;
+mod plugin_events;
 mod utils;
 
 use clap::Parser;
@@ -24,7 +25,9 @@ async fn main() {
     let needs_plugins = matches!(
         &command,
         Commands::Send(_)
-            | Commands::Request(cli::RequestArgs { command: RequestCommands::Send { .. } })
+            | Commands::Request(cli::RequestArgs {
+                command: RequestCommands::Send { .. } | RequestCommands::Schema { .. },
+            })
     );
 
     let context = CliContext::initialize(data_dir, app_id, needs_plugins).await;

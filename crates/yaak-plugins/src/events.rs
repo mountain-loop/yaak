@@ -163,8 +163,8 @@ pub enum InternalEventPayload {
     WindowInfoRequest(WindowInfoRequest),
     WindowInfoResponse(WindowInfoResponse),
 
-    ListWorkspacesRequest(ListWorkspacesRequest),
-    ListWorkspacesResponse(ListWorkspacesResponse),
+    ListOpenWorkspacesRequest(ListOpenWorkspacesRequest),
+    ListOpenWorkspacesResponse(ListOpenWorkspacesResponse),
 
     GetHttpRequestByIdRequest(GetHttpRequestByIdRequest),
     GetHttpRequestByIdResponse(GetHttpRequestByIdResponse),
@@ -631,12 +631,12 @@ pub struct WindowInfoResponse {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
-pub struct ListWorkspacesRequest {}
+pub struct ListOpenWorkspacesRequest {}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
-pub struct ListWorkspacesResponse {
+pub struct ListOpenWorkspacesResponse {
     pub workspaces: Vec<WorkspaceInfo>,
 }
 

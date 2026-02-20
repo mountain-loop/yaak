@@ -1,7 +1,9 @@
 use super::dedupe_headers;
 use crate::db_context::DbContext;
 use crate::error::Result;
-use crate::models::{HttpRequestHeader, WebsocketRequest, WebsocketRequestIden};
+use crate::models::{
+    Folder, FolderIden, HttpRequestHeader, WebsocketRequest, WebsocketRequestIden,
+};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -13,6 +15,22 @@ impl<'a> DbContext<'a> {
 
     pub fn list_websocket_requests(&self, workspace_id: &str) -> Result<Vec<WebsocketRequest>> {
         self.find_many(WebsocketRequestIden::WorkspaceId, workspace_id, None)
+    }
+
+    pub fn list_websocket_requests_for_folder_recursive(
+        &self,
+        folder_id: &str,
+    ) -> Result<Vec<WebsocketRequest>> {
+        let mut children = Vec::new();
+        for folder in self.find_many::<Folder>(FolderIden::FolderId, folder_id, None)? {
+            children.extend(self.list_websocket_requests_for_folder_recursive(&folder.id)?);
+        }
+        for request in
+            self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, folder_id, None)?
+        {
+            children.push(request);
+        }
+        Ok(children)
     }
 
     pub fn delete_websocket_request(
