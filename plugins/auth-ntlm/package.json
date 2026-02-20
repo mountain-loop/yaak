@@ -11,7 +11,8 @@
   "version": "0.1.0",
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev"
+    "dev": "yaakcli dev",
+    "test": "vitest --run tests"
   },
   "dependencies": {
     "httpntlm": "^1.8.13"
