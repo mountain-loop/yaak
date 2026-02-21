@@ -1,5 +1,7 @@
 import type { HttpRequestHeader } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
+import { Fragment } from 'react';
+import type { InheritedHeader } from '../hooks/useInheritedHeaders';
 import { charsets } from '../lib/data/charsets';
 import { connections } from '../lib/data/connections';
 import { encodings } from '../lib/data/encodings';
@@ -8,6 +10,7 @@ import { mimeTypes } from '../lib/data/mimetypes';
 import { CountBadge } from './core/CountBadge';
 import { DetailsBanner } from './core/DetailsBanner';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
+import { Icon } from './core/Icon';
 import type { InputProps } from './core/Input';
 import type { Pair, PairEditorProps } from './core/PairEditor';
 import { PairEditorRow } from './core/PairEditor';
@@ -18,7 +21,7 @@ import { HStack } from './core/Stacks';
 type Props = {
   forceUpdateKey: string;
   headers: HttpRequestHeader[];
-  inheritedHeaders?: HttpRequestHeader[];
+  inheritedHeaders?: InheritedHeader[];
   inheritedHeadersLabel?: string;
   stateKey: string;
   onChange: (headers: HttpRequestHeader[]) => void;
@@ -62,21 +65,29 @@ export function HeadersEditor({
             </HStack>
           }
         >
-          <div className="pb-2">
+          <div className="pb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center">
             {validInheritedHeaders?.map((pair, i) => (
-              <PairEditorRow
-                key={`${pair.id}.${i}`}
-                index={i}
-                disabled
-                disableDrag
-                className="py-1"
-                pair={ensurePairId(pair)}
-                stateKey={null}
-                nameAutocompleteFunctions
-                nameAutocompleteVariables
-                valueAutocompleteFunctions
-                valueAutocompleteVariables
-              />
+              <Fragment key={`${pair.id}.${i}`}>
+                <PairEditorRow
+                  index={i}
+                  disabled
+                  disableDrag
+                  className="py-1"
+                  pair={ensurePairId(pair)}
+                  stateKey={null}
+                  nameAutocompleteFunctions
+                  nameAutocompleteVariables
+                  valueAutocompleteFunctions
+                  valueAutocompleteVariables
+                />
+                <span className="text-xs text-text-subtlest whitespace-nowrap pl-1 pr-2 flex items-center gap-1">
+                  {pair.source.model === 'default' && <Icon icon="sparkles" size="xs" />}
+                  {pair.source.model === 'workspace' && <Icon icon="house" size="xs" />}
+                  {pair.source.model === 'workspace' && pair.source.name}
+                  {pair.source.model === 'folder' && <Icon icon="folder" size="xs" />}
+                  {pair.source.model === 'folder' && pair.source.name}
+                </span>
+              </Fragment>
             ))}
           </div>
         </DetailsBanner>
