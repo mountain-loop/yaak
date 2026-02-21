@@ -29,6 +29,7 @@ const modules = [
 
 function normalizeResult(result: unknown): string {
   if (typeof result === 'string') return result;
+  if (result instanceof Date) return result.toISOString();
   return JSON.stringify(result);
 }
 
