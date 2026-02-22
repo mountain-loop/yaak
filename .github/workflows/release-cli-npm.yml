@@ -109,6 +109,39 @@ jobs:
           name: vendored-assets
           path: crates-tauri/yaak-app/vendored
 
+      - name: Set CLI build version
+        shell: bash
+        env:
+          WORKFLOW_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="$WORKFLOW_VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#yaak-cli-}"
+          fi
+          VERSION="${VERSION#v}"
+          echo "Building yaak version: $VERSION"
+          python - "$VERSION" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          version = sys.argv[1]
+          manifest = pathlib.Path("crates-cli/yaak-cli/Cargo.toml")
+          contents = manifest.read_text()
+          updated, replacements = re.subn(
+              r'(?m)^version = ".*"$',
+              f'version = "{version}"',
+              contents,
+              count=1,
+          )
+          if replacements != 1:
+              raise SystemExit("Failed to update yaak-cli version in Cargo.toml")
+          manifest.write_text(updated)
+          print(f"Updated {manifest} to version {version}")
+          PY
+
       - name: Build yaak
         run: cargo build --locked --release -p yaak-cli --bin yaak --target ${{ matrix.target }}
 
