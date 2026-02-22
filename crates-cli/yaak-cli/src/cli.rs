@@ -29,6 +29,12 @@ pub enum Commands {
     /// Plugin development and publishing commands
     Plugin(PluginArgs),
 
+    #[command(hide = true)]
+    Build(PluginPathArg),
+
+    #[command(hide = true)]
+    Dev(PluginPathArg),
+
     /// Send a request, folder, or workspace by ID
     Send(SendArgs),
 

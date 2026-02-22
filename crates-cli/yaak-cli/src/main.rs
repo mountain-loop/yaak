@@ -49,6 +49,8 @@ async fn main() {
     let exit_code = match command {
         Commands::Auth(args) => commands::auth::run(args).await,
         Commands::Plugin(args) => commands::plugin::run(args).await,
+        Commands::Build(args) => commands::plugin::run_build(args).await,
+        Commands::Dev(args) => commands::plugin::run_dev(args).await,
         Commands::Send(args) => {
             commands::send::run(
                 context.as_ref().expect("context initialized for send"),
