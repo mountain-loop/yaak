@@ -1,0 +1,59 @@
+name: Release API to NPM
+
+on:
+  push:
+    tags: [yaak-api-*]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: API version to publish (for example 0.9.0 or v0.9.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish-npm:
+    name: Publish @yaakapp/api
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set @yaakapp/api version
+        shell: bash
+        env:
+          WORKFLOW_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="$WORKFLOW_VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#yaak-api-}"
+          fi
+          VERSION="${VERSION#v}"
+          echo "Preparing @yaakapp/api version: $VERSION"
+          cd packages/plugin-runtime-types
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build @yaakapp/api
+        working-directory: packages/plugin-runtime-types
+        run: npm run build
+
+      - name: Publish @yaakapp/api
+        working-directory: packages/plugin-runtime-types
+        run: npm publish --provenance --access public

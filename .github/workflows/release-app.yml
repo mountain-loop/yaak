@@ -1,4 +1,4 @@
-name: Generate Artifacts
+name: Release App Artifacts
 on:
   push:
     tags: [v*]
