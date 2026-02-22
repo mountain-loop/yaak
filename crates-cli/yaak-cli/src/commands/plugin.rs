@@ -218,11 +218,22 @@ struct PublishResponse {
 }
 
 async fn build_plugin_bundle(plugin_dir: &Path) -> CommandResult<Vec<String>> {
+    prepare_build_output_dir(plugin_dir)?;
     let mut bundler = Bundler::new(bundler_options(plugin_dir, false))
         .map_err(|err| format!("Failed to initialize Rolldown: {err}"))?;
     let output = bundler.write().await.map_err(|err| format!("Plugin build failed:\n{err}"))?;
 
     Ok(output.warnings.into_iter().map(|w| w.to_string()).collect())
+}
+
+fn prepare_build_output_dir(plugin_dir: &Path) -> CommandResult {
+    let build_dir = plugin_dir.join("build");
+    if build_dir.exists() {
+        fs::remove_dir_all(&build_dir)
+            .map_err(|e| format!("Failed to clean build directory {}: {e}", build_dir.display()))?;
+    }
+    fs::create_dir_all(&build_dir)
+        .map_err(|e| format!("Failed to create build directory {}: {e}", build_dir.display()))
 }
 
 fn bundler_options(plugin_dir: &Path, watch: bool) -> BundlerOptions {
