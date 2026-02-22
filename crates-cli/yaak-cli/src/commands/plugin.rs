@@ -437,8 +437,8 @@ const TEMPLATE_PACKAGE_JSON: &str = r#"{
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "build": "yaakcli build",
-    "dev": "yaakcli dev"
+    "build": "yaakcli plugin build",
+    "dev": "yaakcli plugin dev"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
