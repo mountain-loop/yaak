@@ -1,4 +1,4 @@
-const { readdirSync, cpSync, existsSync } = require('node:fs');
+const { readdirSync, cpSync, existsSync, mkdirSync } = require('node:fs');
 const path = require('node:path');
 
 const pluginsDir = path.join(__dirname, '..', 'plugins');
@@ -24,6 +24,7 @@ for (const name of readdirSync(pluginsDir)) {
     continue;
   }
   const destDir = path.join(__dirname, '../crates-tauri/yaak-app/vendored/plugins/', name);
+  mkdirSync(destDir, { recursive: true });
   console.log(`Copying ${name} to ${destDir}`);
   cpSync(path.join(dir, 'package.json'), path.join(destDir, 'package.json'));
   cpSync(path.join(dir, 'build'), path.join(destDir, 'build'), { recursive: true });

@@ -14,8 +14,39 @@ permissions:
   contents: read
 
 jobs:
+  prepare-vendored-assets:
+    name: Prepare vendored plugin assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin assets
+        run: |
+          npm run build-plugins
+          npm run vendor:vendor-plugins
+
+      - name: Upload vendored assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendored-assets
+          path: |
+            crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs
+            crates-tauri/yaak-app/vendored/plugins
+          if-no-files-found: error
+
   build-binaries:
     name: Build ${{ matrix.pkg }}
+    needs: prepare-vendored-assets
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -66,6 +97,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libdbus-1-dev
+
+      - name: Download vendored assets
+        uses: actions/download-artifact@v4
+        with:
+          name: vendored-assets
+          path: crates-tauri/yaak-app/vendored
 
       - name: Build yaak
         run: cargo build --locked --release -p yaak-cli --bin yaak --target ${{ matrix.target }}
