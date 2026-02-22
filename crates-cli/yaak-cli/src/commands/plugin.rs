@@ -1,4 +1,4 @@
-use crate::cli::{GenerateArgs, PluginPathArg};
+use crate::cli::{GenerateArgs, PluginArgs, PluginCommands, PluginPathArg};
 use crate::ui;
 use keyring::Entry;
 use rand::Rng;
@@ -54,6 +54,15 @@ pub async fn run_build(args: PluginPathArg) -> i32 {
             ui::error(&error);
             1
         }
+    }
+}
+
+pub async fn run(args: PluginArgs) -> i32 {
+    match args.command {
+        PluginCommands::Build(args) => run_build(args).await,
+        PluginCommands::Dev(args) => run_dev(args).await,
+        PluginCommands::Generate(args) => run_generate(args).await,
+        PluginCommands::Publish(args) => run_publish(args).await,
     }
 }
 
