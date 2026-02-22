@@ -26,6 +26,18 @@ pub enum Commands {
     /// Authentication commands
     Auth(AuthArgs),
 
+    /// Transpile code into a runnable plugin bundle
+    Build(PluginPathArg),
+
+    /// Build plugin bundle continuously when the filesystem changes
+    Dev(PluginPathArg),
+
+    /// Generate a "Hello World" Yaak plugin
+    Generate(GenerateArgs),
+
+    /// Publish a Yaak plugin version to the plugin registry
+    Publish(PluginPathArg),
+
     /// Send a request, folder, or workspace by ID
     Send(SendArgs),
 
@@ -325,4 +337,21 @@ pub enum AuthCommands {
 
     /// Print the current logged-in user's info
     Whoami,
+}
+
+#[derive(Args, Clone)]
+pub struct PluginPathArg {
+    /// Path to plugin directory (defaults to current working directory)
+    pub path: Option<PathBuf>,
+}
+
+#[derive(Args, Clone)]
+pub struct GenerateArgs {
+    /// Plugin name (defaults to a generated name in interactive mode)
+    #[arg(long)]
+    pub name: Option<String>,
+
+    /// Output directory for the generated plugin (defaults to ./<name> in interactive mode)
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
 }

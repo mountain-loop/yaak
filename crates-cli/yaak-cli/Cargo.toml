@@ -20,12 +20,16 @@ keyring = { workspace = true, features = ["apple-native", "windows-native", "syn
 log = { workspace = true }
 rand = "0.8"
 reqwest = { workspace = true }
+rolldown = "0.1.0"
+oxc_resolver = "=11.10.0"
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "net", "signal", "time"] }
+walkdir = "2"
 webbrowser = "1"
+zip = "4"
 yaak = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-http = { workspace = true }
