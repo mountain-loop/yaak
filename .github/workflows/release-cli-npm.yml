@@ -2,7 +2,7 @@ name: Release CLI to NPM
 
 on:
   push:
-    tags: [yaakcli-v*]
+    tags: [yaak-cli-*]
   workflow_dispatch:
     inputs:
       version:
@@ -112,7 +112,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="$WORKFLOW_VERSION"
           else
-            VERSION="${GITHUB_REF_NAME#yaakcli-v}"
+            VERSION="${GITHUB_REF_NAME#yaak-cli-}"
           fi
           echo "Preparing CLI npm packages for version: $VERSION"
           YAAK_CLI_VERSION="$VERSION" node npm/prepare-publish.js
